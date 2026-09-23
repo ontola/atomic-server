@@ -27,9 +27,9 @@ export const manifest = {
   config: {
     // Key this plugin's config sits under in the installation's stored config.
     // Omit it when the config is stored flat.
-    key: 'pets',
+    key: 'example',
     properties: {
-      table: { type: 'string', description: 'Table the pets are written to' },
+      table: { type: 'string', description: 'Table the records are written to' },
       properties: { type: 'object' },
     },
     required: ['table'],

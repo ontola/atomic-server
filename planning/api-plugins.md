@@ -6,6 +6,14 @@ PR #1307). Rebuilds part of the direction from
 live OAuth provider imports — on top of the plugin model instead of a separate
 Reflector-backed importer.
 
+**Update (PR #1549):** provider plugins (Pets, Notion, GitHub issues, MT940,
+Clockify, Calendar), their tests and certification moved to
+[atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps
+catalog discovery, install and the plugin runtime. #1549 contains #1618, so the
+WASM Syncables path is gone and LocalThought connect/sync is broken until its
+proxy calls move into the plugin iframe (follow-up). The Pets section below is
+history; the files it names no longer exist here.
+
 ## Where PR #1383 left off
 
 PR #1383 discovered integrations under a `REFLECTOR_ROOT/spec` folder (declarative
@@ -17,9 +25,9 @@ signs in, and gets data — as an ordinary plugin installed from `integrations/`
 so it shares one review, secrets, and sandbox story with every other plugin
 instead of a parallel one.
 
-## First step: `pets`
+## First step: `pets` (history, moved to atomic-plugins)
 
-[`integrations/pets`](../integrations/pets/) is the first commit here, and is
+`integrations/pets` was the first commit here, and was
 deliberately trivial: a static demo collection with a small code-first
 ontology (species, breed, age, mood), no provider, no OAuth, no secret. It
 exists only to walk every touch point a real API plugin needs, before adding
@@ -88,8 +96,8 @@ that the Rust `integrations/localthought/syncables` crate and
 Migration is per platform, not a flag-day cutover:
 
 - [ ] Google Calendar first — reflector already supports it live.
-- [ ] Todoist and Clockify keep using the browser/WASM/integration-proxy path
-  above until each is ported.
+- [ ] Todoist and Clockify: the browser/WASM/integration-proxy path they used
+  is gone (#1618 is in #1549); they have no working path until ported.
 - A plugin consumes a self-hosted reflector instance the same way it consumes
   any other third-party API: through the sandboxed `fetch` capability
   (`plugin-runtime/wit/plugin-runtime.wit`), with reflector's origin declared
@@ -130,7 +138,8 @@ checkboxes are checked):
 - `ontola/atomic-server#1618` (this repo, `feat/plugin-debug`) — removes the
   `wasm/Cargo.toml` dependency, `wasm/src/integrations.rs`,
   `wasm/src/calendar_import.rs` (used only by it), and this repo's own copy
-  of the vendored crate. **Not yet merged** — deliberately, see below.
+  of the vendored crate. Since merged into `feat/plugin-debug` and carried by
+  PR #1549; the warning below is now the actual state.
 
 ### The open question neither PR answers
 

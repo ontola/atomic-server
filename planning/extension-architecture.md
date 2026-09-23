@@ -2,7 +2,8 @@
 
 Status: product direction agreed with the user, 2026-09-08; technical migration
 in progress. This describes the target, not guarantees already implemented. Current
-extension work is on PR #1307. The Reflector integration proposed in PR #1383 (a
+extension code reached `develop` with #1500 (2026-09-17); PR #1307 remains open
+for its remaining-work list. The Reflector integration proposed in PR #1383 (a
 Rust `reflector-rs` adapter) is superseded by
 [issue #1599](https://github.com/ontola/atomic-server/issues/1599): Reflector is a
 TS package (`localthought/reflector`) called from the plugin sandbox like any other

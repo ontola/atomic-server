@@ -1,5 +1,7 @@
 # Notion two-way sync and table/view parity
 
+> **Moved (PR #1549):** the Notion provider, its tests and certification now live in [atomic-plugins](https://github.com/ontola/atomic-plugins). Paths below under `integrations/notion/` and `notion_sync_tests.rs` no longer exist in this repo.
+
 Status: implemented pilot, 2026-09-06. Sandboxed provider, native installer and
 shared UI are implemented. Live workspace verification and broader parity remain
 open. A disposable personal Notion database and restricted test connection are

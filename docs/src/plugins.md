@@ -73,14 +73,15 @@ See `wasm-plugins/examples/random-folder-extender` for a minimal Rust project th
 Open **Settings → Integration** to choose which plugins appear on the
 **Integrations** page:
 
-- **Show API plugins** displays generated Syncables integrations from the
-  LocalThought API catalog, including Google Calendar and GitHub issues.
-- **Show experimental plugins** displays bundled experimental integrations and
+- **Show API plugins** displays the catalog's API (integration-proxy) entries.
+- **Show experimental plugins** displays the catalog's experimental entries and
   unverified community plugins.
 
-Which plugins exist, and which category each belongs to, comes from the plugin
-catalog (by default the one published from
-[atomic-plugins](https://github.com/ontola/atomic-plugins)). Proxy-backed
+Which plugins exist, and which category each belongs to, comes from the remote
+plugin catalog. The default is
+`https://ontola.github.io/atomic-plugins/integrations/catalog.json`, published
+from [atomic-plugins](https://github.com/ontola/atomic-plugins); you can change
+it in **Settings → Integration**. Proxy-backed
 experimental plugins require both options to be enabled. Other experimental
 plugins only require **Show experimental plugins**.
 

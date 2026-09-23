@@ -177,19 +177,11 @@ This is private authoring/static export coverage, not public SaaS publication or
 live-model quality. See `planning/assistant-websites.md` for limits.
 
 App runner production regression (2026-09-12): `plugins.spec.ts` exercises
-manual preview/apply, missing-target refusal, manifest credential discovery,
-publishing, and integration sync against the embedded production frontend.
+release publishing, manual preview/apply, missing-target refusal and manifest
+credential discovery against the embedded production frontend.
 The runner must use Vite's worker bundling: copying only its entry with `?url`
-left shared library imports missing in production. MT940 validation uses the
-same bundled worker. The publish-button assertion also catches an obsolete
-English catalog entry rendering an empty label.
-
-The integration case seeds an automation draft through the public resource API,
-then tests editing, sample review/apply, execution permissions and persistence.
-It does not claim assistant-generated automation creation coverage; the separate
-GitHub case verifies the current New automation chat handoff. Notion fixtures
-use the configured test origin and assert native required-field validation,
-UUID refusal, token clearing and duplicate-prevention after partial setup failure.
+left shared library imports missing in production. The publish-button assertion
+also catches an obsolete English catalog entry rendering an empty label.
 
 Save acknowledgement: `browser/lib/src/save-acknowledgement.test.ts` reproduces
 an online genesis POST failure reported as persisted. It verifies pending/backoff
@@ -197,12 +189,8 @@ saves return offline and a later acknowledged retry preserves the subject.
 
 Installation prerequisites: `browser/lib/src/plugin-installation.test.ts` checks
 local-only rejection without a server call, missing server resources, network
-failure and successful server visibility. `app-setup.spec.ts` verifies the local-only
-error clears the credential, stays retryable and does not submit it to the server.
-The missing-app failure was traced to a failed database write and mismatched
-server executable. Both GitHub installation browser flows pass after recovery: existing-table views
-are preserved, and the new-board flow covers action review, permissions, history
-cleanup and the current assistant handoff. External approval transport is stubbed.
+failure and successful server visibility. The provider setup browser flows
+(`app-setup.spec.ts`) moved to atomic-plugins with the providers.
 
 # Testing coverage map
 
@@ -210,7 +198,19 @@ Plugin discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks that
 generated API entries follow the remote catalog; `helpers/integrationVisibility.test.ts`
 covers gating by the experimental/API-plugins toggles. Discovery unit checks do
 not exercise live provider consent. No provider-specific lenses remain in this
-repo; every LocalThought platform imports through the plain generated path.
+repo. `PluginRuns/pluginCatalog.test.ts` covers parsing the remote plugin
+catalog.
+
+Gap: LocalThought connect/sync has no working path on this branch. The WASM
+Syncables engine was removed (#1618), so `engine()` in
+`PluginRuns/localThought.ts` throws; moving the proxy calls into the plugin
+iframe is a follow-up. Nothing tests an end-to-end LocalThought connection or
+sync until then.
+
+Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
+status tags and booleans, picking close/reopen targets, and title/`#number`
+filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
+tracker tables.
 
 Schema namespaces: `PluginRuns/localThoughtSync.test.ts` covers installation
 and refresh. Plain imports use the `api-<platform>` namespace; installations
@@ -224,9 +224,9 @@ partial model drafts, forbidden arguments and size limits. It also validates res
 setup declarations: detached round-trips, supported constraints, malformed schemas,
 choice hints and rejection of unknown keywords before form/model use. `AppSetup/setup.test.ts`
 checks schema parity, repository and Notion UUID validation, and credential-link constraints.
-`browser/e2e/tests/app-setup.spec.ts` exercises the generic GitHub form and an
-assistant tool handoff with a scripted model, plus Notion manual validation before credential storage. Live authentication, installation
-recovery and arbitrary authored setup execution are not covered by these checks.
+The provider setup E2E (`app-setup.spec.ts`) moved to atomic-plugins. Live
+authentication, installation recovery and arbitrary authored setup execution
+are not covered here.
 
 Local integration resource recovery (#1406):
 `browser/lib/src/local-schema-resource.test.ts` exercises the real Store and
@@ -247,14 +247,12 @@ also execute when invoked from outside the repository (including `/`).
 LocalThought browser migration: `integrations/localthought/browser.test.ts`
 covers secret-free selected-platform redirects, S256 PKCE, one-time redemption,
 actor/drive/platform ownership, cancellation, expiry, rotation before dispatch,
-pagination, uncertain-response refusal and cross-origin pagination refusal. The real generated
-WASM bundle is exercised by `wasm-smoke.mjs` for pagination, typed ontology,
-timestamps and provider failures. `browser-smoke.mjs` exercises the complete
-mock consent/import/review/OPFS/reload journey with AtomicServer unavailable
-(verified locally). Local installation/schema lookup tests reject missing or
+pagination, uncertain-response refusal and cross-origin pagination refusal.
+`browser-smoke.mjs` exercised the complete mock consent/import/review/OPFS/reload
+journey through the WASM engine, which was removed in #1618; it fails until
+the proxy calls move into the plugin iframe. Local installation/schema lookup tests reject missing or
 incomplete local databases rather than inferring permission to create duplicates.
-The companion Syncables branch has 142 passing native tests and a wasm32 build;
-the proxy redirect work has 60 passing Rust tests including PostgreSQL-backed
+The proxy redirect work has 60 passing Rust tests including PostgreSQL-backed
 consent/replay, optional credential grants, callback binding and redemption expiry.
 CORS was verified with the earlier live browser flow; the new secret-free flow
 still requires matching proxy/frontend deployments and live verification.
@@ -263,8 +261,7 @@ The standalone browser-only Devonian demo (`chunks/DevonianDemo/`, the
 `/app/devonian-demo` route, and `browser/e2e/tests/devonian-issue-sync.spec.mts`)
 and the `integrations/github-issues/devonian` bridge were removed along with
 the `devonian` dependency; their coverage no longer applies. GitHub issue
-sync is covered through `integrations/github-issues/adapter.test.ts` and the
-generic app-setup/assistant paths described above.
+sync tests moved to atomic-plugins with the provider.
 
 What is tested, at which layer, and — the part that matters — **what is not**.
 
@@ -439,32 +436,15 @@ whatever is published upstream. Provider plugins, their fixture tests and their
 certification live in atomic-plugins; this repo tests only discovery and
 install.
 
-Integration UX: `plugins.spec.ts` covers search before credential setup, lazy
-GitHub/Notion dialogs, and creating an automation from a connected integration.
-It edits JavaScript, saves and reviews a real proposed effect, enables execution,
-returns to review mode and checks history. The trigger HTTP response regression
-`response_filters_round_trip_into_updates` ensures GET filter values can be sent
-back to POST; tagged database values previously broke the enable button.
-The Pets flow uses a real mock integration-proxy service: selected-platform consent,
-PKCE handoff redemption,
-return to the same drive, rotating connection codes, two-page Syncables fetch,
-review/apply, and five displayed records with integer/boolean/float/timestamp
-properties. Dagger starts the mock for E2E; local runs opt in with
-`ATOMIC_MOCK_INTEGRATION_PROXY=1` and the README configuration.
-`browser.test.ts` and the real WASM smoke cover actor/drive binding, PKCE redemption,
-Syncables pagination/ontology and duplicate-page refusal. The mock's Node test
-covers invalid PKCE verifiers, replayed handoffs and rotated proxy codes. The mapping tests cover
-typed proposals, missing identities, repeat imports, local edits and duplicates.
-The historical server path was live-verified for GitHub and Google Calendar.
-The new secret-free browser path awaits matching proxy/frontend deployment and
-live verification.
+Integration UX: `plugins.spec.ts` covers release publish and draft creation,
+propose/apply (nothing written until approval), a blocked run on a missing
+target, and two credential cases: a plugin asks only for the credentials it
+declares, and an undeclared secret still has somewhere to go. The trigger HTTP
+response regression `response_filters_round_trip_into_updates` ensures GET
+filter values can be sent back to POST. Provider connection flows (GitHub,
+Notion, the mock-proxy Pets flow) moved to atomic-plugins.
 Run it against a production build to catch missing translation catalog entries:
 Vite dev extracts them automatically and can hide blank production labels.
-The GitHub setup flow also covers opting into assistant-led automation creation:
-request and integration context survive a model-setup handoff, and source editing
-stays collapsed. A unit test checks draft/context binding. The advanced path still
-tests save, sample review and enablement. These checks do not call a live LLM or
-certify generated JavaScript quality.
 
 Coverage is split by *layer*, because the same flow can be well covered in one
 and absent in another:
@@ -1161,11 +1141,8 @@ labels, stale previews, uncertain-write refusal, approval identities and an
 imported issue triggering a linked chatroom Message through the ordinary trigger
 engine. `connection_state` tests cover idempotent checkpoint recovery.
 
-`integrations/github-issues/adapter.test.ts` covers pagination, PR exclusion,
-manifest scope, failed reads and bundle drift. `automation.test.ts` checks the
-message-action template. `atomic.live.test.ts` is opt-in and installs the real
-bundle/private release/kanban through an isolated HTTP server without GitHub calls.
-`plugins.spec.ts` covers sidebar discovery, icons and browser sandbox approval.
+The provider's own suites (`adapter.test.ts`, `automation.test.ts`, the live
+tests) moved to atomic-plugins with `integrations/github-issues`.
 
 Live GitHub conformance, durable event replay, concurrent-edit atomicity,
 background sync and scale/performance are not covered. Dagger's Rust test feature
@@ -1183,63 +1160,18 @@ selection now includes the sandbox; the updated container gate has not been run.
 - `plugins/sync_session_tests.rs`: hard termination after provider acceptance,
   uncertain-result refusal, verified-receipt recovery without resending, and
   discovery markers excluding initial backfill/local-origin issues.
-- `plugins.spec.ts`: UI-only GitHub installation, code-first event wiring into an
-  independent automation with explicit integration references, sync approvals and
-  persisted background toggles. The background check closes the browser context
-  and reads status independently until a new scheduled run completes.
 
 Still not certified: live GitHub failure recovery, multi-provider remote-action workflows, guided
 Atomic uncertain-write recovery, query-outbox performance/retention at scale and
 the Dagger container gate. Queue storage prevents loss; it does not imply
 cross-system exactly-once execution or automatic reconciliation of uncertain writes.
 
-### Live connector query snapshots
+### Live connector query snapshots and Notion pilot
 
-`integrations/github-issues/atomic.live.test.ts` now reproduces repeated
-server-authoritative membership reads after five sequential inserts. This caught
-merging generated query snapshots as editable CRDT data; the connection reader
-now replaces query snapshots. This opt-in HTTP regression needs only a local
-AtomicServer, and performs no GitHub calls.
-
-`integrations/github-issues/github.live.test.ts` passed against the actual private
-`ontola/atomic-github-sync-sandbox` repository. Explicit opt-in only: verifies
-bidirectional issues, kanban status/labels, creation from Atomic and background
-discovery -> independent JavaScript Atomic notification. Closes synthetic issues
-and pauses polling afterwards. This does not certify real-provider crash recovery,
-large-repository performance, email/push or chat delivery.
-
-### Notion connector pilot (2026-09-06)
-
-- Live setup exposed missing UUID path matching. `uuid_paths_are_single_canonical_segments`
-  covers constrained UUID authorization and rejection of path escapes; the Notion
-  sandbox fixture now checks every simulated request against the real matcher
-  using a manifest fixture verified against the TypeScript provider declaration.
-
-- `integrations/notion/model.test.ts`: stable property IDs, sparse patches,
-  null/false/zero, option identities, rich-text refusal, long-text chunks,
-  preservation of provider-only view configuration and title/display-name conflicts.
-- `integrations/notion/plugin.test.ts`: preview, schema changes, pagination loops,
-  independent edits/conflicts, stale approvals and provider access/rate-limit errors.
-- `integrations/notion/package.test.ts`: exact shipped bundle reproducibility and
-  POST-read versus PATCH-write manifest classification.
-- `integrations/notion/atomic.live.test.ts`: optional real local Atomic installer
-  with simulated Notion metadata; native properties and view bindings. No Notion calls.
-- `server/src/plugins/notion_sync_tests.rs`: shipped bundle in actual QuickJS/WASM,
-  real Atomic plan/apply and connection journals; bidirectional rows, property
-  renames, independent view name/column changes preserving widths, local remote
-  creation and refusal to duplicate an uncertain accepted create.
-- `plugins.spec.ts`: Notion UI identifier validation before credential writes;
-  shared integration preview/background flow remains covered by its existing E2E.
-
-Live manual coverage: restricted personal database setup, initial title import,
-Atomic-to-Notion title edit and Notion-to-Atomic edit, verified in both UIs. The
-first imported table needed a reload to show membership: refresh/invalidation gap.
-Missing provider code is now rejected before setup mutations (package regression).
-
-Not certified: broader live Notion APIs, Notion background discovery delivery, board edits
-in a live workspace, formatted page content, incremental sync or view parity
-outside the explicitly supported subset. Plain-text fidelity refusals and
-compatibility notes are part of the pilot contract, not full import coverage.
+Moved to atomic-plugins with `integrations/github-issues` and
+`integrations/notion` (their live tests, fixture suites and
+`notion_sync_tests.rs`). `uuid_paths_are_single_canonical_segments` still
+covers constrained UUID authorization and path-escape rejection here.
 
 ### Named integration actions
 
@@ -1314,35 +1246,15 @@ consumer responses to check inspection, required reason and one explicit abandon
 request; the JS client test checks the signed request fields. Deleted-automation
 reconciliation and per-run (rather than per-worker) concurrency remain open.
 
-Notion setup UX: `plugins.spec.ts` now covers empty-form feedback (previously
-silently disabled), invalid identifiers before credential storage, Enter submission
-and a mocked credential-storage rejection with a visible error and retry enabled.
-OAuth and named database discovery now have coverage described below; live provider verification remains open.
-
-Notion proxy migration: `integrations/notion/proxy.test.ts` checks named search
-and POST pagination, endpoint/read-vs-write constraints, parity with the shipped
-provider preview, import/checkpoint and an Atomic-to-Notion update.
-`integrations/localthought/async-plugin.test.ts` checks bounded receipt replay
-without duplicate HTTP requests. `browser-sync.test.ts` checks durable uncertainty
-and refusal to replay a lost write, plus converged checkpoints. Browser
-`Notion discovers databases through the proxy and reports revoked access without
-server OAuth` uses synthetic browser-owned credentials and proxy replies, imports
-and checkpoints with AtomicServer unavailable, and rejects server OAuth/secret
-requests. The shared browser transport tests cover PKCE and code rotation.
-The former Notion-specific server OAuth and popup tests were removed with that
-implementation. Live proxy deployment and Notion consent are not certified by
-these fixtures. Browser sync is manual; server schedules and discovery
-notifications remain only on legacy token installations.
+Notion setup UX and proxy migration: the provider and its tests moved to
+atomic-plugins. `integrations/localthought/async-plugin.test.ts` checks bounded
+receipt replay without duplicate HTTP requests. `browser-sync.test.ts` checks
+durable uncertainty and refusal to replay a lost write, plus converged checkpoints.
 
 Runtime feature coverage: `cargo check -p atomic-server` and
 `cargo check -p atomic-server --no-default-features --features light` validate
 both default runtime-on and runtime-off binaries. The `wasm-plugins` feature
 controls the nested WASM build, runtime modules and runtime HTTP registrations.
-
-Integration UX walkthrough (2026-09-07): desktop browser checked discovery and
-connection dialogs. Four focused `plugins.spec.ts` cases pass, including the
-Notion proxy preview/approval transition and GitHub automation creation.
-Provider calls are fixtures; this does not verify live account authorization.
 
 `discoverIntegrations.test.ts` checks assistant capability search, exclusion of
 nonconnection drafts, partial failures and drives without a plugin schema.
@@ -1357,9 +1269,8 @@ Task schema/template pilot: `tableTemplates.test.ts` checks shared references
 across Issue Tracker and Project Tasks. `task-schema.test.ts` checks the embedded
 vocabulary against exported identities/options. `client-proxy.test.ts` checks
 identity-preserving local schema resolution and rejects an unrelated proxy
-identity. `plugins.spec.ts` adds GitHub setup into an existing Project Tasks
-table, shared property identities, and preservation of its views. This verifies
-setup, not live provider reconciliation against existing task records.
+identity. GitHub setup into an existing Project Tasks table moved to
+atomic-plugins with the provider.
 # GitHub token setup shortcut
 
 The connection form now links to GitHub's fine-grained token template with
@@ -1370,48 +1281,13 @@ New automation and integration shortcuts open a fresh assistant chat with resour
 context, requesting user intent before draft creation. Browser acceptance of
 these entry points and assistant-led creation remains open.
 
-## MT940 and camt.053 bank statement importer
-
-`integrations/mt940/parser.test.ts` has nine scenarios covering signed exact
-amounts, reversals, balance reconciliation, invalid/truncated input, multiple
-accounts, date rollover, multiline descriptions, nesting, reimport/conflict
-handling, reference-free overlap, identical legitimate rows and resource bounds.
-JSON-shaped narratives are rejected until legacy text materialization is fixed.
-`plugins::bank_statement_tests::bank_statement_proposes_exact_nested_transactions`
-runs the shipped JS in real QuickJS/WASM and verifies balance failures and
-network-free proposals. Offline certification passes and is recorded in the
-integration store's bundle-matched evidence.
-
-`integrations/mt940/camt053.test.ts` has six scenarios for the camt.053 path:
-the sandbox-safe XML reader (namespaces, prefixes, entities, CDATA, malformed
-input), booked-entry mapping to exact amounts/dates/codes/references/narratives,
-v08 status codes, `DtTm` dates, `PRCD` openings and `Othr` account ids,
-reconciliation/currency/date/balance-type/size failures, the 500-entry bound,
-format detection and per-format identities.
-`plugins::bank_statement_tests::camt_statement_proposes_the_same_nested_transactions`
-runs the same bundle on the camt.053 fixture in QuickJS/WASM. The MT940 E2E
-below ends by uploading the camt.053 fixture into the same importer and
-expecting two new rows. No real bank camt.053 export has been validated yet.
-
-`browser/e2e/tests/mt940.spec.ts` uses a synthetic statement with the real Worker,
-server runtime, planner and signed persistence. It verifies invalid-file errors,
-preview/apply, visible transaction amounts, reopening the installed importer,
-and zero-change reimport. `/tmp/mt940-table.png` is the reviewed table screenshot.
-The E2E uploads the shared synthetic fixture from disk and covers cold-load
-plugin-schema hydration when reopening the installed importer. A supplied real
-bunq export (272 transactions) also passed preview, apply and zero-change
-reimport locally on 2026-09-11; private bank data is not committed as a fixture.
-Installation recovery and exact-decimal table aggregation remain uncovered.
-Shared identity concurrency is tested below.
-
 ## Shared import identity and source baselines
 
 `browser/lib/src/import-records.test.ts` covers native localId persistence,
 immediate-parent identity scope, ambiguous duplicates, local/source conflicts,
 append-only source changes, existing links, interrupted batch replanning and
 legacy adoption. `plugin-apply.test.ts` also verifies distinct approval markers
-without modifying the reviewed proposal. The Clockify Store integration test
-uses real typed resources, Loro commits and DID link rewriting with mocked HTTP.
+without modifying the reviewed proposal.
 
 `lib::import_identity::tests` covers these real-Db scenarios: concurrent signed identity
 claims have one winner (the same ID in another destination succeeds), and stale
@@ -1419,10 +1295,8 @@ baselines/duplicate approvals cannot overwrite newer source values or local edit
 The existing `did_import_resolves_forward_local_id_references` regression confirms
 JSON-AD nested references and reimport retain their subtree namespace.
 
-MT940 and Clockify pass offline provider certification (27 fixture tests plus
-their real QuickJS/WASM tests). Three Chromium flows pass against the rebuilt
-local server: MT940 validation/import/reimport, Clockify setup/transport errors,
-and Clockify linked import/reimport and parent migration. No live provider writes.
+MT940 and Clockify provider tests and certification moved to atomic-plugins;
+the dated verification notes below mentioning them are history.
 
 Remaining: offline-peer identity collision repair and whole-batch atomicity.
 Process-abort recovery, lost-receipt recovery and browser conflict review
@@ -1967,21 +1841,8 @@ automated checks do not certify live LocalThought login, consent, redemption or
 provider writes; matching deployment evidence is tracked separately in PR and
 release verification.
 
-Google Calendar one-way projection: `integrations/localthought/calendar.test.ts`
-covers all-day/timed start dates, offset boundaries, exclusive end preservation,
-feature notes (including WASM-normalized field names), cancellations without
-start data, invalid active events, namespace isolation and repeat import/local
-field preservation. `browser/e2e/tests/google-calendar-import.spec.mts` uses the
-shared HTTP mock integration-proxy with a paginated Google Calendar, selected
-platform consent and PKCE redemption. It covers browser WASM fetching, local
-one-request validation, immediate folder creation before a held background import,
-automatic schema/application, Calendar display, refresh on reopening, OPFS reload,
-stable identities and local-only notes while AtomicServer HTTP/WebSockets are
-unavailable. A failed refresh retains records and reopening recovers. Missing
-rows in a bounded snapshot are retained, not interpreted as deletions.
-Live-provider browser OAuth and write verification are tracked separately in PR
-and release verification; this fixture intentionally uses no live provider
-account.
+Google Calendar one-way projection and its E2E (`google-calendar-import.spec.mts`)
+were removed with the Calendar lens; there is no Calendar import coverage here.
 
 ## Google Calendar recurrence
 
@@ -1992,82 +1853,41 @@ account.
 - `browser/data-browser/src/chunks/TablePage/Calendar/calendarOccurrences.test.ts`:
   imported/native property names, civil-day placement across offset boundaries,
   recurring all-day spans clipped to the visible grid.
-- `wasm/src/calendar_import.rs` unit tests: generic catalog selections set
-  documented query parameters, reject unknown paths and parameters, and remove
-  inherited `timeMin`, `timeMax`, and `orderBy` values for series requests.
 
 The bundled Google Calendar (Devonian) lens and its end-to-end coverage
 (`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
 `devonian-google-calendar` card) were removed along with the `devonian`
-dependency. Google Calendar still imports through the plain generated
-LocalThought path above; there is currently no e2e coverage of a full
-recurring-series import through that plain path — a gap, not a deliberate
-scope cut.
+dependency. LocalThought imports (including Google Calendar) are currently
+broken (see the gap under Plugin discovery), so there is no e2e coverage of a
+recurring-series import.
 
 The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
 these fixtures; unsupported full-series rules are rejected before import.
 
-Validated 2026-09-09: library 643/643, importer 24/24, UI buckets 2/2,
-standalone compilation of Rust adapter tests 2/2, frontend/library tsc, Oxlint,
-production WASM build, and both Chromium import flows (31.5s). The browser flow
-retains the existing explicit server-unavailable network fixture; no live Google
-account or full native Rust workspace test was run.
-
-Google Calendar two-way existing-event edits: `integrations/localthought/calendar-sync.test.ts`
-checks three-way field merges, title aliases, ETag rejection, stale local reviews,
-changes during requests, idempotent recovery after a lost checkpoint, time/date
-validation, duplicate identities, unsupported fields and permission failures.
-`browser.test.ts` checks conditional-header forwarding through rotating credentials.
-The companion proxy suite checks write scopes, CORS preflight and upstream
-If-Match forwarding. New event creation/deletion, live OAuth reconsent and live
-Google writes are not covered; the existing Calendar E2E covers inbound imports.
-
 All-day ranges: `browser/lib/src/calendar-date.test.ts` covers civil-date
 validation, exclusive single/multi-day ends, leap days, DST dates and year
-boundaries; run under UTC, America/Los_Angeles and Pacific/Kiritimati. Import
-tests reject malformed/mixed/nonpositive all-day intervals and verify raw
-provider Start/End retention. The existing Google import E2E now imports a
-three-day all-day event, asserts all three occupied cells and the excluded end,
-and verifies repeated chips survive reload without duplicate resources.
+boundaries; run under UTC, America/Los_Angeles and Pacific/Kiritimati.
 
 ## Metadata-driven platform extraction (2026-09-10, removed)
 
-This section documented `integrations/localthought/syncables/tests/query_bindings.rs`
-(Link traversal, query-only bindings, pagination beyond 50 pages),
-`read_absence.rs` (declared-missing vs. permission/server/undeclared errors)
-and `ontology_shared_types.rs` (heterogeneous shared fields as JSON) —
-coverage for the vendored Rust `syncables` crate at
-`integrations/localthought/syncables/`. That crate, `wasm/Cargo.toml`'s
-dependency on it and `wasm/src/integrations.rs`'s
-`describeIntegration`/`fetchIntegration` bridge to it have been removed
-entirely; the browser-side OpenAPI-driven import/sync feature they backed no
-longer exists in this repo. `moneybird_fixture.rs`'s ignored-by-default
-32-collection synthetic-traversal coverage went with it.
+History: this section documented the Rust tests of the vendored Syncables
+crate and its WASM bridge. Both were removed in #1618, together with the
+browser-side OpenAPI-driven import they backed.
 
 `integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
 Retry-After handling with rotating credentials, deadline rejection, and separate
 catalog selections with explicit caller precedence. Notion now uses this shared
 browser authorization flow; its proxy migration coverage is described above.
 
-The Local Thought Vitest suite no longer imports Calendar code from the
-`devonian` package, now that the Google Calendar lens is retired. GitHub,
-Notion and Clockify implementations, fixture suites, certification metadata
-and Rust tests remain in this repository; Rust tests execute the shipped
-provider bundles.
+GitHub, Notion and Clockify implementations, fixture suites and
+certification live in atomic-plugins.
 
 `integrations/localthought/settings.test.ts` covers runtime proxy selection,
 deployment-default fallback, URL validation without losing the previous setting,
 origin-separated connection keys and migration of legacy connections only for
 the matching proxy and owner.
 
-Known limitations: Link `operationRef` is explicitly rejected; the implemented
-traversal uses `operationId`. The browser preview rejects more than 5,000 records
-with an explicit incomplete-import error rather than silently truncating.
-
-`IntegrationDiscovery.test.ts` verifies that all four bundled plugins remain
-discoverable without contacting an integration proxy. Clockify upgrade tests
-remain alongside the Notion proxy tests.
 
 
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
@@ -2220,11 +2040,6 @@ It also exercises the compiled Vault session error path (no React hook in an
 error constructor). Actual staging billing/admission and multi-device migration
 remain separate acceptance checks.
 
-Merge integration regression: `IntegrationDiscovery.test.ts` imports the bundled
-integration UI and catches a Dialog → Feedback → file-picker initialization cycle.
-Dialog loads its onboarding feedback lazily so its exported content component is
-initialized before feedback-dependent dialogs are imported.
-
 Standalone Rust library tests enable Tokio’s multithread runtime through a dev
 dependency. `db::app_agent::store_tests::revocation_survives_process_exit_without_destructors`
 exercises runtime construction in both the parent and its abruptly exiting child
@@ -2235,7 +2050,7 @@ Integration discovery preferences: `integrationVisibility.test.ts` covers absent
 or malformed values and all four independent boolean combinations.
 `integration-visibility.spec.ts` covers default-hidden discovery, settings links,
 Atomic persistence across reloads, independent toggles, visible existing connections
-and no community catalog fetch while disabled. Existing plugin/setup/MT940 browser tests explicitly opt in
+and no community catalog fetch while disabled. Existing plugin browser tests explicitly opt in
 through Settings. Cross-device preference sync uses normal private-drive sync;
 a dedicated multi-device preference test is not yet present.
 
@@ -2248,10 +2063,8 @@ a dedicated multi-device preference test is not yet present.
   without importing, failed validation before folder creation, overlapping refresh
   exclusion, failure/recovery with last-success preservation, blocked imports and
   switching accounts during a fetch.
-- `browser/e2e/tests/google-calendar-import.spec.mts`: real WASM and browser OPFS
-  journey for background installation, folder-open and five-minute timer refresh,
-  preserved identities, local edits and notes, failure/recovery, and Calendar
-  instances/series. No live accounts.
+- No E2E: the Calendar import journey was removed and LocalThought sync is
+  broken until the proxy calls move into the plugin iframe.
 - Online and visibility lifecycle hooks use the same refresh function.
   Closed-browser execution is intentionally unsupported.
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone

@@ -2896,8 +2896,8 @@ msgstr "Aucune utilisation de la classe trouvée."
 msgid "This resource has <0/> children"
 msgstr "Cette ressource a <0/> enfants"
 
-#. 0: prop.shortname
-#. 0: prop.shortname
+#. 0: label
+#. 0: label
 #. 0: title
 #: src/chunks/TablePage/EditorCells/JSONCell.tsx
 #: src/chunks/TablePage/EditorCells/MarkdownCell.tsx
@@ -5317,7 +5317,7 @@ msgstr ""
 msgid "Only the largest groups are shown."
 msgstr ""
 
-#. 0: titles.get(groupByColumn!) ?? groupProperty?.shortname ?? ''
+#. 0: titles.get(groupByColumn!) ?? ''
 #: src/chunks/TablePage/TableSummaryBar.tsx
 msgid "Per {0}"
 msgstr ""
@@ -8764,16 +8764,6 @@ msgstr ""
 
 #. 0: rowName.toLowerCase()
 #: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "Filter {0}s by title or #number"
-msgstr ""
-
-#. 0: rowName.toLowerCase()
-#: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "Filter {0}s"
-msgstr ""
-
-#. 0: rowName.toLowerCase()
-#: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "New {0} title"
 msgstr ""
 
@@ -8794,21 +8784,6 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Issue state"
-msgstr ""
-
-#. 0: filter; 1: rowName.toLowerCase(); 2: search.trim()
-#: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "No {0} {1}s match \"{2}\"."
-msgstr ""
-
-#. 0: rowName.toLowerCase()
-#: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "No open {0}s."
-msgstr ""
-
-#. 0: rowName.toLowerCase()
-#: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "No closed {0}s."
 msgstr ""
 
 #. 0: tableName
@@ -9457,4 +9432,45 @@ msgid ""
 "{0} earlier messages omitted to fit the report.\n"
 "\n"
 ""
+msgstr ""
+
+#: src/chunks/TablePage/Issues/IssueRow.tsx
+msgid "# comment"
+msgid_plural "# comments"
+msgstr[0] ""
+msgstr[1] ""
+
+#. 0: title
+#: src/chunks/TablePage/Issues/IssueRow.tsx
+msgid "Reopen {0}"
+msgstr ""
+
+#. 0: title
+#: src/chunks/TablePage/Issues/IssueRow.tsx
+msgid "Close {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "This table has no status or checkbox column to tell open from closed, so it cannot be shown as an issue list."
+msgstr ""
+
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "Filter by title or #number"
+msgstr ""
+
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "Filter by title or number"
+msgstr ""
+
+#. 0: search.trim()
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "Nothing matches \"{0}\"."
+msgstr ""
+
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "Nothing open."
+msgstr ""
+
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "Nothing closed."
 msgstr ""
