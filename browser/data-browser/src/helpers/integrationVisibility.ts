@@ -60,6 +60,15 @@ function cacheKey(actor: string | undefined): string {
   return `integration-visibility:${actor ?? 'anonymous'}`;
 }
 
+/**
+ * Toggles not yet confirmed as saved to the private drive. They outlive the
+ * page, so a reload or navigation right after a toggle resumes the write
+ * instead of letting the drive's older value win.
+ */
+function pendingKey(actor: string | undefined): string {
+  return `integration-visibility-pending:${actor ?? 'anonymous'}`;
+}
+
 function defaultStorage(): Storage | undefined {
   try {
     return globalThis.localStorage;
@@ -73,8 +82,38 @@ export function readVisibilityCache(
   actor: string | undefined,
   storage: Storage | undefined = defaultStorage(),
 ): IntegrationVisibilityValues {
+  return readValues(cacheKey(actor), storage);
+}
+
+/** Reads the toggles still waiting to be saved for an agent. Never throws. */
+export function readPendingVisibility(
+  actor: string | undefined,
+  storage: Storage | undefined = defaultStorage(),
+): IntegrationVisibilityValues {
+  return readValues(pendingKey(actor), storage);
+}
+
+/** Replaces the agent's pending toggles; empty clears them. Never throws. */
+export function writePendingVisibility(
+  actor: string | undefined,
+  values: IntegrationVisibilityValues,
+  storage: Storage | undefined = defaultStorage(),
+): void {
   try {
-    const raw = storage?.getItem(cacheKey(actor));
+    if (Object.keys(values).length === 0)
+      storage?.removeItem(pendingKey(actor));
+    else storage?.setItem(pendingKey(actor), JSON.stringify(values));
+  } catch {
+    // Without storage a reload can still lose an unsaved toggle, as before.
+  }
+}
+
+function readValues(
+  storageKey: string,
+  storage: Storage | undefined,
+): IntegrationVisibilityValues {
+  try {
+    const raw = storage?.getItem(storageKey);
     const parsed = raw ? JSON.parse(raw) : undefined;
 
     if (!parsed || typeof parsed !== 'object') return {};
