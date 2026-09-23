@@ -76,9 +76,6 @@ test('joins an unhosted drive through its signed browser invitation', async ({
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
     );
     await topBarShareButton(owner).click();
-    await owner
-      .getByRole('button', { name: 'Create Invite', exact: true })
-      .click();
     await owner.getByLabel('Full name', { exact: true }).fill('Drive Owner');
     await owner
       .getByRole('button', { name: 'Save and continue', exact: true })
