@@ -314,7 +314,11 @@ test.describe('kanban', () => {
 
     const todo = column(page, 'todo');
     await addCard(page, todo, 'Typo');
-    const card = cardIn(todo, 'Typo');
+    // Pin the card by subject: its text changes while we type.
+    const subject = await cardIn(todo, 'Typo').getAttribute(
+      'data-kanban-card-subject',
+    );
+    const card = todo.locator(`[data-kanban-card-subject="${subject}"]`);
     const heightBefore = (await card.boundingBox())?.height;
 
     await card.getByTestId('kanban-card-title').click();
@@ -340,13 +344,11 @@ test.describe('kanban', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
     // Escape throws the draft away.
-    await cardIn(todo, 'Fix the login bug')
-      .getByTestId('kanban-card-title')
-      .click();
-    const secondInput = todo.getByTestId('kanban-card-title-input');
-    await secondInput.pressSequentially(' later');
-    await secondInput.press('Escape');
-    await expect(secondInput).toHaveCount(0);
+    await card.getByTestId('kanban-card-title').click();
+    await expect(titleInput).toBeFocused();
+    await titleInput.pressSequentially(' later');
+    await titleInput.press('Escape');
+    await expect(titleInput).toHaveCount(0);
     await expect(
       todo.getByTestId('kanban-card-title').filter({ hasText: 'later' }),
     ).toHaveCount(0);
