@@ -5,6 +5,7 @@ import {
   type Problem,
   type Verdict,
 } from './plugin-run.js';
+import { inParallel } from './plugin-schema.js';
 import type { Property } from './store.js';
 import type { JSONValue } from './value.js';
 
@@ -98,6 +99,9 @@ export function planHostFromStore(store: PlanStore): PlanHost {
   };
 }
 
+/** How many reads planning keeps in flight ahead of the loop that uses them. */
+export const PREFETCH_LIMIT = 8;
+
 export async function planVerdict(
   verdict: Verdict,
   host: PlanHost,
@@ -128,7 +132,7 @@ export async function planVerdict(
       .map(i => [minted[i.localId], i.isA]),
   );
 
-  // Every fetch this plan needs, started together.
+  // Every fetch this plan needs, started up front.
   //
   // Planning is a loop of awaits, so each distinct property and each subject
   // used to cost its own round trip in series: an import of five rows with six
@@ -136,20 +140,34 @@ export async function planVerdict(
   // front of a dialog the user is watching. The memo below is what makes this
   // safe — the loop still reads exactly the same promises, it just no longer
   // waits for one to start the next.
-  const prefetch = (promise: Promise<unknown>) => {
-    // Failures are handled where the value is actually awaited; this only
-    // marks the promise as observed so starting it early cannot surface as an
-    // unhandled rejection.
-    void promise.catch(() => undefined);
-  };
+  //
+  // Started through a bounded runner rather than all at once: an import that
+  // edits 5,000 rows would otherwise put 5,000 reads in flight together.
+  // Properties go first because every row needs them.
+  const prefetches = new Map<string, () => Promise<unknown>>();
 
   for (const intent of resolved) {
-    if (intent.op !== 'create') prefetch(resources(intent.subject));
-
     if (intent.op === 'create' || intent.op === 'set') {
-      for (const url of Object.keys(intent.set)) prefetch(properties(url));
+      for (const url of Object.keys(intent.set))
+        prefetches.set(`p ${url}`, () => properties(url));
     }
   }
+
+  for (const intent of resolved) {
+    if (intent.op !== 'create') {
+      const subject = intent.subject;
+      prefetches.set(`r ${subject}`, () => resources(subject));
+    }
+  }
+
+  // Failures are handled where the value is actually awaited; catching here
+  // only marks each promise as observed so starting it early cannot surface as
+  // an unhandled rejection.
+  void inParallel(
+    [...prefetches.values()],
+    fetch => fetch().catch(() => undefined),
+    PREFETCH_LIMIT,
+  );
 
   const changes: PlannedChange[] = [];
 

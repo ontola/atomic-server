@@ -145,47 +145,90 @@ describe('ensureSchema', () => {
     expect(second).toEqual(first);
   });
 
-  it('creates independent terms together rather than one round trip each', async () => {
+  it('saves the terms it has to create at the same time', async () => {
+    // One save per term, awaited one after the other, is the whole wait
+    // between asking for a plugin and seeing its page: on a drive with no
+    // schema that was sixteen round trips before anything appeared, which the
+    // e2e suite saw as a page that never arrived. The terms are independent,
+    // so a slow save must not hold up the next one.
     const store = makeStore();
+    let openSaves = 0;
+    let mostAtOnce = 0;
+    const releases: Array<() => void> = [];
 
-    let inFlight = 0;
-    let peak = 0;
-
-    const slow = async () => {
-      inFlight++;
-      peak = Math.max(peak, inFlight);
-      await new Promise(resolve => setTimeout(resolve, 5));
-      inFlight--;
-    };
-
-    const create = store.newResource;
+    const inner = store.newResource;
     store.newResource = vi.fn(async opts => {
-      await slow();
+      const resource = await inner(opts);
 
-      return create(opts);
-    });
-    store.findByLocalId = vi.fn(async () => {
-      await slow();
-
-      return undefined;
+      return {
+        ...resource,
+        save: async () => {
+          openSaves += 1;
+          mostAtOnce = Math.max(mostAtOnce, openSaves);
+          // Hold every save open until they have all arrived. Sequential code
+          // deadlocks here rather than passing slowly, so this cannot regress
+          // into a test that merely takes longer.
+          await new Promise<void>(resolve => releases.push(resolve));
+          openSaves -= 1;
+        },
+      };
     });
 
     const spec: SchemaSpec = {
-      properties: Array.from({ length: 6 }, (_, i) => ({
-        shortname: `field-${i}`,
-        name: `Field ${i}`,
-        description: 'A field.',
+      properties: ['one', 'two', 'three'].map(shortname => ({
+        shortname,
+        name: shortname,
+        description: shortname,
         datatype: Datatype.STRING,
       })),
       classes: [],
     };
 
-    const terms = await ensureSchema(store, DRIVE, spec);
+    const pending = ensureSchema(store, DRIVE, spec);
+    await vi.waitFor(() => expect(releases.length).toBe(3));
+    for (const release of releases) release();
 
-    expect(Object.keys(terms.properties)).toHaveLength(6);
-    // Sequentially this never rises above one, and a six-property schema costs
-    // twelve round trips before the user sees anything.
-    expect(peak).toBe(6);
+    const schema = await pending;
+    expect(Object.keys(schema.properties)).toEqual(['one', 'two', 'three']);
+    expect(mostAtOnce).toBe(3);
+  });
+
+  it('refuses an incompatible shared term before creating any sibling', async () => {
+    const shared = 'https://x/drive/shared-count';
+    const store = makeStore({
+      [shared]: {
+        subject: shared,
+        isA: [],
+        props: {
+          [core.properties.isA]: [core.classes.property],
+          [core.properties.datatype]: Datatype.STRING,
+        },
+      },
+    });
+
+    const spec: SchemaSpec = {
+      properties: [
+        ...['one', 'two', 'three'].map(shortname => ({
+          shortname,
+          name: shortname,
+          description: shortname,
+          datatype: Datatype.STRING,
+        })),
+        {
+          shortname: 'count',
+          name: 'Count',
+          description: 'Bound to a term of the wrong datatype.',
+          datatype: Datatype.INTEGER,
+          subject: shared,
+        },
+      ],
+      classes: [],
+    };
+
+    await expect(ensureSchema(store, DRIVE, spec)).rejects.toThrow(
+      /incompatible property datatype/,
+    );
+    expect(store.newResource).not.toHaveBeenCalled();
   });
 
   it('keeps the ontology list in spec order however the creates finish', async () => {

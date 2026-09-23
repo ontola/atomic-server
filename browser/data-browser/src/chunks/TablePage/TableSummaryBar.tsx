@@ -91,9 +91,7 @@ export function TableSummaryBar({
   return (
     <Wrapper data-testid='table-summary'>
       <Breakdown data-testid='table-breakdown'>
-        <caption>
-          Per {titles.get(groupByColumn!) ?? groupProperty?.shortname ?? ''}
-        </caption>
+        <caption>Per {titles.get(groupByColumn!) ?? ''}</caption>
         <tbody>
           {groups.map(group => (
             <tr key={group.key} data-testid={`group-${group.key}`}>

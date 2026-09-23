@@ -22,6 +22,8 @@ import { FaRegCircleDot, FaRegCircleCheck } from 'react-icons/fa6';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { InputStyled } from '@components/forms/InputStyles';
+import { useAllMembers } from '../helpers/useAllMembers';
+import { useCreateRow } from '../helpers/useCreateRow';
 import { IssueRow } from './IssueRow';
 import { useIssueStatus } from './useIssueStatus';
 import {
@@ -86,24 +88,7 @@ export function IssuesView({
 
   // Every row, loaded up front: the open/closed split and the text filter both
   // need the whole table, not one page of it.
-  const [memberSubjects, setMemberSubjects] = useState<string[]>([]);
-  const totalMembers = collection.totalMembers;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void collection
-      .getAllMembers()
-      .then(members => {
-        if (!cancelled) setMemberSubjects(members);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [collection, totalMembers]);
-
+  const memberSubjects = useAllMembers(collection);
   const rows = useResources(memberSubjects);
 
   const [filter, setFilter] = useState<Filter>('open');
@@ -151,31 +136,31 @@ export function IssuesView({
   const [creating, setCreating] = useState(false);
   const draftRef = useRef<HTMLInputElement>(null);
 
+  const createRow = useCreateRow(tableSubject, tableClass);
+
   const handleCreate = useCallback(async () => {
     const trimmed = draft.trim();
 
     if (!trimmed || readOnly) return;
 
-    const propVals: Record<string, JSONValue> = {
-      [core.properties.name]: trimmed,
-      [commits.properties.createdAt]: Date.now(),
-    };
-
+    const extra: Record<string, JSONValue> = {};
     const openValue = model && statusValueFor(model, false);
 
-    if (model && openValue !== undefined) propVals[model.property] = openValue;
+    if (model && openValue !== undefined) extra[model.property] = openValue;
 
-    const row = await store.newResource({
-      parent: tableSubject,
-      isA: tableClass.subject,
-      propVals,
-    });
-    await row.save();
-    store.notifyResourceManuallyCreated(row);
+    try {
+      await createRow(trimmed, extra);
+    } catch (error) {
+      // Keep the draft: a failed create should not also lose what was typed.
+      store.notifyError(error as Error);
+
+      return;
+    }
+
     setDraft('');
     setCreating(false);
     setFilter('open');
-  }, [draft, readOnly, model, store, tableSubject, tableClass]);
+  }, [draft, readOnly, model, createRow, store]);
 
   const handleToggleClosed = useCallback(
     async (subject: string, toClosed: boolean) => {
@@ -183,9 +168,13 @@ export function IssuesView({
 
       if (!model || target === undefined) return;
 
-      const resource = store.getResourceLoading(subject);
-      await resource.set(model.property, target);
-      await resource.save();
+      try {
+        const resource = store.getResourceLoading(subject);
+        await resource.set(model.property, target);
+        await resource.save();
+      } catch (error) {
+        store.notifyError(error as Error);
+      }
     },
     [store, model],
   );
@@ -203,6 +192,18 @@ export function IssuesView({
   }
 
   if (status === 'resolving') {
+    // A reader cannot create the Status column, so with no select or checkbox
+    // column to read open/closed from this would never resolve. Say so rather
+    // than look busy forever. (No columns at all is still the loading state.)
+    if (readOnly && allColumns.length > 0) {
+      return (
+        <Center data-testid='issues-view-unavailable'>
+          This table has no status or checkbox column to tell open from closed,
+          so it cannot be shown as an issue list.
+        </Center>
+      );
+    }
+
     return <Center>Setting up the issue tracker…</Center>;
   }
 
@@ -219,8 +220,8 @@ export function IssuesView({
       <Toolbar>
         <Search
           type='search'
-          placeholder={`Filter ${rowName.toLowerCase()}s by title or #number`}
-          aria-label={`Filter ${rowName.toLowerCase()}s`}
+          placeholder='Filter by title or #number'
+          aria-label='Filter by title or number'
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -271,24 +272,22 @@ export function IssuesView({
         </NewIssue>
       )}
       <ListBox>
-        <ListHeader role='tablist' aria-label='Issue state'>
+        <ListHeader role='group' aria-label='Issue state'>
           <StateTab
-            role='tab'
             type='button'
-            aria-selected={filter === 'open'}
+            aria-pressed={filter === 'open'}
             $active={filter === 'open'}
             onClick={() => setFilter('open')}
           >
-            <FaRegCircleDot /> {open.length} Open
+            <FaRegCircleDot aria-hidden /> {open.length} Open
           </StateTab>
           <StateTab
-            role='tab'
             type='button'
-            aria-selected={filter === 'closed'}
+            aria-pressed={filter === 'closed'}
             $active={filter === 'closed'}
             onClick={() => setFilter('closed')}
           >
-            <FaRegCircleCheck /> {closed.length} Closed
+            <FaRegCircleCheck aria-hidden /> {closed.length} Closed
           </StateTab>
         </ListHeader>
         <List>
@@ -306,10 +305,10 @@ export function IssuesView({
           {shown.length === 0 && (
             <Empty>
               {search.trim()
-                ? `No ${filter} ${rowName.toLowerCase()}s match "${search.trim()}".`
+                ? `Nothing matches "${search.trim()}".`
                 : filter === 'open'
-                  ? `No open ${rowName.toLowerCase()}s.`
-                  : `No closed ${rowName.toLowerCase()}s.`}
+                  ? 'Nothing open.'
+                  : 'Nothing closed.'}
             </Empty>
           )}
         </List>

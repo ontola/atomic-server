@@ -49,7 +49,7 @@ export function TableFilterBar({
         .filter(c => !taken.has(c.subject))
         .map(c => ({
           id: c.subject,
-          label: titles.get(c.subject) ?? c.shortname,
+          label: titles.get(c.subject)!,
           onClick: () => addFilter(c.subject),
         })),
       // A computed column is filterable too: the store evaluates it per row, so

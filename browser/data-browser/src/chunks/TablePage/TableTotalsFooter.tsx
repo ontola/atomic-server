@@ -18,6 +18,7 @@ import { TableHeadingWrapper } from '@chunks/TableEditor/TableHeading';
 import { TablePageContext, type AggregateTarget } from './tablePageContext';
 import type { TableColumn } from './useTableColumns';
 import { BreakdownDialog } from './BreakdownDialog';
+import { useColumnLabel } from './helpers/useColumnLabel';
 import type { DerivedColumnSpec } from './derivedColumns';
 import {
   AGGREGATE_FUNCTION_LABELS,
@@ -311,6 +312,7 @@ function TotalCell({
   readOnly: boolean;
 }): JSX.Element {
   const functions = functionsFor(column);
+  const propertyLabel = useColumnLabel(column.property);
 
   // A column that is neither stored nor computed — the timer's Start/Stop button
   // — has nothing to add up. Say so rather than swallowing the click: a dead cell
@@ -325,7 +327,7 @@ function TotalCell({
     );
   }
 
-  const label = column.derived?.label ?? column.property?.shortname ?? '';
+  const label = column.derived?.label ?? propertyLabel;
 
   const outcome = configured
     ? outcomeByKey.get(aggregateKey(configured))

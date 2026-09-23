@@ -10,6 +10,7 @@ import { AtomicLink } from '@components/AtomicLink';
 import { Button } from '@components/Button';
 import { Tag } from '@components/Tag';
 import { formatTimeAgo } from '@helpers/formatTimeAgo';
+import { plural } from '@helpers/plural';
 import { useCommentCount } from '../../../hooks/useCommentCount';
 import {
   isIssueClosed,
@@ -24,7 +25,7 @@ interface IssueRowProps {
   /** An integer column holding the issue's number, when the table has one. */
   numberProp: string | undefined;
   readOnly: boolean;
-  onToggleClosed: (subject: string, closed: boolean) => void;
+  onToggleClosed: (subject: string, closed: boolean) => void | Promise<void>;
 }
 
 /**
@@ -57,8 +58,16 @@ export function IssueRow({
 
   return (
     <Row data-testid='issue-row' data-closed={closed || undefined}>
-      <StateIcon $closed={closed} aria-label={closed ? 'Closed' : 'Open'}>
-        {closed ? <FaRegCircleCheck /> : <FaRegCircleDot />}
+      <StateIcon
+        role='img'
+        $closed={closed}
+        aria-label={closed ? 'Closed' : 'Open'}
+      >
+        {closed ? (
+          <FaRegCircleCheck aria-hidden />
+        ) : (
+          <FaRegCircleDot aria-hidden />
+        )}
       </StateIcon>
       <Body>
         <TitleLine>
@@ -76,16 +85,18 @@ export function IssueRow({
         {count > 0 && (
           <Comments
             $unseen={hasUnseen}
-            title={`${count} ${count === 1 ? 'comment' : 'comments'}`}
+            title={plural(count, ['# comment', '# comments'])}
           >
-            <FaRegComment /> {count}
+            <FaRegComment aria-hidden /> {count}
           </Comments>
         )}
         {!readOnly && (
           <ToggleButton
             subtle
             type='button'
-            onClick={() => onToggleClosed(subject, !closed)}
+            // The visible word alone is ambiguous in a list of them.
+            aria-label={closed ? `Reopen ${title}` : `Close ${title}`}
+            onClick={() => void onToggleClosed(subject, !closed)}
           >
             {closed ? 'Reopen' : 'Close'}
           </ToggleButton>

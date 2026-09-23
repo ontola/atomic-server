@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { planVerdict, type PlanHost } from './plugin-plan.js';
+import { PREFETCH_LIMIT, planVerdict, type PlanHost } from './plugin-plan.js';
 import { Datatype } from './datatypes.js';
 import type { Property } from './store.js';
 import type { Verdict } from './plugin-run.js';
@@ -541,5 +541,56 @@ describe('fetching', () => {
     // ever fetched once.
     expect(peak).toBe(3);
     expect(host.getProperty).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a bounded number of reads in flight for a large edit', async () => {
+    const subjects = Array.from({ length: 50 }, (_, i) => `https://x/${i}`);
+    const host = makeHost({
+      resources: Object.fromEntries(subjects.map(s => [s, { [NAME]: 'old' }])),
+    });
+
+    let inFlight = 0;
+    let peak = 0;
+    let released = false;
+    const held: Array<() => void> = [];
+
+    // Every read is held open until the test lets go, so an unbounded
+    // prefetch would show all fifty in flight at once.
+    const readResource = host.readResource;
+    host.readResource = vi.fn(async subject => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+
+      if (!released) await new Promise<void>(resolve => held.push(resolve));
+
+      inFlight--;
+
+      return readResource(subject);
+    });
+
+    const planning = planVerdict(
+      verdict({
+        intents: subjects.map(subject => ({
+          op: 'set' as const,
+          subject,
+          set: { [NAME]: 'new' },
+        })),
+      }),
+      host,
+    );
+
+    await vi.waitFor(() => expect(held.length).toBe(PREFETCH_LIMIT));
+    // Give an unbounded runner every chance to start more.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(inFlight).toBe(PREFETCH_LIMIT);
+
+    released = true;
+    held.forEach(release => release());
+
+    const plan = await planning;
+
+    expect(plan.changes).toHaveLength(subjects.length);
+    expect(peak).toBe(PREFETCH_LIMIT);
+    expect(host.readResource).toHaveBeenCalledTimes(subjects.length);
   });
 });
