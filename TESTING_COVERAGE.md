@@ -2503,3 +2503,11 @@ must not override an intentional sign-out or device lock.
 | Pre-DID queries retry without unsupported parameters and filter locally | `browser/lib/src/legacy-http-collection.test.ts` | Preserves drive ancestry and AND filters, sorts before pagination, keeps undated rows; a loaded parent Drive overrides stale default scope |
 | Migrated agents authenticate legacy HTTP reads at their original origin | `browser/lib/src/client-legacy-auth.test.ts` | Original HTTP identity, padded standard-base64 key/signature, real Ed25519 verification; other hosts, schemes, ports and lookalikes never receive the legacy identity |
 | Public legacy HTTP drive and its children load from a nodeless home | `browser/lib/src/legacy-http-live-check.test.ts` | Opt-in `ATOMIC_LEGACY_LIVE=1`; live atomicdata.dev read verified 2026-09-23. Does not cover private legacy auth or browser sidebar rendering |
+
+## Agent secrets from app.atomic.place (#1649)
+
+`browser/lib/src/agent-secret-1649.test.ts` passes a synthetic secret in the
+deployed app's base64 JSON format with an `atomic:agent:` subject through the
+same `Agent.fromSecret` parser used by the local welcome form. It verifies
+the identity and public key. Browser sign-in and data recovery are separate
+flows.
