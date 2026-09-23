@@ -10,6 +10,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { openPrivateHome } from '../helpers/openPrivateHome';
 import { privateHomeNudge } from '../helpers/privateHomeNudge';
+import { addRecentResource } from '../helpers/recentResources';
 
 export type ShowRouteSearch = {
   subject: string;
@@ -94,6 +95,15 @@ export const ShowComponent: React.FunctionComponent = () => {
       replace: true,
     });
   }, [signInFirst, subject, navigate]);
+
+  // Feeds the "recent" list the document `@` menu shows before typing.
+  React.useEffect(() => {
+    if (signInFirst || !drive || !Client.isValidSubject(subject)) return;
+    // Wait until the drive switch above has landed.
+    if (requestedDrive && requestedDrive !== drive) return;
+
+    addRecentResource(drive, subject);
+  }, [signInFirst, drive, requestedDrive, subject]);
 
   if (signInFirst) {
     return null;

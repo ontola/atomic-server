@@ -1851,6 +1851,20 @@ export async function contextMenuClick(text: string, page: Page) {
   await item.click();
 }
 
+/**
+ * Open the Connections or Automations dialog of the table page on screen.
+ * Both live in the table's context menu, which only lists them once the table
+ * page has mounted, so `timeout` covers the page still loading.
+ */
+export async function openWorkspaceDialog(
+  page: Page,
+  section: 'connections' | 'automations',
+  timeout?: number,
+) {
+  await page.click(contextMenu);
+  await page.getByTestId(`menu-item-${section}`).click({ timeout });
+}
+
 export const anyValue = Symbol('any');
 type CommitFilter = {
   set?: Record<string, unknown | typeof anyValue>;

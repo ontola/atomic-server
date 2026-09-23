@@ -297,7 +297,6 @@ msgstr "Choisir un modèle par défaut"
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/AISetupPanel.tsx src/components/DemoExitButton.tsx
 #: src/components/DemoExitButton.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Back"
 msgstr "Retour"
 
@@ -1492,6 +1491,7 @@ msgstr "Description textuelle <0/>"
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -2448,7 +2448,6 @@ msgstr "Accepter les modifications"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx src/components/Share/ShareDialog.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr "Partager"
 
@@ -2552,9 +2551,8 @@ msgstr "Rien à afficher"
 msgid "Allow edits"
 msgstr "Autoriser les modifications"
 
-#: src/components/InviteForm.tsx
-msgid "Invite text (optional)"
-msgstr "Texte d'invitation (facultatif)"
+#~ msgid "Invite text (optional)"
+#~ msgstr "Texte d'invitation (facultatif)"
 
 #: src/components/InviteForm.tsx
 msgid "Invite created and copied to clipboard! 🚀"
@@ -4157,7 +4155,6 @@ msgstr ""
 msgid "as a classtype."
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Create Invite"
@@ -12321,4 +12318,57 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+#: src/components/AI/MicrophoneSelect.tsx
+#: src/components/AI/SpeechSettings.tsx
+msgid "Microphone"
+msgstr ""
+
+#. 0: index + 1
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "Microphone {0}"
+msgstr ""
+
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "System default"
+msgstr ""
+
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "Show microphone names…"
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite people to"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Manage access"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Access to"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Inherited permissions"
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Stop starting new {0}s here"
+msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Start new {0}s here"
+msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "New {0}s start here"
 msgstr ""

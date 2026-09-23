@@ -207,6 +207,7 @@ export function SideBarDrive({
                 <QuickCreateRow
                   parent={drive}
                   newResourceButtonTestId='sidebar-new-resource'
+                  highlightUntilUsed
                   onItemClick={onItemClick}
                 />
               </NewResourceRow>

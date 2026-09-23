@@ -12,6 +12,32 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   another card and open it. The editor now matches the title's box and wraps
   like it, opens with the caret under the click, commits on Enter or blur,
   cancels on Escape, and shows the new title while it saves.
+- AI chat options and the speech settings let you pick the microphone used for
+  voice messages. The agent select in AI chat options is clickable over its
+  whole width again: an inline width left its chevron outside the select.
+- Fix: someone who signs up from an invitation and has no recovery backup can
+  still accept it. The portal opens the restore step for an invitee whenever it
+  cannot rule out an earlier identity, and with nothing to restore that step
+  stopped at "No recovery backup was found". It now offers to create the
+  account, keeping the invitation.
+- Typing `@` in a document lists recently opened resources in that drive, topped up with the drive's own children, instead of "No results found".
+- The sidebar's New button stands out for first-time users. It opens the page
+  for everything you can build (apps, websites, tables, templates), but at rest
+  it is a faint grey line under the tree. Until the New page has been opened
+  once in this browser, it shows in the accent colour on a soft tint and pulses
+  a few times after 20 seconds.
+- Fix: a task added from a table's calendar, grid, quick-add button or paste
+  now starts in the board's Todo lane instead of "No status". Tables carry
+  `table-row-defaults` (property to starting value), which every way of adding
+  a row fills in for what it does not set itself. Templates set it (Todo, Lead,
+  Wishlist, Want to read, Invited), as does a Status column the board creates,
+  and any board lane can be made the default from its header menu.
+- Fix: a table breakdown's "n rows" counts every row in the group. It showed
+  how many rows fed the first statistic, so Project tasks, which sums Estimate,
+  read "0 rows" under each status until tasks had an estimate. And a select
+  option's page counts the rows that use it through its column (a task's
+  Status), not only through `tags`, so Doing no longer reads "0 resources".
+- Move the Connections and Automations buttons above table views into the table's context menu, next to Export to CSV. They open the same dialog as before.
 
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
