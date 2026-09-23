@@ -3,11 +3,7 @@ import styled from 'styled-components';
 import { useStore, type Resource } from '@tomic/react';
 import { AtomicLink } from '@components/AtomicLink';
 import { Button } from '@components/Button';
-import {
-  readWebsiteExport,
-  readWebsiteVersion,
-  downloadWebsite,
-} from './websiteExport';
+import { readWebsiteVersion, downloadWebsite } from './websiteExport';
 import type { WebsiteArtifact } from './renderWebsite';
 import { WebsitePreview } from './WebsitePreview';
 
@@ -16,7 +12,7 @@ export function WebsiteExportPage({
   deployment,
 }: {
   resource: Resource;
-  deployment?: string;
+  deployment: string;
 }) {
   const store = useStore();
   const [artifact, setArtifact] = useState<WebsiteArtifact>();
@@ -27,10 +23,7 @@ export function WebsiteExportPage({
     let active = true;
     setArtifact(undefined);
     setError('');
-    (deployment
-      ? readWebsiteVersion(store, resource.subject, deployment)
-      : readWebsiteExport(store, store.getDrive()!, resource)
-    )
+    readWebsiteVersion(store, resource.subject, deployment)
       .then(result => {
         if (active) setArtifact(result);
       })
@@ -59,9 +52,7 @@ export function WebsiteExportPage({
               </p>
             </div>
             <nav aria-label='Export actions'>
-              <AtomicLink subject={artifact.project}>
-                Back to app
-              </AtomicLink>
+              <AtomicLink subject={artifact.project}>Back to app</AtomicLink>
               <select
                 aria-label='Preview page'
                 value={pagePath}

@@ -37,13 +37,13 @@ test('selected private image renders in a published gallery', async ({
   await expect
     .poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth))
     .toBe(1);
-  await page.getByRole('button', { name: 'Publish site', exact: true }).click();
+  await page.getByRole('button', { name: 'Publish app', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Up to date', exact: true }),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const popupPromise = page.waitForEvent('popup');
-  await page.getByTestId('menu-item-website-view').click();
+  await page.getByTestId('menu-item-publication-view').click();
   const popup = await popupPromise;
   await popup.waitForLoadState();
   const target = new URL(popup.url());

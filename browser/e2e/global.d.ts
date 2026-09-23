@@ -123,9 +123,8 @@ export interface E2EModules {
       project: string,
       config: WebsiteConfig,
     ): Promise<WebsiteArtifact>;
-    saveWebsiteRelease(
+    saveAppRelease(
       store: Store,
-      drive: string,
       resource: Resource,
       artifact: WebsiteArtifact,
     ): Promise<HostingStatus>;

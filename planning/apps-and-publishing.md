@@ -38,6 +38,10 @@ this publication model must specify whether an App release is pinned or live.
 - [x] Keep site page inline editing against its source Documents and Tables.
 - [x] Use one static release authorization and upload path for site and table
   Apps, with explicit selected rows and fields.
+- [x] Keep the pending table publication selection on its App so people and AI
+  can review the same draft.
+- [x] Remove the obsolete export-resource class and read path; versions live in
+  the hosting release store.
 - [ ] Give code Apps a reviewed, credential-free public renderer with selected
   data and no implicit writes.
 - [ ] Export composed blocks through the same release model, including exact

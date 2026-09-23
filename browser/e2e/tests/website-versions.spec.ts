@@ -6,32 +6,29 @@ test('website versions deduplicate without creating sidebar resources', async ({
 }) => {
   await before({ page });
   const saved = await page.evaluate(async () => {
-    const { createWebsite, starterWebsite, readWebsite } =
+    const { createWebsite, starterWebsite } =
       window.atomicE2E.websiteModel;
-    const { buildWebsiteArtifact, saveWebsiteRelease } =
+    const { buildWebsiteArtifact, saveAppRelease } =
       window.atomicE2E.websiteExport;
     const store = window.store;
     const drive = store.getDrive()!;
     const config = starterWebsite('Version navigation');
     const site = await createWebsite(store, drive, config);
     const artifact = await buildWebsiteArtifact(store, site.subject, config);
-    const first = await saveWebsiteRelease(store, drive, site, artifact);
-    const again = await saveWebsiteRelease(store, drive, site, {
+    const first = await saveAppRelease(store, site, artifact);
+    const again = await saveAppRelease(store, site, {
       ...artifact,
       createdAt: new Date().toISOString(),
     });
-    const { schema } = await readWebsite(store, drive, site);
 
     return {
       subject: site.subject,
       first,
       again,
-      release: site.get(schema.properties!['website-release']),
     };
   });
   expect(saved.again.state!.deployments).toHaveLength(1);
   expect(saved.again.state!.revision).toBe(saved.first.state!.revision);
-  expect(saved.release).toBeFalsy();
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(saved.subject)}`,
   );
@@ -42,11 +39,11 @@ test('website versions deduplicate without creating sidebar resources', async ({
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(saved.subject)}&view=website-version:${saved.first.deployment}`,
   );
   await expect(
-    page.getByRole('link', { name: 'Back to website' }),
+    page.getByRole('link', { name: 'Back to app' }),
   ).toBeVisible();
   await expect(
     page
-      .frameLocator('iframe[title="Website preview"]')
+      .frameLocator('iframe[title="App preview"]')
       .getByRole('heading', { name: 'Version navigation' })
       .first(),
   ).toBeVisible();

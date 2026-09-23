@@ -1,5 +1,4 @@
 import { LocalThoughtSync } from '@chunks/PluginRuns/LocalThoughtSyncPanel';
-import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
@@ -56,11 +55,6 @@ const ViewPage = lazy(() =>
   import('../chunks/TablePage/ViewPage').then(m => ({ default: m.ViewPage })),
 );
 
-const WebsiteExportPage = lazy(() =>
-  import('@chunks/Website/WebsiteExportPage').then(m => ({
-    default: m.WebsiteExportPage,
-  })),
-);
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
   resource: Resource<Subject>;
@@ -84,10 +78,6 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const isPlugin = useIsPlugin(resource);
   const store = useStore();
   const drive = store.getDrive();
-  const websiteExportClass = useWebsiteClass(
-    isAList.join('|'),
-    'website-export',
-  );
 
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page interactive again.
@@ -172,18 +162,6 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
 
   if (ReturnComponent === ResourcePageDefault) {
     if (loading) return null;
-
-    if (websiteExportClass && resource.hasClasses(websiteExportClass)) {
-      return (
-        <Main subject={subject}>
-          <ErrorBoundary>
-            <Suspense fallback={<Spinner />}>
-              <WebsiteExportPage resource={resource} />
-            </Suspense>
-          </ErrorBoundary>
-        </Main>
-      );
-    }
 
     // A plugin's class is minted per drive, so it has no fixed subject and
     // cannot be a case in `selectComponent`. It gets a real page all the same.

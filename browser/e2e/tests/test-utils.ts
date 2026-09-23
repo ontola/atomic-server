@@ -1039,7 +1039,11 @@ export async function openNewResourcePage(page: Page) {
 }
 
 /** Create a complete starter from the catalog, preserving the current parent. */
-export async function createFromCatalog(page: Page, title: string) {
+export async function createFromCatalog(
+  page: Page,
+  title: string,
+  appLayout?: 'Blocks' | 'Site pages' | 'Custom code',
+) {
   const parent = new URL(page.url()).searchParams.get('subject');
   await waitForSynced(page);
   const url = new URL('/app/new', page.url());
@@ -1076,6 +1080,11 @@ export async function createFromCatalog(page: Page, title: string) {
       .getByRole('region', { name: 'Start blank' })
       .getByRole('button', { name: title, exact: true })
       .click();
+    if (appLayout)
+      await page
+        .getByRole('region', { name: 'Choose app layout' })
+        .getByRole('button', { name: appLayout, exact: true })
+        .click();
     await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
   } catch (waitFailed) {
     console.error(

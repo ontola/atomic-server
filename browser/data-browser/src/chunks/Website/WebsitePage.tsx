@@ -53,7 +53,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 
   useEffect(() => {
     let active = true;
-    void readWebsiteRelease(store, drive, resource)
+    void readWebsiteRelease(store, resource)
       .then(saved => {
         if (active) setRelease(saved);
       })

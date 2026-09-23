@@ -143,28 +143,8 @@ export const WEBSITE_SPEC: SchemaSpec = {
         'Draft routes, appearance and explicitly selected content. JSON text.',
       datatype: Datatype.STRING,
     },
-    {
-      shortname: 'website-release',
-      name: 'Website release',
-      description:
-        'A private frozen static export. This does not make the website public.',
-      datatype: Datatype.ATOMIC_URL,
-    },
-    {
-      shortname: 'website-artifact',
-      name: 'Website artifact',
-      description: 'Versioned static release manifest as JSON text.',
-      datatype: Datatype.STRING,
-    },
   ],
-  classes: [
-    {
-      shortname: 'website-export',
-      name: 'Website export',
-      description: 'A frozen website ready for static hosting.',
-      requires: ['website-artifact'],
-    },
-  ],
+  classes: [],
 };
 export function starterWebsite(
   title = 'My website',
