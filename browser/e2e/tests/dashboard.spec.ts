@@ -300,6 +300,7 @@ test.describe('dashboards', () => {
     const createdClass = await page.evaluate(async () => {
       const subject = new URL(location.href).searchParams.get('subject')!;
       const resource = await window.store.getResource(subject);
+
       return resource.get('https://atomicdata.dev/properties/isA');
     });
     expect(createdClass).toContain('https://atomicdata.dev/classes/View');

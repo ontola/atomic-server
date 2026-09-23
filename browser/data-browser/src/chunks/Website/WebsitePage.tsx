@@ -61,10 +61,9 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         if (active && reportedReleaseError.current !== String(cause)) {
           reportedReleaseError.current = String(cause);
           store.notifyError(
-            new Error(
-              'Could not load saved app version: ' + String(cause),
-              { cause },
-            ),
+            new Error('Could not load saved app version: ' + String(cause), {
+              cause,
+            }),
           );
         }
       });
@@ -201,7 +200,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     () =>
       askAI({
         prompt:
-          /* @wc-ignore */ 'Help me design this app’s site pages. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
+          /* @wc-ignore */ 'Help me design this app’s site pages. Read it with describe_app, ask what I want to change, then use update_app. Keep content in its existing Atomic documents and tables.',
         context: [
           newContextItem<AIAtomicResourceMessageContext>({
             type: 'atomic-resource',

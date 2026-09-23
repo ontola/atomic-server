@@ -1,7 +1,13 @@
 import { standardClassAlias } from './standardClassAlias';
 import { updateTableRows } from './updateTableRows';
 // @wc-ignore-file
-import { websiteTools } from '@chunks/Website/websiteTools';
+import {
+  createWebsite,
+  readWebsite,
+  updateWebsite,
+  websiteConfigSchema,
+} from '@chunks/Website/websiteModel';
+import { buildWebsiteArtifact } from '@chunks/Website/websiteExport';
 import { useAppSetup } from '../../components/AppSetup/AppSetupProvider';
 import { listAppSetups } from '../../components/AppSetup/registry';
 import { previewEventSchema, previewTrigger } from './previewTrigger';
@@ -99,8 +105,6 @@ export const TOOL_NAMES = {
   READ_SKILL: 'read_skill',
   READ_SKILL_REFERENCE: 'read_skill_reference',
   CREATE_SKILL: 'create_skill',
-  CREATE_DASHBOARD: 'create_dashboard',
-  DESCRIBE_DASHBOARD: 'describe_dashboard',
   CONFIGURE_BLOCK: 'configure_block',
   // Derived from `resourceActions` (`asTool`). Keep names in sync with
   // `toolName` on those definitions.
@@ -116,13 +120,33 @@ export const TOOL_NAMES = {
   CALL_INTEGRATION_ACTION: 'call_integration_action',
   RUN_PLUGIN: 'run_plugin',
   SCHEDULE_PLUGIN: 'schedule_plugin',
-  CREATE_WEBSITE: 'create_website',
-  DESCRIBE_WEBSITE: 'describe_website',
-  UPDATE_WEBSITE: 'update_website',
   CREATE_APP: 'create_app',
   DESCRIBE_APP: 'describe_app',
   UPDATE_APP: 'update_app',
 } as const;
+
+function expandSiteRefs(config: z.infer<typeof websiteConfigSchema>) {
+  return {
+    ...config,
+    pages: config.pages.map(page => ({
+      ...page,
+      documents: page.documents.map(expandSubject),
+      media: page.media?.map(image => ({
+        ...image,
+        subject: expandSubject(image.subject),
+      })),
+      tables: page.tables.map(table => ({
+        ...table,
+        table: expandSubject(table.table),
+        rows: table.rows.map(expandSubject),
+        columns: table.columns.map(column => ({
+          ...column,
+          property: expandSubject(column.property),
+        })),
+      })),
+    })),
+  };
+}
 
 /**
  * When a run began.
@@ -578,11 +602,9 @@ export function useAtomicMCPTools({
     return { table, tableClass: await store.getResource(classtype) };
   };
 
-  const { describe_website, ...websiteWriteTools } = websiteTools(store, drive);
   const tools = {
     read: {
       ...derivedReadTools,
-      describe_website,
       [TOOL_NAMES.SEMANTIC_SEARCH]: tool({
         description:
           'Perform a hybrid semantic and/or text search for resources in the AtomicServer Database. This is more powerful than regular search as it understands the meaning of the query. The results only include the **first** relevant chunk of the resource that matches the query. To get a complete picture you might need to fetch the full resource. If your search requires more specific results use the optional text_query parameter to bias the results towards the text',
@@ -891,27 +913,6 @@ export function useAtomicMCPTools({
             return shortenRefsDeep(await describeTable(store, table));
           } catch (err) {
             return `Error describing table: ${err}`;
-          }
-        },
-        strict: true,
-      }),
-      [TOOL_NAMES.DESCRIBE_DASHBOARD]: tool({
-        description:
-          "Read a dashboard's blocks and their configuration: each block's kind, title, source table, which view scopes it, what it measures and how it is bucketed. Use this before configure_block instead of guessing.",
-        inputSchema: z.object({
-          dashboard: z.string().describe('Subject (or #ref) of the dashboard.'),
-        }),
-        execute: async ({ dashboard: reference }) => {
-          try {
-            const dashboard = await store.getResource(expandSubject(reference));
-
-            if (dashboard.error) {
-              throw new Error(String(dashboard.error));
-            }
-
-            return shortenRefsDeep(await describeDashboard(store, dashboard));
-          } catch (err) {
-            return `Error describing dashboard: ${err}`;
           }
         },
         strict: true,
@@ -1361,44 +1362,9 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         },
         strict: true,
       }),
-      [TOOL_NAMES.CREATE_DASHBOARD]: tool({
-        description:
-          /* @wc-ignore */
-          'Create a composed View over existing tables in ONE call: its blocks and their layout. The View can live under a Drive and combine multiple tables. Blocks come in four kinds: "stat" (one number), "chart" (a number per bucket, drawn as bars), "view" (an embedded, editable table/board/calendar) and "text" (a heading or note). A stat or chart block borrows a view\'s filters, so "open issues" is a stat block pointing at the view that filters to open — call describe_table first to see which views exist. Blocks are laid out left to right in twelfths automatically.',
-        inputSchema: z.object({
-          name: z.string().describe('The display name of the dashboard.'),
-          parent: z
-            .string()
-            .optional()
-            .describe(
-              'Subject of the folder or drive to create it in. Defaults to the current drive.',
-            ),
-          blocks: z.array(blockSpecSchema).describe('The blocks, in order.'),
-        }),
-        execute: async ({ name, parent, blocks }) => {
-          try {
-            const result = await buildDashboardFromSpec(
-              store,
-              { name, blocks: blocks as DashboardBlockSpec[] },
-              { parent: parent ? expandSubject(parent) : drive },
-            );
-
-            return shortenRefsDeep({
-              dashboard: result.dashboardSubject,
-              blocks: result.blocks,
-              ...(result.warnings.length > 0
-                ? { warnings: result.warnings }
-                : {}),
-            });
-          } catch (err) {
-            return `Error creating dashboard: ${err}`;
-          }
-        },
-        strict: true,
-      }),
       [TOOL_NAMES.CONFIGURE_BLOCK]: tool({
         description:
-          'Change one block of a dashboard in place. Only the fields you pass are touched, so setting a width cannot drop what the block measures — with one exception: pointing a block at a different `table` also clears its view, measure and chart column, because those named columns of the old table. Pass replacements in the same call. Read the current state with describe_dashboard first.',
+          'Change one block of a blocks App in place. Only the fields you pass are touched. Pointing a block at another table clears its view, measure and chart column; pass replacements in the same call. Read the App with describe_app first.',
         inputSchema: z.object({
           dashboard: z.string().describe('Subject (or #ref) of the dashboard.'),
           block: z
@@ -1452,28 +1418,37 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         },
         strict: true,
       }),
-      ...websiteWriteTools,
       [TOOL_NAMES.CREATE_APP]: tool({
-        description: CREATE_APP_DESCRIPTION,
+        description:
+          'Create an App with site pages, composed blocks, or custom code. Use a table template or native table view when it fits. Site content stays editable in its source documents and tables. Blocks can combine multiple tables. Custom code is for interactions that native views and blocks cannot express. Creating a draft never publishes it. For code Apps: ' +
+          CREATE_APP_DESCRIPTION,
         inputSchema: z.object({
           name: z.string().describe('Display name of the app.'),
+          layout: z.enum(['site', 'blocks', 'code']),
+          parent: z.string().optional(),
+          config: websiteConfigSchema.optional(),
+          blocks: z.array(blockSpecSchema).optional(),
           emoji: z
             .string()
+            .optional()
             .describe(
               'One emoji for the app, shown wherever it is listed. Pick something about what the app is FOR, not a generic 📱 or ✨.',
             ),
           rowNameSingular: z
             .string()
+            .optional()
             .describe(
               "What ONE of the app's records is called, in the user's words: 'Feeding session', 'Contact', 'Workout'. Never 'Item' or 'Record'. This names the class, and it is what the table's rows are called everywhere in the UI.",
             ),
           rowNamePlural: z
             .string()
+            .optional()
             .describe(
               "The plural of rowNameSingular: 'Feeding sessions', 'Contacts', 'Workouts'. This becomes the table's title, so it is what the user reads in the sidebar.",
             ),
           source: z
             .string()
+            .optional()
             .describe(
               'The full JavaScript module, exporting `view({root, store})`.',
             ),
@@ -1481,6 +1456,10 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         }),
         execute: async ({
           name,
+          layout,
+          parent,
+          config,
+          blocks,
           emoji,
           rowNameSingular,
           rowNamePlural,
@@ -1488,6 +1467,46 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
           description,
         }) => {
           try {
+            if (layout === 'site') {
+              if (!config || config.title !== name)
+                throw new Error(
+                  'A site App needs a config with the same title as name.',
+                );
+              const parsed = expandSiteRefs(config);
+              const check = await buildWebsiteArtifact(store, 'draft', parsed);
+              const resource = await createWebsite(
+                store,
+                drive,
+                parsed,
+                parent ? expandSubject(parent) : drive,
+              );
+
+              return shortenRefsDeep({
+                app: resource.subject,
+                layout,
+                checkedPages: Object.keys(check.files),
+                status: 'private draft',
+              });
+            }
+
+            if (layout === 'blocks') {
+              if (!blocks) throw new Error('A blocks App needs blocks.');
+              const result = await buildDashboardFromSpec(
+                store,
+                { name, blocks: blocks as DashboardBlockSpec[] },
+                { parent: parent ? expandSubject(parent) : drive },
+              );
+
+              return shortenRefsDeep({
+                app: result.dashboardSubject,
+                layout,
+                blocks: result.blocks,
+                warnings: result.warnings,
+              });
+            }
+
+            if (!source || !emoji || !rowNameSingular || !rowNamePlural)
+              throw new Error('A code App needs source, emoji and row names.');
             const created = await createApp(store, {
               drive,
               name,
@@ -1539,12 +1558,28 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.DESCRIBE_APP]: tool({
         description:
-          'Read an app back: its name, emoji, its full source, and the table and row class its data lives in. Call this BEFORE update_app whenever you did not write the source yourself in this conversation — fixing a bug means editing the code that is actually running, not the code you would have written.',
+          'Read an App and its layout. Site Apps return their page design and source references, blocks Apps return all blocks and settings, and code Apps return their complete source and data table. Call before update_app or configure_block.',
         inputSchema: z.object({
           app: z.string().describe('Subject (or #ref) of the app.'),
         }),
         execute: async ({ app: reference }) => {
           try {
+            const resource = await store.getResource(expandSubject(reference));
+            if (resource.error) throw new Error(String(resource.error));
+            const layout = resource.get(dataBrowser.properties.viewKind);
+
+            if (layout === 'site') {
+              const { config } = await readWebsite(store, drive, resource);
+
+              return shortenRefsDeep({ app: resource.subject, layout, config });
+            }
+
+            if (layout === 'blocks')
+              return shortenRefsDeep({
+                app: resource.subject,
+                layout,
+                ...(await describeDashboard(store, resource)),
+              });
             const described = await describeApp(
               store,
               drive,
@@ -1560,13 +1595,10 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.UPDATE_APP]: tool({
         description:
-          'Change an existing app: its source, its name, its emoji, or any combination. Use this to fix a bug, add a feature, or rename — never create_app a second time, which would leave the user with two apps and strand the rows in the first.\n\n' +
-          '`source` REPLACES the whole module, so pass the complete file, not a fragment or a diff. Call describe_app first if you do not already have the current source in front of you.\n\n' +
-          "The app's table, row class, schema, identity and rights all survive this — only the code changes. So the user's existing rows are still there after a fix, and your new source has to keep reading them the same way.\n\n" +
-          'If the fix needs a field the rows do not have yet, add it with add_table_columns first, then write source that uses it.\n\n' +
-          "The app is run before this tool returns, and the result comes back as `ran`. A fix that does not make `ran` say 'ok' is not a fix — keep going.",
+          'Update an App in place. For site pages, pass the complete config and keep content in its source documents and tables; the static export is checked but no release is published. For code, source replaces the whole module and is run before this tool returns. Read the current App with describe_app first. For individual blocks, use configure_block.',
         inputSchema: z.object({
           app: z.string().describe('Subject (or #ref) of the app to change.'),
+          config: websiteConfigSchema.optional(),
           source: z
             .string()
             .optional()
@@ -1576,8 +1608,46 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
           name: z.string().optional().describe('A new display name.'),
           emoji: z.string().optional().describe('A new emoji.'),
         }),
-        execute: async ({ app: reference, source, name, emoji }) => {
+        execute: async ({ app: reference, config, source, name, emoji }) => {
           try {
+            const resource = await store.getResource(expandSubject(reference));
+            if (resource.error) throw new Error(String(resource.error));
+            const layout = resource.get(dataBrowser.properties.viewKind);
+
+            if (layout === 'site') {
+              if (!config) throw new Error('A site App update needs config.');
+              const parsed = expandSiteRefs(config);
+              const check = await buildWebsiteArtifact(
+                store,
+                resource.subject,
+                parsed,
+              );
+              await updateWebsite(store, drive, resource, parsed);
+
+              return {
+                app: shortenSubject(resource.subject),
+                updated: true,
+                checkedPages: Object.keys(check.files),
+                status: 'private draft; published release unchanged',
+              };
+            }
+
+            if (layout === 'blocks') {
+              if (source || config || emoji)
+                throw new Error('Use configure_block to edit blocks.');
+
+              if (name) {
+                await resource.set(core.properties.name, name);
+                await resource.save();
+              }
+
+              return shortenRefsDeep({
+                app: resource.subject,
+                updated: !!name,
+                ...(await describeDashboard(store, resource)),
+              });
+            }
+
             const updated = await updateApp(store, drive, {
               app: expandSubject(reference),
               source,

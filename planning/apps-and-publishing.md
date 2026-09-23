@@ -33,6 +33,8 @@ this publication model must specify whether an App release is pinned or live.
 - [x] Offer one App creation entry with a starting layout choice.
 - [x] Dispatch stand-alone Apps through one resource page.
 - [x] Remove new Dashboard, Website and drive-local App root classes.
+- [x] Use one assistant create/describe/update App tool across site, blocks and
+  code layouts; configure individual blocks with the existing block tool.
 - [x] Keep site page inline editing against its source Documents and Tables.
 - [x] Use one static release authorization and upload path for site and table
   Apps, with explicit selected rows and fields.
@@ -42,8 +44,8 @@ this publication model must specify whether an App release is pinned or live.
   stat/chart values and an explicit treatment of write-capable blocks.
 - [ ] Unify publication controls and saved draft selection across layouts so
   AI and collaborators can review the same pending release.
-- [ ] Remove remaining Dashboard/Website terminology from authoring tools,
-  templates and implementation names after their replacements are in place.
+- [ ] Remove remaining Dashboard/Website terminology from templates and
+  implementation names after their replacements are in place.
 - [ ] Verify creation, inline editing and public output in a real browser, plus
   focused TypeScript, Rust and unit coverage.
 
