@@ -29,6 +29,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   old server echoes back. The in-memory store keys resources canonically
   (#1584).
 
+- The causality guard no longer refuses a commit whose writes lost an honest
+  race. It asked whether the merge kept what the commit sent, which an unseeded
+  client and a client that simply lost to a newer peer both answer no, so a
+  client with a perfectly good doc was told to refetch and retry, and could only
+  resend the same bytes. It now asks what it means to ask: whether the incoming
+  update's version vector carries any peer the stored state also has. A doc
+  seeded from the server does, however far behind it has fallen, and losing
+  last-writer-wins from there is accepted. A doc built from scratch does not,
+  and its vanished writes are still refused, as before. The version comes from
+  the blob header via `update_range`, so the check costs a parse and not a
+  second document build.
+
 - A causality rejection now names the writes it dropped. The error a client
   gets when its Loro update lost every write to LWW reports each mismatching
   property as `sent <x>, stored <y>`, in place of the full list of values sent
