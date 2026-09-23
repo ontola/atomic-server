@@ -78,9 +78,12 @@ second writer on tracked files. Four ways that has cost real time:
   browser/data-browser/src/locales/.wuchale` and restart vite. Do not make
   the `.po` files read-only to stop the rewrite; the compiled output goes
   stale instead.
-- **`pnpm clean-translations` is not the same writer.** It extracts from test
-  files too, which the vite plugin does not, so its output is a *different*
-  fixed point. Settling by running the app is what matches the dev server.
+- **Settle with `pnpm clean-translations`.** `wuchale.config.js` ignores test
+  files, which the vite plugin never sees, so the CLI and the dev server now
+  extract the same catalog. After adding or removing UI text, run it in
+  `browser/data-browser` and commit the `.po` files. A component whose strings
+  never made it into the catalogs renders them blank in a production build,
+  and only e2e notices. Check the diff doesn't drop real translations.
 
 Strings a model reads — tool descriptions, prompts, instructions — must be
 `@wc-ignore`d. A translated tool name is not a tool name. See
