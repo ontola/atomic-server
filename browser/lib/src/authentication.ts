@@ -1,6 +1,28 @@
 import type { Agent } from './agent.js';
 import type { HeadersObject } from './client.js';
 import { getTimestampNow } from './commit.js';
+import { decodeB64, encodeB64 } from './base64.js';
+
+/** The old identity is only used at the origin named by the imported secret. */
+export function legacyAgentForRequest(
+  url: string,
+  agent: Agent,
+): string | undefined {
+  const legacy = agent.legacySubject;
+  if (!legacy) return undefined;
+
+  try {
+    const target = new URL(url);
+    const identity = new URL(legacy);
+
+    return ['http:', 'https:'].includes(identity.protocol) &&
+      target.origin === identity.origin
+      ? legacy
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Returns a JSON-AD resource of an Authentication */
 export async function createAuthentication(subject: string, agent: Agent) {
@@ -40,6 +62,8 @@ export async function signRequest(
   subject: string,
   agent: Agent,
   headers: HeadersObject,
+  /** Original HTTP agent for a request to its own legacy server. */
+  legacySubject?: string,
 ): Promise<HeadersObject> {
   const timestamp = getTimestampNow();
   const newHeaders = { ...headers };
@@ -54,6 +78,18 @@ export async function signRequest(
 
     if (agent.subject) {
       newHeaders['x-atomic-agent'] = agent.subject;
+    }
+
+    if (legacySubject) {
+      newHeaders['x-atomic-agent'] = legacySubject;
+      // Old servers decode standard base64 and compare the public-key text
+      // against the original Agent resource. DID-era base64url fails both.
+      newHeaders['x-atomic-public-key'] = encodeB64(
+        decodeB64(newHeaders['x-atomic-public-key']),
+      );
+      newHeaders['x-atomic-signature'] = encodeB64(
+        decodeB64(newHeaders['x-atomic-signature']),
+      );
     }
   }
 

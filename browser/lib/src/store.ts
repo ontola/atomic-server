@@ -3405,6 +3405,25 @@ export class Store {
     subject: string,
     opts: FetchOpts = {},
   ): Promise<void> {
+    // Foreign HTTP identities are served by their own authority. A local
+    // database attachment/lock must not delay that read (in particular the
+    // bounded legacy-account lookup during sign-in). Keep OPFS as an offline
+    // fallback, but do not make it a prerequisite for contacting the server.
+    if (
+      /^https?:\/\//.test(subject) &&
+      new URL(subject).origin !== new URL(this.serverUrl).origin &&
+      !isEmbeddedVocabulary(subject) &&
+      !this.isLocalOnlySubject(subject)
+    ) {
+      try {
+        const remote = await this.fetchResourceFromServer(subject, opts);
+        if (!isTransportError(remote.error)) return;
+      } catch (e) {
+        if (e instanceof RequestCancelledError) throw e;
+        if (!isTransportError(e)) throw e;
+      }
+    }
+
     // Embedded vocabulary skips the local-first detour while there is a server
     // to ask. It is about twenty fixed, tiny resources that the installed host
     // serves from its own store, so the client database can only ever hold a
