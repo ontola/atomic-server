@@ -297,7 +297,6 @@ msgstr "Choose a default model"
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/AISetupPanel.tsx src/components/DemoExitButton.tsx
 #: src/components/DemoExitButton.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -1492,6 +1491,7 @@ msgstr "Textual Description <0/>"
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -2448,7 +2448,6 @@ msgstr "Accept Changes"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx src/components/Share/ShareDialog.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr "Share"
 
@@ -2552,9 +2551,8 @@ msgstr "Nothing to show"
 msgid "Allow edits"
 msgstr "Allow edits"
 
-#: src/components/InviteForm.tsx
-msgid "Invite text (optional)"
-msgstr "Invite text (optional)"
+#~ msgid "Invite text (optional)"
+#~ msgstr "Invite text (optional)"
 
 #: src/components/InviteForm.tsx
 msgid "Invite created and copied to clipboard! 🚀"
@@ -4168,7 +4166,6 @@ msgstr "properties have"
 msgid "as a classtype."
 msgstr "as a classtype."
 
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Create Invite"
@@ -12366,3 +12363,37 @@ msgstr "Workspace sync off"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
 msgstr "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite people to"
+msgstr "Invite people to"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Manage access"
+msgstr "Manage access"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite"
+msgstr "Invite"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Access to"
+msgstr "Access to"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Inherited permissions"
+msgstr "Inherited permissions"
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Stop starting new {0}s here"
+msgstr "Stop starting new {0}s here"
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Start new {0}s here"
+msgstr "Start new {0}s here"
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "New {0}s start here"
+msgstr "New {0}s start here"
