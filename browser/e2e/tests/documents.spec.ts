@@ -239,6 +239,39 @@ test.describe('documents', async () => {
     await expect(remoteCursor).toHaveAttribute('style', /border-color/);
   });
 
+  test('formatting toolbar formats text and can be hidden', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await newResource('document', page);
+    await editTitle(`Toolbar Doc ${timestamp()}`, page);
+
+    const editor = page.getByLabel('Rich Text Editor');
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+    await expect(toolbar).toBeVisible();
+
+    await editor.click();
+    await page.keyboard.type('Toolbar text');
+    await page.keyboard.press('ControlOrMeta+a');
+    await toolbar.getByTitle('Toggle bold').click();
+    await expect(editor.locator('strong')).toHaveText('Toolbar text');
+
+    await toolbar.getByTitle('Bullet list').click();
+    await expect(editor.locator('ul li')).toHaveText('Toolbar text');
+
+    // Hiding is remembered across page loads.
+    await toolbar.getByTitle(/^Hide toolbar/).click();
+    await expect(toolbar).not.toBeVisible();
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    await expect(toolbar).not.toBeVisible();
+
+    await page.getByTitle('Show formatting toolbar').click();
+    await expect(toolbar).toBeVisible();
+  });
+
   test('opens a v1 document and migrates it silently into the editor', async ({
     page,
   }) => {

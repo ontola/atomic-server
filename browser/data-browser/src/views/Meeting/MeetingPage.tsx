@@ -88,6 +88,7 @@ export function MeetingPage({
               resource={resource}
               doc={doc}
               property={dataBrowser.properties.documentContent}
+              toolbar
             />
           </Suspense>
         ) : (
