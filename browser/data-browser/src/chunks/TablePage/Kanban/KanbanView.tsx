@@ -37,6 +37,7 @@ import { KanbanColumn, UNCATEGORIZED_COLUMN_ID } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
 import { ExpandedRowDialog } from '../ExpandedRowDialog';
 import { useKanbanGroupBy } from './useKanbanGroupBy';
+import { DEFAULT_STATUS_TAGS } from './createSelectProperty';
 import { TablePresenceContext } from '../TablePresence';
 import { KanbanFlipContext, type CardFlipRecord } from './cardFlip';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
@@ -78,7 +79,7 @@ export function KanbanView({
   // as one a template sets up.
   const handleStatusCreated = useCallback(
     async (property: string, tagsByName: Record<string, string>) => {
-      const todo = tagsByName['Todo'];
+      const todo = tagsByName[DEFAULT_STATUS_TAGS[0].name];
 
       if (todo) {
         await setRowDefault(table, property, [todo]);
