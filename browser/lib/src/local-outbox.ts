@@ -216,6 +216,12 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
  * rights change or the user abandoning the edit — neither helped by hammering.
  */
 export function isUnrecoverableCommitErrorMessage(message: string): boolean {
+  // A causality rejection is deterministic for the same Loro update. Keep the
+  // local edit visible, but stop sending it once the bounded retry window ends.
+  if (message.includes("Commit's Loro update produced no state changes")) {
+    return true;
+  }
+
   // Managed nodes refuse writes until enrollment/quota changes. Keep the edit,
   // but park it after bounded retries rather than flooding the node forever.
   if (
@@ -265,6 +271,7 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
   ErrorCode.MISSING_CLASS,
   ErrorCode.SYNC_REJECTED,
   ErrorCode.IMMUTABLE_COMMIT,
+  ErrorCode.CAUSALITY_CONFLICT,
 ]);
 
 /**
@@ -331,7 +338,8 @@ export function isUnrecoverableCommitError(
     return (
       code === ErrorCode.UNAUTHORIZED_WRITE ||
       code === ErrorCode.MISSING_CLASS ||
-      code === ErrorCode.SYNC_REJECTED
+      code === ErrorCode.SYNC_REJECTED ||
+      code === ErrorCode.CAUSALITY_CONFLICT
     );
   }
 
