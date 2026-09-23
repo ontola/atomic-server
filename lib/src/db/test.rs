@@ -1126,6 +1126,7 @@ async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
     let drive = "atomic:driveAliasDedup";
     let legacy = "did:ad:childAliasDedup";
     let canonical = "atomic:childAliasDedup";
+    let row_class = "atomic:rowAliasClass";
 
     let child = |subject: &str| {
         let mut resource = crate::Resource::new(subject.into());
@@ -1137,6 +1138,12 @@ async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
             .unwrap();
         resource
             .set_unsafe(urls::NAME.into(), Value::String("Document".into()))
+            .unwrap();
+        resource
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(row_class.into())]),
+            )
             .unwrap();
         resource
     };
@@ -1195,6 +1202,107 @@ async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
     let second_page = store.query(&query).await.unwrap();
     assert!(second_page.subjects.is_empty());
     assert_eq!(second_page.count, 1);
+
+    // Table Views add an isA constraint even when the user has not sorted.
+    let mut table_query = crate::storelike::Query::new_prop_val(urls::PARENT, drive);
+    table_query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    table_query.drive = Some(drive.into());
+    table_query.limit = Some(100);
+    assert_eq!(store.query(&table_query).await.unwrap().count, 1);
+    let table_filter = crate::db::query_index::QueryFilter::try_from_query(&table_query).unwrap();
+    let table_sort_key = crate::db::query_index::sort_key_for(&child(legacy), urls::PARENT);
+    let table_legacy_key = crate::db::query_index::create_query_index_key(
+        &table_filter,
+        Some(&table_sort_key),
+        Some(legacy),
+    )
+    .unwrap();
+    store
+        .kv
+        .insert(Tree::QueryMembers, &table_legacy_key, b"")
+        .unwrap();
+    let table_result = store.query(&table_query).await.unwrap();
+    assert_eq!(
+        table_result.count, 1,
+        "table aliases: {:?}",
+        table_result.subjects
+    );
+    assert_eq!(table_result.subjects[0].as_str(), canonical);
+}
+
+#[tokio::test]
+async fn basic_parent_query_deduplicates_legacy_and_canonical_subjects() {
+    let store = Db::init_temp("basic_parent_alias_dedup").await.unwrap();
+    let parent = "atomic:basicAliasParent";
+    let legacy = "did:ad:basicAliasChild";
+    let canonical = "atomic:basicAliasChild";
+    let child = |subject: &str| {
+        let mut resource = crate::Resource::new(subject.into());
+        resource
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()))
+            .unwrap();
+        resource
+    };
+
+    store
+        .add_resource_opts(&child(legacy), false, true, true)
+        .await
+        .unwrap();
+
+    // Simulate both primary index keys left by a pre-upgrade peer.
+    let legacy_index_atom = child(legacy)
+        .to_atoms()
+        .into_iter()
+        .find(|atom| atom.property == urls::PARENT)
+        .unwrap()
+        .to_indexable_atoms()
+        .remove(0);
+    let prop_key = crate::db::prop_val_sub_index::propvalsub_key(&legacy_index_atom);
+    let value_key = crate::db::val_prop_sub_index::valpropsub_key(&legacy_index_atom);
+    store.kv.insert(Tree::PropValSub, &prop_key, b"").unwrap();
+    store.kv.insert(Tree::ValPropSub, &value_key, b"").unwrap();
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent);
+    let stale = store.query(&query).await.unwrap();
+    assert_eq!(
+        stale.count, 1,
+        "stale alias inflated count: {:?}",
+        stale.subjects
+    );
+    assert_eq!(stale.subjects[0].as_str(), canonical);
+    let mut value_only = crate::storelike::Query::new();
+    value_only.value = Some(Value::AtomicUrl(parent.into()));
+    let value_result = store.query(&value_only).await.unwrap();
+    assert_eq!(
+        value_result.count, 1,
+        "value index aliases: {:?}",
+        value_result.subjects
+    );
+    assert_eq!(value_result.subjects[0].as_str(), canonical);
+    query.offset = 1;
+    let second_page = store.query(&query).await.unwrap();
+    assert!(second_page.subjects.is_empty());
+    assert_eq!(second_page.count, 1);
+
+    store
+        .add_resource_opts(&child(canonical), false, true, true)
+        .await
+        .unwrap();
+
+    query.offset = 0;
+    let result = store.query(&query).await.unwrap();
+    assert_eq!(
+        result.count, 1,
+        "duplicate index entries: {:?}",
+        result.subjects
+    );
+    assert_eq!(result.subjects[0].as_str(), canonical);
+    assert!(!store.kv.contains_key(Tree::PropValSub, &prop_key).unwrap());
+    assert!(!store.kv.contains_key(Tree::ValPropSub, &value_key).unwrap());
 }
 
 /// Production path: create a Drive via `store.create_drive`, add children
