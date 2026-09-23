@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: someone who signs up from an invitation and has no recovery backup can
+  still accept it. The portal opens the restore step for an invitee whenever it
+  cannot rule out an earlier identity, and with nothing to restore that step
+  stopped at "No recovery backup was found". It now offers to create the
+  account, keeping the invitation.
 - Typing `@` in a document lists recently opened resources in that drive, topped up with the drive's own children, instead of "No results found".
 - The sidebar's New button stands out for first-time users. It opens the page
   for everything you can build (apps, websites, tables, templates), but at rest
