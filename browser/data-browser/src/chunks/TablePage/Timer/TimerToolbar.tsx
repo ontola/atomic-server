@@ -14,6 +14,7 @@ import { FaPlay } from 'react-icons/fa6';
 import { Button } from '@components/Button';
 import { Checkbox } from '@components/forms/Checkbox';
 import { InputStyled } from '@components/forms/InputStyles';
+import { withTableRowDefaults } from '../rowDefaults';
 
 interface TimerToolbarProps {
   tableSubject: string;
@@ -87,7 +88,7 @@ export function TimerToolbar({
       const row = await store.newResource({
         parent: tableSubject,
         isA: tableClass.subject,
-        propVals,
+        propVals: await withTableRowDefaults(store, tableSubject, propVals),
       });
       await row.save();
       store.notifyResourceManuallyCreated(row);

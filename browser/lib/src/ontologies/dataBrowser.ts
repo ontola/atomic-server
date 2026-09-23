@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { OntologyBaseObject, BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps, JSONObject } from '../index.js';
 
 export const dataBrowser = {
   classes: {
@@ -77,6 +77,7 @@ export const dataBrowser = {
     tableColumnWidths: 'https://atomicdata.dev/properties/tableColumnWidths',
     tableViews: 'https://atomicdata.dev/properties/table-views',
     tableDefaultView: 'https://atomicdata.dev/properties/table-default-view',
+    tableRowDefaults: 'https://atomicdata.dev/properties/table-row-defaults',
     viewKind: 'https://atomicdata.dev/properties/view-kind',
     viewFilters: 'https://atomicdata.dev/properties/view-filters',
     viewSortBy: 'https://atomicdata.dev/properties/view-sort-by',
@@ -187,6 +188,7 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/tableColumnWidths',
       'https://atomicdata.dev/properties/table-views',
       'https://atomicdata.dev/properties/table-default-view',
+      'https://atomicdata.dev/properties/table-row-defaults',
     ],
     ['https://atomicdata.dev/classes/View']: [
       'https://atomicdata.dev/properties/name',
@@ -394,7 +396,8 @@ declare module '../index.js' {
       recommends:
         | typeof dataBrowser.properties.tableColumnWidths
         | typeof dataBrowser.properties.tableViews
-        | typeof dataBrowser.properties.tableDefaultView;
+        | typeof dataBrowser.properties.tableDefaultView
+        | typeof dataBrowser.properties.tableRowDefaults;
     };
     [dataBrowser.classes.view]: {
       requires:
@@ -507,6 +510,7 @@ declare module '../index.js' {
     [dataBrowser.properties.tableColumnWidths]: number[];
     [dataBrowser.properties.tableViews]: string[];
     [dataBrowser.properties.tableDefaultView]: string;
+    [dataBrowser.properties.tableRowDefaults]: JSONObject;
     [dataBrowser.properties.viewKind]: string;
     [dataBrowser.properties.viewDashboard]: string;
     [dataBrowser.properties.viewFilters]: Array<{
@@ -626,6 +630,7 @@ declare module '../index.js' {
     [dataBrowser.properties.tableColumnWidths]: 'tableColumnWidths';
     [dataBrowser.properties.tableViews]: 'tableViews';
     [dataBrowser.properties.tableDefaultView]: 'tableDefaultView';
+    [dataBrowser.properties.tableRowDefaults]: 'tableRowDefaults';
     [dataBrowser.properties.viewKind]: 'viewKind';
     [dataBrowser.properties.viewDashboard]: 'viewDashboard';
     [dataBrowser.properties.viewFilters]: 'viewFilters';
