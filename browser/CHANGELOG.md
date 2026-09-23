@@ -4,7 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- Plugins moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). The Integrations page lists what that catalog publishes (`catalog.json`, fetched at runtime; the URL is configurable under Settings > Integration) instead of plugins compiled into the app and server. The bundled GitHub issues, Notion, Pets, MT940/camt.053, Clockify and Google Calendar (Devonian) integrations, the `devonian` dependency and the `/app/devonian-demo` page are removed. Todoist stays as a read-only LocalThought lens.
+- Plugins moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). The Integrations page lists what that catalog publishes (`catalog.json`, fetched at runtime; the URL is configurable under Settings > Integration) instead of plugins compiled into the app and server. The bundled GitHub issues, Notion, Pets, MT940/camt.053, Clockify and Google Calendar (Devonian) integrations, the `devonian` dependency and the `/app/devonian-demo` page are removed. The Todoist lens and the Moneybird administration picker are removed too; every LocalThought platform imports through the plain generated path.
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value
