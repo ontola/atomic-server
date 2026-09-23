@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
+import { readableColor } from 'polished';
 import { useClickAwayListener } from '../../hooks/useClickAwayListener';
 import { Button } from '../Button';
 import { DropdownTriggerComponent as DropdownTriggerComponent } from './DropdownTrigger';
@@ -648,11 +649,17 @@ interface MenuItemStyledProps {
 }
 
 const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
+  --menu-highlight-bg: ${p =>
+    p.theme.colorful ? p.theme.colors.main : p.theme.colors.mainSelectedBg};
+  --menu-highlight-fg: ${p =>
+    p.theme.colorful
+      ? readableColor(p.theme.colors.main)
+      : p.theme.colors.mainSelectedFg};
   /* Transparent so the menu's frosted surface shows through. */
   --menu-item-bg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedBg : 'transparent'};
+    p.selected ? 'var(--menu-highlight-bg)' : 'transparent'};
   --menu-item-fg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
+    p.selected ? 'var(--menu-highlight-fg)' : p.theme.colors.text};
   align-items: center;
   display: flex;
   gap: 0.5rem;
@@ -668,9 +675,10 @@ const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
     color: var(--menu-item-fg);
   }
 
-  &:hover {
-    --menu-item-bg: ${p => p.theme.colors.mainSelectedBg};
-    --menu-item-fg: ${p => p.theme.colors.mainSelectedFg};
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    --menu-item-bg: var(--menu-highlight-bg);
+    --menu-item-fg: var(--menu-highlight-fg);
 
     @media (prefers-contrast: more) {
       --menu-item-bg: ${p => (p.theme.darkMode ? 'white' : 'black')};

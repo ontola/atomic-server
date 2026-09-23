@@ -78,6 +78,13 @@ test.describe('data-browser', async () => {
 
       await openAgentPage(page);
       await page.click('[data-test="sign-out"]');
+      await expect(page).toHaveURL(
+        url =>
+          url.pathname === '/app/welcome' && !url.searchParams.has('return_to'),
+      );
+      expect(
+        await page.evaluate(() => window.store.getAgent()),
+      ).toBeUndefined();
       await expect(
         page.getByRole('button', { name: 'Create account' }),
       ).toBeVisible();

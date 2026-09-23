@@ -19,6 +19,12 @@ export const SettingsSectionWrapper = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   padding-block: 0.4rem;
 
+  button[aria-label='collapse'],
+  button[aria-label='expand'] {
+    width: 1.8rem;
+    min-width: 1.8rem;
+  }
+
   &:first-child {
     border-top: 0;
   }
@@ -28,16 +34,34 @@ export const SettingsSectionWrapper = styled.div`
   }
 `;
 
-/** Muted label for settings section titles. */
+/** Section headings remain distinct from the controls they contain. */
 export const SettingsLabel = styled.span`
   font-size: 0.9rem;
-  font-weight: 500;
-  color: ${p => p.theme.colors.textLight};
+  font-weight: 650;
+  color: ${p => p.theme.colors.text};
 `;
 
-/** Padding wrapper for content inside a settings section. */
+/** Indentation and a guide keep expanded children visibly inside their section. */
 export const SettingsContent = styled.div`
-  padding-block: 0.5rem 1rem;
+  /* Summary padding + half the toggle, minus half the rule. */
+  margin: 0.5rem 0 0.75rem calc(1.1rem - 1px);
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-inline-start: 2px solid ${p => p.theme.colors.bg2};
+  min-width: 0;
+
+  ${SettingsSectionWrapper} {
+    border-bottom: 0;
+    padding-block: 0.25rem;
+  }
+
+  ${SettingsLabel} {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  @media (max-width: 600px) {
+    padding-inline-start: 0.65rem;
+  }
 `;
 
 interface SettingsSectionProps extends DetailsPropsBase {
@@ -52,7 +76,9 @@ export function queryMatches(query: string, haystack: string): boolean {
     .toLowerCase()
     .split(/\s+/)
     .filter(Boolean)
-    .every(term => haystack.includes(term));
+    .every(term =>
+      term === 'ai' ? /\bai\b/.test(haystack) : haystack.includes(term),
+    );
 }
 
 /** Extracts text content from React children without rendering them to DOM.

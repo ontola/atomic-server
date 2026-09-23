@@ -8,6 +8,8 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { isOriginWithoutNode } from '../helpers/originNode';
+import { openPrivateHome } from '../helpers/openPrivateHome';
+import { privateHomeNudge } from '../helpers/privateHomeNudge';
 
 export type ShowRouteSearch = {
   subject: string;
@@ -43,6 +45,27 @@ export const ShowComponent: React.FunctionComponent = () => {
   const { agent, drive, setDrive } = useSettings();
   const store = useStore();
   const navigate = useNavigate();
+
+  // A persisted identity can land here without running the welcome flow.
+  // Hydrate/recover its own home before materializing it; other resources
+  // retain their normal missing/permission handling.
+  React.useEffect(() => {
+    if (!agent || !subject) return;
+    let cancelled = false;
+    void openPrivateHome(store, subject)
+      .then(result => {
+        if (cancelled || !result) return;
+        setDrive(subject);
+        if (result === 'created') privateHomeNudge();
+      })
+      .catch(() => {
+        // ResourcePage displays the read error and its recovery actions.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agent, subject, store, setDrive]);
 
   // Signed out on an origin that runs no node: nothing can load until a
   // sign-in restores the data, so go straight to the sign-in step with the

@@ -452,18 +452,20 @@ const getClassesString = async (
 interface UseAtomicMCPToolsProps {
   onResourceEdited?: (originalResource: Resource) => void;
   editModel: AIModelIdentifier;
+  hosted?: boolean;
 }
 
 export function useAtomicMCPTools({
   onResourceEdited,
   editModel,
+  hosted = false,
 }: UseAtomicMCPToolsProps) {
   const store = useStore();
   const openAppSetup = useAppSetup();
   const navigate = useNavigateWithTransition();
   const addToOntology = useAddToOntology();
   const { drive } = useSettings();
-  const runDocumentEdit = useDocumentEditAgent(editModel);
+  const runDocumentEdit = useDocumentEditAgent(editModel, hosted);
   const [favorites, addFavorite, removeFavorite] = useFavorites();
   const [currentSubject] = useCurrentSubject();
   const derivedActionTools = deriveActionTools(resourceActions, {

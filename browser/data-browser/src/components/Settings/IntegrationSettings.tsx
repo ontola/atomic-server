@@ -38,7 +38,7 @@ export function IntegrationSettings() {
             checked={showApiPlugins}
             onChange={value => setVisibility('show-api-plugins', value)}
           />
-          Show API plugins
+          <span>Show API plugins</span>
         </CheckboxLabel>
         <CheckboxLabel>
           <Checkbox
@@ -47,7 +47,7 @@ export function IntegrationSettings() {
               setVisibility('show-experimental-plugins', value)
             }
           />
-          Show experimental plugins
+          <span>Show experimental plugins</span>
         </CheckboxLabel>
         <Description>
           These preferences are saved in your private Atomic drive. Existing

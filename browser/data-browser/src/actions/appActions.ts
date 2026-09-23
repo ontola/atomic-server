@@ -66,7 +66,7 @@ export const appActions: ActionDefinition[] = [
     id: 'userSettings',
     scope: 'app',
     section: 'action',
-    label: () => 'User settings',
+    label: () => 'User',
     helper: () => 'Open your agent / user settings.',
     keywords: ['account', 'agent', 'profile'],
     shortcut: shortcuts.userSettings,

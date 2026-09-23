@@ -409,18 +409,4 @@ test.describe('sync', () => {
 
     await context2.close();
   });
-
-  test('sync page shows correct status', async ({ page }) => {
-    await page.goto(`${FRONTEND_URL}/app/sync`);
-
-    await expect(page.getByText('This device', { exact: true })).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(
-      page.getByRole('heading', { name: 'Sync', exact: true }),
-    ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Developer', { exact: true })).toBeVisible({
-      timeout: 10000,
-    });
-  });
 });

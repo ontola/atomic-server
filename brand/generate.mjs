@@ -43,6 +43,8 @@ const DEV_ROOT = path.resolve(SERVER_ROOT, '..');
 const SAAS_ROOT = path.join(DEV_ROOT, 'atomic-saas');
 
 const MARKS = {
+  place: path.join(BRAND_DIR, 'src', 'place-mark.svg'),
+  placeMono: path.join(BRAND_DIR, 'src', 'place-mark-mono.svg'),
   atomic: path.join(BRAND_DIR, 'src', 'atomic-mark.svg'),
   atomicMono: path.join(BRAND_DIR, 'src', 'atomic-mark-mono.svg'),
   canvas: path.join(BRAND_DIR, 'src', 'canvas-mark.svg'),
@@ -147,7 +149,7 @@ const png = (to, size, variant = 'alpha') => ({ kind: 'png', to, size, variant }
 
 const TARGETS = [
   {
-    mark: 'atomic',
+    mark: 'place',
     root: SERVER_ROOT,
     label: 'atomic-server: data-browser web app',
     dir: 'browser/data-browser/public/app_data/images',
@@ -170,7 +172,7 @@ const TARGETS = [
       png('mstile-310x150.png', [558, 270]),
       { kind: 'ico', to: 'favicon.ico' },
       // Safari flattens pinned-tab icons to one ink — needs the mono lockup.
-      { kind: 'svg', to: 'mask-icon.svg', mark: 'atomicMono' },
+      { kind: 'svg', to: 'mask-icon.svg', mark: 'placeMono' },
     ],
   },
   {
@@ -325,7 +327,7 @@ const TARGETS = [
 
   /* Sibling repos — skipped when the checkout is not present. */
   {
-    mark: 'atomic',
+    mark: 'place',
     root: SAAS_ROOT,
     label: 'atomic-saas: portal',
     dir: 'portal/public',
@@ -337,7 +339,7 @@ const TARGETS = [
     ],
   },
   {
-    mark: 'atomic',
+    mark: 'place',
     root: SAAS_ROOT,
     label: 'atomic-saas: marketing site',
     // Next.js App Router picks these up by filename convention — no <link> tags.
@@ -376,8 +378,16 @@ function build(markPath, file, outPath) {
   }
 }
 
+// Optional repeatable --target=<directory> limits regeneration to a surface.
+const selectedDirs = process.argv.slice(2).map(arg => {
+  if (!arg.startsWith('--target=')) throw new Error(`Unknown argument: ${arg}`);
+  const dir = arg.slice('--target='.length);
+  if (!TARGETS.some(target => target.dir === dir)) throw new Error(`Unknown target: ${dir}`);
+  return dir;
+});
 try {
   for (const target of TARGETS) {
+    if (selectedDirs.length && !selectedDirs.includes(target.dir)) continue;
     if (!existsSync(target.root)) {
       console.warn(`  skip  ${target.label} — no checkout at ${target.root}`);
       skipped += target.files.length;

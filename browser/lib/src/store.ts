@@ -1323,6 +1323,9 @@ export class Store {
       }
 
       const created = await this.postCommit(genesis, endpoint);
+      // Publish the acknowledgement before ResourceSaved listeners decide
+      // whether this new resource can be subscribed on the server.
+      this.outbox.clearGenesis(subject);
       const commitId = commitIdOf(created);
       const resource = this.resources.get(subject);
 
@@ -1344,7 +1347,6 @@ export class Store {
         this.notifyResourceSaved(resource);
       }
 
-      this.outbox.clearGenesis(subject);
       entry = this.outbox.getEntry(subject);
 
       if (!entry) {

@@ -1780,17 +1780,16 @@ function SyncPage() {
           </p>
         </ConfirmationDialog>
 
-        {/* Signed in, but this device holds none of the account's data — it's
-            still on whatever device created it. Pairing is the way across, so
-            lead with it. Takes precedence over the local-only notice below:
-            there is nothing here to promote. */}
+        {/* A failed read gives no evidence about copies on other devices. */}
         {driveMissing && (
           <LocalDriveNotice>
             <CardIcon>
               <FaMobileScreenButton />
             </CardIcon>
             <ConnBody>
-              <ConnTitle>Your data is on another device</ConnTitle>
+              <ConnTitle>
+                This workspace could not be read on this device
+              </ConnTitle>
               {isNode && status.drive ? (
                 <DiscoverWorkspace
                   key={status.drive}
@@ -1804,8 +1803,8 @@ function SyncPage() {
                     node, otherwise the server's — the other device scans it and
                     syncs the drive somewhere this one can read. */}
                     {pairNodeId
-                      ? 'You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it.'
-                      : 'You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it.'}
+                      ? 'If another device has this workspace, scan the code below to connect it.'
+                      : 'If another device has this workspace, you can connect it.'}
                   </ConnSub>
                   <ConnActions>
                     {!pairNodeId && (
@@ -1873,13 +1872,15 @@ function SyncPage() {
             title='This device'
             footer={<BrowserPeerPanel drive={status.drive ?? undefined} />}
             subtitle={
-              isNode
-                ? status.lastDriveSync
-                  ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
-                  : 'Embedded server · stored locally'
-                : clientDbOn
-                  ? 'Cached locally · works offline'
-                  : 'Server-only · no local cache'
+              driveMissing
+                ? 'Local copy unavailable'
+                : isNode
+                  ? status.lastDriveSync
+                    ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
+                    : 'Embedded server · stored locally'
+                  : clientDbOn
+                    ? 'Cached locally · works offline'
+                    : 'Server-only · no local cache'
             }
             nodeId={isNode && localNodeId ? localNodeId : undefined}
           />
