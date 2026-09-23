@@ -10,6 +10,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   a row fills in for what it does not set itself. Templates set it (Todo, Lead,
   Wishlist, Want to read, Invited), as does a Status column the board creates,
   and any board lane can be made the default from its header menu.
+- Fix: a table breakdown's "n rows" counts every row in the group. It showed
+  how many rows fed the first statistic, so Project tasks, which sums Estimate,
+  read "0 rows" under each status until tasks had an estimate. And a select
+  option's page counts the rows that use it through its column (a task's
+  Status), not only through `tags`, so Doing no longer reads "0 resources".
 
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy

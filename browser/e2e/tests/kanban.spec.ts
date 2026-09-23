@@ -317,6 +317,17 @@ test.describe('kanban', () => {
 
     await addOnToday('Take out the bins');
     await expect(cardIn(doing, 'Take out the bins')).toBeVisible();
+
+    // The All tasks breakdown counts rows per status. Neither task has an
+    // Estimate, which the view sums; that sum's own count once read as
+    // "0 rows" under every status.
+    await page.getByRole('tab', { name: 'All tasks' }).click();
+    const breakdown = page.getByTestId('table-breakdown');
+    await expect(breakdown).toBeVisible({ timeout: 30_000 });
+    await expect(breakdown.getByText('1 rows')).toHaveCount(2, {
+      timeout: 30_000,
+    });
+    await expect(breakdown).not.toContainText('0 rows');
   });
 
   test('clicking a card opens it in the expanded modal (not full-screen)', async ({
