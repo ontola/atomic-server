@@ -12461,3 +12461,7 @@ msgstr "Start new {0}s here"
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 msgid "New {0}s start here"
 msgstr "New {0}s start here"
+
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "Saved microphone"
+msgstr "Saved microphone"
