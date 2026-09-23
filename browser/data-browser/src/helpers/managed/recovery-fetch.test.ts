@@ -1,6 +1,6 @@
 // @wc-ignore-file
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { getRecoverySecret } from './recovery';
+import { getRecoverySecret, getUnlockableRecoverySecret } from './recovery';
 import { getManagedAccount } from './session';
 import { managedFetch, getManagedApiBase } from './api';
 
@@ -95,4 +95,14 @@ it('retries a failed read and makes no request while signed out', async () => {
   vi.mocked(getManagedAccount).mockResolvedValue(null);
   expect(await getRecoverySecret()).toBeNull();
   expect(managedFetch).toHaveBeenCalledTimes(2);
+});
+
+it('matches a backup saved under the legacy did:ad: spelling of the agent', async () => {
+  const backup = { agent_subject: 'did:ad:agent:abc', wrappers: [] };
+  vi.mocked(managedFetch).mockResolvedValue(
+    new Response(JSON.stringify(backup), { status: 200 }),
+  );
+  expect(await getUnlockableRecoverySecret('atomic:agent:abc')).toMatchObject(
+    backup,
+  );
 });

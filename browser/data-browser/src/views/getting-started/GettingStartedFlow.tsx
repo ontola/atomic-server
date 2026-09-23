@@ -1233,10 +1233,35 @@ export function GettingStartedFlow({
                     </Column>
                   )
                 ) : restore.phase === 'no-backup' ? (
-                  <p key='no-backup'>
-                    No recovery backup was found for {restore.email}. Account
-                    recovery only works if you enabled it earlier.
-                  </p>
+                  inviteToken ? (
+                    // The portal sends an invitee here whenever it cannot rule
+                    // out an earlier identity. With nothing to restore, the
+                    // invitation still wants an account to land in.
+                    <Column key='no-backup-invite' gap='0.75rem'>
+                      <p key='copy'>
+                        {`There is nothing to restore for ${restore.email} yet. Create your account to accept the invitation.`}
+                      </p>
+                      <Button
+                        key='create'
+                        type='button'
+                        onClick={() => {
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('from_portal', 'true');
+                          url.searchParams.set('email', restore.email);
+                          // A reload, because the managed create flow is read
+                          // from the URL on mount.
+                          window.location.assign(url.toString());
+                        }}
+                      >
+                        Create account and accept
+                      </Button>
+                    </Column>
+                  ) : (
+                    <p key='no-backup'>
+                      No recovery backup was found for {restore.email}. Account
+                      recovery only works if you enabled it earlier.
+                    </p>
+                  )
                 ) : restoreUnlock.showPasskey ? (
                   <Column key='ready-passkey' gap='1rem'>
                     <p key='copy'>

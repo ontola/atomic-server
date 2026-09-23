@@ -5,6 +5,7 @@ import type { SuggestionItem } from '../types';
 import { getIconForClass } from '@helpers/iconMap';
 import { PluginKey } from '@tiptap/pm/state';
 import { createRenderFunction } from '../SlashMenu/CommandsExtension';
+import { getRecentResources } from '@helpers/recentResources';
 
 const resourceSuggestionPluginKey = new PluginKey('resourceSuggestion');
 
@@ -32,18 +33,61 @@ export const ResourceCommands = Extension.create({
   },
 });
 
+const MAX_SUGGESTIONS = 10;
+
+/** With nothing typed yet, offer what the user opened recently in this drive,
+ * topped up with the drive's own children so a fresh drive isn't empty. */
+const getSubjectsWithoutQuery = async (
+  store: Store,
+  drive: string,
+  exclude: string | undefined,
+): Promise<string[]> => {
+  const subjects = getRecentResources(drive).filter(s => s !== exclude);
+
+  if (subjects.length < MAX_SUGGESTIONS) {
+    try {
+      const driveResource = await store.getResource(drive);
+      const children =
+        await driveResource.getChildrenCollection(MAX_SUGGESTIONS);
+
+      for (const child of await children.getMembersOnPage(0)) {
+        if (child !== exclude && !subjects.includes(child)) {
+          subjects.push(child);
+        }
+      }
+    } catch (e) {
+      console.error('Could not list drive children for @ mentions', e);
+    }
+  }
+
+  const resources = await Promise.all(
+    subjects.map(subject => store.getResource(subject)),
+  );
+
+  // Recents can point at resources that were deleted or are no longer
+  // readable since they were opened.
+  return resources
+    .filter(r => !r.error && r.title)
+    .slice(0, MAX_SUGGESTIONS)
+    .map(r => r.subject);
+};
+
 export const buildResourceSuggestion = (
   container: HTMLElement,
   store: Store,
   drive: string,
+  /** The resource being edited, left out of the suggestions. */
+  currentSubject?: string,
 ): Partial<SuggestionOptions> => ({
   items: async ({ query }: { query: string }): Promise<SuggestionItem[]> => {
-    const results = await store.search(query.toLowerCase(), {
-      limit: 10,
-      // Including the results could lead to weird behavior when the document itself is returned from the server.
-      include: false,
-      parents: [drive],
-    });
+    const results = query.trim()
+      ? await store.search(query.toLowerCase(), {
+          limit: MAX_SUGGESTIONS,
+          // Including the results could lead to weird behavior when the document itself is returned from the server.
+          include: false,
+          parents: [drive],
+        })
+      : await getSubjectsWithoutQuery(store, drive, currentSubject);
 
     const resources = await Promise.all(results.map(x => store.getResource(x)));
 

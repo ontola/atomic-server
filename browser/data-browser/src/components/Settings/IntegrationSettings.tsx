@@ -18,15 +18,26 @@ import {
 
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
-  const { showApiPlugins, showExperimentalPlugins, error, setVisibility } =
-    useIntegrationVisibility();
+  const {
+    showApiPlugins,
+    showExperimentalPlugins,
+    ready,
+    pending,
+    error,
+    setVisibility,
+  } = useIntegrationVisibility();
 
   return (
     <SettingsSection
       label='Integration'
       childSearchKeywords='proxy server url localthought api experimental plugins'
     >
-      <Column gap='1rem'>
+      <Column
+        gap='1rem'
+        data-testid='integration-visibility'
+        data-ready={ready}
+        aria-busy={pending}
+      >
         <CheckboxLabel>
           <Checkbox
             checked={showApiPlugins}
