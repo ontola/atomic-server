@@ -165,6 +165,12 @@ const columnSchema = z.object({
       "For 'relation' columns: the class the link points at (a class URL or #ref), so the cell picks from that class instead of searching everything.",
     ),
   description: z.string().optional(),
+  default: z
+    .union([z.string(), z.number(), z.boolean()])
+    .optional()
+    .describe(
+      "The value a new row starts with. For a 'select' column, one of its `options`, e.g. 'Todo', so a task added from a calendar or grid still lands in the board's Todo lane.",
+    ),
 });
 
 const derivedColumnSchema = z.object({

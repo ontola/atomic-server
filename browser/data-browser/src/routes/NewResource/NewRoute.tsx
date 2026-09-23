@@ -38,6 +38,7 @@ import { getIconForClass } from '../../helpers/iconMap';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useAISidebar } from '../../components/AI/AISidebarContext';
 import { useAISettings } from '../../components/AI/AISettingsContext';
+import { useMarkNewActionDiscovered } from '../../hooks/useNewActionDiscovered';
 import { ApplyTemplateDialog } from '../../components/Template/ApplyTemplateDialog';
 import type {
   Template,
@@ -101,6 +102,7 @@ function NewResourceSelector() {
   const { askAI } = useAISidebar();
   const { enableAI } = useAISettings();
   const catalogRef = useRef<HTMLDivElement>(null);
+  useMarkNewActionDiscovered();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
