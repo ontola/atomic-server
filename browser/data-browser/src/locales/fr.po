@@ -1085,6 +1085,8 @@ msgstr "Ressources"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/components/NavBar.tsx src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Tags"
@@ -2446,6 +2448,7 @@ msgstr "Annuler"
 msgid "Accept Changes"
 msgstr "Accepter les modifications"
 
+#: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx
