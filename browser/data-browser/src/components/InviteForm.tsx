@@ -7,7 +7,6 @@ import {
   Resource,
   urls,
   useCurrentAgent,
-  core,
   server,
   dataBrowser,
 } from '@tomic/react';
@@ -34,13 +33,22 @@ interface InviteFormProps {
   /** The resource that becomes accessible on opening the invite */
   target: Resource;
   inDialog?: boolean;
+  /** Shown above the form, e.g. a warning about what is being shared */
+  notice?: ReactNode;
+  /** Rendered next to the Create button */
+  secondaryAction?: ReactNode;
 }
 
 /**
  * Allows the user to create a new Invite for some resource. Outputs the
  * generated Subject after saving.
  */
-export function InviteForm({ target, inDialog }: InviteFormProps) {
+export function InviteForm({
+  target,
+  inDialog,
+  notice,
+  secondaryAction,
+}: InviteFormProps) {
   const [agent] = useCurrentAgent();
   const {
     resource: profile,
@@ -60,7 +68,9 @@ export function InviteForm({ target, inDialog }: InviteFormProps) {
       key={agent?.subject}
       target={target}
       inDialog={inDialog}
-      skipProfile={!!icon}
+      notice={notice}
+      secondaryAction={secondaryAction}
+      skipProfile={!!icon || profileReviewedBefore(agent?.subject)}
     />
   );
 }
@@ -69,6 +79,8 @@ function InviteFormContent({
   target,
   skipProfile,
   inDialog,
+  notice,
+  secondaryAction,
 }: InviteFormProps & { skipProfile: boolean }) {
   const store = useStore();
   const [subject] = useState(() => store.createSubject());
@@ -173,7 +185,7 @@ function InviteFormContent({
         agent,
         !!write,
         expiresAt,
-        invite.get(core.properties.description) as string | undefined,
+        undefined,
         browserPeer,
       );
 
@@ -205,22 +217,16 @@ function InviteFormContent({
   }, [invite, agent, target, store, isSaas]);
 
   if (agent?.subject && !profileReviewed) {
-    return (
-      <InviteFormLayout inDialog={inDialog}>
-        <TeamProfileStep
-          subject={agent.subject}
-          onContinue={() => setProfileReviewed(true)}
-        />
-      </InviteFormLayout>
-    );
-  }
+    const agentSubject = agent.subject;
 
-  if (agent?.subject && !profileReviewed) {
     return (
       <InviteFormLayout inDialog={inDialog}>
         <TeamProfileStep
-          subject={agent.subject}
-          onContinue={() => setProfileReviewed(true)}
+          subject={agentSubject}
+          onContinue={() => {
+            rememberProfileReviewed(agentSubject);
+            setProfileReviewed(true);
+          }}
         />
       </InviteFormLayout>
     );
@@ -231,12 +237,16 @@ function InviteFormContent({
       <InviteFormLayout
         inDialog={inDialog}
         actions={
-          <Button disabled={creating} onClick={createInvite}>
-            {creating ? 'Preparing invite…' : 'Create'}
-          </Button>
+          <>
+            {secondaryAction}
+            <Button disabled={creating} onClick={createInvite}>
+              {creating ? 'Preparing invite…' : 'Create'}
+            </Button>
+          </>
         }
       >
         <Column gap='1rem'>
+          {notice}
           <ResourceField
             label={'Allow edits'}
             propertyURL={server.properties.write}
@@ -255,11 +265,6 @@ function InviteFormContent({
                 Viewers are free.
               </p>
             )}
-          <ResourceField
-            label={'Invite text (optional)'}
-            propertyURL={core.properties.description}
-            resource={invite}
-          />
           {err && (
             <p>
               <ErrorLook>{err.message}</ErrorLook>
@@ -275,6 +280,31 @@ function InviteFormContent({
         <CodeBlock content={inviteUrl!} data-test='invite-code' />
       </InviteFormLayout>
     );
+}
+
+const PROFILE_REVIEWED_KEY = 'inviteProfileReviewed';
+
+/**
+ * Share opens on the invite, so without this someone who skips the optional
+ * picture would get the profile step on every Share click. Once per agent on
+ * this device is enough of a nudge.
+ */
+function profileReviewedBefore(agent: string | undefined): boolean {
+  if (!agent) return false;
+
+  try {
+    return localStorage.getItem(PROFILE_REVIEWED_KEY) === agent;
+  } catch {
+    return false;
+  }
+}
+
+function rememberProfileReviewed(agent: string): void {
+  try {
+    localStorage.setItem(PROFILE_REVIEWED_KEY, agent);
+  } catch {
+    /* Without storage the step simply shows again next time. */
+  }
 }
 
 function InviteFormLayout({

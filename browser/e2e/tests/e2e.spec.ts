@@ -278,10 +278,8 @@ test.describe('data-browser', async () => {
       await expect(
         page.getByRole('heading', { name: 'How your colleagues see you' }),
       ).toHaveCount(0);
+      // Share opens straight on the invite form.
       await topBarShareButton(page).click();
-      await page
-        .getByRole('button', { name: 'Create Invite', exact: true })
-        .click();
       await expect(page.getByLabel('Allow edits')).toBeVisible();
       await expect(
         page.getByRole('heading', { name: 'How your colleagues see you' }),
@@ -387,15 +385,14 @@ test.describe('data-browser', async () => {
     const chatRoomHref = showFallback.href;
 
     // Owner: Share → invite. Guest: open invite URL only (new agent via acceptInvite).
-    await topBarShareButton(page).click();
-    await expect(
-      page.getByRole('button', { name: 'Create Invite' }),
-    ).toBeVisible({ timeout: 10000 });
-
     context.grantPermissions(['clipboard-read', 'clipboard-write'], {
       origin: new URL(FRONTEND_URL).origin,
     });
-    await page.getByRole('button', { name: 'Create Invite' }).click();
+    // Share opens straight on the invite, starting with the profile step.
+    await topBarShareButton(page).click();
+    await expect(page.getByLabel('Full name', { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
     await page.getByLabel('Full name', { exact: true }).fill('Chat Owner');
     await page
       .getByRole('button', { name: 'Save and continue', exact: true })
