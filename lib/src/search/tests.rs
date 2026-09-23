@@ -372,9 +372,12 @@ async fn filter_respects_parent_scope() {
 
     let hits = query(&store, "", &opts_filter(&folder_a, urls::IS_A, urls::FILE)).unwrap();
     let ids = subjects(&hits);
-    assert!(ids.contains(&child_a), "folder A file missing: {ids:?}");
     assert!(
-        !ids.contains(&child_b),
+        ids.contains(&crate::Subject::from(child_a.as_str()).pure_id()),
+        "folder A file missing: {ids:?}"
+    );
+    assert!(
+        !ids.contains(&crate::Subject::from(child_b.as_str()).pure_id()),
         "folder B file leaked into folder A: {ids:?}"
     );
 }

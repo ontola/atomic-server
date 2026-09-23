@@ -2262,7 +2262,10 @@ impl Db {
         resource: &Resource,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        for index_atom in atom.to_indexable_atoms() {
+        for mut index_atom in atom.to_indexable_atoms() {
+            // Index by resource identity, even when an older peer sent the
+            // same subject using the legacy identifier scheme.
+            index_atom.subject = index_atom.subject.pure_id().into();
             add_atom_to_valpropsub_index(&index_atom, transaction)?;
             add_atom_to_prop_val_sub_index(&index_atom, transaction)?;
             // Also update the query index to keep collections performant
@@ -3555,35 +3558,40 @@ impl Db {
         let mut subjects: Vec<Subject> = vec![];
         let mut resources: Vec<Resource> = vec![];
         let mut total_count = 0;
+        let mut seen = HashSet::new();
         let rights_cache = std::sync::Mutex::new(RightsCache::default());
+        let base_domain = self.get_base_domain();
 
         let atoms = self.get_index_iterator_for_query(q);
 
-        for (i, atom_res) in atoms.enumerate() {
+        for atom_res in atoms {
             let atom = atom_res?;
             if !q.include_external && !atom.subject.is_local() {
                 continue;
             }
+            let identity = atom.subject.pure_id();
+            if !seen.insert(identity.clone()) {
+                continue;
+            }
+            let subject = Subject::from_raw(&identity, base_domain.as_deref());
+            let index = seen.len() - 1;
 
             total_count += 1;
 
-            if q.offset > i {
+            if q.offset > index {
                 continue;
             }
 
             if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
                 // Sudo without nested bodies needs no per-member work at all.
                 if q.for_agent == ForAgent::Sudo && !q.include_nested {
-                    subjects.push(atom.subject.clone());
+                    subjects.push(subject);
                     continue;
                 }
 
-                match self
-                    .resolve_query_member(&atom.subject, q, &rights_cache)
-                    .await
-                {
+                match self.resolve_query_member(&subject, q, &rights_cache).await {
                     Some(body) => {
-                        subjects.push(atom.subject.clone());
+                        subjects.push(subject);
                         if let Some(resource) = body {
                             resources.push(resource);
                         }
@@ -3956,9 +3964,18 @@ impl Db {
         resource: &Resource,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        for index_atom in atom.to_indexable_atoms() {
+        for mut index_atom in atom.to_indexable_atoms() {
+            let canonical = index_atom.subject.pure_id();
+            let legacy = crate::identifiers::to_legacy_scheme(&canonical);
+            index_atom.subject = canonical.into();
             transaction.push(Operation::remove_atom_from_reference_index(&index_atom));
             transaction.push(Operation::remove_atom_from_prop_val_sub_index(&index_atom));
+            if legacy != index_atom.subject.as_str() {
+                let mut legacy_atom = index_atom.clone();
+                legacy_atom.subject = legacy.into();
+                transaction.push(Operation::remove_atom_from_reference_index(&legacy_atom));
+                transaction.push(Operation::remove_atom_from_prop_val_sub_index(&legacy_atom));
+            }
 
             check_if_atom_matches_watched_query_filters(
                 self,
@@ -5206,7 +5223,7 @@ mod resolver_tests {
         );
         assert_eq!(
             resolved.subject.as_str(),
-            "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+            "atomic:test-child?drive=".to_string() + drive_did.as_str()
         );
     }
 
