@@ -128,6 +128,8 @@ msgstr ""
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx src/components/ConfirmationDialog.tsx
 #: src/components/ConfirmationDialog.tsx
@@ -833,6 +835,7 @@ msgstr ""
 msgid "v{0}"
 msgstr ""
 
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/chunks/Website/WebsiteHosting.tsx src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -3219,6 +3222,11 @@ msgid "Install"
 msgstr ""
 
 #: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
 msgid "unset"
 msgstr ""
 
@@ -3323,23 +3331,23 @@ msgstr ""
 msgid "Heading 6"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle bold"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle italic"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle strikethrough"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle blockquote"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle inline code"
 msgstr ""
 
@@ -9596,7 +9604,9 @@ msgid "Frozen release"
 msgstr ""
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Website preview"
 msgstr ""
 
@@ -9676,11 +9686,14 @@ msgid "Release"
 msgstr ""
 
 #: src/chunks/Website/WebsiteExportPage.tsx src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Download website"
 msgstr ""
 
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Publishing…"
 msgstr ""
@@ -9751,7 +9764,9 @@ msgstr ""
 
 #: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Retry preview"
 msgstr ""
 
@@ -9827,6 +9842,7 @@ msgid "Updating preview…"
 msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 msgid "Website versions"
 msgstr ""
 
@@ -9843,7 +9859,7 @@ msgstr ""
 msgid "{0} editable fields and {1} documents"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/LinkPopoverButton.tsx
 msgid "Set link"
 msgstr ""
 
@@ -12320,6 +12336,36 @@ msgstr ""
 msgid "Workspace sync off"
 msgstr ""
 
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Show formatting toolbar"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Bullet list"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Numbered list"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Task list"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Insert image"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Mention a resource (@)"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Hide toolbar (type / or @ instead)"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Formatting"
 #: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/MicrophoneSelect.tsx
 #: src/components/AI/SpeechSettings.tsx

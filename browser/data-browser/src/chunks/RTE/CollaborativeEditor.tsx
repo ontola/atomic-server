@@ -45,6 +45,7 @@ import { EditorWrapperBase } from './EditorWrapperBase';
 import styled, { useTheme } from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
+import { FormattingToolbar } from './FormattingToolbar';
 import { IsInRTEContex } from '@hooks/useIsInRTE';
 import { FaCircleInfo, FaGripVertical, FaLink, FaTable } from 'react-icons/fa6';
 import { useUpload } from '@hooks/useUpload';
@@ -78,6 +79,8 @@ export type CollaborativeEditorProps = {
   property: string;
   id?: string;
   onBlur?: () => void;
+  /** Show the (hideable) formatting toolbar above the text. */
+  toolbar?: boolean;
 };
 
 const UNDO_KEYS = 'Mod-z';
@@ -92,6 +95,7 @@ export default function CollaborativeEditor({
   id,
   resource,
   onBlur,
+  toolbar = false,
 }: CollaborativeEditorProps): React.JSX.Element {
   const store = useStore();
   const undoSessionGeneration = useSyncExternalStore(
@@ -441,6 +445,7 @@ export default function CollaborativeEditor({
     <IsInRTEContex value={true}>
       <TiptapContextProvider editor={editor}>
         <StyledEditorWrapper hideEditor={false} $embedded={embedded}>
+          {toolbar && canWrite && editorReady && <FormattingToolbar />}
           <DragHandle editor={editor}>
             <FaGripVertical />
           </DragHandle>

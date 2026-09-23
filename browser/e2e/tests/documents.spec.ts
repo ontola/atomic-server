@@ -66,7 +66,7 @@ test.describe('documents', async () => {
     const editor = page.getByLabel('Rich Text Editor');
 
     await editor.fill('/heading');
-    await expect(page.getByText('Heading 1')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Heading 1' })).toBeVisible();
     await page.keyboard.press('Enter');
     // The command changes the document structure asynchronously. Type only
     // once its heading exists, rather than racing that selection transition.
@@ -237,6 +237,39 @@ test.describe('documents', async () => {
     // persisted into the doc), and it carries the peer's color via inline style.
     await expect(remoteCursor).toHaveCount(1);
     await expect(remoteCursor).toHaveAttribute('style', /border-color/);
+  });
+
+  test('formatting toolbar formats text and can be hidden', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await newResource('document', page);
+    await editTitle(`Toolbar Doc ${timestamp()}`, page);
+
+    const editor = page.getByLabel('Rich Text Editor');
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+    await expect(toolbar).toBeVisible();
+
+    await editor.click();
+    await page.keyboard.type('Toolbar text');
+    await page.keyboard.press('ControlOrMeta+a');
+    await toolbar.getByTitle('Toggle bold').click();
+    await expect(editor.locator('strong')).toHaveText('Toolbar text');
+
+    await toolbar.getByTitle('Bullet list').click();
+    await expect(editor.locator('ul li')).toHaveText('Toolbar text');
+
+    // Hiding is remembered across page loads.
+    await toolbar.getByTitle(/^Hide toolbar/).click();
+    await expect(toolbar).not.toBeVisible();
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    await expect(toolbar).not.toBeVisible();
+
+    await page.getByTitle('Show formatting toolbar').click();
+    await expect(toolbar).toBeVisible();
   });
 
   test('opens a v1 document and migrates it silently into the editor', async ({

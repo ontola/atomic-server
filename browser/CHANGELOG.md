@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Documents and meetings show a formatting toolbar above the text (block type,
+  bold, italic, strikethrough, quote, code, link, lists, image and mention), so
+  new users don't have to know the `/` and `@` commands. It can be hidden, which
+  the browser remembers, and brought back with the small button in its place.
 - Fix: editing a kanban card's title is reliable. A space or Enter typed in
   the title started a keyboard drag of the card, which swallowed the space,
   moved focus away and saved a partial title; selecting text with the mouse
