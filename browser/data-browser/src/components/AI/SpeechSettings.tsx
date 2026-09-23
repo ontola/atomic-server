@@ -58,12 +58,11 @@ export default function SpeechSettings() {
           <Checkbox checked={voiceEnabled} onChange={setVoiceEnabled} />
           <span>Enable voice input</span>
         </CheckboxLabel>
-        {voiceEnabled && (
-          <>
-            <label htmlFor='voice-microphone'>Microphone</label>
-            <MicrophoneSelect id='voice-microphone' />
-          </>
-        )}
+        {/* Two conditionals, not one fragment: wuchale then reads the
+            transcription fragment below as a message it never extracts, and
+            it renders nothing. */}
+        {voiceEnabled && <label htmlFor='voice-microphone'>Microphone</label>}
+        {voiceEnabled && <MicrophoneSelect id='voice-microphone' />}
         {voiceEnabled &&
           (openRouterApiKey ? (
             <>
