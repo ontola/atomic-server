@@ -6,7 +6,7 @@ test.beforeEach(before);
 const ENABLED = 'https://atomicdata.dev/integrations/properties/enabled';
 const SHORTNAME = 'https://atomicdata.dev/properties/shortname';
 
-/** Serve the real catalog with exactly these entries enabled. */
+/** Serve the mock catalog (testdata/atomic-plugins-mock) with exactly these entries enabled. */
 async function enableCatalogEntries(page: Page, shortnames: string[]) {
   await page.route('**/integrations/catalog.json', async route => {
     const response = await route.fetch();
@@ -25,7 +25,7 @@ test('integration categories default off and independent Atomic preferences surv
   page,
 }) => {
   const catalogRequests: string[] = [];
-  await enableCatalogEntries(page, ['clockify', 'devonian-todoist']);
+  await enableCatalogEntries(page, ['fixture-experimental', 'fixture-api']);
   await page.route('**/catalog', route =>
     route.fulfill({ json: ['uncertified'] }),
   );
@@ -158,7 +158,7 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('region', { name: 'Your integrations' })
       .getByRole('link', { name: 'New plugin', exact: true }),
   ).toBeVisible();
-  // The stock catalog enables no API plugins, so that toggle is not offered.
+  // The mock catalog enables no API plugins, so that toggle is not offered.
   await expect(
     page.getByRole('checkbox', { name: 'Show API plugins' }),
   ).toHaveCount(0);

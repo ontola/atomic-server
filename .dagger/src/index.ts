@@ -2020,6 +2020,9 @@ export class AtomicServer {
         // Raw imports in browser/e2e/tests reach into ../../../integrations
         // relative to /app/e2e/tests, resolving to /integrations here.
         .withDirectory('/integrations', this.source.directory('integrations'))
+        // playwright.config.ts starts testdata/atomic-plugins-mock/serve.mjs
+        // (../../testdata from /app/e2e) as the suite's plugin catalog.
+        .withDirectory('/testdata', this.source.directory('testdata'))
         // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
         // plain `readFileSync` at `../../../server/src/plugins/assets/
         // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()

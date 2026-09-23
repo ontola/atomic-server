@@ -29,8 +29,15 @@ if (
 //
 // The `VITE_*` spellings are accepted too, so an invocation that used to bake
 // the value keeps working by seeding it instead.
-const catalogUrl =
+//
+// Unless a catalog is given, the suite serves its own: a static copy of the
+// atomic-plugins layout (testdata/atomic-plugins-mock), started below as a
+// `webServer`, so no spec depends on what is published upstream.
+const configuredCatalogUrl =
   process.env.PLUGIN_CATALOG_URL || process.env.VITE_PLUGIN_CATALOG_URL;
+const pluginsMockPort = process.env.ATOMIC_PLUGINS_MOCK_PORT || '9893';
+const pluginsMockUrl = `http://127.0.0.1:${pluginsMockPort}/integrations/catalog.json`;
+const catalogUrl = configuredCatalogUrl || pluginsMockUrl;
 const integrationProxy =
   process.env.INTEGRATION_PROXY_URL || process.env.VITE_INTEGRATION_PROXY_URL;
 
@@ -77,14 +84,10 @@ const seededStorage = [
   // under webdriver anyway, so this is belt and braces: it keeps the suite
   // deterministic if either of those ever changes.
   { name: 'viewTransitionsEnabled', value: 'false' },
-  ...(catalogUrl
-    ? [
-        {
-          name: 'plugin-catalog-url',
-          value: checkSeed('PLUGIN_CATALOG_URL', catalogUrl, false),
-        },
-      ]
-    : []),
+  {
+    name: 'plugin-catalog-url',
+    value: checkSeed('PLUGIN_CATALOG_URL', catalogUrl, false),
+  },
   ...(integrationProxy
     ? [
         {
@@ -238,6 +241,20 @@ const config: PlaywrightTestConfig = {
   // The local runner and direct Playwright share one conservative budget.
   // Dagger sets a per-shard override; aggregate concurrency includes all shards.
   workers: workerBudget().workers,
+  webServer: configuredCatalogUrl
+    ? undefined
+    : {
+        command: `node ${JSON.stringify(
+          path.resolve(
+            __dirname,
+            '../../testdata/atomic-plugins-mock/serve.mjs',
+          ),
+        )} ${pluginsMockPort}`,
+        url: pluginsMockUrl,
+        // The mock is stateless and identical across checkouts, so another
+        // run's instance on the same port serves this one just as well.
+        reuseExistingServer: true,
+      },
 };
 
 export default config;
