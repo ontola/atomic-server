@@ -8,6 +8,7 @@ import {
 import { useCallback } from 'react';
 import { CellPasteData } from '@chunks/TableEditor';
 import { appendStringToType } from '../dataTypeMaps';
+import { withRowDefaults } from '../rowDefaults';
 import type { TableColumn } from '../useTableColumns';
 import { useSettings } from '../../../helpers/AppSettings';
 import {
@@ -54,9 +55,9 @@ export function useHandlePaste(
             row = await store.newResource({
               isA: tableClass.subject,
               parent: table.subject,
-              propVals: {
+              propVals: withRowDefaults(table, {
                 [commits.properties.createdAt]: Date.now(),
-              },
+              }),
             });
 
             historyItemBatch.push(createResourceCreatedHistoryItem(row));
