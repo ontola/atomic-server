@@ -3,7 +3,9 @@ import { updateTableRows } from './updateTableRows';
 // @wc-ignore-file
 import {
   createWebsite,
+  readAppPublicationDraft,
   readWebsite,
+  saveAppPublicationDraft,
   updateWebsite,
   websiteConfigSchema,
 } from '@chunks/Website/websiteModel';
@@ -1580,6 +1582,16 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                 layout,
                 ...(await describeDashboard(store, resource)),
               });
+            if (layout !== 'code')
+              return shortenRefsDeep({
+                app: resource.subject,
+                layout,
+                publication: await readAppPublicationDraft(
+                  store,
+                  drive,
+                  resource,
+                ),
+              });
             const described = await describeApp(
               store,
               drive,
@@ -1646,6 +1658,25 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                 updated: !!name,
                 ...(await describeDashboard(store, resource)),
               });
+            }
+
+            if (layout !== 'code') {
+              if (!config)
+                throw new Error('A table App update needs publication config.');
+              const parsed = expandSiteRefs(config);
+              const check = await buildWebsiteArtifact(
+                store,
+                resource.subject,
+                parsed,
+              );
+              await saveAppPublicationDraft(store, drive, resource, parsed);
+
+              return {
+                app: shortenSubject(resource.subject),
+                updated: true,
+                checkedPages: Object.keys(check.files),
+                status: 'private draft; published release unchanged',
+              };
             }
 
             const updated = await updateApp(store, drive, {

@@ -19,14 +19,10 @@ import {
   saveAppRelease,
 } from '@chunks/Website/websiteExport';
 import {
+  readAppPublicationDraft,
+  saveAppPublicationDraft,
   starterWebsite,
-  websiteConfigSchema,
 } from '@chunks/Website/websiteModel';
-import {
-  hostingRequest,
-  type HostingStatus,
-  type WebsitePackage,
-} from '@chunks/Website/hostingClient';
 import type { WebsiteArtifact } from '@chunks/Website/renderWebsite';
 
 const SCALAR_TYPES: ReadonlySet<Datatype> = new Set([
@@ -49,6 +45,7 @@ export function AppPublication({
   table: Resource;
 }) {
   const store = useStore();
+  const drive = store.getDrive()!;
   const canWrite = useCanWrite(app);
   const rowClass = table.get(core.properties.classtype) as string | undefined;
   const [columns, setColumns] = useState<TableColumnInfo[]>([]);
@@ -62,9 +59,10 @@ export function AppPublication({
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [saving, setSaving] = useState(false);
 
-  // The saved package contains the last reviewed selection. There is no live
-  // query in the public host, so newly created private rows stay private.
+  // The App stores the pending selection. Changes to source rows never enter a
+  // public release until the owner reviews and publishes a new snapshot.
   useEffect(() => {
     if (!rowClass) return;
     let active = true;
@@ -73,9 +71,9 @@ export function AppPublication({
       store
         .getResource(rowClass)
         .then(resource => readTableColumns(store, resource)),
-      hostingRequest<HostingStatus>(store, app.subject),
+      readAppPublicationDraft(store, drive, app),
     ])
-      .then(async ([map, status]) => {
+      .then(([map, config]) => {
         if (!active) return;
         setColumns([
           {
@@ -90,25 +88,18 @@ export function AppPublication({
               SCALAR_TYPES.has(column.datatype),
           ),
         ]);
-        const id = status.state?.active;
-        if (id) {
-          const pkg = await hostingRequest<WebsitePackage>(
-            store,
-            app.subject,
-            `/preview/${id}`,
-          );
-          const config = websiteConfigSchema.parse(pkg.metadata?.config);
+
+        if (config) {
           const selection = config.pages[0]?.tables[0];
-          if (
-            pkg.metadata?.project !== app.subject ||
-            selection?.table !== table.subject
-          )
-            throw new Error('The active release does not match this App.');
+          if (selection?.table !== table.subject)
+            throw new Error('The saved draft does not match this App.');
+
           if (active) {
             setRows(selection.rows);
             setColumnSubjects(selection.columns.map(column => column.property));
           }
         }
+
         if (active) {
           setInitialized(true);
           setLoading(false);
@@ -120,10 +111,11 @@ export function AppPublication({
           setLoading(false);
         }
       });
+
     return () => {
       active = false;
     };
-  }, [store, app.subject, table.subject, rowClass]);
+  }, [store, drive, app, table.subject, rowClass]);
 
   const selection = useMemo(() => {
     const config = starterWebsite(app.title);
@@ -141,6 +133,7 @@ export function AppPublication({
         })),
       },
     ];
+
     return config;
   }, [app.title, table.subject, rows, columnSubjects, columns]);
 
@@ -163,6 +156,7 @@ export function AppPublication({
           setLoading(false);
         }
       });
+
     return () => {
       active = false;
     };
@@ -177,19 +171,36 @@ export function AppPublication({
 
   const addRow = async () => {
     if (!candidate || rows.includes(candidate) || rows.length >= 200) return;
+
     try {
       const resource = await store.getResource(candidate);
+
       if (
         resource.error ||
         resource.get(core.properties.parent) !== table.subject
       ) {
         setError('Choose a row from this table.');
+
         return;
       }
+
       setRows(current => [...current, candidate]);
       setCandidate(undefined);
     } catch (cause) {
       setError(`Could not read the row: ${String(cause)}`);
+    }
+  };
+
+  const saveDraft = async () => {
+    setSaving(true);
+
+    try {
+      await saveAppPublicationDraft(store, drive, app, selection);
+      setError('');
+    } catch (cause) {
+      setError(`Could not save the draft: ${String(cause)}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -262,6 +273,13 @@ export function AppPublication({
           )}
         </div>
       </Selection>
+      <Button
+        subtle
+        disabled={!canWrite || saving || columnSubjects.length === 0}
+        onClick={() => void saveDraft()}
+      >
+        {saving ? 'Saving…' : 'Save draft'}
+      </Button>
       {columnSubjects.length === 0 && (
         <p role='alert'>Select at least one field.</p>
       )}
@@ -293,7 +311,11 @@ export function AppPublication({
           error || (columnSubjects.length === 0 ? 'Select a field.' : '')
         }
         canWrite={!!canWrite}
-        saveRelease={artifact => saveAppRelease(store, app, artifact)}
+        saveRelease={async artifact => {
+          await saveAppPublicationDraft(store, drive, app, selection);
+
+          return saveAppRelease(store, app, artifact);
+        }}
       />
     </Panel>
   );

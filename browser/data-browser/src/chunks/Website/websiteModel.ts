@@ -230,6 +230,39 @@ export async function readWebsite(
 
   return { config, schema, property };
 }
+
+/** A publication draft belongs to its App, independent of its private layout. */
+export async function readAppPublicationDraft(
+  store: Store,
+  drive: string,
+  app: Resource,
+): Promise<WebsiteConfig | undefined> {
+  const schema = await findWebsiteSchema(store, drive);
+  const property = schema.properties?.['website-design'];
+  if (!property) return undefined;
+  const raw = app.get(property);
+
+  return typeof raw === 'string'
+    ? websiteConfigSchema.parse(JSON.parse(raw))
+    : undefined;
+}
+
+export async function saveAppPublicationDraft(
+  store: Store,
+  drive: string,
+  app: Resource,
+  config: WebsiteConfig,
+) {
+  await assertPrivateWebsiteParent(store, app.subject);
+  if (!app.hasClasses(dataBrowser.classes.view))
+    throw new Error('Only an App can have a publication draft.');
+  const schema = await ensureSchema(store, drive, WEBSITE_SPEC);
+  await app.set(
+    schema.properties['website-design'],
+    JSON.stringify(websiteConfigSchema.parse(config)),
+  );
+  await saveWebsiteResource(app);
+}
 export async function updateWebsite(
   store: Store,
   drive: string,
