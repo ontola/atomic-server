@@ -29,6 +29,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   old server echoes back. The in-memory store keys resources canonically
   (#1584).
 
+- A causality rejection now names the writes it dropped. The error a client
+  gets when its Loro update lost every write to LWW reports each mismatching
+  property as `sent <x>, stored <y>`, in place of the full list of values sent
+  and the bare list of stored keys. Which write lost, and to what, previously
+  lived only in the server's own `[causality-guard] rejecting` log line. The
+  `Commit's Loro update produced no state changes` prefix that
+  `classify_commit_error` and the client outbox match on is unchanged, and so
+  is the condition for accepting or rejecting a commit.
+
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and
   until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
