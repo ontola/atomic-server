@@ -78,13 +78,13 @@ jobs:
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
           # `--publish-docs` only from a stable `v*` tag (no hyphen), matching
-          # production. This pipeline runs on every push, and netlifyDeploy
-          # used to pass `--prod` unconditionally — so any feature branch
-          # republished the public docs and typedoc. `master` used to own live
+          # production. This pipeline previously ran on every push, and
+          # netlifyDeploy used to pass `--prod` unconditionally — so a feature
+          # branch republished the public docs and typedoc. `master` used to own live
           # docs while the app shipped from tags; both now follow the tag.
           # Every other ref gets a preview URL. `--host-profile` selects
-          # parallelism (mancave hot / hosted quiet). `--playwright-mode` is
-          # light (@smoke) on feature branches and full on develop/tags.
+          # parallelism (mancave hot / hosted quiet). Main currently passes
+          # full for develop, tags, and dispatched integration batches.
           # Not `--e2e-mode`: Dagger maps that kebab to `e2EMode` and misses
           # the argument.
           args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}

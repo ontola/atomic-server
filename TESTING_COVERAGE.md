@@ -535,15 +535,16 @@ A flow is only genuinely safe when all three are covered.
 
 ### Playwright light vs full
 
-Only the browser suite splits. Lint, Rust, vitest, JS integration, and
-Flutter run on every CI job.
+Only the browser suite has light/full modes. Lint, Rust, vitest, JS
+integration, and Flutter run on every Main CI job. Automatic CI on PR events
+and feature-branch pushes is paused while runner capacity is limited.
 
 | Trigger | Playwright |
 |---|---|
-| Feature-branch push | **light** (`@smoke`), required |
+| PR event or feature-branch push | No automatic repository CI |
 | `develop` push | **full**, required (staging) |
-| stable `v*` tag | **full**, required (production) |
-| `workflow_dispatch` `e2e_mode=full`, `[full-e2e]` in the commit, or PR label `full-e2e` | **full** |
+| `v*` tag | **full**, required (release) |
+| Manual `workflow_dispatch` on a temporary branch combining PR heads | **full** |
 
 Tag a new journey `@smoke` (`smoke` from `browser/e2e/tests/test-utils.ts`)
 only if a failure means the first-hour demo is dead. Extra operators,
@@ -560,8 +561,8 @@ templates, and offline variants stay in the full suite. Policy:
 | Server integration | `cargo test -p atomic-server --test it <module>` | `rustTest` |
 | Browser unit (vitest) | `cd browser && pnpm run -r test` | `jsTest` |
 | Browser integration (vitest + real server) | `cd browser/lib && pnpm run test:integration` | `jsTestIntegration` |
-| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | `endToEnd` on feature branches |
-| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on `develop` and `v*` tags |
+| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | Local diagnostic |
+| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on dispatched batches, `develop`, and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
 

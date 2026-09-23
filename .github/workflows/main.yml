@@ -1,26 +1,20 @@
 on:
   push:
+    branches: [develop]
+    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      e2e_mode:
-        description: Playwright suite. auto = light on feature branches, full on develop and v* tags.
-        type: choice
-        options:
-          - auto
-          - light
-          - full
-        default: auto
 
-# Superseded feature-branch runs can stop immediately. Keep develop and tag
-# validation running to completion because deployments consume their results.
-# Per-ref groups keep a feature push from replacing develop validation.
+# Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
+# on a temporary branch containing the exact PR heads to test together.
+# Keep develop and tag validation running to completion because deployments
+# consume their results. Per-ref groups isolate integration batches.
 concurrency:
   group: main-pipeline-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type == 'branch' && github.ref_name != 'develop' }}
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
-# Heavy CI runs on GitHub-hosted only when explicitly selected or required for
-# PRs, never as a retry after a red test suite.
+# Heavy CI runs on GitHub-hosted only when explicitly selected, never as a
+# retry after a red test suite.
 #
 # Flow:
 #   1. Pick runner — hosted control job selects the heavy CI runner
@@ -44,10 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     outputs:
       host: ${{ steps.pick.outputs.host }}
-      e2e-mode: ${{ steps.e2e.outputs.mode }}
     steps:
       - id: pick
         env:
@@ -72,39 +64,6 @@ jobs:
           echo "Defaulting heavy CI to Mancave"
           echo "host=mancave" >> "$GITHUB_OUTPUT"
 
-      - id: e2e
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          DISPATCH_MODE: ${{ github.event.inputs.e2e_mode }}
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          # Light = @smoke Playwright. Full = every spec.
-          # Default full on develop/tags so staging/production never ship on
-          # a subset. Feature-branch pushes are light unless opted in.
-          mode=light
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${DISPATCH_MODE:-auto}" = "full" ]; then
-            mode=full
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${DISPATCH_MODE:-auto}" = "light" ]; then
-            mode=light
-          elif [ "$REF" = "refs/heads/develop" ]; then
-            mode=full
-          elif [[ "$REF" == refs/tags/v* ]]; then
-            mode=full
-          elif printf '%s' "${COMMIT_MSG:-}" | grep -q '\[full-e2e\]'; then
-            mode=full
-          elif prs=$(gh api "repos/$REPO/commits/$SHA/pulls" -H "Accept: application/vnd.github+json" 2>/dev/null); then
-            if printf '%s' "$prs" | jq -e 'any(.[]; any(.labels[]; .name == "full-e2e"))' >/dev/null; then
-              mode=full
-            fi
-          fi
-          echo "e2e-mode=$mode (ref=$REF dispatch=${DISPATCH_MODE:-} event=$EVENT_NAME)"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-
   mancave:
     name: Main (Mancave)
     needs: pick
@@ -119,7 +78,7 @@ jobs:
     with:
       runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
       host-profile: mancave
-      e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
+      e2e-mode: full
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -252,7 +211,8 @@ jobs:
           cargo test --locked -p atomic-managed-node
           git diff --exit-code -- Cargo.lock
 
-  # Hosted only when explicitly selected or required for PR events.
+  # Hosted only when explicitly selected. A PR event would also be hosted if
+  # that trigger is ever restored.
   # Deliberately does NOT run when Mancave finished with test failures.
   github:
     name: Main (GitHub)
@@ -265,7 +225,7 @@ jobs:
     with:
       runner: '["ubuntu-latest"]'
       host-profile: hosted
-      e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
+      e2e-mode: full
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
