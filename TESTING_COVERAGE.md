@@ -1748,8 +1748,10 @@ missing/corrupt attachments.
 
 `managed-sync-presentation.spec.ts` uses a real local node and OPFS with mocked
 account/enrollment/Vault responses. It reproduces both reported connection states,
-checks refusal when local history cannot be read, switches to browser-only sync,
+checks refusal when local history cannot be read, confirms the extra Sync-page
+button is absent, switches to browser-only sync with the server-card toggle,
 and verifies an edit plus attachment survive reload without HTTP/WS data writes.
+It turns server sync back on and checks that the local edit is sent.
 It also exercises the compiled Vault session error path (no React hook in an
 error constructor). Actual staging billing/admission and multi-device migration
 remain separate acceptance checks.
@@ -2253,8 +2255,10 @@ missing/corrupt attachments.
 
 `managed-sync-presentation.spec.ts` uses a real local node and OPFS with mocked
 account/enrollment/Vault responses. It reproduces both reported connection states,
-checks refusal when local history cannot be read, switches to browser-only sync,
+checks refusal when local history cannot be read, confirms the extra Sync-page
+button is absent, switches to browser-only sync with the server-card toggle,
 and verifies an edit plus attachment survive reload without HTTP/WS data writes.
+It turns server sync back on and checks that the local edit is sent.
 It also exercises the compiled Vault session error path (no React hook in an
 error constructor). Actual staging billing/admission and multi-device migration
 remain separate acceptance checks.
