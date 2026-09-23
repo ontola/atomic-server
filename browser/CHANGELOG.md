@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: a task added from a table's calendar, grid, quick-add button or paste
+  now starts in the board's Todo lane instead of "No status". Tables carry
+  `table-row-defaults` (property to starting value), which every way of adding
+  a row fills in for what it does not set itself. Templates set it (Todo, Lead,
+  Wishlist, Want to read, Invited), as does a Status column the board creates,
+  and any board lane can be made the default from its header menu.
+
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value
