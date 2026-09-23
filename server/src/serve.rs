@@ -37,6 +37,62 @@ fn process_fd_soft_limit() -> Option<usize> {
     None
 }
 
+/// Raise this process's file-descriptor soft limit to its hard limit.
+///
+/// A process may do this for itself without privileges, and the two are
+/// usually far apart: a soft limit of 1024 against a hard limit in the
+/// hundreds of thousands. The budget below divides the soft limit among HTTP
+/// workers, but HTTP is not the only tenant. The database, Iroh's QUIC
+/// sockets and every open websocket draw on the same pool, so on a stock 1024
+/// the process can exhaust it while the HTTP budget still looks healthy.
+/// Staging did exactly that: twenty-three minutes of `error accepting
+/// connection: No file descriptors available`, Iroh unable to bind its
+/// hairpin probe, and a panic at the tail, all from one `EMFILE`.
+///
+/// Raising before reading is what makes the reserve generous rather than
+/// cramped. Failure is not fatal: the budget is computed from whatever limit
+/// is in force afterwards either way.
+#[cfg(unix)]
+fn raise_fd_soft_limit() {
+    let mut limit = std::mem::MaybeUninit::<libc::rlimit>::uninit();
+    // SAFETY: getrlimit writes the initialized rlimit into this valid pointer
+    // on success. We only read it after checking the return value.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, limit.as_mut_ptr()) } != 0 {
+        tracing::warn!("Could not read the file-descriptor limit to raise it");
+
+        return;
+    }
+    let current = unsafe { limit.assume_init() };
+
+    if current.rlim_cur >= current.rlim_max {
+        return;
+    }
+
+    let raised = libc::rlimit {
+        rlim_cur: current.rlim_max,
+        rlim_max: current.rlim_max,
+    };
+
+    // SAFETY: setrlimit reads an rlimit through this valid pointer. Raising the
+    // soft limit as far as the hard limit requires no privileges.
+    if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raised) } == 0 {
+        tracing::info!(
+            from = current.rlim_cur,
+            to = current.rlim_max,
+            "Raised the file-descriptor soft limit to the hard limit"
+        );
+    } else {
+        tracing::warn!(
+            soft = current.rlim_cur,
+            hard = current.rlim_max,
+            "Could not raise the file-descriptor soft limit; continuing on the soft limit"
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn raise_fd_soft_limit() {}
+
 /// Custom span builder: uses "{method} {path}" when no route pattern is matched
 /// (e.g. static files), so spans are legible in SigNoz instead of just "GET".
 struct AtomicRootSpanBuilder;
@@ -410,6 +466,7 @@ where
     // server passes a no-op (see `serve`), so it never phones home.
     on_ready(&appstate);
 
+    raise_fd_soft_limit();
     let fd_soft_limit = process_fd_soft_limit().unwrap_or_else(|| {
         tracing::warn!("Could not read the process file-descriptor limit; budgeting HTTP connections against 1024 descriptors");
         1024
@@ -633,5 +690,33 @@ mod connection_budget_tests {
         assert_eq!(http_connections_per_worker(64, 8), 1);
         assert_eq!(http_connections_per_worker(usize::MAX, 8), 1024);
         assert_eq!(http_connections_per_worker(1024, 0), 768);
+    }
+
+    /// The budget is only as good as the limit it divides, and a stock soft
+    /// limit of 1024 is what let staging run out of descriptors with HTTP
+    /// still inside its share. Raising first is the whole point, so assert the
+    /// process really is left on its hard limit.
+    #[cfg(unix)]
+    #[test]
+    fn raising_leaves_the_soft_limit_at_the_hard_limit() {
+        super::raise_fd_soft_limit();
+
+        let mut limit = std::mem::MaybeUninit::<libc::rlimit>::uninit();
+        // SAFETY: as in `process_fd_soft_limit`; read only after the check.
+        assert_eq!(
+            unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, limit.as_mut_ptr()) },
+            0,
+            "the descriptor limit should be readable"
+        );
+        let limit = unsafe { limit.assume_init() };
+
+        assert_eq!(
+            limit.rlim_cur, limit.rlim_max,
+            "the soft limit should have been raised to the hard limit"
+        );
+        assert!(
+            super::process_fd_soft_limit().is_some_and(|soft| soft >= 1024),
+            "the raised limit should be readable and no smaller than the stock default"
+        );
     }
 }

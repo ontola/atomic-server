@@ -7,6 +7,17 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- The server raises its own file-descriptor soft limit to its hard limit at
+  startup. It already budgeted HTTP connections against the soft limit and kept
+  a reserve, but HTTP is not the only tenant of that pool: the database, Iroh's
+  QUIC sockets and every open websocket draw on it too, so on a stock soft limit
+  of 1024 the process can run out while the HTTP budget still looks healthy.
+  Staging did, for twenty-three minutes, with 2,655 `error accepting connection:
+  No file descriptors available`, Iroh unable to bind its hairpin probe, and a
+  panic at the tail. A process may raise its own soft limit as far as the hard
+  limit without privileges, and the connection budget is computed from whatever
+  is in force afterwards, so a refused raise is logged and not fatal.
+
 - Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
   `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
   previous `did:ad:` spelling is accepted forever and names the same
