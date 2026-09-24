@@ -398,6 +398,11 @@ pub struct Db {
     /// know about encryption is indistinguishable, on disk, from one nobody
     /// meant to protect.
     node_key: Arc<std::sync::OnceLock<[u8; crate::vault::keys::KEK_LEN]>>,
+    /// The integration proxy origin this node's plugins reach through
+    /// `ctx.http` (ontola/atomic-plugins#54). The server's host signs requests
+    /// to it with the installation's app agent, and lets exactly this origin
+    /// through the loopback check. `None` means no proxy is configured.
+    integration_proxy: Arc<RwLock<Option<String>>>,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
@@ -489,6 +494,7 @@ impl Db {
             kv,
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
+            integration_proxy: Arc::new(RwLock::new(None)),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
             on_commit: None,
@@ -2457,6 +2463,22 @@ impl Db {
     /// would write secrets the winner cannot read.
     pub fn set_node_key(&self, key: [u8; crate::vault::keys::KEK_LEN]) {
         let _ = self.node_key.set(key);
+    }
+
+    /// Sets the integration proxy origin (`scheme://host[:port]`) plugins may
+    /// reach, or clears it. Validating it is the server's job; this only holds it.
+    pub fn set_integration_proxy(&self, origin: Option<String>) {
+        if let Ok(mut slot) = self.integration_proxy.write() {
+            *slot = origin;
+        }
+    }
+
+    /// The configured integration proxy origin, if any.
+    pub fn integration_proxy(&self) -> Option<String> {
+        self.integration_proxy
+            .read()
+            .ok()
+            .and_then(|slot| slot.clone())
     }
 
     /// Wraps a secret for storage, or passes it through when no key is set.

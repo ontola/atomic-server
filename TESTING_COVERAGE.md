@@ -228,6 +228,20 @@ search overlay with the query on Enter. `components/overlayState.test.ts`
 checks the pre-filled search query is dropped on close and on a plain open.
 The labelled header search button is not covered beyond `test-utils.ts`
 still finding it by its `Search (` title.
+Host signing of `ctx.http` to the integration proxy (ontola/atomic-plugins#54,
+decisions 8 and 12): `plugins::host_core` tests send a real request to a
+one-shot loopback server standing in for the configured proxy and verify its
+v2 signature (method, full URL with query, body hash) as the installation's
+app agent on this node, that plugin-supplied `x-atomic-*` headers are replaced,
+that an installation with no app agent on this node is refused before
+connecting, and that other loopback origins stay refused even when a manifest
+declares them. `plugins::egress` tests pin the exception to exactly the
+configured origin (another port, the other scheme, another loopback address,
+`localhost` for `127.0.0.1`, and credentials in the URL are all refused).
+`app_endpoints_test::an_active_installation_reports_its_agent_on_this_node`
+checks `GET /app-agent` reports the identity activation mints for a JS
+Installation. Not covered: a real integration proxy (atomic-plugins#122)
+accepting these requests, delegations and `POST /runtimes`, and a second node.
 
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`

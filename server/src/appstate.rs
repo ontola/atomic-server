@@ -79,6 +79,13 @@ impl AppState {
         // the clear during startup and then silently left that way.
         store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?);
 
+        // Validated here so a typo stops the server at boot rather than
+        // surfacing as a refused plugin request at 3am.
+        if let Some(raw) = &config.opts.integration_proxy_url {
+            let proxy = crate::plugins::egress::ProxyOrigin::parse(raw)?;
+            store.set_integration_proxy(Some(proxy.origin().to_string()));
+        }
+
         // `config.toml` holds this server's agent secret and was created
         // world-readable by every version before this one. Narrowed on every
         // boot rather than at setup, so an existing installation is fixed by
