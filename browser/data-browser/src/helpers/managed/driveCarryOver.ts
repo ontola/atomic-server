@@ -7,7 +7,7 @@ import type { VaultCapableDb } from './vault';
 /**
  * Carrying local-only drives from a replaced identity into the account's.
  *
- * A local-only drive (a demo guest's kept template, its home) lives in its
+ * A local-only drive (a demo guest's kept template) lives in its
  * identity's own encrypted database, and the switch opens the account's
  * database instead. `initClientDb` refuses to seed one identity's database
  * from another's in-memory resources: on a shared device that would hand one

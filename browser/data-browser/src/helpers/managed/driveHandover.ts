@@ -6,13 +6,17 @@ import { core, server } from '@tomic/react';
  * Handing a local identity's drives to the account identity that replaces it.
  *
  * One email has one identity. When the account already has one and this
- * browser made another, the account's wins — but the browser's may already
- * own drives (a kept template preview, the home an invite created). Before
- * the switch, while the local agent can still sign, it adds the account agent
- * to each of those drives' `write`, and copies the local-only ones out of its
- * own database (`driveCarryOver.ts`). After the switch, the account imports
- * those copies and lists every handed-over drive in its own home, the way
+ * browser made a demo guest, the account's wins — but the guest may already
+ * own drives (a kept template preview). Before the switch, while the guest
+ * can still sign, it adds the account agent to each of those drives'
+ * `write`, and copies the local-only ones out of its own database
+ * (`driveCarryOver.ts`). After the switch, the account imports those copies
+ * and lists every handed-over drive in its own home, the way
  * `addToSavedDrives` does for the demo.
+ *
+ * The guest's own home is read for the drives it lists, never handed over
+ * itself: it holds nothing but that list, and the account has a home of its
+ * own. Handing it over put a second "My drive" in the account's switcher.
  */
 
 export const PENDING_DRIVE_HANDOVER_KEY = 'atomic.pendingDriveHandover';
@@ -92,7 +96,10 @@ function drivesListedIn(resource: HandoverResource): string[] {
     : [];
 }
 
-/** `from`'s personal drive and the drives it lists, reads that failed left out. */
+/**
+ * The drives `from`'s personal drive lists, without that personal drive
+ * itself (it lists itself, for its own switcher).
+ */
 async function drivesOf(
   store: HandoverStore,
   from: string,
@@ -127,7 +134,7 @@ async function drivesOf(
     return [];
   }
 
-  return [personalDrive, ...drivesListedIn(home)];
+  return drivesListedIn(home).filter(drive => drive !== personalDrive);
 }
 
 const inFlight = new Map<string, Promise<PendingDriveHandover>>();

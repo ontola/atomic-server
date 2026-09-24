@@ -131,6 +131,15 @@ export async function cleanupDemoDrive(
       frontier = next;
     }
 
+    // A guest's profile row is the guest's own agent resource (see
+    // `createGuestProfile`), so it is parented under this drive's team
+    // table. The identity outlives the demo: removing it would tombstone the
+    // agent for the rest of the session, and a later save on it (keeping a
+    // template links the guest's home on it) would have nothing to save to.
+    // The next demo run rewrites the row in place.
+    const agent = store.getAgent()?.subject;
+    if (agent) doomed.delete(agent);
+
     for (const subject of doomed) {
       store.removeResource(subject, false);
     }

@@ -64,6 +64,7 @@ describe('handing drives to the account identity', () => {
       [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
       'did:ad:home': owned({
         [server.properties.drives]: [
+          'did:ad:home',
           'did:ad:kept',
           'did:ad:demo',
           'did:ad:preview',
@@ -86,31 +87,69 @@ describe('handing drives to the account identity', () => {
       archiveIdentity: archive,
     });
 
-    for (const drive of ['did:ad:home', 'did:ad:kept']) {
-      expect(resources[drive].get(core.properties.write)).toContain(account);
-      expect(resources[drive].save).toHaveBeenCalledOnce();
-    }
+    expect(resources['did:ad:kept'].get(core.properties.write)).toContain(
+      account,
+    );
+    expect(resources['did:ad:kept'].save).toHaveBeenCalledOnce();
 
-    for (const drive of ['did:ad:demo', 'did:ad:preview', 'did:ad:shared']) {
+    for (const drive of [
+      'did:ad:home',
+      'did:ad:demo',
+      'did:ad:preview',
+      'did:ad:shared',
+    ]) {
       expect(resources[drive].get(core.properties.write) ?? []).not.toContain(
         account,
       );
       expect(resources[drive].save).not.toHaveBeenCalled();
     }
 
-    expect(pending).toEqual({
-      agent: account,
-      drives: ['did:ad:home', 'did:ad:kept'],
-    });
+    expect(pending).toEqual({ agent: account, drives: ['did:ad:kept'] });
     expect(readPendingDriveHandover()).toEqual(pending);
     expect(archive).toHaveBeenCalledExactlyOnceWith(guest, []);
+  });
+
+  // The guest's home holds only its switcher list. Handed over, it showed up
+  // in the account's switcher as a second "My drive".
+  it("reads the guest's home for its drives but never hands the home over", async () => {
+    const resources = {
+      [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
+      'did:ad:home': owned({
+        [server.properties.drives]: ['did:ad:home', 'did:ad:kept'],
+      }),
+      'did:ad:kept': owned(),
+    };
+    const carryOver = vi.fn(async () => {});
+    const archive = vi.fn(async () => {});
+
+    const pending = await handOverDrives(
+      fixture(resources, ['did:ad:home', 'did:ad:kept']),
+      {
+        from: guest,
+        to: account,
+        skip: [],
+        carryOver,
+        archiveIdentity: archive,
+      },
+    );
+
+    expect(resources['did:ad:home'].get(core.properties.write)).toEqual([
+      guest,
+    ]);
+    expect(resources['did:ad:home'].save).not.toHaveBeenCalled();
+    expect(carryOver).toHaveBeenCalledExactlyOnceWith(['did:ad:kept']);
+    expect(archive).toHaveBeenCalledExactlyOnceWith(guest, ['did:ad:kept']);
+    expect(pending.drives).toEqual([]);
   });
 
   it('keeps local-only drives with the archived identity, not the account home', async () => {
     const resources = {
       [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
-      'did:ad:home': owned({ [server.properties.drives]: ['did:ad:kept'] }),
+      'did:ad:home': owned({
+        [server.properties.drives]: ['did:ad:kept', 'did:ad:synced'],
+      }),
       'did:ad:kept': owned(),
+      'did:ad:synced': owned(),
     };
     const archive = vi.fn(async () => {});
 
@@ -124,7 +163,7 @@ describe('handing drives to the account identity', () => {
     expect(resources['did:ad:kept'].get(core.properties.write)).toContain(
       account,
     );
-    expect(pending.drives).toEqual(['did:ad:home']);
+    expect(pending.drives).toEqual(['did:ad:synced']);
     expect(archive).toHaveBeenCalledExactlyOnceWith(guest, ['did:ad:kept']);
   });
 
@@ -156,7 +195,7 @@ describe('handing drives to the account identity', () => {
       },
     );
 
-    expect(order).toEqual(['carry did:ad:home did:ad:kept', 'archive']);
+    expect(order).toEqual(['carry did:ad:kept', 'archive']);
     // Listed once imported, not before.
     expect(pending.drives).toEqual([]);
   });
@@ -164,12 +203,13 @@ describe('handing drives to the account identity', () => {
   it('fails, keeping nothing aside, when carrying over fails', async () => {
     const resources = {
       [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
-      'did:ad:home': owned(),
+      'did:ad:home': owned({ [server.properties.drives]: ['did:ad:kept'] }),
+      'did:ad:kept': owned(),
     };
     const archive = vi.fn(async () => {});
 
     await expect(
-      handOverDrives(fixture(resources, ['did:ad:home']), {
+      handOverDrives(fixture(resources, ['did:ad:kept']), {
         from: guest,
         to: account,
         skip: [],
@@ -186,7 +226,8 @@ describe('handing drives to the account identity', () => {
   it('is idempotent', async () => {
     const resources = {
       [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
-      'did:ad:home': owned(),
+      'did:ad:home': owned({ [server.properties.drives]: ['did:ad:kept'] }),
+      'did:ad:kept': owned(),
     };
     const store = fixture(resources);
     const options = {
@@ -204,15 +245,18 @@ describe('handing drives to the account identity', () => {
 
     expect(concurrent).toBe(first);
     expect(again).toEqual(first);
-    expect(resources['did:ad:home'].get(core.properties.write)).toEqual([
+    expect(resources['did:ad:kept'].get(core.properties.write)).toEqual([
       guest,
       account,
     ]);
-    expect(resources['did:ad:home'].save).toHaveBeenCalledOnce();
+    expect(resources['did:ad:kept'].save).toHaveBeenCalledOnce();
   });
 
   it('falls back to the recorded home when the agent cannot be read', async () => {
-    const resources = { 'did:ad:home': owned() };
+    const resources = {
+      'did:ad:home': owned({ [server.properties.drives]: ['did:ad:kept'] }),
+      'did:ad:kept': owned(),
+    };
 
     const pending = await handOverDrives(fixture(resources), {
       from: guest,
@@ -222,7 +266,7 @@ describe('handing drives to the account identity', () => {
       archiveIdentity: vi.fn(async () => {}),
     });
 
-    expect(pending.drives).toEqual(['did:ad:home']);
+    expect(pending.drives).toEqual(['did:ad:kept']);
   });
 
   it('fails, recording nothing, when a known home cannot be read', async () => {
@@ -272,7 +316,7 @@ describe('listing handed-over drives after the switch', () => {
   }
 
   it('adds the drives to the new home and clears the record', async () => {
-    pending(['did:ad:home', 'did:ad:kept']);
+    pending(['did:ad:template', 'did:ad:kept']);
     const home = fake({ [server.properties.drives]: ['did:ad:other'] });
     const store = fixture({
       [account]: fake({
@@ -284,7 +328,7 @@ describe('listing handed-over drives after the switch', () => {
     expect(await applyPendingDriveHandover(store, account)).toBe(true);
     expect(home.get(server.properties.drives)).toEqual([
       'did:ad:other',
-      'did:ad:home',
+      'did:ad:template',
       'did:ad:kept',
     ]);
     expect(home.save).toHaveBeenCalledOnce();
@@ -304,7 +348,7 @@ describe('listing handed-over drives after the switch', () => {
       }),
       'did:ad:accounthome': home,
     });
-    const importCarried = vi.fn(async () => ['did:ad:home', 'did:ad:kept']);
+    const importCarried = vi.fn(async () => ['did:ad:template', 'did:ad:kept']);
 
     expect(await applyPendingDriveHandover(store, account, importCarried)).toBe(
       true,
@@ -312,7 +356,7 @@ describe('listing handed-over drives after the switch', () => {
     expect(importCarried).toHaveBeenCalledWith(account);
     expect(home.get(server.properties.drives)).toEqual([
       'did:ad:synced',
-      'did:ad:home',
+      'did:ad:template',
       'did:ad:kept',
     ]);
   });
@@ -354,7 +398,7 @@ describe('listing handed-over drives after the switch', () => {
   });
 
   it('waits for the identity the drives were handed to', async () => {
-    pending(['did:ad:home']);
+    pending(['did:ad:template']);
     const store = fixture({});
 
     expect(await applyPendingDriveHandover(store, guest)).toBe(false);
@@ -363,7 +407,7 @@ describe('listing handed-over drives after the switch', () => {
   });
 
   it('keeps the record for a retry when the home cannot be saved', async () => {
-    pending(['did:ad:home']);
+    pending(['did:ad:template']);
     const home = fake({});
     home.save.mockRejectedValueOnce(new Error('offline'));
     const store = fixture({

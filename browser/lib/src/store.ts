@@ -1818,10 +1818,12 @@ export class Store {
         await this.clientDb.getResourceWithSnapshot(subject);
       if (!jsonAd) return null;
 
-      return this.hydrateOfflineReplay(
-        subject,
-        JSON.parse(jsonAd),
-        snapshot ?? undefined,
+      return (
+        this.hydrateOfflineReplay(
+          subject,
+          JSON.parse(jsonAd),
+          snapshot ?? undefined,
+        ) ?? null
       );
     } catch {
       return null;
@@ -1831,12 +1833,17 @@ export class Store {
   /** Build a Resource from a parsed JSON-AD object, hydrate Loro,
    *  and route through the unified ingress with `offline-replay`
    *  source. Used by both the OPFS-cold-load path and the
-   *  per-page-reload outbox restore path. */
+   *  per-page-reload outbox restore path.
+   *
+   *  Returns the store's own copy, or `undefined` when the ingress refused
+   *  the state (the subject was destroyed in this session). Never the
+   *  Resource built here when it was refused: that one has no store, so a
+   *  caller that edits and saves it fails with "Resource has no store". */
   private hydrateOfflineReplay(
     subject: string,
     parsed: Record<string, unknown>,
     snapshot?: Uint8Array,
-  ): Resource {
+  ): Resource | undefined {
     const resource = new Resource(subject);
     resource.applyHydratedValues(
       Object.entries(parsed).filter(([key]) => key !== '@id') as [
@@ -1850,13 +1857,13 @@ export class Store {
     if (snapshot?.length) resource.importLoroUpdate(snapshot, true);
     else resource.getLoroDoc();
     resource.loading = false;
-    this.applyIncoming({
+    const outcome = this.applyIncoming({
       subject: resource.subject,
       resource,
       source: 'offline-replay',
     });
 
-    return resource;
+    return outcome === 'applied' ? this.getResolved(subject) : undefined;
   }
 
   /**
