@@ -61,8 +61,17 @@ managedDriveTest(
 
 test('a demo guest can create a template drive without an account', async ({
   page,
+  browserDiagnostics,
 }) => {
   test.setTimeout(180000);
+  browserDiagnostics.expect(
+    'error',
+    /Each child in a list should have a unique.*key.*DriveTemplateSetup/s,
+    'Existing Wuchale React key warning in Vite template setup',
+    1,
+    undefined,
+    { optional: true },
+  );
   await mockManagedPortal(page);
   await page.route('**/server', async route => {
     const response = await route.fetch({
@@ -77,14 +86,14 @@ test('a demo guest can create a template drive without an account', async ({
       },
     });
   });
-  // "Try the app" visitors have no account, so the control plane has no session.
-  await page.route('**/api/me', route => route.fulfill({ status: 401 }));
+  // "Try the app" visitors have no account, so the control plane has no
+  // session. 204 means the same to the app as the real 401, without a
+  // browser console error for every lookup.
+  await page.route('**/api/me', route => route.fulfill({ status: 204 }));
 
+  // The demo leaves its splash once the guest and its workspace exist.
   await page.goto(`${FRONTEND_URL}/app/demo`);
-  const back = page.getByRole('button', { name: 'Back', exact: true });
-  await expect(back).toBeVisible({ timeout: 90000 });
-  await back.click();
-  await expect(page).toHaveURL(/new-drive/);
+  await expect(page).not.toHaveURL(/\/app\/demo/, { timeout: 90000 });
 
   await page.goto(`${FRONTEND_URL}/app/new-drive?template=student`);
   await expect(

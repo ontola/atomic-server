@@ -29,6 +29,7 @@ function fixture(local = false, guest = false) {
     getResource: async () => ({ get: () => (guest ? undefined : home) }),
     isLocalOnlyDrive: () => local,
     makeDriveLocal: vi.fn(async () => {}),
+    registerLocalOnlyDrive: vi.fn(),
   };
 
   return store as unknown as Store & typeof store;
@@ -109,7 +110,9 @@ describe('template drive preparation', () => {
     vi.mocked(getManagedAccount).mockResolvedValue(null);
     await prepareTemplateDrive(store);
     expect(getManagedEnrollments).not.toHaveBeenCalled();
-    expect(store.makeDriveLocal).toHaveBeenCalledExactlyOnceWith(home);
+    // Nothing to verify on the server: a guest's home was never there.
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+    expect(store.registerLocalOnlyDrive).toHaveBeenCalledExactlyOnceWith(home);
   });
 
   it('still asks a signed-out account to sign in', async () => {
