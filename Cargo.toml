@@ -50,5 +50,13 @@ overflow-checks = true
 [profile.dev.package."*"]
 debug = false
 
+# RSA key generation for plugin route keys takes seconds unoptimized, and
+# tests generate one per installation.
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
+
+[profile.dev.package.rsa]
+opt-level = 3
+
 [workspace.metadata.bin]
 wasm-pack = { version = "0.15.0" }

@@ -25,6 +25,7 @@ import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
 import { WelcomeRoute } from './WelcomeRoute';
 import { NewDriveRoute } from './NewDriveRoute';
+import { RouteConsentRoute } from './RouteConsentRoute';
 
 const DevDriveRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -95,6 +96,7 @@ const routeTree = rootRoute.addChildren({
     DemoRoute,
     InviteRoute,
     LinkOpenRouter,
+    RouteConsentRoute,
   }),
   topRoute,
 });

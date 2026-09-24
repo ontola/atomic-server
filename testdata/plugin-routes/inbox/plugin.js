@@ -13,6 +13,23 @@
 // `subject`: that is how they check the host refuses writes outside the
 // write target and changes to resources this installation did not create.
 // A real plugin decides these itself.
+//
+// Host crypto (AS-08, #1718): the `actor-key` and the `storage` tokens.
+//
+// - `GET /actor` publishes the key's public half, with keyId
+//   `<base>/actor#main-key`.
+// - `POST /signed-inbox` (`auth: http-signature`) stores an item like
+//   `/inbox`, and answers with the verified `request.caller`.
+// - `POST /outbox` with `{ to, activity }` has the host sign a delivery to
+//   `to` and answers with the signed headers. Only a fixture hands out
+//   signatures: a real plugin enqueues the delivery (AS-09).
+// - `GET /storage/{*rest}` (`auth: bearer`) answers with the caller.
+// - `GET /oauth?scope&client_id&state` redirects to the host's consent page;
+//   `GET /oauth/callback` redeems the code it sends back for a token.
+// - `POST /tokens` with `{ op: issue | verify | revoke, ... }` calls
+//   `ctx.tokens.*` directly.
+// - `GET /dump` answers with everything the handler can see, for the test
+//   that no key material reaches the sandbox.
 const NAME = 'https://atomicdata.dev/properties/name';
 const DESCRIPTION = 'https://atomicdata.dev/properties/description';
 const PARENT = 'https://atomicdata.dev/properties/parent';
@@ -67,6 +84,106 @@ export function handle(ctx, request) {
         response: reply(200, { deleted: body.subject }),
         intents: [{ op: 'destroy', subject: body.subject }],
       };
+    case 'GET actor': {
+      const id = `${request.base}/actor`;
+      const keyId = `${id}#main-key`;
+      const key = ctx.keys.publicKey('actor-key', { keyId });
+      return reply(200, {
+        id,
+        type: 'Service',
+        publicKey: { id: keyId, owner: id, publicKeyPem: key.publicKeyPem },
+      });
+    }
+    case 'POST signed-inbox':
+      return {
+        response: reply(202, { caller: request.caller }),
+        intents: [
+          {
+            op: 'create',
+            localId: 'item',
+            parent: ctx.config.inbox,
+            isA: [PLAIN_TEXT],
+            set: {
+              [NAME]: body.name || 'Signed item',
+              [DESCRIPTION]: `from ${request.caller.owner}`,
+            },
+          },
+        ],
+      };
+    case 'POST outbox':
+      return reply(
+        200,
+        ctx.keys.sign({
+          key: 'actor-key',
+          keyId: `${request.base}/actor#main-key`,
+          operation: 'deliver',
+          request: { method: 'POST', url: body.to, body: body.activity },
+        }),
+      );
+    case 'GET storage':
+      return reply(200, { caller: request.caller, path: request.params.rest });
+    case 'GET oauth': {
+      const { url } = ctx.tokens.requestConsent({
+        name: 'storage',
+        scopes: [request.query.scope],
+        client: request.query.client_id,
+        redirect: '/oauth/callback',
+        state: request.query.state,
+      });
+      return { status: 302, headers: { location: url } };
+    }
+    case 'GET oauth-callback':
+      if (request.query.error) {
+        return reply(403, { error: request.query.error, state: request.query.state });
+      }
+      return reply(200, {
+        ...ctx.tokens.issue({ code: request.query.code }),
+        state: request.query.state,
+      });
+    case 'POST tokens':
+      switch (body.op) {
+        case 'issue':
+          return reply(
+            200,
+            ctx.tokens.issue({
+              name: body.name || 'storage',
+              scopes: body.scopes,
+              client: body.client,
+              expiresIn: body.expiresIn,
+            }),
+          );
+        case 'verify':
+          return reply(200, { token: ctx.tokens.verify(body.token) });
+        case 'revoke':
+          return reply(200, { revoked: ctx.tokens.revoke(body.id) });
+        default:
+          return reply(400, { error: 'op' });
+      }
+    case 'GET dump': {
+      const attempt = (f) => {
+        try {
+          return f();
+        } catch (e) {
+          return { error: String(e) };
+        }
+      };
+      return reply(200, {
+        ctx: JSON.stringify(ctx),
+        request,
+        globals: Object.keys(globalThis),
+        publicKey: attempt(() => ctx.keys.publicKey('actor-key')),
+        signed: attempt(() =>
+          ctx.keys.sign({
+            key: 'actor-key',
+            keyId: 'https://elsewhere.example/k',
+            operation: 'deliver',
+            request: { method: 'POST', url: 'https://elsewhere.example/inbox', body: '{}' },
+          }),
+        ),
+        undeclared: attempt(() => ctx.keys.publicKey('other-key')),
+        exported: attempt(() => __hostCall('keys.export', JSON.stringify({ key: 'actor-key' }))),
+      });
+    }
     default:
       return reply(404, { error: 'not here' });
   }

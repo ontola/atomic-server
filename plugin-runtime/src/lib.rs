@@ -83,6 +83,22 @@ globalThis.__atomic = (function () {
     return JSON.parse(unwrap(__hostQuery(property, value)));
   };
 
+  // Host-held crypto (plugin routes only). The host signs and keeps
+  // tokens; nothing here ever holds a private key or a token's hash.
+  function call(name, request) {
+    return JSON.parse(unwrap(__hostCall(name, JSON.stringify(request ?? null))));
+  }
+  input.keys = {
+    publicKey: (key, options) => call('keys.publicKey', { ...(options || {}), key }),
+    sign: (request) => call('keys.sign', request),
+  };
+  input.tokens = {
+    issue: (request) => call('tokens.issue', request),
+    verify: (token) => call('tokens.verify', { token }),
+    revoke: (id) => call('tokens.revoke', { id }),
+    requestConsent: (request) => call('tokens.requestConsent', request),
+  };
+
   return input;
 })();
 "#;
@@ -125,6 +141,16 @@ impl Guest for Component {
                     "__hostQuery",
                     Function::new(ctx.clone(), |property: String, value: String| {
                         encode(host::query(&property, &value))
+                    })
+                    .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
+
+            globals
+                .set(
+                    "__hostCall",
+                    Function::new(ctx.clone(), |name: String, request: String| {
+                        encode(host::host_call(&name, &request))
                     })
                     .map_err(|e| e.to_string())?,
                 )
