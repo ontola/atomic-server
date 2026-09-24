@@ -35,6 +35,7 @@ import {
   type QuickAccessPropType,
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
+import type { ClientDbOutboxWrite } from './client-db.js';
 import {
   forkResource,
   isFork,
@@ -2466,10 +2467,10 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Removes the resource both locally and from the server.
    *
-   * The delete is durable the moment this is called: the signed destroy
-   * commit goes into the store's `LocalOutbox` (localStorage-backed, survives a
-   * reload) and the resource is removed from the store and tombstoned in
-   * OPFS right away. The outbox drain POSTs the envelope with the same
+   * The delete is durable before this resolves: the signed destroy commit
+   * goes into the store's `LocalOutbox` (stored in the client database, or
+   * localStorage without one; survives a reload) and the resource is removed
+   * from the store and tombstoned in OPFS right away. The outbox drain POSTs the envelope with the same
    * backoff and reconnect replay as any other write.
    *
    * Resolution semantics mirror {@link save}:
@@ -2530,7 +2531,10 @@ export class Resource<C extends OptionalClass = any> {
     this.store.removeResource(this.subject);
 
     if (!this.store.serverConnected) {
-      // Queued; the reconnect drain POSTs it.
+      // Queued; the reconnect drain POSTs it. Resolve once the queued
+      // envelope is on disk, like an offline save.
+      await this.store.outbox.flush();
+
       return;
     }
 
@@ -3332,17 +3336,8 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       if (!this.store.serverConnected) {
-        // Offline: persist the Loro snapshot to clientDb BEFORE
-        // marking the outbox dirty. `pendingDirtyCount > 0` is the
-        // canonical "edit landed durably" signal; bumping it via
-        // `markDirty` before `saveOffline` finishes would leave a
-        // window where a reload loses the OPFS snapshot while the
-        // localStorage dirty bit survives.
-        await this.saveOffline();
-
-        if (hasChanges) {
-          this.store.outbox.markDirty(this.subject);
-        }
+        // Offline: the snapshot and the outbox entry are written together.
+        await this.saveOffline(hasChanges);
 
         return 'offline';
       }
@@ -3484,8 +3479,12 @@ export class Resource<C extends OptionalClass = any> {
    *    clientDb so a reload can hydrate the Loro state before the WS
    *    reconnect drain re-signs from the same `_loroVersionAtLastSave`
    *    cursor.
+   *  - Writes the outbox entry (the last-synced cursor and, with
+   *    `markDirty`, the dirty bit) in the same write, so a reload finds
+   *    both or neither. The entry changes in memory only after that write,
+   *    so `pendingDirtyCount > 0` still means the edit is durable.
    */
-  private async saveOffline(): Promise<void> {
+  private async saveOffline(markDirty = false): Promise<void> {
     // Server sets createdAt on apply; we need it locally for sort.
     if (this.get(commits.properties.createdAt) === undefined) {
       this.setCreatedAtValue(Date.now());
@@ -3511,15 +3510,15 @@ export class Resource<C extends OptionalClass = any> {
     // advanced the local cursor to that snapshot; treating it as a rewind
     // baseline makes the post-genesis empty export look like "OPFS not ready"
     // and the drain retries forever (`offline-create-then-online`).
-    if (!signedGenesis) {
-      const baseVersion = this.getEncodedSaveCursor();
+    const baseVersion = signedGenesis
+      ? undefined
+      : this.getEncodedSaveCursor() || undefined;
 
-      if (baseVersion) {
-        this.store.outbox.setBaseVersion(this.subject, baseVersion);
-      }
-    }
-
-    await this.persistToClientDb();
+    await this.store.outbox.recordOfflineSave(
+      this.subject,
+      { baseVersion, dirty: markDirty },
+      outbox => this.persistToClientDb(outbox),
+    );
 
     this.commitError = undefined;
     this.loading = false;
@@ -3539,9 +3538,14 @@ export class Resource<C extends OptionalClass = any> {
    * (`fetchResourceWithLocalFallback`) reads it from clientDb and never
    * consults the racy server view.
    *
+   * `outbox` rows are written in the same worker message and flush, when
+   * the outbox lives in this database. Resolves `true` when they were.
+   *
    * @internal store-level / offline-persistence only.
    */
-  public async persistToClientDb(): Promise<void> {
+  public async persistToClientDb(
+    outbox?: ClientDbOutboxWrite,
+  ): Promise<boolean> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
     const identity = this.store.getAgent()?.subject;
@@ -3552,7 +3556,12 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const clientDb = this.store.getClientDb();
-    if (!clientDb || clientDb.unsupportedEnvironment) return;
+    if (!clientDb || clientDb.unsupportedEnvironment) return false;
+
+    // Rows for the queue's own database only; otherwise the outbox writes
+    // them itself once this resolves.
+    const withOutbox =
+      outbox && this.store.outbox.isStoredIn(clientDb) ? outbox : undefined;
 
     // A resource without propvals still gets its `@id` row: this path is the
     // durable one, and a caller that awaited it expects a row to exist.
@@ -3574,8 +3583,11 @@ export class Resource<C extends OptionalClass = any> {
       // When the drain already wrote this exact state, this awaits that write.
       await this.store.persistState(clientDb, this.subject, jsonAd, snapshot, {
         exact: true,
+        outbox: withOutbox,
       });
       closePersist();
+
+      return !!withOutbox;
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 

@@ -52,7 +52,12 @@ export type WorkerRequest =
       subject: string;
       jsonAd: string;
       snapshot?: Uint8Array;
+      /** Outbox rows written with the resource and made durable by the same
+       *  flush, so a crash keeps both or neither. */
+      outbox?: OutboxWrite;
     }
+  | { id: number; type: 'outboxEntries'; agent: string }
+  | ({ id: number; type: 'outboxWrite'; durable: boolean } & OutboxWrite)
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
   | { id: number; type: 'applyPeerCommit'; commitJsonAd: string }
   | { id: number; type: 'removeResource'; subject: string }
@@ -129,6 +134,22 @@ export type WorkerRequest =
       devicePubkey: string;
       segment: number;
     };
+
+/** Outbox rows for one agent; mirrors `ClientDbOutboxWrite` in client-db.ts
+ *  (duplicated, not imported: see the note on shared modules there). */
+interface OutboxWrite {
+  agent: string;
+  puts: Array<{ subject: string; value: string }>;
+  deletes: string[];
+}
+
+function writeOutbox(write: OutboxWrite): void {
+  db!.outboxWrite(
+    write.agent,
+    JSON.stringify(write.puts),
+    JSON.stringify(write.deletes),
+  );
+}
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
@@ -242,6 +263,12 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         await db!.putResource(msg.jsonAd);
       }
 
+      // The outbox entry that says this snapshot still has to reach the
+      // server. Both writes commit without fsync, so the one flush below
+      // persists them together: redb rolls back every commit after the last
+      // durable one, so a crash before it keeps neither, never just one.
+      if (msg.outbox) writeOutbox(msg.outbox);
+
       // Per-write redb commits use `Durability::None` — see the periodic
       // `flush()` tick below. Everywhere else that's fine (the periodic
       // tick catches up within `FLUSH_INTERVAL_MS`), but this op is the
@@ -256,6 +283,29 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       dirty = true;
       db!.flush();
       dirty = false;
+
+      return;
+    }
+
+    case 'outboxEntries': {
+      await ensureInit();
+
+      return db!.outboxEntries(msg.agent) as string[];
+    }
+
+    case 'outboxWrite': {
+      await ensureInit();
+      writeOutbox(msg);
+
+      // Envelopes (a signed genesis or destroy) and offline cursors are
+      // written durably; a plain dirty bit waits for the periodic tick.
+      if (msg.durable) {
+        dirty = true;
+        db!.flush();
+        dirty = false;
+      } else {
+        dirty = true;
+      }
 
       return;
     }

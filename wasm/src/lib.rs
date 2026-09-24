@@ -311,6 +311,43 @@ impl ClientDb {
         Ok(())
     }
 
+    /// The browser outbox's rows for `agent` (`Tree::Outbox`), each the JSON
+    /// text the tab stored. The tab owns the format; see
+    /// `atomic_lib::sync::outbox::raw`.
+    #[wasm_bindgen(js_name = "outboxEntries")]
+    pub fn outbox_entries(&self, agent: &str) -> Result<Vec<String>, JsError> {
+        atomic_lib::sync::outbox::raw::entries(self.db(), agent)
+            .map_err(to_js_err)?
+            .into_iter()
+            .map(|bytes| String::from_utf8(bytes).map_err(to_js_err))
+            .collect()
+    }
+
+    /// Store and remove browser outbox rows for `agent` in one batch.
+    /// `puts_json` is `[{ subject, value }]`, `deletes_json` a subject list.
+    /// Like every other write this commits without an fsync; the worker
+    /// flushes when the caller needs it durable.
+    #[wasm_bindgen(js_name = "outboxWrite")]
+    pub fn outbox_write(
+        &self,
+        agent: &str,
+        puts_json: &str,
+        deletes_json: &str,
+    ) -> Result<(), JsError> {
+        #[derive(serde::Deserialize)]
+        struct Row {
+            subject: String,
+            value: String,
+        }
+        let puts: Vec<Row> = serde_json::from_str(puts_json).map_err(to_js_err)?;
+        let deletes: Vec<String> = serde_json::from_str(deletes_json).map_err(to_js_err)?;
+        let puts: Vec<(String, Vec<u8>)> = puts
+            .into_iter()
+            .map(|row| (row.subject, row.value.into_bytes()))
+            .collect();
+        atomic_lib::sync::outbox::raw::write(self.db(), agent, &puts, &deletes).map_err(to_js_err)
+    }
+
     /// Apply a Commit (JSON-AD) to the local database.
     /// This is the efficient incremental update path: the Loro diff
     /// determines exactly which atoms changed, so only affected index

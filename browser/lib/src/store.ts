@@ -82,6 +82,7 @@ import {
 } from './genesis.js';
 import type {
   ClientDbWorker,
+  ClientDbOutboxWrite,
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
@@ -89,6 +90,7 @@ import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
+  isOutboxDatabase,
   isSettledDestroyErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
@@ -816,6 +818,49 @@ export class Store {
    */
   public expectClientDb(): void {
     this.clientDbExpected = true;
+    // The outbox lives in that database: until it attaches, the queue may be
+    // missing entries only the database holds.
+    this.outbox.expectDatabase();
+    void this.bindOutboxDatabase();
+  }
+
+  /**
+   * Move the current agent's outbox into the attached client database (see
+   * `LocalOutbox.attachDatabase`), or settle for the localStorage queue when
+   * none arrives or it cannot open. Safe to call repeatedly: the outbox
+   * ignores a database it already holds, and a call that an identity change
+   * or a newer database overtook stops.
+   */
+  private async bindOutboxDatabase(): Promise<void> {
+    const agent = this.agent?.subject;
+    const attached = await this.waitForClientDb(CLIENT_DB_ATTACH_GRACE);
+
+    if (this.agent?.subject !== agent) return;
+
+    const db = this.clientDb;
+
+    if (!attached || !db || !isOutboxDatabase(db)) {
+      // Nothing to move into (yet). A later `setClientDb` binds it then.
+      if (!db) this.outbox.databaseUnavailable(agent);
+
+      return;
+    }
+
+    const ready = await db.waitForInit();
+
+    if (this.agent?.subject !== agent || this.clientDb !== db) return;
+
+    if (!ready) {
+      this.outbox.databaseUnavailable(agent);
+
+      return;
+    }
+
+    const added = await this.outbox.attachDatabase(agent, db);
+
+    for (const entry of added) this.hydrateCommitLogFromOutbox(entry);
+
+    this.scheduleOutboxDrain();
   }
 
   /**
@@ -856,10 +901,13 @@ export class Store {
     // `emitSyncStatus`.
     this.clientDb = clientDb;
 
+    if (isOutboxDatabase(clientDb)) this.outbox.expectDatabase();
+
     // Release fetches that started before the attach and would otherwise be
     // about to fail a resource this database can answer for.
     if (clientDb) {
       for (const waiter of [...this.clientDbWaiters]) waiter();
+      void this.bindOutboxDatabase();
     }
 
     this.emitSyncStatus();
@@ -1113,6 +1161,12 @@ export class Store {
    * which exports the subject's Loro delta, signs one commit and posts it.
    */
   public async syncDirtyResources(): Promise<void> {
+    // Entries still in the database are invisible until it attaches. The
+    // reconnect sequence refetches and reconciles after this resolves, and
+    // must not do so over an offline edit the queue has not loaded yet.
+    if (!this.getAgent()) return;
+    await this.outbox.whenHydrated();
+
     if (this.outbox.size === 0 || !this.getAgent()) return;
     perfMark('store.syncDirtyResources.subjects', { count: this.outbox.size });
     this.emitSyncStatus();
@@ -1381,7 +1435,7 @@ export class Store {
 
     if (!resource) {
       // Cold drain: resource not in memory. Typical shape: the entry was
-      // restored from localStorage after a page load, and nothing on the
+      // restored from storage after a page load, and nothing on the
       // current page renders this subject — so no view will EVER load it,
       // and waiting for "the hydration path" would strand the entry (and
       // `pendingDirtyCount`) forever. Load it ourselves and drain on top.
@@ -1413,7 +1467,7 @@ export class Store {
     // hydrate completes) shows up here as `loading=true` with an
     // empty Loro doc — draining it would `exportLoroDeltaForDrain →
     // undefined → clearDirty`, permanently dropping the
-    // localStorage-restored offline edit before its real state has
+    // restored offline edit before its real state has
     // a chance to land.
     const hasLoroState =
       resource.hasLoroDoc() && !!resource.getLoroDoc()?.oplogVersion();
@@ -2143,7 +2197,7 @@ export class Store {
     // edits need that local hydration to merge their durable copy back in.
     const resource =
       existing ??
-      (this.outbox.hasPending(subject)
+      (this.outbox.mayHavePending(subject)
         ? this.getResourceLoading(subject, { newResource: false })
         : new Resource(subject));
     resource.setStore(this);
@@ -2157,7 +2211,7 @@ export class Store {
     // `hasUnsavedChanges()` is in-memory only, so it's blind on a cold
     // reload: a WS reconnect can deliver the server's stale (pre-offline-
     // edit) snapshot for a subject whose offline edit only exists in
-    // clientDb + the outbox's durable (localStorage-backed) dirty bit —
+    // clientDb + the outbox's durable dirty bit —
     // nothing has called `set()` on THIS freshly-created Resource object
     // yet. Without also checking `outbox.hasPending`, `replace: true`
     // wipes the doc via `resetLoroState()` before the OPFS-based local
@@ -2171,7 +2225,7 @@ export class Store {
       !!change.replaceLoroDocsFromRemote &&
       !isCommitSubject(subject) &&
       !resource.hasUnsavedChanges() &&
-      !this.outbox.hasPending(subject);
+      !this.outbox.mayHavePending(subject);
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
     // Commit-detail resources (`did:ad:commit:<sig>`) carry a single
@@ -3655,7 +3709,7 @@ export class Store {
     // drain).
     //
     // We deliberately do NOT gate on `hasPendingCommits` (the outbox
-    // genesis/dirty bit): that survives reload via localStorage, so on
+    // genesis/dirty bit): that survives a reload, so on
     // a cold load a freshly-created placeholder for an offline-saved
     // resource has `hasPendingCommits === true` but NO in-memory state
     // to protect. Gating on it skipped `hydrateOfflineReplay`, leaving
@@ -3671,7 +3725,7 @@ export class Store {
     this.hydrateOfflineReplay(subject, parsed, snapshot);
 
     // If the outbox holds a dirty bit for this subject (offline edit
-    // restored from localStorage), kick a drain now that the resource
+    // restored after a reload), kick a drain now that the resource
     // is finally in the store. Without this nudge the drain would
     // either: (a) never fire — `hydrateOfflineReplay` doesn't go
     // through `set()`, so the Loro subscriber that normally schedules
@@ -4979,6 +5033,10 @@ export class Store {
     }
 
     this.eventManager.emit(StoreEvents.AgentChanged, agent);
+
+    // After the event: an app that keeps one database per agent detaches the
+    // previous agent's on it, and this must not bind that one.
+    void this.bindOutboxDatabase();
   }
 
   /**
@@ -6611,12 +6669,20 @@ export class Store {
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
-    { exact = false }: { exact?: boolean } = {},
+    {
+      exact = false,
+      outbox,
+    }: {
+      exact?: boolean;
+      /** Outbox rows to write in the same worker message and flush. A write
+       *  carrying them is never skipped as a duplicate. */
+      outbox?: ClientDbOutboxWrite;
+    } = {},
   ): Promise<void> {
     const stamp = hashPersistedState(jsonAd, snapshot);
     const last = this.lastPersisted.get(subject);
 
-    if (last && last.db === db && last.stamp === stamp) {
+    if (!outbox && last && last.db === db && last.stamp === stamp) {
       if (!exact) return last.done;
 
       if (
@@ -6634,20 +6700,22 @@ export class Store {
       done: Promise.resolve(),
       inFlight: { jsonAd, snapshot },
     };
-    entry.done = db.putResourceWithSnapshot(subject, jsonAd, snapshot).then(
-      () => {
-        entry.inFlight = undefined;
-      },
-      e => {
-        // Failed write: forget it so the next attempt is not skipped as a
-        // duplicate of a write that never landed.
-        if (this.lastPersisted.get(subject) === entry) {
-          this.lastPersisted.delete(subject);
-        }
+    entry.done = db
+      .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)
+      .then(
+        () => {
+          entry.inFlight = undefined;
+        },
+        e => {
+          // Failed write: forget it so the next attempt is not skipped as a
+          // duplicate of a write that never landed.
+          if (this.lastPersisted.get(subject) === entry) {
+            this.lastPersisted.delete(subject);
+          }
 
-        throw e;
-      },
-    );
+          throw e;
+        },
+      );
     this.lastPersisted.set(subject, entry);
 
     return entry.done;
