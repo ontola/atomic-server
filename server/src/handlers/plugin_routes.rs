@@ -708,6 +708,26 @@ mod tests {
                 "{uri}"
             );
         }
+        // Without an `Accept` header (as machine clients probe): the claimed
+        // name is still the plugin's, an unclaimed one is a `404`, not the
+        // app's HTML, on the drive's host and on the API origin.
+        let bare = |host: &str, uri: &str| {
+            test::TestRequest::get()
+                .uri(uri)
+                .insert_header((header::HOST, host))
+                .to_request()
+        };
+        let resp = test::call_service(&app, bare(ALICE, "/.well-known/nodeinfo")).await;
+        assert_eq!(resp.status(), 200);
+        for host in [ALICE, "localhost:9883"] {
+            let resp = test::call_service(&app, bare(host, "/.well-known/ocm")).await;
+            assert_eq!(resp.status(), 404, "{host}");
+            assert_eq!(
+                resp.headers().get(header::CONTENT_TYPE).unwrap(),
+                "application/problem+json",
+                "{host}"
+            );
+        }
         // The drive itself (not public here, so `401` from the server).
         let resp = test::call_service(&app, on!(ALICE, "/")).await;
         assert_eq!(resp.status(), 401);
