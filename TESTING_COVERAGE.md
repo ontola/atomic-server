@@ -216,8 +216,7 @@ and that no release feature set (nor atomic.place's) turns the feature on.
 `tests/it/server_cli.rs` checks the binary exits non-zero on
 `ATOMIC_PLUGIN_ROUTES=read-only` without the feature. CI runs the lib tests
 and clippy once more with `--features plugin-routes`. Not covered: no e2e
-build has the feature yet (nothing is served behind it before #1714), and no
-UI reads `hostFeatures` yet.
+build has the feature yet (nothing is served behind it before #1714).
 
 Manifest v3 `http` block (#1712): `testdata/plugin-manifest/http-index.json`
 (accepted and rejected cases, the gate each needs, the derived `requires`) and
@@ -230,7 +229,20 @@ gated release are refused on the test node (gate `off`) and that the old
 release stays; `plugin_release_test.rs` checks `/plugin-release-pin` answers
 `409` with the typed problem, and the catalog's `requires`. Not covered: an
 install on a node with the gates open (the test fixture's config is fixed at
-`off`), and no UI shows the refusal yet (#1713).
+`off`).
+
+Catalog and install review for gated plugins (#1713): the lib test
+`plugin-manifest-http.test.ts` checks that a catalog entry's derived
+`requires` gives the same verdict as its manifest for every
+`http-refusals.json` case (`requiresGate` + `checkGate`), and parses
+`hostFeatures`. In the data-browser, `catalogGate.test.ts` covers hidden (not
+compiled, or a server without `hostFeatures`), marked (level too low, listener
+not bound) and listed; `PublicEndpoints.test.tsx` renders the "Public
+endpoints" section from `v3-activitypub.json` and the review dialog both
+refusing up front and showing a thrown `HostFeatureUnavailableError` (the
+`409`) inline with Install disabled. Not covered: an e2e test against a default
+build (hidden plugin, refused direct link; there is no direct plugin link
+yet), and the upgrade review's diff of surfaces.
 
 Plugin route registry (#1714): `server/src/plugins/route_registry.rs` unit
 tests cover slugs, `{param}`/`{*rest}` matching, both mounts, reserved paths

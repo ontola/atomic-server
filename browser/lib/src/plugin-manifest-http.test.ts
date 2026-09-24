@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { validateManifest } from './plugin-manifest.js';
 import {
+  checkGate,
   checkHostFeatures,
   derivedRequires,
   hostFeatureMessage,
   httpGate,
+  parsePluginRoutesStatus,
+  requiresGate,
   HostFeatureUnavailableError,
   type PluginRoutesStatus,
 } from './plugin-manifest-http.js';
@@ -111,5 +114,63 @@ describe('pinning a release the node cannot open', () => {
     expect(error).toBeInstanceOf(HostFeatureUnavailableError);
     expect(error.problem).toEqual(problem.refusal);
     expect(error.message).toBe(problem.message);
+  });
+});
+
+describe('a catalog entry gated by its derived requires', () => {
+  const cases: {
+    name: string;
+    file: string;
+    node: PluginRoutesStatus;
+    refusal: { compiled: boolean; level: string; needed: string } | null;
+  }[] = fixture('http-refusals.json');
+
+  // A catalog must not mark a plugin the install would accept, or list one
+  // it would refuse.
+  for (const entry of cases) {
+    it(`agrees with the manifest: ${entry.name}`, () => {
+      const manifest = validateManifest(fixture(entry.file));
+      const refusal = checkGate(
+        requiresGate(derivedRequires(manifest)),
+        entry.node,
+      );
+
+      if (entry.refusal === null) {
+        expect(refusal).toBeUndefined();
+
+        return;
+      }
+
+      expect(refusal).toMatchObject({
+        compiled: entry.refusal.compiled,
+        level: entry.refusal.level,
+        needed: entry.refusal.needed,
+      });
+    });
+  }
+
+  it('needs nothing without requires', () => {
+    expect(requiresGate(null).needed).toBe('none');
+    expect(requiresGate(['wasm-sandbox']).needed).toBe('none');
+  });
+});
+
+describe('hostFeatures in a /plugin-catalog body', () => {
+  it('reads pluginRoutes', () => {
+    const pluginRoutes = {
+      compiled: true,
+      level: 'read-only',
+      routesOrigin: null,
+      listeners: ['willow-wgps'],
+      sidecars: [],
+    };
+
+    expect(
+      parsePluginRoutesStatus({ entries: [], hostFeatures: { pluginRoutes } }),
+    ).toEqual(pluginRoutes);
+  });
+
+  it('is absent for a server from before the gates', () => {
+    expect(parsePluginRoutesStatus([])).toBeUndefined();
   });
 });

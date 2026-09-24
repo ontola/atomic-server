@@ -15,6 +15,7 @@ import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
 import type { JSONValue } from './value.js';
+import type { DeclaredHttp } from './plugin-manifest-http.js';
 
 export const RUNTIME_JS = 'atomic-js/1';
 const WORLD_EXTENSION = 'extension';
@@ -84,6 +85,11 @@ export interface InstallationReview {
   capabilities: ReviewCapability[];
   configSchema?: JSONValue;
   defaultConfig?: JSONValue;
+  /**
+   * The public endpoints a version-three manifest opens, in the canonical
+   * form the server validated at publish. Absent when it opens none.
+   */
+  http?: DeclaredHttp;
 }
 
 function asString(value: unknown): string | undefined {
@@ -193,6 +199,9 @@ export function readInstallationReview(
     capabilities,
     configSchema: manifest.configSchema as JSONValue | undefined,
     defaultConfig: manifest.defaultConfig as JSONValue | undefined,
+    ...(asObject(manifest.http)
+      ? { http: manifest.http as unknown as DeclaredHttp }
+      : {}),
   };
 }
 
