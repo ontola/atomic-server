@@ -73,8 +73,8 @@ fall back to synthetic `memory://` upload URLs.
 ## Existing production account in a Mac dev window
 
 For an interactive check with an existing account, stop the local acceptance
-stack above. Point the Tauri frontend at `https://atomicserver.eu` with
-`VITE_MANAGED_PORTAL_URL` and at `https://atomicserver.eu/api` with
+stack above. Point the Tauri frontend at `https://atomic.place` with
+`VITE_MANAGED_PORTAL_URL` and at `https://atomic.place/api` with
 `VITE_MANAGED_API_BASE`. Use Vite on `localhost:6747` or `localhost:5173`:
 the production API accepts those development origins, but rejected the local
 acceptance port `6751` during this check. The frontend origin also separates

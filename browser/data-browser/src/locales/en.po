@@ -1002,9 +1002,8 @@ msgstr "Failed to persist agent after accepting invite"
 msgid "Invite accepted, but no destination was returned."
 msgstr "Invite accepted, but no destination was returned."
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "AtomicServer"
-msgstr "AtomicServer"
+#~ msgid "AtomicServer"
+#~ msgstr "AtomicServer"
 
 #. 0: write ? 'edit' \\: 'view'; 1: resourceName ? ` "${resourceName}"` \\: ''
 #: src/views/InvitePage.tsx
@@ -12501,3 +12500,6 @@ msgstr "AtomicServer stores this app’s data in its embedded node. Quit other A
 #: src/helpers/onboardingStorage.ts
 msgid "The local node is taking too long to start."
 msgstr "The local node is taking too long to start."
+
+#~ msgid "Atomic Place"
+#~ msgstr "Atomic Place"
