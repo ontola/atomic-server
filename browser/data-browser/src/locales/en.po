@@ -12524,3 +12524,13 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#. 0: ' '
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to connect your{0} <0/> account. The connection stays in this browser; the app can only make requests through it."
+msgstr "This app wants to connect your{0} <0/> account. The connection stays in this browser; the app can only make requests through it."
+
+#. 0: ' '
+#: src/components/ProxyTrafficNotice.tsx
+msgid "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"
+msgstr "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"

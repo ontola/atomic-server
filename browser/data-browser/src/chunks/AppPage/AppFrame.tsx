@@ -21,6 +21,7 @@ import {
   type ProxyConnection,
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
+import { ProxyTrafficNotice } from '@components/ProxyTrafficNotice';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -377,12 +378,15 @@ function AppFrameSession({
       )}
       {connectAsk && (
         <ConnectBar role='group' aria-label='Connect an account'>
-          <ErrorText>
-            This app wants to use your{' '}
-            <strong>{platformName(connectAsk.platform)}</strong> account through{' '}
-            {getIntegrationProxy()}. The proxy keeps the connection under your
-            account; this app may use it until you revoke that.
-          </ErrorText>
+          <ConnectText>
+            <ErrorText>
+              This app wants to use your{' '}
+              <strong>{platformName(connectAsk.platform)}</strong> account. The
+              proxy keeps the connection under your account; this app may use it
+              until you revoke that.
+            </ErrorText>
+            <ProxyTrafficNotice />
+          </ConnectText>
           <Row gap='0.5rem'>
             {connectAsk.existing?.[0] && (
               <Button onClick={() => pickExisting(connectAsk.existing![0])}>
@@ -604,6 +608,14 @@ const ConnectBar = styled.div`
   border-radius: ${p => p.theme.radius};
   background-color: ${p => p.theme.colors.bg1};
   margin-bottom: 0.5rem;
+`;
+
+const ConnectText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 20rem;
+  min-width: 0;
 `;
 
 /** Keeps the frame filling whatever is left once the bar has taken its height. */

@@ -12478,3 +12478,13 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
+
+#. 0: ' '
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to connect your{0} <0/> account. The connection stays in this browser; the app can only make requests through it."
+msgstr ""
+
+#. 0: ' '
+#: src/components/ProxyTrafficNotice.tsx
+msgid "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"
+msgstr ""
