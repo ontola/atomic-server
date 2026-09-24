@@ -258,19 +258,33 @@ const INBOX_MANIFEST: &str = include_str!("../../../testdata/plugin-routes/inbox
 /// route grant its review shows and an inbox its agent may write to.
 /// Returns the drive, the inbox and the Installation.
 async fn install_inbox(client: &Client) -> AtomicResult<(String, String, String)> {
-    let agent = client.new_agent("Alice").await?;
-    let drive = client.new_public_drive(&agent, "Inbox Drive").await?;
+    install_writer(client, INBOX_SOURCE, INBOX_MANIFEST, "inbox").await
+}
 
-    // The inbox the installer points the plugin at.
+/// Installs a fixture with one write target, whose parent is `config.<key>`,
+/// in a new public drive of a new agent, with the route grant its review
+/// shows and a target resource its agent may write to. Returns the drive,
+/// the target and the Installation.
+async fn install_writer(
+    client: &Client,
+    source: &str,
+    manifest: &str,
+    key: &str,
+) -> AtomicResult<(String, String, String)> {
+    let agent = client.new_agent("Alice").await?;
+    let drive = client.new_public_drive(&agent, "Writer Drive").await?;
+
+    // The target the installer points the plugin at.
     let mut inbox = client.new_resource(&drive)?;
-    inbox.set_unsafe(urls::NAME.into(), Value::String("Inbox".into()))?;
+    inbox.set_unsafe(urls::NAME.into(), Value::String(key.into()))?;
     inbox.save_remote(client.store()).await?;
     let inbox = inbox.get_subject().to_string();
 
     // Installed with the route grant its review shows: the write targets.
-    let manifest: serde_json::Value = serde_json::from_str(INBOX_MANIFEST)?;
+    let manifest: serde_json::Value = serde_json::from_str(manifest)?;
+    let name = manifest["name"].as_str().unwrap_or_default().to_string();
     let targets = manifest["http"]["writeTargets"].clone();
-    let mut release = PluginRelease::js(INBOX_SOURCE.into(), manifest, Default::default());
+    let mut release = PluginRelease::js(source.into(), manifest, Default::default());
     release.world = WORLD_EXTENSION.into();
     let mut release_resource = client.new_resource(&drive)?;
     release.write_to_resource(&mut release_resource, None)?;
@@ -281,7 +295,7 @@ async fn install_inbox(client: &Client) -> AtomicResult<(String, String, String)
             urls::IS_A,
             Value::ResourceArray(vec![urls::INSTALLATION.into()]),
         ),
-        (urls::NAME, Value::String("inbox".into())),
+        (urls::NAME, Value::String(name)),
         (urls::NAMESPACE, Value::String("fixtures".into())),
         (
             urls::RELEASE_PROP,
@@ -293,7 +307,7 @@ async fn install_inbox(client: &Client) -> AtomicResult<(String, String, String)
             urls::GRANTS,
             Value::Json(json!(["storage", {"route-writes": targets}])),
         ),
-        (urls::CONFIG, Value::Json(json!({ "inbox": inbox }))),
+        (urls::CONFIG, Value::Json(json!({ key: inbox }))),
     ] {
         installation.set_unsafe(property.into(), value)?;
     }
@@ -594,5 +608,98 @@ async fn a_route_enqueues_a_delivery_the_server_sends_signed() -> AtomicResult<(
         .await
         .map_err(|e| e.to_string())?;
     assert_eq!(resp.status(), 502);
+    Ok(())
+}
+
+/// `testdata/plugin-routes/files/`: a remoteStorage-like plugin whose
+/// `PUT /files/{*path}` takes a blob body (#1720).
+const FILES_SOURCE: &str = include_str!("../../../testdata/plugin-routes/files/plugin.js");
+const FILES_MANIFEST: &str = include_str!("../../../testdata/plugin-routes/files/manifest.json");
+
+/// A 2 MiB body, twice the largest inline body, is PUT through a route and
+/// GETs back byte for byte, with the host's `ETag` and the uploaded content
+/// type. The host stored it; the handler only saw its hash.
+#[tokio::test]
+async fn a_blob_body_round_trips_through_a_route() -> AtomicResult<()> {
+    let port = start_server_with_args("plugin_route_blobs", &["--plugin-routes", "read-write"]);
+    wait_for_server(port).await;
+    let server = format!("http://localhost:{port}");
+    let client = Client::new(&server).await?;
+    let http = reqwest::Client::new();
+    let (_drive, _folder, installation) =
+        install_writer(&client, FILES_SOURCE, FILES_MANIFEST, "folder").await?;
+    let url = format!(
+        "{server}/_routes/{}/files/music/song.ogg",
+        slug(&installation)
+    );
+
+    let body: Vec<u8> = (0..2 * 1024 * 1024u32)
+        .map(|i| (i.wrapping_mul(2_654_435_761) >> 24) as u8)
+        .collect();
+    let hash = blake3::hash(&body).to_hex().to_string();
+    let etag = format!("\"{hash}\"");
+
+    let resp = http
+        .put(&url)
+        .header("content-type", "audio/ogg")
+        .body(body.clone())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 201);
+    assert_eq!(resp.headers()["etag"], etag.as_str());
+    let seen: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    assert_eq!(seen["blob"]["hash"], hash);
+    assert_eq!(seen["blob"]["size"], body.len());
+    assert_eq!(seen["inline"], serde_json::Value::Null);
+
+    let resp = http.get(&url).send().await.map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.headers()["content-type"], "audio/ogg");
+    assert_eq!(resp.headers()["etag"], etag.as_str());
+    assert_eq!(resp.headers()["x-content-type-options"], "nosniff");
+    assert_eq!(
+        resp.headers()["content-length"],
+        body.len().to_string().as_str()
+    );
+    let got = resp.bytes().await.map_err(|e| e.to_string())?;
+    assert!(got.as_ref() == body.as_slice(), "the bytes differ");
+
+    // HEAD: the length, no bytes.
+    let resp = http.head(&url).send().await.map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(
+        resp.headers()["content-length"],
+        body.len().to_string().as_str()
+    );
+    assert!(resp.bytes().await.map_err(|e| e.to_string())?.is_empty());
+
+    // Conditional GET and PUT, answered by the host.
+    let resp = http
+        .get(&url)
+        .header("if-none-match", etag.as_str())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 304);
+    let resp = http
+        .put(&url)
+        .header("content-type", "audio/ogg")
+        .header("if-none-match", "*")
+        .body(b"overwrite".to_vec())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 412);
+
+    // Over the route's 16 MiB default: refused before it is stored.
+    let resp = http
+        .put(&url)
+        .header("content-type", "audio/ogg")
+        .body(vec![0u8; 16 * 1024 * 1024 + 1])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 413);
     Ok(())
 }

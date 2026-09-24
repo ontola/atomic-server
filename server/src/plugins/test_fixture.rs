@@ -221,6 +221,19 @@ pub fn inbox_release() -> atomic_lib::db::plugin_release::PluginRelease {
     js_release_with_source(INBOX_SOURCE, serde_json::from_str(INBOX_MANIFEST).unwrap())
 }
 
+/// `testdata/plugin-routes/files/`: a remoteStorage-like `drive-prefix`
+/// plugin whose `PUT /files/{*path}` takes a blob body and stores a File
+/// under `config.folder`, and whose `GET /files/{*path}` answers with that
+/// blob. Needs `--plugin-routes read-write` and a route grant.
+pub const FILES_SOURCE: &str = include_str!("../../../testdata/plugin-routes/files/plugin.js");
+pub const FILES_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/files/manifest.json");
+
+/// The files fixture as a release.
+pub fn files_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(FILES_SOURCE, serde_json::from_str(FILES_MANIFEST).unwrap())
+}
+
 /// A JS `extension` release of the trivial source with this manifest.
 pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
     js_release_with_source(HELLO_ROUTE_SOURCE, manifest)

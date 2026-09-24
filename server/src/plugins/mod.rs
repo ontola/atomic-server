@@ -79,6 +79,10 @@ pub mod release_binding;
 pub mod replicate;
 #[cfg(feature = "plugin-routes")]
 pub mod route_auth;
+#[cfg(feature = "plugin-routes")]
+pub mod route_blobs;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_blobs_test;
 #[cfg(all(test, feature = "plugin-routes"))]
 mod route_crypto_test;
 #[cfg(feature = "plugin-routes")]
