@@ -208,6 +208,17 @@ on its first render without fetching again; `helpers/integrationVisibility.test.
 stored preferences. `integration-visibility.spec.ts` checks no "Show API
 plugins" toggle is offered.
 
+Plugin-routes gates (#1711): `server/src/plugin_routes.rs` unit tests cover the
+three levels, the startup refusals (no `plugin-routes` feature; listeners or
+sidecars below `read-write`), routes-origin validation, the catalog report,
+and that no release feature set (nor atomic.place's) turns the feature on.
+`config.rs` tests parse the flag and, in child processes, the env var;
+`tests/it/server_cli.rs` checks the binary exits non-zero on
+`ATOMIC_PLUGIN_ROUTES=read-only` without the feature. CI runs the lib tests
+and clippy once more with `--features plugin-routes`. Not covered: no e2e
+build has the feature yet (nothing is served behind it before #1714), and no
+UI reads `hostFeatures` yet.
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

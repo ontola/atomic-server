@@ -21,6 +21,7 @@ pub mod invite_token;
 mod jsonerrors;
 mod metrics;
 pub mod node_key;
+pub mod plugin_routes;
 pub mod plugins;
 pub mod rate_limit;
 pub mod routes;
