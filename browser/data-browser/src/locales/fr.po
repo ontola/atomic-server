@@ -114,6 +114,7 @@ msgstr "Agents IA"
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -9703,3 +9704,15 @@ msgid "# plugin needs server features this server doesn’t have."
 msgid_plural "# plugins need server features this server doesn’t have."
 msgstr[0] ""
 msgstr[1] ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open link"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to open <0/> in a new tab. <1/>"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open a link"
+msgstr ""

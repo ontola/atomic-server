@@ -349,3 +349,58 @@ it('says so plainly where WebCrypto has no Ed25519', async () => {
 
   expect(f.parent.postMessage).not.toHaveBeenCalled();
 });
+
+function timedStore(f: ReturnType<typeof frame>) {
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  return new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(f.window, setTimeout, clearTimeout);
+}
+
+it('asks the host to open links and resources, and waits on the person as long as it takes', async () => {
+  for (const op of ['openExternal', 'openResource'] as const)
+    expect(isViewRequest(viewRequest(1, op, {}))).toBe(true);
+
+  vi.useFakeTimers();
+  const f = frame();
+  const store = timedStore(f);
+
+  const external = store.openExternal(new URL('https://www.notion.so/p'));
+  const resource = store.openResource('did:ad:row');
+  const outcome = resource.then(
+    () => 'answered',
+    (e: Error) => e.message,
+  );
+  const [ask, open] = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect([ask, open].every(isViewRequest)).toBe(true);
+  expect(ask).toMatchObject({
+    op: 'openExternal',
+    args: { url: 'https://www.notion.so/p' },
+  });
+  expect(open).toMatchObject({
+    op: 'openResource',
+    args: { subject: 'did:ad:row' },
+  });
+
+  // The person may take minutes to decide; that is not a silent host.
+  expect(vi.getTimerCount()).toBe(1);
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  expect(await outcome).toMatch('did not answer openResource');
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: ask.id,
+    result: { status: 'cancelled' },
+  });
+  expect(await external).toEqual({ status: 'cancelled' });
+});

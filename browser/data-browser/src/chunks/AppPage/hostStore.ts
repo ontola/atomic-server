@@ -6,6 +6,8 @@ import {
   core,
   errorMessageFromResponse,
   findSchema,
+  isAtomicIdentifier,
+  isResourceSubject,
   pluginSchema,
   signRequest,
 } from '@tomic/react';
@@ -40,6 +42,8 @@ export interface HostRequest {
   connectionId?: string;
   /** The frame's own Ed25519 public key, base64url. */
   publicKey?: string;
+  /** `openExternal`: the http(s) link to open once the person confirms. */
+  url?: string;
 }
 
 export interface HostReply {
@@ -315,6 +319,54 @@ async function refuseOutsideApp(
   throw new Error(
     'This app may only write its own data. Writing here needs rights its key does not have.',
   );
+}
+
+/** Longer subjects are not something a person could be sent to. */
+const MAX_SUBJECT = 2048;
+
+/**
+ * The subject `openResource` may send the host page to, or an error the app
+ * can show.
+ *
+ * Only a resource: an Atomic resource identifier (not an agent, commit, blob
+ * or node) or an http(s) resource URL. And only one the signed-in person can
+ * already read, checked by loading it through their store, so an app cannot
+ * use the host to show them anything they could not open themselves.
+ */
+export async function resourceToOpen(
+  store: Store,
+  subject: unknown,
+): Promise<string> {
+  if (
+    typeof subject !== 'string' ||
+    subject.length === 0 ||
+    subject.length > MAX_SUBJECT ||
+    !(isAtomicIdentifier(subject)
+      ? isResourceSubject(subject)
+      : isHttpUrl(subject))
+  )
+    throw new Error('openResource takes a resource subject');
+
+  const resource = await store.getResource(subject);
+
+  if (resource.error)
+    throw new Error(
+      `openResource cannot open ${subject}: ${resource.error.message}`,
+    );
+
+  return subject;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') && !!url.host
+    );
+  } catch {
+    return false;
+  }
 }
 
 function required(value: string | undefined, name: string): string {

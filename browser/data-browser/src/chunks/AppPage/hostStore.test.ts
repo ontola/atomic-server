@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { core } from '@tomic/react';
 import type { Store } from '@tomic/react';
-import { handleRequest, isHostRequest, isWithinApp } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  isWithinApp,
+  resourceToOpen,
+} from './hostStore';
 
 vi.mock('@tomic/react', async () => {
   const actual =
@@ -374,5 +379,57 @@ describe('integration-proxy capabilities', () => {
         proxy,
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('openResource', () => {
+  const readable = (unreadable: string[] = []) =>
+    ({
+      getResource: async (subject: string) => ({
+        subject,
+        error: unreadable.includes(subject)
+          ? new Error('Unauthorized')
+          : undefined,
+      }),
+    }) as unknown as Store;
+
+  it('opens a resource the person can read', async () => {
+    await expect(resourceToOpen(readable(), 'did:ad:row')).resolves.toBe(
+      'did:ad:row',
+    );
+    await expect(resourceToOpen(readable(), 'atomic:row')).resolves.toBe(
+      'atomic:row',
+    );
+    await expect(
+      resourceToOpen(readable(), 'https://atomicdata.dev/classes/Class'),
+    ).resolves.toBe('https://atomicdata.dev/classes/Class');
+  });
+
+  it('refuses one they cannot read', async () => {
+    await expect(
+      resourceToOpen(readable(['did:ad:secret']), 'did:ad:secret'),
+    ).rejects.toThrow(/cannot open did:ad:secret: Unauthorized/);
+  });
+
+  it.each([
+    'did:ad:agent:abc',
+    'did:ad:commit:abc',
+    'atomic:blob:abc',
+    'did:ad:node:abc',
+    'javascript:alert(1)',
+    '/app/dev-drive',
+    'row',
+    '',
+    42,
+    undefined,
+    `did:ad:${'a'.repeat(3000)}`,
+  ])('refuses %s before loading anything', async subject => {
+    const store = {
+      getResource: vi.fn(),
+    } as unknown as Store;
+    await expect(resourceToOpen(store, subject)).rejects.toThrow(
+      'openResource takes a resource subject',
+    );
+    expect(store.getResource).not.toHaveBeenCalled();
   });
 });
