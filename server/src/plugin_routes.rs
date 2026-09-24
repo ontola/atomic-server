@@ -24,6 +24,28 @@ pub const COMPILED: bool = true;
 #[cfg(not(feature = "plugin-routes"))]
 pub const COMPILED: bool = false;
 
+/// `/.well-known/` names the host multiplexes between installations
+/// (design 2.4).
+pub const SHARED_WELL_KNOWN: [&str; 1] = ["webfinger"];
+/// `/.well-known/` names one installation per host may claim. Anything not
+/// in either list is refused, so a plugin cannot create entries other
+/// software on the host would interpret (`change-password`, `security.txt`).
+pub const EXCLUSIVE_WELL_KNOWN: [&str; 8] = [
+    "nodeinfo",
+    "ocm",
+    "atproto-did",
+    "solid",
+    "oauth-authorization-server",
+    "oauth-protected-resource",
+    "openid-configuration",
+    "did.json",
+];
+/// `/.well-known/` names the server keeps for itself on every host: the ACME
+/// challenge (`https.rs`, compiled into every build), and `host-meta`, which
+/// the host generates from the `webfinger` claims.
+#[cfg(any(feature = "plugin-routes", test))]
+pub const SERVER_WELL_KNOWN: [&str; 3] = ["acme-challenge", "host-meta", "host-meta.json"];
+
 /// How much the operator lets installed plugins expose. Ordered: a surface
 /// that needs `ReadOnly` is also allowed at `ReadWrite`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum)]
@@ -66,6 +88,16 @@ pub struct Sidecar {
     pub url: url::Url,
 }
 
+/// A `/.well-known/` name the operator lets one installation claim on the
+/// API origin (`ATOMIC_PLUGIN_API_WELL_KNOWN=nodeinfo=did:ad:...`). That
+/// origin's identity is the operator's, so nobody else can grant it
+/// (design 2.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ApiWellKnown {
+    pub name: String,
+    pub installation: String,
+}
+
 /// The gates as resolved at startup. Constant while the server runs.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PluginRoutesConfig {
@@ -74,6 +106,10 @@ pub struct PluginRoutesConfig {
     routes_origin: Option<url::Url>,
     listeners: Vec<Listener>,
     sidecars: Vec<Sidecar>,
+    /// Host names of the API origin, lowercased, without a port. A loopback
+    /// origin also counts `localhost`, `127.0.0.1` and `[::1]`.
+    api_hosts: Vec<String>,
+    api_well_known: Vec<ApiWellKnown>,
 }
 
 impl PluginRoutesConfig {
@@ -110,6 +146,16 @@ impl PluginRoutesConfig {
 
     pub fn sidecars(&self) -> &[Sidecar] {
         &self.sidecars
+    }
+
+    /// Whether `host` (a name without a port, lowercased) is the API origin's.
+    pub fn is_api_host(&self, host: &str) -> bool {
+        self.api_hosts.iter().any(|h| h == host)
+    }
+
+    /// The operator's grants of `/.well-known/` names on the API origin.
+    pub fn api_well_known(&self) -> &[ApiWellKnown] {
+        &self.api_well_known
     }
 
     /// `hostFeatures.pluginRoutes` for `/plugin-catalog`. Names only: ports
@@ -150,6 +196,7 @@ pub struct PluginRoutesOptions<'a> {
     pub routes_origin: Option<&'a str>,
     pub listeners: Option<&'a str>,
     pub sidecars: Option<&'a str>,
+    pub api_well_known: Option<&'a str>,
 }
 
 /// Where the resolved routes origin must not overlap.
@@ -171,6 +218,7 @@ pub fn resolve(
     let routes_origin = set(options.routes_origin);
     let listeners = set(options.listeners);
     let sidecars = set(options.sidecars);
+    let api_well_known = set(options.api_well_known);
 
     if !compiled {
         let offending = if options.level != PluginRoutesLevel::Off {
@@ -184,6 +232,8 @@ pub fn resolve(
             Some("`--plugin-sidecars` (ATOMIC_PLUGIN_SIDECARS)".to_string())
         } else if routes_origin.is_some() {
             Some("`--routes-origin` (ATOMIC_ROUTES_ORIGIN)".to_string())
+        } else if api_well_known.is_some() {
+            Some("`--plugin-api-well-known` (ATOMIC_PLUGIN_API_WELL_KNOWN)".to_string())
         } else {
             None
         };
@@ -219,6 +269,14 @@ pub fn resolve(
         }
     }
 
+    let api_well_known = api_well_known
+        .map(parse_api_well_known)
+        .transpose()?
+        .unwrap_or_default();
+    if !api_well_known.is_empty() && options.level == PluginRoutesLevel::Off {
+        return Err("`--plugin-api-well-known` (ATOMIC_PLUGIN_API_WELL_KNOWN) needs `--plugin-routes read-only` or higher, but the level is `off`. Raise the level or remove the option.".to_string());
+    }
+
     let routes_origin = routes_origin
         .map(|raw| {
             let website_host = origins
@@ -244,7 +302,58 @@ pub fn resolve(
         routes_origin,
         listeners,
         sidecars,
+        api_hosts: api_hosts(origins.api_origin),
+        api_well_known,
     })
+}
+
+/// The host names requests to the API origin arrive on.
+fn api_hosts(api_origin: &str) -> Vec<String> {
+    let Some(host) = url::Url::parse(api_origin).ok().and_then(|u| {
+        u.host_str()
+            .map(|h| h.trim_end_matches('.').to_ascii_lowercase())
+    }) else {
+        return Vec::new();
+    };
+    const LOOPBACK: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
+    if LOOPBACK.contains(&host.as_str()) {
+        LOOPBACK.iter().map(|h| h.to_string()).collect()
+    } else {
+        vec![host]
+    }
+}
+
+/// `name=<installation subject>,...`. A shared name (`webfinger`) may be
+/// granted to several installations; an exclusive one to one.
+fn parse_api_well_known(raw: &str) -> Result<Vec<ApiWellKnown>, String> {
+    const OPTION: &str = "ATOMIC_PLUGIN_API_WELL_KNOWN";
+    let mut exclusive = Vec::new();
+    entries(raw)
+        .map(|entry| {
+            let (name, installation) = entry.split_once('=').ok_or_else(|| {
+                format!("{OPTION}: `{entry}` is not `name=<installation subject>`.")
+            })?;
+            let (name, installation) = (name.trim(), installation.trim());
+            let shared = SHARED_WELL_KNOWN.contains(&name);
+            if !shared && !EXCLUSIVE_WELL_KNOWN.contains(&name) {
+                return Err(format!(
+                    "{OPTION}: `{name}` is not a `/.well-known/` name a plugin may claim."
+                ));
+            }
+            if installation.is_empty() || installation.contains(char::is_whitespace) {
+                return Err(format!(
+                    "{OPTION}: `{name}` needs the subject of an Installation."
+                ));
+            }
+            if !shared {
+                refuse_duplicate(&mut exclusive, name, OPTION)?;
+            }
+            Ok(ApiWellKnown {
+                name: name.to_string(),
+                installation: installation.to_string(),
+            })
+        })
+        .collect()
 }
 
 /// An option counts as unset when empty, as an empty env var often is.
@@ -419,6 +528,13 @@ mod tests {
                 },
                 "ATOMIC_ROUTES_ORIGIN",
             ),
+            (
+                PluginRoutesOptions {
+                    api_well_known: Some("nodeinfo=did:ad:x"),
+                    ..Default::default()
+                },
+                "ATOMIC_PLUGIN_API_WELL_KNOWN",
+            ),
         ];
         for (opts, name) in cases {
             let err = resolve(opts, false, API).unwrap_err();
@@ -436,6 +552,7 @@ mod tests {
             routes_origin: Some(""),
             listeners: Some("  "),
             sidecars: Some(""),
+            api_well_known: Some(" "),
         };
         assert_eq!(resolve(opts, false, API).unwrap().level(), Off);
     }
@@ -607,6 +724,7 @@ mod tests {
                 routes_origin: Some("https://routes.example.net"),
                 listeners: Some("willow-wgps:4455"),
                 sidecars: Some("pds=http://127.0.0.1:2583"),
+                api_well_known: None,
             },
             true,
             API,
@@ -767,6 +885,82 @@ mod tests {
                 !on.contains("plugin-routes"),
                 "{set:?} turns on plugin-routes: {on:?}"
             );
+        }
+    }
+
+    #[test]
+    fn api_well_known_grants_parse_claimable_names_only() {
+        let with = |raw: &'static str, level| {
+            resolve(
+                PluginRoutesOptions {
+                    level,
+                    api_well_known: Some(raw),
+                    ..Default::default()
+                },
+                true,
+                API,
+            )
+        };
+        let config = with(
+            "nodeinfo=did:ad:a, webfinger=did:ad:a,webfinger=did:ad:b",
+            ReadOnly,
+        )
+        .unwrap();
+        assert_eq!(
+            config.api_well_known(),
+            [
+                ApiWellKnown {
+                    name: "nodeinfo".into(),
+                    installation: "did:ad:a".into()
+                },
+                ApiWellKnown {
+                    name: "webfinger".into(),
+                    installation: "did:ad:a".into()
+                },
+                ApiWellKnown {
+                    name: "webfinger".into(),
+                    installation: "did:ad:b".into()
+                },
+            ]
+        );
+        for raw in [
+            "nodeinfo",
+            "nodeinfo=",
+            "acme-challenge=did:ad:a",
+            "host-meta=did:ad:a",
+            "security.txt=did:ad:a",
+            "nodeinfo=did:ad:a,nodeinfo=did:ad:b",
+        ] {
+            assert!(with(raw, ReadOnly).is_err(), "{raw}");
+        }
+        let err = with("nodeinfo=did:ad:a", Off).unwrap_err();
+        assert!(err.contains("read-only"), "{err}");
+    }
+
+    #[test]
+    fn the_api_hosts_follow_the_api_origin() {
+        let config = resolve(options(ReadOnly), true, API).unwrap();
+        assert!(config.is_api_host("example.com"));
+        assert!(!config.is_api_host("alice.example.com"));
+        let local = resolve(
+            options(ReadOnly),
+            true,
+            OriginContext {
+                api_origin: "http://localhost:9883",
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        for host in ["localhost", "127.0.0.1", "[::1]"] {
+            assert!(local.is_api_host(host), "{host}");
+        }
+    }
+
+    #[test]
+    fn server_owned_well_known_names_are_never_claimable() {
+        for name in SERVER_WELL_KNOWN {
+            assert!(!SHARED_WELL_KNOWN.contains(&name), "{name}");
+            assert!(!EXCLUSIVE_WELL_KNOWN.contains(&name), "{name}");
         }
     }
 }

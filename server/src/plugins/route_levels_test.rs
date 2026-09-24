@@ -9,6 +9,10 @@
 //! | `plugin-routes`    | `read-only`       | yes      | 200 `Hello, x`            |
 //! | `plugin-routes`    | `read-write`      | yes      | 200 `Hello, x`            |
 //!
+//! The well-known fixture (`testdata/plugin-routes/well-known/`, a
+//! `drive-host` plugin claiming `/.well-known/nodeinfo`) follows the same
+//! table on a host bound to the drive.
+//!
 //! Compiled into every `wasm-plugins` build, so both CI feature sets run it.
 use actix_web::{test, web, App};
 
@@ -77,6 +81,56 @@ async fn the_hello_route_fixture_at_every_build_and_level() {
                 "text/plain; charset=utf-8"
             );
             assert_eq!(test::read_body(resp).await, "Hello, alice", "{level}");
+        }
+    }
+}
+
+/// The well-known fixture (`testdata/plugin-routes/well-known/`, a
+/// `drive-host` plugin that claims `/.well-known/nodeinfo`) at every build
+/// and level, on a host bound to the drive: installed and answering only
+/// with the feature and a level of at least `read-only`. Everywhere else
+/// the drive's host serves the drive, which has nothing there.
+#[actix_rt::test]
+async fn the_well_known_fixture_at_every_build_and_level() {
+    use super::test_fixture::well_known_release;
+    use atomic_lib::Value;
+    let levels: &[&str] = if COMPILED {
+        &["off", "read-only", "read-write"]
+    } else {
+        &["off"]
+    };
+    for level in levels {
+        let f =
+            fixture_with_args(&format!("well_known_{level}"), &["--plugin-routes", level]).await;
+        let installed = install_release(&f, &well_known_release()).await;
+        let should_install = *level != "off";
+        assert_eq!(installed.is_ok(), should_install, "{level}: {installed:?}");
+        if let Err(err) = &installed {
+            assert!(err.contains("well-known `nodeinfo`"), "{level}: {err}");
+        }
+        f.appstate
+            .store
+            .add_drive_mapping("alice.example", &Value::AtomicUrl(f.drive.as_str().into()))
+            .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(f.appstate.clone()))
+                .configure(crate::routes::config_routes),
+        )
+        .await;
+        for path in ["/.well-known/nodeinfo", "/nodeinfo/2.1"] {
+            let resp = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri(path)
+                    .insert_header(("host", "alice.example"))
+                    .insert_header(("accept", "application/ad+json"))
+                    .to_request(),
+            )
+            .await;
+            let expected = if should_install { 200 } else { 404 };
+            assert_eq!(resp.status().as_u16(), expected, "{level} {path}");
         }
     }
 }

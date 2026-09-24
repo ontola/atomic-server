@@ -313,6 +313,16 @@ pub struct Opts {
     /// and the `plugin-routes` feature.
     #[clap(long, env = "ATOMIC_PLUGIN_SIDECARS")]
     pub plugin_sidecars: Option<String>,
+
+    /// `/.well-known/` names installed plugins may claim on the API origin,
+    /// as `name=<Installation subject>,...` (e.g.
+    /// `nodeinfo=did:ad:...`). That origin's identity is the operator's, so
+    /// only this option grants one; claims on a plugin's own origin or on a
+    /// drive's host need no operator config. Names must be claimable
+    /// (`webfinger`, `nodeinfo`, `did.json`, ...). Needs `--plugin-routes
+    /// read-only` and the `plugin-routes` feature.
+    #[clap(long, env = "ATOMIC_PLUGIN_API_WELL_KNOWN")]
+    pub plugin_api_well_known: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -700,6 +710,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
             routes_origin: config.opts.routes_origin.as_deref(),
             listeners: config.opts.plugin_listeners.as_deref(),
             sidecars: config.opts.plugin_sidecars.as_deref(),
+            api_well_known: config.opts.plugin_api_well_known.as_deref(),
         },
         crate::plugin_routes::COMPILED,
         crate::plugin_routes::OriginContext {
@@ -770,6 +781,7 @@ mod tests {
         assert_eq!(opts.routes_origin, None);
         assert_eq!(opts.plugin_listeners, None);
         assert_eq!(opts.plugin_sidecars, None);
+        assert_eq!(opts.plugin_api_well_known, None);
         let config = config_from(&[]).unwrap();
         assert_eq!(config.plugin_routes_level(), PluginRoutesLevel::Off);
         assert_eq!(
@@ -796,6 +808,7 @@ mod tests {
             ("routes_origin", "ATOMIC_ROUTES_ORIGIN"),
             ("plugin_listeners", "ATOMIC_PLUGIN_LISTENERS"),
             ("plugin_sidecars", "ATOMIC_PLUGIN_SIDECARS"),
+            ("plugin_api_well_known", "ATOMIC_PLUGIN_API_WELL_KNOWN"),
         ] {
             let arg = command
                 .get_arguments()
