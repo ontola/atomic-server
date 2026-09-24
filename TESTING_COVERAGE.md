@@ -355,6 +355,22 @@ worker deliver a signed POST to a loopback receiver. Not covered: more than
 private address (only literal addresses are tested), and enqueues from query
 triggers (not implemented).
 
+Endpoint health (#1721): `EndpointHealth.test.tsx` renders the Installation
+page's Endpoints section from server-shaped `/plugin-route-status` bodies:
+nothing yet (zero counts, URLs with copy buttons, method and auth), a route
+with errors and its last error, the queue (depth, today's cap use, a retry
+and a dead letter), the gates off (`hostFeatureMessage`'s words and the
+switch as code), degraded for another reason, and a token revoked after
+confirming; the container renders nothing without plugin routes or routes,
+drops a revoked token, and shows a read error. `hostStore.test.ts` covers the
+view op `readRouteStatus` (answered, `null` on a server without plugin
+routes, refused before any request for someone who can't write the app) and
+`viewProtocol.test.ts` that `store.routes.*` sends the three route ops.
+`route_delivery_test` checks the status carries each route's path, methods
+and auth, the mount, and no `refusal` when the gates are open. Not covered:
+`refusal` on a degraded installation through the handler (only by hand, with
+a restart at `read-only`), and an e2e run of the section.
+
 The route grant from the install review: `testdata/plugin-routes/inbox/page-install.json`
 is what the page writes (the grants verbatim, and `write` on the inbox for the
 installation's agent). `browser/lib/src/plugin-route-grant.test.ts` checks

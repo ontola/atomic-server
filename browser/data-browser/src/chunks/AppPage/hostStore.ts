@@ -2,6 +2,11 @@ import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import type { ProxyRelay } from '@helpers/proxyConnections';
 import {
+  fetchRouteStatus,
+  revokeRouteTokenBody,
+  routeTokensBody,
+} from '@chunks/Plugins/routeStatusApi';
+import {
   CollectionBuilder,
   core,
   errorMessageFromResponse,
@@ -211,10 +216,23 @@ export async function handleRequest(
     // The bearer tokens this app's routes issued (plugin routes, #1718):
     // listed and revoked, never read. The server holds only their hashes.
     case 'routeTokens':
-      return await routeTokens(store, app);
+      return await routeTokensBody(store, app);
 
     case 'revokeRouteToken':
-      return await routeTokens(store, app, required(request.tokenId, 'tokenId'));
+      return await revokeRouteTokenBody(
+        store,
+        app,
+        required(request.tokenId, 'tokenId'),
+      );
+
+    // The app's endpoint health (#1721): per route its URL, 24-hour counts
+    // and last error, and the delivery queue. Only for someone who may
+    // write the Installation, as on its page; `null` on a server built
+    // without plugin routes.
+    case 'readRouteStatus':
+      await requireWrite(store, app);
+
+      return (await fetchRouteStatus(store, app)) ?? null;
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.
@@ -270,36 +288,16 @@ async function writeAsApp(
   return (await response.json()) as { subject: string };
 }
 
-/**
- * Lists the app's route tokens, or revokes one, as the signed-in person. The
- * server wants write rights on the app's Installation, and the arguments in
- * the signed URL, so a signature answers this one request only.
- */
-async function routeTokens(
-  store: Store,
-  app: string,
-  revoke?: string,
-): Promise<unknown> {
+/** The signed-in person may write `subject`, or this throws. */
+async function requireWrite(store: Store, subject: string): Promise<void> {
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to manage this app');
 
-  let url = `${store.getServerUrl()}/plugin-route-tokens?installation=${encodeURIComponent(app)}`;
+  const resource = await store.getResource(subject);
+  const [canWrite] = await resource.canWrite(agent.subject);
 
-  if (revoke) url += `&revoke=${encodeURIComponent(revoke)}`;
-
-  const headers = await signRequest(url, agent, {});
-  const response = await fetch(url, {
-    method: revoke ? 'POST' : 'GET',
-    headers,
-  });
-  const body = await response.text();
-
-  if (!response.ok) {
-    throw new Error(errorMessageFromResponse(body, response.status));
-  }
-
-  return JSON.parse(body);
+  if (!canWrite) throw new Error('Only people who can edit this app see this');
 }
 
 /**

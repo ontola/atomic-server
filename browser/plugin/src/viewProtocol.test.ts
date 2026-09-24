@@ -176,3 +176,40 @@ it('carries the proxy relay ops, and store.proxy sends them', () => {
   ]);
   expect(sent[0].args).toMatchObject({ connectionId: 'c1', path: '/pets' });
 });
+
+it('carries the route ops, and store.routes sends them', () => {
+  for (const op of [
+    'readRouteStatus',
+    'routeTokens',
+    'revokeRouteToken',
+  ] as const)
+    expect(isViewRequest(viewRequest(1, op))).toBe(true);
+  const f = frame();
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const store = new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(
+    f.window,
+    () => 0,
+    () => undefined,
+  );
+  void store.routes.status();
+  void store.routes.tokens();
+  void store.routes.revokeToken('tok_1');
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args])).toEqual([
+    ['readRouteStatus', {}],
+    ['routeTokens', {}],
+    ['revokeRouteToken', { tokenId: 'tok_1' }],
+  ]);
+});

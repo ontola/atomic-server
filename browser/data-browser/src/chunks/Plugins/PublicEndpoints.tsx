@@ -13,7 +13,7 @@ import { FaTriangleExclamation } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 
 /** Who may call a route, in words. */
-function authText(auth: RouteAuth | undefined): string {
+export function authText(auth: RouteAuth | undefined): string {
   switch (auth ?? 'none') {
     case 'atomic':
       return 'Callers sign in with their Atomic agent.';
