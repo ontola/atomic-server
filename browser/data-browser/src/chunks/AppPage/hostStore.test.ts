@@ -77,6 +77,51 @@ describe('writing as the app', () => {
     ]);
   });
 
+  it('re-reads what it saved, so the app reads its own write back', async () => {
+    const store = fakeStore({ 'did:ad:mine': APP });
+    const order: string[] = [];
+    vi.mocked(fetch).mockImplementationOnce((async () => {
+      order.push('write');
+
+      return {
+        ok: true,
+        json: async () => ({ subject: 'did:ad:mine' }),
+      } as unknown as Response;
+    }) as typeof fetch);
+    Object.assign(store, {
+      fetchResourceFromServer: vi.fn(async (subject: string) => {
+        order.push(`reread ${subject}`);
+      }),
+    });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:mine', propVals: { p: 'v' } }),
+    );
+
+    expect(order).toEqual(['write', 'reread did:ad:mine']);
+  });
+
+  it('reports a landed save as saved even when the re-read fails', async () => {
+    const store = fakeStore({ 'did:ad:mine': APP });
+    Object.assign(store, {
+      fetchResourceFromServer: vi.fn(async () => {
+        throw new Error('offline');
+      }),
+    });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('save', { subject: 'did:ad:mine', propVals: { p: 'v' } }),
+      ),
+    ).resolves.toEqual({ subject: 'did:ad:mine' });
+  });
+
   it('creates under the app when given no parent', async () => {
     const store = fakeStore();
 
