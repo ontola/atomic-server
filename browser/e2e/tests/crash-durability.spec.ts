@@ -148,7 +148,7 @@ test('acknowledged document, table and attachment survive a browser process kill
       return { subject: resource.subject, result };
     }, tableSubject);
     expect(['offline', 'noop']).toContain(row.result);
-    expect(row.subject).toMatch(/^did:ad:/);
+    expect(row.subject).toMatch(/^(atomic|did:ad):/);
     const attachmentBytes = Array.from({ length: 65537 }, (_, i) => i % 251);
     const expectedAttachmentHash = createHash('sha256')
       .update(Buffer.from(attachmentBytes))
@@ -205,7 +205,7 @@ test('acknowledged document, table and attachment survive a browser process kill
         const file = await window.store.getResource(subject);
         if (file.get('https://atomicdata.dev/properties/blob') !== blob)
           throw new Error('Attachment metadata missing');
-        const hex = blob.slice('did:ad:blob:'.length);
+        const hex = blob.replace(/^(atomic|did:ad):blob:/, '');
         const hash = Uint8Array.from(hex.match(/../g)!, b => parseInt(b, 16));
         const bytes = await window.store.getClientDb()!.getBlob(hash);
         if (!bytes) throw new Error('Attachment bytes missing after crash');
