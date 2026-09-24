@@ -12,6 +12,8 @@
  */
 
 let nextId = 0;
+/** The host refuses larger `getMany` batches; say so before asking. */
+const MAX_GET_MANY = 100;
 const pending = new Map();
 
 window.addEventListener('message', event => {
@@ -209,6 +211,30 @@ export const store = {
   /** `{ subject, agent }`: what this view shows, and who is looking. */
   async getContext() {
     return send('context', {});
+  },
+
+  /**
+   * Reads up to 100 resources in one round trip, with the same rights as
+   * `getResource` and seeing this person's own writes the same way.
+   * Resolves to an array in the order asked: a resource for each one that
+   * could be read, and `{ subject, error }` in the place of one that could
+   * not, so one missing row does not fail the rest. More than 100 is
+   * refused; ask in batches.
+   */
+  async getMany(subjects) {
+    const list = Array.from(subjects ?? []);
+
+    if (list.length > MAX_GET_MANY) {
+      throw new Error(`getMany reads at most ${MAX_GET_MANY} subjects at a time; ask in batches`);
+    }
+
+    if (list.length === 0) return [];
+
+    const results = await send('getMany', { subjects: list });
+
+    return results.map(entry =>
+      entry.error === undefined ? makeResource(entry.subject, entry.props, entry.title) : { subject: entry.subject, error: entry.error },
+    );
   },
 
   /**

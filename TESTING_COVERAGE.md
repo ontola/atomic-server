@@ -1867,6 +1867,14 @@ window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
+App frame `store.getMany(subjects)` (#1737): `hostStore.test.ts` checks it
+answers in order through the same store read as `get` (same state after a
+local change), reports an unreadable subject in its place without failing the
+rest, and refuses more than 100 subjects or a non-array before reading any.
+`viewProtocol.test.ts` checks the generated client makes one request for the
+batch, hands back resources like `getResource`'s, asks nothing for an empty
+list and refuses 101 without asking.
+
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;
 resource creation and signing still use the real local backend. This verifies the

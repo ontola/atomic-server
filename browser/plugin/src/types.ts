@@ -101,6 +101,14 @@ export interface RPCMessage<T extends MessageType = any, A = MessageArgs[T]> {
   requestId: string;
 }
 
+/**
+ * One entry of `store.getMany(subjects)` in an app frame, in the order asked:
+ * the resource, or why it could not be read.
+ */
+export type GetManyEntry =
+  | (Resource & { error?: undefined })
+  | { subject: string; error: string };
+
 export interface PageContext {
   /** The current page resource */
   resource: Resource;
