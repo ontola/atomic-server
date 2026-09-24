@@ -467,5 +467,68 @@
     "name": "v1 has no accepts",
     "file": "v1-accepts.json",
     "error": "unknown field"
+  },
+  {
+    "name": "v2 proxy platform with a proxy-relative operation",
+    "file": "v2-proxy.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "proxy": [
+        "clockify"
+      ],
+      "operations": [
+        {
+          "id": "me",
+          "method": "GET",
+          "url": "atomic-proxy:/clockify/api/v1/user",
+          "effect": "read"
+        }
+      ],
+      "secrets": []
+    }
+  },
+  {
+    "name": "v1 proxy platform",
+    "file": "v1-proxy.json",
+    "serialized": {
+      "schemaVersion": 1,
+      "proxy": [
+        "clockify"
+      ],
+      "operations": [
+        {
+          "id": "entries",
+          "method": "GET",
+          "url": "atomic-proxy:/clockify/api/v1/workspaces/{number}/time-entries",
+          "effect": "read"
+        }
+      ],
+      "secrets": []
+    }
+  },
+  {
+    "name": "v2 proxy operation for an undeclared platform",
+    "file": "v2-proxy-undeclared-platform.json",
+    "error": "does not declare proxy platform"
+  },
+  {
+    "name": "v2 proxy platform that is not an identifier",
+    "file": "v2-proxy-bad-platform.json",
+    "error": "proxy platforms must be"
+  },
+  {
+    "name": "v2 duplicate proxy platform",
+    "file": "v2-proxy-duplicate-platform.json",
+    "error": "proxy platforms must be"
+  },
+  {
+    "name": "v2 proxy operation with a dot segment",
+    "file": "v2-proxy-operation-traversal.json",
+    "error": "atomic-proxy: URLs"
+  },
+  {
+    "name": "v2 proxy operation with a query",
+    "file": "v2-proxy-operation-query.json",
+    "error": "atomic-proxy: URLs"
   }
 ]

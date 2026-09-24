@@ -1,4 +1,5 @@
 import {
+  agentSubject,
   canonicalIdentifier,
   canonicalizeScheme,
   toLegacyScheme,
@@ -145,6 +146,38 @@ export class Agent implements AgentInterface {
     const provider = new SubtleCryptoProvider(keyPair);
 
     return new Agent(provider, subject, initialDrive);
+  }
+
+  /**
+   * A new agent whose private key exists only in memory and can never be
+   * read out: a WebCrypto Ed25519 key generated non-extractable. Its subject
+   * is `atomic:agent:<public key>`. For a short-lived signer, such as a
+   * plugin frame's key (ontola/atomic-plugins#54), that must not outlive the
+   * page or be copied by script.
+   *
+   * Throws when this environment's WebCrypto has no Ed25519 (older Safari
+   * and Android WebViews, ontola/atomic-server#1688) rather than falling back
+   * to an extractable JavaScript key, which would defeat the point.
+   */
+  public static async generateNonExtractable(): Promise<Agent> {
+    let keyPair: CryptoKeyPair;
+
+    try {
+      keyPair = (await globalThis.crypto.subtle.generateKey(
+        { name: 'Ed25519' },
+        false,
+        ['sign', 'verify'],
+      )) as CryptoKeyPair;
+    } catch (e) {
+      throw new AtomicError(
+        `This browser cannot make a non-extractable Ed25519 key (WebCrypto Ed25519 is missing; see atomic-server#1688): ${(e as Error)?.message ?? e}`,
+        ErrorType.Client,
+      );
+    }
+
+    const provider = new SubtleCryptoProvider(keyPair);
+
+    return new Agent(provider, agentSubject(await provider.getPublicKey()));
   }
 
   /**

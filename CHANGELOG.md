@@ -7,6 +7,55 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Plugins reach the integration proxy without naming its origin (#1700,
+  answer 4). A manifest declares `proxy: ["clockify"]`, and the plugin calls
+  `ctx.http` with `atomic-proxy:/clockify/...`, as its operations declare it.
+  The host resolves that to
+  `{--integration-proxy-url}/proxy/{connection_id}/clockify/...` with the
+  connection the Installation was delegated for that platform, and signs it.
+  It refuses a platform the manifest does not declare, a platform with no
+  delegated connection, dot segments, and a node with no proxy configured.
+  Absolute proxy URLs keep working and log a deprecation warning.
+- Installations carry what the integration proxy needs (#1700, answers 1–3;
+  provisional):
+  - `integrationAppAgent`: the installation's app id, a keyless
+    `atomic:agent:<pubkey>`. `installRelease` mints it in the genesis the
+    user signs and discards the private key. The server refuses a value that
+    is not an agent id, and refuses to change it once set.
+  - Each node that activates a JS Installation publishes the agent it minted
+    for it on an `InstallationRuntime` child (`integrationRuntimeAgent`,
+    `name` = the node's device name). The node's agent signs its genesis and
+    may write it, so a page can register it with `POST /runtimes`.
+  - `integrationConnections`: `{platform: connection_id}`, written by the
+    page when it delegates. Server-side JS runs get it as `ctx.connections`,
+    and the app id as `ctx.app`, next to `ctx.config`; the host's values
+    replace any the caller sent.
+- Server-side plugins reach the integration proxy through `ctx.http` signed
+  by the host (ontola/atomic-plugins#54, decisions 8 and 12). New option
+  `--integration-proxy-url` / `ATOMIC_INTEGRATION_PROXY_URL`: the proxy's
+  origin, exactly its `BASE_URL`. A plugin request to that origin is signed
+  with a version 2 request signature as this node's app agent for the
+  installation; the plugin never holds the key and its own `x-atomic-*`
+  headers are dropped. An installation with no app agent on this node is
+  refused rather than sent unsigned. A loopback origin (`localhost`, `127.x`,
+  `::1`) is let through the public-address check for exactly that scheme,
+  host and port, connecting to loopback without a DNS lookup; every other
+  loopback or private destination stays refused. The option is validated at
+  startup. Unset, nothing changes.
+- Version 2 request signatures (ontola/atomic-plugins#54). A request sent
+  with `x-atomic-signature-version: 2` is checked against
+  `atomic-request-v2\n{METHOD}\n{full URL}\n{timestamp ms}\n{sha-256 hex of
+  the body}` instead of v1's `"{url} {timestamp}"`, so a captured proof can
+  no longer be replayed with a different method or body within its five
+  minutes. v2 is opt-in: a request without the header is checked as v1
+  exactly as before, and a v2 request that fails is refused, never retried as
+  v1. `/app-agent` and `/plugin-view-token` accept v2 (they do not require it
+  yet); every other endpoint refuses a v2 signature with a 401 that says to
+  sign with v1, as do an unknown version and a v2 header without the
+  `x-atomic-*` headers. Cookies and WebSocket `AUTH` stay v1. `atomic_lib`
+  exports `request_signature_message_v2`, `RequestBinding` and
+  `client::get_authentication_headers_v2`; shared test vectors live in
+  `lib/src/authentication_v2_vectors.json`.
 - Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
   `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
   previous `did:ad:` spelling is accepted forever and names the same

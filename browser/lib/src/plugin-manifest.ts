@@ -173,6 +173,12 @@ export interface PluginManifestV2 {
   operations?: DeclaredOperation[];
   actions?: DeclaredAction[];
   network?: DeclaredNetwork;
+  /**
+   * Integration-proxy platforms the plugin calls with
+   * `atomic-proxy:/<platform>/...` URLs, which the server host resolves to the
+   * installation's delegated connection and signs. Operations name those URLs.
+   */
+  proxy?: string[];
   config?: DeclaredConfig;
   configSchema?: Record<string, JSONValue>;
   defaultConfig?: Record<string, JSONValue>;
@@ -376,7 +382,7 @@ export function validateManifest(raw: unknown): PluginManifest {
   known(
     entry,
     version === 1
-      ? ['schemaVersion', 'secrets', 'operations', 'actions', 'config']
+      ? ['schemaVersion', 'secrets', 'operations', 'actions', 'proxy', 'config']
       : [
           'schemaVersion',
           'runtime',
@@ -387,6 +393,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           'operations',
           'actions',
           'network',
+          'proxy',
           'config',
           'configSchema',
           'defaultConfig',
@@ -399,6 +406,15 @@ export function validateManifest(raw: unknown): PluginManifest {
           'author',
         ],
   );
+
+  const proxy = list(entry.proxy, 'proxy').map(value => {
+    if (typeof value !== 'string' || !PROXY_PLATFORM.test(value))
+      throw new Error(PROXY_PLATFORMS_RULE);
+
+    return value;
+  });
+  if (new Set(proxy).size !== proxy.length)
+    throw new Error(PROXY_PLATFORMS_RULE);
 
   const names = new Set<string>();
   const secrets = list(entry.secrets, 'secrets').map(value => {
@@ -431,7 +447,19 @@ export function validateManifest(raw: unknown): PluginManifest {
     )
       throw new Error('operation IDs must be nonempty and unique');
     names.add(operation.id);
-    endpoint(operation.url);
+    const relative =
+      typeof operation.url === 'string'
+        ? parseProxyRelative(operation.url)
+        : undefined;
+    if (relative) {
+      if (relative.query !== undefined) throw new Error(PROXY_URL_RULE);
+      if (!proxy.includes(relative.platform))
+        throw new Error(
+          `operation ${operation.id} does not declare proxy platform '${relative.platform}' in \`proxy\``,
+        );
+    } else {
+      endpoint(operation.url);
+    }
     if (
       typeof operation.method !== 'string' ||
       !['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(
@@ -533,6 +561,7 @@ export function validateManifest(raw: unknown): PluginManifest {
       secrets,
       operations,
       ...(actions.length ? { actions } : {}),
+      ...(proxy.length ? { proxy } : {}),
       ...(declaredConfig
         ? { config: declaredConfig as unknown as DeclaredConfig }
         : {}),
@@ -781,6 +810,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           },
         }
       : {}),
+    ...(proxy.length ? { proxy } : {}),
     ...(entry.configSchema !== undefined
       ? {
           configSchema: object(entry.configSchema, 'configSchema') as Record<
@@ -909,5 +939,53 @@ function validateDestination(
   return {
     schema: { properties, classes },
     table: { name: text(table.name, 'table name'), rowClass, columns },
+  };
+}
+
+const PROXY_PLATFORM = /^[A-Za-z0-9_-]{1,64}$/;
+const PROXY_PLATFORMS_RULE =
+  'proxy platforms must be unique identifiers of letters, digits, `-` and `_`';
+const PROXY_URL_RULE =
+  'atomic-proxy: URLs are `atomic-proxy:/<platform>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query';
+
+/** An `atomic-proxy:/<platform>/<path>?<query>` URL, split. */
+export interface ProxyRelativeUrl {
+  platform: string;
+  /** Starts with `/`. */
+  path: string;
+  query?: string;
+}
+
+/**
+ * Splits an `atomic-proxy:` URL the way the server does
+ * (`ProxyRelative::parse` in `server/src/plugins/manifest.rs`). Returns
+ * `undefined` for any other URL and throws for a malformed one.
+ */
+export function parseProxyRelative(raw: string): ProxyRelativeUrl | undefined {
+  if (!raw.startsWith('atomic-proxy:')) return undefined;
+  const rest = raw.slice('atomic-proxy:'.length);
+  if (rest.includes('#') || rest.includes('\\'))
+    throw new Error(PROXY_URL_RULE);
+  const q = rest.indexOf('?');
+  const pathPart = q === -1 ? rest : rest.slice(0, q);
+  const query = q === -1 ? undefined : rest.slice(q + 1);
+  if (!pathPart.startsWith('/')) throw new Error(PROXY_URL_RULE);
+  const slash = pathPart.indexOf('/', 1);
+  if (slash === -1) throw new Error(PROXY_URL_RULE);
+  const platform = pathPart.slice(1, slash);
+  const path = pathPart.slice(slash + 1);
+  if (!PROXY_PLATFORM.test(platform) || !path) throw new Error(PROXY_URL_RULE);
+  const dot = (segment: string) => {
+    const decoded = segment.toLowerCase().replaceAll('%2e', '.');
+
+    return decoded === '.' || decoded === '..';
+  };
+  if (path.split('/').some(dot) || path.toLowerCase().includes('%2f'))
+    throw new Error(PROXY_URL_RULE);
+
+  return {
+    platform,
+    path: `/${path}`,
+    ...(query !== undefined ? { query } : {}),
   };
 }
