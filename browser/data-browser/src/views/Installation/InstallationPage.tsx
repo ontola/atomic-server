@@ -9,16 +9,20 @@ import { JSONEditor } from '@components/JSONEditor';
 import { Column, Row } from '@components/Row';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
+  capabilityGrantNames,
   core,
   publishZipRelease,
   readInstallationReview,
+  routeGrantOf,
   server,
   updateInstallationRelease,
+  withdrawRouteWriteRights,
   useCanWrite,
   useSaveState,
   useStore,
   useString,
   useValue,
+  type DeclaredWriteTarget,
   type InstallationStatus,
   type JSONValue,
   type Server,
@@ -118,16 +122,24 @@ export const InstallationPage: React.FC<
   const hasFullDriveAccess = declared.some(
     c => c.title === 'full-drive-access',
   );
-  const grantNames = Array.isArray(grants)
-    ? grants.map(String)
-    : grants && typeof grants === 'object'
-      ? Object.keys(grants)
-      : [];
+  const routeGrant = routeGrantOf(grants);
+  const grantNames = [
+    ...capabilityGrantNames(grants),
+    ...(routeGrant
+      ? [`route-writes: ${routeGrant.map(t => t.id).join(', ')}`]
+      : []),
+  ];
 
   const changeStatus = async (next: InstallationStatus) => {
     setChanging(true);
 
     try {
+      // Revoking retires the agent, so its rights on the route grant's
+      // parents go first, while the server still names it.
+      if (next === 'revoked') {
+        await withdrawRouteWriteRights(store, resource.subject);
+      }
+
       await setStatus(next);
       await resource.save();
       await refreshCustomViews();
@@ -161,6 +173,7 @@ export const InstallationPage: React.FC<
         review: readInstallationReview({ ...published, id }),
         release: { url: subject, id },
         currentConfig: config as JSONValue | undefined,
+        approvedRouteWrites: routeGrantOf(grants),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -174,6 +187,7 @@ export const InstallationPage: React.FC<
     p: PendingInstallation,
     nextConfig: JSONValue | undefined,
     nextGrants: string[],
+    routeWrites: DeclaredWriteTarget[] | undefined,
   ) => {
     // The server compares these with the package, so a zip for a different
     // plugin is refused there. Saying so here is the clearer error.
@@ -186,6 +200,7 @@ export const InstallationPage: React.FC<
     await updateInstallationRelease(store, resource.subject, {
       release: p.release,
       grants: nextGrants,
+      routeWrites,
       config: nextConfig,
       version: p.review.version,
     });
@@ -394,6 +409,7 @@ export const InstallationPage: React.FC<
         bindShow={open => !open && setConfirm(undefined)}
         onConfirm={async () => {
           const parent = resource.props.parent;
+          await withdrawRouteWriteRights(store, resource.subject);
           await resource.destroy();
           await refreshCustomViews();
           navigate(constructOpenURL(parent));
