@@ -15,7 +15,12 @@ import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars } from '@views/PluginView/useCreateThemeVars';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
-import { isPlatformId, ProxyConnections } from '@helpers/proxyConnections';
+import {
+  isPlatformId,
+  ProxyConnections,
+  type ProxyConnection,
+} from '@helpers/proxyConnections';
+import { appAgentOf } from './appAgent';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -188,13 +193,24 @@ function AppFrameSession({
         // One question at a time; a second ask answers the first.
         const previous = connectAskRef.current;
         previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
-        const ask = {
+        const ask: ConnectAsk = {
           id: data.id,
           platform: data.platform!,
           reply: session.post,
         };
         connectAskRef.current = ask;
         setConnectAsk(ask);
+
+        // Offer a connection the person already has for this platform, so
+        // using it for one more app needs no second trip through OAuth.
+        existingConnections(store, data.platform!)
+          .then(existing => {
+            if (connectAskRef.current !== ask || existing.length === 0) return;
+            const withExisting = { ...ask, existing };
+            connectAskRef.current = withExisting;
+            setConnectAsk(withExisting);
+          })
+          .catch(() => undefined);
 
         return;
       }
@@ -264,35 +280,62 @@ function AppFrameSession({
     return <LoaderBlock />;
   }
 
+  const finishAsk = (reply: HostReply) => {
+    connectAsk?.reply(reply);
+    connectAskRef.current = undefined;
+    setConnectAsk(undefined);
+  };
+
   const connect = () => {
     if (!connectAsk) return;
-    const actor = store.getAgent()?.subject;
 
-    if (!actor) {
-      connectAsk.reply({
-        id: connectAsk.id,
-        error: 'Sign in to connect an account.',
-      });
-      connectAskRef.current = undefined;
-      setConnectAsk(undefined);
+    if (!store.getAgent()) {
+      finishAsk({ id: connectAsk.id, error: 'Sign in to connect an account.' });
 
       return;
     }
 
-    new ProxyConnections(localStorage, getIntegrationProxy())
-      .start({ drive, actor, app }, connectAsk.platform, location.href)
+    (async () => {
+      const appAgent = await appAgentOf(store, { drive, app });
+
+      return proxyConnections(store).start(
+        { drive, app, appAgent },
+        connectAsk.platform,
+        location.href,
+        await appLabel(store, app),
+      );
+    })()
       .then(url => location.assign(url))
-      .catch((e: Error) => {
-        connectAsk.reply({ id: connectAsk.id, error: e.message });
-        connectAskRef.current = undefined;
-        setConnectAsk(undefined);
-      });
+      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
+  };
+
+  const pickExisting = (connection: ProxyConnection) => {
+    if (!connectAsk) return;
+
+    (async () => {
+      const appAgent = await appAgentOf(store, { drive, app });
+      await proxyConnections(store).delegate(
+        connection.connection_id,
+        appAgent,
+        await appLabel(store, app),
+      );
+    })()
+      .then(() =>
+        finishAsk({
+          id: connectAsk.id,
+          result: {
+            status: 'connected',
+            connectionId: connection.connection_id,
+            platform: connection.platform,
+          },
+        }),
+      )
+      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
   };
 
   const cancelConnect = () => {
-    connectAsk?.reply({ id: connectAsk.id, result: { status: 'cancelled' } });
-    connectAskRef.current = undefined;
-    setConnectAsk(undefined);
+    if (!connectAsk) return;
+    finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
   };
 
   const fixIt = () => {
@@ -335,13 +378,20 @@ function AppFrameSession({
       {connectAsk && (
         <ConnectBar role='group' aria-label='Connect an account'>
           <ErrorText>
-            This app wants to connect your{' '}
+            This app wants to use your{' '}
             <strong>{platformName(connectAsk.platform)}</strong> account through{' '}
-            {getIntegrationProxy()}. The connection stays in this browser; the
-            app can only make requests through it.
+            {getIntegrationProxy()}. The proxy keeps the connection under your
+            account; this app may use it until you revoke that.
           </ErrorText>
           <Row gap='0.5rem'>
-            <Button onClick={connect}>Connect</Button>
+            {connectAsk.existing?.[0] && (
+              <Button onClick={() => pickExisting(connectAsk.existing![0])}>
+                Use existing connection
+              </Button>
+            )}
+            <Button subtle={!!connectAsk.existing?.length} onClick={connect}>
+              Connect
+            </Button>
             <Button subtle onClick={cancelConnect}>
               Cancel
             </Button>
@@ -397,7 +447,7 @@ async function answer(
         drive,
         request,
         table,
-        proxyRelay(store, app, drive),
+        proxyHost(store, app, drive),
       ),
     });
   } catch (e) {
@@ -405,21 +455,72 @@ async function answer(
   }
 }
 
-/** This app's proxy connections in this page, or none when signed out. */
-function proxyRelay(
+/** The configured proxy, managed with the signed-in user's key. */
+function proxyConnections(store: ReturnType<typeof useStore>) {
+  return new ProxyConnections(localStorage, getIntegrationProxy(), () =>
+    store.getAgent(),
+  );
+}
+
+/**
+ * Each app's agent, looked up once per page. A failed lookup is forgotten so
+ * the next request tries again (the app may get an identity meanwhile).
+ */
+const appAgents = new Map<string, Promise<string>>();
+
+function cachedAppAgent(
+  store: ReturnType<typeof useStore>,
+  drive: string,
+  app: string,
+): Promise<string> {
+  const key = JSON.stringify([store.getServerUrl(), drive, app]);
+  let found = appAgents.get(key);
+
+  if (!found) {
+    found = appAgentOf(store, { drive, app });
+    found.catch(() => appAgents.delete(key));
+    appAgents.set(key, found);
+  }
+
+  return found;
+}
+
+/** This app's integration-proxy access, or none when signed out. */
+function proxyHost(
   store: ReturnType<typeof useStore>,
   app: string,
   drive: string,
 ) {
-  const actor = store.getAgent()?.subject;
-
-  return actor
-    ? new ProxyConnections(localStorage, getIntegrationProxy()).relay({
-        drive,
-        actor,
-        app,
-      })
+  return store.getAgent()
+    ? proxyConnections(store).host(() => cachedAppAgent(store, drive, app))
     : undefined;
+}
+
+/** The person's own connections for `platform`, most recently used first. */
+async function existingConnections(
+  store: ReturnType<typeof useStore>,
+  platform: string,
+): Promise<ProxyConnection[]> {
+  if (!store.getAgent()) return [];
+  const rows = await proxyConnections(store).list(platform);
+
+  return rows.sort((a, b) =>
+    String(b.last_used_at ?? b.created_at ?? '').localeCompare(
+      String(a.last_used_at ?? a.created_at ?? ''),
+    ),
+  );
+}
+
+/** What a delegation is labelled with at the proxy: the app's name. */
+async function appLabel(
+  store: ReturnType<typeof useStore>,
+  app: string,
+): Promise<string> {
+  try {
+    return (await store.getResource(app)).title || app;
+  } catch {
+    return app;
+  }
 }
 
 /** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
@@ -434,6 +535,8 @@ interface ConnectAsk {
   id: number | string;
   platform: string;
   reply: (reply: HostReply) => void;
+  /** Connections the person already has for this platform. */
+  existing?: ProxyConnection[];
 }
 
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
