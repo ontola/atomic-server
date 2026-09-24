@@ -10001,3 +10001,12 @@ msgstr "Endpoints"
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
 msgstr "Token revoked"
+#. 0: String(reason)
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Could not set up this importer: {0}"
+msgstr "Could not set up this importer: {0}"
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."

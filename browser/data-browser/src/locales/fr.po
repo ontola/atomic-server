@@ -9584,6 +9584,9 @@ msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
 msgid "Denying…"
+#. 0: names[0]
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
@@ -9978,4 +9981,9 @@ msgstr ""
 
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
+msgstr ""
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr ""
