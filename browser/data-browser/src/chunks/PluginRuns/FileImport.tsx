@@ -269,19 +269,25 @@ async function ensureChild(
   propVals: Record<string, unknown>,
 ): Promise<Resource> {
   const existing = await store.findByLocalId(drive, parent, localId);
-  const resource =
-    existing ??
-    (await store.newResource({
+
+  if (!existing) {
+    // Created whole: a Table's genesis commit must already carry its
+    // required classtype.
+    const created = await store.newResource({
       parent,
       isA,
-      propVals: { [core.properties.localId]: localId },
-    }));
+      propVals: { ...propVals, [core.properties.localId]: localId } as never,
+    });
+    await created.save();
+
+    return created;
+  }
 
   for (const [property, value] of Object.entries(propVals))
-    await resource.set(property, value as never);
-  await resource.save();
+    await existing.set(property, value as never);
+  await existing.save();
 
-  return resource;
+  return existing;
 }
 
 /**
