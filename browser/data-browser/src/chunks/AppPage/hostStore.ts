@@ -173,6 +173,7 @@ export async function handleRequest(
         subject,
         propVals: request.propVals ?? {},
       });
+      await reread(store, subject);
 
       return { subject };
     }
@@ -278,6 +279,25 @@ async function refuseOutsideApp(
   throw new Error(
     'This app may only write its own data. Writing here needs rights its key does not have.',
   );
+}
+
+/**
+ * Read-your-writes for the app. The server makes the commit, not this page,
+ * so this page's copy of `subject` still holds what it had before, and the
+ * app's next `get` would be answered from it. An app that reconciles against
+ * what it last saved (a sync baseline, an ETag) then sees its own write
+ * undone. So the copy is fetched again once the write has landed.
+ *
+ * Best effort: the write already succeeded, and a failed re-read must not be
+ * reported to the app as a failed write.
+ */
+async function reread(store: Store, subject: string): Promise<void> {
+  try {
+    await store.fetchResourceFromServer(subject);
+  } catch {
+    // The next `get` is stale until the page hears of the commit; the write
+    // itself stands.
+  }
 }
 
 function required(value: string | undefined, name: string): string {
