@@ -231,8 +231,9 @@ fn package_file_subject(package: &str) -> Subject {
 /// Installation's `release` can point at a URL (and another server can fetch
 /// it) instead of a bare id. A wasip2 release's zip gets a `File` resource
 /// under the same drive, reused when the same bytes were uploaded before.
-/// Idempotent: a release that is already recorded is left as it is, including
-/// its publisher. Returns the resource's subject.
+/// Idempotent: a release that is already recorded keeps its drive and its
+/// publisher, and a later publisher of the same release is granted read on it
+/// and on its package File. Returns the resource's subject.
 pub async fn record_release(
     db: &Db,
     id: &str,
@@ -242,11 +243,23 @@ pub async fn record_release(
     origin: &str,
 ) -> AtomicResult<Subject> {
     let subject = release_subject(id);
-    if db.get_resource(&subject).await.is_ok() {
+    if let Ok(existing) = db.get_resource(&subject).await {
+        // The record lives under the first publisher's drive. Anyone else who
+        // publishes the same release holds the same bytes, so they may read
+        // it too; without this their Installation, which resolves the release
+        // as its signer, is refused.
+        if let Some(publisher) = publisher {
+            if let Some(file) = string_value(&existing, urls::PACKAGE) {
+                if let Ok(file) = db.get_resource(&file.as_str().into()).await {
+                    grant_read(db, file, publisher).await?;
+                }
+            }
+            grant_read(db, existing, publisher).await?;
+        }
         return Ok(subject);
     }
     let package_file = match &release.package {
-        Some(package) => Some(ensure_package_file(db, package, drive, origin).await?),
+        Some(package) => Some(ensure_package_file(db, package, drive, publisher, origin).await?),
         None => None,
     };
     let mut resource = Resource::new(subject.to_string());
@@ -268,16 +281,40 @@ pub async fn record_release(
     Ok(subject)
 }
 
-/// The `File` resource for a stored package blob, created when missing.
+/// Adds `agent` to the resource's `read` rights, when it is not there yet.
+async fn grant_read(db: &Db, mut resource: Resource, agent: &str) -> AtomicResult<()> {
+    let mut readers = match resource.get(urls::READ) {
+        Ok(value) => value.to_subjects(None)?,
+        Err(_) => Vec::new(),
+    };
+    if readers.iter().any(|reader| reader == agent) {
+        return Ok(());
+    }
+    readers.push(agent.to_string());
+    resource.set_unsafe(
+        urls::READ.into(),
+        Value::ResourceArray(readers.iter().map(|r| r.as_str().into()).collect()),
+    )?;
+    resource.save_locally(db).await?;
+    Ok(())
+}
+
+/// The `File` resource for a stored package blob, created when missing. An
+/// existing File may sit in another drive (the same bytes were uploaded
+/// there); the publisher is then granted read on it.
 async fn ensure_package_file(
     db: &Db,
     package: &str,
     drive: &str,
+    publisher: Option<&str>,
     origin: &str,
 ) -> AtomicResult<String> {
     let subject = package_file_subject(package);
     if let Ok(existing) = db.get_resource(&subject).await {
         if string_value(&existing, urls::INTERNAL_ID).as_deref() == Some(package) {
+            if let Some(publisher) = publisher {
+                grant_read(db, existing, publisher).await?;
+            }
             return Ok(subject.to_string());
         }
     }
