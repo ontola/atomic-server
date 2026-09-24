@@ -99,7 +99,7 @@ jobs:
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: create-docker-images --tags ${{ inputs.tags }}
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} create-docker-images --tags ${{ inputs.tags }}
 
       - name: Say what shipped
         run: |

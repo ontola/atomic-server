@@ -50,7 +50,7 @@ jobs:
           # default stop would kill the engine under a job still using it.
           engine-stop: "false"
           verb: call
-          args: deploy-server --remote-host ${{ inputs.remote_host }} --remote-user env://REMOTE_USER --ssh-private-key env://SSH_PRIVATE_KEY
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} deploy-server --remote-host ${{ inputs.remote_host }} --remote-user env://REMOTE_USER --ssh-private-key env://SSH_PRIVATE_KEY
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
 
       # A deploy that copies a binary and restarts a unit reports success as
