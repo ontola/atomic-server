@@ -15,8 +15,12 @@
 //! under the Installation's route grant, within quotas, before the response
 //! is sent ([`super::route_writes`], AS-07). Enqueueing deliveries (AS-09)
 //! does not exist yet, so a verdict that enqueues is refused whole, as not
-//! implemented. Verifying `auth` other than `none` is AS-08: until then a
-//! route that needs it answers `501` without starting the sandbox.
+//! implemented. `auth: http-signature` and `auth: bearer` are verified by
+//! [`super::route_auth`] before the sandbox starts (AS-08), and a failure is
+//! a `401`; `auth: atomic`, `auth: dpop` and the `caller` principal still
+//! answer `501` without starting it. At `read-write` a handler also gets the
+//! host-held `ctx.keys` and `ctx.tokens` ([`super::route_keys`],
+//! [`super::route_tokens`]).
 //!
 //! Runs happen on their own small runtime ([`pool`]), apart from the HTTP
 //! workers and the job scheduler, so a flood of route requests cannot starve
@@ -281,6 +285,10 @@ pub struct RouteExecutor {
     stats: Mutex<HashMap<String, InstallationStats>>,
     /// Route write quotas (AS-07); see [`super::route_writes`].
     pub quotas: super::route_writes::QuotaLedger,
+    /// Remote callers' signing keys, cached per installation (AS-08).
+    pub keys: super::route_auth::KeyResolver,
+    /// Consent requests and codes for route tokens (AS-08).
+    pub consents: Arc<super::route_tokens::Consents>,
 }
 
 impl Default for RouteExecutor {
@@ -297,7 +305,15 @@ impl RouteExecutor {
             rate: WriteRateLimiter::new(installation_per_minute, remote_per_minute),
             stats: Mutex::new(HashMap::new()),
             quotas: Default::default(),
+            keys: Default::default(),
+            consents: Default::default(),
         }
+    }
+
+    /// This executor with another way to fetch remote keys (tests).
+    pub fn with_key_fetch(mut self, fetch: Arc<dyn super::route_auth::KeyFetch>) -> Self {
+        self.keys = super::route_auth::KeyResolver::new(fetch);
+        self
     }
 
     /// This executor with these route write quotas.
@@ -331,7 +347,13 @@ impl RouteExecutor {
                     .unwrap_or_else(|| format!("answered {}", entry.status)),
             });
         }
-        let sampled = if (200..300).contains(&entry.status) {
+        // A run in which the host signed with an installation key is always
+        // kept: every signature is logged with its operation id (2.7).
+        let signed = entry
+            .problems
+            .iter()
+            .any(|p| p.starts_with(super::route_keys::SIGNED_LOG_PREFIX));
+        let sampled = if (200..300).contains(&entry.status) && !signed {
             stats.ok_seen += 1;
             (stats.ok_seen - 1).is_multiple_of(SAMPLE_2XX)
         } else {
@@ -430,6 +452,9 @@ pub struct ResponseRules<'a> {
     pub cors: Cors,
     pub max_bytes: usize,
     pub head: bool,
+    /// A `location` on another host is allowed when it starts with this:
+    /// the host's consent page, which a route redirects to (D6).
+    pub consent_page: Option<String>,
 }
 
 /// A validated response, and the headers that were dropped from it.
@@ -495,7 +520,12 @@ pub fn build_response(response: &Json, rules: &ResponseRules) -> Result<Built, S
                 let allowed = RESPONSE_HEADERS.contains(&lower.as_str())
                     || (rules.cors == Cors::AnyOriginNoCredentials
                         && CORS_HEADERS.contains(&lower.as_str()));
-                if !allowed || (lower == "location" && !same_host(&value, rules.host)) {
+                let location_ok = same_host(&value, rules.host)
+                    || rules
+                        .consent_page
+                        .as_deref()
+                        .is_some_and(|page| value.starts_with(page));
+                if !allowed || (lower == "location" && !location_ok) {
                     dropped.push(lower);
                     continue;
                 }
@@ -705,6 +735,9 @@ struct RouteHost {
     grants: ResourceGrants,
     fetches: bool,
     reads_left: u32,
+    /// `ctx.keys.*` and `ctx.tokens.*`: only at `read-write`, where a
+    /// release that declares keys or tokens can be installed at all.
+    crypto: Option<super::route_auth::CryptoHost>,
 }
 
 #[async_trait::async_trait]
@@ -734,6 +767,16 @@ impl PluginHost for RouteHost {
 
     async fn resource_grants(&mut self) -> ResourceGrants {
         self.grants
+    }
+
+    async fn host_call(&mut self, name: String, request: String) -> Result<String, String> {
+        match &self.crypto {
+            Some(crypto) => crypto.call(&name, &request).await,
+            None => Err(
+                "keys and tokens are only available to routes at `--plugin-routes read-write`"
+                    .into(),
+            ),
+        }
     }
 }
 
@@ -891,16 +934,28 @@ async fn run(
     let route = &loaded.route;
     *cors = RouteCors::declared(route.cors);
 
-    // Authentication (design 2.5) is AS-08. Never run a handler that
-    // expects a verified caller without one.
-    if route.auth != Auth::None || route.principal == Principal::Caller {
+    // Authentication (design 2.5, AS-08). `bearer` and `http-signature` are
+    // verified below. `atomic` (and with it the `caller` principal) needs
+    // Atomic request signatures bound to the method and body (v2, #1696),
+    // which this server does not have yet; `dpop` is phase 3. Never run a
+    // handler that expects a caller this host cannot verify.
+    if matches!(route.auth, Auth::Atomic | Auth::Dpop) || route.principal == Principal::Caller {
         return problem(
             StatusCode::NOT_IMPLEMENTED,
             "route-auth-unavailable",
             "This plugin route needs authentication this server cannot verify yet",
-            "Routes with `auth` other than `none`, or the `caller` principal, are not served by this server version.",
+            "Routes with `auth: atomic` or `auth: dpop`, or the `caller` principal, are not served by this server version.",
         )
         .into();
+    }
+    // A bearer token costs a lookup, so it is checked before the body is
+    // read. A signature needs the body for its digest: below.
+    let mut caller = Json::Null;
+    if route.auth == Auth::Bearer {
+        match super::route_auth::verify_bearer(store, installation, req, at) {
+            Ok(verified) => caller = verified,
+            Err(refused) => return unauthorized(route.auth, &slug, refused),
+        }
     }
     let for_agent = match route.principal {
         Principal::Anonymous => ForAgent::Public,
@@ -993,6 +1048,44 @@ async fn run(
         }
     };
 
+    // Verified before the pool: a flood of bad signatures costs no slot
+    // and no fuel, and a stale or unbound one not even a key fetch.
+    if route.auth == Auth::HttpSignature {
+        let parts = super::route_auth::RequestParts::of(req);
+        match super::route_auth::verify_signature(
+            &executor.keys,
+            store,
+            installation,
+            &parts,
+            body.as_deref().unwrap_or("").as_bytes(),
+            at,
+        )
+        .await
+        {
+            Ok(verified) => caller = verified,
+            Err(refused) => return unauthorized(route.auth, &slug, refused),
+        }
+    }
+    // Per verified caller, like per remote address above.
+    let caller_key = caller["owner"]
+        .as_str()
+        .or_else(|| caller["token"]["id"].as_str());
+    if let Some(key) = caller_key {
+        if let Err(limited) = executor.rate.check(&format!("{slug} caller {key}"), true) {
+            let mut response = problem(
+                StatusCode::TOO_MANY_REQUESTS,
+                "route-rate-limited",
+                "Too many requests",
+                "This caller is sending this plugin route more requests than it may answer. Try again later.",
+            );
+            response.headers_mut().insert(
+                header::RETRY_AFTER,
+                HeaderValue::from(limited.retry_after_secs),
+            );
+            return response.into();
+        }
+    }
+
     let grants =
         host_core::installation_grants(store, &loaded.drive, installation, Some(&loaded.manifest))
             .await;
@@ -1026,15 +1119,38 @@ async fn run(
         Some(_) => serde_json::Map::new(),
         None => params(&route.path, path),
     };
+    // Where this request reached the installation: `url` as the client
+    // addressed it, `base` the installation's root on that host. A plugin
+    // needs them for ids it publishes (an actor, a `keyId`).
+    let origin = {
+        let info = req.connection_info();
+        format!("{}://{}", info.scheme(), info.host())
+    };
+    let base = match mount {
+        Mount::DrivePrefix => format!(
+            "{origin}/{}/{slug}",
+            atomic_lib::subject::PLUGIN_ROUTES_SEGMENT
+        ),
+        _ => origin.clone(),
+    };
+    let url = format!(
+        "{origin}{}",
+        req.uri()
+            .path_and_query()
+            .map(|p| p.as_str())
+            .unwrap_or("/")
+    );
     let request = json!({
         "method": req.method().as_str(),
         "path": path,
+        "url": url,
+        "base": base,
         "wellKnown": well_known,
         "params": params,
         "query": query(req.query_string()),
         "headers": request_headers(req, shared_host),
         "body": body,
-        "caller": null,
+        "caller": caller,
         "receivedAt": at,
     });
     let request_id = format!("http:{}", ulid::Ulid::new().to_string().to_lowercase());
@@ -1050,6 +1166,8 @@ async fn run(
     })
     .to_string();
 
+    // Every signature the host makes for this request, for the run log.
+    let signed: Arc<Mutex<Vec<String>>> = Default::default();
     let host = RouteHost {
         inner: StoreHost {
             db: Arc::new(store.clone()),
@@ -1065,6 +1183,17 @@ async fn run(
         } else {
             INLINE_READS
         },
+        crypto: (level >= PluginRoutesLevel::ReadWrite).then(|| super::route_auth::CryptoHost {
+            db: Arc::new(store.clone()),
+            installation: installation.to_string(),
+            manifest: loaded.manifest.clone(),
+            registry: appstate.route_registry.clone(),
+            consents: executor.consents.clone(),
+            base: base.clone(),
+            api_origin: appstate.config.get_origin(),
+            log: signed.clone(),
+            now: at,
+        }),
     };
     let deadline = route
         .timeout_ms
@@ -1186,6 +1315,9 @@ async fn run(
                 .map(str::to_string)
                 .unwrap_or_else(|| p.to_string())
         })
+        .chain(std::mem::take(
+            &mut *signed.lock().unwrap_or_else(|e| e.into_inner()),
+        ))
         .collect();
 
     // What a route may cause. Refusals here come before anything is applied.
@@ -1266,6 +1398,8 @@ async fn run(
             RESPONSE_BYTES
         },
         head: req.method() == actix_web::http::Method::HEAD,
+        consent_page: (level >= PluginRoutesLevel::ReadWrite)
+            .then(|| super::route_auth::consent_url(&appstate.config.get_origin(), "")),
     };
     // The response is validated before anything is written, and the writes
     // are stored before it is sent: a 2xx means stored (design 2.6).
@@ -1291,7 +1425,7 @@ async fn run(
                         config: &loaded.config,
                         grants: &loaded.grants,
                         request_id: &request_id,
-                        caller: &Json::Null,
+                        caller: &caller,
                         remote: &remote,
                         at,
                     },
@@ -1339,6 +1473,28 @@ async fn run(
             ..Outcome::failed(handler_failed(), format!("the response was refused: {e}"))
         },
     }
+}
+
+/// `401` from the host: the caller could not be verified, and the sandbox
+/// did not start. The reason names what failed (a stale date, a digest,
+/// an unknown token), never key material.
+fn unauthorized(auth: Auth, slug: &str, refused: super::http_signatures::Refused) -> Outcome {
+    let challenge = match auth {
+        Auth::Bearer => format!("Bearer realm=\"{slug}\""),
+        _ => format!("Signature realm=\"{slug}\",headers=\"(request-target) host date digest\""),
+    };
+    let mut response = problem(
+        StatusCode::UNAUTHORIZED,
+        "route-unauthorized",
+        "The request could not be verified",
+        &format!("{refused}."),
+    );
+    if let Ok(value) = HeaderValue::from_str(&challenge) {
+        response
+            .headers_mut()
+            .insert(header::WWW_AUTHENTICATE, value);
+    }
+    Outcome::failed(response, format!("not verified: {refused}"))
 }
 
 fn handler_failed() -> HttpResponse {

@@ -361,5 +361,73 @@ async fn a_route_write_is_stored_and_reads_back() -> AtomicResult<()> {
     assert_eq!(resp.status(), 502);
     let problem: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
     assert_eq!(problem["type"], "route-write-refused");
+
+    // A signed POST, end to end (#1718). The actor publishes its key; the
+    // host signs a delivery with it on the plugin's behalf; the signed inbox
+    // verifies that signature before the sandbox starts, and the handler and
+    // the stored item's provenance get the verified caller.
+    let actor: serde_json::Value = http
+        .get(format!("{prefix}/actor"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let key_id = actor["publicKey"]["id"].as_str().unwrap().to_string();
+    assert_eq!(key_id, format!("{prefix}/actor#main-key"));
+    assert!(actor["publicKey"]["publicKeyPem"]
+        .as_str()
+        .is_some_and(|pem| pem.starts_with("-----BEGIN PUBLIC KEY-----")));
+    let activity = r#"{"type":"Create","name":"signed"}"#;
+    let signed: serde_json::Value = http
+        .post(format!("{prefix}/outbox"))
+        .json(&json!({"to": format!("{prefix}/signed-inbox"), "activity": activity}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let deliver = |body: &'static str| {
+        let mut request = http
+            .post(format!("{prefix}/signed-inbox"))
+            .header("content-type", "application/activity+json")
+            .body(body);
+        for (name, value) in signed["headers"].as_object().unwrap() {
+            if name != "host" {
+                request = request.header(name.as_str(), value.as_str().unwrap());
+            }
+        }
+        request.send()
+    };
+    let resp = deliver(activity).await.map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 202);
+    let answer: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    assert_eq!(answer["caller"]["keyId"], key_id);
+    assert_eq!(answer["caller"]["owner"], format!("{prefix}/actor"));
+    assert_eq!(answer["caller"]["scheme"], "draft-cavage-12");
+    // The same headers over another body: refused before the handler runs.
+    let resp = deliver(r#"{"type":"Delete"}"#)
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 401);
+    assert!(resp.headers().contains_key("www-authenticate"));
+    let items: serde_json::Value = http
+        .get(format!("{prefix}/items"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let signed_items: Vec<&serde_json::Value> = items
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["provenance"]["route"] == "signed-inbox")
+        .collect();
+    assert_eq!(signed_items.len(), 1, "{items}");
+    assert_eq!(signed_items[0]["provenance"]["caller"]["keyId"], key_id);
     Ok(())
 }

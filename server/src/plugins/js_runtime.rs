@@ -107,6 +107,10 @@ impl<H: PluginHost> bindings::atomic::plugin_runtime::host::Host for RuntimeStat
     async fn query(&mut self, property: String, value: String) -> Result<String, String> {
         self.host.query(property, value).await
     }
+
+    async fn host_call(&mut self, name: String, request: String) -> Result<String, String> {
+        self.host.host_call(name, request).await
+    }
 }
 
 /// The compiled runtime, kept for the process' lifetime.

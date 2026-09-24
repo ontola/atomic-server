@@ -645,3 +645,50 @@ describe('getMany', () => {
     },
   );
 });
+
+describe('route tokens', () => {
+  it('lists and revokes through the host, with the arguments in the signed URL', async () => {
+    const calls: Array<{ url: string; method?: string }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, method: init.method });
+
+        return {
+          ok: true,
+          text: async () =>
+            url.includes('revoke=')
+              ? '{"revoked":true}'
+              : '{"tokens":[{"id":"tok_1","name":"storage","scopes":["notes:r"]}]}',
+        } as unknown as Response;
+      }),
+    );
+
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('routeTokens')),
+    ).toEqual({
+      tokens: [{ id: 'tok_1', name: 'storage', scopes: ['notes:r'] }],
+    });
+    expect(
+      await handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('revokeRouteToken', { tokenId: 'tok_1' }),
+      ),
+    ).toEqual({ revoked: true });
+    expect(calls).toEqual([
+      {
+        url: 'https://node.test/plugin-route-tokens?installation=did%3Aad%3Aapp',
+        method: 'GET',
+      },
+      {
+        url: 'https://node.test/plugin-route-tokens?installation=did%3Aad%3Aapp&revoke=tok_1',
+        method: 'POST',
+      },
+    ]);
+    await expect(
+      handleRequest(fakeStore(), APP, DRIVE, req('revokeRouteToken')),
+    ).rejects.toThrow('tokenId is required');
+  });
+});

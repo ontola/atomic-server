@@ -8,6 +8,14 @@
       "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
     }
   ],
+  "operations": [
+    {
+      "id": "deliver",
+      "method": "POST",
+      "url": "https://*/inbox",
+      "effect": "write"
+    }
+  ],
   "http": {
     "mount": "drive-prefix",
     "routes": [
@@ -36,6 +44,68 @@
         "auth": "none",
         "body": "json",
         "writes": ["inbox-items"]
+      },
+      {
+        "id": "actor",
+        "path": "/actor",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "signed-inbox",
+        "path": "/signed-inbox",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "http-signature",
+        "body": "json",
+        "maxBodyBytes": 65536,
+        "writes": ["inbox-items"]
+      },
+      {
+        "id": "outbox",
+        "path": "/outbox",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "enqueues": ["deliver"]
+      },
+      {
+        "id": "storage",
+        "path": "/storage/{*rest}",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "bearer"
+      },
+      {
+        "id": "oauth",
+        "path": "/oauth",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "oauth-callback",
+        "path": "/oauth/callback",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "tokens",
+        "path": "/tokens",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json"
+      },
+      {
+        "id": "dump",
+        "path": "/dump",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
       }
     ],
     "writeTargets": [
@@ -45,6 +115,19 @@
         "classes": ["https://atomicdata.dev/classes/PlainText"]
       }
     ],
-    "reason": "Stores what is POSTed to /_routes/<slug>/inbox as a PlainText under the configured inbox. A fixture for route writes."
+    "keys": [
+      {
+        "name": "actor-key",
+        "alg": "rsa-sha256",
+        "reason": "Signs what this fixture's actor sends, and is published at /actor."
+      }
+    ],
+    "tokens": [
+      {
+        "name": "storage",
+        "reason": "Bearer tokens for /storage, issued directly or after consent."
+      }
+    ],
+    "reason": "Stores what is POSTed to /_routes/<slug>/inbox (or, signed, to /signed-inbox) as a PlainText under the configured inbox. A fixture for route writes and host crypto."
   }
 }

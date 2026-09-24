@@ -2668,6 +2668,17 @@ impl Db {
             .and_then(|slot| slot.clone())
     }
 
+    /// Wraps host-held key material (a plugin route's installation key) the
+    /// way plugin secrets are wrapped: with the node key, when there is one.
+    pub fn wrap_node_secret(&self, value: &str) -> AtomicResult<String> {
+        self.wrap_secret(value)
+    }
+
+    /// Opens what [`Db::wrap_node_secret`] wrapped.
+    pub fn unwrap_node_secret(&self, stored: &str) -> AtomicResult<String> {
+        self.unwrap_secret(stored)
+    }
+
     /// Wraps a secret for storage, or passes it through when no key is set.
     ///
     /// Passing through is what lets a store predating the node key still be

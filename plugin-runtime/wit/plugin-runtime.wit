@@ -18,6 +18,14 @@ interface host {
 
   /// Subjects matching a property/value, as a JSON array.
   query: func(property: string, value: string) -> result<string, string>;
+
+  /**
+  Host-held crypto for plugin routes: `keys.publicKey`, `keys.sign`,
+  `tokens.issue`, `tokens.verify`, `tokens.revoke`, `tokens.requestConsent`.
+  `request` and the result are JSON. Private keys and token hashes stay in
+  the host; other runs get an error.
+  */
+  host-call: func(name: string, request: string) -> result<string, string>;
 }
 
 world plugin-runtime {

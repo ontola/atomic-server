@@ -50,6 +50,8 @@ pub mod external;
 pub mod files;
 #[cfg(feature = "wasm-plugins")]
 pub mod host_core;
+#[cfg(feature = "plugin-routes")]
+pub mod http_signatures;
 pub mod importer;
 #[cfg(feature = "wasm-plugins")]
 pub mod installation;
@@ -76,11 +78,19 @@ pub mod release;
 pub mod release_binding;
 pub mod replicate;
 #[cfg(feature = "plugin-routes")]
+pub mod route_auth;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_crypto_test;
+#[cfg(feature = "plugin-routes")]
 pub mod route_exec;
+#[cfg(feature = "plugin-routes")]
+pub mod route_keys;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod route_levels_test;
 #[cfg(feature = "plugin-routes")]
 pub mod route_registry;
+#[cfg(feature = "plugin-routes")]
+pub mod route_tokens;
 #[cfg(feature = "plugin-routes")]
 pub mod route_writes;
 #[cfg(feature = "wasm-plugins")]
