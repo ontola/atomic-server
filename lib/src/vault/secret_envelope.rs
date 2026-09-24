@@ -532,16 +532,19 @@ mod tests {
         let mut value: serde_json::Value =
             serde_json::from_str(&envelope.to_json().unwrap()).unwrap();
         let wrappers = value["wrappers"].as_array_mut().unwrap();
-        for kind in ["recovery-code", "password", "webauthn-prf"] {
+        // Wrapper kinds older builds could write; the extra fields are the
+        // Argon2 ones they carried. Placeholder bytes, not credentials.
+        const REMOVED_KINDS: [&str; 3] = ["recovery-code", "password", "webauthn-prf"];
+        for kind in REMOVED_KINDS {
             wrappers.insert(
                 0,
                 serde_json::json!({
                     "kind": kind,
                     "id": kind,
                     "kdf": {"mem_kib": 65536, "iterations": 3, "parallelism": 1},
-                    "salt": "AAAAAAAAAAAAAAAAAAAAAA==",
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "wrapped_dek": "AAAA",
+                    "salt": b64(&[0u8; 16]),
+                    "nonce": b64(&[0u8; NONCE_LEN]),
+                    "wrapped_dek": b64(&[0u8; 3]),
                 }),
             );
         }
@@ -561,7 +564,7 @@ mod tests {
         assert!(editable
             .add_wrapper(&Unlock::AgentSecret(PROOF), &node(1))
             .is_err());
-        assert!(editable.remove_wrapper("password").is_err());
+        assert!(editable.remove_wrapper(REMOVED_KINDS[0]).is_err());
     }
 
     /// v1 blobs are a different scheme. Refusing them loudly beats appearing to
