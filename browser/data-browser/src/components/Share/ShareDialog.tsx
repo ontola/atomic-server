@@ -294,7 +294,7 @@ function ShareOverview({
           {err && <ErrorLook>{err.message}</ErrorLook>}
         </Stack>
       </Dialog.Content>
-      <Dialog.Actions>
+      <Actions>
         {composing ? (
           <>
             <Button clean onClick={resetCompose} disabled={sending}>
@@ -317,7 +317,7 @@ function ShareOverview({
             <Button onClick={onDone}>Done</Button>
           </>
         )}
-      </Dialog.Actions>
+      </Actions>
     </>
   );
 }
@@ -501,6 +501,16 @@ const Stack = styled.div`
   flex-direction: column;
   gap: 1.25rem;
   padding-top: 0.25rem;
+`;
+
+/** On phones the invite link and Done go on two rows instead of squeezing. */
+const Actions = styled(Dialog.Actions)`
+  flex-wrap: wrap;
+  row-gap: 0.75rem;
+
+  button {
+    white-space: nowrap;
+  }
 `;
 
 const Spacer = styled.span`
