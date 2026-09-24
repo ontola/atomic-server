@@ -9416,11 +9416,16 @@ msgstr ""
 msgid "Sign in to connect an account."
 msgstr ""
 
-#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
-msgstr ""
-
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
+msgstr ""
+
+#. 0: ' '
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to connect your{0} <0/> account. The connection stays in this browser; the app can only make requests through it."
+msgstr ""
+
+#. 0: ' '
+#: src/components/ProxyTrafficNotice.tsx
+msgid "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"
 msgstr ""
