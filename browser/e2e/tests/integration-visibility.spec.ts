@@ -113,10 +113,18 @@ test('integration categories default off and independent Atomic preferences surv
   await expect(settingsExperimental).toBeChecked();
   await expect(settingsApi).not.toBeChecked();
 
+  // An enabled checkbox does not mean the private-drive save has landed, and a
+  // reload before it does drops the choice. Wait for the section to settle.
+  const visibility = page.getByTestId('integration-visibility');
   await settingsExperimental.uncheck();
-  await expect(settingsExperimental).toBeEnabled();
+  await expect(visibility).toHaveAttribute('aria-busy', 'false', {
+    timeout: 30_000,
+  });
   await settingsApi.check();
-  await expect(settingsApi).toBeEnabled();
+  await expect(visibility).toHaveAttribute('aria-busy', 'false', {
+    timeout: 30_000,
+  });
+  await expect(visibility.getByRole('alert')).toHaveCount(0);
   await page.reload();
   await page.getByPlaceholder('Search settings...').fill('plugins');
   await expect(settingsApi).toBeChecked();

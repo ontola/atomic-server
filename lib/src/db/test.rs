@@ -1120,6 +1120,191 @@ async fn query_by_parent_after_add_resource() {
     );
 }
 
+#[tokio::test]
+async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
+    let store = Db::init_temp("sorted_parent_alias_dedup").await.unwrap();
+    let drive = "atomic:driveAliasDedup";
+    let legacy = "did:ad:childAliasDedup";
+    let canonical = "atomic:childAliasDedup";
+    let row_class = "atomic:rowAliasClass";
+
+    let child = |subject: &str| {
+        let mut resource = crate::Resource::new(subject.into());
+        resource
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("Document".into()))
+            .unwrap();
+        resource
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(row_class.into())]),
+            )
+            .unwrap();
+        resource
+    };
+
+    store
+        .add_resource_opts(&child(legacy), false, true, true)
+        .await
+        .unwrap();
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, drive);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+    assert_eq!(store.query(&query).await.unwrap().count, 1);
+
+    // Simulate an already-persisted index key written before the scheme fix.
+    let filter = crate::db::query_index::QueryFilter::try_from_query(&query).unwrap();
+    let sort_key = crate::db::query_index::sort_key_for(&child(legacy), urls::NAME);
+    let legacy_key =
+        crate::db::query_index::create_query_index_key(&filter, Some(&sort_key), Some(legacy))
+            .unwrap();
+    store
+        .kv
+        .insert(Tree::QueryMembers, &legacy_key, b"")
+        .unwrap();
+    let stale = store.query(&query).await.unwrap();
+    assert_eq!(
+        stale.count, 1,
+        "stale alias inflated count: {:?}",
+        stale.subjects
+    );
+    assert_eq!(stale.subjects.len(), 1);
+    query.sort_desc = true;
+    let descending = store.query(&query).await.unwrap();
+    assert_eq!(descending.count, 1);
+    assert_eq!(descending.subjects[0].as_str(), canonical);
+    query.sort_desc = false;
+
+    // An upgraded device rewrites the same resource under its canonical name.
+    store
+        .add_resource_opts(&child(canonical), false, true, true)
+        .await
+        .unwrap();
+    let result = store.query(&query).await.unwrap();
+    assert_eq!(
+        result.count, 1,
+        "duplicate index entries: {:?}",
+        result.subjects
+    );
+    assert_eq!(result.subjects[0].pure_id(), canonical);
+    assert!(!store
+        .kv
+        .contains_key(Tree::QueryMembers, &legacy_key)
+        .unwrap());
+
+    query.offset = 1;
+    let second_page = store.query(&query).await.unwrap();
+    assert!(second_page.subjects.is_empty());
+    assert_eq!(second_page.count, 1);
+
+    // Table Views add an isA constraint even when the user has not sorted.
+    let mut table_query = crate::storelike::Query::new_prop_val(urls::PARENT, drive);
+    table_query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    table_query.drive = Some(drive.into());
+    table_query.limit = Some(100);
+    assert_eq!(store.query(&table_query).await.unwrap().count, 1);
+    let table_filter = crate::db::query_index::QueryFilter::try_from_query(&table_query).unwrap();
+    let table_sort_key = crate::db::query_index::sort_key_for(&child(legacy), urls::PARENT);
+    let table_legacy_key = crate::db::query_index::create_query_index_key(
+        &table_filter,
+        Some(&table_sort_key),
+        Some(legacy),
+    )
+    .unwrap();
+    store
+        .kv
+        .insert(Tree::QueryMembers, &table_legacy_key, b"")
+        .unwrap();
+    let table_result = store.query(&table_query).await.unwrap();
+    assert_eq!(
+        table_result.count, 1,
+        "table aliases: {:?}",
+        table_result.subjects
+    );
+    assert_eq!(table_result.subjects[0].as_str(), canonical);
+}
+
+#[tokio::test]
+async fn basic_parent_query_deduplicates_legacy_and_canonical_subjects() {
+    let store = Db::init_temp("basic_parent_alias_dedup").await.unwrap();
+    let parent = "atomic:basicAliasParent";
+    let legacy = "did:ad:basicAliasChild";
+    let canonical = "atomic:basicAliasChild";
+    let child = |subject: &str| {
+        let mut resource = crate::Resource::new(subject.into());
+        resource
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()))
+            .unwrap();
+        resource
+    };
+
+    store
+        .add_resource_opts(&child(legacy), false, true, true)
+        .await
+        .unwrap();
+
+    // Simulate both primary index keys left by a pre-upgrade peer.
+    let legacy_index_atom = child(legacy)
+        .to_atoms()
+        .into_iter()
+        .find(|atom| atom.property == urls::PARENT)
+        .unwrap()
+        .to_indexable_atoms()
+        .remove(0);
+    let prop_key = crate::db::prop_val_sub_index::propvalsub_key(&legacy_index_atom);
+    let value_key = crate::db::val_prop_sub_index::valpropsub_key(&legacy_index_atom);
+    store.kv.insert(Tree::PropValSub, &prop_key, b"").unwrap();
+    store.kv.insert(Tree::ValPropSub, &value_key, b"").unwrap();
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent);
+    let stale = store.query(&query).await.unwrap();
+    assert_eq!(
+        stale.count, 1,
+        "stale alias inflated count: {:?}",
+        stale.subjects
+    );
+    assert_eq!(stale.subjects[0].as_str(), canonical);
+    let mut value_only = crate::storelike::Query::new();
+    value_only.value = Some(Value::AtomicUrl(parent.into()));
+    let value_result = store.query(&value_only).await.unwrap();
+    assert_eq!(
+        value_result.count, 1,
+        "value index aliases: {:?}",
+        value_result.subjects
+    );
+    assert_eq!(value_result.subjects[0].as_str(), canonical);
+    query.offset = 1;
+    let second_page = store.query(&query).await.unwrap();
+    assert!(second_page.subjects.is_empty());
+    assert_eq!(second_page.count, 1);
+
+    store
+        .add_resource_opts(&child(canonical), false, true, true)
+        .await
+        .unwrap();
+
+    query.offset = 0;
+    let result = store.query(&query).await.unwrap();
+    assert_eq!(
+        result.count, 1,
+        "duplicate index entries: {:?}",
+        result.subjects
+    );
+    assert_eq!(result.subjects[0].as_str(), canonical);
+    assert!(!store.kv.contains_key(Tree::PropValSub, &prop_key).unwrap());
+    assert!(!store.kv.contains_key(Tree::ValPropSub, &value_key).unwrap());
+}
+
 /// Production path: create a Drive via `store.create_drive`, add children
 /// via `apply_commit` (what WebSocket/HTTP commits do), then fetch them
 /// with a sorted query — the exact path the folder/table UI takes.
@@ -2667,7 +2852,10 @@ async fn first_build_cross_checks_the_unscanned_constraint() {
 
     let res = store.query(&query).await.unwrap();
     assert_eq!(res.count, 4, "got {:?}", res.subjects);
-    assert!(res.subjects.iter().any(|s| s.as_str() == gone));
+    assert!(res
+        .subjects
+        .iter()
+        .any(|s| s.pure_id() == Subject::from(gone).pure_id()));
     let report = store.check_query_index(&query).unwrap();
     assert!(report.is_consistent(), "{report:?}");
 }
@@ -2835,13 +3023,19 @@ async fn did_rows_stamped_into_another_drive_stay_out_of_a_watched_query() {
         .iter()
         .map(|s| s.as_str().to_string())
         .collect();
-    assert!(found.contains(&in_a), "{found:?}");
     assert!(
-        !found.contains(&in_b),
+        found.contains(&Subject::from(in_a.as_str()).pure_id()),
+        "{found:?}"
+    );
+    assert!(
+        !found.contains(&Subject::from(in_b.as_str()).pure_id()),
         "a row stamped into drive B is listed by drive A's query: {found:?}"
     );
     // No stamp is no evidence; read rights decide at query time.
-    assert!(found.contains(&unstamped), "{found:?}");
+    assert!(
+        found.contains(&Subject::from(unstamped.as_str()).pure_id()),
+        "{found:?}"
+    );
 
     // Written while the query is watched: the commit path.
     let (in_a2, r) = row("inA2", Some(drive_a));
@@ -2863,9 +3057,12 @@ async fn did_rows_stamped_into_another_drive_stay_out_of_a_watched_query() {
         .iter()
         .map(|s| s.as_str().to_string())
         .collect();
-    assert!(found.contains(&in_a2), "{found:?}");
     assert!(
-        !found.contains(&in_b2),
+        found.contains(&Subject::from(in_a2.as_str()).pure_id()),
+        "{found:?}"
+    );
+    assert!(
+        !found.contains(&Subject::from(in_b2.as_str()).pure_id()),
         "a row committed into drive B reached drive A's watched query: {found:?}"
     );
     assert_eq!(found.len(), 3, "{found:?}");

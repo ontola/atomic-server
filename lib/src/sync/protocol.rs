@@ -271,6 +271,9 @@ pub mod error_code {
     /// content is whatever was signed, and no local edit to it could ever
     /// have applied.
     pub const IMMUTABLE_COMMIT: u16 = 10;
+    /// A new Loro write lost against stored state. Preserve the local edit,
+    /// but stop sending the same stale update until it is rebased.
+    pub const CAUSALITY_CONFLICT: u16 = 11;
 }
 
 /// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
@@ -304,6 +307,12 @@ pub struct DecodedError {
 /// `isTerminalCommitErrorMessage` / `isUnrecoverableCommitErrorMessage`
 /// patterns — update both sides together if you add a case.
 pub fn classify_commit_error(message: &str) -> u16 {
+    // A stale Loro write cannot win by resending the same update. Preserve it
+    // client-side for review/rebase instead of retrying indefinitely.
+    if message.contains("Commit's Loro update produced no state changes") {
+        return error_code::CAUSALITY_CONFLICT;
+    }
+
     // Admission refusals are not transport failures. They can recover after
     // enrollment/quota changes, so keep the write but stop unlimited retries.
     if message.contains("is not enrolled for sync on this node")
@@ -1859,6 +1868,10 @@ mod tests {
 
     #[test]
     fn classify_commit_error_matches_known_patterns() {
+        assert_eq!(
+            classify_commit_error("Commit's Loro update produced no state changes — its writes were silently dropped by LWW against stored state."),
+            error_code::CAUSALITY_CONFLICT
+        );
         assert_eq!(
             classify_commit_error("is_genesis: true, but the resource already exists"),
             error_code::GENESIS_COLLISION

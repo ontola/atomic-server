@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before, waitForSynced } from './test-utils';
+import { before, openWorkspaceDialog, waitForSynced } from './test-utils';
 test.beforeEach(before);
 
 test('workspace owns its views and links to separate connection settings', async ({
@@ -65,9 +65,6 @@ test('workspace owns its views and links to separate connection settings', async
     ).href,
   );
   await expect(
-    page.getByRole('button', { name: 'Connections', exact: true }),
-  ).toBeVisible();
-  await expect(
     page.getByRole('heading', { name: 'Secrets', exact: false }),
   ).not.toBeVisible();
   await expect(
@@ -95,7 +92,7 @@ test('workspace owns its views and links to separate connection settings', async
     fullPage: true,
     animations: 'disabled',
   });
-  await page.getByRole('button', { name: 'Connections', exact: true }).click();
+  await openWorkspaceDialog(page, 'connections');
   const allSettings = page.getByRole('link', {
     name: 'Connection settings',
     exact: true,
@@ -199,7 +196,7 @@ test('workspace starts automation chat without requiring a connection', async ({
   await page.goto(
     new URL(`/app/show?subject=${encodeURIComponent(table)}`, page.url()).href,
   );
-  await page.getByRole('button', { name: 'Automations', exact: true }).click();
+  await openWorkspaceDialog(page, 'automations');
   await expect(
     page.getByText('No automations yet.', { exact: true }),
   ).toBeVisible();
@@ -240,7 +237,7 @@ test('workspace starts automation chat without requiring a connection', async ({
     page.getByRole('tab', { name: 'Automation', exact: true }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Open workspace', exact: true }).click();
-  await page.getByRole('button', { name: 'Automations', exact: true }).click();
+  await openWorkspaceDialog(page, 'automations');
   await expect(
     page.getByRole('dialog').getByRole('link', { name: /Local reminder/ }),
   ).toBeVisible();

@@ -22,6 +22,7 @@ import { styled, keyframes } from 'styled-components';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { useMaterializeWhenDeselected } from './useMaterializeWhenDeselected';
+import { withRowDefaults } from './rowDefaults';
 
 interface TableRowProps {
   collection: Collection;
@@ -206,9 +207,22 @@ export function TableNewRow({
     // mount: an empty placeholder must keep exactly the seeded `isA` +
     // `parent` entries, because "more than 2 entries" is what the
     // materialize/rebase/advance heuristics treat as "has user content".
-    if (!seededOrderRef.current && sortOrder !== undefined) {
+    if (!seededOrderRef.current) {
       seededOrderRef.current = true;
-      void resource.set(dataBrowser.properties.sortOrder, sortOrder, false);
+
+      if (sortOrder !== undefined) {
+        void resource.set(dataBrowser.properties.sortOrder, sortOrder, false);
+      }
+
+      // The table's row defaults (a Status of Todo, say), for whatever the
+      // user has not filled in themselves.
+      for (const [property, value] of Object.entries(
+        withRowDefaults(parent, {}),
+      )) {
+        if (resource.get(property) === undefined) {
+          void resource.set(property, value, false);
+        }
+      }
     }
 
     if (spawnedRef.current || !isLastRef.current) {
@@ -217,7 +231,7 @@ export function TableNewRow({
 
     spawnedRef.current = true;
     addNewRow();
-  }, [addNewRow, resource, sortOrder]);
+  }, [addNewRow, resource, sortOrder, parent]);
 
   // Seed class + parent locally (validate:false → no fetch, no commit) so the
   // genesis sign at materialization builds a valid row of the table's class.

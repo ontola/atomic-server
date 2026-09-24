@@ -174,6 +174,14 @@ export function parseAggregates(
  * The timezone offset travels with it so day and month buckets are the user's
  * days, not UTC's — a 23:30 entry belongs to the day the user was living.
  */
+/**
+ * The id of the row count a breakdown asks for alongside the view's own
+ * statistics. A group's `count` is how many rows contributed a value to THAT
+ * statistic, so a sum of Estimate over tasks with no estimate reads 0: the
+ * breakdown's "n rows" has to come from a count of every row instead.
+ */
+export const BREAKDOWN_ROWS_ID = '__breakdown_rows';
+
 export function toAggregation(
   aggregates: TableAggregate[],
   groupByColumn: string | undefined,
@@ -217,7 +225,9 @@ export function toAggregation(
   return {
     // Rows are a display concern; each statistic is asked for once and carries
     // its own id, which is how the outcomes are matched back to it.
-    aggregates: requests,
+    aggregates: groupByColumn
+      ? [...requests, { id: BREAKDOWN_ROWS_ID, function: 'count' }]
+      : requests,
     group_by: groupByColumn
       ? {
           property: groupByColumn,

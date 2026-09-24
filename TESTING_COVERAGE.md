@@ -15,6 +15,8 @@ PR #1585 frontend regressions: Vault backup tests verify a legacy drive ID reads
 
 PR #1585 upgrade regressions: library tests pin the pre-rename AI Chats singleton and restored alias cache, negotiate nested reduced/full sync identifiers, and export canonical snapshots for legacy requests. Rust tests cover legacy filtered/full version vectors and restarting an interrupted scheme migration after rows moved but before indexes finished. These are library/frame-level checks; a deployed mixed-version browser/Iroh pairing is not exercised.
 
+Collection alias indexing: `sorted_parent_query_deduplicates_legacy_and_canonical_subjects` reproduces an old `did:ad:` query-member key beside its `atomic:` key, then verifies one member, a count of one, canonical output in both sort directions, correct pagination, and stale-key removal on update. It also checks a Table View's class-filtered query without an explicit sort. `basic_parent_query_deduplicates_legacy_and_canonical_subjects` covers the separate property/value and value-only index paths, including both primary index trees and offset pagination. The production drive's duplicate labels were observed on two devices, but their individual resource IDs have not been inspected; these tests prove the alias failure paths rather than the identity of each live row.
+
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
@@ -533,15 +535,16 @@ A flow is only genuinely safe when all three are covered.
 
 ### Playwright light vs full
 
-Only the browser suite splits. Lint, Rust, vitest, JS integration, and
-Flutter run on every CI job.
+Only the browser suite has light/full modes. Lint, Rust, vitest, JS
+integration, and Flutter run on every Main CI job. Automatic CI on PR events
+and feature-branch pushes is paused while runner capacity is limited.
 
 | Trigger | Playwright |
 |---|---|
-| Feature-branch push | **light** (`@smoke`), required |
+| PR event or feature-branch push | No automatic repository CI |
 | `develop` push | **full**, required (staging) |
-| stable `v*` tag | **full**, required (production) |
-| `workflow_dispatch` `e2e_mode=full`, `[full-e2e]` in the commit, or PR label `full-e2e` | **full** |
+| `v*` tag | **full**, required (release) |
+| Manual `workflow_dispatch` on a temporary branch combining PR heads | **full** |
 
 Tag a new journey `@smoke` (`smoke` from `browser/e2e/tests/test-utils.ts`)
 only if a failure means the first-hour demo is dead. Extra operators,
@@ -558,8 +561,8 @@ templates, and offline variants stay in the full suite. Policy:
 | Server integration | `cargo test -p atomic-server --test it <module>` | `rustTest` |
 | Browser unit (vitest) | `cd browser && pnpm run -r test` | `jsTest` |
 | Browser integration (vitest + real server) | `cd browser/lib && pnpm run test:integration` | `jsTestIntegration` |
-| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | `endToEnd` on feature branches |
-| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on `develop` and `v*` tags |
+| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | Local diagnostic |
+| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on dispatched batches, `develop`, and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
 
@@ -1030,6 +1033,13 @@ count document-body changes in the causality guard while retaining rejection of
 property writes that lose completely; expression tests exercise browser operator
 aliases. The editor Link lifecycle test preserves telephone links across multiple
 mounts without resetting or re-registering the global parser.
+
+`lib/src/sync/protocol.rs` classifies a causality refusal as a conflict, and
+`server/src/errors.rs` checks its HTTP 409 response. `browser/lib/src/local-outbox.test.ts`
+classifies both the structured code and the older server message as blocking,
+not terminal; the outbox's existing tests cover bounded retries and keeping
+blocked edits pending. `lib/src/sync/outbox.rs` checks the same verdict for
+native clients.
 
 ### Save durability and identity lifecycle regressions
 

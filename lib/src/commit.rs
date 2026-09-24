@@ -706,7 +706,11 @@ impl Commit {
         //     but lost last-writer-wins against stored state, contributing
         //     nothing. Happens when the client's Loro doc was not seeded
         //     from the server's state (fresh peer ID, concurrent writes).
-        //     REJECT so the silent data loss surfaces.
+        //     REJECT so the silent data loss surfaces — but only when the
+        //     doc really was unseeded, which its version vector says and
+        //     the values do not: a client that holds the stored history and
+        //     lost to a newer peer is LWW working as designed, and refusing
+        //     it only teaches the client to send the same bytes again.
         //
         // Exemptions:
         // - destroy commits (no Loro merge to evaluate).
@@ -809,30 +813,75 @@ impl Commit {
                         .map(|(key, value)| (key.to_string(), value.clone()))
                         .collect::<std::collections::BTreeMap<_, _>>()
                 };
-                let body_changed =
-                    body_state(&applied.resource_old.build_state_doc()?) != body_state(&merged_doc);
-                let all_match = if body_changed || incoming_intent.is_empty() {
-                    true
+                let stored_doc = applied.resource_old.build_state_doc()?;
+                let body_changed = body_state(&stored_doc) != body_state(&merged_doc);
+                // The writes that did not survive the merge, each with what the
+                // commit sent and what the store kept. Empty means nothing was
+                // dropped. Collecting the losers rather than answering
+                // yes-or-no is what lets the rejection name them: a key list
+                // alone leaves the one question the reader has ("which write
+                // lost, and to what?") to be guessed from the server's own
+                // logs, which whoever reads the error usually cannot see.
+                let dropped: Vec<String> = if body_changed || incoming_intent.is_empty() {
+                    Vec::new()
                 } else {
-                    incoming_intent.iter().all(|(key, incoming_val)| {
-                        if server_managed.contains(&key.as_str()) {
-                            return true;
-                        }
-                        merged_state.get(key).is_some_and(|mv| mv == incoming_val)
-                    })
+                    incoming_intent
+                        .iter()
+                        .filter(|(key, _)| !server_managed.contains(&key.as_str()))
+                        .filter_map(|(key, incoming_val)| {
+                            let stored = merged_state.get(key);
+
+                            if stored.is_some_and(|mv| mv == incoming_val) {
+                                return None;
+                            }
+
+                            Some(format!("{key}: sent {incoming_val:?}, stored {stored:?}"))
+                        })
+                        .collect()
                 };
 
-                if all_match {
+                // Whether this client had ever seen the stored state. A doc
+                // seeded from the server carries the server's peers in its own
+                // version vector, however far behind it has since fallen; a doc
+                // built from scratch carries only its own. That is the
+                // difference this guard exists to catch — case 2 above says so
+                // in as many words, "fresh peer ID" — and comparing values
+                // cannot see it, because a write that never saw the server and
+                // a write that merely lost a race to a newer peer both fail to
+                // survive the merge. Losing a race is what LWW is for, so a
+                // client that holds the history is told nothing; a client whose
+                // writes vanished without it ever having read the resource
+                // still is. `update_range` reads the version out of the blob
+                // header, so this costs a parse and not a second doc build.
+                let client_holds_stored_history = commit
+                    .loro_update
+                    .as_deref()
+                    .and_then(|bytes| crate::loro::AtomicLoroDoc::update_range(bytes).ok())
+                    .is_some_and(|(_, incoming_vv)| {
+                        let stored_vv = stored_doc.oplog_vv();
+                        incoming_vv.iter().any(|(peer, counter)| {
+                            *counter > 0 && stored_vv.get(peer).copied().unwrap_or(0) > 0
+                        })
+                    });
+
+                if dropped.is_empty() {
                     tracing::debug!(
                         subject = %commit.subject,
                         keys = ?incoming_intent.keys().collect::<Vec<_>>(),
                         empty_intent = incoming_intent.is_empty(),
                         "[causality-guard] accepting commit (propval intent is empty or matches stored state)"
                     );
+                } else if client_holds_stored_history {
+                    tracing::debug!(
+                        subject = %commit.subject,
+                        dropped = ?dropped,
+                        "[causality-guard] accepting a concurrent loss (the client's doc carries the stored history, so LWW decided against it rather than it never having read the resource)"
+                    );
                 } else {
                     tracing::warn!(
                         subject = %commit.subject,
                         loro_bytes = commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
+                        dropped = ?dropped,
                         incoming_intent = ?incoming_intent,
                         merged_state = ?merged_state,
                         "[causality-guard] rejecting commit with non-trivial loroUpdate that produced no state changes (silent LWW loss)"
@@ -842,13 +891,8 @@ impl Commit {
                         "Commit's Loro update produced no state changes — its writes were \
                          silently dropped by LWW against stored state. The client's Loro doc \
                          wasn't seeded from the server's current state. Refetch the resource \
-                         and retry the commit. subject={} incoming_intent={:?} merged_state_keys={:?}",
-                        commit.subject,
-                        incoming_intent
-                            .iter()
-                            .map(|(k, v)| format!("{k} = {v:?}"))
-                            .collect::<Vec<_>>(),
-                        merged_state.keys().collect::<Vec<_>>(),
+                         and retry the commit. subject={} dropped={:?}",
+                        commit.subject, dropped,
                     )
                     .into());
                 }
@@ -3089,6 +3133,159 @@ mod test {
             after_second.get(crate::urls::NAME).unwrap().to_string(),
             "Ne",
             "fresh-doc-per-commit should still land the second rename"
+        );
+    }
+
+    /// A client that booted from the stored state and then lost a race to
+    /// another peer branching off the same version is not a client that failed
+    /// to seed. Its write is gone, and that is last-writer-wins doing its job,
+    /// so the commit stands. Refusing it is what turned this into a retry loop
+    /// in the field: the client can only resend the same bytes, which lose
+    /// again.
+    ///
+    /// Both contenders branch from the same stored version, so their `name`
+    /// ops carry the same lamport and the peer ID decides. Pinned so the
+    /// client is the one that loses.
+    #[tokio::test]
+    async fn a_concurrent_loss_by_a_seeded_client_is_accepted() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/seeded_concurrent_loss";
+
+        let first = crate::loro::AtomicLoroDoc::new();
+        first.set_peer_id(u64::MAX - 1).unwrap();
+        first
+            .set_property(crate::urls::NAME, &Value::String("first".into()))
+            .unwrap();
+        first
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        first
+            .set_property(crate::urls::SHORTNAME, &Value::String("first".into()))
+            .unwrap();
+        first
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
+            .unwrap();
+
+        let empty = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(first.export_snapshot());
+        let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
+        store.apply_commit(commit1, &OPTS).await.unwrap();
+
+        // The client boots from what the server stored, writes, and holds the
+        // bytes while someone else gets there first.
+        let stored = store.get_resource(&subject.into()).await.unwrap();
+        let client = stored.build_state_doc().unwrap();
+        client.set_peer_id(1).unwrap();
+        client
+            .set_property(crate::urls::NAME, &Value::String("from the client".into()))
+            .unwrap();
+        let client_update = client.export_snapshot();
+
+        // A second peer branches from the same stored version and wins the
+        // tiebreak on peer ID.
+        let other = stored.build_state_doc().unwrap();
+        other.set_peer_id(u64::MAX - 2).unwrap();
+        other
+            .set_property(crate::urls::NAME, &Value::String("from the peer".into()))
+            .unwrap();
+        let mut builder2 = CommitBuilder::new(subject.into());
+        builder2.set_loro_update(other.export_snapshot());
+        let commit2 = builder2.sign(&agent, &store, &stored).await.unwrap();
+        store.apply_commit(commit2, &OPTS).await.unwrap();
+
+        let after_peer = store.get_resource(&subject.into()).await.unwrap();
+        let mut builder3 = CommitBuilder::new(subject.into());
+        builder3.set_loro_update(client_update);
+        let commit3 = builder3.sign(&agent, &store, &after_peer).await.unwrap();
+        store
+            .apply_commit(commit3, &OPTS)
+            .await
+            .expect("a client that holds the stored history may lose a race");
+
+        assert_eq!(
+            store
+                .get_resource(&subject.into())
+                .await
+                .unwrap()
+                .get(crate::urls::NAME)
+                .unwrap()
+                .to_string(),
+            "from the peer",
+            "the write that won LWW is the one that stands"
+        );
+    }
+
+    /// The same loss from a doc that never read the resource stays a
+    /// rejection. Nothing here shares a peer with the stored state, so the
+    /// client's writes did not lose a race, they vanished.
+    #[tokio::test]
+    async fn a_loss_by_a_client_that_never_saw_the_stored_state_is_rejected() {
+        let (store, agent) = store_with_known_agent().await;
+        let subject = "https://localhost/unseeded_loss";
+
+        let stored_doc = crate::loro::AtomicLoroDoc::new();
+        stored_doc.set_peer_id(u64::MAX - 1).unwrap();
+        stored_doc
+            .set_property(crate::urls::NAME, &Value::String("A".into()))
+            .unwrap();
+        stored_doc
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        stored_doc
+            .set_property(crate::urls::SHORTNAME, &Value::String("a".into()))
+            .unwrap();
+        stored_doc
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
+            .unwrap();
+
+        let empty = Resource::new(subject.into());
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set_loro_update(stored_doc.export_snapshot());
+        let commit1 = builder.sign(&agent, &store, &empty).await.unwrap();
+        store.apply_commit(commit1, &OPTS).await.unwrap();
+
+        let fresh = crate::loro::AtomicLoroDoc::new();
+        fresh.set_peer_id(1).unwrap();
+        fresh
+            .set_property(crate::urls::NAME, &Value::String("B".into()))
+            .unwrap();
+        fresh
+            .set_property(
+                crate::urls::IS_A,
+                &Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+            )
+            .unwrap();
+        fresh
+            .set_property(crate::urls::SHORTNAME, &Value::String("b".into()))
+            .unwrap();
+        fresh
+            .set_property(crate::urls::DESCRIPTION, &Value::String("desc".into()))
+            .unwrap();
+
+        let after_first = store.get_resource(&subject.into()).await.unwrap();
+        let mut builder2 = CommitBuilder::new(subject.into());
+        builder2.set_loro_update(fresh.export_snapshot());
+        let commit2 = builder2.sign(&agent, &store, &after_first).await.unwrap();
+        let error = store
+            .apply_commit(commit2, &OPTS)
+            .await
+            .expect_err("an unseeded doc losing every write is still a rejection")
+            .to_string();
+
+        assert!(
+            error.contains("Commit's Loro update produced no state changes"),
+            "the rejection keeps the message the client and `classify_commit_error` match on: {error}"
+        );
+        assert!(
+            error.contains(crate::urls::NAME) && error.contains("sent") && error.contains("stored"),
+            "the rejection names the write that was dropped and both sides of it: {error}"
         );
     }
 
