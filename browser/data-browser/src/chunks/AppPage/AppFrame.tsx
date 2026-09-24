@@ -5,7 +5,18 @@ import { styled } from 'styled-components';
 import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  resourceToOpen,
+  type HostReply,
+} from './hostStore';
+import {
+  checkExternalLink,
+  openInNewTab,
+} from '@helpers/extensions/externalLink';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { paths } from '../../routes/paths';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -82,6 +93,15 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  // An app asking to open a link outside the drive. Same rule: only a click
+  // here opens it, so the frame never needs popup rights.
+  const [externalAsk, setExternalAsk] = useState<ExternalAsk>();
+  const externalAskRef = useRef<ExternalAsk | undefined>(undefined);
+  const navigate = useNavigateWithTransition();
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -226,6 +246,42 @@ function AppFrameSession({
         return;
       }
 
+      if (data.op === 'openExternal') {
+        const link = checkExternalLink(data.url);
+
+        if ('error' in link) {
+          session.post({ id: data.id, error: link.error });
+
+          return;
+        }
+
+        const { url } = link;
+        // One question at a time; a second ask answers the first.
+        const previous = externalAskRef.current;
+        previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
+        const ask: ExternalAsk = { id: data.id, url, reply: session.post };
+        externalAskRef.current = ask;
+        setExternalAsk(ask);
+
+        return;
+      }
+
+      if (data.op === 'openResource') {
+        resourceToOpen(store, data.subject)
+          .then(subject => {
+            session.post({
+              id: data.id,
+              result: { status: 'opened', subject },
+            });
+            void navigateRef.current(
+              `${paths.show}?${new URLSearchParams({ subject })}`,
+            );
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
@@ -347,6 +403,19 @@ function AppFrameSession({
       .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
   };
 
+  const finishExternal = (status: 'opened' | 'cancelled') => {
+    if (!externalAsk) return;
+
+    // Opened from this click, so the browser allows the new tab without the
+    // frame ever holding popup rights.
+    if (status === 'opened') openInNewTab(externalAsk.url);
+    externalAsk.reply({ id: externalAsk.id, result: { status } });
+    externalAskRef.current = undefined;
+    setExternalAsk(undefined);
+  };
+
+  const externalHost = externalAsk?.url.host;
+
   const cancelConnect = () => {
     if (!connectAsk) return;
     finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
@@ -407,6 +476,20 @@ function AppFrameSession({
               Connect
             </Button>
             <Button subtle onClick={cancelConnect}>
+              Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {externalAsk && (
+        <ProxyConsentBar aria-label='Open a link'>
+          <ProxyConsentText>
+            This app wants to open <Host>{externalHost}</Host> in a new tab.
+            <ExternalUrl>{externalAsk.url.href}</ExternalUrl>
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={() => finishExternal('opened')}>Open link</Button>
+            <Button subtle onClick={() => finishExternal('cancelled')}>
               Cancel
             </Button>
           </Row>
@@ -545,6 +628,12 @@ interface ConnectAsk {
   existing?: ProxyConnection[];
 }
 
+interface ExternalAsk {
+  id: number | string;
+  url: URL;
+  reply: (reply: HostReply) => void;
+}
+
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
 
 /**
@@ -629,6 +718,16 @@ const ErrorText = styled.span`
   color: ${p => p.theme.colors.textLight};
   overflow-wrap: anywhere;
   min-width: 0;
+`;
+
+/** The destination host, in full: what the person is deciding about. */
+const Host = styled.strong``;
+
+/** The whole link, under the host, for anyone who wants to check the path. */
+const ExternalUrl = styled.span`
+  display: block;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
 `;
 
 const Problem = styled.p`

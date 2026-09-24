@@ -114,6 +114,7 @@ msgstr ""
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -9474,4 +9475,16 @@ msgstr ""
 #. 0: platformName(platform)
 #: src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open link"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to open <0/> in a new tab. <1/>"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open a link"
 msgstr ""

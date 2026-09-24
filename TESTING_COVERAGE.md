@@ -1832,6 +1832,16 @@ window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
+App frame navigation (#1734, #1735): `helpers/extensions/externalLink.test.ts`
+checks `openExternal` accepts only http(s) links without credentials, keeps
+the full (punycode) host the confirm bar shows, and opens with
+`noopener,noreferrer`. `hostStore.test.ts` checks `openResource` refuses
+agents, commits, blobs, nodes and non-subjects before loading anything, and
+refuses a resource the person's store cannot read. `viewProtocol.test.ts`
+checks the generated client sends both ops and waits on the person without a
+deadline. Not covered by an automated browser test: the confirm bar itself
+and the navigation (checked by hand with a throwaway Playwright script).
+
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;
 resource creation and signing still use the real local backend. This verifies the

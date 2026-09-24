@@ -24,7 +24,14 @@ export type ViewOperation =
   /** Connection references (never credentials) delegated to this app. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
-  | 'proxyConnect';
+  | 'proxyConnect'
+  /**
+   * Open an http(s) link in a new tab, once the person confirms it in host
+   * UI that names the destination host. The frame gets no popup rights.
+   */
+  | 'openExternal'
+  /** Show a resource the person can already read in the host page. */
+  | 'openResource';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -80,6 +87,8 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'proxyCapability',
       'proxyConnections',
       'proxyConnect',
+      'openExternal',
+      'openResource',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

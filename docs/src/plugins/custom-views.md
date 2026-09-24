@@ -197,3 +197,23 @@ const file = await rpc.pickFile({
   allowedMimes: ['image/png', 'image/jpeg'],
 });
 ```
+
+## App frames
+
+A drive app's view (an app made with `createApp`, or an Installation's app) gets a `store` from `/plugin-ui?format=client` instead of an `RPCClient`. It speaks the same versioned wire protocol (`atomic.view.request` / `atomic.view.response`, the `ViewOperation`s in `@tomic/plugin`). Besides reading and writing resources, it can ask the host to do what a sandboxed, null-origin frame cannot do itself.
+
+#### `store.openExternal(url): Promise<{ status: 'opened' | 'cancelled' }>`
+
+Opens an `http:` or `https:` link in a new tab. The frame has no popup rights (`allow-popups` is not in its sandbox), so `window.open` and `target="_blank"` do nothing. Instead, the host shows a bar naming the destination's host in full, with the whole link under it, and opens the link only when the person clicks **Open link**. It opens with `noopener,noreferrer`. Other schemes, and links with a user name or password in them, are refused. A second call before the person answers resolves the first as `cancelled`.
+
+```js
+const { status } = await store.openExternal('https://www.notion.so/My-page-abc123');
+```
+
+#### `store.openResource(subject): Promise<{ status: 'opened', subject }>`
+
+Shows a resource in the host page, leaving the app. Only a resource the signed-in person can already read: the host loads it with their store first and refuses it when that fails. Agents, commits, blobs, nodes and anything that is not a resource subject are refused.
+
+```js
+await store.openResource(table.subject);
+```
