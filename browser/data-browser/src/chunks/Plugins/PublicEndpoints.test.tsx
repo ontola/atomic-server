@@ -19,6 +19,13 @@ import activitypub from '../../../../../testdata/plugin-manifest/v3-activitypub.
 
 // The dialog's chrome needs a real <dialog> and the app's providers; what is
 // under test is its content and its Install button.
+const dialog = vi.hoisted(() => [
+  {},
+  () => undefined,
+  () => undefined,
+  true,
+]);
+
 vi.mock('@components/Dialog', async original => {
   const Pass = ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
@@ -31,7 +38,10 @@ vi.mock('@components/Dialog', async original => {
       Content: Pass,
       Actions: Pass,
     }),
-    useDialog: () => [{}, () => undefined, () => undefined, true],
+    // Stable, like the real hook's: the dialog's reset effect depends on
+    // `show`, so a new function per render would clear a refusal right after
+    // it is shown, and the assertions below would race that.
+    useDialog: () => dialog,
   };
 });
 vi.mock('@components/JSONEditor', () => ({ JSONEditor: () => null }));
