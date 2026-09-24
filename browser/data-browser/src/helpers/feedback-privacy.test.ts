@@ -63,3 +63,15 @@ it('retains browser and OS metadata without unrelated request or context data', 
   });
   expect(JSON.stringify(report)).not.toContain('SECRET');
 });
+
+it('keeps a known report source and replaces anything else', () => {
+  const source = (value: unknown) =>
+    sanitizeFeedbackEvent({
+      type: 'feedback',
+      contexts: { feedback: { message: 'Problem', source: value } },
+    }).contexts?.feedback?.source;
+
+  expect(source('ai-chat')).toBe('ai-chat');
+  expect(source('error')).toBe('error');
+  expect(source('SECRET_SOURCE')).toBe('sidebar');
+});

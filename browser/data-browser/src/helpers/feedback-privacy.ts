@@ -1,6 +1,9 @@
 // @wc-ignore-file
 import type { Event } from '@sentry/react';
 
+/** Where a report was sent from. Anything else is reported as the sidebar. */
+const FEEDBACK_SOURCES = new Set(['sidebar', 'error', 'ai-chat']);
+
 /** Feedback must not inherit scope breadcrumbs, private URLs, or user context. */
 export function sanitizeFeedbackEvent(event: Event): Event {
   if (event.type !== 'feedback') return event;
@@ -34,7 +37,11 @@ export function sanitizeFeedbackEvent(event: Event): Event {
           typeof feedback?.contact_email === 'string'
             ? feedback.contact_email
             : undefined,
-        source: 'sidebar',
+        source:
+          typeof feedback?.source === 'string' &&
+          FEEDBACK_SOURCES.has(feedback.source)
+            ? feedback.source
+            : 'sidebar',
         url: '',
       },
     },
