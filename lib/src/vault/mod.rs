@@ -16,15 +16,15 @@ pub mod keys;
 // envelope. Gated on `db-redb` because that is the feature carrying
 // `chacha20poly1305`, and every host that can run a vault client already
 // enables it (see the host table in CLOUD_VAULT_ARCHITECTURE.md).
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod dek;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod envelope;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod pack;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod secret_envelope;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod store;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod sync;

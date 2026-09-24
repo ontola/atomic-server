@@ -7,7 +7,7 @@
 //! /iroh-sync` — the endpoint every browser pairing flow depends on — and
 //! neither represents the desktop-to-desktop pair a user actually has.
 //!
-//! Separate processes are not optional here. `iroh_transport` keeps its router
+//! Separate processes are not optional here. `atomic_lib::sync::peer` keeps its router
 //! and node identity in process globals, so servers sharing a process also
 //! share one Iroh node: "pairing" would be a node dialling itself, and every
 //! co-resident server would advertise the same node id regardless of whose
@@ -237,7 +237,7 @@ async fn post_iroh_sync(
 /// because a user pasted a pairing code.
 #[tokio::test]
 async fn a_public_drive_reconciles_between_two_servers_over_iroh() {
-    // Both servers are subprocesses, and this process runs none. `iroh_transport`
+    // Both servers are subprocesses, and this process runs none. `atomic_lib::sync::peer`
     // holds the router and node identity in globals, so every server sharing a
     // process also shares one node id — meaning a co-resident server from
     // another test in this suite could be the one A's `/server` advertises,

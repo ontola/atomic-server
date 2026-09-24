@@ -142,13 +142,10 @@ export class NodeClientDb {
   async getResourceWithSnapshot(
     subject: string,
   ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
-    const db = this.requireDb();
-    const jsonAd = (await db.getResource(subject)) as string | null;
-    const snapshot = jsonAd
-      ? (db.getLoroSnapshot(subject) as Uint8Array | null)
-      : null;
-
-    return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+    return (await this.requireDb().getResourceWithSnapshot(subject)) as {
+      jsonAd: string | null;
+      snapshot: Uint8Array | null;
+    };
   }
 
   async getResourcesWithSnapshots(
@@ -173,8 +170,12 @@ export class NodeClientDb {
     snapshot?: Uint8Array,
   ): Promise<void> {
     const db = this.requireDb();
-    await db.putResource(jsonAd);
-    if (snapshot) db.putLoroSnapshot(subject, snapshot);
+
+    if (snapshot) {
+      await db.putResourceWithSnapshot(jsonAd, snapshot);
+    } else {
+      await db.putResource(jsonAd);
+    }
   }
 
   /** Mirror of {@link ClientDbWorker.putResources} for the Node integration

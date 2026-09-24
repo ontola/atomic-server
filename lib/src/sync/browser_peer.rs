@@ -393,7 +393,7 @@ impl BrowserPeerSession {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
     use crate::db::trees::Tree;

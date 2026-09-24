@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { LoroDoc } from 'loro-crdt';
 
 import init, { ClientDb } from '../../../wasm/pkg/atomic_wasm.js';
 import { NodeClientDb } from '../src/client-db.node.js';
@@ -47,6 +48,33 @@ describe('wasm/pkg in Node', () => {
     const round = await db.getBlob(hash);
     expect(round).not.toBeNull();
     expect(Array.from(round!)).toEqual(Array.from(data));
+
+    db.destroy();
+  });
+
+  it('stores a snapshot as given and reads it back with the row', async () => {
+    const db = new NodeClientDb({ wasmPath });
+    await db.init('http://localhost:9883');
+    const subject = 'http://localhost:9883/smoke-snapshot';
+    const name = 'https://atomicdata.dev/properties/name';
+    const doc = new LoroDoc();
+    doc.getMap('props').set(name, 'from the tab');
+    const snapshot = doc.export({ mode: 'snapshot' });
+
+    await db.putResourceWithSnapshot(
+      subject,
+      JSON.stringify({ '@id': subject, [name]: 'from the tab' }),
+      snapshot,
+    );
+    const row = await db.getResourceWithSnapshot(subject);
+
+    expect(Array.from(row.snapshot ?? [])).toEqual(Array.from(snapshot));
+    const json = JSON.parse(row.jsonAd!);
+    expect(json[name]).toBe('from the tab');
+    // The snapshot travels beside the row, not a second time inside it.
+    expect(
+      json['https://atomicdata.dev/properties/loroUpdate'],
+    ).toBeUndefined();
 
     db.destroy();
   });

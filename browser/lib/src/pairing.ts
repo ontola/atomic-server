@@ -197,14 +197,6 @@ export function encodePairingEnvelope(envelope: PairingEnvelope): string {
   return `${nodeSubject(id)}?${queryOf(envelope)}`;
 }
 
-/** https://atomicserver.eu/node/{id}?v=1&drives=… — tappable in chat. */
-export function encodePairingShareUrl(envelope: PairingEnvelope): string {
-  assertValid(envelope);
-  const id = nodeId(envelope.node) ?? envelope.node;
-
-  return `${PAIRING_SHARE_ORIGIN}/node/${id}?${queryOf(envelope)}`;
-}
-
 function parseQuery(query: string): URLSearchParams {
   return new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
 }

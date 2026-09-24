@@ -1,6 +1,6 @@
 //! Integration tests for sync between two Db instances.
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod peer_sync_tests {
     use crate::{agents::ForAgent, storelike::Query, Db, Storelike};
 
