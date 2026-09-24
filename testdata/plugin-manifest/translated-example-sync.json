@@ -18,9 +18,9 @@
   "operations": [],
   "network": {
     "origins": [
-      "https://api.notion.com"
+      "https://api.example.com"
     ],
-    "reason": "Reads pages from Notion"
+    "reason": "Reads pages from the example API"
   },
   "configSchema": {
     "properties": {
@@ -37,9 +37,9 @@
     "interval": 60,
     "workspace": ""
   },
-  "name": "notion-sync",
+  "name": "example-sync",
   "namespace": "example",
   "version": "2.1.0",
-  "description": "Mirrors Notion pages",
+  "description": "Mirrors pages from the example API",
   "author": "Ontola"
 }

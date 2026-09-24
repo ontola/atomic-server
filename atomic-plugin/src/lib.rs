@@ -258,16 +258,16 @@ pub fn commit(commit: &CommitBuilder) -> Result<(), String> {
 ///
 /// Put `secret:<name>` in a **header value** and the host substitutes the
 /// secret before sending. The plugin never sees it — printing the header shows
-/// `secret:notion`, not the token.
+/// `secret:example`, not the token.
 ///
 /// ```no_run
 /// # use atomic_plugin::{fetch, HttpHeader, HttpRequest};
 /// let response = fetch(HttpRequest {
 ///     method: "GET".to_string(),
-///     url: "https://api.notion.com/v1/users/me".to_string(),
+///     url: "https://api.example.com/v1/users/me".to_string(),
 ///     headers: vec![HttpHeader {
 ///         name: "Authorization".to_string(),
-///         value: "Bearer secret:notion".to_string(),
+///         value: "Bearer secret:example".to_string(),
 ///     }],
 ///     body: None,
 /// })?;

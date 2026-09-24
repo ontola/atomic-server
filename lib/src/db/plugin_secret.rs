@@ -59,7 +59,7 @@ impl PluginSecretKey {
 pub struct PluginSecret {
     /// The credential. Never leaves the host.
     pub value: String,
-    /// Origins this secret may be sent to, e.g. `https://api.notion.com`.
+    /// Origins this secret may be sent to, e.g. `https://api.example.com`.
     /// Empty means the secret is unusable, not that it is usable anywhere.
     pub origins: Vec<String>,
     /// Milliseconds since the epoch.
@@ -157,13 +157,13 @@ mod store_tests {
     }
 
     fn key() -> PluginSecretKey {
-        PluginSecretKey::new("did:ad:drive", "did:ad:plugin", "notion")
+        PluginSecretKey::new("did:ad:drive", "did:ad:plugin", "example")
     }
 
     fn secret() -> PluginSecret {
         PluginSecret::new(
             "tok-abc".to_string(),
-            vec!["https://api.notion.com".to_string()],
+            vec!["https://api.example.com".to_string()],
             1_700_000_000_000,
         )
     }
@@ -172,7 +172,7 @@ mod store_tests {
     fn legacy_positional_credentials_remain_readable() {
         let bytes = rmp_serde::to_vec(&(
             "token",
-            vec!["https://api.notion.com"],
+            vec!["https://api.example.com"],
             123i64,
             None::<i64>,
             0u64,
@@ -187,13 +187,13 @@ mod store_tests {
     async fn connection_references_follow_rotation_and_revocation_without_leaking() {
         let db = db("connection_reference").await;
         db.set_node_key([7u8; crate::vault::keys::KEK_LEN]);
-        let shared = PluginSecretKey::new("did:ad:drive", "connection:test", "notion");
+        let shared = PluginSecretKey::new("did:ad:drive", "connection:test", "example");
         db.set_plugin_secret(&shared, &secret()).unwrap();
-        let mut alias = PluginSecret::new(String::new(), vec!["https://api.notion.com".into()], 1);
+        let mut alias = PluginSecret::new(String::new(), vec!["https://api.example.com".into()], 1);
         alias.connection = Some(shared.clone());
         db.set_plugin_secret(&key(), &alias).unwrap();
         let read = || {
-            db.use_plugin_secret(&key(), "https://api.notion.com", 2, |v| v.to_owned())
+            db.use_plugin_secret(&key(), "https://api.example.com", 2, |v| v.to_owned())
                 .unwrap()
         };
         assert_eq!(read(), Some("tok-abc".into()));
@@ -210,7 +210,7 @@ mod store_tests {
         alias.connection.as_mut().unwrap().drive = "other-drive".into();
         db.set_plugin_secret(&key(), &alias).unwrap();
         assert!(db
-            .use_plugin_secret(&key(), "https://api.notion.com", 2, |_| ())
+            .use_plugin_secret(&key(), "https://api.example.com", 2, |_| ())
             .is_err());
     }
 
@@ -246,7 +246,7 @@ mod store_tests {
         // No user and no credential — which is the whole reason the node
         // holds a key rather than the person holding one.
         let seen = db
-            .use_plugin_secret(&key(), "https://api.notion.com", 1, |v| v.to_string())
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
             .expect("read")
             .expect("allowed");
 
@@ -263,7 +263,7 @@ mod store_tests {
         db.set_node_key(NODE_KEY);
 
         let seen = db
-            .use_plugin_secret(&key(), "https://api.notion.com", 1, |v| v.to_string())
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
             .expect("read")
             .expect("allowed");
 
@@ -290,7 +290,7 @@ mod store_tests {
 
         assert!(
             elsewhere
-                .use_plugin_secret(&key(), "https://api.notion.com", 1, |v| v.to_string())
+                .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
                 .is_err(),
             "a store restored on another machine handed over its secrets",
         );
@@ -302,7 +302,7 @@ mod store_tests {
         db.set_plugin_secret(&key(), &secret()).expect("stored");
 
         let seen = db
-            .use_plugin_secret(&key(), "https://api.notion.com", 1, |value| {
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |value| {
                 value.to_string()
             })
             .expect("read")
@@ -342,7 +342,7 @@ mod store_tests {
         db.set_plugin_secret(&key(), &secret()).expect("stored");
 
         for at in [10, 20, 30] {
-            db.use_plugin_secret(&key(), "https://api.notion.com", at, |_| ())
+            db.use_plugin_secret(&key(), "https://api.example.com", at, |_| ())
                 .expect("read")
                 .expect("allowed");
         }
@@ -358,7 +358,7 @@ mod store_tests {
 
         assert!(db.get_plugin_secret_info(&key()).unwrap().is_none());
         assert!(db
-            .use_plugin_secret(&key(), "https://api.notion.com", 1, |_| ())
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |_| ())
             .unwrap()
             .is_none());
 
@@ -371,7 +371,7 @@ mod store_tests {
     #[tokio::test]
     async fn secrets_of_different_plugins_do_not_collide() {
         let db = db("per_plugin").await;
-        let other = PluginSecretKey::new("did:ad:drive", "did:ad:other-plugin", "notion");
+        let other = PluginSecretKey::new("did:ad:drive", "did:ad:other-plugin", "example");
 
         db.set_plugin_secret(&key(), &secret()).expect("stored");
         db.set_plugin_secret(
@@ -381,7 +381,7 @@ mod store_tests {
         .expect("stored");
 
         let first = db
-            .use_plugin_secret(&key(), "https://api.notion.com", 1, |v| v.to_string())
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
             .unwrap()
             .unwrap();
 
@@ -400,12 +400,12 @@ mod store_tests {
         .unwrap();
         // Another plugin on the same drive, and the same plugin name on another.
         db.set_plugin_secret(
-            &PluginSecretKey::new("did:ad:drive", "did:ad:other", "notion"),
+            &PluginSecretKey::new("did:ad:drive", "did:ad:other", "example"),
             &PluginSecret::new("nope".to_string(), vec![], 0),
         )
         .unwrap();
         db.set_plugin_secret(
-            &PluginSecretKey::new("did:ad:other-drive", "did:ad:plugin", "notion"),
+            &PluginSecretKey::new("did:ad:other-drive", "did:ad:plugin", "example"),
             &PluginSecret::new("nope".to_string(), vec![], 0),
         )
         .unwrap();
@@ -416,7 +416,7 @@ mod store_tests {
 
         assert_eq!(
             listed.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(),
-            vec!["airtable", "notion"],
+            vec!["airtable", "example"],
         );
 
         // And still no values anywhere in it.
@@ -431,7 +431,7 @@ mod store_tests {
 
         assert_eq!(
             PluginSecretKey::name_from_key(&encoded).expect("name"),
-            "notion",
+            "example",
         );
         assert!(encoded.starts_with(&PluginSecretKey::plugin_prefix(
             "did:ad:drive",
@@ -455,7 +455,7 @@ mod tests {
     fn secret() -> PluginSecret {
         PluginSecret::new(
             "tok".to_string(),
-            vec!["https://api.notion.com".to_string()],
+            vec!["https://api.example.com".to_string()],
             0,
         )
     }
@@ -464,19 +464,19 @@ mod tests {
     fn origins_match_exactly() {
         let s = secret();
 
-        assert!(s.allows("https://api.notion.com"));
+        assert!(s.allows("https://api.example.com"));
         // Scheme, host and port all count.
-        assert!(!s.allows("http://api.notion.com"));
-        assert!(!s.allows("https://api.notion.com:8443"));
-        assert!(!s.allows("https://api.notion.com.evil.test"));
-        assert!(!s.allows("https://notion.com"));
+        assert!(!s.allows("http://api.example.com"));
+        assert!(!s.allows("https://api.example.com:8443"));
+        assert!(!s.allows("https://api.example.com.evil.test"));
+        assert!(!s.allows("https://example.com"));
     }
 
     #[test]
     fn a_secret_with_no_origins_goes_nowhere() {
         let s = PluginSecret::new("tok".to_string(), vec![], 0);
 
-        assert!(!s.allows("https://api.notion.com"));
+        assert!(!s.allows("https://api.example.com"));
         assert!(!s.allows(""));
     }
 
@@ -495,29 +495,29 @@ mod tests {
 
     #[test]
     fn info_cannot_carry_a_value() {
-        let info = PluginSecretInfo::of("notion", &secret());
+        let info = PluginSecretInfo::of("example", &secret());
         let json = serde_json::to_string(&info).expect("serializes");
 
         assert!(!json.contains("tok"));
-        assert!(json.contains("notion"));
-        assert!(json.contains("api.notion.com"));
+        assert!(json.contains("\"example\""));
+        assert!(json.contains("api.example.com"));
     }
 
     #[test]
     fn handles_are_recognised() {
-        assert_eq!(handle_name("secret:notion"), Some("notion"));
-        assert_eq!(handle_name("Bearer secret:notion"), None);
-        assert_eq!(handle_name("notion"), None);
+        assert_eq!(handle_name("secret:example"), Some("example"));
+        assert_eq!(handle_name("Bearer secret:example"), None);
+        assert_eq!(handle_name("example"), None);
 
-        assert!(mentions_handle("Bearer secret:notion"));
-        assert!(mentions_handle("https://x/?t=secret:notion"));
+        assert!(mentions_handle("Bearer secret:example"));
+        assert!(mentions_handle("https://x/?t=secret:example"));
         assert!(!mentions_handle("Bearer abc"));
     }
 
     #[test]
     fn names_stay_to_a_shape_that_cannot_smuggle_anything() {
-        assert!(PluginSecretKey::validate_name("notion").is_ok());
-        assert!(PluginSecretKey::validate_name("notion-api_2").is_ok());
+        assert!(PluginSecretKey::validate_name("example").is_ok());
+        assert!(PluginSecretKey::validate_name("example-api_2").is_ok());
 
         assert!(PluginSecretKey::validate_name("").is_err());
         assert!(PluginSecretKey::validate_name("has space").is_err());

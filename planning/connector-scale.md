@@ -4,7 +4,7 @@
 
 **Status:** Active implementation, 2026-09-06. User direction: reliable bidirectional sync
 with many major and niche domain applications without bloating Atomic.
-GitHub and Notion pilots now run in the shared sandbox and have bounded live
+The GitHub pilot runs in the shared sandbox and has bounded live
 checks. Broader support, monitoring and release operations remain incomplete.
 
 ## Product direction (2026-09-08)
@@ -28,8 +28,7 @@ Existing implementation checklists below do not claim this UX migration is done.
 - [x] Assistant-led automation requests create the same review-only draft and attach the selected integration; JavaScript authoring remains an advanced path.
 - [x] Sync remains the primary connection flow. Automation setup is optional and hidden when an integration exposes no events.
 - [x] Preserve the assistant request during provider setup and prevent automatic page context from replacing handoff context.
-- [x] Notion OAuth and named data-source selection using administrator-configured OAuth credentials; manual token/ID setup is an advanced fallback.
-- [ ] Managed authorization deployment and live Notion OAuth verification (see shared authorization architecture below).
+- [ ] Managed authorization deployment and live OAuth verification (see shared authorization architecture below).
 - [ ] Rich JavaScript completion, sample-event selection and capability-linked action examples.
 
 The editor and event selector use the existing automation runtime and permission
@@ -84,8 +83,7 @@ FOSS versions of each integration.
 Keep the reusable implementation in `atomic-server` or extract a small FOSS
 package when the deployment boundary requires it. The exact package/process
 layout is still open. `atomic-saas` consumes and deploys it rather than owning a
-second implementation. The Notion handlers support local administrator-configured OAuth and optional
-remote authorization through the shared service. Deployment remains separate.
+second implementation. Deployment remains separate.
 
 The host selects its authorization service through configuration. Plugins
 should declare their authorization needs and receive scoped host capabilities,
@@ -102,8 +100,6 @@ optional capability, not part of the initial authorization milestone.
 
 ### Shared service implementation progress
 
-- [x] Extract the Notion token exchange from HTTP handlers into
-  `server/src/oauth/notion.rs`; the existing local handler uses that adapter.
 - [x] Implement a provider-independent handoff store in
   `server/src/oauth/handoff.rs`: server/agent/drive/provider/attempt binding,
   separate retrieval proof, ten-minute expiry, encrypted credentials,
@@ -133,8 +129,6 @@ retrieval and browser polling of the local host. Refresh and SaaS deployment rem
 - [ ] Specify which service handles refresh when the provider requires the app
   secret. Define credential retention, rotation, revocation and service-outage
   behavior explicitly; do not assume the managed service never sees tokens.
-- [x] Extract/reuse the current Notion authorization code behind that boundary,
-  preserving the existing direct self-hosted mode and one credential model.
 - [ ] Add managed deployment/configuration for the shared service and register
   Atomic's provider apps. Never ship their client secrets in FOSS distributions.
 - [ ] Run the same conformance suite against managed and independent deployments:
@@ -566,7 +560,7 @@ check the database owner and allow the grace period before forcing termination.
 - [x] Single-use callback code exchange and encrypted outbound redemption.
 - [x] Host-only ticket storage, same signed local UI API, direct/managed mode selection.
 - [x] Real loopback HTTP client/service test plus direct and managed browser fixtures.
-- [ ] Live Notion consent and real two-way sync after app registration.
+- [ ] Live provider consent and real two-way sync after app registration.
 - [ ] Automated enrollment/key rotation, remote cancellation and provider refresh.
 
 The loopback test needs permission to bind a socket in the local sandbox; a

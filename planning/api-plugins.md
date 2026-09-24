@@ -6,7 +6,7 @@ PR #1307). Rebuilds part of the direction from
 live OAuth provider imports — on top of the plugin model instead of a separate
 Reflector-backed importer.
 
-**Update (PR #1549):** provider plugins (Pets, Notion, GitHub issues, MT940,
+**Update (PR #1549):** provider plugins (Pets, GitHub issues, MT940,
 Clockify, Calendar), their tests and certification moved to
 [atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps
 catalog discovery, install and the plugin runtime. #1549 contains #1618, so the

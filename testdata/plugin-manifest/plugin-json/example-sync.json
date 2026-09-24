@@ -1,13 +1,13 @@
 {
-  "name": "notion-sync",
+  "name": "example-sync",
   "namespace": "example",
   "version": "2.1.0",
-  "description": "Mirrors Notion pages",
+  "description": "Mirrors pages from the example API",
   "author": "Ontola",
   "permissions": [
     {
       "permission": "network",
-      "reason": "Reads pages from Notion"
+      "reason": "Reads pages from the example API"
     },
     {
       "permission": "storage",
@@ -20,7 +20,7 @@
   ],
   "network": {
     "origins": [
-      "https://api.notion.com"
+      "https://api.example.com"
     ]
   },
   "defaultConfig": {

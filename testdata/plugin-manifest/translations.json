@@ -1,11 +1,11 @@
 [
   {
     "name": "class extender with permissions",
-    "pluginJson": "plugin-json/notion-sync.json",
+    "pluginJson": "plugin-json/example-sync.json",
     "classUrls": [
       "https://atomicdata.dev/classes/Folder"
     ],
-    "expected": "translated-notion-sync.json"
+    "expected": "translated-example-sync.json"
   },
   {
     "name": "package extending no class exports run",

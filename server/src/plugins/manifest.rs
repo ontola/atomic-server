@@ -277,7 +277,7 @@ impl Serialize for Capability {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Network {
-    /// Exact origins, e.g. `https://api.notion.com`. No wildcards.
+    /// Exact origins, e.g. `https://api.example.com`. No wildcards.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub origins: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
