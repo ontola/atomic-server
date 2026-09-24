@@ -221,6 +221,14 @@ async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
         .await
         .map_err(|e| e.to_string())?;
     assert_eq!(resp.status(), 404);
+    // Nor does a client without an `Accept` header get the app's HTML there.
+    let resp = http
+        .get(format!("{server}/.well-known/nodeinfo"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 404);
+    assert_eq!(resp.headers()["content-type"], "application/problem+json");
 
     // A reserved path refuses the install.
     let err = install(
