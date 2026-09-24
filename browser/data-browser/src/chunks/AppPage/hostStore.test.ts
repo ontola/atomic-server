@@ -9,8 +9,23 @@ vi.mock('@tomic/react', async () => {
 
   // Signing needs a real key and a real agent; what these tests are about is
   // which requests leave and which are refused before they do.
-  return { ...actual, signRequest: async () => ({}) };
+  return {
+    ...actual,
+    signRequest: async () => ({}),
+    // Reading an importer's stored config is tested in @tomic/lib
+    // (plugin-destination.test.ts); here only what `data` passes on.
+    destinationTablesFor: async (
+      _store: unknown,
+      _drive: string,
+      table: string,
+    ) => (table === 'did:ad:transactions' ? DESTINATION_TABLES : undefined),
+  };
 });
+
+const DESTINATION_TABLES = {
+  statements: { table: 'did:ad:statements', rowClass: 'did:ad:statement' },
+  closingBalances: { table: 'did:ad:balances', rowClass: 'did:ad:balance' },
+};
 
 const APP = 'did:ad:app';
 const DRIVE = 'did:ad:drive';
@@ -175,6 +190,22 @@ describe('writing as the app', () => {
     )) as { table: string };
 
     expect(viewing.table).toBe('did:ad:someone-elses-table');
+  });
+
+  it('names the other tables of a multi-class destination by their keys', async () => {
+    const store = fakeStore();
+
+    await expect(
+      handleRequest(store, APP, DRIVE, req('data'), 'did:ad:transactions'),
+    ).resolves.toEqual({
+      table: 'did:ad:transactions',
+      rowClass: undefined,
+      tables: DESTINATION_TABLES,
+    });
+    // A single-table destination, or any other table, answers as before.
+    await expect(
+      handleRequest(store, APP, DRIVE, req('data'), 'did:ad:other'),
+    ).resolves.toEqual({ table: 'did:ad:other', rowClass: undefined });
   });
 
   it('refuses an operation it does not implement', async () => {

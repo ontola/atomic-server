@@ -4,6 +4,7 @@ import type { ProxyHost } from '@helpers/proxyConnections';
 import {
   CollectionBuilder,
   core,
+  destinationTablesFor,
   errorMessageFromResponse,
   findSchema,
   pluginSchema,
@@ -105,12 +106,17 @@ export async function handleRequest(
       // names what its rows are, and duplicating that on the app would be two
       // places to disagree.
       const tableResource = await store.getResource(subject);
+      // A table an importer's Set up created together with others (a
+      // manifest `destination.tables`): its siblings, by the keys the
+      // manifest declared, so a view of transactions can find statements.
+      const tables = await destinationTablesFor(store, drive, subject);
 
       return {
         table: subject,
         rowClass: tableResource.get(core.properties.classtype) as
           | string
           | undefined,
+        ...(tables ? { tables } : {}),
       };
     }
 

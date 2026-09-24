@@ -51,6 +51,17 @@ pub struct Manifest {
     pub config_schema: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_config: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Files the host may hand this plugin as `input.upload`. See [`Accept`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<Accept>,
+    /// Where an importer writes: a schema and the tables (`table`, and/or
+    /// keyed `tables`) the browser host creates before the first run and
+    /// records as the plugin's config. It grants nothing and the server never
+    /// acts on it, so it is carried verbatim (its bytes are part of the
+    /// release id); [`validate_destination`] checks its shape the way the
+    /// browser's `validateManifest` does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -96,6 +107,8 @@ impl From<ManifestV1> for Manifest {
             config: v1.config,
             config_schema: None,
             default_config: None,
+            accepts: Vec::new(),
+            destination: None,
             name: None,
             namespace: None,
             version: None,
@@ -309,6 +322,36 @@ pub struct Secret {
     pub description: Option<String>,
 }
 
+/// Used when an `accepts` entry declares no `maxBytes`: 5 MiB.
+pub const DEFAULT_ACCEPT_MAX_BYTES: u64 = 5 * 1024 * 1024;
+/// The largest `maxBytes` a plugin may declare: 20 MiB. The file is held
+/// several times over during a run (request body, host string, sandbox string,
+/// parse output), so this stays well under the sandbox's 256 MiB default.
+pub const ACCEPT_MAX_BYTES_CEILING: u64 = 20 * 1024 * 1024;
+
+/// A file the host may hand the plugin as `input.upload`, instead of the
+/// plugin fetching data itself. `extensions` and `mediaTypes` only filter the
+/// picker; the plugin still validates what it is given. Only `as: "text"`
+/// exists: UTF-8, falling back to Windows-1252, decoded by the host.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Accept {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub media_types: Vec<String>,
+    #[serde(rename = "as")]
+    pub read_as: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_bytes: Option<u64>,
+}
+
+impl Accept {
+    pub fn max_bytes(&self) -> u64 {
+        self.max_bytes.unwrap_or(DEFAULT_ACCEPT_MAX_BYTES)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Operation {
@@ -454,6 +497,50 @@ impl Manifest {
                 return Err("view entrypoint requires the custom-view capability".into());
             }
         }
+        if self.accepts.len() > 8 {
+            return Err("at most 8 accepts entries".into());
+        }
+        for accept in &self.accepts {
+            if accept.read_as != "text" {
+                return Err("accepts entries must be read `as` text".into());
+            }
+            if accept
+                .max_bytes
+                .is_some_and(|max| !(1..=ACCEPT_MAX_BYTES_CEILING).contains(&max))
+            {
+                return Err(format!(
+                    "accepts maxBytes must be a whole number from 1 to {ACCEPT_MAX_BYTES_CEILING}"
+                ));
+            }
+            let lower_ext = |c: char| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')
+            };
+            if accept.extensions.iter().any(|ext| {
+                ext.len() < 2
+                    || ext.len() > 33
+                    || !ext.starts_with('.')
+                    || !ext[1..].starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    || !ext.chars().all(lower_ext)
+            }) {
+                return Err("accepts extensions must be lower-case and start with a dot".into());
+            }
+            let token = |part: &str| {
+                part.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    && part.chars().all(|c| {
+                        c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '+' | '-')
+                    })
+            };
+            if accept.media_types.iter().any(|media| {
+                !media
+                    .split_once('/')
+                    .is_some_and(|(kind, sub)| token(kind) && token(sub))
+            }) {
+                return Err("accepts mediaTypes must be type/subtype".into());
+            }
+        }
+        if let Some(destination) = &self.destination {
+            validate_destination(destination)?;
+        }
         if let Some(namespace) = &self.namespace {
             validate_plugin_identifiers(namespace, "name").map_err(|e| e.to_string())?;
         }
@@ -590,6 +677,8 @@ pub fn translate_plugin_json(
         config: None,
         config_schema: plugin_json.config_schema.as_ref().map(sorted),
         default_config: plugin_json.default_config.as_ref().map(sorted),
+        accepts: Vec::new(),
+        destination: None,
         name: Some(plugin_json.name.clone()),
         namespace: Some(plugin_json.namespace.clone()),
         version: Some(plugin_json.version.clone()),
@@ -705,6 +794,190 @@ impl ProxyRelative {
     }
 }
 
+/// A class or property shortname: lower-case letters and digits in
+/// dash-separated groups.
+fn is_shortname(value: &str) -> bool {
+    value.split('-').all(|part| {
+        !part.is_empty()
+            && part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    })
+}
+
+/// A `destination.tables` key, read back by the plugin as `config.tables.<key>`:
+/// a lower-case letter, then letters and digits, at most 64. Keys that would
+/// shadow an `Object.prototype` member in the plugin are refused.
+fn is_table_key(value: &str) -> bool {
+    const RESERVED: [&str; 7] = [
+        "constructor",
+        "hasOwnProperty",
+        "isPrototypeOf",
+        "propertyIsEnumerable",
+        "toLocaleString",
+        "toString",
+        "valueOf",
+    ];
+    value.len() <= 64
+        && value.starts_with(|c: char| c.is_ascii_lowercase())
+        && value.chars().all(|c| c.is_ascii_alphanumeric())
+        && !RESERVED.contains(&value)
+}
+
+/// Checks a manifest's `destination` with the rules, and the messages, of
+/// `validateDestination` in `browser/lib/src/plugin-manifest.ts`. Both are
+/// held to `testdata/plugin-manifest/index.json`.
+fn validate_destination(entry: &serde_json::Value) -> Result<(), String> {
+    use serde_json::{Map, Value};
+    use std::collections::HashSet;
+
+    fn fail(message: &str) -> String {
+        format!("destination: {message}")
+    }
+    fn object<'a>(
+        value: Option<&'a Value>,
+        keys: Option<&[&str]>,
+    ) -> Result<&'a Map<String, Value>, String> {
+        let Some(Value::Object(map)) = value else {
+            return Err(fail("expected a map"));
+        };
+        if let Some(keys) = keys {
+            if let Some(key) = map.keys().find(|key| !keys.contains(&key.as_str())) {
+                return Err(fail(&format!("unknown field `{key}`")));
+            }
+        }
+        Ok(map)
+    }
+    fn text(value: Option<&Value>, what: &str) -> Result<String, String> {
+        match value {
+            Some(Value::String(text))
+                if !text.trim().is_empty() && text.encode_utf16().count() <= 1024 =>
+            {
+                Ok(text.clone())
+            }
+            _ => Err(fail(&format!("{what} must be nonempty text"))),
+        }
+    }
+    fn shortnames(value: Option<&Value>, what: &str) -> Result<Vec<String>, String> {
+        let Some(value) = value else {
+            return Ok(Vec::new());
+        };
+        let Value::Array(items) = value else {
+            return Err(fail(&format!("{what} must be a list")));
+        };
+        items
+            .iter()
+            .map(|item| match item {
+                Value::String(name) if is_shortname(name) => Ok(name.clone()),
+                _ => Err(fail(&format!("{what} must list shortnames"))),
+            })
+            .collect()
+    }
+
+    let entry = object(Some(entry), Some(&["schema", "table", "tables"]))?;
+    let schema = object(entry.get("schema"), Some(&["properties", "classes"]))?;
+    let (Some(Value::Array(properties)), Some(Value::Array(classes))) =
+        (schema.get("properties"), schema.get("classes"))
+    else {
+        return Err(fail("schema needs properties and classes lists"));
+    };
+
+    let mut known = HashSet::new();
+    for raw in properties {
+        let property = object(
+            Some(raw),
+            Some(&["shortname", "name", "description", "datatype"]),
+        )?;
+        let shortname = text(property.get("shortname"), "property shortname")?;
+        if !is_shortname(&shortname) {
+            return Err(fail(&format!("invalid shortname {shortname}")));
+        }
+        let datatype = text(property.get("datatype"), "property datatype")?;
+        let supported = datatype
+            .strip_prefix("https://atomicdata.dev/datatypes/")
+            .is_some_and(|name| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphabetic()));
+        if !supported {
+            return Err(fail(&format!("unsupported datatype {datatype}")));
+        }
+        text(property.get("name"), "property name")?;
+        text(property.get("description"), "property description")?;
+        known.insert(shortname);
+    }
+    if known.len() != properties.len() || known.len() > 64 {
+        return Err(fail("property shortnames must be unique, at most 64"));
+    }
+
+    let mut class_names = HashSet::new();
+    for raw in classes {
+        let class = object(
+            Some(raw),
+            Some(&["shortname", "name", "description", "requires", "recommends"]),
+        )?;
+        let shortname = text(class.get("shortname"), "class shortname")?;
+        if !is_shortname(&shortname) {
+            return Err(fail(&format!("invalid shortname {shortname}")));
+        }
+        let requires = shortnames(class.get("requires"), "requires")?;
+        let recommends = shortnames(class.get("recommends"), "recommends")?;
+        if requires
+            .iter()
+            .chain(&recommends)
+            .any(|name| !known.contains(name))
+        {
+            return Err(fail(&format!(
+                "class {shortname} names an undeclared property"
+            )));
+        }
+        text(class.get("name"), "class name")?;
+        text(class.get("description"), "class description")?;
+        class_names.insert(shortname);
+    }
+    if classes.is_empty() || classes.len() > 8 || class_names.len() != classes.len() {
+        return Err(fail("declare one to eight uniquely named classes"));
+    }
+
+    // Checks one declared table and returns its row class.
+    let table = |raw: &Value| -> Result<String, String> {
+        let declared = object(Some(raw), Some(&["name", "rowClass", "columns"]))?;
+        let row_class = text(declared.get("rowClass"), "table rowClass")?;
+        if !class_names.contains(&row_class) {
+            return Err(fail("table rowClass must name a class in schema"));
+        }
+        let columns = shortnames(declared.get("columns"), "table columns")?;
+        if columns.iter().any(|name| !known.contains(name)) {
+            return Err(fail("table columns must name properties in schema"));
+        }
+        text(declared.get("name"), "table name")?;
+        Ok(row_class)
+    };
+
+    if entry.get("table").is_none() && entry.get("tables").is_none() {
+        return Err(fail("declare `table` or `tables`"));
+    }
+    let mut row_classes = Vec::new();
+    if let Some(primary) = entry.get("table") {
+        row_classes.push(table(primary)?);
+    }
+    if let Some(tables) = entry.get("tables") {
+        let tables = object(Some(tables), None)?;
+        if tables.is_empty() {
+            return Err(fail("tables must not be empty"));
+        }
+        for (key, declared) in tables {
+            if !is_table_key(key) {
+                return Err(fail(
+                    "table keys must be identifiers of letters and digits starting with a lower-case letter, at most 64",
+                ));
+            }
+            row_classes.push(table(declared)?);
+        }
+    }
+    if row_classes.iter().collect::<HashSet<_>>().len() != row_classes.len() {
+        return Err(fail("each table needs its own rowClass"));
+    }
+    Ok(())
+}
+
 fn exact_origin(value: &str, what: &str) -> Result<(), String> {
     let parsed = endpoint(value)?;
     if parsed.origin().ascii_serialization() != value {
@@ -725,6 +998,42 @@ mod tests {
             panic!("{path}: {e}");
         }))
         .unwrap()
+    }
+
+    /// Checking `destination` more strictly must not move a release id: the
+    /// declaration is carried verbatim. The single-table id is the one
+    /// `release-ids.json` pins on the atomic-plugins pin branch.
+    #[test]
+    fn destination_fixtures_keep_their_release_ids() {
+        for (file, pinned) in [
+            (
+                "v2-accepts-destination.json",
+                "blake3:4d41ebf175cb12e05339b85698a8d9b91485523728826485025af20c51ace3ea",
+            ),
+            (
+                "v2-destination-tables.json",
+                "blake3:7ac2291a55e8bbe11c26bc0ce413173b3527e85505dbdd7d9f9fd167afeb421d",
+            ),
+            (
+                "v2-destination-tables-only.json",
+                "blake3:ed8b010912f877717c191a10dd2975c2bb216f8108dc832a88e79571d3d9ed63",
+            ),
+        ] {
+            let manifest = Manifest::parse(fixture(file)).unwrap().unwrap();
+            assert_eq!(
+                manifest.destination.as_ref(),
+                fixture(file).get("destination"),
+                "{file}"
+            );
+            let id = atomic_lib::db::plugin_release::PluginRelease::js(
+                "export function run() {}".into(),
+                serde_json::json!(manifest),
+                Default::default(),
+            )
+            .id()
+            .unwrap();
+            assert_eq!(id, pinned, "{file}");
+        }
     }
 
     #[test]

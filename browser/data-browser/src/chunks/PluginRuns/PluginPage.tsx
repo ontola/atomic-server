@@ -40,6 +40,7 @@ import { PluginSecrets } from './PluginSecrets';
 import { PluginRunHistory } from './PluginRunHistory';
 import { PluginSchedule } from './PluginSchedule';
 import { RunPluginDialog } from './RunPluginDialog';
+import { FileImport } from './FileImport';
 import { usePluginManifest, usePluginSource } from './runScript';
 import { originsMentionedIn, secretsMentionedIn } from '@tomic/react';
 
@@ -75,6 +76,10 @@ export function PluginPage({
   const manifest = usePluginManifest(source);
   const connection = useIntegrationConnection(resource.subject, drive);
   const automation = useAutomationTrigger(resource.subject, drive);
+  // A plugin that declares `accepts` is started with a file, not a Run button,
+  // a schedule or a trigger: without one it has nothing to work on.
+  const fileImport =
+    !connection && !automation && (manifest.accepts?.length ?? 0) > 0;
   const [dataTable, setDataTable] = useState<string>();
   useEffect(() => {
     let active = true;
@@ -138,7 +143,13 @@ export function PluginPage({
           tabs={[
             {
               value: 'manage',
-              label: connection ? 'Sync' : automation ? 'Automation' : 'Run',
+              label: connection
+                ? 'Sync'
+                : automation
+                  ? 'Automation'
+                  : fileImport
+                    ? 'Import'
+                    : 'Run',
             },
             ...(!automation
               ? [{ value: 'automations', label: 'Automations' }]
@@ -150,7 +161,15 @@ export function PluginPage({
         >
           <Panel value='manage'>
             <Column gap='1.5rem'>
-              {!connection && !automation && (
+              {fileImport && (
+                <FileImport
+                  resource={resource}
+                  drive={drive}
+                  source={source}
+                  manifest={manifest}
+                />
+              )}
+              {!connection && !automation && !fileImport && (
                 <Button onClick={run}>
                   <FaPlay aria-hidden /> Run
                 </Button>
@@ -173,7 +192,7 @@ export function PluginPage({
                   drive={drive}
                   definition={connection}
                 />
-              ) : !automation ? (
+              ) : !automation && !fileImport ? (
                 <PluginSchedule
                   plugin={resource.subject}
                   drive={drive}
@@ -184,7 +203,7 @@ export function PluginPage({
                   reviewedNonce={reviewedNonce}
                 />
               ) : null}
-              {!connection && (
+              {!connection && !fileImport && (
                 <PluginTrigger
                   plugin={resource.subject}
                   drive={drive}
