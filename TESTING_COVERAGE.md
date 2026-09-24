@@ -344,6 +344,32 @@ e2e-tested. Not covered: DPoP and `auth: atomic` (not implemented), ECDSA
 keys, and a real remote key fetch (the egress fetcher is only tested
 refusing).
 
+Delivery queue (#1719): `server/src/plugins/route_delivery_test.rs` runs the
+queue against a fake installation with a loopback stub (through the real
+egress transport, with its loopback test seam) or a scripted transport:
+enqueue, send and settle; the egress guard refusing loopback without the
+seam and private and metadata addresses with it (dead letters, one attempt);
+backoff with jitter per attempt up to the dead letter after 12; which
+answers retry (`5xx`, `429` with `Retry-After` holding the host, timeouts as
+uncertain) and which end the job (`404`, redirects); a job surviving a
+reopened store, with the attempt that was in flight retried as uncertain;
+the daily cap deferring to the next UTC day without dropping; at most two
+requests in flight per destination host; idempotency keys (explicit, and
+derived from the content) while queued, after delivery and once forgotten;
+held and resumed jobs, and a gone installation's jobs dropped; RSA (cavage)
+and Ed25519 (RFC 9421) signatures verified against the installation's public
+key; the refusals of `prepare`. Through the app with the inbox fixture's
+`POST /deliver`: a route enqueues, the worker sends a signed POST that
+verifies with the key `/actor` publishes, `/plugin-route-status` shows the
+queue before and after; a refused delivery refuses the whole verdict,
+intents included; pausing holds and revoking drops; a restart at
+`read-only` degrades the installation and holds its jobs, and a restart at
+`read-write` sends them. `tests/it/plugin_routes.rs` has a real server's
+worker deliver a signed POST to a loopback receiver. Not covered: more than
+16 deliveries in flight, the queue-full `503`, a DNS name that resolves to a
+private address (only literal addresses are tested), and enqueues from query
+triggers (not implemented).
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

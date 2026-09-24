@@ -662,6 +662,32 @@ impl Manifest {
                 && matches_path(endpoint.path(), url.path())
         })
     }
+
+    /// Whether a delivery of operation `id` may go to `url`: a declared
+    /// write operation with this method, whose URL is this origin, or a
+    /// wildcard host (`https://*/inbox`, design 2.2 and D5) with this scheme.
+    /// The path must match either way. Which operations a route may enqueue
+    /// at all is its `enqueues` list; the egress guard still checks the
+    /// address.
+    pub fn allows_delivery(&self, id: &str, method: &str, url: &url::Url) -> bool {
+        self.operations.iter().any(|operation| {
+            if operation.id != id
+                || !operation.method.eq_ignore_ascii_case(method)
+                || operation.effect != "write"
+            {
+                return false;
+            }
+            let Ok(endpoint) = url::Url::parse(&operation.url) else {
+                return false;
+            };
+            let origin = if endpoint.host_str() == Some("*") {
+                endpoint.scheme() == url.scheme()
+            } else {
+                endpoint.origin() == url.origin()
+            };
+            origin && matches_path(endpoint.path(), url.path())
+        })
+    }
 }
 
 /// Version three: public endpoints, the gate they need, and the derived

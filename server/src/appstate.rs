@@ -51,6 +51,10 @@ pub struct AppState {
     /// `plugins::route_exec`.
     #[cfg(feature = "plugin-routes")]
     pub route_exec: Arc<plugins::route_exec::RouteExecutor>,
+    /// The durable queue of route-enqueued deliveries; see
+    /// `plugins::route_delivery`. Its worker runs only at `read-write`.
+    #[cfg(feature = "plugin-routes")]
+    pub route_delivery: Arc<plugins::route_delivery::DeliveryQueue>,
 }
 
 impl AppState {
@@ -305,6 +309,18 @@ impl AppState {
             plugins::route_exec::RouteExecutor::default()
                 .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts)),
         );
+        #[cfg(feature = "plugin-routes")]
+        let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(
+            store.clone(),
+            config.opts.plugin_route_deliveries_per_day,
+            Arc::new(plugins::route_delivery::RegistryHost {
+                registry: route_registry.clone(),
+                db: store.clone(),
+            }),
+            Arc::new(plugins::route_delivery::EgressTransport {
+                loopback: config.plugin_delivery_loopback,
+            }),
+        ));
         Ok(AppState {
             store,
             config,
@@ -319,6 +335,8 @@ impl AppState {
             route_registry,
             #[cfg(feature = "plugin-routes")]
             route_exec,
+            #[cfg(feature = "plugin-routes")]
+            route_delivery,
         })
     }
 

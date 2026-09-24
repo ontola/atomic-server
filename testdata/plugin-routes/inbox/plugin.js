@@ -22,7 +22,18 @@
 //   `/inbox`, and answers with the verified `request.caller`.
 // - `POST /outbox` with `{ to, activity }` has the host sign a delivery to
 //   `to` and answers with the signed headers. Only a fixture hands out
-//   signatures: a real plugin enqueues the delivery (AS-09).
+//   signatures: a real plugin enqueues the delivery, as `/deliver` does.
+//
+// Deliveries (AS-09, #1719):
+//
+// - `POST /deliver` with `{ to, activity, id?, operation?, unsigned?, note? }`
+//   enqueues a POST of `activity` to `to`, signed by the host with
+//   `actor-key` unless `unsigned`, with `id` as its idempotency key. The
+//   operation is `deliver` (`https://*/inbox`) unless named: the tests use
+//   `deliver-local` (`http://*/inbox`) to reach a stub on loopback. With
+//   `note`, the same verdict also stores an item, so the tests can check a
+//   refused delivery leaves nothing behind. `extra` is added to the
+//   enqueued delivery as-is, for the refusal tests.
 // - `GET /storage/{*rest}` (`auth: bearer`) answers with the caller.
 // - `GET /oauth?scope&client_id&state` redirects to the host's consent page;
 //   `GET /oauth/callback` redeems the code it sends back for a token.
@@ -120,6 +131,34 @@ export function handle(ctx, request) {
           request: { method: 'POST', url: body.to, body: body.activity },
         }),
       );
+    case 'POST deliver':
+      return {
+        response: reply(202, { queued: true }),
+        intents: body.note
+          ? [
+              {
+                op: 'create',
+                localId: 'note',
+                parent: ctx.config.inbox,
+                isA: [PLAIN_TEXT],
+                set: { [NAME]: body.note, [DESCRIPTION]: 'sent' },
+              },
+            ]
+          : [],
+        enqueue: [
+          {
+            operation: body.operation || 'deliver',
+            url: body.to,
+            headers: { 'content-type': 'application/activity+json' },
+            body: body.activity,
+            sign: body.unsigned
+              ? undefined
+              : { key: 'actor-key', keyId: `${request.base}/actor#main-key` },
+            idempotencyKey: body.id,
+            ...(body.extra || {}),
+          },
+        ],
+      };
     case 'GET storage':
       return reply(200, { caller: request.caller, path: request.params.rest });
     case 'GET oauth': {

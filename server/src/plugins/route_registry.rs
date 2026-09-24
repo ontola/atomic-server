@@ -1157,6 +1157,7 @@ impl RouteRegistry {
                 _ => {
                     self.retire(&subject, now);
                     persist(store, &subject, Some(now));
+                    super::route_delivery::drop_installation(store, &subject);
                     continue;
                 }
             }
@@ -1259,6 +1260,12 @@ impl RouteRegistry {
             if keys + tokens > 0 {
                 tracing::info!(%subject, keys, tokens, "erased plugin route keys and tokens");
             }
+            // Its queued deliveries go too (#1719): nobody may send in the
+            // name of a revoked installation.
+            let deliveries = super::route_delivery::drop_installation(store, &subject);
+            if deliveries > 0 {
+                tracing::info!(%subject, deliveries, "dropped queued plugin deliveries");
+            }
             return;
         }
         if status == STATUS_PAUSED || status == STATUS_DRAFT {
@@ -1284,6 +1291,8 @@ impl RouteRegistry {
             _ => tracing::info!(%subject, slug = %slug(&subject), "plugin routes registered"),
         }
         persist(store, &subject, None);
+        // Deliveries held while it was paused go out again.
+        super::route_delivery::resume(store, &subject, atomic_lib::utils::now());
         // Keys are generated on activation, on the node that serves the
         // routes (design 2.9, D3). An upgrade keeps them.
         let keys = manifest
@@ -1398,7 +1407,7 @@ fn string_value(resource: &Resource, prop: &str) -> Option<String> {
 
 /// The versioned manifest of the release the Installation pins, from this
 /// node's release cache.
-fn pinned_manifest(store: &Db, resource: &Resource) -> Option<Manifest> {
+pub(crate) fn pinned_manifest(store: &Db, resource: &Resource) -> Option<Manifest> {
     let id = string_value(resource, urls::RELEASE_ID)?;
     let release = store.get_plugin_release(&id).ok()?;
     Manifest::parse(release.manifest).ok().flatten()

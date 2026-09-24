@@ -82,6 +82,10 @@ pub mod route_auth;
 #[cfg(all(test, feature = "plugin-routes"))]
 mod route_crypto_test;
 #[cfg(feature = "plugin-routes")]
+pub mod route_delivery;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_delivery_test;
+#[cfg(feature = "plugin-routes")]
 pub mod route_exec;
 #[cfg(feature = "plugin-routes")]
 pub mod route_keys;

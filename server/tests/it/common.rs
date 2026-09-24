@@ -13,6 +13,17 @@ pub fn start_server(name: &str) -> u16 {
 /// `start_server` with extra CLI flags appended, for suites that exercise a
 /// non-default option (a small rate limit, a host mode).
 pub fn start_server_with_args(name: &str, extra_args: &[&str]) -> u16 {
+    start_server_with(name, extra_args, |_| {})
+}
+
+/// `start_server_with_args`, with `configure` applied to the built config:
+/// for test seams that are deliberately not command-line options.
+#[allow(dead_code)]
+pub fn start_server_with(
+    name: &str,
+    extra_args: &[&str],
+    configure: impl FnOnce(&mut atomic_server::config::Config),
+) -> u16 {
     let unique = format!("{}_{}", name, atomic_lib::utils::random_string(10));
     let port = pick_port();
 
@@ -41,6 +52,7 @@ pub fn start_server_with_args(name: &str, extra_args: &[&str]) -> u16 {
 
     let mut config = atomic_server::config::build_config(opts).expect("config failed");
     config.search_index_path = format!("./.temp/{unique}/search").into();
+    configure(&mut config);
 
     std::thread::spawn(move || {
         let rt = actix_web::rt::System::new();
