@@ -841,7 +841,7 @@ export function GettingStartedFlow({
           </OnboardingWrap>
         </Swap>
       ) : step === 'welcome' ? (
-        <CenteredSwap key='welcome'>
+        <WelcomeSwap key='welcome'>
           <WelcomeStack>
             <VisuallyHiddenH1 key='heading'>AtomicServer</VisuallyHiddenH1>
             {/* alt='' because the heading above already names the app. */}
@@ -943,7 +943,7 @@ export function GettingStartedFlow({
               </CardError>
             ) : null}
           </WelcomeStack>
-        </CenteredSwap>
+        </WelcomeSwap>
       ) : step === 'signin' ? (
         <Swap key='signin'>
           <OnboardingWrap>
@@ -1489,10 +1489,11 @@ const Swap = styled.div`
   }
 `;
 
-/* The welcome choice is short and has nothing below it, so it sits in the
-   middle of the screen rather than at the top like the forms. Auto margins
-   (not justify-content) keep it scrollable when it outgrows a small screen. */
-const CenteredSwap = styled(Swap)`
+/* The one step that is a landing, not a form: center it in the viewport.
+   Auto margins (not justify-content) so a phone too short for it still
+   scrolls from the top instead of clipping the logo. Doubled specificity to
+   beat Shell's top-aligning margin reset for its children. */
+const WelcomeSwap = styled(Swap)`
   && {
     margin-block: auto;
   }
