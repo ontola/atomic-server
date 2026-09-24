@@ -1,4 +1,5 @@
 import { styled } from 'styled-components';
+import { Logo } from './Logo';
 import type { JSX, ReactNode } from 'react';
 
 /** Height of the bar; the layout below it reserves the same space. */
@@ -7,9 +8,9 @@ export const SETUP_BAR_HEIGHT = '3.5rem';
 /**
  * The one bar shown while someone is setting up: in the demo, in a template
  * preview, in the template gallery and on the naming step. Every step looks
- * the same: what this step is on the left, what you can do on the right,
- * secondary actions first and the primary one last. Where the buttons are
- * never depends on which step you are on.
+ * the same: the logo and what this step is on the left, what you can do on
+ * the right, secondary actions first and the primary one last. Where the
+ * buttons are never depends on which step you are on.
  */
 export function SetupBar({
   title,
@@ -20,6 +21,7 @@ export function SetupBar({
 }): JSX.Element {
   return (
     <Bar role='region' aria-label='Setup'>
+      <BarLogo />
       <Title>{title}</Title>
       <Actions>{children}</Actions>
     </Bar>
@@ -62,8 +64,16 @@ const Bar = styled.div`
   }
 `;
 
+const BarLogo = styled(Logo)`
+  /* Shrinks before the buttons do, so a phone keeps room for two of them. */
+  flex: 0 1 9rem;
+  min-width: 4.5rem;
+`;
+
 const Title = styled.div`
   flex: 1;
+  padding-left: 1rem;
+  border-left: 1px solid ${p => p.theme.colors.bg2};
   min-width: 0;
   font-weight: 600;
   overflow: hidden;

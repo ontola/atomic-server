@@ -7,7 +7,6 @@ import { useSettings } from '../helpers/AppSettings';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { Shell } from '../views/getting-started/chrome';
-import { Logo } from '../components/Logo';
 import { Button } from '../components/Button';
 import {
   demoForDrive,
@@ -90,7 +89,6 @@ function NewDrivePage(): JSX.Element {
   return (
     <Shell>
       <SetupContent>
-        <Logo style={{ width: '14rem', maxWidth: '55%' }} />
         <DriveTemplateSetup
           renderBar={({ naming, back, busy, create }) => (
             <FixedBar>
