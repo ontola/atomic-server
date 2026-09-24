@@ -212,12 +212,15 @@ export {
   type PluginManifestV3,
 } from './plugin-manifest.js';
 export {
+  checkGate,
   checkHostFeatures,
   derivedRequires,
   hostFeatureMessage,
   httpGate,
   isWildcardHost,
   parseHostFeatureUnavailable,
+  parsePluginRoutesStatus,
+  requiresGate,
   HOST_FEATURE_UNAVAILABLE,
   HostFeatureUnavailableError,
   type DeclaredHttp,
@@ -283,6 +286,7 @@ export {
 export {
   installRelease,
   updateInstallationRelease,
+  withdrawRouteWriteRights,
   publishZipRelease,
   readInstallationReview,
   grantsFor,
@@ -297,6 +301,22 @@ export {
   type ReleaseReference,
   type ReviewCapability,
 } from './plugin-install.js';
+export {
+  ROUTE_WRITES_GRANT,
+  UnresolvedWriteTargetError,
+  capabilityGrantNames,
+  fetchPluginAgent,
+  giveRouteWriteRights,
+  grantsWithRouteWrites,
+  newWriteTargets,
+  removeRouteWriteRights,
+  resolveWriteTargetParent,
+  resolveWriteTargetParents,
+  routeGrantOf,
+  routeWriteParentsOf,
+  routeWriteRightsDiff,
+  type InstallationGrant,
+} from './plugin-route-grant.js';
 export * from './integration-actions.js';
 
 export { taskSchema } from './task-schema.js';
