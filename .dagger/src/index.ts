@@ -1501,6 +1501,12 @@ export class AtomicServer {
           '/code/browser/e2e/tests/fixtures/test-plugin.zip',
           source.file('browser/e2e/tests/fixtures/test-plugin.zip'),
         )
+        // `atomic_lib`'s tests `include_str!` the browser copy of the v2
+        // signature vectors to catch the two copies drifting apart.
+        .withFile(
+          '/code/browser/lib/src/authentication_v2_vectors.json',
+          source.file('browser/lib/src/authentication_v2_vectors.json'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
