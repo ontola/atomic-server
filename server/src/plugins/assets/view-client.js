@@ -60,6 +60,13 @@ function send(op, payload) {
  */
 function makeResource(subject, propVals) {
   const props = { ...propVals };
+  // Set and removed since the last save. `save` sends only these: the rest
+  // is what the host already has (re-sending it would also write back
+  // whatever the host keeps alongside, and undo a removal). Removals go apart
+  // from the values: the host's save only sets, so leaving a property out
+  // would keep it.
+  const changed = new Set();
+  const removed = new Set();
   let destroyed = false;
 
   return {
@@ -72,18 +79,26 @@ function makeResource(subject, propVals) {
     },
     set(property, value) {
       props[property] = value;
+      changed.add(property);
+      removed.delete(property);
 
       return this;
     },
     remove(property) {
       delete props[property];
+      changed.delete(property);
+      removed.add(property);
 
       return this;
     },
     async save() {
       if (destroyed) throw new Error('This resource was destroyed.');
 
-      await send('save', { subject, propVals: props });
+      const remove = [...removed];
+      const propVals = Object.fromEntries([...changed].map(property => [property, props[property]]));
+      await send('save', { subject, propVals, ...(remove.length ? { remove } : {}) });
+      for (const property of remove) removed.delete(property);
+      for (const property of Object.keys(propVals)) changed.delete(property);
 
       return this;
     },
