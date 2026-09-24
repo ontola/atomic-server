@@ -292,7 +292,11 @@ async function writeAsApp(
  * write already succeeded, so a failed refresh is not the view's error.
  */
 async function refresh(store: Store, subject: string): Promise<void> {
-  await store.fetchResourceFromServer?.(subject).catch(() => undefined);
+  // Replace rather than merge: a merge keeps properties the write removed.
+  // `applyIncoming` still refuses to clobber unsaved local edits.
+  await store
+    .fetchResourceFromServer?.(subject, { forceOverride: true })
+    .catch(() => undefined);
 }
 
 /**
