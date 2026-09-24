@@ -172,10 +172,30 @@ export const test = base.extend<{
 
 export default test;
 
-/** Isolated UI fixtures do not depend on the public discovery service. */
+/** Isolated UI fixtures do not depend on the public discovery service.
+ *
+ * The host list has to track `defaultPeerSignalingUrl`
+ * (data-browser/src/helpers/browserPeerSync.ts), which picks the SaaS portal
+ * for the origin the app is served from. It answers `atomic.place` for every
+ * origin except staging, and an e2e app is served from localhost, so that is
+ * the one this fixture meets. When #1699 introduced that default the pattern
+ * here still named `atomicserver.eu` alone, the stub stopped matching, and
+ * every context dialled production instead: a single unroutable websocket
+ * that the diagnostics fixture turns into a console error, failing tests that
+ * have nothing to do with peers. Twelve of nineteen in a five-spec mix here,
+ * three runs of three, on meetings, saved-drives, second-device-load and
+ * sign-in-without-data.
+ *
+ * It only shows up where that host is unreachable. On a machine that CAN
+ * reach atomic.place the socket connects, nothing is logged, and the suite
+ * looks fine while quietly depending on the public service this fixture
+ * exists to remove. That is the more expensive half of the bug, and it is why
+ * the hosts are matched by name rather than the whole path pattern: a local
+ * signaling server, which some setups point at, must still reach its socket.
+ */
 export async function installEmptyDiscoveryRoom(context: BrowserContext) {
   await context.routeWebSocket(
-    /^wss:\/\/(?:staging\.)?atomicserver\.eu\/webrtc-signal$/,
+    /^wss:\/\/(?:(?:staging\.)?atomicserver\.eu|atomic\.place)\/webrtc-signal$/,
     socket => {
       socket.onMessage(message => {
         if (
