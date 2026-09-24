@@ -84,6 +84,35 @@ pub fn connections_of(
     Ok(Some(map))
 }
 
+/// The connection delegated to `installation` for `platform`, if any. Refuses
+/// an id that could not be one path segment of a proxy URL, since it is put
+/// into one verbatim.
+pub async fn delegated_connection(
+    db: &Db,
+    installation: &str,
+    platform: &str,
+) -> Result<Option<String>, String> {
+    let resource = db
+        .get_resource(&installation.into())
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(connections) = connections_of(&resource).map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    let Some(id) = connections.get(platform).and_then(|id| id.as_str()) else {
+        return Ok(None);
+    };
+    if !id
+        .bytes()
+        .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+    {
+        return Err(format!(
+            "the connection delegated for {platform} is not a connection id"
+        ));
+    }
+    Ok(Some(id.to_string()))
+}
+
 /// What an Installation commit may not do to these properties. Called from
 /// the Installation's before-commit hook, before the store has the new state.
 pub async fn check_commit(
