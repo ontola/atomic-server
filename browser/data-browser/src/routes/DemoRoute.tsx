@@ -14,6 +14,12 @@ import { Button } from '../components/Button';
 import * as Sentry from '@sentry/react';
 import type { DemoSetupStep } from '../chunks/Demo/startDemo';
 import type { DemoManifest } from '../chunks/Demo/demoWorkspace';
+import { localAgentIsDisposable } from '../helpers/managed/reconcile';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
+import { withDeadline } from '../helpers/withDeadline';
+import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { readDemoDrive } from '../components/DemoExitButton';
+import { paths } from './paths';
 
 // Setup takes seconds on a laptop and several times that on a phone. Past
 // this, say so and offer a way out rather than spin forever: a phone in an
@@ -52,18 +58,52 @@ function updateRun(patch: Partial<DemoRun>): void {
   for (const listener of listeners) listener();
 }
 
+/**
+ * The drive a signed-in visitor lands on instead of the demo: the one open
+ * now unless that is a demo drive, else their home. Undefined when neither
+ * resolves, which sends them to the drive gallery.
+ */
+async function signedInDrive(
+  store: Store,
+  currentDrive: string | undefined,
+): Promise<string | undefined> {
+  const agent = store.getAgent();
+  if (!agent?.subject) return undefined;
+  // Guests and identities without a workspace keep getting the demo.
+  if (await localAgentIsDisposable(store, agent.subject)) return undefined;
+
+  const demoDrive = readTemplateDemo()?.drive ?? readDemoDrive();
+  if (currentDrive && currentDrive !== demoDrive) return currentDrive;
+
+  return (
+    (await withDeadline(
+      fetchPrivateDriveSubject(store, agent).catch(() => undefined),
+      2_500,
+      undefined,
+    )) ?? paths.newDrive
+  );
+}
+
 function startRun(
   store: Store,
+  currentDrive: string | undefined,
   onReady: (manifest: DemoManifest) => void,
+  onSignedIn: (target: string) => void,
 ): void {
   run = { startedAt: Date.now(), done: false, reported: false };
-  import('../chunks/Demo/startDemo')
-    .then(({ startDemoWorkspace }) =>
-      startDemoWorkspace(store, step => updateRun({ step })),
-    )
-    .then(manifest => {
+  // Someone with an account who follows "Try the app" wants their own
+  // workspace, not a scripted one built next to it.
+  signedInDrive(store, currentDrive)
+    .then(async target => {
+      if (target) return target;
+      const { startDemoWorkspace } = await import('../chunks/Demo/startDemo');
+
+      return startDemoWorkspace(store, step => updateRun({ step }));
+    })
+    .then(result => {
       updateRun({ done: true });
-      onReady(manifest);
+      if (typeof result === 'string') onSignedIn(result);
+      else onReady(result);
     })
     .catch(e => {
       updateRun({
@@ -81,7 +121,7 @@ function startRun(
  */
 const DemoRoute: React.FC = () => {
   const store = useStore();
-  const { setSideBarLocked } = useSettings();
+  const { setSideBarLocked, drive, setDrive } = useSettings();
   const navigate = useNavigateWithTransition();
   const [current, setCurrent] = useState<DemoRun | undefined>(run);
   const [stalled, setStalled] = useState(false);
@@ -105,10 +145,24 @@ const DemoRoute: React.FC = () => {
     // Re-running the demo must always start fresh, so only a run still in
     // progress is joined.
     if (!run || run.done || run.error) {
-      startRun(store, manifest => {
-        if (window.innerWidth < SIDEBAR_TOGGLE_WIDTH) setSideBarLocked(true);
-        navigate(constructOpenURL(manifest.welcomeDoc));
-      });
+      startRun(
+        store,
+        drive,
+        manifest => {
+          if (window.innerWidth < SIDEBAR_TOGGLE_WIDTH) setSideBarLocked(true);
+          navigate(constructOpenURL(manifest.welcomeDoc));
+        },
+        target => {
+          if (target === paths.newDrive) {
+            navigate(target);
+
+            return;
+          }
+
+          setDrive(target);
+          navigate(constructOpenURL(target));
+        },
+      );
     }
 
     const sync = () => setCurrent(run);
