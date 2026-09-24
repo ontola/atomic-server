@@ -245,7 +245,7 @@ the shared fixture `testdata/plugin-routes/hello-route/` at every build and
 level. `lib/src/commit.rs` checks, in every build, that nothing can be created
 under `/_routes/`. `tests/it/plugin_routes.rs` (only with `--features
 plugin-routes`) installs over HTTP on a real server and gets both mounts'
-answers, the fixture's `Hello, world` among them. Not covered: `drive-host` (#1716), removed
+answers, the fixture's `Hello, world` among them. Not covered: removed
 routes answering `410` after an upgrade, and a peer `COMMIT` applied outside a
 sync import scope (the owner check relies on that scope).
 
@@ -260,6 +260,24 @@ counts. `route_levels_test.rs` gets `200 Hello, alice` at both open levels;
 covered: the `installation` principal's reads, `ctx.http` from a route, the
 pool and per-installation concurrency limits under real load, and the
 `/plugin-route-status` endpoint over HTTP (its counts are unit-tested).
+
+Well-known claims and the `drive-host` mount (#1716): `route_registry.rs` unit
+tests dispatch claims on a drive's hosts, an installation's own origin and
+(with the operator's grant) the API origin; `webfinger` by `resourcePrefix`
+(404 unmatched, 400 without `resource`), generated `host-meta`; a second
+exclusive claim or an overlapping prefix refused naming the holder;
+server-owned and unlisted names refused; the paths a `drive-host` route may
+not take; nothing at level `off`. `handlers/plugin_routes.rs` runs the shared
+fixture `testdata/plugin-routes/well-known/` on a host bound to the drive
+(nodeinfo, webfinger, host-meta, fall-through to the drive, not on the API
+origin, gone when paused), two installations sharing `webfinger` each running
+only for their own queries, install-time refusals, and the drive-owner and
+resource-path checks. `route_levels_test.rs` runs that fixture at every build
+and level; `tests/it/plugin_routes.rs` gets nodeinfo, webfinger (with CORS)
+and host-meta from a claimed name on a real server. Not covered: a
+`drive-host` route or claim over HTTP on a real server (binding a host needs a
+signed `/bind-drive` on that host), and resources created later at a route's
+path (they are shadowed on the drive's hosts by design).
 
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls

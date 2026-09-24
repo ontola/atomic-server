@@ -193,6 +193,21 @@ pub fn hello_route_release() -> atomic_lib::db::plugin_release::PluginRelease {
     js_release(serde_json::from_str(HELLO_ROUTE_MANIFEST).unwrap())
 }
 
+/// `testdata/plugin-routes/well-known/`: a `drive-host` plugin that claims
+/// `/.well-known/nodeinfo` and `/.well-known/webfinger` (for `acct:`).
+pub const WELL_KNOWN_SOURCE: &str =
+    include_str!("../../../testdata/plugin-routes/well-known/plugin.js");
+pub const WELL_KNOWN_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/well-known/manifest.json");
+
+/// The well-known fixture as a release.
+pub fn well_known_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(
+        WELL_KNOWN_SOURCE,
+        serde_json::from_str(WELL_KNOWN_MANIFEST).unwrap(),
+    )
+}
+
 /// A JS `extension` release of the trivial source with this manifest.
 pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
     js_release_with_source(HELLO_ROUTE_SOURCE, manifest)
