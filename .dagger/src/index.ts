@@ -34,6 +34,14 @@ const TOUCH_WORKSPACE_SOURCES = [
 ];
 
 /**
+ * One stamp per module process, so every call inside one `ci()` shares it.
+ * Stamping per call gave each `wasmBuild()`/`jsBuild()` caller its own graph,
+ * so Dagger could not dedupe them: one run built wasm seven times, all fighting
+ * over the same target volume's cargo lock.
+ */
+const RUN_STAMP = new Date().toISOString();
+
+/**
  * Runs the touch above on every pipeline run. A `withExec` is a cached layer
  * keyed on its inputs, and the Rust sources are the same bytes across many
  * commits, so the touch was replayed from cache with its old mtimes. Any
@@ -45,7 +53,7 @@ const TOUCH_WORKSPACE_SOURCES = [
  */
 function touchWorkspaceSources(container: Container): Container {
   return container
-    .withEnvVariable('ATOMIC_TOUCH_RUN', new Date().toISOString())
+    .withEnvVariable('ATOMIC_TOUCH_RUN', RUN_STAMP)
     .withExec(TOUCH_WORKSPACE_SOURCES);
 }
 
