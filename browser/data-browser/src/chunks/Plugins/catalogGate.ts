@@ -1,6 +1,8 @@
 import {
   checkGate,
   requiresGate,
+  REQUIRES_UNKNOWN,
+  type CatalogRequires,
   type HostFeatureUnavailable,
   type PluginRoutesStatus,
 } from '@tomic/react';
@@ -25,15 +27,22 @@ export interface GatedEntry<T> {
    * shown, marked, and can't be installed.
    */
   refusal?: HostFeatureUnavailable;
+  /**
+   * Set when the server couldn't say what the entry needs (`requires:
+   * "unknown"`: its release isn't cached there and couldn't be read). Shown
+   * and marked, never hidden; the review reads the manifest before install.
+   */
+  unknown?: true;
 }
 
 /**
  * Splits catalog entries by what this node can host (design 0.5):
  * gated entries are hidden when the build has no plugin routes, and marked
  * when the operator hasn't raised the level far enough. Only the entries'
- * derived `requires` is read, so nothing is fetched.
+ * derived `requires` is read, so nothing is fetched. An entry whose
+ * `requires` is unknown is treated conservatively: marked, not hidden.
  */
-export function gateCatalog<T extends { requires?: string[] | null }>(
+export function gateCatalog<T extends { requires?: CatalogRequires }>(
   entries: T[],
   pluginRoutes: PluginRoutesStatus | undefined,
 ): { shown: GatedEntry<T>[]; hidden: number } {
@@ -42,6 +51,11 @@ export function gateCatalog<T extends { requires?: string[] | null }>(
   let hidden = 0;
 
   for (const entry of entries) {
+    if (entry.requires === REQUIRES_UNKNOWN) {
+      shown.push({ entry, unknown: true });
+      continue;
+    }
+
     const refusal = checkGate(requiresGate(entry.requires), node);
 
     if (refusal && !refusal.compiled) hidden++;

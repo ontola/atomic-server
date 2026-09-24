@@ -138,6 +138,12 @@ export const ErrorCode = {
   /** The server rejected a stale Loro write; preserve the local edit and
    *  stop retrying until it can be based on current state. */
   CAUSALITY_CONFLICT: 11,
+  /** A commit activating a plugin Installation (install, upgrade, resume)
+   *  was refused because the release opens public endpoints this node's
+   *  plugin-routes gates don't allow. The message carries the typed problem
+   *  (`AtomicError.problem`). Blocking, not terminal: the operator can open
+   *  the gates. */
+  HOST_FEATURE_UNAVAILABLE: 12,
 } as const;
 
 /** Capability names a server may advertise in its AUTH_OK payload (mirrors

@@ -9,6 +9,8 @@
  * 0.4, 1 and 2.2.
  */
 
+import { AtomicError } from './error.js';
+
 export type RouteMount = 'installation-origin' | 'drive-host' | 'drive-prefix';
 export type RoutePrincipal = 'anonymous' | 'installation' | 'caller';
 export type RouteAuth =
@@ -729,19 +731,38 @@ export function checkHostFeatures(
 }
 
 /**
+ * A catalog entry's `requires` when the server couldn't read or verify the
+ * release (#1743): not in its cache and not derivable in time. Treat it
+ * conservatively: mark the entry, don't hide it, and let the review read the
+ * manifest before anything is installed.
+ */
+export const REQUIRES_UNKNOWN = 'unknown';
+
+/**
+ * `requires` as `/plugin-catalog` sends it: the derived list; null for a
+ * release without versioned declarations, which needs no gate; or
+ * {@link REQUIRES_UNKNOWN}.
+ */
+export type CatalogRequires =
+  | readonly string[]
+  | null
+  | typeof REQUIRES_UNKNOWN;
+
+/**
  * The gate a catalog entry's derived `requires` names (`plugin-routes:<level>`,
  * `operator-listener:<name>`, `operator-sidecar:<name>`), so a client can
  * compare it with `hostFeatures` without fetching the manifest. It carries no
  * surfaces: `requires` doesn't say which endpoints asked for the level.
  */
 export function requiresGate(
-  requires: readonly string[] | null | undefined,
+  requires: CatalogRequires | undefined,
 ): ReleaseGate {
   let top = 0;
   const listeners: string[] = [];
   const sidecars: string[] = [];
 
-  for (const entry of requires ?? []) {
+  // `unknown` says nothing about the gate; callers mark such entries.
+  for (const entry of Array.isArray(requires) ? requires : []) {
     const [kind, value] = [
       entry.slice(0, entry.indexOf(':')),
       entry.slice(entry.indexOf(':') + 1),
@@ -856,6 +877,23 @@ export function parseHostFeatureUnavailable(
     listeners: strings(raw.listeners),
     sidecars: strings(raw.sidecars),
   };
+}
+
+/**
+ * The typed refusal an error carries, as a `HostFeatureUnavailableError`:
+ * the error itself when it already is one (`/plugin-release-pin`'s `409`), or
+ * one built from a refused commit (an Installation's install, upgrade or
+ * resume), whose `AtomicError.problem` holds the same fields. `undefined` for
+ * any other error.
+ */
+export function hostFeatureUnavailableError(
+  error: unknown,
+): HostFeatureUnavailableError | undefined {
+  if (error instanceof HostFeatureUnavailableError) return error;
+  if (!(error instanceof AtomicError)) return undefined;
+  const problem = parseHostFeatureUnavailable(error.problem);
+
+  return problem ? new HostFeatureUnavailableError(problem) : undefined;
 }
 
 /**

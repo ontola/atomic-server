@@ -218,12 +218,21 @@ async fn respond(
 /// - `release`: the `Release` resource URL an Installation pins
 /// - `releaseId`: the `blake3:` id, also what `/plugin-package/{id}` takes
 /// - `runtime` (`atomic-js/1` | `wasip2/1`) and `world` (`extension` |
-///   `server-extension`), from the release; null when it is not in this
-///   node's cache
+///   `server-extension`), from the release; null when it could not be read
 /// - `requires`: derived from the release manifest, e.g.
 ///   `["plugin-routes:read-only", "public-origin", ...]`, so a client can
 ///   compare it with `hostFeatures` without parsing manifests; null when the
-///   release is not cached or has no versioned manifest
+///   manifest has no versioned declarations (it needs no gate); `"unknown"`
+///   when the release could not be read, which a client treats
+///   conservatively: mark the entry, don't hide it.
+///
+/// A release that isn't in this node's cache (a Listing that arrived by sync,
+/// say) is read from the `Release` resource its Listing names and verified
+/// against the listed id ([`release::uncached_release`]). A local one costs a
+/// store read; remote ones are fetched concurrently, at most
+/// [`release::REMOTE_RELEASE_BUDGET`] per request and each within
+/// [`release::REMOTE_RELEASE_TIMEOUT`]. Nothing is cached, so a later
+/// request tries again.
 pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpResponse> {
     let store = &appstate.store;
     let listings = store
@@ -236,10 +245,50 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
         })
         .await?;
     let origin = store.get_server_url();
+    let base_domain = store.get_base_domain();
+    let mut remote_budget = release::REMOTE_RELEASE_BUDGET;
+    let mut lookups = Vec::with_capacity(listings.resources.len());
+    for listing in &listings.resources {
+        let text = |prop: &str| listing.get(prop).ok().map(|v| v.to_string());
+        let release_id = text(urls::RELEASE_ID);
+        let cached = release_id
+            .as_deref()
+            .and_then(|id| store.get_plugin_release(id).ok());
+        lookups.push(match (cached, release_id, text(urls::RELEASE_PROP)) {
+            (Some(cached), _, _) => Lookup::Cached(cached),
+            (None, Some(id), Some(reference)) => {
+                let local =
+                    atomic_lib::Subject::from_raw(&reference, base_domain.as_deref()).is_local();
+                let fetch_remote = !local && remote_budget > 0;
+                if fetch_remote {
+                    remote_budget -= 1;
+                }
+                Lookup::Uncached {
+                    id,
+                    reference,
+                    fetch_remote,
+                }
+            }
+            _ => Lookup::Missing,
+        });
+    }
+    let found = futures::future::join_all(lookups.into_iter().map(|lookup| async move {
+        match lookup {
+            Lookup::Cached(release) => Some(release),
+            Lookup::Uncached {
+                id,
+                reference,
+                fetch_remote,
+            } => release::uncached_release(store, &reference, &id, fetch_remote).await,
+            Lookup::Missing => None,
+        }
+    }))
+    .await;
     let entries: Vec<serde_json::Value> = listings
         .resources
         .iter()
-        .map(|listing| {
+        .zip(found)
+        .map(|(listing, found)| {
             let text = |prop: &str| listing.get(prop).ok().map(|v| v.to_string());
             let json = |prop: &str| match listing.get(prop) {
                 Ok(Value::Json(v)) => v.clone(),
@@ -250,10 +299,6 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
                     .unwrap_or(serde_json::Value::Array(vec![])),
                 Err(_) => serde_json::Value::Array(vec![]),
             };
-            let release_id = text(urls::RELEASE_ID);
-            let cached = release_id
-                .as_deref()
-                .and_then(|id| store.get_plugin_release(id).ok());
             serde_json::json!({
                 "subject": listing.get_subject().resolve(&origin),
                 "name": text(urls::NAME),
@@ -263,10 +308,13 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
                 "domains": json(urls::DOMAINS),
                 "standards": json(urls::STANDARDS),
                 "release": text(urls::RELEASE_PROP),
-                "releaseId": release_id,
-                "runtime": cached.as_ref().map(|r| r.runtime.clone()),
-                "world": cached.as_ref().map(|r| r.world.clone()),
-                "requires": cached.as_ref().and_then(|r| release::derived_requires(&r.manifest)),
+                "releaseId": text(urls::RELEASE_ID),
+                "runtime": found.as_ref().map(|r| r.runtime.clone()),
+                "world": found.as_ref().map(|r| r.world.clone()),
+                "requires": match &found {
+                    Some(r) => release::catalog_requires(&r.manifest),
+                    None => release::REQUIRES_UNKNOWN.into(),
+                },
             })
         })
         .collect();
@@ -276,6 +324,17 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
             "pluginRoutes": appstate.config.plugin_routes.report(),
         },
     })))
+}
+
+/// Where a catalog entry's release comes from.
+enum Lookup {
+    Cached(PluginRelease),
+    Uncached {
+        id: String,
+        reference: String,
+        fetch_remote: bool,
+    },
+    Missing,
 }
 
 /// A release the caller may see: one listed in this server's marketplace, or a

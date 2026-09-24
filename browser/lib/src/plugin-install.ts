@@ -17,7 +17,10 @@ import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
 import { agentSubject } from './subject.js';
 import type { JSONValue } from './value.js';
-import type { DeclaredHttp } from './plugin-manifest-http.js';
+import {
+  hostFeatureUnavailableError,
+  type DeclaredHttp,
+} from './plugin-manifest-http.js';
 
 export const RUNTIME_JS = 'atomic-js/1';
 const WORLD_EXTENSION = 'extension';
@@ -318,7 +321,19 @@ export async function installRelease(
       [server.properties.integrationAppAgent]: Datatype.ATOMIC_URL,
     },
   });
-  await installation.save();
+  try {
+    await installation.save();
+  } catch (e) {
+    const refused = hostFeatureUnavailableError(e);
+    if (!refused) throw e;
+    // Refused, not failed: this node's gates don't allow the release, and
+    // retrying changes nothing until the operator opens them. The
+    // Installation never reached the server, so forget it here too rather
+    // than leave a parked genesis that would install it later unreviewed.
+    store.outbox.discard(installation.subject);
+    store.removeResource(installation.subject);
+    throw refused;
+  }
 
   return installation.subject;
 }
@@ -378,7 +393,12 @@ export async function updateInstallationRelease(
     await resource.set(server.properties.config, config, false, Datatype.JSON);
   }
 
-  await resource.save();
+  try {
+    await resource.save();
+  } catch (e) {
+    // A refused upgrade leaves the old release running; say why, typed.
+    throw hostFeatureUnavailableError(e) ?? e;
+  }
 }
 
 type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;
