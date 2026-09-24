@@ -21,7 +21,17 @@ export type ViewOperation =
   /** Connection references (never credentials) this app may relay through. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
-  | 'proxyConnect';
+  | 'proxyConnect'
+  /**
+   * This app's endpoint health (plugin routes, #1721): per route its URL,
+   * method and auth, 24-hour counts and last error, and the delivery queue.
+   * `null` on a server without plugin routes.
+   */
+  | 'readRouteStatus'
+  /** The tokens this app's routes issued (never their values). */
+  | 'routeTokens'
+  /** Revoke one of them: `{ tokenId }`. */
+  | 'revokeRouteToken';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -77,6 +87,9 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'proxy',
       'proxyConnections',
       'proxyConnect',
+      'readRouteStatus',
+      'routeTokens',
+      'revokeRouteToken',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&
