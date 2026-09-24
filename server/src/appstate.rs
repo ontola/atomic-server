@@ -300,7 +300,8 @@ impl AppState {
         #[cfg(feature = "plugin-routes")]
         let route_exec = Arc::new(
             plugins::route_exec::RouteExecutor::default()
-                .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts)),
+                .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts))
+                .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes),
         );
         #[cfg(feature = "plugin-routes")]
         let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(
