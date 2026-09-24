@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "proxy": [
+    "clockify"
+  ],
+  "operations": [
+    {
+      "id": "up",
+      "method": "GET",
+      "url": "atomic-proxy:/clockify/../admin",
+      "effect": "read"
+    }
+  ]
+}
