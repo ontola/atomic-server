@@ -61,9 +61,17 @@ than inventing new ones.
 
 Every PR that changes the UI needs screenshots of the actual screen. Run the
 app, open each changed view (Playwright or a browser), and capture it; include
-mobile width when layout is affected. Then either upload them to GitHub (in the
-PR description or a PR comment) or show them in chat to the developer you are
-working with. A text description of a UI change is not enough for review.
+mobile width when layout is affected. A text description of a UI change is not
+enough for review.
+
+Never commit screenshots to the repository, not even temporarily or in a
+`planning/` folder. Share them in one of these ways instead:
+
+- Attach them to a GitHub PR comment or the PR description (GitHub hosts the
+  image, the repo stays clean).
+- Upload them to external storage, such as an S3 bucket, and link them from the
+  PR.
+- Show them in chat to the developer you are working with.
 
 ## Translation catalogs (`src/locales/*.po`)
 
