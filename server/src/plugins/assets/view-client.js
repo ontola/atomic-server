@@ -291,8 +291,10 @@ export const store = {
      * proposes, in the host's own review. Nothing is written unless they
      * apply it.
      *
-     * Pass `file: { name, mediaType, text }` for a file the app already has,
-     * or nothing to have the host show its own file picker (this frame is
+     * Pass `file: { name, mediaType, text }` for a file the app already has
+     * (`{ name, mediaType, base64 }` when the importer's `accepts` entry for
+     * it declares `as: 'base64'`), or nothing to have the host show its own
+     * file picker (this frame is
      * sandboxed and cannot hand over a picked `File`). Resolves to
      * `{ status: 'applied', importer, created, updated, destroyed, failed, errors }`,
      * or `{ status: 'cancelled' | 'nothing', importer }`, or

@@ -919,6 +919,48 @@ describe('running its own importer', () => {
     ).rejects.toThrow('file must be { name, mediaType?, text }');
   });
 
+  it('takes base64 for an accepts entry read as base64, and only there', async () => {
+    const store = importerStore();
+    const withBase64: PluginManifest = {
+      ...MANIFEST,
+      accepts: [
+        ...MANIFEST.accepts!,
+        { extensions: ['.willow'], as: 'base64', maxBytes: 4 },
+      ],
+    } as PluginManifest;
+    const run = (file: unknown) =>
+      resolveAppImporter(
+        store,
+        DRIVE,
+        'did:ad:transactions',
+        { file },
+        async () => withBase64,
+      );
+
+    // Four bytes, 0x00 0x01 0xfe 0xff.
+    await expect(
+      run({ name: 'a.willow', base64: 'AAH+/w==' }),
+    ).resolves.toMatchObject({
+      upload: { name: 'a.willow', mediaType: '', size: 4, base64: 'AAH+/w==' },
+    });
+    // Bounded by the base64 entry, not the text one.
+    await expect(run({ name: 'a.willow', base64: 'AAAAAAA=' })).rejects.toThrow(
+      /accepts at most 4 bytes/,
+    );
+    await expect(run({ name: 'a.willow', text: 'abc' })).rejects.toThrow(
+      'pass file.base64',
+    );
+    await expect(run({ name: 'a.sta', base64: 'AAAA' })).rejects.toThrow(
+      'pass file.text',
+    );
+    await expect(run({ name: 'a.willow', base64: 'not base64!' })).rejects.toThrow(
+      'standard, padded base64',
+    );
+    await expect(
+      run({ name: 'a.willow', base64: 'AAAA', text: 'x' }),
+    ).rejects.toThrow('file must be');
+  });
+
   it('has none on its own page or on a table no importer made', async () => {
     await expect(resolve(undefined)).rejects.toThrow(NO_IMPORTER);
     await expect(resolve('did:ad:someone-elses-table')).rejects.toThrow(

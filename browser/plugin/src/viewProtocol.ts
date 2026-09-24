@@ -126,12 +126,22 @@ export function isViewRequest(value: unknown): value is ViewRequest {
 }
 
 /** A file the app already has, handed to its importer as `input.upload`. */
-export interface ImporterFile {
+export type ImporterFile = {
   name: string;
   mediaType?: string;
-  /** The file's text. The host checks it against the importer's `accepts`. */
-  text: string;
-}
+} & (
+  | {
+      /** The file's text, for an `accepts` entry read as text (the default). */
+      text: string;
+    }
+  | {
+      /**
+       * Standard, padded base64 of the file's exact bytes, for an `accepts`
+       * entry declaring `as: 'base64'`.
+       */
+      base64: string;
+    }
+);
 
 /** `store.importer.run(args)`. */
 export interface ImporterRunArgs {

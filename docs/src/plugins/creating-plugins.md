@@ -194,6 +194,9 @@ const result = await store.importer.run({
   file: { name: file.name, mediaType: file.type, text: await file.text() },
 });
 
+// For an `accepts` entry with `as: 'base64'`, pass the exact bytes instead:
+// file: { name, mediaType, base64 } (standard, padded base64).
+
 // Or let the host show its own file picker (the frame is sandboxed):
 const result = await store.importer.run();
 ```

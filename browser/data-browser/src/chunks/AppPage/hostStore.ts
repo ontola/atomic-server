@@ -11,6 +11,7 @@ import {
   routeTokensBody,
 } from '@chunks/Plugins/routeStatusApi';
 import {
+  acceptFor,
   CollectionBuilder,
   core,
   destinationOwnerOf,
@@ -30,7 +31,11 @@ import {
   type RunPlan,
 } from '@tomic/react';
 import type { ImporterFile, ImporterRunResult } from '@tomic/plugin';
-import { checkSize, type ImportUpload } from '@chunks/PluginRuns/importFile';
+import {
+  checkSize,
+  sameEncoding,
+  type ImportUpload,
+} from '@chunks/PluginRuns/importFile';
 
 /**
  * Answers the data requests an app's view makes.
@@ -596,24 +601,68 @@ export async function resolveAppImporter(
   };
 }
 
-/** A file the app handed over: well-formed, and no larger than accepted. */
+const FILE_SHAPE =
+  'file must be { name, mediaType?, text } or { name, mediaType?, base64 }';
+const BASE64 =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+/**
+ * A file the app handed over: well-formed, in the encoding the `accepts`
+ * entry it falls under declares (`text`, or `base64` for `as: 'base64'`),
+ * and no larger than the entries sharing that encoding accept.
+ */
 function appFile(file: unknown, manifest: PluginManifest): ImportUpload {
-  const f = file as Partial<ImporterFile> | null;
+  const f = file as
+    | (Partial<Record<'name' | 'mediaType' | 'text' | 'base64', unknown>> &
+        object)
+    | null;
 
   if (
     !f ||
     typeof f !== 'object' ||
     typeof f.name !== 'string' ||
     !f.name ||
-    typeof f.text !== 'string' ||
-    (f.mediaType !== undefined && typeof f.mediaType !== 'string')
+    (f.mediaType !== undefined && typeof f.mediaType !== 'string') ||
+    (typeof f.text === 'string') === (typeof f.base64 === 'string') ||
+    (f.text !== undefined && typeof f.text !== 'string') ||
+    (f.base64 !== undefined && typeof f.base64 !== 'string')
   )
-    throw new Error('file must be { name, mediaType?, text }');
+    throw new Error(FILE_SHAPE);
 
-  const size = new TextEncoder().encode(f.text).length;
-  checkSize(size, manifest.accepts ?? []);
+  const name = f.name;
+  const mediaType = (f.mediaType as string | undefined) ?? '';
+  const accepts = manifest.accepts ?? [];
+  const accept = acceptFor({ name, type: mediaType }, accepts);
+  if (!accept) throw new Error("This app's importer does not take files.");
+  const wants = accept.as ?? 'text';
 
-  return { name: f.name, mediaType: f.mediaType ?? '', size, text: f.text };
+  if (typeof f.base64 === 'string') {
+    if (wants !== 'base64')
+      throw new Error(
+        `This importer reads ${name} as text; pass file.text, not file.base64.`,
+      );
+    if (!BASE64.test(f.base64))
+      throw new Error('file.base64 must be standard, padded base64.');
+    const padding = f.base64.endsWith('==')
+      ? 2
+      : f.base64.endsWith('=')
+        ? 1
+        : 0;
+    const size = (f.base64.length / 4) * 3 - padding;
+    checkSize(size, sameEncoding(accept, accepts));
+
+    return { name, mediaType, size, base64: f.base64 };
+  }
+
+  if (wants !== 'text')
+    throw new Error(
+      `This importer reads ${name} as base64; pass file.base64, not file.text.`,
+    );
+  const text = f.text as string;
+  const size = new TextEncoder().encode(text).length;
+  checkSize(size, sameEncoding(accept, accepts));
+
+  return { name, mediaType, size, text };
 }
 
 /**
