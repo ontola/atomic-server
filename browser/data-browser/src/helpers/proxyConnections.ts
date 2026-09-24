@@ -40,6 +40,11 @@ export interface ConnectScope {
   app: string;
   /** The app's own agent (`atomic:agent:…`), which gets the delegation. */
   appAgent: string;
+  /**
+   * `app` is an Installation: once delegated, the return records
+   * `integrationConnections[platform]` on it (#1700, answer 3).
+   */
+  recordOnInstallation?: boolean;
 }
 
 interface PendingConnect extends ConnectScope {
@@ -113,6 +118,14 @@ export class ProxyError extends Error {
 
 export const isPlatformId = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-z0-9-]{1,80}$/.test(value);
+
+/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
+export function platformName(id: string): string {
+  return id
+    .split('-')
+    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
+    .join(' ');
+}
 
 export const base64url = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -346,9 +359,14 @@ export class ProxyConnections {
    * (`error=access_denied`) drops the pending handoff and still returns
    * there, so the app can offer to connect again.
    */
-  async finish(
-    params: URLSearchParams,
-  ): Promise<{ returnTo: string; connected: boolean; connectionId?: string }> {
+  async finish(params: URLSearchParams): Promise<{
+    returnTo: string;
+    connected: boolean;
+    connectionId?: string;
+    platform: string;
+    app: string;
+    recordOnInstallation: boolean;
+  }> {
     const state = params.get('integration_state') ?? '';
     const c = this.pending(state);
     // Consumed before anything else: the verifier is single-use either way.
@@ -364,8 +382,15 @@ export class ProxyConnections {
 
     const code = params.get('connection_code');
 
+    const scope = {
+      returnTo: c.returnTo,
+      platform: c.platform,
+      app: c.app,
+      recordOnInstallation: c.recordOnInstallation === true,
+    };
+
     if (!code || code.length > 4096) {
-      return { returnTo: c.returnTo, connected: false };
+      return { ...scope, connected: false };
     }
 
     const result = (await this.call('POST', '/connect/redeem', {
@@ -385,11 +410,7 @@ export class ProxyConnections {
 
     await this.delegate(result.connection_id, c.appAgent, c.label);
 
-    return {
-      returnTo: c.returnTo,
-      connected: true,
-      connectionId: result.connection_id,
-    };
+    return { ...scope, connected: true, connectionId: result.connection_id };
   }
 
   /** This user's connections at the proxy, with their delegations. */
