@@ -48,6 +48,12 @@ import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
 import {
+  unregisterInstallationRuntimes,
+  unregisterRuntimesInBackground,
+  useInstallationRuntimes,
+} from '@helpers/useInstallationRuntimes';
+import { readInstallationRuntimes } from '@helpers/installationRuntimes';
+import {
   InstallationReviewDialog,
   type PendingInstallation,
 } from '@chunks/Plugins/InstallationReviewDialog';
@@ -124,12 +130,27 @@ export const InstallationPage: React.FC<
       ? Object.keys(grants)
       : [];
 
+  // Each node that runs this Installation publishes its agent on a child;
+  // the proxy lets it act for the app once the owner registers it (#1700).
+  useInstallationRuntimes(
+    store,
+    resource.subject,
+    canWrite && currentStatus !== 'revoked',
+  );
+
   const changeStatus = async (next: InstallationStatus) => {
     setChanging(true);
 
     try {
       await setStatus(next);
       await resource.save();
+
+      // Revoking retires the nodes' agents; the proxy should stop letting
+      // them act for the app too. Runtime children stay, so they can be read.
+      if (next === 'revoked') {
+        void unregisterInstallationRuntimes(store, resource.subject);
+      }
+
       await refreshCustomViews();
       toast.success(`Installation ${next}`);
     } catch (err) {
@@ -394,7 +415,13 @@ export const InstallationPage: React.FC<
         bindShow={open => !open && setConfirm(undefined)}
         onConfirm={async () => {
           const parent = resource.props.parent;
+          // Read before the destroy takes the runtime children with it.
+          const runtimes = await readInstallationRuntimes(
+            store,
+            resource.subject,
+          ).catch(() => []);
           await resource.destroy();
+          unregisterRuntimesInBackground(store, runtimes);
           await refreshCustomViews();
           navigate(constructOpenURL(parent));
           toast.success('Plugin uninstalled');

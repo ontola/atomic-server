@@ -236,10 +236,17 @@ it; that `integrationConnections` must map platforms to id strings; and that a
 server-side JS run gets `ctx.app` and `ctx.connections` from the Installation,
 over whatever the caller sent. `browser/lib/src/plugin-install.test.ts` checks
 `installRelease` records a fresh `atomic:agent:` in the genesis with no key
-material. Not covered: the page reading the runtime child and calling
-`POST /runtimes`, the page writing `integrationConnections` when it delegates,
-a second node publishing its own runtime child, and syncing those children
-between nodes.
+material. `data-browser/src/helpers/installationRuntimes.test.ts` checks the
+page's side against a fake proxy that mirrors atomic-plugins#122's routes and
+verifies every v2 signature: `POST /runtimes {app, agent, label}` for each
+runtime child whose genesis the named agent signed, nothing posted again in
+the same page or when the proxy already lists it, a re-post when the label
+changes, `DELETE /runtimes/{agent}` on revoke, and a retry after a proxy error.
+`chunks/AppPage/appAgent.test.ts` checks that `appAgentOf` prefers the
+Installation's `integrationAppAgent` and falls back to `GET /app-agent`. Not
+covered: the page writing `integrationConnections` when it delegates, a real
+proxy accepting the page's calls, a second node publishing its own runtime
+child, and syncing those children between nodes.
 
 `atomic-proxy:` URLs (#1700, answer 4): the shared fixtures in
 `testdata/plugin-manifest/` (Rust `shared_manifest_conformance` and the
