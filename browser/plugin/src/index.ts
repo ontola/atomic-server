@@ -32,6 +32,9 @@ export {
   packagedViewOperations,
 } from './viewProtocol.js';
 export type {
+  ImporterFile,
+  ImporterRunArgs,
+  ImporterRunResult,
   ViewOperation,
   ViewRequest,
   ViewResponse,

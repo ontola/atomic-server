@@ -8018,6 +8018,8 @@ msgstr ""
 msgid "Review this external action before approving it."
 msgstr ""
 
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -9595,6 +9597,9 @@ msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
 msgid "a token for its"
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "File to import"
 msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
@@ -9981,9 +9986,29 @@ msgstr ""
 
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
+#. 0: bytes
+#: src/chunks/PluginRuns/importFile.ts
+msgid "{0} bytes"
 msgstr ""
 
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Choose file"
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Import with this app"
+msgstr ""
+
+#. 0: ' '
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
 msgstr ""

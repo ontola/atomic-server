@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { RPCClient } from './rpc';
 import { isViewRequest, viewRequest } from './viewProtocol';
+import type { ImporterRunResult } from './viewProtocol';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -569,4 +570,44 @@ it('carries the route ops, and store.routes sends them', async () => {
     ['routeTokens', {}],
     ['revokeRouteToken', { tokenId: 'tok_1' }],
   ]);
+});
+
+it('runs its importer through the host, which may take as long as the review does', async () => {
+  vi.useFakeTimers();
+  const f = frame();
+  const store = timedStore(f);
+  const file = {
+    name: 'statement.mt940',
+    mediaType: 'text/plain',
+    text: ':20:X',
+  };
+  const outcome = store.importer.run({ file });
+  const [request] = f.parent.postMessage.mock.calls[0];
+
+  expect(isViewRequest(request)).toBe(true);
+  expect(request.op).toBe('runImporter');
+  expect(request.args).toEqual({ file });
+
+  // A person reading a review is not a host that went silent.
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  const summary: ImporterRunResult = {
+    status: 'applied',
+    importer: 'importer',
+    created: 2,
+    updated: 0,
+    destroyed: 0,
+    failed: 0,
+    errors: [],
+  };
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: request.id,
+    result: summary,
+  });
+  expect(await outcome).toEqual(summary);
+
+  // With no file, the host asks the person to choose one.
+  void store.importer.run();
+  expect(f.parent.postMessage.mock.calls[1][0].args).toEqual({});
 });

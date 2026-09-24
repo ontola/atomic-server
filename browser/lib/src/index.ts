@@ -380,6 +380,7 @@ export * from './import-resolution.js';
 export * from './import-reference-review.js';
 
 export {
+  destinationOwnerOf,
   destinationTablesFor,
   provisionDestination,
   type DestinationConfig,

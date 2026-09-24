@@ -8,6 +8,7 @@ import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import {
   handleRequest,
   isHostRequest,
+  resolveAppImporter,
   resourceToOpen,
   type HostReply,
 } from './hostStore';
@@ -17,6 +18,8 @@ import {
 } from '@helpers/extensions/externalLink';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { paths } from '../../routes/paths';
+import { AppImporterRun, type ImporterAsk } from './AppImporterRun';
+import { describePluginSource } from '@chunks/PluginRuns/runScript';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -38,6 +41,8 @@ import {
 import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
 import { appAgentOf } from './appAgent';
 import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
+
+const IMPORT_WAITING = 'An import from this app is already waiting for you.';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -105,6 +110,11 @@ function AppFrameSession({
   useEffect(() => {
     navigateRef.current = navigate;
   }, [navigate]);
+  // An app asking to run its own importer: a picker and a review, both drawn
+  // by this page. One at a time, so a review is never swapped out under the
+  // person.
+  const [importerAsk, setImporterAsk] = useState<ImporterAsk>();
+  const importerAskRef = useRef<ImporterAsk | undefined>(undefined);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -280,6 +290,40 @@ function AppFrameSession({
             void navigateRef.current(
               `${paths.show}?${new URLSearchParams({ subject })}`,
             );
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
+      if (data.op === 'runImporter') {
+        if (importerAskRef.current) {
+          session.post({
+            id: data.id,
+            error: IMPORT_WAITING,
+          });
+
+          return;
+        }
+
+        resolveAppImporter(store, drive, table, data, describePluginSource)
+          .then(resolved => {
+            if (importerAskRef.current) {
+              session.post({
+                id: data.id,
+                error: IMPORT_WAITING,
+              });
+
+              return;
+            }
+
+            const ask: ImporterAsk = {
+              id: data.id,
+              resolved,
+              reply: session.post,
+            };
+            importerAskRef.current = ask;
+            setImporterAsk(ask);
           })
           .catch((e: Error) => session.post({ id: data.id, error: e.message }));
 
@@ -498,6 +542,17 @@ function AppFrameSession({
             </Button>
           </Row>
         </ProxyConsentBar>
+      )}
+      {importerAsk && (
+        <AppImporterRun
+          key={String(importerAsk.id)}
+          ask={importerAsk}
+          drive={drive}
+          onDone={() => {
+            importerAskRef.current = undefined;
+            setImporterAsk(undefined);
+          }}
+        />
       )}
       <Frame
         ref={frameRef}

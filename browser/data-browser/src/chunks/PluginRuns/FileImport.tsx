@@ -1,14 +1,9 @@
 import { useEffect, useId, useState } from 'react';
 import {
-  acceptFor,
-  executeServerPlugin,
   provisionDestination,
   pluginConfigFor,
   pluginConfigProblems,
-  readUpload,
   useStore,
-  DEFAULT_ACCEPT_MAX_BYTES,
-  type DeclaredAccept,
   type DeclaredDestination,
   type JSONObject,
   type PluginManifest,
@@ -22,6 +17,13 @@ import { Input, ErrMessage } from '@components/forms/InputStyles';
 import { AtomicLink } from '@components/AtomicLink';
 import { pluginClassesFor } from './runScript';
 import { RunPluginDialog } from './RunPluginDialog';
+import {
+  acceptAttribute,
+  formatBytes,
+  maxBytes,
+  previewImport,
+  readUpload,
+} from './importFile';
 
 /**
  * The generic entry point for a plugin that declares `accepts`: choose a file,
@@ -106,34 +108,15 @@ export function FileImport({
     setImported(false);
 
     try {
-      const accept = acceptFor(file, accepts);
-      if (!accept) throw new Error('This plugin does not accept files.');
-      // The server bounds an upload by the entries sharing its encoding.
-      const max = maxBytes(
-        accepts.filter(other => (other.as ?? 'text') === (accept.as ?? 'text')),
-      );
-      if (file.size > max)
-        throw new Error(
-          `This file is ${formatBytes(file.size)}; this importer accepts at most ${formatBytes(max)}. Export a shorter period.`,
-        );
-      const upload = readUpload(file, await file.arrayBuffer(), accept);
-      const result = await executeServerPlugin(store, {
-        drive,
-        plugin: resource.subject,
-        source,
-        input: {
-          upload,
+      setVerdict(
+        await previewImport(store, {
+          drive,
+          plugin: resource.subject,
+          source,
           config,
-          trigger: {
-            kind: 'manual',
-            at: Date.now(),
-            subject: resource.subject,
-          },
-        },
-      });
-      if (result.error || !result.verdict)
-        throw new Error(result.error ?? 'The importer returned no preview.');
-      setVerdict(result.verdict);
+          upload: await readUpload(file, accepts),
+        }),
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -255,30 +238,6 @@ function firstTable(config: JSONObject | undefined): string | undefined {
     typeof first.table === 'string'
     ? first.table
     : undefined;
-}
-
-function maxBytes(accepts: DeclaredAccept[]): number {
-  return Math.max(
-    0,
-    ...accepts.map(accept => accept.maxBytes ?? DEFAULT_ACCEPT_MAX_BYTES),
-  );
-}
-
-function acceptAttribute(accepts: DeclaredAccept[]): string | undefined {
-  const values = accepts.flatMap(accept => [
-    ...(accept.extensions ?? []),
-    ...(accept.mediaTypes ?? []),
-  ]);
-
-  return values.length ? values.join(',') : undefined;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024)
-    return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-
-  return `${bytes} bytes`;
 }
 
 async function storedConfig(
