@@ -208,7 +208,7 @@ test('interactive demo leads to template selection and back from the top bar', a
   await devDrive(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/demo`);
-  const bar = page.getByRole('region', { name: 'Demo' });
+  const bar = page.getByRole('region', { name: 'Setup' });
   const choose = bar.getByRole('button', { name: 'Choose a template' });
   await expect(choose).toBeVisible({ timeout: 90000 });
   await expect(bar.getByRole('button', { name: 'Leave demo' })).toBeVisible();

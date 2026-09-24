@@ -13,7 +13,7 @@ import {
   demoForDrive,
   readInteractiveDemo,
 } from '../chunks/Templates/demoSession';
-import { Row } from '../components/Row';
+import { SETUP_BAR_HEIGHT, SetupBar, ShortLabel } from '../components/SetupBar';
 import { styled } from 'styled-components';
 import { DriveTemplateSetup } from '../chunks/Templates/DriveTemplateSetup';
 import { useEffect, type JSX } from 'react';
@@ -44,11 +44,11 @@ function NewDrivePage(): JSX.Element {
   const { agent, drive, setDrive, setAgent } = useSettings();
   const store = useStore();
   const currentDrive = useResource(drive || undefined);
-  const isDemo = !!demoForDrive(drive);
+  const demo = demoForDrive(drive);
   const closeTarget =
     agent &&
     drive &&
-    !isDemo &&
+    !demo &&
     !currentDrive.error &&
     currentDrive.isReady() &&
     currentDrive.hasClasses(server.classes.drive)
@@ -90,18 +90,48 @@ function NewDrivePage(): JSX.Element {
   return (
     <Shell>
       <SetupContent>
-        <Row justify='space-between'>
-          <Logo style={{ width: '14rem', maxWidth: '55%' }} />
-          {closeTarget && (
-            <Button
-              subtle
-              onClick={() => navigate(constructOpenURL(closeTarget))}
-            >
-              Close
-            </Button>
-          )}
-        </Row>
+        <Logo style={{ width: '14rem', maxWidth: '55%' }} />
         <DriveTemplateSetup
+          renderBar={({ naming, back, busy }) => (
+            <FixedBar>
+              <SetupBar
+                title={naming ? 'Name your drive' : 'Choose a template'}
+              >
+                {demo && (!naming || demo.kind === 'template') && (
+                  <Button
+                    subtle
+                    disabled={busy}
+                    onClick={() =>
+                      navigate(
+                        constructOpenURL(
+                          demo.kind === 'interactive'
+                            ? demo.welcomeDoc
+                            : demo.session.drive,
+                        ),
+                      )
+                    }
+                  >
+                    {demo.kind === 'interactive'
+                      ? 'Back to the demo'
+                      : 'Back to the preview'}
+                  </Button>
+                )}
+                {!demo && closeTarget && !naming && (
+                  <Button
+                    subtle
+                    onClick={() => navigate(constructOpenURL(closeTarget))}
+                  >
+                    Close
+                  </Button>
+                )}
+                {naming && demo?.kind !== 'template' && (
+                  <Button subtle disabled={busy} onClick={back}>
+                    <ShortLabel full='Back to templates' short='Back' />
+                  </Button>
+                )}
+              </SetupBar>
+            </FixedBar>
+          )}
           onCreated={resource => {
             // The demo stays open while the user picks a template, so they
             // can go back to it. Once they have a drive of their own, it has
@@ -125,7 +155,14 @@ function NewDrivePage(): JSX.Element {
   );
 }
 
+const FixedBar = styled.div`
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: ${p => p.theme.zIndex.sidebar};
+`;
+
 const SetupContent = styled.main`
+  padding-top: ${SETUP_BAR_HEIGHT};
   width: min(100%, 65rem);
   display: flex;
   flex-direction: column;

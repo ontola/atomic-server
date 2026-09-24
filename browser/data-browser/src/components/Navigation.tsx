@@ -1,5 +1,6 @@
 import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
 import { DemoActionsBar } from './DemoExitButton';
+import { SETUP_BAR_HEIGHT } from './SetupBar';
 import { demoForDrive } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
@@ -69,14 +70,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     pathname === `${pathNames.app}${pathNames.invite}` ||
     signedOutHosted;
 
-  // The demo bar follows one rule: the current drive is a demo drive. It
-  // stays up on the template gallery too — that is where the demo leads, and
-  // where a preview returns to — so the way back never depends on which page
-  // the user happens to be on. Only the full-screen splash and sign-in pages,
-  // which are not part of the demo, go without it.
-  const onGallery = pathname === paths.newDrive;
-  const demo = !hideGlobalChrome || onGallery ? demoForDrive(drive) : undefined;
-  const previewHeight = demo ? '3.5rem' : '0px';
+  // The setup bar follows one rule: the current drive is a demo drive. Pages
+  // without the app chrome (the template gallery, sign-in, the splash) are
+  // not part of the demo; the gallery renders its own setup bar.
+  const demo = hideGlobalChrome ? undefined : demoForDrive(drive);
+  const previewHeight = demo ? SETUP_BAR_HEIGHT : '0px';
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -104,7 +102,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {!hideGlobalChrome && <MeetingMessageToaster />}
             {demo && (
               <PreviewHeader>
-                <DemoActionsBar demo={demo} onGallery={onGallery} />
+                <DemoActionsBar demo={demo} />
               </PreviewHeader>
             )}
             {!hideGlobalChrome && (
@@ -241,6 +239,6 @@ const SideBarWrapper = styled.div<{
 const PreviewHeader = styled.div`
   position: fixed;
   inset: 0 0 auto;
-  height: 3.5rem;
+  height: ${SETUP_BAR_HEIGHT};
   z-index: ${p => p.theme.zIndex.sidebar};
 `;

@@ -39,7 +39,7 @@ managedDriveTest(
 
     await page.goto(`${FRONTEND_URL}/app/new-drive?template=student`);
     await managedExpect(
-      page.getByRole('heading', { name: 'Give your space a name' }),
+      page.getByRole('region', { name: 'Setup' }).getByText('Name your drive'),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Create drive' }).click();
     await managedExpect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });

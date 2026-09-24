@@ -1,5 +1,5 @@
 import { getIconForClass } from '../../helpers/iconMap';
-import { useState, useRef, lazy, Suspense } from 'react';
+import { useState, useRef, lazy, Suspense, type ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { dataBrowser, useStore, type Resource } from '@tomic/react';
 import { SIDEBAR_TOGGLE_WIDTH } from '../../components/SideBar';
@@ -22,12 +22,24 @@ import { keepTemplateDemo } from './keepTemplateDemo';
 import { prepareTemplateDrive } from './prepareTemplateDrive';
 const TemplateChat = lazy(() => import('./TemplateChat'));
 
+export interface TemplateSetupStep {
+  /** The name step (a template or a blank drive chosen), or the gallery. */
+  naming: boolean;
+  /** From the name step back to the gallery. */
+  back: () => void;
+  busy: boolean;
+}
+
 export function DriveTemplateSetup({
   onCreated,
   onPreview,
+  renderBar,
 }: {
   onCreated: (resource: Resource) => void;
   onPreview?: () => void;
+  /** Where a full page puts the step's title and back action: in its setup
+   *  bar. Without it (the new-drive dialog) they stay inline. */
+  renderBar?: (step: TemplateSetupStep) => ReactNode;
 }) {
   const store = useStore();
   const navigate = useNavigateWithTransition();
@@ -135,6 +147,11 @@ export function DriveTemplateSetup({
 
   return (
     <Column gap='1.5rem'>
+      {renderBar?.({
+        naming,
+        back: () => setNaming(false),
+        busy: busy || !!partial,
+      })}
       {error && (
         <>
           <ErrorBlock error={error} />
@@ -151,14 +168,18 @@ export function DriveTemplateSetup({
       )}
       {naming ? (
         <>
-          <Button
-            subtle
-            disabled={busy || !!partial}
-            onClick={() => setNaming(false)}
-          >
-            Back to templates
-          </Button>
-          <h1>Give your space a name</h1>
+          {!renderBar && (
+            <>
+              <Button
+                subtle
+                disabled={busy || !!partial}
+                onClick={() => setNaming(false)}
+              >
+                Back to templates
+              </Button>
+              <h1>Give your space a name</h1>
+            </>
+          )}
           <form
             onSubmit={e => {
               e.preventDefault();

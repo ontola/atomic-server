@@ -262,19 +262,30 @@ full and was removed from this document on 2026-09-15.
 - The interactive demo is not a template: it is gone from the template
   gallery (`chunks/Templates/catalog.ts`). It is reached from "Try the live
   demo" on the welcome screen and `/app/demo`.
-- The next step out of the demo is choosing a template. The bar offers
-  **Leave demo** (clean up, go to the personal drive or the gallery) and
-  **Choose a template** (the gallery, demo kept open).
-- The bar shows whenever the current drive is a demo drive, on every page
-  of it and on the gallery, where it reads **Back to the demo** / **Back to
-  the preview**. A template preview offers **Back to templates** and **Use
-  this template**. Labels only name places the user has been.
+- The next step out of the demo is choosing a template.
+- **One setup bar** (`components/SetupBar.tsx`) for every setup step: the
+  step's title on the left, actions on the right, secondary before primary.
+  Titles are hidden on phones; long labels shorten there.
+  - Demo: "Demo workspace", **Leave demo** (guest → start screen, account →
+    personal drive) and **Choose a template** (the gallery, demo kept open).
+  - Template preview: "Preview: <drive name>", **Back to templates** and
+    **Use this template**.
+  - Gallery (`routes/NewDriveRoute.tsx`): "Choose a template", with **Back to
+    the demo** / **Back to the preview**, or **Close** for a user with a drive.
+  - Naming step: "Name your drive", with one back: **Back to the preview** when
+    a preview is open, otherwise **Back to templates**.
+  `DriveTemplateSetup` takes `renderBar`; the new-drive dialog omits it and
+  keeps its inline title and back button.
 - It used to vanish: the check read the template-preview record first and
   fell back to the demo manifest only when there was none, so a stale preview
   record (a closed tab, "Use this template" abandoned) hid the demo's bar.
   `demoForDrive` matches each record on its own.
 - The demo drive is cleaned up when the user creates their own drive from the
-  gallery (`routes/NewDriveRoute.tsx`).
+  gallery (`routes/NewDriveRoute.tsx`). The cleanup never removes the current
+  agent: a guest's profile is a row in the demo's Team table, and deleting it
+  broke every later write ("Resource has no store").
+- A deleted demo or preview page reached through history says so and offers
+  the current drive or the gallery (`views/ErrorPage.tsx`).
 
 ## v2 content feedback (Joep, July 2026) — BUILT
 

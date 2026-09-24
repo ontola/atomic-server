@@ -1,7 +1,7 @@
 import { Button } from './Button';
+import { SetupBar, ShortLabel } from './SetupBar';
 import { useState } from 'react';
-import { styled } from 'styled-components';
-import { useStore } from '@tomic/react';
+import { useResource, useStore } from '@tomic/react';
 import { useNavigate } from '@tanstack/react-router';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -11,23 +11,15 @@ import { leaveTemplatePreview } from '../chunks/Templates/leaveTemplatePreview';
 import { paths } from '../routes/paths';
 
 /**
- * The bar above navigation while the current drive is a demo drive — the
- * interactive demo or a template preview — on every page of it, including the
- * template gallery. `NavWrapper` decides *whether* to show it
- * (`demoForDrive`); this only decides what it offers:
- *
- * - interactive demo: leave it, or go on to choosing a template;
- * - template preview: back to the gallery it was picked from, or keep it;
- * - on the gallery itself: back to the demo or preview that is still open.
- *
- * The labels only name places the user has actually been.
+ * The setup bar on the pages of a demo drive: the interactive demo or a
+ * template preview. `NavWrapper` decides *whether* to show it
+ * (`demoForDrive`); the template gallery renders its own `SetupBar`, with a
+ * way back here. Labels only name places the user has actually been.
  */
 export function DemoActionsBar({
   demo,
-  onGallery,
 }: {
   demo: ActiveDemo;
-  onGallery: boolean;
 }): React.JSX.Element {
   const store = useStore();
   const navigate = useNavigateWithTransition();
@@ -91,24 +83,9 @@ export function DemoActionsBar({
     });
   }
 
-  if (onGallery) {
-    const [label, target] =
-      demo.kind === 'interactive'
-        ? ['Back to the demo', demo.welcomeDoc]
-        : ['Back to the preview', demo.session.drive];
-
-    return (
-      <PreviewBar role='region' aria-label='Demo'>
-        <Button subtle onClick={() => navigate(constructOpenURL(target))}>
-          {label}
-        </Button>
-      </PreviewBar>
-    );
-  }
-
   if (demo.kind === 'interactive') {
     return (
-      <PreviewBar role='region' aria-label='Demo'>
+      <SetupBar title='Demo workspace'>
         <Button
           subtle
           disabled={leaving}
@@ -119,15 +96,14 @@ export function DemoActionsBar({
         <Button disabled={leaving} onClick={() => navigate(paths.newDrive)}>
           Choose a template
         </Button>
-      </PreviewBar>
+      </SetupBar>
     );
   }
 
   return (
-    <PreviewBar role='region' aria-label='Demo'>
+    <SetupBar title={<PreviewTitle drive={demo.session.drive} />}>
       <Button subtle onClick={() => backToTemplates(demo.session)}>
-        <BackLabel>Back to templates</BackLabel>
-        <ShortBackLabel>Back</ShortBackLabel>
+        <ShortLabel full='Back to templates' short='Back' />
       </Button>
       <Button
         onClick={() =>
@@ -138,8 +114,15 @@ export function DemoActionsBar({
       >
         Use this template
       </Button>
-    </PreviewBar>
+    </SetupBar>
   );
+}
+
+/** "Preview: Student demo", from the preview drive's own name. */
+function PreviewTitle({ drive }: { drive: string }): React.JSX.Element {
+  const resource = useResource(drive);
+
+  return <>Preview: {resource.title}</>;
 }
 
 /** Resolve `p`, but give up with `undefined` after `ms` — so a hung fetch
@@ -150,36 +133,3 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
     new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), ms)),
   ]);
 }
-
-const PreviewBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 0.5rem 1rem;
-  button {
-    white-space: nowrap;
-  }
-  @media (max-width: 600px) {
-    padding: 0.5rem;
-    button {
-      font-size: 0.875rem;
-    }
-  }
-  background: ${p => p.theme.colors.bg1};
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-`;
-
-const BackLabel = styled.span`
-  @media (max-width: 600px) {
-    display: none;
-  }
-`;
-const ShortBackLabel = styled.span`
-  display: none;
-  @media (max-width: 600px) {
-    display: inline;
-  }
-`;

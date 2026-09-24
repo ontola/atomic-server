@@ -299,6 +299,7 @@ msgstr "Choose a default model"
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/AISetupPanel.tsx src/components/DemoExitButton.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -7603,6 +7604,7 @@ msgstr "Drive name"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
 msgstr "Back to templates"
 
@@ -12470,25 +12472,23 @@ msgstr "New {0}s start here"
 msgid "Saved microphone"
 msgstr "Saved microphone"
 
-#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to the demo"
 msgstr "Back to the demo"
 
-#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to the preview"
 msgstr "Back to the preview"
 
-#: src/components/DemoExitButton.tsx
-#: src/components/DemoExitButton.tsx
-#: src/components/DemoExitButton.tsx
-msgid "Demo"
-msgstr "Demo"
+#~ msgid "Demo"
+#~ msgstr "Demo"
 
 #: src/components/DemoExitButton.tsx
 msgid "Leave demo"
 msgstr "Leave demo"
 
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr "Choose a template"
@@ -12504,3 +12504,20 @@ msgstr "It was deleted, for example when you left a demo or a preview."
 #: src/views/ErrorPage.tsx
 msgid "Open your drive"
 msgstr "Open your drive"
+
+#: src/components/DemoExitButton.tsx
+msgid "Demo workspace"
+msgstr "Demo workspace"
+
+#. 0: resource.title
+#: src/components/DemoExitButton.tsx
+msgid "Preview: {0}"
+msgstr "Preview: {0}"
+
+#: src/components/SetupBar.tsx
+msgid "Setup"
+msgstr "Setup"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Name your drive"
+msgstr "Name your drive"
