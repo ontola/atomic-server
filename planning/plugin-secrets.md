@@ -45,8 +45,8 @@ Four things on the roadmap are waiting on this and nothing else:
 - the HTTP action a plugin needs to reach anything outside the drive;
 - email, which should be an HTTP call to a provider rather than an SMTP
   client in atomic-server;
-- token-based importers — Notion's API sends no CORS headers, so the browser
-  cannot fetch it at all;
+- token-based importers — many provider APIs send no CORS headers, so the
+  browser cannot fetch them at all;
 - every scheduled connector in
   [`personal-information-suite.md`](./personal-information-suite.md).
 
@@ -115,13 +115,13 @@ The guest sees `secret:<name>` and can pass it where a credential goes:
 
 ```ts
 const res = await ctx.http({
-  url: 'https://api.notion.com/v1/databases/…',
-  headers: { Authorization: 'Bearer secret:notion' },
+  url: 'https://api.example.com/v1/items/…',
+  headers: { Authorization: 'Bearer secret:example' },
 });
 ```
 
 The host substitutes at the boundary. A plugin that logs its config, returns it
-in a verdict, or embeds it in an intent leaks the string `secret:notion`.
+in a verdict, or embeds it in an intent leaks the string `secret:example`.
 
 Substitution happens **only** in header values and only for a secret whose
 `origins` include the request's origin. A handle in a URL, a body, or a query
@@ -204,7 +204,7 @@ authoring mistake, and the assistant should say so rather than route around it.
    rather than sending it bare.
 4. **Prove the path. Done.** Ran through the UI end to end.
 
-A Notion importer is deliberately *not* a step here. It is the acceptance
+A provider importer is deliberately *not* a step here. It is the acceptance
 criterion for the platform — a user asks, and the assistant builds one — and
 the assistant is the thing being tested. An importer hand-written by us would
 prove the opposite of what it looks like it proves.

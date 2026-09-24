@@ -221,7 +221,8 @@ Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input vali
 partial model drafts, forbidden arguments and size limits. It also validates resource JSON
 setup declarations: detached round-trips, supported constraints, malformed schemas,
 choice hints and rejection of unknown keywords before form/model use. `AppSetup/setup.test.ts`
-checks schema parity, repository and Notion UUID validation, and credential-link constraints.
+checks that credential values are redacted from reported host errors and that no setup
+actions are registered.
 The provider setup E2E (`app-setup.spec.ts`) moved to atomic-plugins. Live
 authentication, installation recovery and arbitrary authored setup execution
 are not covered here.
@@ -429,7 +430,7 @@ target, and two credential cases: a plugin asks only for the credentials it
 declares, and an undeclared secret still has somewhere to go. The trigger HTTP
 response regression `response_filters_round_trip_into_updates` ensures GET
 filter values can be sent back to POST. Provider connection flows (GitHub,
-Notion, the mock-proxy Pets flow) moved to atomic-plugins.
+the mock-proxy Pets flow) moved to atomic-plugins.
 Run it against a production build to catch missing translation catalog entries:
 Vite dev extracts them automatically and can hide blank production labels.
 
@@ -1161,11 +1162,10 @@ Atomic uncertain-write recovery, query-outbox performance/retention at scale and
 the Dagger container gate. Queue storage prevents loss; it does not imply
 cross-system exactly-once execution or automatic reconciliation of uncertain writes.
 
-### Live connector query snapshots and Notion pilot
+### Live connector query snapshots
 
-Moved to atomic-plugins with `integrations/github-issues` and
-`integrations/notion` (their live tests, fixture suites and
-`notion_sync_tests.rs`). `uuid_paths_are_single_canonical_segments` still
+Moved to atomic-plugins with `integrations/github-issues` (its live tests
+and fixture suites). `uuid_paths_are_single_canonical_segments` still
 covers constrained UUID authorization and path-escape rejection here.
 
 ### Named integration actions
@@ -1240,12 +1240,6 @@ tests cover terminal acknowledgement without writes. The browser uses synthetic
 consumer responses to check inspection, required reason and one explicit abandon
 request; the JS client test checks the signed request fields. Deleted-automation
 reconciliation and per-run (rather than per-worker) concurrency remain open.
-
-Notion setup UX and proxy migration: the provider and its tests moved to
-atomic-plugins, and so did its browser sync host (`async-plugin.ts` and
-`browser-sync.ts`; their only importer here, `browserPluginSync.ts`, went with
-the LocalThought removal). Their tests (bounded receipt replay, refusal to
-replay a lost write, converged checkpoints) run there.
 
 Runtime feature coverage: `cargo check -p atomic-server` and
 `cargo check -p atomic-server --no-default-features --features light` validate
@@ -1875,10 +1869,9 @@ browser-side OpenAPI-driven import they backed.
 
 `integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
 Retry-After handling with rotating credentials, deadline rejection, and separate
-catalog selections with explicit caller precedence. Notion now uses this shared
-browser authorization flow; its proxy migration coverage is described above.
+catalog selections with explicit caller precedence.
 
-GitHub, Notion and Clockify implementations, fixture suites and
+GitHub and Clockify implementations, fixture suites and
 certification live in atomic-plugins.
 
 `integrations/localthought/settings.test.ts` covers runtime proxy selection,

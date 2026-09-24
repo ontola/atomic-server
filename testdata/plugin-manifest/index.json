@@ -96,7 +96,7 @@
       ],
       "network": {
         "origins": [
-          "https://api.notion.com"
+          "https://api.example.com"
         ]
       },
       "name": "folder-index",
@@ -309,7 +309,7 @@
   },
   {
     "name": "translated plugin.json (server extension)",
-    "file": "translated-notion-sync.json",
+    "file": "translated-example-sync.json",
     "serialized": {
       "schemaVersion": 2,
       "runtime": "wasip2/1",
@@ -330,9 +330,9 @@
       "operations": [],
       "network": {
         "origins": [
-          "https://api.notion.com"
+          "https://api.example.com"
         ],
-        "reason": "Reads pages from Notion"
+        "reason": "Reads pages from the example API"
       },
       "configSchema": {
         "properties": {
@@ -349,10 +349,10 @@
         "interval": 60,
         "workspace": ""
       },
-      "name": "notion-sync",
+      "name": "example-sync",
       "namespace": "example",
       "version": "2.1.0",
-      "description": "Mirrors Notion pages",
+      "description": "Mirrors pages from the example API",
       "author": "Ontola"
     }
   },

@@ -105,7 +105,7 @@ describe('ProxyConnections', () => {
     expect(connections.list({ ...SCOPE, app: 'did:ad:other' }, 'pets')).toEqual(
       [],
     );
-    expect(connections.list(SCOPE, 'notion')).toEqual([]);
+    expect(connections.list(SCOPE, 'other')).toEqual([]);
   });
 
   it('relays a call, rotates the code, and never returns it', async () => {
@@ -144,8 +144,8 @@ describe('ProxyConnections', () => {
     await expect(
       connections
         .relay(SCOPE)
-        .request({ ...ref, platform: 'notion', path: '/pets' }),
-    ).rejects.toThrow('No notion connection');
+        .request({ ...ref, platform: 'other', path: '/pets' }),
+    ).rejects.toThrow('No other connection');
     for (const path of ['pets', '//evil.test/x', '/../../connect', '/a#b'])
       expect(() => proxyUrl(ORIGIN, 'pets', path)).toThrow();
     await expect(
