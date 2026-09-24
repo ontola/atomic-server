@@ -644,6 +644,49 @@ mod tests {
         assert!(notice.contains("only the drive-prefix mount"), "{notice}");
     }
 
+    /// At `--plugin-routes off`, in either build, nothing answers on the
+    /// plugin mounts: `/_routes/...` is an ordinary (absent) path and a
+    /// would-be routes host gets the ordinary server.
+    #[actix_rt::test]
+    async fn nothing_is_mounted_while_the_level_is_off_or_the_feature_is_absent() {
+        use actix_web::{test, web, App};
+        let appstate = crate::tests::init_test_appstate(&[]).await;
+        assert_eq!(appstate.config.plugin_routes_level(), Off);
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(appstate.clone()))
+                .configure(crate::routes::config_routes),
+        )
+        .await;
+        let slug = "0123456789abcdef0123456789abcdef";
+        for (host, path) in [
+            ("localhost", format!("/_routes/{slug}/x")),
+            ("localhost", "/_routes".to_string()),
+            (&*format!("{slug}.routes.localhost"), "/x".to_string()),
+        ] {
+            let resp = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri(&path)
+                    .insert_header(("host", host))
+                    .insert_header(("accept", "application/ad+json"))
+                    .to_request(),
+            )
+            .await;
+            let status = resp.status().as_u16();
+            let content_type = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            assert!(
+                ![501, 503, 410].contains(&status) && content_type != "application/problem+json",
+                "{host}{path}: {status} {content_type}"
+            );
+        }
+    }
+
     #[test]
     fn compiled_matches_the_cargo_feature() {
         assert_eq!(COMPILED, cfg!(feature = "plugin-routes"));
