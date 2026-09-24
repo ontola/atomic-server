@@ -145,6 +145,7 @@ const store = new Store({
   agent: initalAgent,
   serverUrl,
   connect: !isOriginWithoutNode(serverUrl),
+  requireOnlineWrites: isRunningInTauri(),
 });
 
 const initialDrive = driveStorage.get();

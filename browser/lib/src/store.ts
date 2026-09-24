@@ -164,6 +164,8 @@ export interface StoreOpts {
    * attempted. A later `setServerUrl` to a real node connects as usual.
    */
   connect?: boolean;
+  /** Native shells have no ClientDb, so a disconnected node cannot save edits. */
+  requireOnlineWrites?: boolean;
 }
 
 export interface StoreSyncStatus {
@@ -696,8 +698,10 @@ export class Store {
   >();
 
   private client: Client;
+  public readonly requireOnlineWrites: boolean;
 
   public constructor(opts: StoreOpts = {}) {
+    this.requireOnlineWrites = opts.requireOnlineWrites ?? false;
     initOntologies();
     this._resources = new Map();
     this.webSockets = new Map();

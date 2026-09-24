@@ -91,6 +91,12 @@ async function signUpAndGetMagicLink(email: string): Promise<string> {
   return body.magic_link;
 }
 
+async function openMagicLink(page: Page, email: string): Promise<void> {
+  await page.goto(await signUpAndGetMagicLink(email));
+  // The portal waits for an explicit click before consuming a one-use link.
+  await page.getByRole('button', { name: 'Sign in with this link' }).click();
+}
+
 /**
  * Walk first-run onboarding and return the generated recovery code.
  *
@@ -242,7 +248,7 @@ test.describe('Cloud Vault backup and restore', () => {
     test.slow();
 
     const email = uniqueEmail();
-    await page.goto(await signUpAndGetMagicLink(email));
+    await openMagicLink(page, email);
     await completeOnboarding(page);
 
     await openSync(page);
@@ -289,7 +295,7 @@ test.describe('Cloud Vault backup and restore', () => {
     test.slow();
 
     const email = uniqueEmail();
-    await page.goto(await signUpAndGetMagicLink(email));
+    await openMagicLink(page, email);
     const { recoveryCode, driveUrl } = await completeOnboarding(page);
 
     // Cut this device off from the node BEFORE making the canary.
@@ -344,7 +350,7 @@ test.describe('Cloud Vault backup and restore', () => {
       // A returning account lands on the portal dashboard rather than
       // onboarding, so reach the app the way the dashboard's own drive link
       // does. The app then asks how to sign in.
-      await fresh.goto(await signUpAndGetMagicLink(email));
+      await openMagicLink(fresh, email);
       // The portal exchanges the token before setting the session cookie.
       await fresh.waitForURL(url => !url.searchParams.has('token'));
       await fresh.goto(driveUrl);

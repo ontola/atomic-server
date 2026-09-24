@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { Store } from './store.js';
+import { Store, type StoreOpts } from './store.js';
 import { Agent } from './agent.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import type { Commit } from './commit.js';
@@ -29,8 +29,8 @@ export interface TestStore {
  *   the datatype fetch instead of hitting the network. `set()` already
  *   degrades gracefully when a property can't be loaded.
  */
-export async function testStore(): Promise<TestStore> {
-  const store = new Store({ serverUrl: 'https://example.com' });
+export async function testStore(opts: StoreOpts = {}): Promise<TestStore> {
+  const store = new Store({ serverUrl: 'https://example.com', ...opts });
   store.setServerConnected(true);
 
   const keys = await Agent.generateKeyPair();

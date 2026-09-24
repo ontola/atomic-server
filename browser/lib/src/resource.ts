@@ -3365,6 +3365,12 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set, you cannot save.');
     }
 
+    if (this.store.requireOnlineWrites && !this.store.serverConnected) {
+      throw new Error(
+        'The local node is not connected; this change was not saved.',
+      );
+    }
+
     if (!this._lastCommit) {
       this._lastCommit = this.get(properties.commit.lastCommit)?.toString();
     }
@@ -3493,6 +3499,15 @@ export class Resource<C extends OptionalClass = any> {
     } catch (e) {
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);
+
+        if (this.store.requireOnlineWrites) {
+          this.commitError = e;
+          throw new Error(
+            'The local node disconnected before confirming this save.',
+            { cause: e },
+          );
+        }
+
         await this.saveOffline();
 
         return 'offline';

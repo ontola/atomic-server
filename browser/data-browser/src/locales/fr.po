@@ -6558,31 +6558,23 @@ msgstr ""
 msgid "Signing out…"
 msgstr ""
 
-#: src/components/IdentityReconcileGate.tsx
-msgid "Keep this one"
-msgstr ""
+#~ msgid "Keep this one"
+#~ msgstr ""
 
-#: src/components/IdentityReconcileGate.tsx
-msgid "This email already has an identity"
-msgstr ""
+#~ msgid "This email already has an identity"
+#~ msgstr ""
 
-#. 0: conflict.managedAccountEmail
-#: src/components/IdentityReconcileGate.tsx
-msgid "{0} is backed up with an identity that is not the one this browser is using. An account has one identity — which one should this be?"
-msgstr ""
+#~ msgid "{0} is backed up with an identity that is not the one this browser is using. An account has one identity — which one should this be?"
+#~ msgstr ""
 
-#: src/components/IdentityReconcileGate.tsx
-msgid "Switch to my account's identity"
-msgstr ""
+#~ msgid "Switch to my account's identity"
+#~ msgstr ""
 
-#: src/components/IdentityReconcileGate.tsx
-msgid "Restores it here. The identity you made in this browser stays reachable only with its agent secret."
-msgstr ""
+#~ msgid "Restores it here. The identity you made in this browser stays reachable only with its agent secret."
+#~ msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/components/IdentityReconcileGate.tsx
-msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
-msgstr ""
+#~ msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
@@ -12430,4 +12422,43 @@ msgstr ""
 
 #: src/components/AI/MicrophoneSelect.tsx
 msgid "Saved microphone"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Keep this browser identity"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Choose an identity for this browser"
+msgstr ""
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "This browser has an identity that is different from the one saved for {0}. Choose which identity you want to use here."
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Use the account identity"
+msgstr ""
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Loads the identity saved for {0}. You can still use this browser's current identity with its agent secret."
+msgstr ""
+
+#. 0: PRODUCT_NAME; 1: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Keeps the identity and data already on this browser, and signs you out of {0}. This identity won't be backed up to {1}."
+msgstr ""
+
+#: src/views/getting-started/chrome.tsx
+msgid "The local node could not start"
+msgstr ""
+
+#: src/views/getting-started/chrome.tsx
+msgid "AtomicServer stores this app’s data in its embedded node. Quit other AtomicServer processes using the same data directory or port 9883, then reopen the app."
+msgstr ""
+
+#: src/helpers/onboardingStorage.ts
+msgid "The local node is taking too long to start."
 msgstr ""

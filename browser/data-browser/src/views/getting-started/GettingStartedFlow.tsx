@@ -40,6 +40,8 @@ import {
   restoreFromVault,
 } from '../../helpers/managed/vaultAutoBackup';
 import { isOriginWithoutNode } from '../../helpers/originNode';
+import { isRunningInTauri } from '../../helpers/tauri';
+import { openExternal } from '../../helpers/openExternal';
 import {
   buildEnvelopeV2,
   buildEnvelopeWithPasskeyAndCode,
@@ -1073,12 +1075,14 @@ export function GettingStartedFlow({
                         {secretError ?? error?.message}
                       </CardError>
                     ) : null}
-                    {/* A portal URL or session alone does not mean there is a
-                        backup to restore. Wait for the encrypted backup check;
-                        known accounts already have their own picker above. */}
+                    {/* Native installs need a way to link the portal before
+                        the backup check can succeed. Once linked, the restore
+                        step checks whether this account has a backup. */}
                     {knownAccounts.length === 0 &&
                     knownPortalUrl &&
-                    restore.phase === 'ready' ? (
+                    (restore.phase === 'ready' ||
+                      (restore.phase === 'no-session' &&
+                        !canHoldProviderCookie(knownPortalUrl))) ? (
                       <Button
                         key='forgot'
                         type='button'
@@ -1119,7 +1123,10 @@ export function GettingStartedFlow({
                           if (createTarget.kind === 'portal') {
                             const url = safePortalUrl(createTarget.url);
 
-                            if (url) window.location.assign(url);
+                            if (url) {
+                              if (isRunningInTauri()) void openExternal(url);
+                              else window.location.assign(url);
+                            }
                           } else {
                             setStep('create');
                           }
@@ -1141,7 +1148,7 @@ export function GettingStartedFlow({
                   setError(undefined);
                   setSecretValue('');
 
-                  if (returnToPortal && knownPortalUrl) {
+                  if (returnToPortal && knownPortalUrl && !isRunningInTauri()) {
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
@@ -1457,7 +1464,7 @@ export function GettingStartedFlow({
                 subtle
                 type='button'
                 onClick={() => {
-                  if (knownPortalUrl) {
+                  if (knownPortalUrl && !isRunningInTauri()) {
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
@@ -1483,6 +1490,10 @@ export function GettingStartedFlow({
 const Swap = styled.div`
   width: 100%;
   animation: ${swapIn} 220ms ease-out;
+
+  /* A packaged macOS WebView can leave entry animations at time zero while
+     its window is not foregrounded. That makes the whole flow transparent. */
+  ${isRunningInTauri() && 'animation: none;'}
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
