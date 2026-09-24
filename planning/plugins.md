@@ -79,7 +79,7 @@ is a value in a manifest field, not a separate concept.
 | --- | --- |
 | Class extender `before_commit` | `run`, trigger `commit:before`, returns problems |
 | Importer transform | `run`, trigger `manual`, capability `parse` |
-| Scheduled connector (Calendar) | `run`, trigger `cron`, capabilities `network` + `secrets` |
+| Scheduled connector (Notion, Calendar) | `run`, trigger `cron`, capabilities `network` + `secrets` |
 | Automation ("email at €100") | `run`, trigger `query:entered` |
 | Importer skill | `run` + fixtures + instructions |
 | Custom resource view | `view`, capability `atomic.read/write`, slot `resource-page` |
