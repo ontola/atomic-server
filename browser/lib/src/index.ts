@@ -192,6 +192,21 @@ export {
   type CreatedApp,
 } from './plugin-app.js';
 export {
+  catalogAppProperties,
+  catalogAppSchema,
+  catalogAppState,
+  compareVersions,
+  fetchCatalogAppModule,
+  installCatalogApp,
+  parseCatalogApp,
+  readInstalledCatalogApps,
+  resolveModuleUrl,
+  subresourceIntegrity,
+  updateCatalogApp,
+  type CatalogApp,
+  type InstalledCatalogApp,
+} from './catalog-app.js';
+export {
   parseManifest,
   validateManifest,
   type CapabilityName,
