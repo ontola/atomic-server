@@ -12533,3 +12533,8 @@ msgstr ""
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
 msgstr ""
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr ""

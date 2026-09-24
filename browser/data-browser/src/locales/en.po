@@ -12579,3 +12579,8 @@ msgstr "This app wants to open <0/> in a new tab. <1/>"
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
 msgstr "Open a link"
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
