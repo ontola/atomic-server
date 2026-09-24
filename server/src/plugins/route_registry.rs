@@ -1257,8 +1257,11 @@ impl RouteRegistry {
             // wherever they exist, with the revocation tombstone.
             let keys = super::route_keys::erase(store, &subject);
             let tokens = super::route_tokens::erase(store, &subject);
-            if keys + tokens > 0 {
-                tracing::info!(%subject, keys, tokens, "erased plugin route keys and tokens");
+            // Which blobs it stored, too: nothing may serve them in its
+            // name. The bytes stay (content-addressed; a File may hold them).
+            let blobs = super::route_blobs::erase(store, &subject);
+            if keys + tokens + blobs > 0 {
+                tracing::info!(%subject, keys, tokens, blobs, "erased plugin route keys, tokens and blob records");
             }
             // Its queued deliveries go too (#1719): nobody may send in the
             // name of a revoked installation.

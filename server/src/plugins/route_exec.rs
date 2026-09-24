@@ -22,6 +22,10 @@
 //! host-held `ctx.keys` and `ctx.tokens` ([`super::route_keys`],
 //! [`super::route_tokens`]).
 //!
+//! A `body: blob` request is stored by the host before the sandbox runs, and
+//! a handler may answer with a blob instead of a body; conditional requests
+//! against either are answered by the host ([`super::route_blobs`], #1720).
+//!
 //! Runs happen on their own small runtime ([`pool`]), apart from the HTTP
 //! workers and the job scheduler, so a flood of route requests cannot starve
 //! either. Every request is counted for `readRouteStatus`
@@ -289,6 +293,8 @@ pub struct RouteExecutor {
     pub keys: super::route_auth::KeyResolver,
     /// Consent requests and codes for route tokens (AS-08).
     pub consents: Arc<super::route_tokens::Consents>,
+    /// The operator's cap on a `body: blob` request (#1720).
+    pub max_blob_bytes: u64,
 }
 
 impl Default for RouteExecutor {
@@ -307,6 +313,7 @@ impl RouteExecutor {
             quotas: Default::default(),
             keys: Default::default(),
             consents: Default::default(),
+            max_blob_bytes: super::route_blobs::DEFAULT_MAX_BLOB_BYTES,
         }
     }
 
@@ -319,6 +326,12 @@ impl RouteExecutor {
     /// This executor with these route write quotas.
     pub fn with_quotas(mut self, quotas: super::route_writes::Quotas) -> Self {
         self.quotas = super::route_writes::QuotaLedger::new(quotas);
+        self
+    }
+
+    /// This executor with this cap on blob request bodies.
+    pub fn with_max_blob_bytes(mut self, max: u64) -> Self {
+        self.max_blob_bytes = max;
         self
     }
 
@@ -980,6 +993,9 @@ async fn run(
     };
 
     // Body admission, before the pool: an oversized upload never costs a slot.
+    // A blob body is read here (and refused as soon as it is too large) but
+    // only stored once the caller is verified and a slot is free.
+    let mut blob_in: Option<(Vec<u8>, String, String)> = None;
     let body = match route.body {
         None if has_body(req) => {
             return problem(
@@ -992,13 +1008,66 @@ async fn run(
         }
         None => None,
         Some(Body::Blob) => {
-            return problem(
-                StatusCode::NOT_IMPLEMENTED,
-                "route-blob-unavailable",
-                "Blob request bodies are not supported yet",
-                "Routes with `body: blob` are not served by this server version.",
-            )
-            .into()
+            // Read-only routes may serve blobs, never store them.
+            if level < PluginRoutesLevel::ReadWrite {
+                return problem(
+                    StatusCode::FORBIDDEN,
+                    "route-blob-refused",
+                    "This plugin route cannot store request bodies here",
+                    "Storing request bodies needs `--plugin-routes read-write` on this server.",
+                )
+                .into();
+            }
+            // Storing a body is a write: only under an approved route grant
+            // for one of the route's write targets, checked before a byte
+            // is read.
+            if let Some(http) = loaded.manifest.http.as_ref() {
+                if let Err(refusal) = super::route_writes::allowed_targets(
+                    store,
+                    http,
+                    route,
+                    &loaded.config,
+                    &loaded.grants,
+                ) {
+                    return Outcome::failed(
+                        problem(refusal.status, refusal.kind, refusal.title, &refusal.detail),
+                        refusal.error,
+                    );
+                }
+            }
+            let content_type = essence(req);
+            if !route.accept.is_empty()
+                && !route
+                    .accept
+                    .iter()
+                    .any(|a| a.eq_ignore_ascii_case(&content_type))
+            {
+                return problem(
+                    StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                    "route-unsupported-media-type",
+                    "Unsupported content type",
+                    &format!("This route does not accept `{content_type}`."),
+                )
+                .into();
+            }
+            let bodiless =
+                !has_body(req) && matches!(req.method().as_str(), "GET" | "HEAD" | "DELETE");
+            if !bodiless {
+                let media_type = super::route_blobs::media_type(req);
+                match super::route_blobs::read(
+                    payload,
+                    content_length(req),
+                    super::route_blobs::limit(route, executor.max_blob_bytes),
+                    executor.quotas.bytes_left(installation, at),
+                    executor.quotas.quotas().bytes_per_day,
+                )
+                .await
+                {
+                    Ok((bytes, hash)) => blob_in = Some((bytes, hash, media_type)),
+                    Err(refused) => return blob_refused(refused),
+                }
+            }
+            None
         }
         Some(kind) => {
             let content_type = essence(req);
@@ -1058,7 +1127,10 @@ async fn run(
             store,
             installation,
             &parts,
-            body.as_deref().unwrap_or("").as_bytes(),
+            match &blob_in {
+                Some((bytes, ..)) => bytes,
+                None => body.as_deref().unwrap_or("").as_bytes(),
+            },
             at,
         )
         .await
@@ -1114,6 +1186,28 @@ async fn run(
         return busy("This plugin is answering as many requests as it may at once.");
     };
 
+    // The blob is stored before the sandbox runs, which only ever sees its
+    // reference (design 2.6).
+    let blob = match blob_in {
+        Some((bytes, hash, media_type)) => {
+            match super::route_blobs::store(
+                store,
+                &executor.quotas,
+                installation,
+                &bytes,
+                &hash,
+                media_type,
+                at,
+            )
+            .await
+            {
+                Ok(blob) => Some(blob),
+                Err(refused) => return blob_refused(refused),
+            }
+        }
+        None => None,
+    };
+
     // A claim's path is `/.well-known/<name>`, not the route's pattern:
     // there are no params, and the handler is told which name it answers.
     let params = match well_known {
@@ -1151,6 +1245,7 @@ async fn run(
         "query": query(req.query_string()),
         "headers": request_headers(req, shared_host),
         "body": body,
+        "blob": blob.as_ref().map(super::route_blobs::BlobRef::to_json),
         "caller": caller,
         "receivedAt": at,
     });
@@ -1375,6 +1470,62 @@ async fn run(
         }
     }
 
+    // A blob answer (#1720): only one this installation may serve, and
+    // conditional requests answered against it, or against the blob the
+    // handler says the target held (`current`), before anything is stored.
+    let mut response_json = verdict["response"].clone();
+    let served = match served_blob(
+        store,
+        installation,
+        &loaded,
+        &mut response_json,
+        blob.as_ref(),
+    )
+    .await
+    {
+        Ok(served) => served,
+        Err(refused) => {
+            let (response, error) = *refused;
+            return Outcome {
+                fuel,
+                problems,
+                ..Outcome::failed(response, error)
+            };
+        }
+    };
+    if let Some(current) = &served.current {
+        match super::route_blobs::precondition(req, current.as_deref()) {
+            Some(StatusCode::NOT_MODIFIED) => {
+                let mut response = HttpResponse::NotModified();
+                if let Some(hash) = current {
+                    response.insert_header((header::ETAG, super::route_blobs::etag(hash)));
+                }
+                return Outcome {
+                    fuel,
+                    problems,
+                    ..Outcome::from(
+                        response
+                            .insert_header((header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
+                            .finish(),
+                    )
+                };
+            }
+            Some(status) => {
+                return Outcome {
+                    fuel,
+                    problems,
+                    ..Outcome::from(problem(
+                        status,
+                        "route-precondition-failed",
+                        "Precondition failed",
+                        "The resource is not in the state the request expects. Nothing was stored.",
+                    ))
+                };
+            }
+            None => {}
+        }
+    }
+
     let host = req
         .headers()
         .get(header::HOST)
@@ -1395,9 +1546,52 @@ async fn run(
     };
     // The response is validated before anything is written, and the writes
     // are stored before it is sent: a 2xx means stored (design 2.6).
-    match build_response(&verdict["response"], &rules) {
-        Ok(built) => {
+    match build_response(&response_json, &rules) {
+        Ok(mut built) => {
             let mut problems = problems;
+            // The bytes are loaded before anything is stored: a blob that
+            // is not there is a failed answer, not a half-applied one.
+            let mut blob_body = None;
+            if let Some(hash) = &served.hash {
+                match super::route_blobs::load(store, hash, rules.head).await {
+                    Some(bytes) => blob_body = Some(bytes),
+                    None => {
+                        return Outcome {
+                            fuel,
+                            problems,
+                            ..Outcome::failed(
+                                problem(
+                                    StatusCode::BAD_GATEWAY,
+                                    "route-blob-missing",
+                                    "This plugin route answered with a file this server does not have",
+                                    "The file's bytes are not on this server (yet).",
+                                ),
+                                format!("blob {hash} is not in the blob store"),
+                            )
+                        };
+                    }
+                }
+            }
+            // The host's ETag: the served blob's hash, or (after a blob
+            // upload) the stored one's, unless the handler set its own.
+            let etag = match (&served.hash, &blob) {
+                (Some(hash), _) => {
+                    built.headers.retain(|(name, _)| name != header::ETAG);
+                    Some(hash.as_str())
+                }
+                (None, Some(stored))
+                    if built.status.is_success()
+                        && !built.headers.iter().any(|(name, _)| name == header::ETAG) =>
+                {
+                    Some(stored.hash.as_str())
+                }
+                _ => None,
+            };
+            if let Some(hash) = etag {
+                if let Ok(value) = HeaderValue::from_str(&super::route_blobs::etag(hash)) {
+                    built.headers.push((header::ETAG, value));
+                }
+            }
             // Deliveries are checked before anything is applied, and stored
             // after the intents, before the response (design 2.6).
             let mut deliveries = Vec::new();
@@ -1512,8 +1706,17 @@ async fn run(
                     built.dropped.join(", ")
                 ));
             }
+            let response = match blob_body {
+                Some(Ok(bytes)) => response.body(bytes),
+                // `HEAD`: the length without the bytes.
+                Some(Err(size)) => response.body(actix_web::body::SizedStream::new(
+                    size,
+                    futures::stream::empty::<Result<web::Bytes, std::convert::Infallible>>(),
+                )),
+                None => response.body(built.body),
+            };
             Outcome {
-                response: response.body(built.body),
+                response,
                 error: None,
                 problems,
                 fuel,
@@ -1547,6 +1750,139 @@ fn unauthorized(auth: Auth, slug: &str, refused: super::http_signatures::Refused
             .insert(header::WWW_AUTHENTICATE, value);
     }
     Outcome::failed(response, format!("not verified: {refused}"))
+}
+
+/// What a handler's response serves as a blob, and what the target held.
+#[derive(Default)]
+struct Served {
+    /// `response.blob`: the blob to send.
+    hash: Option<String>,
+    /// The blob conditional requests compare against: the served one, or
+    /// `response.current` (`Some(None)`: the target holds nothing). `None`
+    /// when the handler said neither, and preconditions are its own.
+    current: Option<Option<String>>,
+}
+
+/// Checks `response.blob` and `response.current`, and rewrites the response
+/// the handler gave into one [`build_response`] validates like any other:
+/// without them, and with the blob's content type when it set none.
+async fn served_blob(
+    store: &Db,
+    installation: &str,
+    loaded: &Loaded,
+    response: &mut Json,
+    uploaded: Option<&super::route_blobs::BlobRef>,
+) -> Result<Served, Box<(HttpResponse, String)>> {
+    use super::route_blobs::{approved_parents, may_use, parse_hash, stored};
+    let Some(object) = response.as_object_mut() else {
+        return Ok(Served::default());
+    };
+    let invalid = |error: String| Box::new((handler_failed(), error));
+    let hash_of = |value: Json, field: &str| match value {
+        Json::Null => Ok(None),
+        Json::String(s) => parse_hash(&s)
+            .map(Some)
+            .ok_or_else(|| format!("response.{field} is not a blob hash")),
+        _ => Err(format!("response.{field} is not a blob hash")),
+    };
+    let blob = hash_of(object.remove("blob").unwrap_or(Json::Null), "blob").map_err(invalid)?;
+    let current = match object.remove("current") {
+        None => None,
+        Some(value) => Some(hash_of(value, "current").map_err(invalid)?),
+    };
+    let Some(hash) = blob else {
+        return Ok(Served {
+            hash: None,
+            current,
+        });
+    };
+    if !matches!(object.get("body"), None | Some(Json::Null)) {
+        return Err(invalid("a response has a body or a blob, not both".into()));
+    }
+    let parents = match loaded.manifest.http.as_ref() {
+        Some(http) => approved_parents(store, http, &loaded.route, &loaded.config, &loaded.grants),
+        None => Vec::new(),
+    };
+    let just_stored = uploaded.is_some_and(|b| b.hash == hash);
+    if !just_stored && !may_use(store, installation, &hash, &parents).await {
+        return Err(Box::new((
+            problem(
+                StatusCode::BAD_GATEWAY,
+                "route-blob-refused",
+                "This plugin route answered with a file it may not serve",
+                "A plugin may only serve files it stored, or that its folders hold.",
+            ),
+            format!("blob {hash} was not stored by this installation, and none of its write targets holds it"),
+        )));
+    }
+    // The type it was stored with, unless the handler names one.
+    let headers = object
+        .entry("headers")
+        .or_insert_with(|| Json::Object(Default::default()));
+    if headers.is_null() {
+        *headers = Json::Object(Default::default());
+    }
+    if let Json::Object(headers) = headers {
+        if !headers
+            .keys()
+            .any(|k| k.eq_ignore_ascii_case("content-type"))
+        {
+            let media_type = stored(store, installation, &hash)
+                .map(|b| b.media_type)
+                .unwrap_or_else(|| "application/octet-stream".into());
+            headers.insert("content-type".into(), Json::String(media_type));
+        }
+    }
+    Ok(Served {
+        current: Some(Some(hash.clone())),
+        hash: Some(hash),
+    })
+}
+
+/// The host's answer to a blob body it did not store.
+fn blob_refused(refused: super::route_blobs::Refused) -> Outcome {
+    use super::route_blobs::Refused;
+    match refused {
+        Refused::TooLarge(limit) => too_large(limit).into(),
+        Refused::Quota {
+            limit,
+            retry_after_secs,
+        } => {
+            let mut response = problem(
+                StatusCode::TOO_MANY_REQUESTS,
+                "route-quota-exceeded",
+                "This plugin has stored as much as it may for now",
+                &format!(
+                    "The `bytes-per-day` quota ({limit}) is used up. Nothing was stored. Try again later."
+                ),
+            );
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from(retry_after_secs));
+            Outcome::failed(
+                response,
+                format!("the bytes-per-day quota of {limit} would be exceeded by a blob body"),
+            )
+        }
+        Refused::Unreadable(e) => Outcome::failed(
+            problem(
+                StatusCode::BAD_REQUEST,
+                "route-body-unreadable",
+                "The request body could not be read",
+                &e,
+            ),
+            e,
+        ),
+        Refused::Store(e) => Outcome::failed(
+            problem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "route-blob-store-failed",
+                "The server could not store this request's body",
+                "See the server log.",
+            ),
+            e,
+        ),
+    }
 }
 
 /// `503`: the installation's delivery queue has no room.

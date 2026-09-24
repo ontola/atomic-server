@@ -218,6 +218,28 @@ impl QuotaLedger {
         Ok(())
     }
 
+    /// Bytes this installation may still write today, and the seconds until
+    /// that window ends. `None` when the byte quota is off. Nothing is
+    /// booked: a blob body is checked against this while it streams in, and
+    /// booked with [`Self::reserve`] once its size is known.
+    pub fn bytes_left(&self, installation: &str, now: i64) -> Option<(u64, u64)> {
+        let limit = self.quotas.bytes_per_day;
+        if limit == 0 {
+            return None;
+        }
+        let day = now.div_euclid(DAY_MS);
+        let used = self
+            .usage
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .installations
+            .get(installation)
+            .filter(|w| w.index == day)
+            .map_or(0, |w| w.bytes);
+        let retry = (((day + 1) * DAY_MS - now).max(1000) + 999) as u64 / 1000;
+        Some((limit.saturating_sub(used), retry))
+    }
+
     /// Gives back a reservation for a write of which nothing was stored.
     pub fn refund(&self, installation: &str, caller: &str, creates: u64, bytes: u64, now: i64) {
         let (hour, day) = (now.div_euclid(HOUR_MS), now.div_euclid(DAY_MS));
@@ -622,6 +644,25 @@ pub async fn apply(request: WriteRequest<'_>, intents: &Json) -> Result<Applied,
         });
     }
     check_plan(store, &plan, &allowed, &agent).await?;
+    // A blob a write references becomes servable from the target (#1720),
+    // so a route may only reference one its installation stored or its
+    // targets already hold: a hash alone is not the bytes.
+    let mut blobs = Vec::new();
+    for change in &plan.changes {
+        for property in &change.properties {
+            if let Some(to) = &property.to {
+                super::route_blobs::referenced(to, &mut blobs);
+            }
+        }
+    }
+    let parents: Vec<String> = allowed.iter().map(|t| t.parent.clone()).collect();
+    for hash in blobs {
+        if !super::route_blobs::may_use(store, request.installation, &hash, &parents).await {
+            return Err(Refusal::refused(format!(
+                "a route may only reference blobs its installation stored or its write targets hold, not {hash}"
+            )));
+        }
+    }
 
     let (creates, bytes) = cost(&plan);
     let caller = match request.caller {
