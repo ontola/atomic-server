@@ -17,7 +17,19 @@ import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
 import { agentSubject } from './subject.js';
 import type { JSONValue } from './value.js';
-import type { DeclaredHttp } from './plugin-manifest-http.js';
+import type {
+  DeclaredHttp,
+  DeclaredWriteTarget,
+} from './plugin-manifest-http.js';
+import {
+  fetchPluginAgent,
+  giveRouteWriteRights,
+  grantsWithRouteWrites,
+  removeRouteWriteRights,
+  resolveWriteTargetParents,
+  routeWriteParentsOf,
+  routeWriteRightsDiff,
+} from './plugin-route-grant.js';
 
 export const RUNTIME_JS = 'atomic-js/1';
 const WORLD_EXTENSION = 'extension';
@@ -254,6 +266,13 @@ export interface InstallReleaseOptions {
   config?: JSONValue;
   /** Capability names the installer approved. */
   grants: string[];
+  /**
+   * The release's write targets, when the installer approved its route
+   * writes. Written to `grants` as the route grant, and the installation's
+   * agent gets `write` on each target's parent. Every `config:` parent must
+   * resolve against `config`, or nothing is installed.
+   */
+  routeWrites?: DeclaredWriteTarget[];
   /** Committing `active` (the default) is what installs. */
   status?: InstallationStatus;
 }
@@ -276,8 +295,14 @@ export async function installRelease(
     version,
     config,
     grants,
+    routeWrites,
     status = 'active',
   } = options;
+  // Before anything is committed: a target that can't be resolved refuses
+  // the install instead of leaving a plugin that can't store anything.
+  const parents = routeWrites
+    ? resolveWriteTargetParents(routeWrites, config)
+    : [];
   const propVals: Record<string, JSONValue> = {
     [core.properties.name]: name,
     // `release` belongs in the genesis commit, not in a `set` after it.
@@ -288,7 +313,10 @@ export async function installRelease(
     [server.properties.release]: release.url,
     [server.properties.releaseId]: release.id,
     [server.properties.installationStatus]: status,
-    [server.properties.grants]: grants,
+    [server.properties.grants]: grantsWithRouteWrites(
+      grants,
+      routeWrites,
+    ) as JSONValue,
     // In the genesis, so the user's own signature is what records it. The
     // server refuses to change it afterwards.
     [server.properties.integrationAppAgent]: await mintInstallationAppId(),
@@ -320,6 +348,11 @@ export async function installRelease(
   });
   await installation.save();
 
+  if (parents.length > 0 && status === 'active') {
+    const agent = await fetchPluginAgent(store, installation.subject);
+    await giveRouteWriteRights(store, agent, parents);
+  }
+
   return installation.subject;
 }
 
@@ -327,6 +360,13 @@ export interface UpdateReleaseOptions {
   release: ReleaseReference;
   /** Capability names the installer approved for the new release. */
   grants: string[];
+  /**
+   * The new release's write targets, when the installer approved them. The
+   * route grant is replaced by these, and the agent's `write` rights follow:
+   * given on new parents, taken back from parents no longer covered. Absent:
+   * the route grant is dropped and every right it came with is taken back.
+   */
+  routeWrites?: DeclaredWriteTarget[];
   config?: JSONValue;
   version?: string;
 }
@@ -348,8 +388,26 @@ export async function updateInstallationRelease(
   installation: string,
   options: UpdateReleaseOptions,
 ): Promise<void> {
-  const { release, grants, config, version } = options;
+  const { release, grants, routeWrites, config, version } = options;
   const resource = await store.getResource<Server.Installation>(installation);
+  const nextConfig =
+    config !== undefined
+      ? config
+      : (resource.get(server.properties.config) as JSONValue | undefined);
+  const before = routeWriteParentsOf(
+    resource.get(server.properties.grants),
+    resource.get(server.properties.config),
+  );
+  const after = routeWrites
+    ? resolveWriteTargetParents(routeWrites, nextConfig)
+    : [];
+  const { give, remove } = routeWriteRightsDiff(before, after);
+  // Asked while the old release is still installed, so it is known even when
+  // the update fails to activate.
+  const agent =
+    give.length > 0 || remove.length > 0
+      ? await fetchPluginAgent(store, installation)
+      : undefined;
 
   await resource.set(
     server.properties.releaseId,
@@ -363,7 +421,12 @@ export async function updateInstallationRelease(
     false,
     Datatype.ATOMIC_URL,
   );
-  await resource.set(server.properties.grants, grants, false, Datatype.JSON);
+  await resource.set(
+    server.properties.grants,
+    grantsWithRouteWrites(grants, routeWrites) as JSONValue,
+    false,
+    Datatype.JSON,
+  );
 
   if (version !== undefined) {
     await resource.set(
@@ -379,6 +442,34 @@ export async function updateInstallationRelease(
   }
 
   await resource.save();
+
+  if (agent) {
+    await giveRouteWriteRights(store, agent, give);
+    await removeRouteWriteRights(store, agent, remove);
+  }
+}
+
+/**
+ * Takes back the `write` rights an Installation's route grant came with, for
+ * revoking or uninstalling it. Call it before the status change or destroy:
+ * the server only reports the plugin's agent while it is installed.
+ */
+export async function withdrawRouteWriteRights(
+  store: Store,
+  installation: string,
+): Promise<void> {
+  const resource = await store.getResource<Server.Installation>(installation);
+  const parents = routeWriteParentsOf(
+    resource.get(server.properties.grants),
+    resource.get(server.properties.config),
+  );
+  if (parents.length === 0) return;
+  const known = resource.get(server.properties.pluginAgent);
+  const agent =
+    typeof known === 'string' && known.length > 0
+      ? known
+      : await fetchPluginAgent(store, installation, { attempts: 1 });
+  await removeRouteWriteRights(store, agent, parents);
 }
 
 type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;

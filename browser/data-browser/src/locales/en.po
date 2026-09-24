@@ -2229,6 +2229,7 @@ msgstr "Rearange {0}"
 msgid "<0/> Note"
 msgstr "<0/> Note"
 
+#: src/chunks/Plugins/RouteWriteApproval.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/SettingsAgent.tsx
@@ -9736,3 +9737,27 @@ msgstr "This app wants to open <0/> in a new tab. <1/>"
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
 msgstr "Open a link"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "the resource in the config key <0/>, which is not set"
+msgstr "the resource in the config key <0/>, which is not set"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
+msgstr "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Let <0/> add items to <1/> when other servers send them"
+msgstr "Let <0/> add items to <1/> when other servers send them"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Incoming items"
+msgstr "Incoming items"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
+msgstr "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Route writes"
+msgstr "Route writes"
