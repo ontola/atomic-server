@@ -83,13 +83,21 @@ async function ownerName(
   store: Store,
   agentSubject: string,
 ): Promise<string | undefined> {
-  const agentResource = await withDeadline<Resource | undefined>(
-    store.getResource(agentSubject),
-    2_000,
-    undefined,
-  );
+  // Everything inside the guard, not just the promise: `withDeadline` swallows
+  // a rejection, but `getResource` can also throw before there is a promise to
+  // swallow. A name is a nicety and creating the home is not, so nothing here
+  // may be the reason someone is left without one.
+  try {
+    const agentResource = await withDeadline<Resource | undefined>(
+      store.getResource(agentSubject),
+      2_000,
+      undefined,
+    );
 
-  const name = agentResource?.get(core.properties.name);
+    const name = agentResource?.get(core.properties.name);
 
-  return typeof name === 'string' && name.trim() ? name.trim() : undefined;
+    return typeof name === 'string' && name.trim() ? name.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }
