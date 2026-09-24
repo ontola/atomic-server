@@ -1,0 +1,41 @@
+{
+  "name": "example-sync",
+  "namespace": "example",
+  "version": "2.1.0",
+  "description": "Mirrors pages from the example API",
+  "author": "Ontola",
+  "permissions": [
+    {
+      "permission": "network",
+      "reason": "Reads pages from the example API"
+    },
+    {
+      "permission": "storage",
+      "reason": "Caches page bodies"
+    },
+    {
+      "permission": "custom-view",
+      "reason": ""
+    }
+  ],
+  "network": {
+    "origins": [
+      "https://api.example.com"
+    ]
+  },
+  "defaultConfig": {
+    "workspace": "",
+    "interval": 60
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "type": "string"
+      },
+      "interval": {
+        "type": "integer"
+      }
+    }
+  }
+}

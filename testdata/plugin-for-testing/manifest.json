@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "actions": [
+    {
+      "name": "get_record",
+      "title": "Get a record",
+      "description": "Read one record from the test provider.",
+      "operation": "get",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "description": "Positive record number"
+          }
+        },
+        "required": ["number"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create_record",
+      "title": "Create a record",
+      "description": "Prepare a new record for review. Nothing is sent until approved.",
+      "operation": "create",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Record title" },
+          "body": { "type": "string", "description": "Markdown description" }
+        },
+        "required": ["title"],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "secrets": [
+    {
+      "name": "provider",
+      "origin": "https://provider.test",
+      "description": "Token for the test provider"
+    }
+  ],
+  "operations": [
+    {
+      "id": "list",
+      "method": "GET",
+      "url": "https://provider.test/records",
+      "effect": "read"
+    },
+    {
+      "id": "get",
+      "method": "GET",
+      "url": "https://provider.test/records/{number}",
+      "effect": "read"
+    },
+    {
+      "id": "create",
+      "method": "POST",
+      "url": "https://provider.test/records",
+      "effect": "write"
+    },
+    {
+      "id": "update",
+      "method": "PATCH",
+      "url": "https://provider.test/records/{number}",
+      "effect": "write"
+    },
+    {
+      "id": "collections",
+      "method": "GET",
+      "url": "https://provider.test/collections",
+      "effect": "read"
+    },
+    {
+      "id": "schema",
+      "method": "GET",
+      "url": "https://provider.test/records/schema",
+      "effect": "read"
+    },
+    {
+      "id": "rename",
+      "method": "PATCH",
+      "url": "https://provider.test/records/schema",
+      "effect": "write"
+    }
+  ]
+}

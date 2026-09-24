@@ -356,12 +356,12 @@ mod tests {
         let parse = |u: &str| origin_of(&url::Url::parse(u).unwrap()).unwrap();
 
         assert_eq!(
-            parse("https://api.notion.com/v1/x?y=1"),
-            "https://api.notion.com"
+            parse("https://api.example.com/v1/x?y=1"),
+            "https://api.example.com"
         );
         assert_eq!(parse("http://localhost:9883/x"), "http://localhost:9883");
         // A default port normalizes away, so a secret scoped to
-        // `https://api.notion.com` is still spent on `https://api.notion.com:443`.
+        // `https://api.example.com` is still spent on `https://api.example.com:443`.
         // The handler's `normalize_origin` uses the same rule, so what is stored
         // and what is compared cannot drift.
         assert_eq!(parse("https://x.test:443/"), "https://x.test");
@@ -370,9 +370,9 @@ mod tests {
 
     #[test]
     fn a_handle_in_a_url_or_body_is_refused() {
-        assert!(refuse_misplaced_handles("https://x.test/?t=secret:notion", None).is_some());
+        assert!(refuse_misplaced_handles("https://x.test/?t=secret:example", None).is_some());
         assert!(
-            refuse_misplaced_handles("https://x.test/", Some("{\"t\":\"secret:notion\"}"))
+            refuse_misplaced_handles("https://x.test/", Some("{\"t\":\"secret:example\"}"))
                 .is_some()
         );
         assert!(refuse_misplaced_handles("https://x.test/", Some("{}")).is_none());
@@ -383,14 +383,14 @@ mod tests {
         let headers = vec![
             (
                 "Authorization".to_string(),
-                "Bearer secret:notion".to_string(),
+                "Bearer secret:example".to_string(),
             ),
-            ("X-Key".to_string(), "secret:notion".to_string()),
+            ("X-Key".to_string(), "secret:example".to_string()),
             ("Accept".to_string(), "application/json".to_string()),
         ];
 
         let out = substitute_headers(headers, |name| {
-            (name == "notion").then(|| "tok-abc".to_string())
+            (name == "example").then(|| "tok-abc".to_string())
         })
         .expect("substituted");
 

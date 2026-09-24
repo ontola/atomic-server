@@ -126,10 +126,6 @@ export default defineConfig(({ mode }) => {
         // the two WASM memories diverge. Exact-match regex so the
         // `loro-crdt/web` subpath import in `LoroLoader` is left alone.
         {
-          find: '@localthought/atomic-integrations',
-          replacement: 'devonian/platform-lenses/atomic-integrations',
-        },
-        {
           find: '@integration-host/import-records',
           replacement: path.resolve(__dirname, '../lib/src/import-records.ts'),
         },

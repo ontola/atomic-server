@@ -137,3 +137,215 @@ it('lets a generated view wait for host recovery but still rejects a silent host
   await rejected;
   expect(vi.getTimerCount()).toBe(0);
 });
+
+function generatedStore(f: ReturnType<typeof frame>) {
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  return new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(
+    f.window,
+    () => 0,
+    () => undefined,
+  );
+}
+
+const b64 = (s: string) =>
+  Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/')), c =>
+    c.charCodeAt(0),
+  );
+
+async function sha256Hex(text: string) {
+  return Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)),
+    ),
+    b => b.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+/** Lets queued promise callbacks (WebCrypto, postMessage replies) run. */
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
+};
+
+it('carries the proxy ops; the relay op is gone', () => {
+  for (const op of [
+    'proxyCapability',
+    'proxyConnections',
+    'proxyConnect',
+  ] as const)
+    expect(isViewRequest(viewRequest(1, op, { platform: 'pets' }))).toBe(true);
+  expect(isViewRequest({ ...viewRequest(1, 'get'), op: 'proxy' })).toBe(false);
+
+  const f = frame();
+  const store = generatedStore(f);
+  void store.proxy.connections({ platform: 'pets' });
+  void store.proxy.connect({ platform: 'pets' });
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args.platform])).toEqual([
+    ['proxyConnections', 'pets'],
+    ['proxyConnect', 'pets'],
+  ]);
+});
+
+it('calls the proxy directly with a capability and a v2 signature by its own key', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  const fetches: { url: string; init: RequestInit }[] = [];
+  let refusals = 1;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init: RequestInit) => {
+      fetches.push({ url, init });
+
+      if (refusals-- > 0)
+        return new Response(
+          JSON.stringify({ error: 'capability_expired', message: 'expired' }),
+          { status: 401 },
+        );
+
+      return new Response(JSON.stringify([{ id: 1 }]), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          link: '<https://pets.example/pets?page=2>; rel="next"',
+          'set-cookie': 'never=forwarded',
+        },
+      });
+    }),
+  );
+
+  const pending = store.proxy.request({
+    platform: 'pets',
+    connectionId: 'c 1',
+    path: '/pets',
+    method: 'post',
+    query: { page: '2' },
+    body: '{"name":"Rex"}',
+  });
+
+  // Two mints: the first capability is refused as expired, once.
+  for (let mint = 0; mint < 2; mint++) {
+    await settle();
+    const ask = f.parent.postMessage.mock.calls.at(-1)![0];
+    expect(isViewRequest(ask)).toBe(true);
+    expect(ask.op).toBe('proxyCapability');
+    expect(ask.args).toMatchObject({ platform: 'pets', connectionId: 'c 1' });
+    expect(ask.args.publicKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    f.reply({
+      type: 'atomic.view.response',
+      version: 1,
+      id: ask.id,
+      result: {
+        capability: `cap-${mint}`,
+        aud: 'https://proxy.example',
+        exp: Math.floor(Date.now() / 1000) + 600,
+      },
+    });
+  }
+
+  const result = await pending;
+  expect(result).toEqual({
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      link: '<https://pets.example/pets?page=2>; rel="next"',
+    },
+    body: [{ id: 1 }],
+  });
+  expect(fetches).toHaveLength(2);
+
+  const { url, init } = fetches[1];
+  expect(url).toBe('https://proxy.example/proxy/c%201/pets/pets?page=2');
+  expect(init).toMatchObject({
+    method: 'POST',
+    body: '{"name":"Rex"}',
+    credentials: 'omit',
+    redirect: 'error',
+  });
+  const headers = init.headers as Record<string, string>;
+  expect(headers.Authorization).toBe('Capability cap-1');
+  expect(headers['x-atomic-signature-version']).toBe('2');
+  const publicKey = headers['x-atomic-public-key'];
+  expect(headers['x-atomic-agent']).toBe(`atomic:agent:${publicKey}`);
+  const message = [
+    'atomic-request-v2',
+    'POST',
+    url,
+    headers['x-atomic-timestamp'],
+    await sha256Hex('{"name":"Rex"}'),
+  ].join('\n');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    b64(publicKey),
+    { name: 'Ed25519' },
+    false,
+    ['verify'],
+  );
+  expect(
+    await crypto.subtle.verify(
+      { name: 'Ed25519' },
+      key,
+      b64(headers['x-atomic-signature']),
+      new TextEncoder().encode(message),
+    ),
+  ).toBe(true);
+  // Same frame key for both attempts; it never leaves the frame.
+  expect(
+    (fetches[0].init.headers as Record<string, string>)['x-atomic-public-key'],
+  ).toBe(publicKey);
+});
+
+it('refuses a path that would leave the connection, before asking anything', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  vi.stubGlobal('fetch', vi.fn());
+  const pending = store.proxy.request({
+    platform: 'pets',
+    connectionId: 'c1',
+    path: '/../../connections',
+  });
+  await settle();
+  const ask = f.parent.postMessage.mock.calls.at(-1)![0];
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: ask.id,
+    result: {
+      capability: 'cap',
+      aud: 'https://proxy.example',
+      exp: Math.floor(Date.now() / 1000) + 600,
+    },
+  });
+  await expect(pending).rejects.toThrow('Invalid proxy path');
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('says so plainly where WebCrypto has no Ed25519', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  const original = crypto.subtle.generateKey;
+  (crypto.subtle as { generateKey: unknown }).generateKey = () =>
+    Promise.reject(new DOMException('Unrecognized name', 'NotSupportedError'));
+
+  try {
+    await expect(
+      store.proxy.request({ platform: 'pets', connectionId: 'c1', path: '/' }),
+    ).rejects.toThrow(/cannot make an Ed25519 key/);
+  } finally {
+    (crypto.subtle as { generateKey: unknown }).generateKey = original;
+  }
+
+  expect(f.parent.postMessage).not.toHaveBeenCalled();
+});

@@ -77,6 +77,83 @@ describe('writing as the app', () => {
     ]);
   });
 
+  it('sends removed properties as their own write, since save only sets', async () => {
+    const store = fakeStore({ 'did:ad:mine': APP });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', {
+        subject: 'did:ad:mine',
+        propVals: { p: 'v' },
+        remove: ['q'],
+      }),
+    );
+
+    expect(sent).toEqual([
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'remove',
+        subject: 'did:ad:mine',
+        properties: ['q'],
+      },
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'save',
+        subject: 'did:ad:mine',
+        propVals: { p: 'v' },
+      },
+    ]);
+  });
+
+  it('re-reads what it saved, so the app reads its own write back', async () => {
+    const store = fakeStore({ 'did:ad:mine': APP });
+    const order: string[] = [];
+    vi.mocked(fetch).mockImplementationOnce((async () => {
+      order.push('write');
+
+      return {
+        ok: true,
+        json: async () => ({ subject: 'did:ad:mine' }),
+      } as unknown as Response;
+    }) as typeof fetch);
+    Object.assign(store, {
+      fetchResourceFromServer: vi.fn(async (subject: string) => {
+        order.push(`reread ${subject}`);
+      }),
+    });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:mine', propVals: { p: 'v' } }),
+    );
+
+    expect(order).toEqual(['write', 'reread did:ad:mine']);
+  });
+
+  it('reports a landed save as saved even when the re-read fails', async () => {
+    const store = fakeStore({ 'did:ad:mine': APP });
+    Object.assign(store, {
+      fetchResourceFromServer: vi.fn(async () => {
+        throw new Error('offline');
+      }),
+    });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('save', { subject: 'did:ad:mine', propVals: { p: 'v' } }),
+      ),
+    ).resolves.toEqual({ subject: 'did:ad:mine' });
+  });
+
   it('creates under the app when given no parent', async () => {
     const store = fakeStore();
 
@@ -192,5 +269,110 @@ describe('isHostRequest', () => {
     expect(isHostRequest(null)).toBe(false);
     expect(isHostRequest({ __atomic: true })).toBe(false);
     expect(isHostRequest({ __atomic: true, id: 1 })).toBe(true);
+  });
+});
+
+describe('integration-proxy capabilities', () => {
+  const minted = {
+    capability: 'payload.sig',
+    aud: 'https://proxy.example',
+    exp: 1,
+    connectionId: 'c1',
+    platform: 'pets',
+  };
+  const proxy = {
+    capability: vi.fn(async () => minted),
+    connections: vi.fn(async () => [{ connectionId: 'c1', platform: 'pets' }]),
+  };
+
+  it('mints a capability for the frame key, never touching the server', async () => {
+    const result = await handleRequest(
+      fakeStore(),
+      APP,
+      DRIVE,
+      req('proxyCapability', {
+        platform: 'pets',
+        connectionId: 'c1',
+        publicKey: 'frame-key',
+      }),
+      undefined,
+      proxy,
+    );
+    expect(result).toEqual(minted);
+    expect(proxy.capability).toHaveBeenCalledWith({
+      platform: 'pets',
+      connectionId: 'c1',
+      publicKey: 'frame-key',
+    });
+    expect(sent).toEqual([]);
+  });
+
+  it('lists connection references, and none without a proxy', async () => {
+    expect(
+      await handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyConnections', { platform: 'pets' }),
+        undefined,
+        proxy,
+      ),
+    ).toEqual([{ connectionId: 'c1', platform: 'pets' }]);
+    expect(
+      await handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyConnections', { platform: 'pets' }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses without a proxy, a connection or a frame key', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyCapability', {
+          platform: 'pets',
+          connectionId: 'c1',
+          publicKey: 'k',
+        }),
+      ),
+    ).rejects.toThrow('cannot reach the integration proxy');
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyCapability', { platform: 'pets', publicKey: 'k' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow('connectionId is required');
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyCapability', { platform: 'pets', connectionId: 'c1' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow('publicKey is required');
+  });
+
+  it('no longer relays proxy calls through the page', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxy', { platform: 'pets', connectionId: 'c1', path: '/pets' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow();
   });
 });

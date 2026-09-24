@@ -127,6 +127,13 @@ describe('table templates', () => {
               expect(typeOf(view.groupByColumn ?? '')).toBe('select');
             }
 
+            if (view.kind === 'issues') {
+              // Open vs closed is read from a select's tags or a checkbox.
+              expect(['select', 'checkbox']).toContain(
+                typeOf(view.groupByColumn ?? ''),
+              );
+            }
+
             if (view.kind === 'calendar') {
               expect(INSTANT).toContain(typeOf(view.groupByColumn ?? ''));
             }

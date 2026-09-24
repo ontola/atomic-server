@@ -93,7 +93,7 @@ export function mockProxy({
       }
       if (
         redirect.origin !== frontendOrigin ||
-        !['/app/integrations', '/app/devonian-demo'].includes(redirect.pathname) ||
+        redirect.pathname !== '/app/integrations' ||
         !redirect.searchParams.get('integration_state') ||
         redirect.searchParams.get('platform') !== platform
       )

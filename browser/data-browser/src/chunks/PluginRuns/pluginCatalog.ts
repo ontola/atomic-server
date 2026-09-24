@@ -1,94 +1,82 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '@tomic/react';
+import { parseCatalogApp, type CatalogApp } from '@tomic/react';
+import { usePluginCatalogUrl } from '@helpers/pluginCatalogUrl';
 
 const CATALOG_ENTRY_CLASS =
   'https://atomicdata.dev/integrations/classes/PluginCatalogEntry';
 const IS_A_PROP = 'https://atomicdata.dev/properties/isA';
 const SHORTNAME_PROP = 'https://atomicdata.dev/properties/shortname';
-const NAME_PROP = 'https://atomicdata.dev/properties/name';
-const EMOJI_PROP = 'https://atomicdata.dev/properties/emoji';
-const DESCRIPTION_PROP = 'https://atomicdata.dev/properties/description';
 const EXPERIMENTAL_PROP =
   'https://atomicdata.dev/integrations/properties/experimental';
 const ENABLED_PROP = 'https://atomicdata.dev/integrations/properties/enabled';
-const CAPABILITIES_PROP =
-  'https://atomicdata.dev/integrations/properties/capabilities';
-const EVENTS_PROP = 'https://atomicdata.dev/integrations/properties/events';
-const LIMITATION_PROP =
-  'https://atomicdata.dev/integrations/properties/limitation';
-const KEYWORDS_PROP = 'https://atomicdata.dev/integrations/properties/keywords';
 const REQUIRES_API_PLUGINS_PROP =
   'https://atomicdata.dev/integrations/properties/requires-api-plugins';
-const PLATFORM_PROP = 'https://atomicdata.dev/integrations/properties/platform';
-const CALLBACK_PLATFORM_PROP =
-  'https://atomicdata.dev/integrations/properties/callback-platform';
 
-type CatalogResource = Record<string, unknown>;
-
-// A parsed integrations/catalog.json entry. Every entry has an id, an
-// experimental flag and an enabled flag; the rest are only present on the
-// bundled integrations that own card copy (see IntegrationDiscovery.tsx) —
-// a raw LocalThought proxy platform like 'pets' only carries the first three.
+// A parsed integrations/catalog.json entry: the flags that decide what the
+// Integrations page offers.
 export interface CatalogEntry {
   shortname: string;
   experimental: boolean;
   enabled: boolean;
-  name?: string;
-  icon?: string;
-  description?: string;
-  capabilities?: string;
-  events?: string;
-  limitation?: string;
-  keywords?: string;
-  requiresApiPlugins?: boolean;
-  platform?: string;
-  callbackPlatform?: string;
+  requiresApiPlugins: boolean;
+  /** Set when the entry is an installable drive app (`app-module`). */
+  app?: CatalogApp;
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseCatalogEntries(raw: unknown): CatalogEntry[] {
+/** Malformed entries are skipped, so one bad row can't hide the rest. */
+export function parseCatalogEntries(
+  raw: unknown,
+  catalogUrl?: string,
+): CatalogEntry[] {
   if (!Array.isArray(raw)) return [];
 
-  return (raw as CatalogResource[])
-    .filter(resource =>
-      (resource[IS_A_PROP] as string[] | undefined)?.includes(
-        CATALOG_ENTRY_CLASS,
-      ),
-    )
-    .map(resource => ({
-      shortname: resource[SHORTNAME_PROP] as string,
-      experimental: resource[EXPERIMENTAL_PROP] !== false,
-      enabled: resource[ENABLED_PROP] === true,
-      name: asString(resource[NAME_PROP]),
-      icon: asString(resource[EMOJI_PROP]),
-      description: asString(resource[DESCRIPTION_PROP]),
-      capabilities: asString(resource[CAPABILITIES_PROP]),
-      events: asString(resource[EVENTS_PROP]),
-      limitation: asString(resource[LIMITATION_PROP]),
-      keywords: asString(resource[KEYWORDS_PROP]),
-      requiresApiPlugins: resource[REQUIRES_API_PLUGINS_PROP] === true,
-      platform: asString(resource[PLATFORM_PROP]),
-      callbackPlatform: asString(resource[CALLBACK_PLATFORM_PROP]),
-    }));
+  return raw.flatMap((resource): CatalogEntry[] => {
+    if (!isRecord(resource)) return [];
+    const isA = resource[IS_A_PROP];
+    const shortname = resource[SHORTNAME_PROP];
+
+    if (!Array.isArray(isA) || !isA.includes(CATALOG_ENTRY_CLASS)) return [];
+    if (typeof shortname !== 'string' || !shortname) return [];
+
+    return [
+      {
+        shortname,
+        experimental: resource[EXPERIMENTAL_PROP] !== false,
+        enabled: resource[ENABLED_PROP] === true,
+        requiresApiPlugins: resource[REQUIRES_API_PLUGINS_PROP] === true,
+        // Resolved against the catalog it came from, so a catalog can name
+        // its modules relative to itself.
+        ...(catalogUrl ? { app: parseCatalogApp(resource, catalogUrl) } : {}),
+      },
+    ];
+  });
 }
 
-// integrations/catalog.json is compiled into the server as a static asset
-// (see server/build.rs::embed_integrations) and served at
-// /integrations/catalog.json, rather than bundled into the SPA at build
-// time — a Tauri desktop/mobile build ships a separate frontend that can
-// point at any paired server, so the catalog has to come from wherever
-// `store.getServerUrl()` says the data actually lives, not from the origin
-// the frontend itself was loaded from.
+// catalog.json is published from https://github.com/ontola/atomic-plugins
+// (gh-pages, built from that repo's integrations/ tree) rather than
+// bundled into the SPA at build time or fetched from the paired
+// atomic-server — a Tauri desktop/mobile build ships a separate frontend
+// that can pair with any server, so the catalog has to come from a fixed,
+// publicly reachable location independent of both. The URL is
+// user-configurable (see pluginCatalogUrl.ts / Settings > Integration) so a
+// self-hosted or staging catalog can be used instead.
 const cache = new Map<string, Promise<CatalogEntry[]>>();
+// The settled value of each `cache` entry, so a remounted hook starts from it
+// synchronously. With only the promise, the first render after a remount has
+// no entries, so whatever the catalog drives (the "Show experimental plugins"
+// toggle) drops out and comes back a tick later. Remounts are routine: the whole app remounts once per page load when
+// its locale arrives (LocaleContext.tsx).
+const resolved = new Map<string, CatalogEntry[]>();
 
-function fetchIntegrationCatalog(server: string): Promise<CatalogEntry[]> {
-  let promise = cache.get(server);
+function fetchIntegrationCatalog(catalogUrl: string): Promise<CatalogEntry[]> {
+  let promise = cache.get(catalogUrl);
 
   if (!promise) {
-    promise = fetch(`${server}/integrations/catalog.json`)
+    promise = fetch(catalogUrl)
       .then(response => {
         if (!response.ok) {
           throw new Error(
@@ -98,12 +86,17 @@ function fetchIntegrationCatalog(server: string): Promise<CatalogEntry[]> {
 
         return response.json();
       })
-      .then(parseCatalogEntries)
+      .then(raw => parseCatalogEntries(raw, catalogUrl))
+      .then(entries => {
+        resolved.set(catalogUrl, entries);
+
+        return entries;
+      })
       .catch(reason => {
-        cache.delete(server);
+        cache.delete(catalogUrl);
         throw reason;
       });
-    cache.set(server, promise);
+    cache.set(catalogUrl, promise);
   }
 
   return promise;
@@ -113,16 +106,17 @@ export function useIntegrationCatalog(): {
   entries: CatalogEntry[];
   ready: boolean;
   error?: string;
+  /** Where the entries came from. */
+  catalogUrl: string;
 } {
-  const store = useStore();
-  const server = store.getServerUrl();
-  const [entries, setEntries] = useState<CatalogEntry[]>();
+  const catalogUrl = usePluginCatalogUrl();
+  const [entries, setEntries] = useState(() => resolved.get(catalogUrl));
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     let active = true;
     setError(undefined);
-    fetchIntegrationCatalog(server)
+    fetchIntegrationCatalog(catalogUrl)
       .then(result => {
         if (active) setEntries(result);
       })
@@ -133,22 +127,23 @@ export function useIntegrationCatalog(): {
     return () => {
       active = false;
     };
-  }, [server]);
+  }, [catalogUrl]);
 
-  return { entries: entries ?? [], ready: entries !== undefined, error };
+  return {
+    entries: entries ?? [],
+    ready: entries !== undefined,
+    error,
+    catalogUrl,
+  };
 }
 
-export function catalogByShortname(
-  entries: CatalogEntry[],
-): Map<string, CatalogEntry> {
-  return new Map(entries.map(entry => [entry.shortname, entry]));
-}
-
-export function isCatalogVisible(
-  entry: CatalogEntry | undefined,
-  showExperimentalPlugins: boolean,
-): boolean {
-  if (!entry || !entry.enabled) return false;
-
-  return showExperimentalPlugins || !entry.experimental;
+/**
+ * Whether the catalog has an enabled experimental entry the app can offer.
+ * Entries that need API plugins don't count: nothing can run them until the
+ * host proxies their calls (#1624).
+ */
+export function hasExperimentalEntries(entries: CatalogEntry[]): boolean {
+  return entries.some(
+    entry => entry.enabled && entry.experimental && !entry.requiresApiPlugins,
+  );
 }

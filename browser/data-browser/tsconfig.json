@@ -11,12 +11,6 @@
     "paths": {
       "@tomic/react": ["../react/src/index.ts"],
       "@tomic/lib": ["../lib/src/index.ts"],
-      "@localthought/atomic-integrations": [
-        "./node_modules/devonian/platform-lenses/atomic-integrations/index.ts"
-      ],
-      "@localthought/atomic-integrations/*": [
-        "./node_modules/devonian/platform-lenses/atomic-integrations/*"
-      ],
       "@integration-host/import-records": ["../lib/src/import-records.ts"],
       "@integration-host/plugin-connection": [
         "../lib/src/plugin-connection.ts"

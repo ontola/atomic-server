@@ -44,6 +44,15 @@ pub struct Manifest {
     pub config_schema: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_config: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Files the host may hand this plugin as `input.upload`. See [`Accept`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<Accept>,
+    /// Where an importer writes: a schema and one table the browser host
+    /// creates before the first run and records as the plugin's config. It
+    /// grants nothing and the server never acts on it, so, like `config`, it
+    /// is carried rather than interpreted; the browser validates its shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -86,6 +95,8 @@ impl From<ManifestV1> for Manifest {
             config: v1.config,
             config_schema: None,
             default_config: None,
+            accepts: Vec::new(),
+            destination: None,
             name: None,
             namespace: None,
             version: None,
@@ -277,7 +288,7 @@ impl Serialize for Capability {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Network {
-    /// Exact origins, e.g. `https://api.notion.com`. No wildcards.
+    /// Exact origins, e.g. `https://api.example.com`. No wildcards.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub origins: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -297,6 +308,36 @@ pub struct Secret {
     pub origin: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+
+/// Used when an `accepts` entry declares no `maxBytes`: 5 MiB.
+pub const DEFAULT_ACCEPT_MAX_BYTES: u64 = 5 * 1024 * 1024;
+/// The largest `maxBytes` a plugin may declare: 20 MiB. The file is held
+/// several times over during a run (request body, host string, sandbox string,
+/// parse output), so this stays well under the sandbox's 256 MiB default.
+pub const ACCEPT_MAX_BYTES_CEILING: u64 = 20 * 1024 * 1024;
+
+/// A file the host may hand the plugin as `input.upload`, instead of the
+/// plugin fetching data itself. `extensions` and `mediaTypes` only filter the
+/// picker; the plugin still validates what it is given. Only `as: "text"`
+/// exists: UTF-8, falling back to Windows-1252, decoded by the host.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Accept {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub media_types: Vec<String>,
+    #[serde(rename = "as")]
+    pub read_as: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_bytes: Option<u64>,
+}
+
+impl Accept {
+    pub fn max_bytes(&self) -> u64 {
+        self.max_bytes.unwrap_or(DEFAULT_ACCEPT_MAX_BYTES)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -419,6 +460,54 @@ impl Manifest {
                 return Err("view entrypoint requires the custom-view capability".into());
             }
         }
+        if self.accepts.len() > 8 {
+            return Err("at most 8 accepts entries".into());
+        }
+        for accept in &self.accepts {
+            if accept.read_as != "text" {
+                return Err("accepts entries must be read `as` text".into());
+            }
+            if accept
+                .max_bytes
+                .is_some_and(|max| !(1..=ACCEPT_MAX_BYTES_CEILING).contains(&max))
+            {
+                return Err(format!(
+                    "accepts maxBytes must be a whole number from 1 to {ACCEPT_MAX_BYTES_CEILING}"
+                ));
+            }
+            let lower_ext = |c: char| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')
+            };
+            if accept.extensions.iter().any(|ext| {
+                ext.len() < 2
+                    || ext.len() > 33
+                    || !ext.starts_with('.')
+                    || !ext[1..].starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    || !ext.chars().all(lower_ext)
+            }) {
+                return Err("accepts extensions must be lower-case and start with a dot".into());
+            }
+            let token = |part: &str| {
+                part.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    && part.chars().all(|c| {
+                        c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '+' | '-')
+                    })
+            };
+            if accept.media_types.iter().any(|media| {
+                !media
+                    .split_once('/')
+                    .is_some_and(|(kind, sub)| token(kind) && token(sub))
+            }) {
+                return Err("accepts mediaTypes must be type/subtype".into());
+            }
+        }
+        if self
+            .destination
+            .as_ref()
+            .is_some_and(|destination| !destination.is_object())
+        {
+            return Err("destination: expected a map".into());
+        }
         if let Some(namespace) = &self.namespace {
             validate_plugin_identifiers(namespace, "name").map_err(|e| e.to_string())?;
         }
@@ -531,6 +620,8 @@ pub fn translate_plugin_json(
         config: None,
         config_schema: plugin_json.config_schema.as_ref().map(sorted),
         default_config: plugin_json.default_config.as_ref().map(sorted),
+        accepts: Vec::new(),
+        destination: None,
         name: Some(plugin_json.name.clone()),
         namespace: Some(plugin_json.namespace.clone()),
         version: Some(plugin_json.version.clone()),

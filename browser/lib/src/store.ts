@@ -164,6 +164,8 @@ export interface StoreOpts {
    * attempted. A later `setServerUrl` to a real node connects as usual.
    */
   connect?: boolean;
+  /** Native shells have no ClientDb, so a disconnected node cannot save edits. */
+  requireOnlineWrites?: boolean;
 }
 
 export interface StoreSyncStatus {
@@ -696,8 +698,10 @@ export class Store {
   >();
 
   private client: Client;
+  public readonly requireOnlineWrites: boolean;
 
   public constructor(opts: StoreOpts = {}) {
+    this.requireOnlineWrites = opts.requireOnlineWrites ?? false;
     initOntologies();
     this._resources = new Map();
     this.webSockets = new Map();
@@ -1818,10 +1822,12 @@ export class Store {
         await this.clientDb.getResourceWithSnapshot(subject);
       if (!jsonAd) return null;
 
-      return this.hydrateOfflineReplay(
-        subject,
-        JSON.parse(jsonAd),
-        snapshot ?? undefined,
+      return (
+        this.hydrateOfflineReplay(
+          subject,
+          JSON.parse(jsonAd),
+          snapshot ?? undefined,
+        ) ?? null
       );
     } catch {
       return null;
@@ -1831,12 +1837,17 @@ export class Store {
   /** Build a Resource from a parsed JSON-AD object, hydrate Loro,
    *  and route through the unified ingress with `offline-replay`
    *  source. Used by both the OPFS-cold-load path and the
-   *  per-page-reload outbox restore path. */
+   *  per-page-reload outbox restore path.
+   *
+   *  Returns the store's own copy, or `undefined` when the ingress refused
+   *  the state (the subject was destroyed in this session). Never the
+   *  Resource built here when it was refused: that one has no store, so a
+   *  caller that edits and saves it fails with "Resource has no store". */
   private hydrateOfflineReplay(
     subject: string,
     parsed: Record<string, unknown>,
     snapshot?: Uint8Array,
-  ): Resource {
+  ): Resource | undefined {
     const resource = new Resource(subject);
     resource.applyHydratedValues(
       Object.entries(parsed).filter(([key]) => key !== '@id') as [
@@ -1850,13 +1861,13 @@ export class Store {
     if (snapshot?.length) resource.importLoroUpdate(snapshot, true);
     else resource.getLoroDoc();
     resource.loading = false;
-    this.applyIncoming({
+    const outcome = this.applyIncoming({
       subject: resource.subject,
       resource,
       source: 'offline-replay',
     });
 
-    return resource;
+    return outcome === 'applied' ? this.getResolved(subject) : undefined;
   }
 
   /**
@@ -5264,9 +5275,14 @@ export class Store {
 
     if (inherited.length === 0) return;
 
-    const privateDrive = await this.ensurePrivateDrive('My drive', {
-      agentName: legacy.get(core.properties.name) as string | undefined,
-    });
+    const agentName = legacy.get(core.properties.name) as string | undefined;
+    // A home is titled after whoever owns it, so a migrated account keeps its
+    // own name here too. No literal for the nameless case: `ensurePrivateDrive`
+    // has the default, and a copy of it here is a copy that can drift.
+    const privateDrive = await this.ensurePrivateDrive(
+      agentName?.trim() ? `${agentName.trim()}'s Drive` : undefined,
+      { agentName },
+    );
 
     if (privateDrive.error) return;
 

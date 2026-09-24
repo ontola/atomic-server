@@ -21,9 +21,16 @@ export interface FetchedPlatform {
   platform: string;
   ontology: { description: string; terms: Term[] };
   records: FetchedRecord[];
+  /** Non-fatal problems from a partial fetch, e.g. a host-imposed record cap. */
+  errors?: string[];
 }
 export const termKey = (platform: string, term: Pick<Term, "kind" | "shortname">) =>
   `lt-${platform}-${term.kind}-${term.shortname}`;
+/** A column header from a term shortname: `work-start` reads as `Work start`. */
+const displayName = (shortname: string) => {
+  const words = shortname.replaceAll("-", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
 export function platformSchema(platform: string, terms: Term[]): SchemaSpec {
   const paths = new Map(terms.map((term) => [term.path, termKey(platform, term)]));
   return {
@@ -39,7 +46,7 @@ export function platformSchema(platform: string, terms: Term[]): SchemaSpec {
         .filter((t) => t.kind === "property")
         .map((t) => ({
           shortname: termKey(platform, t),
-          name: t.shortname.replaceAll("-", " "),
+          name: displayName(t.shortname),
           description: t.description,
           datatype: t.datatype,
         })),
@@ -48,7 +55,7 @@ export function platformSchema(platform: string, terms: Term[]): SchemaSpec {
       .filter((t) => t.kind === "class")
       .map((t) => ({
         shortname: termKey(platform, t),
-        name: t.shortname.replaceAll("-", " "),
+        name: displayName(t.shortname),
         description: t.description,
         // API fields can be required yet nullable, or omitted in partial representations.
         // Keep them typed and recommended without forbidding those valid responses.

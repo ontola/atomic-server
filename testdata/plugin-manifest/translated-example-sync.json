@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 2,
+  "runtime": "wasip2/1",
+  "world": "server-extension",
+  "entrypoints": {
+    "classExtender": [
+      "https://atomicdata.dev/classes/Folder"
+    ]
+  },
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Caches page bodies"
+    },
+    "custom-view"
+  ],
+  "secrets": [],
+  "operations": [],
+  "network": {
+    "origins": [
+      "https://api.example.com"
+    ],
+    "reason": "Reads pages from the example API"
+  },
+  "configSchema": {
+    "properties": {
+      "interval": {
+        "type": "integer"
+      },
+      "workspace": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "defaultConfig": {
+    "interval": 60,
+    "workspace": ""
+  },
+  "name": "example-sync",
+  "namespace": "example",
+  "version": "2.1.0",
+  "description": "Mirrors pages from the example API",
+  "author": "Ontola"
+}

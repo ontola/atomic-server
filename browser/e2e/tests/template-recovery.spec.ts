@@ -3,6 +3,7 @@ import {
   managedDriveTest,
   expect as managedExpect,
 } from './deployment-fixtures';
+import { mockManagedPortal } from './managed-test-utils';
 import { FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
 
 managedDriveTest(
@@ -57,6 +58,57 @@ managedDriveTest(
     ).toHaveCount(0);
   },
 );
+
+test('a demo guest can create a template drive without an account', async ({
+  page,
+  browserDiagnostics,
+}) => {
+  test.setTimeout(180000);
+  browserDiagnostics.expect(
+    'error',
+    /Each child in a list should have a unique.*key.*DriveTemplateSetup/s,
+    'Existing Wuchale React key warning in Vite template setup',
+    1,
+    undefined,
+    { optional: true },
+  );
+  await mockManagedPortal(page);
+  await page.route('**/server', async route => {
+    const response = await route.fetch({
+      url: nodeReachableServerUrl(route.request().url()),
+    });
+    const body = await response.json();
+    await route.fulfill({
+      json: {
+        ...body,
+        'https://atomicdata.dev/properties/server/managed': true,
+        'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
+      },
+    });
+  });
+  // "Try the app" visitors have no account, so the control plane has no
+  // session. 204 means the same to the app as the real 401, without a
+  // browser console error for every lookup.
+  await page.route('**/api/me', route => route.fulfill({ status: 204 }));
+
+  // The demo leaves its splash once the guest and its workspace exist.
+  await page.goto(`${FRONTEND_URL}/app/demo`);
+  await expect(page).not.toHaveURL(/\/app\/demo/, { timeout: 90000 });
+
+  await page.goto(`${FRONTEND_URL}/app/new-drive?template=student`);
+  await expect(
+    page.getByRole('heading', { name: 'Give your space a name' }),
+  ).toBeVisible({ timeout: 60000 });
+  await page.getByRole('button', { name: 'Create drive' }).click();
+  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
+  await expect(
+    page.getByText('Sign in to check Cloud Server hosting'),
+  ).toHaveCount(0);
+  const createdLocal = await page.evaluate(() =>
+    window.store.isLocalOnlyDrive(window.store.getDrive()!),
+  );
+  expect(createdLocal).toBe(true);
+});
 
 managedDriveTest(
   'template setup errors can be reported with context',

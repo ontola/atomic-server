@@ -90,6 +90,8 @@ pub mod view_token;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm;
 
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod plugin_for_testing_tests;
 #[cfg(feature = "wasm-plugins")]
 pub mod sync_session;
 #[cfg(all(test, feature = "wasm-plugins"))]
@@ -97,16 +99,3 @@ mod sync_session_tests;
 
 #[cfg(feature = "wasm-plugins")]
 pub mod sync_worker;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-mod notion_sync_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-mod clockify_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-#[path = "mt940_tests.rs"]
-mod bank_statement_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-mod pets_tests;

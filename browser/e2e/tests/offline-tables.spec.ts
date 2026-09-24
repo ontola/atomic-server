@@ -28,6 +28,7 @@ test.describe('offline tables', () => {
     });
     await page.waitForFunction(
       () => window.store?.getClientDb()?.isReady === true,
+      undefined,
       { timeout: 30000 },
     );
     await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {

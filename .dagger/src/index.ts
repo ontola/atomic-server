@@ -667,38 +667,8 @@ export class AtomicServer {
           '--test',
           'data-browser/scripts/integration-mcp.test.mjs',
         ])
-        // Provider certification shares the integration and browser mounts.
-        .withWorkdir('/')
-        .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
-        .withExec([
-          'node',
-          '/integrations/tooling/certify.mjs',
-          '--layer',
-          'js',
-          '--output',
-          '/integration-certification',
-        ])
         .stdout()
     );
-  }
-
-  /** Export offline provider evidence; live provider writes are never run here. */
-  @func()
-  integrationCertificationReport(): Directory {
-    return this.jsBuild()
-      .withDirectory('/integrations', this.source.directory('integrations'))
-      .withExec(['ln', '-s', '/app', '/browser'])
-      .withWorkdir('/')
-      .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
-      .withExec([
-        'node',
-        '/integrations/tooling/certify.mjs',
-        '--layer',
-        'js',
-        '--output',
-        '/integration-certification',
-      ])
-      .directory('/integration-certification');
   }
 
   /**
@@ -824,10 +794,6 @@ export class AtomicServer {
           this.source.directory('plugin-runtime'),
         )
         .withDirectory('/code/wasm', this.source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          this.source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
@@ -890,10 +856,6 @@ export class AtomicServer {
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
         .withDirectory('/code/wasm', this.source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          this.source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory(
           '/code/plugin-examples',
           this.source.directory('plugin-examples'),
@@ -1272,10 +1234,9 @@ export class AtomicServer {
       // Integration sources live at the repository root. The browser mounts at
       // /app, and its raw imports resolve these paths from /integrations.
       .withDirectory('/integrations', this.source.directory('integrations'))
-      // Each integrations/*/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Same fix jsTest()/
-      // integrationCertificationReport() already use for this: alias /browser
-      // to the /app mount so those relative paths resolve.
+      // integrations/localthought/tsconfig.json extends the repo-root-relative
+      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
+      // so that relative path resolves.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -1324,25 +1285,10 @@ export class AtomicServer {
       // Surfaces /app/dev-drive and /app/prunetests in the production
       // build the e2e tests run against. See `devRoutesEnabled()` in
       // data-browser/src/config.ts.
-      buildContainer = buildContainer
-        .withEnvVariable('VITE_E2E', 'true')
-        // The mock integration proxy runs beside the server, so from the
-        // server's own process it is on loopback. This value is not the
-        // server's: it is baked into the bundle and used by the browser,
-        // which runs in the playwright container, where 127.0.0.1 is that
-        // container and nothing answers on 19090. Every page that lists
-        // integrations then shows a "TypeError: Failed to fetch" alert, which
-        // is a second `role="alert"` on screen and makes the specs that assert
-        // on an alert either read the wrong one or fail strict mode.
-        //
-        // `atomic.localhost` is the name the browser is told to map to the
-        // server service (see ATOMIC_TEST_HOST_MAP, and the note on
-        // ATOMIC_DOMAIN above), and the mapping is per host, not per port, so
-        // this reaches the same container's exposed 19090.
-        .withEnvVariable(
-          'VITE_INTEGRATION_PROXY_URL',
-          'http://atomic.localhost:19090',
-        );
+      buildContainer = buildContainer.withEnvVariable('VITE_E2E', 'true');
+      // Nothing else is baked in: the plugin catalog URL is seeded into
+      // localStorage by playwright, so this bundle is the same one a non-e2e
+      // build produces apart from the dev routes.
     }
 
     return buildContainer.withExec(['pnpm', 'run', 'build']);
@@ -1399,10 +1345,6 @@ export class AtomicServer {
       .withDirectory('/code/desktop', source.directory('desktop'))
       .withDirectory('/code/wasm', source.directory('wasm'))
       .withDirectory(
-        '/code/integrations/localthought/syncables',
-        source.directory('integrations/localthought/syncables'),
-      )
-      .withDirectory(
         '/code/plugin-examples',
         source.directory('plugin-examples'),
       )
@@ -1414,13 +1356,10 @@ export class AtomicServer {
       .withExec(['cargo', 'fetch', '--locked']);
 
     const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
-    const containerWithAssets = sourceContainer
-      .withDirectory('/code/server/assets_tmp', browserDir)
-      // These static assets are fetched at runtime, separately from the SPA.
-      // Keep test fixtures and plugin TypeScript out of the Rust build input.
-      .withDirectory('/code/integrations', source.directory('integrations'), {
-        include: ['catalog.json', '*/plugin.js'],
-      });
+    const containerWithAssets = sourceContainer.withDirectory(
+      '/code/server/assets_tmp',
+      browserDir,
+    );
 
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
@@ -1596,6 +1535,12 @@ export class AtomicServer {
           '/code/browser/e2e/tests/fixtures/test-plugin.zip',
           source.file('browser/e2e/tests/fixtures/test-plugin.zip'),
         )
+        // `atomic_lib`'s tests `include_str!` the browser copy of the v2
+        // signature vectors to catch the two copies drifting apart.
+        .withFile(
+          '/code/browser/lib/src/authentication_v2_vectors.json',
+          source.file('browser/lib/src/authentication_v2_vectors.json'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
@@ -1607,10 +1552,6 @@ export class AtomicServer {
         .withDirectory('/code/cli', source.directory('cli'))
         .withDirectory('/code/desktop', source.directory('desktop'))
         .withDirectory('/code/wasm', source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory(
           '/code/plugin-examples',
           source.directory('plugin-examples'),
@@ -1906,7 +1847,7 @@ export class AtomicServer {
 
     let runtime = dag
       .container()
-      .from(e2e ? 'node:22-alpine' : 'alpine:latest')
+      .from('alpine:latest')
       .withFile('/atomic-server-bin', atomicServerBinary, {
         permissions: 0o755,
       })
@@ -1917,21 +1858,6 @@ export class AtomicServer {
 
     if (e2e)
       runtime = runtime
-        .withDirectory(
-          '/mock-proxy',
-          this.source.directory('integrations/localthought'),
-        )
-        .withEnvVariable(
-          'ATOMIC_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
-        )
-        .withEnvVariable('TENANT_SECRET', 'bW9jay10ZW5hbnQ.mock-signature')
-        .withEnvVariable(
-          'ATOMIC_INTEGRATION_FRONTEND_ORIGIN',
-          'http://atomic.localhost:9883',
-        )
-        .withEnvVariable('MOCK_FRONTEND_ORIGIN', 'http://atomic.localhost:9883')
-        .withEnvVariable('MOCK_PROXY_HOST', '0.0.0.0')
         // Website publishing is off until the server is given a site origin,
         // and the website specs then get a "hosting is disabled" toast that
         // also sits over the preview and swallows clicks meant for it. The
@@ -1958,7 +1884,6 @@ export class AtomicServer {
         // explicitly bound to a Drive, and `atomic` is not bound, so the
         // containers that curl `http://atomic:9883` are unaffected.
         .withEnvVariable('ATOMIC_DOMAIN', 'atomic.localhost')
-        .withExposedPort(19090)
         .withEntrypoint([
           'sh',
           '-c',
@@ -1971,20 +1896,18 @@ export class AtomicServer {
           // This is no longer about `plugin.spec.ts:26`. That was fixed by
           // giving the server its own `ATOMIC_DOMAIN` above, so it reads its
           // own subjects locally instead of fetching them, and the run after
-          // that change was green on `:26`, `mt940:16` and
-          // `installation-recovery:96`. What this line covers now is
-          // everything else in the container that resolves the name: the
-          // server for any subject genuinely on another host, and the Node
-          // mock proxy, which is given `atomic.localhost:9883` as its frontend
-          // origin. That is a wider scope than the SSRF escape hatch removed
-          // alongside it, which reached only five Rust call sites, so the two
-          // were not a pair despite arriving in one commit.
+          // that change was green on `:26` and `installation-recovery:96`.
+          // What this line covers now is the server resolving any subject
+          // genuinely on another host. That is a wider scope than the SSRF
+          // escape hatch removed alongside it, which reached only five Rust
+          // call sites, so the two were not a pair despite arriving in one
+          // commit.
           //
           // Written at start rather than baked in, because the runtime mounts
           // its own `/etc/hosts` over the image's. The server binds `::`, so
           // once the name resolves it reaches itself.
           'echo "127.0.0.1 atomic.localhost" >> /etc/hosts; ' +
-            'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
+            'exec /atomic-server-bin',
         ]);
 
     // Dagger deduplicates identical services, including their writable state.
@@ -2075,18 +1998,13 @@ export class AtomicServer {
           browserContainer.directory('/app/create-template'),
         )
         .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
-        // Several specs import fixtures and mocks from the repo's integrations
-        // tree (`../../../integrations/...` from /app/e2e/tests), and Playwright
-        // loads every spec file even when a grep selects a subset.
-        .withDirectory('/integrations', this.source.directory('integrations'))
         .withDirectory(
           '/app/node_modules',
           browserContainer.directory('/app/node_modules'),
         )
-        // Raw imports in browser/e2e/tests (e.g. mt940.spec.ts,
-        // devonian-issue-sync.spec.mts) reach into ../../../integrations
-        // relative to /app/e2e/tests, resolving to /integrations here.
-        .withDirectory('/integrations', this.source.directory('integrations'))
+        // playwright.config.ts starts testdata/atomic-plugins-mock/serve.mjs
+        // (../../testdata from /app/e2e) as the suite's plugin catalog.
+        .withDirectory('/testdata', this.source.directory('testdata'))
         // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
         // plain `readFileSync` at `../../../server/src/plugins/assets/
         // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()
@@ -2148,7 +2066,6 @@ export class AtomicServer {
         // It sits after the service binding and the setup probe, so the build
         // layers above stay cached; only the Playwright exec is unique.
         .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
-        .withEnvVariable('ATOMIC_MOCK_INTEGRATION_PROXY', '1')
         .withExec([
           '/bin/bash',
           '-c',

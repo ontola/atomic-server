@@ -14,15 +14,6 @@ test('edit persists to local ClientDb across the drain', async ({ page }) => {
     const NAME = 'https://atomicdata.dev/properties/name';
     const FOLDER = 'https://atomicdata.dev/classes/Folder';
 
-    // `fetchResourceFromClientDb` is a private Store method reached here only
-    // to probe local persistence from inside the page; cast to bypass TS's
-    // visibility check (this runs as plain JS in the browser).
-    const asAny = s as unknown as {
-      fetchResourceFromClientDb: (
-        subject: string,
-      ) => Promise<{ get?: (prop: string) => unknown } | undefined>;
-    };
-
     const tmp = await s.createSubject('persist-test');
     const r = await s.newResource({ subject: tmp, parent: drive, isA: FOLDER });
     await r.set(NAME, 'PersistProbe-A');
@@ -34,20 +25,28 @@ test('edit persists to local ClientDb across the drain', async ({ page }) => {
       throw new Error('ClientDb missing — cannot probe OPFS persistence');
     }
 
+    // Read the stored JSON-AD straight from OPFS. The store's own read path
+    // hands back its live instance, which the edit below would change too.
+    const storedName = async () => {
+      const { jsonAd } = await db.getResourceWithSnapshot(realSubject);
+
+      return jsonAd ? JSON.parse(jsonAd)[NAME] : undefined;
+    };
+
     // Writes commit with Durability::None; flush() is the durable signal.
     await db.flush();
-    const afterCreate = await asAny.fetchResourceFromClientDb(realSubject);
+    const createName = await storedName();
 
     const r2 = await s.getResource(realSubject);
     await r2.set(NAME, 'PersistProbe-B-EDITED');
     await r2.save();
     await db.flush();
-    const afterEdit = await asAny.fetchResourceFromClientDb(realSubject);
+    const editNameLocal = await storedName();
     const srv = await s.fetchResourceFromServer(realSubject);
 
     return {
-      createName: afterCreate?.get?.(NAME),
-      editNameLocal: afterEdit?.get?.(NAME),
+      createName,
+      editNameLocal,
       editNameServer: srv?.get?.(NAME),
     };
   });

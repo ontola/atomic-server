@@ -2,7 +2,8 @@
 
 The former AtomicServer-hosted Notion authorization service has been removed.
 New Notion connections use the shared browser integration-proxy flow described in
-[LocalThought integrations](localthought/README.md) and [Notion](notion/README.md).
+[LocalThought integrations](localthought/README.md); the Notion provider itself
+moved to [atomic-plugins](https://github.com/ontola/atomic-plugins).
 OAuth client registration, token exchange and refresh belong to the proxy and
 its composed OpenAPI metadata. `ATOMIC_NOTION_*` and `ATOMIC_OAUTH_*` no longer
 configure an AtomicServer authorization service.

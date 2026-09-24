@@ -1,7 +1,11 @@
 import { describe, it, vi, afterEach } from 'vitest';
 import { enableLoro } from './loro-loader.js';
 import { Resource } from './resource.js';
-import { AtomicError, ErrorType } from './error.js';
+import {
+  AtomicError,
+  ErrorType,
+  LOCAL_ONLY_NOT_FOUND_MESSAGE,
+} from './error.js';
 import { testStore } from './test-store.js';
 import type { Store } from './store.js';
 
@@ -55,6 +59,7 @@ function fakeDb(
     },
     putResourceWithSnapshot: async () => undefined,
     putResource: async () => undefined,
+    removeResource: async () => undefined,
     flush: async () => undefined,
   };
 
@@ -149,6 +154,42 @@ describe('store read policy', () => {
 
     expect((resource.error as AtomicError).type).toBe(ErrorType.Transport);
     expect(socket.fetch).not.toHaveBeenCalled();
+  });
+
+  it("hands back the store's own copy of a local-only subject it read from the database", async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const { store } = await testStore();
+    store.registerLocalOnlyDrive('atomic:guest');
+    store.setClientDb(
+      fakeDb({ 'atomic:guest': row('atomic:guest', 'Guest') }).db,
+    );
+
+    const resource = await store.fetchResourceFromServer('atomic:guest');
+
+    expect(resource).toBe(store.resources.get('atomic:guest'));
+    await resource.set(NAME, 'Renamed', false);
+    await expect(resource.save()).resolves.toBeDefined();
+  });
+
+  // A demo guest's profile row is its agent resource. Leaving the demo
+  // removed it, and the database later held the agent again; keeping a
+  // template then read it back and saved the copy the store had refused.
+  it('does not hand back a copy the store refused for a subject destroyed this session', async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const { store } = await testStore();
+    store.registerLocalOnlyDrive('atomic:guest');
+    store.setClientDb(
+      fakeDb({ 'atomic:guest': row('atomic:guest', 'Guest') }).db,
+    );
+    store.removeResource('atomic:guest');
+
+    await expect(store.fetchResourceFromServer('atomic:guest')).rejects.toThrow(
+      LOCAL_ONLY_NOT_FOUND_MESSAGE,
+    );
   });
 
   it('getResources reads the whole list from the database in one round trip', async ({

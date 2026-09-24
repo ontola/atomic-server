@@ -11,6 +11,7 @@ import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
 import { addIf } from '@helpers/addIf';
 import InputMarkdown from '@components/forms/InputMarkdown';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
+import { useColumnLabel } from '../helpers/useColumnLabel';
 
 function MarkdownCellEdit({
   value,
@@ -29,6 +30,7 @@ function MarkdownCellEdit({
     },
   });
   const prop = useProperty(property);
+  const label = useColumnLabel(prop);
 
   const { exitEditMode } = useTableEditorContext();
 
@@ -57,7 +59,7 @@ function MarkdownCellEdit({
         {isOpen && (
           <>
             <Dialog.Title>
-              <h1>Edit {prop.shortname}</h1>
+              <h1>Edit {label}</h1>
             </Dialog.Title>
             <StyledDialogContent>
               <InputMarkdown

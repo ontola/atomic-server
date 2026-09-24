@@ -20,6 +20,88 @@ if (
     .join(' ');
 }
 
+// Both the plugin catalog and the integration proxy are read from
+// localStorage at runtime, with the `VITE_*` build-time values as mere
+// defaults. Seeding those keys here is what lets one unmodified binary serve
+// a lane whose catalog and proxy sit on arbitrary ports: `storageState` is
+// applied when the browser context is created, so the first script on the
+// page already sees them, and nothing has to be rebuilt.
+//
+// The `VITE_*` spellings are accepted too, so an invocation that used to bake
+// the value keeps working by seeding it instead.
+//
+// Unless a catalog is given, the suite serves its own: a static copy of the
+// atomic-plugins layout (testdata/atomic-plugins-mock), started below as a
+// `webServer`, so no spec depends on what is published upstream.
+const configuredCatalogUrl =
+  process.env.PLUGIN_CATALOG_URL || process.env.VITE_PLUGIN_CATALOG_URL;
+const pluginsMockPort = process.env.ATOMIC_PLUGINS_MOCK_PORT || '9893';
+const pluginsMockUrl = `http://127.0.0.1:${pluginsMockPort}/integrations/catalog.json`;
+const catalogUrl = configuredCatalogUrl || pluginsMockUrl;
+const integrationProxy =
+  process.env.INTEGRATION_PROXY_URL || process.env.VITE_INTEGRATION_PROXY_URL;
+
+// RFC 6761 gives the whole `.localhost` TLD to loopback; this mirrors
+// `isLoopbackHost` in data-browser/src/helpers/runtimeSetting.ts, which both of the
+// runtime validators use.
+const isLoopbackHost = (host: string) =>
+  host === 'localhost' ||
+  host.endsWith('.localhost') ||
+  host === '127.0.0.1' ||
+  host === '[::1]';
+
+// A seeded value the app rejects is dropped silently and the default is used
+// instead — the suite would then run against the public catalog, or against a
+// proxy that isn't there, and report the product broken. Fail here instead,
+// naming the value, while the cause is still in front of whoever set it.
+function checkSeed(name: string, value: string, originOnly: boolean) {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} is not a URL: ${value}`);
+  }
+
+  if (
+    url.protocol !== 'https:' &&
+    !(url.protocol === 'http:' && isLoopbackHost(url.hostname))
+  ) {
+    throw new Error(
+      `${name} must be an HTTPS URL or a loopback HTTP URL: ${value}`,
+    );
+  }
+
+  if (originOnly && url.origin !== value) {
+    throw new Error(`${name} must be a bare origin, without a path: ${value}`);
+  }
+
+  return value;
+}
+
+const seededStorage = [
+  // Transitions are off by default now, and `isAutomated()` disables them
+  // under webdriver anyway, so this is belt and braces: it keeps the suite
+  // deterministic if either of those ever changes.
+  { name: 'viewTransitionsEnabled', value: 'false' },
+  {
+    name: 'plugin-catalog-url',
+    value: checkSeed('PLUGIN_CATALOG_URL', catalogUrl, false),
+  },
+  ...(integrationProxy
+    ? [
+        {
+          name: 'integration-proxy-url',
+          value: checkSeed(
+            'INTEGRATION_PROXY_URL',
+            integrationProxy.replace(/\/$/, ''),
+            true,
+          ),
+        },
+      ]
+    : []),
+];
+
 const config: PlaywrightTestConfig = {
   // Default `expect` timeout. Playwright's built-in is 5s; bump to 10s
   // so retrying assertions match the action timeout below. Tests that
@@ -42,40 +124,22 @@ const config: PlaywrightTestConfig = {
       cookies: [],
       origins: [
         // `FRONTEND_URL` / `SERVER_URL` are overridable, but this list was not,
-        // so running the suite on any other port silently lost
-        // `viewTransitionsEnabled` — the flake-reducer below — for the origin
-        // actually under test. Derive those two first; the fixed entries stay
-        // for the default and dagger setups.
-        //
-        // Transitions are off by default now, and `isAutomated()` disables
-        // them under webdriver anyway, so this is belt and braces: it keeps
-        // the suite deterministic if either of those ever changes.
+        // so running the suite on any other port silently lost the seeds above
+        // — `viewTransitionsEnabled`, and now the catalog and proxy URLs — for
+        // the origin actually under test. Derive those two first; the fixed
+        // entries stay for the default and dagger setups.
         ...[process.env.FRONTEND_URL, process.env.SERVER_URL]
           .filter((url): url is string => !!url)
-          .map(url => new URL(url).origin)
-          .map(origin => ({
-            origin,
-            localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
-          })),
-        {
-          origin: 'http://localhost:6747',
-          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
-        },
-        {
-          origin: 'http://localhost:9883',
-          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
-        },
-        {
-          origin: 'http://atomic:9883',
-          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
-        },
-        {
-          // Dagger e2e FRONTEND_URL — chromium treats `*.localhost` as a
-          // secure context (needed for WASM ClientDb / crypto.subtle).
-          origin: 'http://atomic.localhost:9883',
-          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
-        },
-      ],
+          .map(url => new URL(url).origin),
+        'http://localhost:6747',
+        'http://localhost:9883',
+        'http://atomic:9883',
+        // Dagger e2e FRONTEND_URL — chromium treats `*.localhost` as a
+        // secure context (needed for WASM ClientDb / crypto.subtle).
+        'http://atomic.localhost:9883',
+      ]
+        .filter((origin, index, all) => all.indexOf(origin) === index)
+        .map(origin => ({ origin, localStorage: seededStorage })),
     },
   },
   reporter: [
@@ -177,6 +241,20 @@ const config: PlaywrightTestConfig = {
   // The local runner and direct Playwright share one conservative budget.
   // Dagger sets a per-shard override; aggregate concurrency includes all shards.
   workers: workerBudget().workers,
+  webServer: configuredCatalogUrl
+    ? undefined
+    : {
+        command: `node ${JSON.stringify(
+          path.resolve(
+            __dirname,
+            '../../testdata/atomic-plugins-mock/serve.mjs',
+          ),
+        )} ${pluginsMockPort}`,
+        url: pluginsMockUrl,
+        // The mock is stateless and identical across checkouts, so another
+        // run's instance on the same port serves this one just as well.
+        reuseExistingServer: true,
+      },
 };
 
 export default config;

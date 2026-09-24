@@ -1,6 +1,8 @@
 import type { Store } from '@tomic/react';
 import { fetchManagedInfo } from '../../helpers/managedServer';
 import { getManagedEnrollments } from '../../helpers/managed/enrollmentApi';
+import { localAgentIsDisposable } from '../../helpers/managed/reconcile';
+import { getManagedAccount } from '../../helpers/managed/session';
 import { prepareDriveSharing } from '../../helpers/managed/prepareDriveSharing';
 import { sameOrigin } from '../../helpers/serverUrl';
 
@@ -14,6 +16,22 @@ export async function prepareTemplateDrive(store: Store): Promise<void> {
   if (!agent) return; // createDrive reports the missing identity.
   const home = await agent.privateDriveSubject();
   if (store.isLocalOnlyDrive(home)) return;
+
+  // A demo guest has no account, so nothing can be hosted for it, and asking
+  // the control plane only fails with "Sign in". Its home was never on the
+  // server either (only a real signup creates one there), so there is no
+  // server copy to verify against: asking the node for its inventory just
+  // times out. Its home lives on this device only. A real account without a
+  // session still has to sign in: its home may be hosted.
+  if (
+    agent.subject &&
+    !(await getManagedAccount()) &&
+    (await localAgentIsDisposable(store, agent.subject))
+  ) {
+    store.registerLocalOnlyDrive(home);
+
+    return;
+  }
 
   const enrollments = await getManagedEnrollments(true);
   const enrolledHereOrUnknown = enrollments.some(

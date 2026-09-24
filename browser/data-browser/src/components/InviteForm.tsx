@@ -10,17 +10,10 @@ import {
   server,
   dataBrowser,
 } from '@tomic/react';
-import { generateInviteToken } from '@tomic/lib';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog';
-import { prepareDriveSharing } from '../helpers/managed/prepareDriveSharing';
 import { managedFetch } from '../helpers/managed/api';
-import {
-  automaticPeerRoom,
-  defaultPeerSignalingUrl,
-  savePeerLink,
-  resumePeerLinks,
-} from '../helpers/browserPeerSync';
+import { useCreateInviteLink } from './Share/useCreateInviteLink';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import toast from 'react-hot-toast';
 import { ErrorLook } from './ErrorLook';
@@ -90,6 +83,7 @@ function InviteFormContent({
   const isSaas = !!getManagedPortalUrl();
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [agent] = useCurrentAgent();
+  const createInviteLink = useCreateInviteLink(target);
   const [profileReviewed, setProfileReviewed] = useState(skipProfile);
   const [saved, setSaved] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | undefined>(undefined);
@@ -138,72 +132,16 @@ function InviteFormContent({
   }, [isSaas, target, store]);
 
   /** Generates the signed token and constructs the invite URL */
-  const createInvite = useCallback(async () => {
+  const createInvite = async () => {
     setCreating(true);
     setErr(undefined);
 
     try {
-      if (!agent) {
-        throw new Error('No agent found');
-      }
-
       const write = (await invite.get(server.properties.write)) as boolean;
       const expiresAt = (await invite.get(
         urls.properties.invite.expiresAt,
       )) as number;
-
-      const isDrive = target.hasClasses(server.classes.drive);
-      let browserPeer = isDrive && store.isLocalOnlyDrive(target.subject);
-
-      if (isDrive && isSaas && !browserPeer) {
-        const response = await managedFetch('/sync-enrollments', {});
-        if (!response.ok || response.status === 204)
-          throw new Error(
-            'Sign in to your portal account to check this drive before sharing.',
-          );
-        const body = await response.json();
-        const enrollments = Array.isArray(body) ? body : body.enrollments;
-        if (!Array.isArray(enrollments))
-          throw new Error('Could not check Cloud Server status. Try again.');
-        browserPeer = await prepareDriveSharing(
-          store,
-          target.subject,
-          enrollments,
-        );
-      }
-
-      if (
-        browserPeer &&
-        !(await store.getClientDb()?.getResourceWithSnapshot(target.subject))
-          ?.snapshot
-      )
-        throw new Error(
-          'Wait for this drive to be saved on this device before sharing.',
-        );
-      const tokenBase64 = await generateInviteToken(
-        target.subject,
-        agent,
-        !!write,
-        expiresAt,
-        undefined,
-        browserPeer,
-      );
-
-      if (browserPeer) {
-        savePeerLink(store, {
-          drive: target.subject,
-          room: await automaticPeerRoom(target.subject),
-          signalingUrl: defaultPeerSignalingUrl(),
-        });
-        resumePeerLinks(store);
-      }
-
-      const baseUrl = browserPeer
-        ? window.location.origin
-        : store.getServerUrl();
-      const finalUrl = `${baseUrl}/app/invite?token=${encodeURIComponent(
-        tokenBase64,
-      )}`;
+      const finalUrl = await createInviteLink({ write: !!write, expiresAt });
 
       setInviteUrl(finalUrl);
       setSaved(true);
@@ -214,7 +152,7 @@ function InviteFormContent({
     } finally {
       setCreating(false);
     }
-  }, [invite, agent, target, store, isSaas]);
+  };
 
   if (agent?.subject && !profileReviewed) {
     const agentSubject = agent.subject;
@@ -289,7 +227,7 @@ const PROFILE_REVIEWED_KEY = 'inviteProfileReviewed';
  * picture would get the profile step on every Share click. Once per agent on
  * this device is enough of a nudge.
  */
-function profileReviewedBefore(agent: string | undefined): boolean {
+export function profileReviewedBefore(agent: string | undefined): boolean {
   if (!agent) return false;
 
   try {
@@ -299,7 +237,7 @@ function profileReviewedBefore(agent: string | undefined): boolean {
   }
 }
 
-function rememberProfileReviewed(agent: string): void {
+export function rememberProfileReviewed(agent: string): void {
   try {
     localStorage.setItem(PROFILE_REVIEWED_KEY, agent);
   } catch {

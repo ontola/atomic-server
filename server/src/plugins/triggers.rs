@@ -796,7 +796,7 @@ mod tests {
     #[actix_rt::test]
     async fn integration_approval_resumes_same_event_without_repeating_write() {
         let mut f = fixture("action_continuation").await;
-        write_plugin(&mut f, "After issue approval").await;
+        write_plugin(&mut f, "After approval").await;
         let original = plugin_source(&f.appstate.store, &f.drive, &f.plugin)
             .await
             .unwrap();
@@ -804,9 +804,9 @@ mod tests {
             .appstate
             .store
             .publish_plugin_release(&atomic_lib::db::plugin_release::PluginRelease {
-                source: Some(include_str!("../../../integrations/github-issues/plugin.js").into()),
+                source: Some(include_str!("../../../testdata/plugin-for-testing/plugin.js").into()),
                 manifest: serde_json::from_str(include_str!(
-                    "../../../integrations/github-issues/manifest.fixture.json"
+                    "../../../testdata/plugin-for-testing/manifest.json"
                 ))
                 .unwrap(),
                 runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
@@ -820,14 +820,21 @@ mod tests {
             .get_resource(&f.plugin.as_str().into())
             .await
             .unwrap();
-        plugin.set_unsafe(f.terms.property("plugin-connection").unwrap().into(),Value::Json(serde_json::json!({"release":release,"config":{"repository":"atomic-fixtures/issues"}}))).unwrap();
+        plugin
+            .set_unsafe(
+                f.terms.property("plugin-connection").unwrap().into(),
+                Value::Json(
+                    serde_json::json!({"release":release,"config":{"collection":"records"}}),
+                ),
+            )
+            .unwrap();
         plugin
             .set_unsafe(
                 f.terms.property("automation-integrations").unwrap().into(),
                 Value::ResourceArray(vec![f.plugin.as_str().into()]),
             )
             .unwrap();
-        let source=format!("{}\nexport function run(ctx) {{ctx.integration({{connection:{},release:{},call:{{action:'create_issue',arguments:{{title:'Synthetic'}},id:ctx.trigger.id}}}});return original(ctx);}}",original.replace("function run(","function original("),serde_json::json!(f.plugin),serde_json::json!(release));
+        let source=format!("{}\nexport function run(ctx) {{ctx.integration({{connection:{},release:{},call:{{action:'create_record',arguments:{{title:'Synthetic'}},id:ctx.trigger.id}}}});return original(ctx);}}",original.replace("function run(","function original("),serde_json::json!(f.plugin),serde_json::json!(release));
         plugin
             .set_unsafe(
                 f.terms.property("plugin-source").unwrap().into(),
@@ -838,10 +845,7 @@ mod tests {
         arm(&f, true).await;
         add_watched(&f, "Arrival").await;
         drain(&f.appstate, &Arc::new(Mutex::new(Guard::default()))).await;
-        assert_eq!(
-            children_named(&f, &f.drive, "After issue approval").await,
-            0
-        );
+        assert_eq!(children_named(&f, &f.drive, "After approval").await, 0);
         assert_eq!(f.appstate.store.queued_plugin_events().unwrap().len(), 1);
         let host = js_runtime::StoreHost {
             db: Arc::new(f.appstate.store.clone()),
@@ -890,10 +894,7 @@ mod tests {
         drain(&f.appstate, &Arc::new(Mutex::new(Guard::default()))).await;
         assert_eq!(provider.0, 1);
         assert!(f.appstate.store.queued_plugin_events().unwrap().is_empty());
-        assert_eq!(
-            children_named(&f, &f.drive, "After issue approval").await,
-            1
-        );
+        assert_eq!(children_named(&f, &f.drive, "After approval").await, 1);
     }
 
     #[actix_rt::test]

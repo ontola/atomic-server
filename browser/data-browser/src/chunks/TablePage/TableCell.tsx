@@ -28,6 +28,7 @@ import {
 } from './dataTypeMaps';
 import { StringCell } from './EditorCells/StringCell';
 import { TablePageContext } from './tablePageContext';
+import { useColumnLabel } from './helpers/useColumnLabel';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { RemoteCellPresence, TablePresenceContext } from './TablePresence';
@@ -101,7 +102,9 @@ export function TableCell({
 
   const dataType = property.datatype;
   const isEditing = useIsEditing(rowIndex, columnIndex);
-  const propertyLabel = property.shortname || property.subject;
+  // Announced to screen readers with every cell, so it should be the label
+  // the column heading shows rather than the property's identifier.
+  const propertyLabel = useColumnLabel(property);
 
   const Editor = useMemo(
     () => dataTypeCellMap.get(dataType) ?? StringCell,

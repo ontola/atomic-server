@@ -35,7 +35,7 @@ It's free, open source (MIT license), and has a ton of features:
 - 🗂️  **Virtual drive**: mount your drive as a folder in Finder or Explorer (desktop app).
 - ✨  **AI** with [MCP](https://modelcontextprotocol.io/) support, any model via OpenRouter or local Ollama.
 - 🧩  **Apps**: custom screens in plain JavaScript, backed by your own data.
-- 🔌  **Plugins and integrations**: Wasm plugins, and syncing from Notion, GitHub and more.
+- 🔌  **Plugins and integrations**: Wasm plugins, and syncing from GitHub and more.
 - 💬  **Group chat**: channels with attachments, search and replies.
 - 🎥  **Meetings**: video calls with shared notes and presence.
 - 🎨  **Canvas**: an infinite drawing surface, shared live.

@@ -189,6 +189,7 @@ describe('a linked device', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(`${PORTAL}/api/me`);
     expect((init!.headers as Headers).get('Authorization')).toBe('Bearer sess');
+    expect(init!.credentials).toBe('omit');
   });
 
   it('still accepts the same origin from a node, trailing slash or not', async () => {
@@ -272,6 +273,18 @@ describe('browser control-plane routing', () => {
     const api = await freshApi();
     expect(api.hasManagedApi()).toBe(true);
     expect(api.getManagedApiBase()).toBe('http://localhost:3030/api');
+  });
+
+  it('keeps cookie credentials for an unlinked browser session', async () => {
+    vi.stubEnv('VITE_MANAGED_API_BASE', 'http://localhost:3030/api');
+    const api = await freshApi();
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({ ok: true } as Response);
+
+    await api.managedFetch('/me');
+
+    expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include');
   });
 
   it('uses a discovered portal in the browser', async () => {

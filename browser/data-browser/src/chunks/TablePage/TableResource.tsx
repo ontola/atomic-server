@@ -53,6 +53,7 @@ import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
 import { DashboardView } from './Dashboard/DashboardView';
+import { IssuesView } from './Issues/IssuesView';
 import { TimerToolbar } from './Timer/TimerToolbar';
 import { useTimerColumns } from './Timer/useTimerColumns';
 import { useDerivedColumns } from './useDerivedColumns';
@@ -532,7 +533,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
       }
     }
 
-    // Kanban groups by it, calendar places days by it, timer starts from it.
+    // Kanban groups by it, calendar places days by it, timer starts from
+    // it, the issue list splits open from closed by it.
     if (viewKind !== 'table' && viewGroupBy) {
       locked.add(viewGroupBy);
     }
@@ -1172,6 +1174,17 @@ export const TableResource: React.FC<TableResourceProps> = ({
             tableClass={tableClass}
             allColumns={allColumns}
             columns={uniqueColumnProperties}
+            collection={collection}
+            ready={ready}
+            viewGroupBy={viewGroupBy}
+            setViewGroupBy={setViewGroupBy}
+            readOnly={!canWrite}
+          />
+        ) : viewKind === 'issues' ? (
+          <IssuesView
+            tableSubject={resource.subject}
+            tableClass={tableClass}
+            allColumns={allColumns}
             collection={collection}
             ready={ready}
             viewGroupBy={viewGroupBy}

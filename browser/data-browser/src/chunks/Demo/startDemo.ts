@@ -29,6 +29,9 @@ function saveDemoDrives(drives: string[]): void {
   localStorage.setItem(DEMO_DRIVES_KEY, JSON.stringify(drives));
 }
 
+/** Where demo setup is, so a report of a stalled setup can say where. */
+export type DemoSetupStep = 'storage' | 'identity' | 'cleanup' | 'workspace';
+
 /**
  * Start the demo: mint a guest agent if nobody is signed in, tear down
  * EVERY previous demo drive, build a FRESH workspace, start the
@@ -39,16 +42,23 @@ function saveDemoDrives(drives: string[]): void {
  * demo drive this browser ever created (tracked in localStorage), not
  * just the last one, covering runs whose manifest was lost.
  */
-export async function startDemoWorkspace(store: Store): Promise<DemoManifest> {
+export async function startDemoWorkspace(
+  store: Store,
+  onStep: (step: DemoSetupStep) => void = () => {},
+): Promise<DemoManifest> {
+  onStep('storage');
   await enableLoro();
 
+  onStep('identity');
   const isGuest = await ensureAgentForDemo(store);
 
   activeDirector?.stop();
   activeDirector = undefined;
 
+  onStep('cleanup');
   await cleanupAllDemoDrives(store);
 
+  onStep('workspace');
   const manifest = await createDemoWorkspace(store, { guest: isGuest });
 
   saveDemoDrives([manifest.drive]);
@@ -120,6 +130,15 @@ export async function cleanupDemoDrive(
 
       frontier = next;
     }
+
+    // A guest's profile row is the guest's own agent resource (see
+    // `createGuestProfile`), so it is parented under this drive's team
+    // table. The identity outlives the demo: removing it would tombstone the
+    // agent for the rest of the session, and a later save on it (keeping a
+    // template links the guest's home on it) would have nothing to save to.
+    // The next demo run rewrites the row in place.
+    const agent = store.getAgent()?.subject;
+    if (agent) doomed.delete(agent);
 
     for (const subject of doomed) {
       store.removeResource(subject, false);

@@ -193,6 +193,21 @@ export {
   type CreatedApp,
 } from './plugin-app.js';
 export {
+  catalogAppProperties,
+  catalogAppSchema,
+  catalogAppState,
+  compareVersions,
+  fetchCatalogAppModule,
+  installCatalogApp,
+  parseCatalogApp,
+  readInstalledCatalogApps,
+  resolveModuleUrl,
+  subresourceIntegrity,
+  updateCatalogApp,
+  type CatalogApp,
+  type InstalledCatalogApp,
+} from './catalog-app.js';
+export {
   parseManifest,
   validateManifest,
   type CapabilityName,
@@ -206,6 +221,10 @@ export {
   type DeclaredSecret,
   type DeclaredConfig,
   type DeclaredConfigField,
+  type DeclaredAccept,
+  type DeclaredDestination,
+  DEFAULT_ACCEPT_MAX_BYTES,
+  ACCEPT_MAX_BYTES_CEILING,
   type ManifestRuntime,
   type ManifestWorld,
   type PluginManifest,
