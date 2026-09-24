@@ -1,6 +1,6 @@
 import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
-import { DemoActionsBar, readDemoDrive } from './DemoExitButton';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { DemoActionsBar } from './DemoExitButton';
+import { demoForDrive } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
 import { type JSX, useMemo } from 'react';
@@ -69,10 +69,14 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     pathname === `${pathNames.app}${pathNames.invite}` ||
     signedOutHosted;
 
-  const previewBar =
-    !hideGlobalChrome &&
-    (readTemplateDemo()?.drive ?? readDemoDrive()) === drive;
-  const previewHeight = previewBar ? '3.5rem' : '0px';
+  // The demo bar follows one rule: the current drive is a demo drive. It
+  // stays up on the template gallery too — that is where the demo leads, and
+  // where a preview returns to — so the way back never depends on which page
+  // the user happens to be on. Only the full-screen splash and sign-in pages,
+  // which are not part of the demo, go without it.
+  const onGallery = pathname === paths.newDrive;
+  const demo = !hideGlobalChrome || onGallery ? demoForDrive(drive) : undefined;
+  const previewHeight = demo ? '3.5rem' : '0px';
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -98,9 +102,9 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             <ResourceContextMenuHost />
             {/* Toasts new meeting messages when the meeting panel isn't open. */}
             {!hideGlobalChrome && <MeetingMessageToaster />}
-            {previewBar && (
+            {demo && (
               <PreviewHeader>
-                <DemoActionsBar />
+                <DemoActionsBar demo={demo} onGallery={onGallery} />
               </PreviewHeader>
             )}
             {!hideGlobalChrome && (
@@ -202,7 +206,7 @@ const SideBarWrapper = styled.div<{
   ${p =>
     p.fullViewportContent
       ? CalculatedPageHeight.define(
-          `min(calc(100dvh - var(--keyboard-inset, 0px)), var(--visible-viewport-height, 100dvh))`,
+          `min(calc(100dvh - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.previewHeight}))`,
         )
       : CalculatedPageHeight.define(
           `min(calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight}))`,
@@ -212,7 +216,7 @@ const SideBarWrapper = styled.div<{
   position: fixed;
   ${p => {
     if (p.fullViewportContent) {
-      return 'top: 0;';
+      return `top: ${p.previewHeight};`;
     }
 
     return `top: calc(${p.previewHeight} + ${p.top ? p.theme.heights.breadCrumbBar : '0px'});`;

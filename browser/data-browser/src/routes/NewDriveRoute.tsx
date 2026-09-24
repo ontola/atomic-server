@@ -9,8 +9,10 @@ import { constructOpenURL } from '../helpers/navigation';
 import { Shell } from '../views/getting-started/chrome';
 import { Logo } from '../components/Logo';
 import { Button } from '../components/Button';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
-import { readDemoDrive } from '../components/DemoExitButton';
+import {
+  demoForDrive,
+  readInteractiveDemo,
+} from '../chunks/Templates/demoSession';
 import { Row } from '../components/Row';
 import { styled } from 'styled-components';
 import { DriveTemplateSetup } from '../chunks/Templates/DriveTemplateSetup';
@@ -42,8 +44,7 @@ function NewDrivePage(): JSX.Element {
   const { agent, drive, setDrive, setAgent } = useSettings();
   const store = useStore();
   const currentDrive = useResource(drive || undefined);
-  const isDemo =
-    drive === readTemplateDemo()?.drive || drive === readDemoDrive();
+  const isDemo = !!demoForDrive(drive);
   const closeTarget =
     agent &&
     drive &&
@@ -102,6 +103,18 @@ function NewDrivePage(): JSX.Element {
         </Row>
         <DriveTemplateSetup
           onCreated={resource => {
+            // The demo stays open while the user picks a template, so they
+            // can go back to it. Once they have a drive of their own, it has
+            // done its job.
+            const interactive = readInteractiveDemo();
+            if (interactive && interactive.drive !== resource.subject)
+              void import('../chunks/Demo/startDemo').then(
+                async ({ cleanupDemoDrive, stopDemoDirector }) => {
+                  stopDemoDirector();
+                  await cleanupDemoDrive(store, interactive.drive);
+                  localStorage.removeItem('atomic.demoWorkspace');
+                },
+              );
             setDrive(resource.subject);
             toast.success('Drive created');
             navigate(constructOpenURL(resource.subject));

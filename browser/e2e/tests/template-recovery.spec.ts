@@ -155,7 +155,7 @@ test('guest returns from a template preview before cleanup finishes', async ({
   ).toBeVisible({ timeout: 60000 });
   await page.getByRole('button', { name: 'Preview template' }).first().click();
   await expect(
-    page.getByRole('button', { name: 'Back to template selection' }),
+    page.getByRole('button', { name: 'Back to templates' }),
   ).toBeVisible({ timeout: 60000 });
 
   await page.evaluate(() => {
@@ -167,9 +167,7 @@ test('guest returns from a template preview before cleanup finishes', async ({
         ? new Promise(() => {})
         : original(query)) as typeof original;
   });
-  await page
-    .getByRole('button', { name: 'Back to template selection' })
-    .click();
+  await page.getByRole('button', { name: 'Back to templates' }).click();
   await expect(
     page.getByRole('button', { name: 'Preview template' }).first(),
   ).toBeVisible({ timeout: 2000 });

@@ -2,33 +2,37 @@ import { Button } from './Button';
 import { useState } from 'react';
 import { styled } from 'styled-components';
 import { useStore } from '@tomic/react';
-import { useSettings } from '../helpers/AppSettings';
+import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import type { ActiveDemo, TemplateDemo } from '../chunks/Templates/demoSession';
 import { leaveTemplatePreview } from '../chunks/Templates/leaveTemplatePreview';
 import { paths } from '../routes/paths';
 
 /**
- * The shared action bar above navigation, shown whenever
- * the demo drive is active. Returns to the template gallery and stops
- * the scripted scenario.
- * Reads the demo manifest straight from localStorage — cheap, and it
- * keeps the heavy demo chunk out of the main bundle (only the click
- * loads it, to stop the director).
+ * The bar above navigation while the current drive is a demo drive — the
+ * interactive demo or a template preview — on every page of it, including the
+ * template gallery. `NavWrapper` decides *whether* to show it
+ * (`demoForDrive`); this only decides what it offers:
+ *
+ * - interactive demo: leave it, or go on to choosing a template;
+ * - template preview: back to the gallery it was picked from, or keep it;
+ * - on the gallery itself: back to the demo or preview that is still open.
+ *
+ * The labels only name places the user has actually been.
  */
-export function DemoActionsBar(): React.JSX.Element | null {
+export function DemoActionsBar({
+  demo,
+  onGallery,
+}: {
+  demo: ActiveDemo;
+  onGallery: boolean;
+}): React.JSX.Element {
   const store = useStore();
-  const { drive } = useSettings();
   const navigate = useNavigateWithTransition();
   const [leaving, setLeaving] = useState(false);
 
-  const templateDemo = readTemplateDemo();
-  const demoDrive = templateDemo?.drive ?? readDemoDrive();
-
-  if (!demoDrive || drive !== demoDrive) return null;
-
-  async function handleExit(adopt = false) {
+  async function exitInteractiveDemo(demoDrive: string) {
     if (leaving) return;
     setLeaving(true);
 
@@ -37,23 +41,6 @@ export function DemoActionsBar(): React.JSX.Element | null {
     // out, and the personal-drive lookup is time-boxed (a guest's DID isn't
     // on the server, so that fetch can stall indefinitely).
     try {
-      if (templateDemo) {
-        if (adopt) {
-          navigate(
-            `/app/new-drive?template=${encodeURIComponent(templateDemo.template)}&keep_preview=1`,
-          );
-
-          return;
-        }
-
-        leaveTemplatePreview(store, templateDemo, navigate, async () => {
-          const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
-          await cleanupDemoDrive(store, templateDemo.drive);
-        });
-
-        return;
-      }
-
       try {
         const { stopDemoDirector } = await import('../chunks/Demo/startDemo');
         stopDemoDirector();
@@ -68,14 +55,15 @@ export function DemoActionsBar(): React.JSX.Element | null {
             2500,
           )
         : undefined;
+      const target = home && home !== demoDrive ? home : undefined;
 
-      store.setDrive(home && home !== demoDrive ? home : '');
+      store.setDrive(target ?? '');
       const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
-      await cleanupDemoDrive(store, demoDrive!);
+      await cleanupDemoDrive(store, demoDrive);
       localStorage.removeItem('atomic.demoWorkspace');
-      navigate(paths.newDrive);
+      navigate(target ? constructOpenURL(target) : paths.newDrive);
     } catch {
-      // Last resort — return to the gallery, never a deleted demo drive.
+      // Last resort — the gallery, never a deleted demo drive.
       store.setDrive('');
       navigate(paths.newDrive);
     } finally {
@@ -83,17 +71,60 @@ export function DemoActionsBar(): React.JSX.Element | null {
     }
   }
 
+  function backToTemplates(session: TemplateDemo) {
+    leaveTemplatePreview(store, session, navigate, async () => {
+      const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
+      await cleanupDemoDrive(store, session.drive);
+    });
+  }
+
+  if (onGallery) {
+    const [label, target] =
+      demo.kind === 'interactive'
+        ? ['Back to the demo', demo.welcomeDoc]
+        : ['Back to the preview', demo.session.drive];
+
+    return (
+      <PreviewBar role='region' aria-label='Demo'>
+        <Button subtle onClick={() => navigate(constructOpenURL(target))}>
+          {label}
+        </Button>
+      </PreviewBar>
+    );
+  }
+
+  if (demo.kind === 'interactive') {
+    return (
+      <PreviewBar role='region' aria-label='Demo'>
+        <Button
+          subtle
+          disabled={leaving}
+          onClick={() => void exitInteractiveDemo(demo.drive)}
+        >
+          Leave demo
+        </Button>
+        <Button disabled={leaving} onClick={() => navigate(paths.newDrive)}>
+          Choose a template
+        </Button>
+      </PreviewBar>
+    );
+  }
+
   return (
-    <PreviewBar role='region' aria-label='Template preview'>
-      <Button subtle disabled={leaving} onClick={() => void handleExit()}>
-        <BackLabel>Back to template selection</BackLabel>
+    <PreviewBar role='region' aria-label='Demo'>
+      <Button subtle onClick={() => backToTemplates(demo.session)}>
+        <BackLabel>Back to templates</BackLabel>
         <ShortBackLabel>Back</ShortBackLabel>
       </Button>
-      {templateDemo && (
-        <Button disabled={leaving} onClick={() => void handleExit(true)}>
-          Use this template
-        </Button>
-      )}
+      <Button
+        onClick={() =>
+          navigate(
+            `/app/new-drive?template=${encodeURIComponent(demo.session.template)}&keep_preview=1`,
+          )
+        }
+      >
+        Use this template
+      </Button>
     </PreviewBar>
   );
 }
@@ -105,16 +136,6 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
     p,
     new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), ms)),
   ]);
-}
-
-export function readDemoDrive(): string | undefined {
-  try {
-    const raw = localStorage.getItem('atomic.demoWorkspace');
-
-    return raw ? (JSON.parse(raw) as { drive?: string }).drive : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 const PreviewBar = styled.div`

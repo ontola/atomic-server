@@ -81,13 +81,6 @@ export function DriveTemplateSetup({
     await run(async () => {
       setPreparingTemplate(template.id);
 
-      if (template.id === 'interactive-demo') {
-        onPreview?.();
-        navigate('/app/demo');
-
-        return;
-      }
-
       const subject = await startTemplateDemo(
         store,
         planTemplate(template, TEMPLATE_CATALOG, true),
@@ -290,7 +283,6 @@ export function DriveTemplateSetup({
 
 const TableIcon = getIconForClass(dataBrowser.classes.table);
 const DocumentIcon = getIconForClass(dataBrowser.classes.documentV2);
-const ChatIcon = getIconForClass(dataBrowser.classes.chatroom);
 
 /** Shared by the gallery and the selected-template summary. */
 function TemplatePreview({ template }: { template: TemplateDefinition }) {
@@ -300,33 +292,16 @@ function TemplatePreview({ template }: { template: TemplateDefinition }) {
         {template.icon} {template.title}
       </strong>
       <SidebarPreview aria-label={`${template.title} contents`}>
-        {planTemplate(template, TEMPLATE_CATALOG).parts.map(part =>
-          part.kind === 'interactive-demo' ? (
-            <div key={part.key}>
-              <PreviewRow>
-                <DocumentIcon aria-hidden />
-                <span>Welcome</span>
-              </PreviewRow>
-              <PreviewRow>
-                <TableIcon aria-hidden />
-                <span>Board</span>
-              </PreviewRow>
-              <PreviewRow>
-                <ChatIcon aria-hidden />
-                <span>Team chat</span>
-              </PreviewRow>
-            </div>
-          ) : (
-            <PreviewRow key={part.key}>
-              {part.kind === 'table' ? (
-                <TableIcon aria-hidden />
-              ) : (
-                <DocumentIcon aria-hidden />
-              )}
-              <span>{part.name}</span>
-            </PreviewRow>
-          ),
-        )}
+        {planTemplate(template, TEMPLATE_CATALOG).parts.map(part => (
+          <PreviewRow key={part.key}>
+            {part.kind === 'table' ? (
+              <TableIcon aria-hidden />
+            ) : (
+              <DocumentIcon aria-hidden />
+            )}
+            <span>{part.name}</span>
+          </PreviewRow>
+        ))}
       </SidebarPreview>
     </>
   );
