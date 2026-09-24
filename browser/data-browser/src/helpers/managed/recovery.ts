@@ -201,45 +201,9 @@ async function deriveRecoveryKey(
   );
 }
 
-export async function buildEncryptedRecoverySecret({
-  secret,
-  password,
-  agentSubject,
-  driveSubject,
-}: {
-  secret: string;
-  password: string;
-  agentSubject: string;
-  driveSubject?: string | null;
-}): Promise<RecoverySecretInput> {
-  const salt = randomBytes(SALT_BYTES);
-  const nonce = randomBytes(NONCE_BYTES);
-  const key = await deriveRecoveryKey(password, salt, ['encrypt']);
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce },
-    key,
-    new TextEncoder().encode(secret),
-  );
-
-  return {
-    agent_subject: agentSubject,
-    drive_subject: driveSubject ?? null,
-    encrypted_secret: bytesToBase64(new Uint8Array(ciphertext)),
-    encryption_algorithm: 'AES-GCM',
-    kdf_algorithm: 'PBKDF2',
-    kdf_params: {
-      hash: KDF_HASH,
-      iterations: KDF_ITERATIONS,
-    },
-    salt: bytesToBase64(salt),
-    nonce: bytesToBase64(nonce),
-    format_version: RECOVERY_FORMAT_VERSION,
-  };
-}
-
 /**
- * Reverse of {@link buildEncryptedRecoverySecret}: derive the AES-GCM key from
- * the recovery password + stored salt, then decrypt the agent secret. Throws a
+ * Decrypt a legacy v1 envelope: derive the AES-GCM key from the recovery
+ * password + stored salt, then decrypt the agent secret. Throws a
  * friendly error on a wrong password (AES-GCM auth-tag failure).
  */
 export async function decryptRecoverySecret(
