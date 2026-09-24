@@ -1004,9 +1004,8 @@ msgstr "Échec de la persistance de l'agent après avoir accepté l'invitation"
 msgid "Invite accepted, but no destination was returned."
 msgstr "Invitation acceptée, mais aucune destination n'a été renvoyée."
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "AtomicServer"
-msgstr "AtomicServer"
+#~ msgid "AtomicServer"
+#~ msgstr "AtomicServer"
 
 #. 0: write ? 'edit' \\: 'view'; 1: resourceName ? ` "${resourceName}"` \\: ''
 #: src/views/InvitePage.tsx
