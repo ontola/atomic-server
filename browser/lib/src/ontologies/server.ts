@@ -19,6 +19,7 @@ export const server = {
     release: 'https://atomicdata.dev/classes/Release',
     installation: 'https://atomicdata.dev/classes/Installation',
     listing: 'https://atomicdata.dev/classes/Listing',
+    installationRuntime: 'https://atomicdata.dev/classes/InstallationRuntime',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -78,6 +79,12 @@ export const server = {
     standards: 'https://atomicdata.dev/properties/standards',
     evidence: 'https://atomicdata.dev/properties/evidence',
     supportTier: 'https://atomicdata.dev/properties/supportTier',
+    integrationAppAgent:
+      'https://atomicdata.dev/properties/integrationAppAgent',
+    integrationConnections:
+      'https://atomicdata.dev/properties/integrationConnections',
+    integrationRuntimeAgent:
+      'https://atomicdata.dev/properties/integrationRuntimeAgent',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -163,6 +170,8 @@ export const server = {
       'https://atomicdata.dev/properties/pluginPermissions',
       'https://atomicdata.dev/properties/jsonSchema',
       'https://atomicdata.dev/properties/version',
+      'https://atomicdata.dev/properties/integrationAppAgent',
+      'https://atomicdata.dev/properties/integrationConnections',
     ],
     ['https://atomicdata.dev/classes/Listing']: [
       'https://atomicdata.dev/properties/name',
@@ -174,6 +183,10 @@ export const server = {
       'https://atomicdata.dev/properties/standards',
       'https://atomicdata.dev/properties/evidence',
       'https://atomicdata.dev/properties/supportTier',
+    ],
+    ['https://atomicdata.dev/classes/InstallationRuntime']: [
+      'https://atomicdata.dev/properties/integrationRuntimeAgent',
+      'https://atomicdata.dev/properties/name',
     ],
   },
 } as const satisfies OntologyBaseObject;
@@ -191,6 +204,7 @@ export namespace Server {
   export type Release = typeof server.classes.release;
   export type Installation = typeof server.classes.installation;
   export type Listing = typeof server.classes.listing;
+  export type InstallationRuntime = typeof server.classes.installationRuntime;
 }
 
 declare module '../index.js' {
@@ -297,7 +311,9 @@ declare module '../index.js' {
         | typeof server.properties.pluginAgent
         | typeof server.properties.pluginPermissions
         | typeof server.properties.jsonSchema
-        | typeof server.properties.version;
+        | typeof server.properties.version
+        | typeof server.properties.integrationAppAgent
+        | typeof server.properties.integrationConnections;
     };
     [server.classes.listing]: {
       requires:
@@ -312,6 +328,10 @@ declare module '../index.js' {
         | typeof server.properties.standards
         | typeof server.properties.evidence
         | typeof server.properties.supportTier;
+    };
+    [server.classes.installationRuntime]: {
+      requires: BaseProps | typeof server.properties.integrationRuntimeAgent;
+      recommends: 'https://atomicdata.dev/properties/name';
     };
   }
 
@@ -370,6 +390,9 @@ declare module '../index.js' {
     [server.properties.standards]: string[];
     [server.properties.evidence]: JSONValue;
     [server.properties.supportTier]: string;
+    [server.properties.integrationAppAgent]: string;
+    [server.properties.integrationConnections]: JSONValue;
+    [server.properties.integrationRuntimeAgent]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -427,5 +450,8 @@ declare module '../index.js' {
     [server.properties.standards]: 'standards';
     [server.properties.evidence]: 'evidence';
     [server.properties.supportTier]: 'supportTier';
+    [server.properties.integrationAppAgent]: 'integrationAppAgent';
+    [server.properties.integrationConnections]: 'integrationConnections';
+    [server.properties.integrationRuntimeAgent]: 'integrationRuntimeAgent';
   }
 }

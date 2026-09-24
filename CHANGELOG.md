@@ -7,6 +7,20 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Installations carry what the integration proxy needs (#1700, answers 1–3;
+  provisional):
+  - `integrationAppAgent`: the installation's app id, a keyless
+    `atomic:agent:<pubkey>`. `installRelease` mints it in the genesis the
+    user signs and discards the private key. The server refuses a value that
+    is not an agent id, and refuses to change it once set.
+  - Each node that activates a JS Installation publishes the agent it minted
+    for it on an `InstallationRuntime` child (`integrationRuntimeAgent`,
+    `name` = the node's device name). The node's agent signs its genesis and
+    may write it, so a page can register it with `POST /runtimes`.
+  - `integrationConnections`: `{platform: connection_id}`, written by the
+    page when it delegates. Server-side JS runs get it as `ctx.connections`,
+    and the app id as `ctx.app`, next to `ctx.config`; the host's values
+    replace any the caller sent.
 - Server-side plugins reach the integration proxy through `ctx.http` signed
   by the host (ontola/atomic-plugins#54, decisions 8 and 12). New option
   `--integration-proxy-url` / `ATOMIC_INTEGRATION_PROXY_URL`: the proxy's
