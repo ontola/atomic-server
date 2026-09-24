@@ -51,6 +51,12 @@ branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 **Stop the vite dev server before any git operation that rewrites files** — a
 rebase, a branch switch, a `git checkout -- .`. See below for why.
 
+## GitHub issues
+
+Add labels to every GitHub issue you create or triage. Reuse the repo's
+existing labels (for example the type of issue and the area it touches) rather
+than inventing new ones.
+
 ## Screenshots for UI changes
 
 Every PR that changes the UI needs screenshots of the actual screen. Run the
