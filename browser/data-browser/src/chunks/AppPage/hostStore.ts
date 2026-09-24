@@ -33,6 +33,8 @@ export interface HostRequest {
   parent?: string;
   isA?: string[];
   propVals?: Record<string, unknown>;
+  /** `save`: properties the view removed, sent apart from `propVals`. */
+  remove?: string[];
   // `proxy` / `proxyConnections`
   platform?: string;
   connectionId?: string;
@@ -168,12 +170,30 @@ export async function handleRequest(
       const subject = required(request.subject, 'subject');
 
       await refuseOutsideApp(store, subject, app);
+
+      // `save` on the server only sets, so a property the view removed goes
+      // as its own write. Without this, `resource.remove(p).save()` left `p`
+      // in place while the view believed it gone. Removed first: if the
+      // save then fails, a retry sees the property already gone rather than
+      // a value the view thinks it no longer owns.
+      const removed = (request.remove ?? []).filter(
+        (p): p is string => typeof p === 'string' && p !== '',
+      );
+
+      if (removed.length) {
+        await writeAsApp(store, drive, app, {
+          op: 'remove',
+          subject,
+          properties: removed,
+        });
+      }
+
       await writeAsApp(store, drive, app, {
         op: 'save',
         subject,
         propVals: request.propVals ?? {},
       });
-      await reread(store, subject);
+      await refresh(store, subject);
 
       return { subject };
     }
@@ -262,6 +282,24 @@ async function writeAsApp(
 }
 
 /**
+ * Pulls the server's copy of a resource the app just wrote into this page's
+ * store.
+ *
+ * The write went through `/app-write`, not through this store, so the copy
+ * cached here is the one from before it. The next `get` from the view read
+ * that stale copy: an app that compares what it imports with what is stored
+ * saw its own last write as missing and wrote it again. Best effort: the
+ * write already succeeded, so a failed refresh is not the view's error.
+ */
+async function refresh(store: Store, subject: string): Promise<void> {
+  // Replace rather than merge: a merge keeps properties the write removed.
+  // `applyIncoming` still refuses to clobber unsaved local edits.
+  await store
+    .fetchResourceFromServer?.(subject, { forceOverride: true })
+    .catch(() => undefined);
+}
+
+/**
  * The app's subtree, checked here as well as on the server.
  *
  * Not the authority: what an app may write is what its agent's DID is on, and
@@ -279,25 +317,6 @@ async function refuseOutsideApp(
   throw new Error(
     'This app may only write its own data. Writing here needs rights its key does not have.',
   );
-}
-
-/**
- * Read-your-writes for the app. The server makes the commit, not this page,
- * so this page's copy of `subject` still holds what it had before, and the
- * app's next `get` would be answered from it. An app that reconciles against
- * what it last saved (a sync baseline, an ETag) then sees its own write
- * undone. So the copy is fetched again once the write has landed.
- *
- * Best effort: the write already succeeded, and a failed re-read must not be
- * reported to the app as a failed write.
- */
-async function reread(store: Store, subject: string): Promise<void> {
-  try {
-    await store.fetchResourceFromServer(subject);
-  } catch {
-    // The next `get` is stale until the page hears of the commit; the write
-    // itself stands.
-  }
 }
 
 function required(value: string | undefined, name: string): string {

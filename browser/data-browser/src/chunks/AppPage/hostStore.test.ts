@@ -77,6 +77,38 @@ describe('writing as the app', () => {
     ]);
   });
 
+  it('sends removed properties as their own write, since save only sets', async () => {
+    const store = fakeStore({ 'did:ad:mine': APP });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', {
+        subject: 'did:ad:mine',
+        propVals: { p: 'v' },
+        remove: ['q'],
+      }),
+    );
+
+    expect(sent).toEqual([
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'remove',
+        subject: 'did:ad:mine',
+        properties: ['q'],
+      },
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'save',
+        subject: 'did:ad:mine',
+        propVals: { p: 'v' },
+      },
+    ]);
+  });
+
   it('re-reads what it saved, so the app reads its own write back', async () => {
     const store = fakeStore({ 'did:ad:mine': APP });
     const order: string[] = [];
