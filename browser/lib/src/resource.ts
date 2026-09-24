@@ -1857,7 +1857,26 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
-  /** Returns true if the resource has unsaved local changes. */
+  /**
+   * True when the user changed this resource in this session (`set`,
+   * `push`, `remove`, undo/redo, or `markDirty` after a direct Loro edit)
+   * and that change has not been acknowledged by the server yet. This is
+   * the one flag behind the `'dirty'` save state.
+   *
+   * It is deliberately NOT derived from the Loro save cursor or the pending
+   * genesis (see `unsaved-state.test.ts`):
+   *  - reconciliation writes (e.g. `merge` dropping the `incomplete`
+   *    marker) put ops past the cursor without being user edits, and so do
+   *    AI edits held for review until they are accepted;
+   *  - a new resource has no cursor yet, so its edits are not "past" it;
+   *  - a pending genesis from `store.newResource` is a placeholder the user
+   *    has not saved, and must not read as an unsaved edit;
+   *  - a write made before Loro loads exists only in the read cache;
+   *  - the outbox entry survives reloads, this flag does not, and the store
+   *    relies on that difference (see `hydrateResourceFromJson`).
+   * Whether `save()` has work to do is the wider question answered in
+   * `saveOnce`: this flag, a pending genesis, or an outbox entry.
+   */
   public hasUnsavedChanges(): boolean {
     return this._dirty;
   }
@@ -1866,11 +1885,11 @@ export class Resource<C extends OptionalClass = any> {
    *  the accumulated Loro delta. The store-level drain
    *  (`drainOutboxSubject`) calls this once the resource is caught up
    *  (no ops past the save cursor) — without it, `_dirty` stays `true`
-   *  forever after the very first edit and the editable-title `*`
-   *  indicator never clears (rename-regression e2e). Distinct from the
-   *  Loro save cursor (`markLoroSavedAt`): the cursor tracks WHICH ops
-   *  are signed; this flag is the coarse "are there any unsynced
-   *  edits" signal that `hasUnsavedChanges` / `UnsavedIndicator` read.
+   *  forever after the very first edit and the save state never
+   *  returns to idle. Distinct from the Loro save cursor
+   *  (`markLoroSavedAt`): the cursor tracks WHICH ops are signed; this
+   *  flag is the coarse "are there any unsynced user edits" signal that
+   *  `hasUnsavedChanges` / `getSaveState` read.
    *  @internal store-level drain only. */
   public markSynced(): void {
     this._dirty = false;
