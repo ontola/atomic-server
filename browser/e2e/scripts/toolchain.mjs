@@ -13,23 +13,33 @@ export function pinnedEnvironment(browser, output, inherited = process.env) {
     throw new Error(`Expected an exact pnpm pin, got ${packageManager}`);
   }
 
+  // The pnpm already on PATH is fine when it is the pinned one. Node 25
+  // stopped bundling Corepack, so only reach for it on a mismatch.
+  if (pnpmVersion(browser, inherited) === packageManager.slice('pnpm@'.length))
+    return { ...inherited, CI: 'true' };
+
   const bin = join(output, 'toolchain-bin');
   mkdirSync(bin, { recursive: true });
-  execFileSync('corepack', ['enable', '--install-directory', bin, 'pnpm'], {
-    cwd: browser,
-    env: inherited,
-    stdio: 'pipe',
-  });
+
+  try {
+    execFileSync('corepack', ['enable', '--install-directory', bin, 'pnpm'], {
+      cwd: browser,
+      env: inherited,
+      stdio: 'pipe',
+    });
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    throw new Error(
+      `pnpm on PATH is not ${packageManager} and Corepack is not installed. Install ${packageManager} or Corepack (npm install -g corepack).`,
+    );
+  }
+
   const env = {
     ...inherited,
     CI: 'true',
     PATH: `${bin}${delimiter}${inherited.PATH}`,
   };
-  const actual = execFileSync('pnpm', ['--version'], {
-    cwd: browser,
-    env,
-    encoding: 'utf8',
-  }).trim();
+  const actual = pnpmVersion(browser, env);
 
   if (`pnpm@${actual}` !== packageManager) {
     throw new Error(
@@ -38,6 +48,19 @@ export function pinnedEnvironment(browser, output, inherited = process.env) {
   }
 
   return env;
+}
+
+function pnpmVersion(cwd, env) {
+  try {
+    return execFileSync('pnpm', ['--version'], {
+      cwd,
+      env,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    return undefined;
+  }
 }
 
 export function verifyPlaywright(browser) {
