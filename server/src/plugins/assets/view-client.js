@@ -35,6 +35,13 @@ window.addEventListener('message', event => {
   }
 });
 
+/**
+ * Operations the host answers only once the person has clicked something.
+ * They wait as long as the person takes; the host answers `cancelled` when
+ * the question goes away.
+ */
+const ASKS_THE_PERSON = new Set(['proxyConnect', 'openExternal']);
+
 function send(op, payload) {
   const id = ++nextId;
 
@@ -42,11 +49,13 @@ function send(op, payload) {
     // A host that never answers would otherwise leave the plugin waiting
     // forever. Allow the host's 30s database-leader / websocket recovery to
     // finish before abandoning a cold-start query after a page reload.
-    const timer = setTimeout(() => {
-      if (pending.delete(id)) {
-        reject(new Error(`The host did not answer ${op} in time.`));
-      }
-    }, 60000);
+    const timer = ASKS_THE_PERSON.has(op)
+      ? undefined
+      : setTimeout(() => {
+          if (pending.delete(id)) {
+            reject(new Error(`The host did not answer ${op} in time.`));
+          }
+        }, 60000);
     pending.set(id, { resolve, reject, timer });
     window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
   });
@@ -167,6 +176,28 @@ export const store = {
       window.removeEventListener('message', listener);
       void send('unsubscribe', { subject });
     };
+  },
+
+  /**
+   * Opens an http(s) link in a new tab, after the person confirms it.
+   *
+   * This frame has no popup rights, so `window.open` and `target="_blank"`
+   * do nothing here. The host shows the destination's host in full and asks;
+   * resolves to `{ status: 'opened' }` once it opened the link (with no
+   * opener and no referrer), or `{ status: 'cancelled' }`. Anything but
+   * http(s), or a link with a user name or password in it, is refused.
+   */
+  async openExternal(url) {
+    return send('openExternal', { url: String(url) });
+  },
+
+  /**
+   * Shows a resource in the host page, leaving this app. Only a resource the
+   * person can already read; resolves to `{ status: 'opened', subject }`,
+   * and refuses agents, commits, blobs and anything that is not a subject.
+   */
+  async openResource(subject) {
+    return send('openResource', { subject });
   },
 
   /**
