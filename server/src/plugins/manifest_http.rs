@@ -269,15 +269,17 @@ fn unique_names<'a>(
     Ok(seen)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Segment {
+/// One segment of a route path pattern, normalized: parameter names are
+/// dropped, so `/users/{a}` and `/users/{b}` are the same pattern.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Segment {
     Literal(String),
     Param,
     Rest,
 }
 
 /// Parses a route path pattern into segments.
-fn pattern(path: &str) -> Result<Vec<Segment>, String> {
+pub fn pattern(path: &str) -> Result<Vec<Segment>, String> {
     let invalid = || {
         format!(
             "route path `{path}` must be `/`-separated literal segments, `{{param}}` and a trailing `{{*rest}}`, without regex"
@@ -327,7 +329,7 @@ fn pattern(path: &str) -> Result<Vec<Segment>, String> {
 
 /// Whether some request path matches both patterns. `{*rest}` matches one or
 /// more segments.
-fn overlaps(a: &[Segment], b: &[Segment]) -> bool {
+pub fn overlaps(a: &[Segment], b: &[Segment]) -> bool {
     match (a.first(), b.first()) {
         (None, None) => true,
         (Some(Segment::Rest), other) | (other, Some(Segment::Rest)) => other.is_some(),
