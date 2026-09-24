@@ -1906,6 +1906,17 @@ checks the generated client sends both ops and waits on the person without a
 deadline. Not covered by an automated browser test: the confirm bar itself
 and the navigation (checked by hand with a throwaway Playwright script).
 
+App frame `store.proxy.disconnect({platform})` (#1736):
+`helpers/proxyConnections.test.ts` checks `disconnectApp` against the
+signature-verifying fake proxy: only `DELETE /connections/{id}/agents/{app}`
+calls, another app's delegation on the same connection kept, no connection
+deleted, a 404 counted as gone. `hostStore.test.ts` checks `proxyDisconnect`
+passes an Installation's recorded connection id along and removes
+`integrationConnections[platform]` (keeping other platforms), writes nothing
+for a `createApp` app, and refuses without a proxy or with a bad platform.
+`viewProtocol.test.ts` checks the frame drops its cached capabilities for the
+platform. Not covered: a real proxy, and the op in a browser.
+
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;
 resource creation and signing still use the real local backend. This verifies the

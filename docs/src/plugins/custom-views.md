@@ -217,3 +217,11 @@ Shows a resource in the host page, leaving the app. Only a resource the signed-i
 ```js
 await store.openResource(table.subject);
 ```
+
+#### `store.proxy.disconnect({ platform }): Promise<{ status: 'disconnected', platform, connectionIds }>`
+
+Stops this app using an integration-proxy platform. The host takes this app's delegation off each `platform` connection delegated to it (`DELETE /connections/{id}/agents/{app agent}` at the proxy, signed by the user), and for an Installation also removes `integrationConnections[platform]`, as the Installation page's **Disconnect** does. The connection itself is never deleted: other apps may share it, so deleting it stays something the person does on a page. `connectionIds` lists the connections the delegation was taken off. The frame drops its cached capabilities for that platform; `store.proxy.connect({ platform })` connects again.
+
+```js
+await store.proxy.disconnect({ platform: 'notion' });
+```
