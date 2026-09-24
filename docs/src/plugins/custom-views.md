@@ -202,6 +202,16 @@ const file = await rpc.pickFile({
 
 A drive app's view (an app made with `createApp`, or an Installation's app) gets a `store` from `/plugin-ui?format=client` instead of an `RPCClient`. It speaks the same versioned wire protocol (`atomic.view.request` / `atomic.view.response`, the `ViewOperation`s in `@tomic/plugin`). Besides reading and writing resources, it can ask the host to do what a sandboxed, null-origin frame cannot do itself.
 
+#### `store.getMany(subjects): Promise<Array<Resource | { subject, error }>>`
+
+Reads up to 100 resources in one round trip to the host, instead of one `getResource` per row. Each subject is read exactly as `getResource` reads it: through the signed-in person's store, so the app sees what they can see, including their own writes. The array is in the order asked. A subject that cannot be read is `{ subject, error }` in its place, so one missing row does not fail the rest. More than 100 subjects are refused, so ask in batches.
+
+```js
+const subjects = await store.query({ property: PARENT, value: table });
+const rows = await store.getMany(subjects.slice(0, 100));
+for (const row of rows) if (!row.error) render(row.get(NAME));
+```
+
 #### `store.openExternal(url): Promise<{ status: 'opened' | 'cancelled' }>`
 
 Opens an `http:` or `https:` link in a new tab. The frame has no popup rights (`allow-popups` is not in its sandbox), so `window.open` and `target="_blank"` do nothing. Instead, the host shows a bar naming the destination's host in full, with the whole link under it, and opens the link only when the person clicks **Open link**. It opens with `noopener,noreferrer`. Other schemes, and links with a user name or password in them, are refused. A second call before the person answers resolves the first as `cancelled`.
