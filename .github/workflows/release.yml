@@ -324,7 +324,7 @@ jobs:
           # default stop would kill the engine under a job still using it.
           engine-stop: "false"
           verb: call
-          args: release-assets export --path ./release-assets
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} release-assets export --path ./release-assets
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
 
       - name: Attach them to the release

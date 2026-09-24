@@ -10,6 +10,7 @@ import {
   Platform,
   Service,
   CacheSharingMode,
+  CacheVolume,
 } from '@dagger.io/dagger';
 import { overrideE2eBudget } from './e2e-budget';
 
@@ -282,6 +283,8 @@ export class AtomicServer {
    *  `hostKnobs` so a light E2E job cannot change nextest width mid-`ci()`. */
   private e2eRun: E2eRunKnobs = e2eRunKnobs('hosted', 'full');
   private e2eCloneSessions = false;
+  /** Suffix for the Rust `target/` cache volumes, one per CI runner. */
+  private targetCacheSuffix = '';
 
   constructor(
     @argument({
@@ -318,8 +321,31 @@ export class AtomicServer {
       ],
     })
     source: Directory,
+    /**
+     * The CI runner's name. Mancave runs several runner processes on one
+     * Dagger engine, and cache volumes are engine-wide, so two jobs from
+     * different branches shared each `target/` volume at the same time. The
+     * per-run touch cannot protect that: a build another branch finishes
+     * after this run's touch is newer than this run's sources, and cargo
+     * reuses it (run 4533 failed to compile `server` against another
+     * branch's `atomic_lib`). One volume per runner means one job at a time
+     * per volume again. Registry and pnpm caches are content-addressed and
+     * stay shared. `Mancave`, the original runner, keeps the old names so its
+     * warm caches survive.
+     */
+    @argument() cacheNamespace: string = '',
   ) {
     this.source = source;
+    const namespace = cacheNamespace.trim();
+    this.targetCacheSuffix =
+      namespace === '' || namespace === 'Mancave'
+        ? ''
+        : `-${namespace.replace(/[^A-Za-z0-9_.-]/g, '-')}`;
+  }
+
+  /** A Rust `target/` cache volume, private to this CI runner. */
+  private targetCache(name: string): CacheVolume {
+    return dag.cacheVolume(`${name}${this.targetCacheSuffix}`);
   }
 
   /**
@@ -687,7 +713,7 @@ export class AtomicServer {
     // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
     // the step that merely ran `flutter pub get`).
     const flutterCargoCache = dag.cacheVolume('flutter-cargo');
-    const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
+    const flutterRustTarget = this.targetCache('flutter-plugin-rust-target');
     const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
     const flutterRustup = dag.cacheVolume('flutter-rustup');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
@@ -816,7 +842,7 @@ export class AtomicServer {
         .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache(
           '/code/target',
-          dag.cacheVolume('rust-wasm-target-v3'),
+          this.targetCache('rust-wasm-target-v3'),
         )
         .with(touchWorkspaceSources)
         .withWorkdir('/code/wasm')
@@ -877,7 +903,7 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
+        .withMountedCache('/code/target', this.targetCache('rust-slim-target-v3'))
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
@@ -1382,7 +1408,7 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
+      .withMountedCache('/code/target', this.targetCache('rust-target-v3'))
       .with(touchWorkspaceSources)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch', '--locked']);
@@ -1591,7 +1617,7 @@ export class AtomicServer {
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
+        .withMountedCache('/code/target', this.targetCache('rust-checks-target-v3'))
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
