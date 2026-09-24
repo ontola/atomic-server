@@ -1,5 +1,10 @@
 import { driveDisplayMetadata } from './driveDisplayMetadata';
-import { StoreEvents, isNotFound, type Store } from '@tomic/lib';
+import {
+  StoreEvents,
+  isNotFound,
+  pageRequestSignal,
+  type Store,
+} from '@tomic/lib';
 import {
   VaultSessionEndedError,
   agentVaultProof,
@@ -441,6 +446,10 @@ export async function restoreFromVault(
 
   if (!agent?.subject) return { status: 'no-backup', reason: 'not signed in' };
 
+  // Taken before the first request, so its pagehide listener is registered
+  // while this document is still the live one. The catch reads it.
+  const pageSignal = pageRequestSignal();
+
   const absentFromNode = isNotFound(store.resources.get(driveSubject)?.error);
 
   try {
@@ -514,7 +523,16 @@ export async function restoreFromVault(
 
     return { status: 'restored', outcome };
   } catch (error) {
-    console.warn('[cloud-vault] restore failed', error);
+    // A discarded document cancels its own in-flight requests, and they land
+    // here as `TypeError: Failed to fetch`, indistinguishable by type from a
+    // control plane that is really unreachable. The page is already gone, so
+    // there is nobody to warn and the warning reads as a defect on every
+    // navigation that happens to interrupt a restore. `Client
+    // .fetchResourceHTTP` draws the same line for reads, and the backup path
+    // above for its own cancellation.
+    if (!pageSignal?.aborted) {
+      console.warn('[cloud-vault] restore failed', error);
+    }
 
     return {
       status: 'failed',

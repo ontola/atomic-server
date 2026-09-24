@@ -488,9 +488,41 @@ describe('restoreFromVault', () => {
         throw new Error('403');
       }),
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     expect((await restoreFromVault(store, DRIVE, deps)).status).toBe('failed');
     expect(store.isLocalOnlyDrive(DRIVE)).toBe(false);
+    // A real failure on a live page is still worth saying out loud.
+    expect(warn).toHaveBeenCalledWith(
+      '[cloud-vault] restore failed',
+      expect.anything(),
+    );
+    warn.mockRestore();
+  });
+
+  /**
+   * Navigating away cancels the restore's own requests, which reject as
+   * `TypeError: Failed to fetch`. Warning about that paints every interrupted
+   * restore as broken — and in a suite that fails on unexpected console output,
+   * as a red test.
+   */
+  it('stays quiet when the document is discarded mid-restore', async () => {
+    const page = new EventTarget();
+    vi.stubGlobal('window', page);
+    const store = await signedInStore();
+    const deps = fakeDeps({
+      restoreDrive: vi.fn(async () => {
+        page.dispatchEvent(new Event('pagehide'));
+        throw new TypeError('Failed to fetch');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect((await restoreFromVault(store, DRIVE, deps)).status).toBe('failed');
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+    vi.unstubAllGlobals();
   });
 });
 
