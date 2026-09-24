@@ -329,8 +329,9 @@ pub const ACCEPT_MAX_BYTES_CEILING: u64 = 20 * 1024 * 1024;
 
 /// A file the host may hand the plugin as `input.upload`, instead of the
 /// plugin fetching data itself. `extensions` and `mediaTypes` only filter the
-/// picker; the plugin still validates what it is given. Only `as: "text"`
-/// exists: UTF-8, falling back to Windows-1252, decoded by the host.
+/// picker; the plugin still validates what it is given. `maxBytes` bounds the
+/// file's raw size, whatever the encoding. See [`AcceptAs`] for what the
+/// plugin receives.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Accept {
@@ -338,8 +339,10 @@ pub struct Accept {
     pub extensions: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub media_types: Vec<String>,
-    #[serde(rename = "as")]
-    pub read_as: String,
+    /// Kept as declared: left out, it stays out when serialized, so a
+    /// release's id does not change; an explicit `"text"` stays too.
+    #[serde(default, rename = "as", skip_serializing_if = "Option::is_none")]
+    pub read_as: Option<AcceptAs>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_bytes: Option<u64>,
 }
@@ -347,6 +350,48 @@ pub struct Accept {
 impl Accept {
     pub fn max_bytes(&self) -> u64 {
         self.max_bytes.unwrap_or(DEFAULT_ACCEPT_MAX_BYTES)
+    }
+
+    pub fn encoding(&self) -> AcceptAs {
+        self.read_as.unwrap_or_default()
+    }
+}
+
+/// How an accepted file reaches the plugin, in `input.upload`
+/// (`{ name, mediaType, size, <encoding> }`, `size` being the byte size):
+///
+/// - `text` (the default): the field `text`, decoded by the host as UTF-8,
+///   falling back to Windows-1252.
+/// - `base64`: the field `base64`, the file's exact bytes in standard padded
+///   base64, with no charset detection.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AcceptAs {
+    #[default]
+    Text,
+    Base64,
+}
+
+impl AcceptAs {
+    /// The `input.upload` field that carries the file in this encoding.
+    pub fn field(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Base64 => "base64",
+        }
+    }
+}
+
+// By hand, so that every wrong value gets the one message both validators share.
+impl<'de> Deserialize<'de> for AcceptAs {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match serde_json::Value::deserialize(deserializer)?.as_str() {
+            Some("text") => Ok(Self::Text),
+            Some("base64") => Ok(Self::Base64),
+            _ => Err(serde::de::Error::custom(
+                "accepts entries must be read `as` text or base64",
+            )),
+        }
     }
 }
 
@@ -499,9 +544,6 @@ impl Manifest {
             return Err("at most 8 accepts entries".into());
         }
         for accept in &self.accepts {
-            if accept.read_as != "text" {
-                return Err("accepts entries must be read `as` text".into());
-            }
             if accept
                 .max_bytes
                 .is_some_and(|max| !(1..=ACCEPT_MAX_BYTES_CEILING).contains(&max))

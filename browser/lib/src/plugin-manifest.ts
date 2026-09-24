@@ -63,6 +63,9 @@ export interface DeclaredConfig {
   required?: string[];
 }
 
+/** How an accepted file reaches the plugin; see {@link DeclaredAccept}. */
+export type AcceptEncoding = 'text' | 'base64';
+
 /** What the host accepts when no `maxBytes` is declared: 5 MiB. */
 export const DEFAULT_ACCEPT_MAX_BYTES = 5 * 1024 * 1024;
 /**
@@ -75,17 +78,29 @@ export const ACCEPT_MAX_BYTES_CEILING = 20 * 1024 * 1024;
 /**
  * A file a plugin can be handed by the host, instead of fetching data itself.
  *
- * The host draws the picker, enforces `maxBytes`, decodes the file and passes
- * it as `input.upload` = `{ name, mediaType, size, text }`. `extensions` and
- * `mediaTypes` only filter the picker; the plugin must still validate the
- * content it is given. Only `as: 'text'` exists so far: UTF-8, falling back to
- * Windows-1252.
+ * The host draws the picker, enforces `maxBytes` on the file's raw size and
+ * passes it as `input.upload` (`ctx.upload` in `run`), in the declared
+ * encoding, under a field named after it:
+ *
+ * - `as: 'text'` (the default when `as` is left out):
+ *   `{ name, mediaType, size, text }`, decoded as UTF-8 and falling back to
+ *   Windows-1252 when the file is not valid UTF-8.
+ * - `as: 'base64'`: `{ name, mediaType, size, base64 }`, the file's exact bytes
+ *   base64-encoded (standard alphabet, padded), with no charset detection.
+ *
+ * `size` is always the byte size of the file. `extensions` and `mediaTypes`
+ * only filter the picker; the plugin must still validate the content it is
+ * given. See `PluginUpload` in `plugin-upload.ts`.
  */
 export interface DeclaredAccept {
   /** Lower-case, with the leading dot: `.xml`. */
   extensions?: string[];
   mediaTypes?: string[];
-  as: 'text';
+  /**
+   * How the host hands over the file. Left out, it is `text`, and it stays
+   * left out when serialized, so a release's id does not change.
+   */
+  as?: AcceptEncoding;
   /** Bytes, at most {@link ACCEPT_MAX_BYTES_CEILING}. */
   maxBytes?: number;
 }
@@ -691,8 +706,12 @@ export function validateManifest(raw: unknown): PluginManifest {
   const accepts = list(entry.accepts, 'accepts').map(value => {
     const accept = object(value, 'accepts entry');
     known(accept, ['extensions', 'mediaTypes', 'as', 'maxBytes']);
-    if (accept.as !== 'text')
-      throw new Error('accepts entries must be read `as` text');
+    if (
+      accept.as !== undefined &&
+      accept.as !== 'text' &&
+      accept.as !== 'base64'
+    )
+      throw new Error('accepts entries must be read `as` text or base64');
     const extensions = list(accept.extensions, 'accepts.extensions').map(
       extension => {
         if (
@@ -731,7 +750,8 @@ export function validateManifest(raw: unknown): PluginManifest {
     return {
       ...(extensions.length ? { extensions } : {}),
       ...(mediaTypes.length ? { mediaTypes } : {}),
-      as: 'text' as const,
+      // Kept exactly as declared: an absent `as` stays absent.
+      ...(accept.as !== undefined ? { as: accept.as as AcceptEncoding } : {}),
       ...(accept.maxBytes !== undefined
         ? { maxBytes: accept.maxBytes as number }
         : {}),

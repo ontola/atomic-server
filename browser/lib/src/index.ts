@@ -221,6 +221,7 @@ export {
   type DeclaredConfig,
   type DeclaredConfigField,
   type DeclaredAccept,
+  type AcceptEncoding,
   type DeclaredDestination,
   DEFAULT_ACCEPT_MAX_BYTES,
   ACCEPT_MAX_BYTES_CEILING,
@@ -229,6 +230,13 @@ export {
   type PluginManifest,
   type PluginManifestV2,
 } from './plugin-manifest.js';
+export {
+  acceptFor,
+  readUpload,
+  decodeUploadText,
+  encodeBase64,
+  type PluginUpload,
+} from './plugin-upload.js';
 export {
   pluginConfigFor,
   pluginConfigProblems,

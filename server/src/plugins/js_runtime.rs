@@ -737,6 +737,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_base64_upload_reaches_the_plugin_byte_for_byte() {
+        // `accepts: [{ as: "base64" }]`: the host hands over the exact bytes
+        // as `upload.base64`, and the sandbox's `atob` gets them back.
+        use base64::Engine as _;
+        let bytes: Vec<u8> = (0..=255u8).collect();
+        let input = serde_json::json!({
+            "trigger": {"kind": "manual", "at": 1700000000000u64},
+            "upload": {
+                "name": "every-byte.bin",
+                "mediaType": "application/octet-stream",
+                "size": bytes.len(),
+                "base64": base64::engine::general_purpose::STANDARD.encode(&bytes),
+            },
+        })
+        .to_string();
+        let runtime = runtime();
+        let (h, _) = host();
+
+        let verdict = runtime
+            .run(
+                r#"export function run(ctx) {
+                     const binary = atob(ctx.upload.base64);
+                     const bytes = Array.from(binary, c => c.charCodeAt(0));
+                     return { intents: [], problems: [], text: typeof ctx.upload.text,
+                              size: ctx.upload.size, bytes };
+                   }"#,
+                &input,
+                h,
+            )
+            .await
+            .unwrap()
+            .expect("ran");
+
+        let verdict: serde_json::Value = serde_json::from_str(&verdict).unwrap();
+        let received: Vec<u8> = serde_json::from_value(verdict["bytes"].clone()).unwrap();
+        assert_eq!(received, bytes);
+        assert_eq!(verdict["size"], 256);
+        assert_eq!(verdict["text"], "undefined");
+    }
+
+    #[tokio::test]
     async fn a_plugin_has_no_ambient_io() {
         let runtime = runtime();
         let (h, _) = host();

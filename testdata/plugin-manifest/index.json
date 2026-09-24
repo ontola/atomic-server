@@ -449,7 +449,7 @@
     "error": "accepts maxBytes must be"
   },
   {
-    "name": "v2 accepts only text",
+    "name": "v2 accepts an unknown `as`",
     "file": "v2-accepts-not-text.json",
     "error": "accepts entries must be read"
   },
@@ -530,5 +530,49 @@
     "name": "v2 proxy operation with a query",
     "file": "v2-proxy-operation-query.json",
     "error": "atomic-proxy: URLs"
+  },
+  {
+    "name": "v2 accepts a file as base64",
+    "file": "v2-accepts-base64.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "secrets": [],
+      "operations": [],
+      "accepts": [
+        {
+          "extensions": [
+            ".willow"
+          ],
+          "as": "base64",
+          "maxBytes": 1000000
+        }
+      ]
+    }
+  },
+  {
+    "name": "v2 accepts without `as` reads text and serializes without it",
+    "file": "v2-accepts-default-text.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "secrets": [],
+      "operations": [],
+      "accepts": [
+        {
+          "extensions": [
+            ".sta"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "v2 accepts `as` that is not a string",
+    "file": "v2-accepts-as-not-string.json",
+    "error": "accepts entries must be read"
+  },
+  {
+    "name": "v2 accepts `as` is case-sensitive",
+    "file": "v2-accepts-as-upper-case.json",
+    "error": "accepts entries must be read"
   }
 ]

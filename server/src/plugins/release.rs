@@ -691,6 +691,32 @@ mod tests {
     }
 
     #[test]
+    fn accepts_without_as_keeps_the_release_id() {
+        // `as` is optional and text by default. A manifest that leaves it out,
+        // and one written for #1691 that spells out `"as": "text"`, must both
+        // serialize to exactly what was published.
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/plugin-manifest");
+        for file in [
+            "v2-accepts-default-text.json",
+            "v2-accepts-destination.json",
+        ] {
+            let path = format!("{fixtures}/{file}");
+            let raw: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let parsed = serde_json::json!(Manifest::parse(raw.clone()).unwrap().unwrap());
+            let source = "export function run() { return {}; }".to_string();
+            let before = PluginRelease::js(source.clone(), raw.clone(), Default::default());
+            let after = PluginRelease::js(source, parsed.clone(), Default::default());
+            assert_eq!(before.id().unwrap(), after.id().unwrap(), "{file}");
+            assert_eq!(
+                parsed["accepts"][0].get("as"),
+                raw["accepts"][0].get("as"),
+                "{file}"
+            );
+        }
+    }
+
+    #[test]
     fn package_hashes_are_blake3_hex() {
         assert!(package_hash(&"ab".repeat(32)).is_ok());
         assert!(package_hash("ab").is_err());
