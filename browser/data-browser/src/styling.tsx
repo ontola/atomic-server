@@ -187,6 +187,11 @@ export const buildTheme = (
     0px 3.5px 5.3px rgba(0, 0, 0, 0.028), 0px 6.6px 10px rgba(0, 0, 0, 0.035),
     0px 11.8px 17.9px rgba(0, 0, 0, 0.042),
     0px 22.1px 33.4px rgba(0, 0, 0, 0.05), 0px 53px 80px rgba(0, 0, 0, 0.07);`,
+    // The same lift for something as small as a button, kept within about
+    // 1rem: the soft shadow's 80px blur is cut off by any scroll area a
+    // button sits in, such as a dialog's content or the sidebar.
+    boxShadowButton: `0px 1.5px 2.2px rgba(0, 0, 0, 0.04),
+    0px 3.5px 5.3px rgba(0, 0, 0, 0.055), 0px 6.6px 10px rgba(0, 0, 0, 0.07);`,
     containerWidth: 40,
     containerWidthWide: '900px',
     fontSizeBody: 1,
@@ -249,6 +254,7 @@ declare module 'styled-components' {
     boxShadow: string;
     boxShadowIntense: string;
     boxShadowSoft: string;
+    boxShadowButton: string;
     /**
      * @deprecated
      * use size() instead
