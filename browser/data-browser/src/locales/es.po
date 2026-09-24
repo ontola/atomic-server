@@ -12488,3 +12488,35 @@ msgstr ""
 #: src/components/ProxyTrafficNotice.tsx
 msgid "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"
 msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr ""
+
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect {0}"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected ·"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr ""
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
+msgstr ""

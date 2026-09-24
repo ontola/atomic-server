@@ -12534,3 +12534,35 @@ msgstr "This app wants to connect your{0} <0/> account. The connection stays in 
 #: src/components/ProxyTrafficNotice.tsx
 msgid "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"
 msgstr "This traffic goes through <0/>. If you want to run your own atomic-integration-proxy, follow the instructions here:{0} <1>self-hosting guide</1>"
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr "Disconnecting…"
+
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect {0}"
+msgstr "Connect {0}"
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected ·"
+msgstr "Connected ·"
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr "Use this connection"
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr "{0} connected"
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
+msgstr "{0} disconnected"

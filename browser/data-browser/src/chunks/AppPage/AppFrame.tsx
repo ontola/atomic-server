@@ -17,9 +17,11 @@ import { useCreateThemeVars } from '@views/PluginView/useCreateThemeVars';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
 import {
   isPlatformId,
+  platformName,
   ProxyConnections,
   type ProxyConnection,
 } from '@helpers/proxyConnections';
+import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
 import { appAgentOf } from './appAgent';
 import { ProxyTrafficNotice } from '@components/ProxyTrafficNotice';
 import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
@@ -389,16 +391,14 @@ function AppFrameSession({
         </ErrorBar>
       )}
       {connectAsk && (
-        <ConnectBar role='group' aria-label='Connect an account'>
-          <ConnectText>
-            <ErrorText>
-              This app wants to use your{' '}
-              <strong>{platformName(connectAsk.platform)}</strong> account. The
-              proxy keeps the connection under your account; this app may use it
-              until you revoke that.
-            </ErrorText>
+        <ProxyConsentBar aria-label='Connect an account'>
+          <ProxyConsentText>
+            This app wants to use your{' '}
+            <strong>{platformName(connectAsk.platform)}</strong> account. The
+            proxy keeps the connection under your account; this app may use it
+            until you revoke that.
             <ProxyTrafficNotice />
-          </ConnectText>
+          </ProxyConsentText>
           <Row gap='0.5rem'>
             {connectAsk.existing?.[0] && (
               <Button onClick={() => pickExisting(connectAsk.existing![0])}>
@@ -412,7 +412,7 @@ function AppFrameSession({
               Cancel
             </Button>
           </Row>
-        </ConnectBar>
+        </ProxyConsentBar>
       )}
       <Frame
         ref={frameRef}
@@ -539,14 +539,6 @@ async function appLabel(
   }
 }
 
-/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
-function platformName(id: string) {
-  return id
-    .split('-')
-    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
-    .join(' ');
-}
-
 interface ConnectAsk {
   id: number | string;
   platform: string;
@@ -607,27 +599,6 @@ const Frame = styled.iframe`
   height: 100%;
   min-height: 20rem;
   background: ${p => p.theme.colors.bg};
-`;
-
-const ConnectBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  margin-bottom: 0.5rem;
-`;
-
-const ConnectText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1 1 20rem;
-  min-width: 0;
 `;
 
 /** Keeps the frame filling whatever is left once the bar has taken its height. */

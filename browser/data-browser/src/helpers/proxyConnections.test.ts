@@ -193,6 +193,9 @@ describe('ProxyConnections', () => {
       returnTo: `${PAGE}/app/show?subject=x`,
       connected: true,
       connectionId: 'new',
+      platform: 'pets',
+      app: 'atomic:app',
+      recordOnInstallation: false,
     });
   });
 
@@ -341,6 +344,9 @@ describe('ProxyConnections', () => {
     expect(await connections.finish(back.searchParams)).toEqual({
       returnTo: `${PAGE}/x`,
       connected: false,
+      platform: 'pets',
+      app: 'atomic:app',
+      recordOnInstallation: false,
     });
     expect(proxy.calls).toEqual([]);
     expect(storage.length).toBe(0);

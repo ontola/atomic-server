@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { StoreEvents, useStore, type Agent } from '@tomic/react';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
 import { ProxyConnections } from '@helpers/proxyConnections';
+import { finishProxyReturn } from '@helpers/installationConnections';
 
 /**
  * Where an app's proxy connection comes back to.
@@ -12,8 +13,9 @@ import { ProxyConnections } from '@helpers/proxyConnections';
  * renders — so no route's own return handling sees it — redeems the code
  * signed with the user key (which makes the user the connection's owner),
  * delegates the connection to the app, and goes back to the app, which then
- * finds the connection by reference. Any other page load renders `children`
- * untouched.
+ * finds the connection by reference. For an Installation it also records
+ * `integrationConnections[platform]` on it, signed by the user. Any other page
+ * load renders `children` untouched.
  */
 export function ProxyConnectReturn({
   children,
@@ -45,8 +47,8 @@ export function ProxyConnectReturn({
     // Redeeming is signed with the user key, which may still be loading this
     // early in a page load.
     waitForAgent(store)
-      .then(() => pending.connections.finish(pending.params))
-      .then(({ returnTo }) => {
+      .then(() => finishProxyReturn(store, pending.connections, pending.params))
+      .then(returnTo => {
         if (!cancelled) location.replace(returnTo);
       })
       .catch((e: Error) => {
