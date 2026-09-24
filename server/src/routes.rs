@@ -79,6 +79,16 @@ fn precompressed_br_available(ctx: &guard::GuardContext<'_>) -> bool {
     map.contains_key(br_key.as_str()) && map.contains_key(path)
 }
 
+/// Whether an embedded static file (the app's bundles, `index.html`,
+/// `robots.txt`, ...) lives under this first path segment. Those are served
+/// on every host, so a plugin route on a drive's host may not use it.
+#[cfg(feature = "plugin-routes")]
+pub fn is_static_asset_segment(first: &str) -> bool {
+    precompressed_index()
+        .keys()
+        .any(|path| path.split('/').next() == Some(first))
+}
+
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
     let Some(rest) = atomic_lib::identifiers::node_id(node_did) else {
         return Err("Expected nodeId to use atomic:node:<node-id>");

@@ -47,7 +47,7 @@ use super::{
     js_runtime::{self, StoreHost},
     manifest::Manifest,
     manifest_http::{Auth, Body, Cors, Mount, Principal, Route},
-    route_registry::slug,
+    route_registry::{slug, Target},
 };
 use crate::{plugin_routes::PluginRoutesLevel, rate_limit::WriteRateLimiter};
 
@@ -139,7 +139,7 @@ const DOCUMENT_TYPES: [&str; 3] = ["text/html", "application/xhtml+xml", "image/
 pub struct RouteCors(pub Vec<(HeaderName, HeaderValue)>);
 
 impl RouteCors {
-    fn declared(cors: Cors) -> Self {
+    pub fn declared(cors: Cors) -> Self {
         match cors {
             Cors::None => Self::default(),
             Cors::AnyOriginNoCredentials => Self(vec![(
@@ -780,33 +780,21 @@ async fn load(store: &Db, installation: &str, route: &str) -> Result<Loaded, Str
     })
 }
 
-/// One matched request to a plugin route, end to end.
-#[allow(clippy::too_many_arguments)]
+/// One matched request to a plugin route, end to end: a route's own path,
+/// or a `/.well-known/` claim ([`Target::well_known`]) that names the route.
 pub async fn execute(
     appstate: &crate::appstate::AppState,
     req: &HttpRequest,
     payload: web::Payload,
-    installation: &str,
-    mount: Mount,
-    path: &str,
-    route_id: &str,
+    target: &Target,
 ) -> HttpResponse {
     let executor = &appstate.route_exec;
     let started = std::time::Instant::now();
     let at = atomic_lib::utils::now();
     let mut cors = RouteCors::default();
-    let outcome = run(
-        appstate,
-        req,
-        payload,
-        installation,
-        mount,
-        path,
-        route_id,
-        at,
-        &mut cors,
-    )
-    .await;
+    let installation = target.installation.as_str();
+    let route_id = target.route.as_str();
+    let outcome = run(appstate, req, payload, target, at, &mut cors).await;
     let mut response = outcome.response;
     executor.record(
         installation,
@@ -825,18 +813,22 @@ pub async fn execute(
     response
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn run(
     appstate: &crate::appstate::AppState,
     req: &HttpRequest,
     payload: web::Payload,
-    installation: &str,
-    mount: Mount,
-    path: &str,
-    route_id: &str,
+    target: &Target,
     at: i64,
     cors: &mut RouteCors,
 ) -> Outcome {
+    let Target {
+        installation,
+        mount,
+        path,
+        route: route_id,
+        well_known,
+    } = target;
+    let (installation, mount, path) = (installation.as_str(), *mount, path.as_str());
     let executor = &appstate.route_exec;
     let store = &appstate.store;
     let level = appstate.route_registry.config().level();
@@ -1009,10 +1001,17 @@ async fn run(
         return busy("This plugin is answering as many requests as it may at once.");
     };
 
+    // A claim's path is `/.well-known/<name>`, not the route's pattern:
+    // there are no params, and the handler is told which name it answers.
+    let params = match well_known {
+        Some(_) => serde_json::Map::new(),
+        None => params(&route.path, path),
+    };
     let request = json!({
         "method": req.method().as_str(),
         "path": path,
-        "params": params(&route.path, path),
+        "wellKnown": well_known,
+        "params": params,
         "query": query(req.query_string()),
         "headers": request_headers(req, shared_host),
         "body": body,

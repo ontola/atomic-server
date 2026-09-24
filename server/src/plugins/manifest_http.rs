@@ -24,21 +24,10 @@ pub const MAX_INLINE_BODY_BYTES: u64 = 1_048_576;
 pub const MAX_TIMEOUT_MS: u64 = 30_000;
 /// Methods a route may answer.
 pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
-/// `/.well-known/` names the host multiplexes between installations.
-pub const SHARED_WELL_KNOWN: [&str; 1] = ["webfinger"];
-/// `/.well-known/` names one installation per host may claim. Anything not
-/// in either list is refused, so a plugin cannot create entries other
-/// software on the host would interpret (`change-password`, `security.txt`).
-pub const EXCLUSIVE_WELL_KNOWN: [&str; 8] = [
-    "nodeinfo",
-    "ocm",
-    "atproto-did",
-    "solid",
-    "oauth-authorization-server",
-    "oauth-protected-resource",
-    "openid-configuration",
-    "did.json",
-];
+/// The claimable `/.well-known/` names (design 2.4). Defined next to the
+/// gates, which the operator's API-origin grants are checked against in every
+/// build.
+pub use crate::plugin_routes::{EXCLUSIVE_WELL_KNOWN, SHARED_WELL_KNOWN};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

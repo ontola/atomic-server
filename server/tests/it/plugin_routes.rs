@@ -3,7 +3,8 @@
 //! installs version-three plugins over HTTP, and their mounts answer:
 //! `drive-prefix` at `/_routes/<slug>/...`, `installation-origin` on
 //! `<slug>.<routes origin>`. A matched route runs the plugin's
-//! `handle(ctx, request)` (AS-05).
+//! `handle(ctx, request)` (AS-05), and a claimed `/.well-known/` name runs the
+//! route its claim names (#1716).
 //!
 //! Run: cargo test -p atomic-server --features plugin-routes --test it plugin_routes
 
@@ -23,6 +24,11 @@ const HELLO_ROUTE_SOURCE: &str =
     include_str!("../../../testdata/plugin-routes/hello-route/plugin.js");
 const HELLO_ROUTE_MANIFEST: &str =
     include_str!("../../../testdata/plugin-routes/hello-route/manifest.json");
+/// `testdata/plugin-routes/well-known/`: claims `nodeinfo` and `webfinger`.
+const WELL_KNOWN_SOURCE: &str =
+    include_str!("../../../testdata/plugin-routes/well-known/plugin.js");
+const WELL_KNOWN_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/well-known/manifest.json");
 
 /// A manifest for plugin `acme/<name>` with this `http` block.
 fn manifest(name: &str, http: serde_json::Value) -> serde_json::Value {
@@ -42,7 +48,17 @@ async fn install(
     drive: &str,
     manifest: serde_json::Value,
 ) -> AtomicResult<String> {
-    let mut release = PluginRelease::js(HELLO_ROUTE_SOURCE.into(), manifest, Default::default());
+    install_source(client, drive, HELLO_ROUTE_SOURCE, manifest).await
+}
+
+/// [`install`] with this plugin source.
+async fn install_source(
+    client: &Client,
+    drive: &str,
+    source: &str,
+    manifest: serde_json::Value,
+) -> AtomicResult<String> {
+    let mut release = PluginRelease::js(source.into(), manifest, Default::default());
     release.world = WORLD_EXTENSION.into();
     let mut release_resource = client.new_resource(drive)?;
     release.write_to_resource(&mut release_resource, None)?;
@@ -136,6 +152,75 @@ async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
         resp.text().await.map_err(|e| e.to_string())?,
         "Hello, alice"
     );
+
+    // A claimed `/.well-known/` name, on the installation's own origin: the
+    // well-known fixture, moved to that mount.
+    let mut claims: serde_json::Value = serde_json::from_str(WELL_KNOWN_MANIFEST)?;
+    claims["http"]["mount"] = "installation-origin".into();
+    let claimed = install_source(&client, &drive, WELL_KNOWN_SOURCE, claims).await?;
+    let claimed_host = format!("{}.routes.localhost:{port}", slug(&claimed));
+    let resp = http
+        .get(format!("{server}/.well-known/nodeinfo"))
+        .header("host", &claimed_host)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.headers()["content-type"], "application/json");
+    let links: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    assert_eq!(
+        links["links"][0]["rel"],
+        "http://nodeinfo.diaspora.software/ns/schema/2.1"
+    );
+    let resp = http
+        .get(format!(
+            "{server}/.well-known/webfinger?resource=acct%3Aalice%40example.com"
+        ))
+        .header("host", &claimed_host)
+        .header("origin", "https://elsewhere.example")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 200);
+    // Declared `any-origin-no-credentials`, through the real CORS layer.
+    assert_eq!(resp.headers()["access-control-allow-origin"], "*");
+    assert!(!resp
+        .headers()
+        .contains_key("access-control-allow-credentials"));
+    let jrd: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    assert_eq!(jrd["subject"], "acct:alice@example.com");
+    // An unmatched resource and an unclaimed name are 404; host-meta is
+    // generated from the webfinger claim.
+    for (path, status) in [
+        ("/.well-known/webfinger?resource=https%3A%2F%2Fx", 404),
+        ("/.well-known/ocm", 404),
+        ("/.well-known/host-meta", 200),
+    ] {
+        let resp = http
+            .get(format!("{server}{path}"))
+            .header("host", &claimed_host)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        assert_eq!(resp.status(), status, "{path}");
+        if status == 200 {
+            let xrd = resp.text().await.map_err(|e| e.to_string())?;
+            assert!(
+                xrd.contains(&format!(
+                    "template=\"http://{claimed_host}/.well-known/webfinger?resource={{uri}}\""
+                )),
+                "{xrd}"
+            );
+        }
+    }
+    // The API origin has no claims without the operator's grant.
+    let resp = http
+        .get(format!("{server}/.well-known/nodeinfo"))
+        .header("accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 404);
 
     // A reserved path refuses the install.
     let err = install(

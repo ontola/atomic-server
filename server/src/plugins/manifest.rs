@@ -1255,6 +1255,7 @@ mod tests {
                 routes_origin: None,
                 listeners: Some(listeners.as_str()),
                 sidecars: Some(sidecars.as_str()),
+                api_well_known: None,
             },
             raw["compiled"].as_bool().unwrap(),
             OriginContext {
