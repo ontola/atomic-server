@@ -320,6 +320,9 @@ jobs:
       - uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"
+          # Keep the shared engine up: Mancave runs several jobs at once, and the
+          # default stop would kill the engine under a job still using it.
+          engine-stop: "false"
           verb: call
           args: release-assets export --path ./release-assets
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
