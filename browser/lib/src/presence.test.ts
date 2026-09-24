@@ -110,9 +110,8 @@ describe('announcements Loro cannot store', () => {
       // seconds still works. Before the check this threw, on a timer, forever.
       expect(() => manager.rebroadcast()).not.toThrow();
       expect(
-        manager
-          .getSnapshot()
-          .find(item => item.sessionId === manager.sessionId)?.data,
+        manager.getSnapshot().find(item => item.sessionId === manager.sessionId)
+          ?.data,
       ).toEqual({ row: 'row-1' });
     } finally {
       consoleError.mockRestore();
@@ -129,7 +128,9 @@ describe('announcements Loro cannot store', () => {
 
     const manager = store.getPresence(drive);
     const unsubscribe = manager.subscribe(() => {});
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
 
     try {
       const cyclic: Record<string, unknown> = { row: 'row-1' };
