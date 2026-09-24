@@ -1,13 +1,16 @@
 import type { ClientDbWorker } from './client-db.js';
-import type { Item } from './rbsr.js';
 import { blobHashHex, isBlobSubject } from './subject.js';
+
+/** One drive inventory entry: a subject and its version vector (peer id →
+ *  counter), as the server's `RBSR_ITEMS` answer lists them. */
+export type DriveItem = { subject: string; vv: Record<string, number> };
 
 /** Verify every readable remote resource and its content-addressed attachment.
  * A root snapshot or matching resource count is not proof of a complete copy. */
 export async function verifyLocalDriveCopy(
   db: ClientDbWorker,
   drive: string,
-  remote: Item[],
+  remote: DriveItem[],
 ): Promise<void> {
   if (!remote.some(item => item.subject === drive))
     throw new Error('The server did not provide a complete drive inventory.');

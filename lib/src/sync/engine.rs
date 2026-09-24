@@ -447,8 +447,10 @@ pub async fn handle_frame_full_for_caps(
                 }
             }
             Some(sync) => {
-                // `subjects`, when present, is the RBSR-reduced set: build
-                // version vectors for just those instead of walking the drive.
+                // `subjects`, when present, limits the reconcile to that set:
+                // build version vectors for just those instead of walking the
+                // drive. The bundled browser client no longer sends it (it
+                // came from the removed RBSR descent); kept for other clients.
                 let filter = sync
                     .subjects
                     .as_ref()
@@ -1065,23 +1067,28 @@ pub fn build_drive_vvs(
     vvs
 }
 
-/// The drive's RBSR items as `agent` may see them: the drive resource itself
+/// One drive inventory entry: a subject and its version vector (peer →
+/// counter). A sorted list of these is what the probe hash is computed over
+/// and what `RBSR_ITEMS` returns.
+pub type DriveItem = (String, std::collections::BTreeMap<String, i32>);
+
+/// The drive's inventory as `agent` may see them: the drive resource itself
 /// must be readable (else `Err`, the caller refuses with
 /// `UNAUTHORIZED_READ`), and every subject the agent cannot `check_read` is
 /// left out. This is the gate the full `SYNC` path has always applied per
-/// subject; the hash-first probe and the `RBSR_FP` / `RBSR_ITEMS` frames
+/// subject; the hash-first probe and the `RBSR_ITEMS` inventory frame
 /// used to skip it, which let an anonymous socket enumerate every subject
 /// and version vector of any drive it could name.
 ///
-/// Filtering per agent also makes the fingerprints *match*: a client only
-/// ever fingerprints what it holds, which is what it may read, so a server
-/// fingerprint over the unfiltered set would never agree with it for a
-/// drive with any private subject.
+/// Filtering per agent also makes the probe hash *match*: a client only
+/// ever hashes what it holds, which is what it may read, so a server hash
+/// over the unfiltered set would never agree with it for a drive with any
+/// private subject.
 pub async fn drive_items_for(
     store: &Db,
     drive: &str,
     agent: &crate::agents::ForAgent,
-) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+) -> Result<Vec<DriveItem>, String> {
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_resource = store
         .get_resource(&drive_subject)
@@ -1094,7 +1101,7 @@ pub async fn drive_items_for(
     let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
     let vvs = build_drive_vvs(store, &drive_subjects);
 
-    let mut items: Vec<crate::sync::rbsr::Item> = Vec::with_capacity(vvs.len());
+    let mut items: Vec<DriveItem> = Vec::with_capacity(vvs.len());
     for (subject, vv) in vvs {
         let readable = match store
             .get_resource(&crate::Subject::from_raw(
@@ -1115,13 +1122,13 @@ pub async fn drive_items_for(
 }
 
 /// Sorted inventory in the peer's spelling. Convert before range filtering or
-/// fingerprinting: both subject bytes and their ordering are part of RBSR.
+/// hashing: subject bytes and their ordering are part of both.
 pub async fn drive_items_for_wire(
     store: &Db,
     drive: &str,
     agent: &crate::agents::ForAgent,
     wire: WireScheme,
-) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+) -> Result<Vec<DriveItem>, String> {
     let mut items = drive_items_for(store, drive, agent).await?;
     for (subject, _) in &mut items {
         *subject = wire.subject(subject);
@@ -1178,18 +1185,17 @@ pub async fn handle_sync_vv(
 }
 
 /// Same as [`handle_sync_vv`], but when `subjects` is `Some(set)` only that set
-/// is reconciled — the RBSR-differing set (`planning/drive-reconciliation.md`
-/// Phase 2b). The server then builds VVs for only those subjects (O(|set|)
-/// rather than O(drive)) and both loops skip anything outside it, so the client
-/// sending version vectors for just the differing subjects is processed exactly
-/// like the full path processes those same subjects.
+/// is reconciled: a differing set the client chose (it used to come from the
+/// RBSR descent, removed 2026-09). The server then builds VVs for only those
+/// subjects (O(|set|) rather than O(drive)) and both loops skip anything
+/// outside it, so the client sending version vectors for just the differing
+/// subjects is processed exactly like the full path processes those subjects.
 ///
-/// **RBSR-path limitation:** the filtered path relies purely on version-vector
+/// **Filtered-path limitation:** it relies purely on version-vector
 /// divergence. The full path (`subjects == None`) additionally pulls a subject
 /// whose VV *matches* but whose blob the server lacks (an HTTP-POST-metadata
-/// backstop, below). A VV fingerprint cannot encode server-only blob presence,
-/// so that backstop does not run for pruned (VV-matching) subjects on the RBSR
-/// path — accepted and documented; the full path is unchanged.
+/// backstop, below). That backstop does not run for subjects left out of the
+/// set.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_sync_vv_filtered(
     drive: &str,
@@ -1208,7 +1214,7 @@ pub async fn handle_sync_vv_filtered(
     });
     let subjects = canonical_subjects.as_ref();
     let server_vvs = match subjects {
-        // RBSR path: build VVs for only the differing subjects — no full-drive
+        // Filtered path: build VVs for only the differing subjects — no full-drive
         // parent walk, no full-drive snapshot reads.
         Some(set) => {
             let mut vvs = std::collections::HashMap::new();
@@ -1359,7 +1365,7 @@ pub async fn handle_sync_vv_filtered(
 
     // Client resources not on server: pull new data, or tell client to delete tombstones.
     for subject in client_vvs.keys() {
-        // On the RBSR path, only reconcile the differing set even if the client
+        // On the filtered path, only reconcile the differing set even if the client
         // sent extra version vectors.
         if subjects.is_some_and(|set| !set.contains(subject)) {
             continue;

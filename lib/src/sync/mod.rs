@@ -3,7 +3,7 @@
 //! Contains the v2 binary frame protocol and the sync engine.
 //! Used by WebSocket (server), Iroh QUIC (native peers), and WASM clients.
 
-// `policy`, `protocol`, and `rbsr` are std-only; the rest needs the `db`
+// `policy` and `protocol` are std-only; the rest needs the `db`
 // feature. The module itself stays ungated so `Storelike::sync_policy`
 // (always compiled) can reference `sync::policy` in a no-features build.
 #[cfg(feature = "iroh")]
@@ -19,7 +19,6 @@ pub mod outbox;
 pub mod peer;
 pub mod policy;
 pub mod protocol;
-pub mod rbsr;
 /// Pushing a whole drive to a remote server, as a client. Needs the WS client.
 #[cfg(feature = "ws")]
 pub mod replicate;

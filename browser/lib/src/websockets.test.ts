@@ -389,7 +389,7 @@ describe('WSClient drive sync probe', () => {
   });
 
   it.each(['identity change', 'disconnect'])(
-    'stops range reconciliation after %s between replies',
+    'does not answer SYNC_RESEND after %s',
     async reason => {
       const expect = assert;
       const { client, socket, store } = await connectedClient();
@@ -407,29 +407,19 @@ describe('WSClient drive sync probe', () => {
         resources: {},
       } as never);
       const internal = client as unknown as {
-        sendReducedSyncState: (drive: string) => Promise<void>;
+        sendFullSyncState: (drive: string) => void;
         startVVSync: (drive: string) => Promise<void>;
-        rbsrFingerprints: () => Promise<string[]>;
-        rbsrItems: () => Promise<never[]>;
       };
-      vi.spyOn(internal, 'rbsrFingerprints').mockImplementation(async () => {
-        if (reason === 'disconnect') client.close();
-        else store.setAgent(undefined);
-
-        return ['ff'.repeat(32)];
-      });
-      const items = vi.spyOn(internal, 'rbsrItems').mockResolvedValue([]);
-      const warning = vi.spyOn(console, 'warn');
       await internal.startVVSync('did:ad:drive');
-      await internal.sendReducedSyncState('did:ad:drive');
-      expect(items).not.toHaveBeenCalled();
+      if (reason === 'disconnect') client.close();
+      else store.setAgent(undefined);
+      internal.sendFullSyncState('did:ad:drive');
       expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
-      expect(warning).not.toHaveBeenCalled();
       client.close();
     },
   );
 
-  it('probes with a binary SYNC and reconciles on SYNC_RESEND', async ({
+  it('probes with a binary SYNC and sends the full state on SYNC_RESEND', async ({
     expect,
   }) => {
     const { client, socket, store } = await connectedClient();
@@ -439,14 +429,14 @@ describe('WSClient drive sync probe', () => {
       peers: [],
       resources: {},
     } as unknown as Awaited<ReturnType<typeof store.computeDriveSyncState>>);
-    const reduced = vi
+    const full = vi
       .spyOn(
         client as unknown as {
-          sendReducedSyncState: (d: string) => Promise<void>;
+          sendFullSyncState: (d: string) => void;
         },
-        'sendReducedSyncState',
+        'sendFullSyncState',
       )
-      .mockResolvedValue(undefined);
+      .mockReturnValue(undefined);
 
     await (
       client as unknown as { startVVSync: (d: string) => Promise<void> }
@@ -469,7 +459,7 @@ describe('WSClient drive sync probe', () => {
     ).toEqual({ peers: [], resources: {}, probe: true });
 
     socket.receive(encodeSyncResend('did:ad:drive'));
-    expect(reduced).toHaveBeenCalledWith('did:ad:drive');
+    expect(full).toHaveBeenCalledWith('did:ad:drive');
     client.close();
   });
 });
@@ -481,37 +471,31 @@ describe('WSClient legacy scheme sync', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses legacy nested subjects in reduced sync and its full fallback', async () => {
-    for (const fallback of [false, true]) {
-      const { client, socket, store } = await connectedClient();
-      const internal = client as unknown as {
-        authenticatedWith: string | undefined;
-        _pendingSyncState: Map<string, unknown>;
-        sendReducedSyncState: (drive: string) => Promise<void>;
-      };
-      internal.authenticatedWith = store.getAgent()?.subject;
-      internal._pendingSyncState.set('atomic:drive', {
+  it('uses legacy nested subjects in the full sync', async () => {
+    const { client, socket } = await connectedClient();
+    const internal = client as unknown as {
+      _pendingSyncState: Map<string, unknown>;
+      sendFullSyncState: (drive: string) => void;
+    };
+    internal._pendingSyncState.set('atomic:drive', {
+      state: {
         drive: 'atomic:drive',
         driveHash: 'hash',
         peers: ['1'],
         resources: { 'atomic:doc': [1] },
-      });
-      const fp = vi.spyOn(client, 'rbsrFingerprints');
-      if (fallback) fp.mockRejectedValue(new Error('test fallback'));
-      else fp.mockResolvedValue(['00'.repeat(32)]);
-      vi.spyOn(client, 'rbsrItems').mockResolvedValue([]);
-      await internal.sendReducedSyncState('did:ad:drive');
-      const frame = framesWithTag(socket, Tag.SYNC).at(-1)!;
-      const dl = (frame[1] << 8) | frame[2];
-      const ho = 3 + dl;
-      const hl = (frame[ho] << 8) | frame[ho + 1];
-      const body = JSON.parse(
-        new TextDecoder().decode(frame.subarray(ho + 2 + hl)),
-      );
-      assert(body.resources).toEqual({ 'did:ad:doc': [1] });
-      if (!fallback) assert(body.subjects).toEqual(['did:ad:doc']);
-      client.close();
-    }
+      },
+      current: () => true,
+    });
+    internal.sendFullSyncState('did:ad:drive');
+    const frame = framesWithTag(socket, Tag.SYNC).at(-1)!;
+    const dl = (frame[1] << 8) | frame[2];
+    const ho = 3 + dl;
+    const hl = (frame[ho] << 8) | frame[ho + 1];
+    const body = JSON.parse(
+      new TextDecoder().decode(frame.subarray(ho + 2 + hl)),
+    );
+    assert(body).toEqual({ peers: ['1'], resources: { 'did:ad:doc': [1] } });
+    client.close();
   });
 
   it('exports canonical in-memory snapshots when a legacy peer requests them', async () => {

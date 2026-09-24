@@ -7,6 +7,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Removed range-based set reconciliation (RBSR, `lib/src/sync/rbsr.rs`). The
+  server rebuilt a drive's whole inventory for every `RBSR_FP` round trip, so
+  the descent cost more than the one full version-vector `SYNC` it replaced.
+  `RBSR_FP` is now answered with `{"drive","unsupported":true}` and no
+  fingerprints, which makes an older browser fall back to the full `SYNC`
+  immediately. `RBSR_ITEMS` stays as the drive inventory, and a `SYNC` with
+  `subjects` is still honoured. The `rbsr` capability is no longer advertised.
+
 - The server raises its own file-descriptor soft limit to its hard limit at
   startup. It already budgeted HTTP connections against the soft limit and kept
   a reserve, but HTTP is not the only tenant of that pool: the database, Iroh's

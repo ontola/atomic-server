@@ -2283,21 +2283,19 @@ mod peer_sync_tests {
         );
     }
 
-    /// The safety gate for the RBSR live wire: reconciling only the
-    /// RBSR-differing subject set (`handle_sync_vv_filtered(Some(D))`, fed the
-    /// client's VVs for just those subjects) must produce the IDENTICAL
-    /// pull/push/remove sets as reconciling the whole drive
+    /// A filtered `SYNC` (`handle_sync_vv_filtered(Some(D))`, fed the
+    /// client's VVs for just the differing subjects D) must produce the
+    /// IDENTICAL pull/push/remove sets as reconciling the whole drive
     /// (`handle_sync_vv`, fed the client's full VV) — for version-vector
-    /// divergence. If these ever diverge, the wire would sync differently than
-    /// the baseline, which is the failure mode the whole design guards against.
+    /// divergence. The server still honours `subjects` for clients that send
+    /// it, so the two paths must not drift.
     #[tokio::test]
-    async fn rbsr_reduced_matches_full_sync_vv() {
+    async fn filtered_sync_matches_full_sync_vv() {
         use crate::sync::engine::{drive_items_for, handle_sync_vv, handle_sync_vv_filtered};
-        use crate::sync::rbsr::{reconcile, Item, RemoteRange};
         use std::collections::{HashMap, HashSet};
 
         // Server has a drive with three resources.
-        let db = Db::init_temp("rbsr_differential").await.unwrap();
+        let db = Db::init_temp("filtered_sync_differential").await.unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
         const CANVAS: &str = "https://atomicdata.dev/ontology/canvas/Canvas";
         let _r1 = db
@@ -2334,35 +2332,16 @@ mod peer_sync_tests {
         // Compact (peers array + per-subject counter arrays) form the wire uses.
         let (peers, resources) = to_compact(&client_vvs);
 
-        // D = the differing set RBSR would find (client vs server).
-        let client_items: Vec<Item> = client_vvs
-            .iter()
-            .map(|(s, v)| (s.clone(), v.clone()))
-            .collect();
-        let mut client_sorted = client_items.clone();
-        client_sorted.sort_by(|a, b| a.0.cmp(&b.0));
-        struct Mem(Vec<Item>);
-        impl RemoteRange for Mem {
-            fn fingerprint(&mut self, lo: &str, hi: Option<&str>) -> [u8; 32] {
-                crate::sync::rbsr::range_fingerprint(&self.0, lo, hi)
-            }
-            fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
-                self.0
-                    .iter()
-                    .filter(|(s, _)| s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true))
-                    .cloned()
-                    .collect()
-            }
-        }
-        let mut server_remote = Mem(server_items.clone());
-        let diff = reconcile(&client_sorted, &mut server_remote, 4, 2);
-        let d: HashSet<String> = diff
-            .only_local
-            .iter()
-            .chain(diff.only_remote.iter())
-            .chain(diff.differ.iter())
+        // D = the subjects whose version vectors differ (client vs server).
+        let server_vvs: HashMap<String, std::collections::BTreeMap<String, i32>> =
+            server_items.iter().cloned().collect();
+        let d: HashSet<String> = client_vvs
+            .keys()
+            .chain(server_vvs.keys())
+            .filter(|s| client_vvs.get(*s) != server_vvs.get(*s))
             .cloned()
             .collect();
+        assert_eq!(d.len(), 3, "R2, R3 and R4 differ: {d:?}");
 
         // Full reconcile over the whole drive.
         let full = handle_sync_vv(&drive, "", &peers, &resources, &db, &ForAgent::Sudo).await;
@@ -2389,7 +2368,7 @@ mod peer_sync_tests {
         assert_eq!(
             decode_diff_sets(&full),
             decode_diff_sets(&reduced),
-            "RBSR-reduced reconcile must yield the same pull/push/remove as the full reconcile"
+            "filtered reconcile must yield the same pull/push/remove as the full reconcile"
         );
     }
 
@@ -2440,96 +2419,6 @@ mod peer_sync_tests {
             }
         }
         (vec![], vec![], vec![])
-    }
-
-    /// Bridge from the pure RBSR algorithm (`sync::rbsr`) to real store data:
-    /// `drive_items` must turn a Db's drive into the sorted `(subject, VV)`
-    /// items the reconcile runs over, and reconciling a store's items against a
-    /// peer that's behind on exactly one resource must find exactly that
-    /// resource — over VVs derived from a real store, not hand-built maps.
-    #[tokio::test]
-    async fn reconcile_over_real_store_finds_the_lagging_resource() {
-        use crate::sync::engine::drive_items_for;
-        use crate::sync::rbsr::{
-            item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange,
-        };
-
-        let db = Db::init_temp("rbsr_real_store").await.unwrap();
-        let (_alice, drive) = db.setup("Alice").await.unwrap();
-        db.create_resource(
-            "https://atomicdata.dev/ontology/canvas/Canvas",
-            &drive,
-            "Canvas One",
-            None,
-        )
-        .await
-        .unwrap();
-        let target = db
-            .create_resource(
-                "https://atomicdata.dev/ontology/canvas/Canvas",
-                &drive,
-                "Canvas Two",
-                None,
-            )
-            .await
-            .unwrap();
-
-        // Local: the store's real drive items (drive root + two canvases).
-        let local = drive_items_for(&db, &drive, &ForAgent::Sudo).await.unwrap();
-        assert!(
-            local.len() >= 3,
-            "expected drive root + 2 canvases, got {}",
-            local.len()
-        );
-
-        // Remote: the same set, but behind on `target` (drop a peer counter so
-        // its VV differs) — models a peer that hasn't received the last edit.
-        let mut remote_items: Vec<Item> = local.clone();
-        remote_items.sort_by(|a, b| a.0.cmp(&b.0));
-        let target_pure =
-            crate::Subject::from_raw(&target, db.get_base_domain().as_deref()).pure_id();
-        let mut mutated = false;
-        for (subject, vv) in remote_items.iter_mut() {
-            if *subject == target_pure {
-                // Roll the VV back to empty — guaranteed different fingerprint.
-                let before = item_fingerprint(subject, vv);
-                vv.clear();
-                assert_ne!(before, item_fingerprint(subject, vv));
-                mutated = true;
-            }
-        }
-        assert!(mutated, "target {target_pure} not found in drive items");
-
-        struct MemRemote {
-            items: Vec<Item>,
-        }
-        impl RemoteRange for MemRemote {
-            fn fingerprint(&mut self, lo: &str, hi: Option<&str>) -> [u8; 32] {
-                range_fingerprint(&self.items, lo, hi)
-            }
-            fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
-                self.items
-                    .iter()
-                    .filter(|(s, _)| s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true))
-                    .cloned()
-                    .collect()
-            }
-        }
-
-        let mut remote = MemRemote {
-            items: remote_items,
-        };
-        let diff = reconcile(&local, &mut remote, 4, 2);
-
-        assert_eq!(
-            diff.differ,
-            vec![target_pure],
-            "reconcile must flag exactly the lagging resource"
-        );
-        assert!(
-            diff.only_local.is_empty() && diff.only_remote.is_empty(),
-            "no subjects should be only-local or only-remote: {diff:?}"
-        );
     }
 
     /// Golden cross-implementation vector for the canonical drive hash

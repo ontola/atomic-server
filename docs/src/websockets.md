@@ -22,7 +22,7 @@ prefix, and no base64: Loro bytes travel raw.
 **WebSocket.** The browser connects to the responder's `/ws` endpoint and
 requests the subprotocol `atomicdata-ws.v2`; the server offers exactly that
 one. WebSocket supplies its own framing, so a frame is one binary message and
-`binaryType` is `arraybuffer`. Some low-volume registration and reconcile
+`binaryType` is `arraybuffer`. Some low-volume registration and inventory
 messages are still UTF-8 text frames with a keyword prefix, listed under
 [Text frames](#text-frames).
 
@@ -70,7 +70,7 @@ The current list (`protocol::CAPABILITIES`):
 | --- | --- |
 | `auth-max-age` | `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused, and a failed `AUTH` answers with `AUTH_FAILED (8)`. |
 | `keepalive` | Understands `KEEPALIVE (0x41)`, and echoes it over WebSocket. |
-| `rbsr` | Answers the `RBSR_FP` / `RBSR_ITEMS` text frames. |
+| `rbsr` | *Retired 2026-09, no longer advertised; never reuse.* Answered the `RBSR_FP` range-fingerprint frames. |
 | `pull-from` | `SYNC_DIFF` carries a `pullFrom` map of per-subject version vectors. |
 | `signed-destroy` | On a peer stream, destroys travel as signed `COMMIT` frames; a naked `DESTROY` from a peer is ignored. |
 | `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
@@ -124,7 +124,7 @@ logged and dropped, not answered.
 | `0x35` | `BLOB_RESPONSE` | either | engine (both transports) |
 | `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
 | `0x37` | `HELLO` | both peers on an Iroh stream; a WebSocket client on open | Iroh handshake and live loop; the WS handler records the client's capabilities. The WS server never sends one (its capabilities ride on `AUTH_OK`). |
-| `0x38` | `SYNC_RESEND` | responder, answering a `SYNC` probe whose hash is stale | client only. Tells the client to reconcile (RBSR descent, then a filtered `SYNC`). |
+| `0x38` | `SYNC_RESEND` | responder, answering a `SYNC` probe whose hash is stale | client only. Tells the client to send its full version-vector `SYNC`. |
 | `0x40` | `EPHEMERAL` | Iroh peers; WS client and server, both ways | Iroh live loop; WS handler (`require_auth`, then the broadcaster). The server relays between the two transports. |
 | `0x41` | `KEEPALIVE` | both sides, on their own schedule | WS server **echoes** it; Iroh **never** echoes it. |
 | `0x42` | `CHALLENGE` | WS server, as its first frame | client only. Never sent on an Iroh stream. |
@@ -406,11 +406,11 @@ link relies on for live updates. The `require_auth` gate covers exactly:
 Everything else is open to an anonymous socket and gated per subject by
 `check_read` instead:
 
-- `GET`, `SUB`, `SYNC` (including the hash-first probe), and `RBSR_FP` /
-  `RBSR_ITEMS`. The probe and the RBSR frames answer
-  over `drive_items_for`, which requires the drive resource itself to be
-  readable and drops every subject the agent cannot read. Filtering also
-  makes the fingerprints agree: a client only ever holds what it may read.
+- `GET`, `SUB`, `SYNC` (including the hash-first probe), and `RBSR_ITEMS`.
+  The probe and the inventory answer over `drive_items_for`, which requires
+  the drive resource itself to be readable and drops every subject the agent
+  cannot read. Filtering also makes the probe hash agree: a client only ever
+  holds what it may read.
 - `COMMIT (0x13)` is **not** gated. A commit is a self-authorizing
   certificate: its signature, its signer's rights and its schema are all
   validated on application, so the connection's own identity is not the
@@ -626,54 +626,33 @@ read and answers `SYNC_OK (0x31)` (in sync, nothing more is exchanged) or
 `SYNC_RESEND (0x38)`. A drive the agent cannot read answers `ERROR`
 `UNAUTHORIZED_READ`.
 
-**2. Range-based set reconciliation.** On `SYNC_RESEND` the client descends
-over subject ranges with the server, comparing fingerprints, rather than
-sending the whole version vector:
+**2. Full state.** On `SYNC_RESEND` the client sends the version vectors of
+every subject it holds in the drive, computed for the probe:
 
 ```
--> RBSR_FP {"drive":"<drive>","ranges":[["<lo>","<hi>"|null], ...]}
-<- RBSR_FP {"drive":"<drive>","fps":["<hex>", ...]}
--> RBSR_ITEMS {"drive":"<drive>","lo":"<lo>","hi":"<hi>"|null}
-<- RBSR_ITEMS {"drive":"<drive>","items":[["<subject>",[["<peer>",<counter>], ...]], ...]}
+-> SYNC (0x30) <drive> <hash> {"peers":[...],"resources":{...}}
 ```
 
-Ranges are half-open `[lo, hi)`, with `hi = null` meaning unbounded above.
-A range whose fingerprints match is pruned with zero transfer; a mismatching
-range is split (branching factor 4) until it holds few enough items (4) to
-fetch and diff directly.
+The server walks the drive once, compares, and answers with the diff.
 
-The fingerprint is defined in `lib/src/sync/rbsr.rs` and mirrored in
-`browser/lib/src/rbsr.ts`:
+A `SYNC` may also carry `"subjects": [...]`, which limits the reconcile to
+that set: the server builds version vectors for just those subjects and
+skips anything outside it. The browser no longer sends it (it came from the
+range-based set reconciliation descent, removed 2026-09), but the server
+still honours it. *Limitation:* the full path also pulls a subject whose
+version vector **matches** but whose blob the server lacks, the backstop
+for metadata that arrived over HTTP `POST /commit` while the bytes stayed on
+the client. That backstop does not run for subjects left out of `subjects`.
 
-```
-item_fingerprint(subject, vv) = SHA-256( "{subject}={peer}:{counter},{peer}:{counter},…" )
-                                 with the (peer, counter) pairs sorted by peer
-range_fingerprint(lo, hi)     = XOR of the item fingerprints in [lo, hi)
-```
-
-XOR makes a range fingerprint order-independent and incremental, and matching
-items cancel out. Both sides emit lower-case hex; the empty range is 32 zero
-bytes. The two implementations must agree byte for byte or the descent never
-converges.
-
-**3. Reduced reconcile.** The client sends version vectors for only the
-differing subjects it actually holds:
-
-```
--> SYNC (0x30) <drive> <hash> {"peers":[...],"resources":{...},
-                               "subjects":["<subject>", ...]}
-```
-
-The server builds version vectors for just that set rather than walking the
-whole drive, and both of its comparison loops skip anything outside it. Any
-RBSR failure (timeout, parse error, closed socket) falls back to sending the
-full `SYNC` state, so the drive always reconciles.
-
-*Limitation of the reduced path:* the full path also pulls a subject whose
-version vector **matches** but whose blob the server lacks, the backstop for
-metadata that arrived over HTTP `POST /commit` while the bytes stayed on the
-client. A version-vector fingerprint cannot encode blob presence, so that
-backstop does not run for pruned subjects. Accepted.
+**3. RBSR (removed 2026-09).** Clients from before this answered
+`SYNC_RESEND` with a range descent over the `RBSR_FP` / `RBSR_ITEMS` text
+frames, then a `SYNC` with `subjects`. The server rebuilt the whole drive
+inventory for every one of those round trips, so it cost more than the one
+full `SYNC` it was meant to avoid. A current server answers `RBSR_FP` at once
+with `{"drive","unsupported":true}` and no `fps`: an old client's descent
+fails on its first range and it sends the full `SYNC`, as it did on any RBSR
+failure. `RBSR_ITEMS` is still answered, as the drive inventory (see
+[Text frames](#text-frames)).
 
 **4. Diff and transfer.** The server answers `SYNC_DIFF (0x32)`, followed
 immediately by the `SYNC_PUSH (0x33)` chunks for everything in its `push`
@@ -699,8 +678,8 @@ Same engine, binary handshake, no text frames:
 -> SYNC_PUSH (0x33) × n        the initiator's answer to `pull`
 ```
 
-The initiator sends the full `SYNC` state; there is no probe and no RBSR on
-this transport. If the `SYNC_DIFF` has an empty `push` list the initiator
+The initiator sends the full `SYNC` state; there is no probe on this
+transport. If the `SYNC_DIFF` has an empty `push` list the initiator
 sends its pushback immediately and stops reading, rather than waiting for
 `SYNC_PUSH` frames that will not come.
 
@@ -871,20 +850,25 @@ Client to server:
 | `PRESENCE_UNSUBSCRIBE` | `{"subject":"<drive>"}` | no |
 | `SUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
 | `UNSUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
-| `RBSR_FP` | `{"drive","ranges":[["<lo>","<hi>"\|null], ...]}` | no |
+| `RBSR_FP` | `{"drive","ranges":[["<lo>","<hi>"\|null], ...]}` (retired, see below) | no |
 | `RBSR_ITEMS` | `{"drive","lo","hi"\|null}` | no |
 
 Server to client:
 
 | Frame | Payload |
 | --- | --- |
-| `RBSR_FP` | `{"drive","fps":["<hex>", ...]}` |
+| `RBSR_FP` | `{"drive","unsupported":true}` (no `fps`) |
 | `RBSR_ITEMS` | `{"drive","items":[["<subject>",[["<peer>",<counter>], ...]], ...]}` |
 | `INDEX_STATUS` | `{"drive","indexing"}` |
 
 The subscriptions register an interest; the updates themselves travel as
 `EPHEMERAL (0x40)`. `SUBSCRIBE_INDEX_STATUS` is answered immediately with
-one `INDEX_STATUS`. Prefixes are matched longest-conflicting first; an
+one `INDEX_STATUS`. `RBSR_ITEMS` returns the drive inventory: every subject
+in `[lo, hi)` (`hi = null` is unbounded) the agent may read, with its version
+vector; the browser uses it to check it holds a complete copy before making
+a drive local-only. The name is left over from the removed range
+reconciliation, as is `RBSR_FP`, which is only answered so old clients fall
+back without waiting for a timeout. Prefixes are matched longest-conflicting first; an
 unrecognized text frame is logged and ignored.
 
 ## Session flows
@@ -900,8 +884,7 @@ unrecognized text frame is logged and ignored.
 -> SUB (0x20) <drive>
 -> SYNC (0x30) drive + hash, probe:true
 <- SYNC_RESEND (0x38) drive
-   ... RBSR_FP / RBSR_ITEMS range descent ...
--> SYNC (0x30) drive + hash + version vectors for `subjects` only
+-> SYNC (0x30) drive + hash + full version vectors
 <- SYNC_DIFF (0x32)
 <- SYNC_PUSH (0x33) x n, last one flagged LAST
 -> SYNC_PUSH (0x33) x n, last one flagged LAST
@@ -975,7 +958,6 @@ step when you touch any of them.
 | --- | --- |
 | `lib/src/sync/protocol.rs` | Tags, flags, error codes, `CAPABILITIES`, encoders and decoders, size limits, golden vectors. |
 | `lib/src/sync/engine.rs` | Transport-agnostic frame handling: `AUTH` verification and binding, `GET`, commit ingest, `SYNC` / `SYNC_DIFF` / `SYNC_PUSH`, blob bookkeeping. |
-| `lib/src/sync/rbsr.rs` | Range fingerprints and the reconcile driver. |
 | `lib/src/sync/peer.rs` | Iroh QUIC transport: length envelope, handshake, live loops, keepalive, ephemeral relay. |
 | `lib/src/authentication.rs` | `AuthValues`, signature check, freshness window. |
 | `lib/src/client/ws.rs` | The Rust WebSocket client. |
@@ -985,7 +967,6 @@ step when you touch any of them.
 | `server/src/serve.rs` | Relays Iroh `EPHEMERAL` into the commit monitor so local WebSocket subscribers see peer presence. |
 | `browser/lib/src/ws-v2.ts` | Frame encode and decode. |
 | `browser/lib/src/websockets.ts` | The browser client: auth, pending requests, subscriptions, commit over WS, liveness, drive reconcile. |
-| `browser/lib/src/rbsr.ts` | The TypeScript reconcile, byte-identical to `rbsr.rs`. |
 | `flutter/rust/src/api/simple/ws_sync.rs` | The Flutter FRB bridge over `WsClient`. |
 
 ## Known gaps
@@ -1066,6 +1047,12 @@ Wire-visible changes in this revision:
   with the new `SYNC_RESEND (0x38)`. The text `SYNC_VV` request and the text
   `SYNC_RESEND <drive>` answer are removed; the RBSR descent stays text.
   Capability `sync-probe`.
+- **Range-based set reconciliation removed.** A stale probe is answered by
+  the client with its full version-vector `SYNC`. The server no longer
+  computes range fingerprints: `RBSR_FP` gets `{"drive","unsupported":true}`,
+  which makes an older client fall back to the full `SYNC` at once.
+  `RBSR_ITEMS` stays, as the drive inventory. Capability `rbsr` is no longer
+  advertised.
 - **The hash-first probe and the RBSR frames are read-gated.** `SYNC` with
   `probe: true`, `RBSR_FP` and `RBSR_ITEMS` now answer only over the subjects
   the asking agent may `check_read`, and refuse an unreadable drive with
