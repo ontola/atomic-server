@@ -69,6 +69,7 @@ export * from './ontology.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
+export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
