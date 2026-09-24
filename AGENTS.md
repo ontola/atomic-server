@@ -51,6 +51,14 @@ branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 **Stop the vite dev server before any git operation that rewrites files** — a
 rebase, a branch switch, a `git checkout -- .`. See below for why.
 
+## Screenshots for UI changes
+
+Every PR that changes the UI needs screenshots of the actual screen. Run the
+app, open each changed view (Playwright or a browser), and capture it; include
+mobile width when layout is affected. Then either upload them to GitHub (in the
+PR description or a PR comment) or show them in chat to the developer you are
+working with. A text description of a UI change is not enough for review.
+
 ## Translation catalogs (`src/locales/*.po`)
 
 Wuchale extracts these from source *as vite serves it*, so the dev server is a
