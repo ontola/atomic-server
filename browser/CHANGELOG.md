@@ -4,6 +4,16 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: a table no longer goes to an error screen while one of its columns is
+  still loading. A resource-array cell reads its own property from the store to
+  decide between the select and relation pickers, and asked for that property's
+  form category before the resource had arrived. A property with no datatype
+  yet threw "Unknown datatype: undefined", which reached the page's error
+  boundary and replaced the whole table. An absent datatype now means "no
+  category yet", the cell renders as a relation until the property lands, and a
+  datatype that is present but unrecognised still throws, since that is a real
+  gap rather than a slow fetch.
+
 - Fix: a presence announcement carrying something Loro cannot store no longer
   breaks the tab. A view's presence payload is typed as whatever that view
   likes, so a callback or a class with methods can travel in it, and Loro
