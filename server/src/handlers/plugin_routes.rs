@@ -8,11 +8,14 @@
 //! falls through to the ordinary handlers (and finds no resource, since none
 //! can be created there) and a routes host gets nothing special.
 //!
-//! A matched route answers `501` until route execution lands (AS-05, #1715).
+//! A matched route runs the installation's handler: see
+//! [`crate::plugins::route_exec`].
 use actix_web::{guard, http::header, web, HttpRequest, HttpResponse};
 
 use crate::appstate::AppState;
-use crate::plugins::route_registry::{Answer, PAUSED_RETRY_AFTER_SECS};
+use crate::plugins::manifest_http::Mount;
+use crate::plugins::route_exec::{self, RouteCors};
+use crate::plugins::route_registry::{Answer, State, PAUSED_RETRY_AFTER_SECS};
 
 fn request_host(head: &actix_web::dev::RequestHead) -> &str {
     head.headers
@@ -71,17 +74,133 @@ fn problem(status: u16, kind: &str, title: &str, detail: &str) -> serde_json::Va
     })
 }
 
-async fn serve(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
+async fn serve(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    payload: web::Payload,
+) -> HttpResponse {
+    let host = request_host(req.head()).to_string();
     let answer = state
         .route_registry
         .answer(
-            request_host(req.head()),
+            &host,
             req.method().as_str(),
             req.path(),
             atomic_lib::utils::now(),
         )
         .unwrap_or(Answer::NotFound);
-    respond(answer)
+    let target = match &answer {
+        Answer::Matched { route } => state
+            .route_registry
+            .target(&host, req.path())
+            .map(|target| (route.clone(), target)),
+        _ => None,
+    };
+    let mut response = match target {
+        Some((route, (installation, mount, path))) => {
+            route_exec::execute(&state, &req, payload, &installation, mount, &path, &route).await
+        }
+        None => respond(answer),
+    };
+    // The server's CORS layer does not speak for plugin routes: a route is
+    // exactly as cross-origin as it declared, and the host's own answers on
+    // a plugin mount are not cross-origin at all.
+    if response.extensions().get::<RouteCors>().is_none() {
+        response.extensions_mut().insert(RouteCors::default());
+    }
+    response
+}
+
+/// `readRouteStatus` (design 2.10): per route of an installation, its URL,
+/// request and error counts for the last 24 hours, and the last error; and
+/// the sampled run log. Readable by whoever may read the Installation.
+#[derive(serde::Deserialize)]
+pub struct StatusQuery {
+    installation: String,
+}
+
+pub async fn status(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    query: web::Query<StatusQuery>,
+    context: crate::context::RequestContext,
+) -> crate::errors::AtomicServerResult<HttpResponse> {
+    use atomic_lib::Storelike;
+    let store = &state.store;
+    let path_and_query = req
+        .head()
+        .uri
+        .path_and_query()
+        .ok_or("Path must be given")?
+        .to_string();
+    let signed_subject =
+        atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
+    let agent = crate::helpers::get_client_agent(req.headers(), &state, &signed_subject).await?;
+    let resource = store
+        .get_resource(&query.installation.as_str().into())
+        .await?;
+    atomic_lib::hierarchy::check_read(store, &resource, &agent).await?;
+
+    let registry = &state.route_registry;
+    let slug = crate::plugins::route_registry::slug(&query.installation);
+    let manifest = resource
+        .get(atomic_lib::urls::RELEASE_ID)
+        .ok()
+        .and_then(|id| store.get_plugin_release(&id.to_string()).ok())
+        .and_then(|release| crate::plugins::manifest::Manifest::parse(release.manifest).ok())
+        .flatten();
+    let http = manifest.as_ref().and_then(|m| m.http.as_ref());
+    let base = match http.map(|h| h.mount) {
+        Some(Mount::InstallationOrigin) => registry.config().routes_origin().map(|origin| {
+            let mut url = origin.clone();
+            let host = format!("{slug}.{}", origin.host_str().unwrap_or_default());
+            let _ = url.set_host(Some(&host));
+            url.as_str().trim_end_matches('/').to_string()
+        }),
+        Some(Mount::DrivePrefix) => Some(format!(
+            "{}/{}/{slug}",
+            context.origin.trim_end_matches('/'),
+            atomic_lib::subject::PLUGIN_ROUTES_SEGMENT
+        )),
+        _ => None,
+    };
+    let routes: Vec<(String, String)> = http
+        .map(|h| {
+            h.routes
+                .iter()
+                .map(|r| {
+                    (
+                        r.id.clone(),
+                        base.as_ref()
+                            .map(|b| format!("{b}{}", r.path))
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let state_name = match registry.state(&query.installation) {
+        Some(State::Active) => "active".to_string(),
+        Some(State::Paused) => "paused".to_string(),
+        Some(State::Retired { .. }) => "retired".to_string(),
+        Some(State::Degraded(_)) => "degraded".to_string(),
+        None => "unregistered".to_string(),
+    };
+    let degraded = match registry.state(&query.installation) {
+        Some(State::Degraded(reason)) => Some(reason),
+        _ => None,
+    };
+    let mut body = state
+        .route_exec
+        .status(&query.installation, &routes, atomic_lib::utils::now());
+    body["installation"] = query.installation.clone().into();
+    body["slug"] = slug.into();
+    body["state"] = state_name.into();
+    body["degraded"] = degraded.into();
+    body["level"] = registry.config().level().as_str().into();
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(body))
 }
 
 pub fn respond(answer: Answer) -> HttpResponse {
@@ -92,15 +211,9 @@ pub fn respond(answer: Answer) -> HttpResponse {
             .body(body.to_string())
     };
     match answer {
-        Answer::Matched { route } => json(
-            HttpResponse::NotImplemented(),
-            problem(
-                501,
-                "route-execution-unavailable",
-                "This plugin route is registered, but this server does not run plugin routes yet",
-                &format!("The request matched route `{route}`. Running plugin routes is not implemented on this server version."),
-            ),
-        ),
+        // `serve` runs a matched route; this is only reached when the
+        // installation disappeared between the two lookups.
+        Answer::Matched { .. } => HttpResponse::NotFound().finish(),
         Answer::MethodNotAllowed { allow } => {
             let mut builder = HttpResponse::MethodNotAllowed();
             builder.insert_header((header::ALLOW, allow.join(", ")));
@@ -211,13 +324,8 @@ mod tests {
         let get = || test::TestRequest::get().uri(&url).to_request();
 
         let resp = test::call_service(&app, get()).await;
-        assert_eq!(resp.status(), 501);
-        let body: serde_json::Value = test::read_body_json(resp).await;
-        assert_eq!(body["type"], "route-execution-unavailable");
-        assert!(
-            body["detail"].as_str().unwrap().contains("`hello`"),
-            "{body}"
-        );
+        assert_eq!(resp.status(), 200);
+        assert_eq!(test::read_body(resp).await, "Hello, alice");
 
         let resp = test::call_service(&app, test::TestRequest::post().uri(&url).to_request()).await;
         assert_eq!(resp.status(), 405);
@@ -229,7 +337,7 @@ mod tests {
         assert_eq!(resp.headers().get(header::RETRY_AFTER).unwrap(), "3600");
 
         set_status(&f.appstate.store, &installation, "active").await;
-        assert_eq!(test::call_service(&app, get()).await.status(), 501);
+        assert_eq!(test::call_service(&app, get()).await.status(), 200);
 
         set_status(&f.appstate.store, &installation, "revoked").await;
         assert_eq!(test::call_service(&app, get()).await.status(), 410);
@@ -263,7 +371,7 @@ mod tests {
                 .to_request(),
         )
         .await;
-        assert_eq!(resp.status(), 501);
+        assert_eq!(resp.status(), 200);
         // The server's own routes are not served on a routes host.
         let resp = test::call_service(
             &app,

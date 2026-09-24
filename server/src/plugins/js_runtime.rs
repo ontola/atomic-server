@@ -121,7 +121,11 @@ impl JsRuntime {
         input: &str,
         host: H,
     ) -> AtomicServerResult<Result<String, String>> {
-        self.run_inner(source, input, host, false).await
+        Ok(self
+            .run_inner(source, input, host, false, Runtime::Js)
+            .await?
+            .outcome
+            .map_err(|stopped| stopped.message))
     }
     pub(crate) async fn run_triggered<H: PluginHost>(
         &self,
@@ -129,7 +133,24 @@ impl JsRuntime {
         input: &str,
         host: H,
     ) -> AtomicServerResult<Result<String, String>> {
-        self.run_inner(source, input, host, true).await
+        Ok(self
+            .run_inner(source, input, host, true, Runtime::Js)
+            .await?
+            .outcome
+            .map_err(|stopped| stopped.message))
+    }
+    /// One plugin route request: `input` carries `trigger.kind: "http"`, and
+    /// the run gets the route budget ([`Runtime::Route`]). Reports what it
+    /// cost, for the route's run log and the instantiation measurement.
+    #[cfg(feature = "plugin-routes")]
+    pub async fn run_route<H: PluginHost>(
+        &self,
+        source: &str,
+        input: &str,
+        host: H,
+    ) -> AtomicServerResult<Run> {
+        self.run_inner(source, input, host, false, Runtime::Route)
+            .await
     }
     async fn run_inner<H: PluginHost>(
         &self,
@@ -137,7 +158,9 @@ impl JsRuntime {
         input: &str,
         host: H,
         trusted_trigger: bool,
-    ) -> AtomicServerResult<Result<String, String>> {
+        runtime: Runtime,
+    ) -> AtomicServerResult<Run> {
+        let started = std::time::Instant::now();
         let mut linker: Linker<RuntimeState<H>> = Linker::new(&self.engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)
             .map_err(|e| format!("could not link WASI: {e}"))?;
@@ -152,7 +175,7 @@ impl JsRuntime {
         // global, not a leak. How much it gets is decided by the capabilities
         // its installation was granted.
         let mut host = host;
-        let limits = host_core::limits(Runtime::Js, host.resource_grants().await);
+        let limits = host_core::limits(runtime, host.resource_grants().await);
 
         let mut store = Store::new(
             &self.engine,
@@ -182,20 +205,55 @@ impl JsRuntime {
             bindings::PluginRuntime::instantiate_async(&mut store, &self.component, &linker)
                 .await
                 .map_err(|e| format!("could not start the plugin runtime: {e}"))?;
+        let instantiate = started.elapsed();
 
-        match instance.call_run(&mut store, source, input).await {
+        let outcome = match instance.call_run(&mut store, source, input).await {
             Ok(result) => {
                 if !store.data().waits.is_empty() {
-                    return Ok(Ok(serde_json::json!({"integrationWaits":store.data().waits,"intents":[],"problems":[{"severity":"error","message":"Waiting for integration approval. Review the action on its connection."}]}).to_string()));
+                    Ok(serde_json::json!({"integrationWaits":store.data().waits,"intents":[],"problems":[{"severity":"error","message":"Waiting for integration approval. Review the action on its connection."}]}).to_string())
+                } else {
+                    result.map_err(|message| Stopped {
+                        exhausted: message.contains("out of memory"),
+                        message,
+                    })
                 }
-                Ok(result)
             }
             // A trap is a plugin that ran out of fuel or memory, which is a
             // problem to report rather than an error to propagate: the run
             // failed, the server did not.
-            Err(e) => Ok(Err(format!("the plugin was stopped: {e}"))),
-        }
+            Err(e) => Err(Stopped {
+                exhausted: matches!(
+                    e.downcast_ref::<wasmtime::Trap>(),
+                    Some(wasmtime::Trap::OutOfFuel)
+                ) || format!("{e:?}").contains("out of memory"),
+                message: format!("the plugin was stopped: {e}"),
+            }),
+        };
+        Ok(Run {
+            outcome,
+            fuel_used: limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0)),
+            instantiate,
+            total: started.elapsed(),
+        })
     }
+}
+
+/// Why a run produced no verdict.
+#[derive(Debug, Clone)]
+pub struct Stopped {
+    /// It ran out of fuel or memory, as opposed to failing on its own.
+    pub exhausted: bool,
+    pub message: String,
+}
+
+/// One run: its verdict (as JSON) or why it has none, and what it cost.
+#[derive(Debug)]
+pub struct Run {
+    pub outcome: Result<String, Stopped>,
+    pub fuel_used: u64,
+    /// Linking and instantiating the component, before the plugin's code.
+    pub instantiate: std::time::Duration,
+    pub total: std::time::Duration,
 }
 
 /// The runtime component, built and embedded by `build.rs`.

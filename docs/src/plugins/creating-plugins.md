@@ -158,7 +158,7 @@ A v3 manifest without `http` is accepted everywhere v3 is understood; an `http` 
 }
 ```
 
-- `mount`: `installation-origin` (default), `drive-host` or `drive-prefix`. Each Installation gets a slug derived from its subject, never reused. `installation-origin` serves the routes at `<slug>.<ATOMIC_ROUTES_ORIGIN>`, and is refused on a server without a routes origin; `drive-prefix` serves them at `/_routes/<slug>/` on the server's own origin. `drive-host` is not served yet. A route is refused when it uses a path the server keeps (`/.well-known/acme-challenge/`, or a `/.well-known/` name that cannot be claimed) or overlaps another installation's route on the same host. While route execution is not implemented, a matched route answers `501`; a paused installation answers `503` with `Retry-After: 3600`, and an uninstalled one `410` for 30 days, then `404`.
+- `mount`: `installation-origin` (default), `drive-host` or `drive-prefix`. Each Installation gets a slug derived from its subject, never reused. `installation-origin` serves the routes at `<slug>.<ATOMIC_ROUTES_ORIGIN>`, and is refused on a server without a routes origin; `drive-prefix` serves them at `/_routes/<slug>/` on the server's own origin. `drive-host` is not served yet. A route is refused when it uses a path the server keeps (`/.well-known/acme-challenge/`, or a `/.well-known/` name that cannot be claimed) or overlaps another installation's route on the same host. A paused installation answers `503` with `Retry-After: 3600`, and an uninstalled one `410` for 30 days, then `404`.
 - `routes`: at most 32. `path` is literal segments, whole-segment `{param}`s and a trailing `{*rest}` (one or more segments); no regex. Routes that share a method may not overlap. `methods` from `GET HEAD POST PUT PATCH DELETE`. `principal` is `anonymous` (default), `installation` or `caller`; `caller` needs `auth: atomic`, and on `drive-prefix` only `anonymous` is allowed unless `auth` is `atomic`. `auth` is `none` (default), `atomic`, `http-signature`, `bearer` (needs `tokens`) or `dpop`. `writes` name `writeTargets`, `enqueues` name declared write operations. `maxBodyBytes` is at most 1 MiB for inline bodies, `timeoutMs` at most 30000.
 - `wellKnown`: `webfinger` is shared and needs `match.resourcePrefix`; `nodeinfo`, `ocm`, `atproto-did`, `solid`, `oauth-authorization-server`, `oauth-protected-resource`, `openid-configuration` and `did.json` are exclusive. Nothing else can be claimed.
 - `listeners` (`world: server-extension` only) and `sidecars` name what the operator configures in `ATOMIC_PLUGIN_LISTENERS` and `ATOMIC_PLUGIN_SIDECARS`.
@@ -168,6 +168,31 @@ The server derives what a release needs from these declarations; the author neve
 Anonymous `GET`/`HEAD` routes and well-known claims need `--plugin-routes read-only`; any other route, write target, key, token, delivery, listener or sidecar needs `read-write`.
 `GET /plugin-catalog` gives each entry a derived `requires` list, such as `["persistent-host", "plugin-routes:read-only", "public-origin", "wasm-sandbox"]`.
 Installing, upgrading or pinning a release that needs more than the server allows is refused with a message that names the endpoints and the switch to turn on (`/plugin-release-pin` answers `409` with the typed `host-feature-unavailable` problem) (see [Plugin public endpoints](../atomicserver/installation.md#plugin-public-endpoints-opt-in)). A refused upgrade leaves the old release running.
+
+### Handling a route request
+
+A matched request runs the plugin's exported `handle(ctx, request)` in the same sandbox as `run`, with `ctx.trigger.kind` set to `"http"`:
+
+```js
+export function handle(ctx, request) {
+  // request: { method, path, params, query, headers, body, caller, receivedAt }
+  return {
+    status: 200,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    body: `Hello, ${request.params.name}`,
+  };
+}
+```
+
+- `path` is relative to the mount (without `/_routes/<slug>`), `params` holds the `{param}` and `{*rest}` values (decoded), and `query` the query string (a repeated key becomes an array).
+- `headers` holds only `accept`, `accept-language`, `content-type`, `content-length`, `content-digest`, `digest`, `date`, `if-match`, `if-none-match`, `if-modified-since`, `if-unmodified-since`, `origin`, `signature`, `signature-input` and `user-agent`, plus `cookie` on `installation-origin`. Atomic auth headers and `authorization` never reach the handler.
+- `body` is the request body as a string, for routes that declare `body: json` or `text` (`json` requires a JSON content type). Other routes refuse a body with `413`. The limit is `maxBodyBytes` (default 256 KiB). `body: blob` answers `501` until blob bodies exist.
+- `caller` is `null`: only `auth: none` is served for now. A route with any other `auth`, or the `caller` principal, answers `501` without running. An `anonymous` route reads as the public agent, an `installation` route as the installation's agent; both within the installation's grants.
+- The handler returns `{ status, headers, body }`, or a verdict with that under `response`. `body` may be a string (default `text/plain`) or JSON (default `application/json`), at most 1 MiB (8 MiB with `extended-memory`). Only `content-type`, `cache-control`, `etag`, `last-modified`, `link`, `location` (same host only), `retry-after`, `vary` and `www-authenticate` are kept, plus `access-control-allow-headers`, `-methods`, `-expose-headers` and `-max-age` under `cors: any-origin-no-credentials`; the server adds `X-Content-Type-Options: nosniff`, and CORS headers only as declared. On `drive-prefix`, HTML and SVG responses are refused and responses get a sandboxing `Content-Security-Policy`.
+- A verdict with `intents` or `enqueue` is refused and nothing is applied: at `read-only` always, and at `read-write` until route writes and deliveries exist.
+- A request gets 1G fuel and 64 MiB (10G and 256 MiB with `extended-fuel` / `extended-memory`) and a deadline of `timeoutMs` (default and maximum 3 s, up to 30 s with `extended-fuel`). Running out answers `503`. `ctx.http` works only at `read-write`, for declared read operations, at most 2 calls (4 with `extended-fuel`).
+- Each installation runs at most 8 requests at once (32 with `extended-fuel`) and answers 600 requests a minute, 120 from one address; past that it answers `503` or `429` with `Retry-After`.
+- A failing handler answers `502` with a `problem+json` body; the details are in `GET /plugin-route-status?installation=<subject>` (readable by whoever can read the Installation): per route its URL, requests and errors in the last 24 hours and the last error, and a sampled run log.
 
 ## The Plugin Manifest (legacy `plugin.json`)
 

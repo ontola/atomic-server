@@ -195,8 +195,16 @@ pub fn hello_route_release() -> atomic_lib::db::plugin_release::PluginRelease {
 
 /// A JS `extension` release of the trivial source with this manifest.
 pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(HELLO_ROUTE_SOURCE, manifest)
+}
+
+/// A JS `extension` release of `source` with this manifest.
+pub fn js_release_with_source(
+    source: &str,
+    manifest: serde_json::Value,
+) -> atomic_lib::db::plugin_release::PluginRelease {
     let mut release = atomic_lib::db::plugin_release::PluginRelease::js(
-        HELLO_ROUTE_SOURCE.into(),
+        source.into(),
         manifest,
         Default::default(),
     );

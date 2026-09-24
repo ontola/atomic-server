@@ -348,6 +348,11 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
                 .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))
                 .route(web::get().to(handlers::plugin_trigger::handle_get_trigger)),
         );
+    // `readRouteStatus`: a plugin route's URL, counts and last error.
+    #[cfg(feature = "plugin-routes")]
+    app.service(
+        web::resource("/plugin-route-status").route(web::get().to(handlers::plugin_routes::status)),
+    );
 }
 
 pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {

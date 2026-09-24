@@ -62,6 +62,10 @@ pub fn engine() -> Result<Arc<Engine>, String> {
 pub enum Runtime {
     ClassExtender,
     Js,
+    /// A plugin route: a JS run per inbound request (design
+    /// `server-plugin-routes.md` 2.8). Someone is waiting for the answer, so
+    /// it gets far less than a job, and it yields so its deadline can stop it.
+    Route,
 }
 
 /// The capabilities that widen a plugin's resource budget.
@@ -129,6 +133,7 @@ const MIB: usize = 1024 * 1024;
 /// `extended-fuel` / `extended-memory` capabilities. JS runs: 20G instructions
 /// and 256 MiB, or 200G and 2000 MiB with the same capabilities, which reach a
 /// JS run through its Installation's grants ([`PluginHost::resource_grants`]).
+/// Plugin routes: 1G instructions and 64 MiB, or 10G and 256 MiB.
 pub fn limits(runtime: Runtime, grants: ResourceGrants) -> Limits {
     match runtime {
         Runtime::ClassExtender => Limits {
@@ -156,6 +161,21 @@ pub fn limits(runtime: Runtime, grants: ResourceGrants) -> Limits {
                 256 * MIB
             },
             yield_interval: None,
+        },
+        Runtime::Route => Limits {
+            fuel: if grants.extended_fuel {
+                10_000_000_000
+            } else {
+                1_000_000_000
+            },
+            memory_bytes: if grants.extended_memory {
+                256 * MIB
+            } else {
+                64 * MIB
+            },
+            // Yielding is what lets the wall-clock deadline interrupt a run
+            // that never calls the host.
+            yield_interval: Some(1_000_000),
         },
     }
 }
