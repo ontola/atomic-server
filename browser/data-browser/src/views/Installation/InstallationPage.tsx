@@ -56,6 +56,7 @@ import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { useConfigDraft } from './useConfigDraft';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
+import { EndpointHealth } from '@chunks/Plugins/EndpointHealth';
 import {
   unregisterInstallationRuntimes,
   unregisterRuntimesInBackground,
@@ -433,6 +434,7 @@ export const InstallationPage: React.FC<
             pluginName={name || title || resource.subject}
           />
         )}
+        {canWrite && <EndpointHealth installation={resource.subject} />}
         {pluginAgent && (
           <Column as='section' aria-label='Plugin agent'>
             <h3>Plugin agent</h3>
@@ -571,6 +573,7 @@ const ConfigAlert = styled.p`
   color: ${p => p.theme.colors.alert};
   margin: 0;
 `;
+
 
 const PluginName = styled.span`
   font-weight: bold;
