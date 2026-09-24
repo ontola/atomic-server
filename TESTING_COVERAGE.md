@@ -306,6 +306,21 @@ the item back through the route and from the store. Not covered: the daily
 and byte quotas end to end (only in the ledger's unit test), concurrent
 requests racing one quota, and a write that fails halfway (`500`).
 
+The route grant from the install review: `testdata/plugin-routes/inbox/page-install.json`
+is what the page writes (the grants verbatim, and `write` on the inbox for the
+installation's agent). `browser/lib/src/plugin-route-grant.test.ts` checks
+`installRelease` produces exactly that, signed by the installer; that a
+`config:` target that doesn't resolve refuses before anything is committed;
+that revoking takes the agent off the parent and leaves other writers; and
+that an upgrade replaces the grant and moves the rights.
+`route_writes::http_tests::a_page_shaped_install_stores_a_post` installs that
+fixture and POSTs (`2xx`). `RouteWriteApproval.test.tsx` covers the review:
+unchecked by default, the targets passed only once approved, install disabled
+while a target doesn't resolve, not offered below `read-write`, and an update
+kept approved or asked again. Not covered: a Playwright run of install, POST
+and revoke (done by hand for #1717's follow-up), and the rights following a
+config edit on the Installation page.
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
