@@ -2,6 +2,7 @@ import { Button } from './Button';
 import { useState } from 'react';
 import { styled } from 'styled-components';
 import { useStore } from '@tomic/react';
+import { useNavigate } from '@tanstack/react-router';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
@@ -30,7 +31,16 @@ export function DemoActionsBar({
 }): React.JSX.Element {
   const store = useStore();
   const navigate = useNavigateWithTransition();
+  const routerNavigate = useNavigate();
   const [leaving, setLeaving] = useState(false);
+
+  function toStartScreen() {
+    routerNavigate({
+      to: paths.welcome,
+      search: { next: undefined, from_portal: undefined },
+      replace: true,
+    });
+  }
 
   async function exitInteractiveDemo(demoDrive: string) {
     if (leaving) return;
@@ -61,11 +71,14 @@ export function DemoActionsBar({
       const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
       await cleanupDemoDrive(store, demoDrive);
       localStorage.removeItem('atomic.demoWorkspace');
-      navigate(target ? constructOpenURL(target) : paths.newDrive);
+      // Back to where the visitor came from: their own drive, or for a guest
+      // the start screen. The gallery is what "Choose a template" is for.
+      if (target) navigate({ to: constructOpenURL(target), replace: true });
+      else toStartScreen();
     } catch {
-      // Last resort — the gallery, never a deleted demo drive.
+      // Last resort — the start screen, never a deleted demo drive.
       store.setDrive('');
-      navigate(paths.newDrive);
+      toStartScreen();
     } finally {
       setLeaving(false);
     }

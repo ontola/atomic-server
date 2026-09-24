@@ -121,6 +121,13 @@ export async function cleanupDemoDrive(
       frontier = next;
     }
 
+    // A guest's own profile is a row in the demo's Team table, so the walk
+    // above finds it. It is also the identity the guest keeps using after the
+    // demo: removing it left every later write ("Create drive" included)
+    // failing with "Resource has no store".
+    const agent = store.getAgent()?.subject;
+    if (agent) doomed.delete(agent);
+
     for (const subject of doomed) {
       store.removeResource(subject, false);
     }

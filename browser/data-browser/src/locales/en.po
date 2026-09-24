@@ -12489,5 +12489,18 @@ msgid "Leave demo"
 msgstr "Leave demo"
 
 #: src/components/DemoExitButton.tsx
+#: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr "Choose a template"
+
+#: src/views/ErrorPage.tsx
+msgid "This page no longer exists"
+msgstr "This page no longer exists"
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted, for example when you left a demo or a preview."
+msgstr "It was deleted, for example when you left a demo or a preview."
+
+#: src/views/ErrorPage.tsx
+msgid "Open your drive"
+msgstr "Open your drive"
