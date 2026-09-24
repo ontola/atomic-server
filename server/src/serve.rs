@@ -523,6 +523,11 @@ where
         }
     }
 
+    if let Some(notice) = config.plugin_routes.startup_notice() {
+        tracing::info!("{}", notice);
+        message.push_str(&format!("{}\n\n", notice));
+    }
+
     if config.opts.https {
         if cfg!(feature = "https") {
             #[cfg(feature = "https")]

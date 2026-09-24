@@ -261,6 +261,13 @@ telemetry = [
 img = ["webp", "image"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
 wasm-plugins = ["wasmtime", "wasmtime-wasi", "wasmtime-wasi-http", "zip"]
+# Lets installed plugins open public endpoints (routes, `/.well-known/`
+# claims, listeners, sidecars), once the operator also passes
+# `--plugin-routes read-only|read-write`. Deliberately NOT in `default`,
+# `light` or any release feature set: atomic.place builds must never contain
+# it. `plugin_routes::tests::release_feature_sets_exclude_plugin_routes`
+# fails if one does.
+plugin-routes = ["wasm-plugins"]
 image = ["dep:image"]
 tonic = ["dep:tonic"]
 tracing-opentelemetry = ["dep:tracing-opentelemetry"]

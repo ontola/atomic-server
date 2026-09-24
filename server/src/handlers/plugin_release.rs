@@ -180,8 +180,13 @@ async fn respond(
     })))
 }
 
-/// This server's marketplace: every `Listing` the public can read, as a JSON
-/// array. Private releases have no Listing and are absent.
+/// This server's marketplace: every `Listing` the public can read, and what
+/// this node can host. Private releases have no Listing and are absent.
+///
+/// The body is `{ "entries": [...], "hostFeatures": { "pluginRoutes": ... } }`.
+/// `hostFeatures.pluginRoutes` is [`crate::plugin_routes::PluginRoutesConfig::report`]:
+/// `{ compiled, level, routesOrigin, listeners, sidecars }`, so a client can
+/// hide or mark plugins that need public endpoints.
 ///
 /// Each entry has:
 /// - `subject`: the Listing resource URL
@@ -238,7 +243,12 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
             })
         })
         .collect();
-    Ok(HttpResponse::Ok().json(entries))
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "entries": entries,
+        "hostFeatures": {
+            "pluginRoutes": appstate.config.plugin_routes.report(),
+        },
+    })))
 }
 
 /// A release the caller may see: one listed in this server's marketplace, or a
