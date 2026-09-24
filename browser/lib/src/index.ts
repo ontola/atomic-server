@@ -239,12 +239,15 @@ export {
   type PluginUpload,
 } from './plugin-upload.js';
 export {
+  checkGate,
   checkHostFeatures,
   derivedRequires,
   hostFeatureMessage,
   httpGate,
   isWildcardHost,
   parseHostFeatureUnavailable,
+  parsePluginRoutesStatus,
+  requiresGate,
   HOST_FEATURE_UNAVAILABLE,
   HostFeatureUnavailableError,
   type DeclaredHttp,
