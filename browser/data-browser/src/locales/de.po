@@ -10011,4 +10011,10 @@ msgstr ""
 
 #: src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Requirements unknown"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "This server couldn’t read what this release needs. The review checks it before installing."
 msgstr ""

@@ -227,9 +227,16 @@ release ids of every accepted v1/v2 fixture, computed before v3 existed.
 `plugin.rs` installation tests check that an install and an upgrade of a
 gated release are refused on the test node (gate `off`) and that the old
 release stays; `plugin_release_test.rs` checks `/plugin-release-pin` answers
-`409` with the typed problem, and the catalog's `requires`. Not covered: an
-install on a node with the gates open (the test fixture's config is fixed at
-`off`).
+`409` with the typed problem, and the catalog's `requires`. The refused
+install and upgrade commits carry the typed problem after their message
+(`protocol::split_problem`), classify as `HOST_FEATURE_UNAVAILABLE` and answer
+`409` over HTTP with it in the Error resource (#1743).
+`the_catalog_derives_requires_for_a_release_it_has_not_cached` covers a listed
+release missing from the cache (derived from its local `Release` resource),
+one whose resource hashes to another id and one on an unreachable server (both
+`"unknown"`). Not covered: an install on a node with the gates open (the test
+fixture's config is fixed at `off`), a remote `Release` that answers, and the
+per-request budget of remote fetches.
 
 Catalog and install review for gated plugins (#1713): the lib test
 `plugin-manifest-http.test.ts` checks that a catalog entry's derived
@@ -240,7 +247,14 @@ compiled, or a server without `hostFeatures`), marked (level too low, listener
 not bound) and listed; `PublicEndpoints.test.tsx` renders the "Public
 endpoints" section from `v3-activitypub.json` and the review dialog both
 refusing up front and showing a thrown `HostFeatureUnavailableError` (the
-`409`) inline with Install disabled. Not covered: an e2e test against a default
+`409`) inline with Install disabled, and the same for a refused Installation
+commit (an `AtomicError` carrying the problem). The lib's
+`plugin-install.test.ts` checks `installRelease` and
+`updateInstallationRelease` raise `HostFeatureUnavailableError` from a refused
+commit and that a refused install leaves nothing in the outbox;
+`plugin-manifest-http.test.ts` maps both commit transports' errors.
+`catalogGate.test.ts` checks an entry with `requires: "unknown"` is marked,
+never hidden. Not covered: an e2e test against a default
 build (hidden plugin, refused direct link; there is no direct plugin link
 yet), and the upgrade review's diff of surfaces.
 

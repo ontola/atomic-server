@@ -434,3 +434,119 @@ async fn publishing_a_recorded_release_again_lets_the_new_publisher_read_it() {
     let resolved = release::resolve(db, &url, &as_second).await.unwrap();
     assert_eq!(resolved.id().unwrap(), id);
 }
+
+/// A Listing whose release isn't in this node's cache (it arrived by sync, or
+/// the cache was cleared) still says what the release needs: `requires` is
+/// derived from the `Release` resource, verified against the listed id.
+/// Only a release that can't be read or verified answers `"unknown"`.
+#[actix_rt::test]
+async fn the_catalog_derives_requires_for_a_release_it_has_not_cached() {
+    let f = fixture("plugin_catalog_uncached").await;
+    let db = &f.appstate.store;
+    let origin = f.appstate.config.get_origin();
+    let gated = PluginRelease::js(
+        "export function run() { return { intents: [] }; }".into(),
+        serde_json::json!({
+            "schemaVersion": 3,
+            "http": {"routes": [{"id": "profile", "path": "/users/{name}", "methods": ["GET"]}]}
+        }),
+        Default::default(),
+    );
+    let other = PluginRelease::js(
+        "export function run() { return {}; }".into(),
+        serde_json::json!({"schemaVersion": 3}),
+        Default::default(),
+    );
+    let listing = |name: &str| release::ListingInput {
+        name: name.into(),
+        ..Default::default()
+    };
+    // Recorded as resources and listed, never put in the release cache.
+    let gated_id = gated.id().unwrap();
+    let gated_subject = release::record_release(db, &gated_id, &gated, &f.drive, None, &origin)
+        .await
+        .unwrap();
+    release::record_listing(
+        db,
+        &gated_id,
+        &gated_subject.resolve(&origin),
+        &f.drive,
+        None,
+        &listing("uncached"),
+    )
+    .await
+    .unwrap();
+    assert!(db.get_plugin_release(&gated_id).is_err());
+    // A Listing whose Release resource hashes to another id.
+    let other_id = other.id().unwrap();
+    let other_subject = release::record_release(db, &other_id, &other, &f.drive, None, &origin)
+        .await
+        .unwrap();
+    let forged = format!("blake3:{}", "1".repeat(64));
+    release::record_listing(
+        db,
+        &forged,
+        &other_subject.resolve(&origin),
+        &f.drive,
+        None,
+        &listing("forged"),
+    )
+    .await
+    .unwrap();
+    // A Listing whose Release lives on a server that can't be reached.
+    let unreachable = format!("blake3:{}", "2".repeat(64));
+    release::record_listing(
+        db,
+        &unreachable,
+        &format!("https://unreachable.invalid/releases/{unreachable}"),
+        &f.drive,
+        None,
+        &listing("unreachable"),
+    )
+    .await
+    .unwrap();
+
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(f.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let started = std::time::Instant::now();
+    let catalog = test::call_service(
+        &service,
+        with_host(TestRequest::with_uri("/plugin-catalog"), &origin).to_request(),
+    )
+    .await;
+    assert!(started.elapsed() < release::REMOTE_RELEASE_TIMEOUT * 2);
+    assert_eq!(catalog.status(), 200);
+    let body: serde_json::Value = serde_json::from_slice(&body_of(catalog)).unwrap();
+    let entries = body["entries"].as_array().unwrap();
+    let entry = |name: &str| {
+        entries
+            .iter()
+            .find(|e| e["name"] == name)
+            .unwrap_or_else(|| panic!("no entry {name} in {entries:?}"))
+    };
+
+    let uncached = entry("uncached");
+    assert_eq!(
+        uncached["requires"],
+        serde_json::json!([
+            "persistent-host",
+            "plugin-routes:read-only",
+            "public-origin",
+            "wasm-sandbox"
+        ])
+    );
+    assert_eq!(uncached["runtime"], "atomic-js/1");
+    assert_eq!(uncached["world"], "extension");
+    // Deriving it doesn't cache the release: the cache holds only what was
+    // published or installed here.
+    assert!(db.get_plugin_release(&gated_id).is_err());
+
+    for name in ["forged", "unreachable"] {
+        assert_eq!(entry(name)["requires"], "unknown", "{name}");
+        assert_eq!(entry(name)["runtime"], serde_json::Value::Null, "{name}");
+    }
+}

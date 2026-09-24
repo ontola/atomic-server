@@ -17,9 +17,10 @@ import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
 import { agentSubject } from './subject.js';
 import type { JSONValue } from './value.js';
-import type {
-  DeclaredHttp,
-  DeclaredWriteTarget,
+import {
+  hostFeatureUnavailableError,
+  type DeclaredHttp,
+  type DeclaredWriteTarget,
 } from './plugin-manifest-http.js';
 import {
   fetchPluginAgent,
@@ -346,7 +347,19 @@ export async function installRelease(
       [server.properties.integrationAppAgent]: Datatype.ATOMIC_URL,
     },
   });
-  await installation.save();
+  try {
+    await installation.save();
+  } catch (e) {
+    const refused = hostFeatureUnavailableError(e);
+    if (!refused) throw e;
+    // Refused, not failed: this node's gates don't allow the release, and
+    // retrying changes nothing until the operator opens them. The
+    // Installation never reached the server, so forget it here too rather
+    // than leave a parked genesis that would install it later unreviewed.
+    store.outbox.discard(installation.subject);
+    store.removeResource(installation.subject);
+    throw refused;
+  }
 
   if (parents.length > 0 && status === 'active') {
     const agent = await fetchPluginAgent(store, installation.subject);
@@ -441,7 +454,12 @@ export async function updateInstallationRelease(
     await resource.set(server.properties.config, config, false, Datatype.JSON);
   }
 
-  await resource.save();
+  try {
+    await resource.save();
+  } catch (e) {
+    // A refused upgrade leaves the old release running; say why, typed.
+    throw hostFeatureUnavailableError(e) ?? e;
+  }
 
   if (agent) {
     await giveRouteWriteRights(store, agent, give);

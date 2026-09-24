@@ -440,8 +440,18 @@ Everything else is open to an anonymous socket and gated per subject by
 | `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
 | `9` | `INVALID_SIGNATURE` | A `COMMIT` whose signature does not verify against its signer's key, or that has none. Terminal for that envelope: sign again. |
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
+| `11` | `HOST_FEATURE_UNAVAILABLE` | A commit activating a plugin Installation (install, upgrade, resume) was refused because the release opens public endpoints this node's plugin-routes gates don't allow. Blocking, not terminal: the operator can open the gates. The message carries the typed problem (see below). Over HTTP, `/commit` answers `409`. |
 
-Codes `1` to `4`, `9` and `10` come from `classify_commit_error`, which pattern-matches the
+A refusal with structured fields appends them to the message: the sentence,
+then `\nproblem+json: `, then one JSON object with RFC 9457 fields (`type`,
+`detail` and the problem's own). The `/commit` Error resource's
+`description` carries the same string. A client splits at the marker and
+shows the sentence; one that doesn't know the marker still shows the sentence
+first. Code `11` carries the `host-feature-unavailable` problem this way:
+`{ type, feature, needed, compiled, level, surfaces, listeners, sidecars,
+detail }`, the same fields `/plugin-release-pin` answers with.
+
+Codes `1` to `4`, `9`, `10` and `11` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,

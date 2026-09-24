@@ -14,7 +14,7 @@ import {
 import {
   checkHostFeatures,
   grantsFor,
-  HostFeatureUnavailableError,
+  hostFeatureUnavailableError,
   newWriteTargets,
   useStore,
   type DeclaredWriteTarget,
@@ -194,8 +194,12 @@ export const InstallationReviewDialog: React.FC<
       await action();
       hide(true);
     } catch (err) {
-      if (err instanceof HostFeatureUnavailableError) {
-        setRefused(err.problem);
+      // The server's refusal, from `/plugin-release-pin` or from the
+      // Installation commit itself: shown inline, like the review's own check.
+      const refusedByServer = hostFeatureUnavailableError(err);
+
+      if (refusedByServer) {
+        setRefused(refusedByServer.problem);
 
         return;
       }
