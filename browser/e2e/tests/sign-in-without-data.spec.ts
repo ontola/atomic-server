@@ -83,11 +83,20 @@ test(
   async ({ page }) => {
     const { secret, home } = await unknownAccount();
     await signIn(page, secret);
+    // The nudge is a toast, raised from `ShowRoute`'s effect once
+    // `openPrivateHome` reports `created`, so this waits on a home drive being
+    // built on the server and not on a render. `signIn` returns as soon as the
+    // agent is in the store, which is what STARTS that effect, so the whole
+    // creation falls inside this budget. The 10s default cannot cover it:
+    // measured at four workers on 24 September 2026, the step cost 12.9s, 13.9s
+    // and 14.6s, and the test failed 3 of 3 with the link never found. It is
+    // green 5 of 5 unloaded, which is why this reads as a flake rather than as
+    // the fixed shortfall it is. CI saw the same test on run 4485.
     await expect(
       page.getByRole('link', {
         name: 'Connect another device or restore a backup',
       }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expectWritableHome(page, home);
   },
 );
