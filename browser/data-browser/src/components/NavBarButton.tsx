@@ -31,6 +31,12 @@ export const LabelButton = styled.button<{ $active?: boolean }>`
     font-size: 1rem;
   }
 
+  @container breadcrumb-bar (max-width: 600px) {
+    > span {
+      display: none;
+    }
+  }
+
   &[disabled] {
     opacity: 0.5;
     cursor: not-allowed;
@@ -55,7 +61,8 @@ export const ButtonArea = styled.div<{ $iconOnly: boolean }>`
   color: ${p => p.theme.colors.textLight};
   gap: ${p => p.theme.size(1)};
   align-items: center;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
 
   @container breadcrumb-bar (max-width: 600px) {
     gap: 0;

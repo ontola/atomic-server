@@ -2492,6 +2492,8 @@ triggers and verifies only action labels disappear. `presence-follow.spec.ts`
 uses two tabs sharing one stored test identity, checks the avatar at 320px,
 opens Follow and verifies subsequent navigation. The updated Chromium test
 passed against the local app; cross-network staging presence was not certified.
+`sidebar-layout.spec.ts` checks the resource menu stays inside 390px and 320px
+viewports, action labels collapse, and the menu opens on tap.
 
 `recovery-fetch.test.ts` verifies 429 cooldowns (Retry-After seconds and a
 60-second fallback), retry after expiry, in-flight sharing and fresh successful

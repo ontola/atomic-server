@@ -150,3 +150,24 @@ test('mobile sidebar stays an overlay and closes from its backdrop', async ({
   await expect(sidebar).toHaveCSS('opacity', '0');
   expect(await main.boundingBox()).toEqual(initial);
 });
+
+test('mobile resource actions keep the menu on screen', async ({ page }) => {
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+
+    const menuTrigger = page.locator('[data-test="context-menu"]');
+    await expect(menuTrigger).toBeVisible();
+    await expect(
+      page.getByTestId('navbar-tags-button').locator('span'),
+    ).toHaveCSS('display', 'none');
+
+    const bounds = await menuTrigger.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+
+    await menuTrigger.click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+  }
+});
