@@ -42,3 +42,68 @@ export function integrationVisibility(
       resource.get(properties['show-experimental-plugins']) === true,
   };
 }
+
+export type IntegrationVisibilityValues = Partial<
+  Record<IntegrationVisibilityKey, boolean>
+>;
+
+const visibilityKeys: IntegrationVisibilityKey[] = [
+  'show-api-plugins',
+  'show-experimental-plugins',
+];
+
+/**
+ * Preferences are cached per agent so a toggle shows up instantly on the next
+ * visit, before (or without) the private drive being readable.
+ */
+function cacheKey(actor: string | undefined): string {
+  return `integration-visibility:${actor ?? 'anonymous'}`;
+}
+
+function defaultStorage(): Storage | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reads the last known preferences for an agent. Never throws. */
+export function readVisibilityCache(
+  actor: string | undefined,
+  storage: Storage | undefined = defaultStorage(),
+): IntegrationVisibilityValues {
+  try {
+    const raw = storage?.getItem(cacheKey(actor));
+    const parsed = raw ? JSON.parse(raw) : undefined;
+
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    const values: IntegrationVisibilityValues = {};
+
+    for (const key of visibilityKeys) {
+      if (typeof parsed[key] === 'boolean') values[key] = parsed[key];
+    }
+
+    return values;
+  } catch {
+    return {};
+  }
+}
+
+/** Merges preferences into the agent's cache. Never throws. */
+export function writeVisibilityCache(
+  actor: string | undefined,
+  values: IntegrationVisibilityValues,
+  storage: Storage | undefined = defaultStorage(),
+): IntegrationVisibilityValues {
+  const merged = { ...readVisibilityCache(actor, storage), ...values };
+
+  try {
+    storage?.setItem(cacheKey(actor), JSON.stringify(merged));
+  } catch {
+    // A full or blocked storage only costs us the head start, not the setting.
+  }
+
+  return merged;
+}

@@ -30,7 +30,11 @@ function CrashPage({
     <StyledMain>
       <ContainerWide resource={resource?.subject}>
         <Column>
-          {children ? children : <ErrorBlock error={error} showTrace />}
+          {children ? (
+            children
+          ) : (
+            <ErrorBlock error={error} showTrace showReport={false} />
+          )}
           <Row>
             {clearError && <Button onClick={clearError}>Clear error</Button>}
             <Button
@@ -44,7 +48,7 @@ function CrashPage({
               Try Again
             </Button>
             <DialogGlobalContextProvider>
-              <FeedbackMenuItem floating />
+              <FeedbackMenuItem floating reportError={error} />
             </DialogGlobalContextProvider>
           </Row>
         </Column>

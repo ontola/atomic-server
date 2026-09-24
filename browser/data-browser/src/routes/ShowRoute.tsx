@@ -8,6 +8,9 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { isOriginWithoutNode } from '../helpers/originNode';
+import { openPrivateHome } from '../helpers/openPrivateHome';
+import { privateHomeNudge } from '../helpers/privateHomeNudge';
+import { addRecentResource } from '../helpers/recentResources';
 
 export type ShowRouteSearch = {
   subject: string;
@@ -44,6 +47,27 @@ export const ShowComponent: React.FunctionComponent = () => {
   const store = useStore();
   const navigate = useNavigate();
 
+  // A persisted identity can land here without running the welcome flow.
+  // Hydrate/recover its own home before materializing it; other resources
+  // retain their normal missing/permission handling.
+  React.useEffect(() => {
+    if (!agent || !subject) return;
+    let cancelled = false;
+    void openPrivateHome(store, subject)
+      .then(result => {
+        if (cancelled || !result) return;
+        setDrive(subject);
+        if (result === 'created') privateHomeNudge();
+      })
+      .catch(() => {
+        // ResourcePage displays the read error and its recovery actions.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agent, subject, store, setDrive]);
+
   // Signed out on an origin that runs no node: nothing can load until a
   // sign-in restores the data, so go straight to the sign-in step with the
   // subject as `next`. Without this the page first fetches, shows
@@ -71,6 +95,15 @@ export const ShowComponent: React.FunctionComponent = () => {
       replace: true,
     });
   }, [signInFirst, subject, navigate]);
+
+  // Feeds the "recent" list the document `@` menu shows before typing.
+  React.useEffect(() => {
+    if (signInFirst || !drive || !Client.isValidSubject(subject)) return;
+    // Wait until the drive switch above has landed.
+    if (requestedDrive && requestedDrive !== drive) return;
+
+    addRecentResource(drive, subject);
+  }, [signInFirst, drive, requestedDrive, subject]);
 
   if (signInFirst) {
     return null;

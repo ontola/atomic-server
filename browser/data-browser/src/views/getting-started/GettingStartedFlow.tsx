@@ -19,6 +19,8 @@ import { beat } from '../../helpers/deviceLock';
 import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
 import { connectHostedDrive } from '../../helpers/managed/reconcile';
 import { deviceHasDriveData } from '../../helpers/driveData';
+import { openPrivateHome } from '../../helpers/openPrivateHome';
+import { privateHomeNudge } from '../../helpers/privateHomeNudge';
 import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
@@ -194,22 +196,28 @@ export function GettingStartedFlow({
     new URLSearchParams(window.location.search).get('drive') ||
     new URLSearchParams(window.location.search).get('subject') ||
     undefined;
+  // Only this named, internal destination is accepted; never navigate to an
+  // arbitrary return URL supplied by a link. Adding a passkey needs the local
+  // identity unlocked before the account settings can edit its backup.
+  const returnToAgent =
+    !fromManaged &&
+    !inviteToken &&
+    !nextDrive &&
+    new URLSearchParams(window.location.search).get('return_to') === 'agent';
+  const signInRequested =
+    new URLSearchParams(window.location.search).get('step') === 'signin';
   const [step, setStep] = useState<Step>(
     fromManaged
       ? 'create'
       : inviteToken
         ? 'restore'
-        : nextDrive
+        : nextDrive || returnToAgent || signInRequested
           ? 'signin'
           : initialStep,
   );
-  useEffect(() => {
-    // A configured SaaS app uses the portal as its account entry point.
-    // A direct drive URL already starts at the unlock step above.
-    if (step === 'welcome' && knownPortalUrl) {
-      window.location.replace(new URL('/dashboard', knownPortalUrl).toString());
-    }
-  }, [step, knownPortalUrl]);
+  // Welcome is also the destination for lock, sign-out, recovery and resource
+  // guards. A portal configuration is not a reason to leave an unlock flow.
+  // Account creation and the explicit Back action can still open the portal.
   const [loading, setLoading] = useState(false);
   const [workspaceStage, setWorkspaceStage] = useState<
     'identity' | 'local' | 'backup'
@@ -649,13 +657,8 @@ export function GettingStartedFlow({
         ? await connectHostedDrive(store, target, setServer)
         : false;
 
-      // A secret restores who you are, not what you have. So the app only
-      // opens once the workspace is here to read: opening one we cannot read
-      // shows an empty shell wearing its name, which reads as data loss.
-      //
-      // Asked before anything writes the drive, deliberately. Materializing it
-      // first — which is what this flow used to do — makes every "do I have my
-      // data?" check answer yes about data the device does not have.
+      // Check for existing data before creating anything, so a newly writable
+      // home is never mistaken for successful recovery of previous content.
       const canRead = (subject: string, refresh = hosted) =>
         withDeadline(
           deviceHasDriveData(store, subject, { refresh }),
@@ -693,7 +696,7 @@ export function GettingStartedFlow({
       // "your data is on another device" hides which one this is.
       let vaultReason: string | undefined;
 
-      if (!hasData && target) {
+      if (!hasData && target && !returnToAgent) {
         setWorkspaceStage('backup');
         const restored = await withDeadline(
           restoreFromVault(store, target),
@@ -722,17 +725,19 @@ export function GettingStartedFlow({
         store.registerLocalOnlyDrive(target);
       }
 
-      // Name the account's drive even when its data hasn't arrived: it is
-      // derived from the key, so it is the one place this identity can write
-      // right away, and the Sync page says "your data is on another device"
-      // about *that* drive, which is true and useful. Only when the drive
-      // cannot be named at all is no drive the honest answer — the value here
-      // otherwise falls back to whatever was last open, or to the default,
-      // which is the server's own root. Showing that as your workspace is how
-      // signing in ends with somebody else's data on screen.
       setDrive(target ?? '');
 
-      if (hasData) {
+      // Recover first, but connecting a device is optional for the identity's
+      // own home. A foreign requested workspace must never be synthesized.
+      const home =
+        !hasData && target && !returnToAgent
+          ? await openPrivateHome(store, target, true)
+          : undefined;
+
+      if (home) {
+        if (home === 'created') privateHomeNudge();
+        navigate(constructOpenURL(target!));
+      } else if (hasData) {
         // The home drive is derived from the key rather than looked up, so
         // nothing else will ever write it — `fetchPrivateDriveSubject` above
         // computes the subject but does not materialize it. Signing in is the
@@ -758,7 +763,12 @@ export function GettingStartedFlow({
         // the whole drive, and sign-in should not wait on an upload.
         void ensureVaultBackup(store, target!);
 
-        navigate(constructOpenURL(target!));
+        navigate(
+          returnToAgent ? paths.agentSettings : constructOpenURL(target!),
+        );
+      } else if (returnToAgent) {
+        // Passkey management needs the key, not a downloaded copy of the drive.
+        navigate(paths.agentSettings);
       } else {
         setMissingDrive(target);
         setMissingDriveVaultReason(vaultReason);
@@ -818,7 +828,7 @@ export function GettingStartedFlow({
 
   return (
     <Shell>
-      {step === 'welcome' && (!createTarget || knownPortalUrl) ? (
+      {step === 'welcome' && !createTarget ? (
         <div role='status' aria-label='Loading account'>
           <Spinner />
         </div>
@@ -1223,10 +1233,35 @@ export function GettingStartedFlow({
                     </Column>
                   )
                 ) : restore.phase === 'no-backup' ? (
-                  <p key='no-backup'>
-                    No recovery backup was found for {restore.email}. Account
-                    recovery only works if you enabled it earlier.
-                  </p>
+                  inviteToken ? (
+                    // The portal sends an invitee here whenever it cannot rule
+                    // out an earlier identity. With nothing to restore, the
+                    // invitation still wants an account to land in.
+                    <Column key='no-backup-invite' gap='0.75rem'>
+                      <p key='copy'>
+                        {`There is nothing to restore for ${restore.email} yet. Create your account to accept the invitation.`}
+                      </p>
+                      <Button
+                        key='create'
+                        type='button'
+                        onClick={() => {
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('from_portal', 'true');
+                          url.searchParams.set('email', restore.email);
+                          // A reload, because the managed create flow is read
+                          // from the URL on mount.
+                          window.location.assign(url.toString());
+                        }}
+                      >
+                        Create account and accept
+                      </Button>
+                    </Column>
+                  ) : (
+                    <p key='no-backup'>
+                      No recovery backup was found for {restore.email}. Account
+                      recovery only works if you enabled it earlier.
+                    </p>
+                  )
                 ) : restoreUnlock.showPasskey ? (
                   <Column key='ready-passkey' gap='1rem'>
                     <p key='copy'>

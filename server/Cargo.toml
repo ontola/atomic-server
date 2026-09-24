@@ -6,7 +6,9 @@ edition = "2021"
 homepage = "https://atomicserver.eu/"
 # Everything the crate needs to COMPILE once unpacked from crates.io, which is
 # more than just src/. `assets_tmp` holds the built frontend and is
-# `include_str!`d by handlers/single_page_app.rs; `wit/` is read at macro
+# `include_str!`d by handlers/single_page_app.rs; `integrations_assets_tmp`
+# holds the filtered copy of `integrations/*/plugin.js` embedded and served at
+# `/integrations` (see build.rs::embed_integrations); `wit/` is read at macro
 # expansion time by `wasmtime::component::bindgen!` in plugins/wasm.rs, which is
 # on by default via the `wasm-plugins` feature.
 #
@@ -14,7 +16,7 @@ homepage = "https://atomicserver.eu/"
 # has all these files regardless. It only shows up as a compile error inside
 # `cargo publish`'s verification build, i.e. mid-release. `wit/` was missing here
 # until v0.41.0-beta.2 and cost a tag to find.
-include = ["src/**/*", "Cargo.toml", "assets_tmp", "build.rs", "build_assets.rs", "wit/**/*"]
+include = ["src/**/*", "Cargo.toml", "assets_tmp", "integrations_assets_tmp", "build.rs", "build_assets.rs", "wit/**/*"]
 license = "MIT"
 name = "atomic-server"
 readme = "./README.md"
@@ -98,6 +100,7 @@ sha1 = "0.11"
 blake3 = "1.8.5"
 hex = "0.4"
 local-ip-address = "0.6.13"
+libc = "0.2"
 anyhow = "1"
 actix-web-static-files = { version = "4.1.1", features = ["static-files-03"] }
 rand = "0.8.6"

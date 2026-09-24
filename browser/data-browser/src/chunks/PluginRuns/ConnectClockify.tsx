@@ -34,7 +34,7 @@ import {
   origin,
   type Config,
 } from '../../../../../integrations/clockify/model';
-import source from '../../../../../integrations/clockify/plugin.js?raw';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 
 export function ConnectClockify({
   drive,
@@ -115,6 +115,10 @@ export function ConnectClockify({
     setError('');
 
     try {
+      const source = await fetchIntegrationSource(
+        'clockify',
+        store.getServerUrl(),
+      );
       const subject =
         plugin ??
         (await createPlugin(
@@ -183,6 +187,10 @@ export function ConnectClockify({
     setError('');
 
     try {
+      const source = await fetchIntegrationSource(
+        'clockify',
+        store.getServerUrl(),
+      );
       const existing = target
         ? (await timeTrackerTables(store, drive)).find(
             t => t.tableSubject === target,

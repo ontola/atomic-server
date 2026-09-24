@@ -20,8 +20,11 @@ import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
-import { AIChatsPanel, NewSidebarChatButton } from './AIPanel';
+import { AIChatsPanel } from './AIPanel';
 import { ChromeTheme } from '../../styling';
+import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
+import { useRightPanel } from '../RightPanel/RightPanelContext';
+import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from '../RightPanel/layout';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -33,11 +36,15 @@ export function SideBar(): JSX.Element {
   const [isRearanging, setIsRearanging] = React.useState(false);
 
   const { drive, sideBarLocked, setSideBarLocked } = useSettings();
+  const { activePanel } = useRightPanel();
   const [ref, hoveringOverSideBar, listeners] = useHover<HTMLElement>();
   // Check if the window is small enough to hide the sidebar
   const isWideScreen = useMediaQuery(
     `(min-width: ${SIDEBAR_TOGGLE_WIDTH}px)`,
     true,
+  );
+  const rightPanelOverlays = useMediaQuery(
+    `(max-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT - 1}px)`,
   );
 
   const { size, dragAreaRef, isDragging, dragAreaListeners } = useResizable({
@@ -73,17 +80,26 @@ export function SideBar(): JSX.Element {
     }
   }, [isWideScreen, setSideBarLocked]);
 
-  const sidebarVisible = sideBarLocked || (hoveringOverSideBar && isWideScreen);
+  const sidebarVisible =
+    sideBarLocked ||
+    (hoveringOverSideBar &&
+      isWideScreen &&
+      !(rightPanelOverlays && activePanel));
 
   return (
-    <SideBarContainer>
+    <SideBarContainer
+      $width={SIDEBAR_WIDTH_PROP.var()}
+      $size={size}
+      $expanded={isWideScreen && sideBarLocked}
+      $dragging={isDragging}
+    >
       <ChromeTheme>
         <StyledNav
           ref={mountRefs}
-          size={size}
           data-testid='sidebar'
           locked={isWideScreen && sideBarLocked}
           exposed={sidebarVisible}
+          $dragging={isDragging}
           {...listeners}
         >
           {/* The key is set to make sure the component is re-loaded when the baseURL changes */}
@@ -95,22 +111,18 @@ export function SideBar(): JSX.Element {
           <MenuWrapper>
             <Column gap='0.5rem' align='stretch'>
               <SideBarHomePanels onItemClick={closeSideBar} />
-              {enabledPanels.has(Panel.AIChats) && (
-                <SideBarPanel
-                  title='AI Chats'
-                  data-testid='ai-chats-panel'
-                  key={drive}
-                  actions={<NewSidebarChatButton />}
-                >
-                  <AIChatsPanel />
-                </SideBarPanel>
-              )}
+              {enabledPanels.has(Panel.AIChats) && <AIChatsPanel key={drive} />}
               {enabledPanels.has(Panel.Ontologies) && (
-                <SideBarPanel title='Ontologies' key={drive}>
+                <SideBarPanel
+                  title='Ontologies'
+                  heightStorageKey='ontologiesPanelHeight'
+                  initialHeight={160}
+                  key={drive}
+                >
                   <OntologiesPanel />
                 </SideBarPanel>
               )}
-              <SideBarPanel title='App'>
+              <SideBarPanel title='App' heightStorageKey='appPanelHeight'>
                 <Column gap='0.5rem' align='stretch'>
                   <AppMenu onItemClick={closeSideBar} />
                 </Column>
@@ -128,7 +140,8 @@ export function SideBar(): JSX.Element {
       </ChromeTheme>
       <SideBarOverlay
         onClick={() => setSideBarLocked(false)}
-        visible={sideBarLocked && !isWideScreen}
+        $visible={sideBarLocked && !isWideScreen}
+        aria-hidden
       />
     </SideBarContainer>
   );
@@ -137,31 +150,21 @@ export function SideBar(): JSX.Element {
 interface StyledNavProps {
   locked: boolean;
   exposed: boolean;
-  size: string;
+  $dragging: boolean;
 }
 
-interface SideBarOverlayProps {
-  visible: boolean;
-}
-
-const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
-  style: {
-    [SIDEBAR_WIDTH_PROP.raw]: p.size,
-  } as Record<string, string>,
-}))`
-  z-index: ${p => p.theme.zIndex.sidebar};
+const StyledNav = styled.nav<StyledNavProps>`
+  z-index: ${p => p.theme.zIndex.sidebar + 2};
   box-sizing: border-box;
   background: ${p => p.theme.colors.bg};
-  transition:
-    opacity 0.3s,
-    left 0.3s;
-  left: ${p =>
-    p.exposed ? '0' : `calc(${SIDEBAR_WIDTH_PROP.var()} * -1 + 0.5rem)`};
-  /* When the user is hovering, show half opacity */
+  transition: ${p => panelTransition(p.$dragging, 'transform', 'opacity')};
+  left: 0;
+  transform: ${p =>
+    p.exposed ? 'translateX(0)' : 'translateX(calc(-100% + 0.5rem))'};
   opacity: ${p => (p.exposed ? 1 : 0)};
   height: ${CalculatedPageHeight.var()};
   width: ${SIDEBAR_WIDTH_PROP.var()};
-  position: ${p => (p.locked ? 'relative' : 'absolute')};
+  position: absolute;
   border-right: ${p => `1px solid ${p.theme.colors.bg2}`};
   box-shadow: ${p => (p.locked ? 'none' : p.theme.boxShadowSoft)};
   display: flex;
@@ -169,10 +172,6 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: ${p => p.theme.size()};
-
-  @media print {
-    display: none;
-  }
 `;
 
 const MenuWrapper = styled.div`
@@ -188,27 +187,19 @@ const MenuWrapper = styled.div`
   padding-inline: ${p => p.theme.margin}rem;
 `;
 
-/** Just needed for positioning the overlay */
-const SideBarContainer = styled('div')`
-  position: relative;
+const SideBarContainer = styled(PanelLayout).attrs<{ $size: string }>(p => ({
+  style: {
+    [SIDEBAR_WIDTH_PROP.raw]: p.$size,
+  } as Record<string, string>,
+}))`
+  @media print {
+    display: none;
+  }
 `;
 
 /** Shown on mobile devices to close the panel */
-const SideBarOverlay = styled.div<SideBarOverlayProps>`
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 100vw;
-  transition: background-color 0.2s;
-  background-color: ${p =>
-    p.visible ? 'rgba(0, 0, 0, .5)' : 'rgba(0, 0, 0, 0.0)'};
-  pointer-events: ${p => (p.visible ? 'auto' : 'none')};
-  height: 100%;
-  cursor: pointer;
-  z-index: 1;
-  -webkit-tap-highlight-color: transparent;
+const SideBarOverlay = styled(PanelBackdrop)`
+  z-index: ${p => p.theme.zIndex.sidebar + 1};
 `;
 
 const SideBarDragArea = styled(DragAreaBase)`

@@ -7,6 +7,60 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- The server raises its own file-descriptor soft limit to its hard limit at
+  startup. It already budgeted HTTP connections against the soft limit and kept
+  a reserve, but HTTP is not the only tenant of that pool: the database, Iroh's
+  QUIC sockets and every open websocket draw on it too, so on a stock soft limit
+  of 1024 the process can run out while the HTTP budget still looks healthy.
+  Staging did, for twenty-three minutes, with 2,655 `error accepting connection:
+  No file descriptors available`, Iroh unable to bind its hairpin probe, and a
+  panic at the tail. A process may raise its own soft limit as far as the hard
+  limit without privileges, and the connection budget is computed from whatever
+  is in force afterwards, so a refused raise is logged and not fatal.
+
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
+  previous `did:ad:` spelling is accepted forever and names the same
+  resource. New genesis certificates still encode the v1 header byte
+  (`0x01`) so `GenesisCert` literals in downstream crates keep compiling;
+  `GenesisCert::new_v2` canonicalizes parent/drive strings to `atomic:`.
+  Decode accepts a `0x02` header. Existing v1 certificates and the
+  personal-drive singleton stay v1. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
+  endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes
+  subjects and identifier-shaped values on write and on query filters.
+  Opening a pre-rename database rewrites leftover `did:ad:` keys in every
+  subject-keyed tree (resources, snapshots, DID mapping keys and hint
+  values, envelopes, tombstones, the outbox), streaming each tree, and
+  rebuilds indexes. A v2 certificate that carries a `did:ad:` string is
+  refused on decode; a v1 certificate's parent and drive are compared with
+  the resource in one spelling. Sync advertises `canonical-scheme` and
+  emits `did:ad:` to peers that do not list it on every frame that names a
+  subject, over WebSocket and Iroh alike; a client canonicalizes what an
+  old server echoes back. The in-memory store keys resources canonically
+  (#1584).
+
+- The causality guard no longer refuses a commit whose writes lost an honest
+  race. It asked whether the merge kept what the commit sent, which an unseeded
+  client and a client that simply lost to a newer peer both answer no, so a
+  client with a perfectly good doc was told to refetch and retry, and could only
+  resend the same bytes. It now asks what it means to ask: whether the incoming
+  update's version vector carries any peer the stored state also has. A doc
+  seeded from the server does, however far behind it has fallen, and losing
+  last-writer-wins from there is accepted. A doc built from scratch does not,
+  and its vanished writes are still refused, as before. The version comes from
+  the blob header via `update_range`, so the check costs a parse and not a
+  second document build.
+
+- A causality rejection now names the writes it dropped. The error a client
+  gets when its Loro update lost every write to LWW reports each mismatching
+  property as `sent <x>, stored <y>`, in place of the full list of values sent
+  and the bare list of stored keys. Which write lost, and to what, previously
+  lived only in the server's own `[causality-guard] rejecting` log line. The
+  `Commit's Loro update produced no state changes` prefix that
+  `classify_commit_error` and the client outbox match on is unchanged, and so
+  is the condition for accepting or rejecting a commit.
+
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and
   until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
@@ -259,7 +313,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Improve browser database durability and resource save-state handling.
 - Isolate E2E shard state and simplify local test tooling; full develop CI passes on the release base.
 
-- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by Atomic SaaS ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
+- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by the managed signaling service ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
 
 ## [v0.41.0-beta.6] - 2026-09-09
 

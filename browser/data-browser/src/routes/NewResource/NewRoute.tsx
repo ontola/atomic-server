@@ -38,6 +38,7 @@ import { getIconForClass } from '../../helpers/iconMap';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useAISidebar } from '../../components/AI/AISidebarContext';
 import { useAISettings } from '../../components/AI/AISettingsContext';
+import { useMarkNewActionDiscovered } from '../../hooks/useNewActionDiscovered';
 import { ApplyTemplateDialog } from '../../components/Template/ApplyTemplateDialog';
 import type {
   Template,
@@ -47,6 +48,7 @@ import { creationAssistantAsk } from './creationAssistant';
 import {
   AI_BUILD_SUGGESTIONS,
   BASIC_CREATIONS,
+  DRIVE_CREATIONS,
   CREATION_TABLE_TEMPLATES,
   CREATION_PAGE_TEMPLATES,
   isUntouchedSuggestion,
@@ -91,7 +93,7 @@ function NewRoutePage(): JSX.Element {
 
 function NewResourceSelector() {
   const { parentSubject, parent } = NewRoute.useSearch();
-  const { drive } = useSettings();
+  const { drive, hideTemplates } = useSettings();
   const destination = parentSubject || parent || drive;
   const parentResource = useResource(destination);
   const store = useStore();
@@ -100,6 +102,7 @@ function NewResourceSelector() {
   const { askAI } = useAISidebar();
   const { enableAI } = useAISettings();
   const catalogRef = useRef<HTMLDivElement>(null);
+  useMarkNewActionDiscovered();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -109,6 +112,7 @@ function NewResourceSelector() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState('');
   const [templateError, setTemplateError] = useState('');
+  const [creating, setCreating] = useState(false);
   const {
     results: customClasses,
     loading,
@@ -119,12 +123,14 @@ function NewResourceSelector() {
     allowEmptyQuery: true,
     limit: 100,
   });
-  const basic = BASIC_CREATIONS.filter(
+  const basic = [...BASIC_CREATIONS, ...DRIVE_CREATIONS].filter(
     item =>
-      (enableAI || item.subject !== ai.classes.aiChat) &&
+      (enableAI ||
+        !('subject' in item) ||
+        item.subject !== ai.classes.aiChat) &&
       matchesCreationSearch(query, item.title, item.description, 'blank'),
   );
-  const tables = CREATION_TABLE_TEMPLATES.filter(item =>
+  const tables = (hideTemplates ? [] : CREATION_TABLE_TEMPLATES).filter(item =>
     matchesCreationSearch(
       query,
       item.title,
@@ -133,14 +139,22 @@ function NewResourceSelector() {
       ...(item.spec?.views ?? []).map(v => v.kind),
     ),
   );
-  const pages = CREATION_PAGE_TEMPLATES.filter(item =>
+  const pages = (hideTemplates ? [] : CREATION_PAGE_TEMPLATES).filter(item =>
     matchesCreationSearch(query, item.title, item.description, 'template'),
   );
   const custom = customClasses.filter(
-    subject => !BASIC_CREATIONS.some(item => item.subject === subject),
+    subject =>
+      !BASIC_CREATIONS.some(item => item.subject === subject) &&
+      !DRIVE_CREATIONS.some(
+        item =>
+          item.shortname ===
+          store.getResourceLoading(subject).get(core.properties.shortname),
+      ),
   );
   const searching = query.trim().length > 0;
+  const showUpload = matchesCreationSearch(query, 'files upload');
   const noMatches =
+    !showUpload &&
     basic.length + tables.length + pages.length + custom.length === 0 &&
     !loading;
 
@@ -189,6 +203,32 @@ function NewResourceSelector() {
     if (!prompt.trim()) return;
 
     askAI(creationAssistantAsk(prompt, destination));
+  };
+
+  const openCreation = async (item: (typeof basic)[number]) => {
+    if ('subject' in item) {
+      showNewResourceUI(item.subject, destination);
+
+      return;
+    }
+
+    if (creating) return;
+    setCreating(true);
+
+    try {
+      const { createDriveResource } = await import('./createDriveResource');
+      const subject = await createDriveResource(
+        item.shortname,
+        store,
+        drive,
+        destination,
+      );
+      navigate(constructOpenURL(subject));
+    } catch (creationError) {
+      store.notifyError(creationError);
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -277,6 +317,34 @@ function NewResourceSelector() {
             </p>
           )}
         </Column>
+        {basic.length > 0 && (
+          <section aria-label='Start blank'>
+            <SectionHeading>Start blank</SectionHeading>
+            <BasicGrid>
+              {basic.map((item, index) => {
+                const subject = 'subject' in item ? item.subject : undefined;
+                const shortname =
+                  'shortname' in item ? item.shortname : undefined;
+                const Icon = getIconForClass(subject, undefined, shortname);
+
+                return (
+                  <BasicChoice
+                    data-creation-result
+                    data-selected={selectedIndex === index}
+                    key={subject ?? shortname}
+                    subtle
+                    title={item.description}
+                    disabled={creating}
+                    onClick={() => void openCreation(item)}
+                  >
+                    <Icon aria-hidden />
+                    {item.title}
+                  </BasicChoice>
+                );
+              })}
+            </BasicGrid>
+          </section>
+        )}
         {!searching && enableAI && (
           <Column gap='0.5rem'>
             <SectionHeading>Build with AI</SectionHeading>
@@ -338,31 +406,7 @@ function NewResourceSelector() {
             )}
           </Column>
         )}
-        {basic.length > 0 && (
-          <section aria-label='Start blank'>
-            <SectionHeading>Start blank</SectionHeading>
-            <BasicGrid>
-              {basic.map((item, index) => {
-                const Icon = getIconForClass(item.subject);
-
-                return (
-                  <BasicChoice
-                    data-creation-result
-                    data-selected={selectedIndex === index}
-                    key={item.subject}
-                    subtle
-                    title={item.description}
-                    onClick={() => showNewResourceUI(item.subject, destination)}
-                  >
-                    <Icon aria-hidden />
-                    {item.title}
-                  </BasicChoice>
-                );
-              })}
-            </BasicGrid>
-          </section>
-        )}
-        {!searching && (
+        {showUpload && (
           <div>
             <CompactUpload
               parentResource={parentResource}
@@ -441,12 +485,7 @@ function NewResourceSelector() {
             </BasicGrid>
           </section>
         )}
-        {error && (
-          <p role='alert'>
-            Your resource types could not be loaded. Templates above are still
-            available.
-          </p>
-        )}
+        {error && <p role='alert'>Your resource types could not be loaded.</p>}
         {!searching && (
           <details>
             <ChooseClassSummary />

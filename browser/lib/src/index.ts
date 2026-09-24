@@ -69,6 +69,7 @@ export * from './ontology.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
+export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
@@ -203,11 +204,18 @@ export {
   secretsMentionedIn,
   originsMentionedIn,
   type DeclaredSecret,
+  type DeclaredConfig,
+  type DeclaredConfigField,
   type ManifestRuntime,
   type ManifestWorld,
   type PluginManifest,
   type PluginManifestV2,
 } from './plugin-manifest.js';
+export {
+  pluginConfigFor,
+  pluginConfigProblems,
+  type StoredPluginConfig,
+} from './plugin-config.js';
 export { describePlugin } from './plugin-runner.js';
 
 export {

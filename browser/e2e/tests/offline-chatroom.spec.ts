@@ -95,7 +95,7 @@ test.describe('offline chatroom', () => {
     // Stash the chatroom's resolved subject so we can re-open it after the
     // reload (the URL might still carry a `_new:` placeholder pre-sign).
     const chatSubject = await getCurrentSubject(page);
-    expect(chatSubject).toMatch(/^did:ad:/);
+    expect(chatSubject).toMatch(/^atomic:/);
 
     const chatInput = page.getByLabel('Chat input');
     await expect(chatInput).toBeFocused();

@@ -1,10 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, openWorkspaceDialog, waitForSynced } from './test-utils';
 test.beforeEach(before);
 
 test('workspace owns its views and links to separate connection settings', async ({
   page,
 }) => {
+  // This test installs a connection, navigates, reloads twice and walks four
+  // settings tabs, and two of its steps are now allowed 45s each because the
+  // resources behind them are read local-first. It measured 25s alone and
+  // failed the 60s default under four local workers with 20s still to run, so
+  // fixing only the assertions would move the failure onto the test budget.
+  test.setTimeout(240_000);
+
   const installed = await page.evaluate(async () => {
     const store = window.store!;
     // `installGitHub` is the app's own installer, which already holds the
@@ -45,6 +52,12 @@ test('workspace owns its views and links to separate connection settings', async
 
     return { plugin: connection.plugin, table: connection.table };
   });
+  // Everything above was written through the store in this page. Navigating
+  // on top of an outbox that has not drained is the race `apps.spec.ts`
+  // documents: the write the UI has already accepted is gone after the
+  // navigation. Twenty-four other spec files wait here; this one did not.
+  await waitForSynced(page);
+
   await page.goto(
     new URL(
       `/app/show?subject=${encodeURIComponent(installed.table)}`,
@@ -52,21 +65,34 @@ test('workspace owns its views and links to separate connection settings', async
     ).href,
   );
   await expect(
-    page.getByRole('button', { name: 'Connections', exact: true }),
-  ).toBeVisible();
-  await expect(
     page.getByRole('heading', { name: 'Secrets', exact: false }),
   ).not.toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Source', exact: true }),
   ).not.toBeVisible();
-  await expect(page.getByText('Todo', { exact: true }).first()).toBeVisible();
+  // The kanban column headings are four Tag resources of the embedded task
+  // vocabulary (`https://atomicdata.dev/task/v1/{todo,doing,blocked,done}`),
+  // and until they load the header renders `useTitle`'s loading placeholder,
+  // so the whole board reads `... 0`. That is what this used to fail on, and
+  // the cause was not this test: reaching them was local-first, and
+  // `fetchResourceWithLocalFallback` would not ask the server until a
+  // client-database read in the WASM worker had answered. Measured under four
+  // local Playwright workers, that one worker round trip cost 3965 ms while
+  // the host answered the same four subjects in 1.5 to 2.1 ms, and raising
+  // this assertion to 45 s was not enough — it failed at 45 s too.
+  //
+  // Fixed in `Store.fetchResourceWithLocalFallback`, which now asks the host
+  // for embedded vocabulary directly. The budget stays because the rest of
+  // this page is still read local-first, but it should no longer be near it.
+  await expect(page.getByText('Todo', { exact: true }).first()).toBeVisible({
+    timeout: 45_000,
+  });
   await page.screenshot({
     path: '/tmp/atomic-integration-workspace.png',
     fullPage: true,
     animations: 'disabled',
   });
-  await page.getByRole('button', { name: 'Connections', exact: true }).click();
+  await openWorkspaceDialog(page, 'connections');
   const allSettings = page.getByRole('link', {
     name: 'Connection settings',
     exact: true,
@@ -93,11 +119,21 @@ test('workspace owns its views and links to separate connection settings', async
   await expect(
     page.getByRole('button', { name: 'New automation' }),
   ).toBeVisible();
+  // The opening-view setting is a write; reloading before it has gone out is
+  // the same race as the navigation above.
+  await waitForSynced(page);
   await page.reload();
   await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+  // Each `<option>` is a view resource rendered by name, so this is the same
+  // local-first read as the kanban headings and shows the same `...` until it
+  // lands. Seen under four workers as
+  //
+  //     <option value="did:ad:_3wWljDq…">...</option>
+  //
+  // still unresolved sixteen polls in.
   await expect(
     page.getByLabel('Opening view').locator('option:checked'),
-  ).toHaveText('All issues');
+  ).toHaveText('All issues', { timeout: 45_000 });
   await page.getByRole('tab', { name: 'Sync', exact: true }).click();
   let releasePreview!: () => void;
   const previewGate = new Promise<void>(resolve => {
@@ -160,7 +196,7 @@ test('workspace starts automation chat without requiring a connection', async ({
   await page.goto(
     new URL(`/app/show?subject=${encodeURIComponent(table)}`, page.url()).href,
   );
-  await page.getByRole('button', { name: 'Automations', exact: true }).click();
+  await openWorkspaceDialog(page, 'automations');
   await expect(
     page.getByText('No automations yet.', { exact: true }),
   ).toBeVisible();
@@ -201,7 +237,7 @@ test('workspace starts automation chat without requiring a connection', async ({
     page.getByRole('tab', { name: 'Automation', exact: true }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Open workspace', exact: true }).click();
-  await page.getByRole('button', { name: 'Automations', exact: true }).click();
+  await openWorkspaceDialog(page, 'automations');
   await expect(
     page.getByRole('dialog').getByRole('link', { name: /Local reminder/ }),
   ).toBeVisible();

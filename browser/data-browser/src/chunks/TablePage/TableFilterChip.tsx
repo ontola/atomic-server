@@ -1,4 +1,10 @@
-import { Property, unknownSubject, useResource, useTitle } from '@tomic/react';
+import {
+  Property,
+  unknownSubject,
+  useResource,
+  useTitle,
+  isAtomicIdentifier,
+} from '@tomic/react';
 import { useContext, useState, type JSX } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
@@ -132,7 +138,7 @@ function FilterValueSummary({
   value: string;
   suffix?: string;
 }): JSX.Element {
-  if (value.startsWith('http') || value.startsWith('did:')) {
+  if (value.startsWith('http') || isAtomicIdentifier(value)) {
     return <ResourceInline subject={value} untabbable />;
   }
 

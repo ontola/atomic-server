@@ -2,6 +2,7 @@ import {
   Page,
   expect,
   Browser,
+  ConsoleMessage,
   Locator,
   TestInfo,
   test,
@@ -49,15 +50,9 @@ export function spaUrl(url: string): string {
 }
 
 /**
- * Hostname the Node test process can actually reach.
- *
- * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
- * it as a secure context (`crypto.subtle` / WASM ClientDb). Chromium is told
- * to map that name via `--host-resolver-rules`; Node is not, and `/etc/hosts`
- * is read-only in the playwright container. When `ATOMIC_SERVICE_URL` is set
- * (dagger: `http://atomic:9883`), rewrite browser-facing URLs to that
- * service-binding host for anything fetched from the test process itself
- * (`route.fetch`, create-template, …).
+ * Internal transport URL for intercepted requests forwarded with `route.fetch`.
+ * Keep public URLs in generated configuration and authentication signatures:
+ * `server-dns.cjs` maps those to the CI service without changing their identity.
  */
 export function nodeReachableServerUrl(browserFacingUrl: string): string {
   const service = process.env.ATOMIC_SERVICE_URL?.replace(/\/$/, '');
@@ -549,7 +544,9 @@ export async function signIn(page: Page, secret?: string) {
  */
 export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
   await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
   const secret = await page.evaluate(() =>
@@ -591,8 +588,20 @@ export async function newDrive(page: Page) {
   await createButton.click();
 
   // Wait for the URL to change to did:ad: (newly created drive)
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
+  // The URL changes when the route does, but the header still shows the drive
+  // you came FROM until the new one's resource has loaded and its name has
+  // arrived, so this waits on a fetch and not on a render. The 10s default does
+  // not cover it: measured at four workers on 24 September 2026, the slowest
+  // few per run were 9.3s, 11.1s and 8.5s, so the budget was already being
+  // blown. Being marginal rather than short is why it presents as a flake,
+  // `saved-drives.spec.ts:81` red 4 of 10, reporting the title of the previous
+  // drive rather than a missing one. 30s, matching the `waitForURL` above it.
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
+    timeout: 30_000,
+  });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
 
@@ -1041,6 +1050,58 @@ export async function openNewResourcePage(page: Page) {
     await sidebarNewResourceButton(page).click();
     await expect(page).toHaveURL(/\/app\/new(\?|$)/, { timeout: 3_000 });
   }).toPass({ timeout: 20_000 });
+}
+
+/** Create a complete starter from the catalog, preserving the current parent. */
+export async function createFromCatalog(page: Page, title: string) {
+  const parent = new URL(page.url()).searchParams.get('subject');
+  await waitForSynced(page);
+  const url = new URL('/app/new', page.url());
+  if (parent) url.searchParams.set('parentSubject', parent);
+  await page.goto(url.href);
+  await page
+    .getByRole('searchbox', { name: 'Search templates and resource types' })
+    .fill(title);
+
+  // `openCreation` (NewRoute.tsx:205) navigates only after the template has
+  // been built, and its catch calls `store.notifyError` and navigates nowhere.
+  // So a creation that failed and a creation still running leave the page on
+  // exactly the same URL, and the wait below reports them identically: a wall
+  // of identical polls and a timeout naming itself. `apps:93` and `apps:182`
+  // both flaked here on develop run 4334 with 90 unchanged polls over the full
+  // 45s and nothing in the log to say which of the two had happened.
+  //
+  // `errorHandler` calls `console.error` before it raises the toast, and an
+  // unhandled rejection reaches it too, so the page's own console is the one
+  // place that can tell them apart. Collect it for the length of this step and
+  // report it only if the wait fails, leaving Playwright's call log intact.
+  const complaints: string[] = [];
+
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === 'error') complaints.push(message.text());
+  };
+
+  const onPageError = (error: Error) => complaints.push(error.message);
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+
+  try {
+    await page
+      .getByRole('region', { name: 'Start blank' })
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+  } catch (waitFailed) {
+    console.error(
+      complaints.length > 0
+        ? `Creating a ${title} from the catalog left the page on /app/new, and the page reported: ${complaints.join(' | ')}`
+        : `Creating a ${title} from the catalog left the page on /app/new, and the page reported no error, so the creation had not finished within the budget.`,
+    );
+    throw waitFailed;
+  } finally {
+    page.off('console', onConsole);
+    page.off('pageerror', onPageError);
+  }
 }
 
 export async function newResource(klass: string, page: Page) {
@@ -1698,7 +1759,7 @@ export async function openConfigureDrive(page: Page) {
   // there too, but go direct).
   await page.goto(`${FRONTEND_URL}/app/agent`);
   await expect(
-    page.getByRole('heading', { name: 'User Settings' }),
+    page.getByRole('heading', { name: 'User', exact: true }),
   ).toBeVisible({
     timeout: 10000,
   });
@@ -1798,6 +1859,33 @@ export async function contextMenuClick(text: string, page: Page) {
   const item = page.getByTestId(`menu-item-${text}`);
   await item.waitFor({ state: 'visible' });
   await item.click();
+}
+
+/**
+ * Open the Connections or Automations dialog of the table page on screen.
+ * Both live in the table's context menu, which only lists them once the table
+ * page has mounted. `timeout` covers opening the menu too, since whatever is
+ * still in front of the page (a setup dialog, say) blocks that click.
+ */
+export async function openWorkspaceDialog(
+  page: Page,
+  section: 'connections' | 'automations',
+  timeout?: number,
+) {
+  // A top-level dialog left over from an earlier step covers the table and
+  // swallows this click: the GitHub setup dialog stays up, its button reading
+  // "Connecting…", until the install settles. A bigger budget does work,
+  // because Playwright retries until the dialog goes, but it makes the budget
+  // the thing under test. Measured on develop at `2c581ff`, running this file
+  // at four workers, the click cost 41.1s against the 45s it had, and 9.8s
+  // unloaded against the 10s it had before that.
+  //
+  // So wait for the dialog to go, the way `waitForTableBuild` above does, and
+  // let the clicks keep their ordinary budgets. A dialog that never closes now
+  // says so, instead of arriving as a click that could not reach its target.
+  await currentDialog(page).waitFor({ state: 'hidden', timeout });
+  await page.click(contextMenu, { timeout });
+  await page.getByTestId(`menu-item-${section}`).click({ timeout });
 }
 
 export const anyValue = Symbol('any');

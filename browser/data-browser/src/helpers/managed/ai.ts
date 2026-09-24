@@ -1,8 +1,9 @@
 // @wc-ignore-file
+import type { LanguageModel } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { hasManagedApi, managedFetch, getManagedDeviceToken } from './api';
 import { getManagedAccount } from './session';
-import type { LanguageModel } from 'ai';
+import { isHostedDistribution } from '@helpers/managedServer';
 
 export interface HostedAIStatus {
   enabled: boolean;
@@ -12,7 +13,15 @@ export interface HostedAIStatus {
   allowance_micros: number;
   used_micros: number;
   remaining_micros: number;
+  purchased_remaining_micros?: number;
+  purchases_enabled?: boolean;
   resets_at: number;
+}
+
+export function canPurchaseHostedAICredits(
+  status: HostedAIStatus | undefined,
+): boolean {
+  return isHostedDistribution() && status?.purchases_enabled === true;
 }
 
 export async function getHostedAIStatus(): Promise<HostedAIStatus | undefined> {
@@ -21,7 +30,7 @@ export async function getHostedAIStatus(): Promise<HostedAIStatus | undefined> {
     (!getManagedDeviceToken() && !(await getManagedAccount()))
   )
     return undefined;
-  const response = await managedFetch('/ai/status');
+  const response = await managedFetch('/ai/status', { cache: 'no-store' });
   if (response.status === 404 || response.status === 401) return undefined;
   if (!response.ok) throw new Error('Could not check included AI credits.');
 
@@ -43,7 +52,9 @@ export async function enableHostedAI(): Promise<HostedAIStatus> {
 export const HOSTED_AI_USAGE_EVENT = 'atomic-hosted-ai-usage';
 
 /** The placeholder key is discarded: only the user's SaaS session leaves the browser. */
-export function createHostedModel(model: string): LanguageModel {
+export function createHostedModel(
+  model: string,
+): Extract<LanguageModel, { specificationVersion: 'v3' }> {
   return createOpenRouter({
     apiKey: 'account-session',
     baseURL: 'https://hosted.invalid',
@@ -69,16 +80,39 @@ export function createHostedModel(model: string): LanguageModel {
 
       if (!response.body)
         throw new Error('Included AI returned an empty response.');
-      const stream = response.body.pipeThrough(
-        new TransformStream({
-          transform(chunk, controller) {
-            controller.enqueue(chunk);
-          },
-          flush() {
-            window.dispatchEvent(new Event(HOSTED_AI_USAGE_EVENT));
-          },
-        }),
-      );
+      const reader = response.body.getReader();
+      let notified = false;
+
+      const notifyUsage = () => {
+        if (notified) return;
+        notified = true;
+        window.dispatchEvent(new Event(HOSTED_AI_USAGE_EVENT));
+      };
+
+      const stream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const { done, value } = await reader.read();
+
+            if (done) {
+              controller.close();
+              notifyUsage();
+            } else {
+              controller.enqueue(value);
+            }
+          } catch (error) {
+            controller.error(error);
+            notifyUsage();
+          }
+        },
+        async cancel(reason) {
+          try {
+            await reader.cancel(reason);
+          } finally {
+            notifyUsage();
+          }
+        },
+      });
 
       return new Response(stream, {
         status: response.status,

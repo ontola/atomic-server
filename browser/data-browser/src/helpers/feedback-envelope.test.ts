@@ -27,7 +27,7 @@ it('sends full diagnostics through the SDK as an isolated attachment', async () 
   const diagnostics = JSON.stringify({
     events: Array(500).fill({ code: 'save-persisted', note: 'synthetic é' }),
   });
-  await submitFeedback('Attachment verification', '', diagnostics);
+  await submitFeedback('Attachment verification', '', 'sidebar', diagnostics);
   await submitFeedback('Without diagnostics', '');
   expect(envelopes).toHaveLength(2);
   const items = envelopes[0][1];

@@ -21,6 +21,15 @@ interface AISettingsContextType {
   /** Enable all AI features in the app */
   enableAI: boolean;
   setEnableAI: (b: boolean) => void;
+  openRouterZdr: boolean;
+  setOpenRouterZdr: (enabled: boolean) => void;
+  voiceEnabled: boolean;
+  setVoiceEnabled: (enabled: boolean) => void;
+  transcriptionModel: string;
+  setTranscriptionModel: (model: string) => void;
+  /** Device id of the microphone used for voice input, empty for the system default */
+  microphoneId: string;
+  setMicrophoneId: (id: string) => void;
   /** List of MCP servers */
   mcpServers: MCPServer[];
   /** Update the list of MCP servers */
@@ -53,6 +62,14 @@ interface ProviderProps {
 
 const initialState: AISettingsContextType = {
   enableIncludedAI: async () => {},
+  openRouterZdr: false,
+  setOpenRouterZdr: () => undefined,
+  voiceEnabled: true,
+  setVoiceEnabled: () => undefined,
+  transcriptionModel: 'openai/whisper-1',
+  setTranscriptionModel: () => undefined,
+  microphoneId: '',
+  setMicrophoneId: () => undefined,
   enableAI: true,
   setEnableAI: () => undefined,
   mcpServers: defaultMCPServers,
@@ -125,6 +142,23 @@ export const AISettingsContextProvider = (
     string | undefined
   >('atomic.ai.openrouter-api-key', undefined);
 
+  const [openRouterZdr, setOpenRouterZdr] = useLocalStorage(
+    'atomic.ai.openRouterZdr',
+    false,
+  );
+  const [voiceEnabled, setVoiceEnabled] = useLocalStorage(
+    'atomic.ai.voiceEnabled',
+    true,
+  );
+  const [transcriptionModel, setTranscriptionModel] = useLocalStorage(
+    'atomic.ai.transcriptionModel',
+    'openai/whisper-1',
+  );
+  const [microphoneId, setMicrophoneId] = useLocalStorage(
+    'atomic.ai.microphoneId',
+    '',
+  );
+
   const [storedDefaultChatModel, setDefaultChatModel] =
     useLocalStorage<AIModelIdentifier>(
       'atomic.ai.defaultChatModel',
@@ -184,6 +218,14 @@ export const AISettingsContextProvider = (
   const context = {
     hostedAI,
     enableIncludedAI,
+    openRouterZdr,
+    setOpenRouterZdr,
+    voiceEnabled,
+    setVoiceEnabled,
+    transcriptionModel,
+    setTranscriptionModel,
+    microphoneId,
+    setMicrophoneId,
     openRouterApiKey,
     setOpenRouterApiKey,
     mcpServers,

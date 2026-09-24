@@ -96,7 +96,7 @@ API routes (all control requests signed with the existing Atomic request proof):
 | GET | `/website-hosting/preview/{deployment}?project=...&drive=...` | Authenticated JSON package with no-store; never HTML on the editor origin |
 | POST | `/website-hosting/activate?project=...&drive=...` | `{ expectedRevision, deployment }`; null unpublishes, old ID rolls back |
 
-## Next: Atomic SaaS
+## Next: managed hosting
 
 Use the same package contract and review/activation semantics; don't implement a
 second website builder. SaaS needs account ownership, a verified relationship to
@@ -184,7 +184,7 @@ suggested order; none of these is a regression against `develop`.
    Up to date / Unpublished changes state against actual published output,
    never infer "clean" from an unavailable source. Missing-resource errors
    should offer repair or removal of the binding, not a dead end with a DID.
-3. **Managed atomic-saas publishing** (the major missing deliverable): a
+3. **Managed publishing** (the major missing deliverable): a
    destination adapter with the same status/upload/preview/activate semantics,
    account-to-drive ownership, hosting entitlement, durable compare-and-swap
    activation, private object storage and a customer-content origin

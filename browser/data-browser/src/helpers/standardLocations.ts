@@ -1,4 +1,10 @@
 import { ai, core, dataBrowser, type Store } from '@tomic/react';
+import {
+  aiChatsFolderCert,
+  decodeB64,
+  isNotFound,
+  isNotAvailableLocally,
+} from '@tomic/lib';
 
 /**
  * Standard locations are well-known resources inside a Drive (the Comments
@@ -59,17 +65,96 @@ export async function getOrCreateCommentsFolder(
   );
 }
 
-/** The Drive's AI Chats folder: home for sidebar AI chats (usually on the personal drive). */
+/** Coalesce first use in one store; independent devices derive the same DID. */
+const aiFolderRequests = new WeakMap<Store, Map<string, Promise<string>>>();
+
 export async function getOrCreateAiChatsFolder(
   store: Store,
   driveSubject: string,
 ): Promise<string> {
-  return getOrCreateDriveLocation(
-    store,
-    driveSubject,
-    ai.properties.aiChatsFolder,
-    { isA: dataBrowser.classes.folder, name: /* @wc-ignore */ 'AI Chats' },
-  );
+  const agent = store.getAgent();
+  if (!agent) throw new Error('Sign in to create an AI chat.');
+  let requests = aiFolderRequests.get(store);
+
+  if (!requests) {
+    requests = new Map();
+    aiFolderRequests.set(store, requests);
+  }
+
+  const key = `${agent.subject}\0${driveSubject}`;
+  const pending = requests.get(key);
+  if (pending) return pending;
+  const request = ensureAiChatsFolder(store, driveSubject);
+  requests.set(key, request);
+
+  try {
+    return await request;
+  } finally {
+    requests.delete(key);
+  }
+}
+
+async function ensureAiChatsFolder(
+  store: Store,
+  driveSubject: string,
+): Promise<string> {
+  const agent = store.getAgent()!;
+  const drive = await store.getResource(driveSubject);
+  if (drive.error) throw drive.error;
+  let subject: string;
+
+  try {
+    subject = await agent.aiChatsFolderSubject(driveSubject);
+  } catch (error) {
+    // Older non-extractable sessions cannot derive a stable DID. Reuse their
+    // existing folder until sign-in refreshes the cached identity; never mint
+    // a random replacement when the pointer hasn't synced yet.
+    const pointer = drive.get(ai.properties.aiChatsFolder) as
+      | string
+      | undefined;
+
+    if (pointer) {
+      const existing = await store.getResource(pointer);
+      if (!existing.error && existing.hasClasses(dataBrowser.classes.folder))
+        return pointer;
+    }
+
+    throw error;
+  }
+
+  if (store.isDestroyed(subject)) {
+    throw new Error(
+      'The AI Chats folder was deleted. Restore it before creating a chat.',
+    );
+  }
+
+  const existing = await store.getResource(subject);
+
+  if (existing.error) {
+    if (!isNotFound(existing.error) && !isNotAvailableLocally(existing.error))
+      throw existing.error;
+    const folder = await store.newResource({
+      subject,
+      genesisCert: aiChatsFolderCert(
+        decodeB64(await agent.getPublicKey()),
+        driveSubject,
+      ),
+      parent: driveSubject,
+      isA: dataBrowser.classes.folder,
+      propVals: { [core.properties.name]: /* @wc-ignore */ 'AI Chats' },
+    });
+    await folder.save();
+    store.notifyResourceManuallyCreated(folder);
+  } else if (!existing.hasClasses(dataBrowser.classes.folder)) {
+    throw new Error('The AI Chats location is not a folder.');
+  }
+
+  if (drive.get(ai.properties.aiChatsFolder) !== subject) {
+    await drive.set(ai.properties.aiChatsFolder, subject);
+    await drive.save();
+  }
+
+  return subject;
 }
 
 /** The Drive's Meetings folder: home for Meeting resources, so live and

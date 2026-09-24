@@ -22,7 +22,7 @@ export function IntegrationSettings() {
     showApiPlugins,
     showExperimentalPlugins,
     ready,
-    saving,
+    pending,
     error,
     setVisibility,
   } = useIntegrationVisibility();
@@ -32,24 +32,27 @@ export function IntegrationSettings() {
       label='Integration'
       childSearchKeywords='proxy server url localthought api experimental plugins'
     >
-      <Column gap='1rem'>
+      <Column
+        gap='1rem'
+        data-testid='integration-visibility'
+        data-ready={ready}
+        aria-busy={pending}
+      >
         <CheckboxLabel>
           <Checkbox
             checked={showApiPlugins}
-            disabled={!ready || saving}
-            onChange={value => void setVisibility('show-api-plugins', value)}
+            onChange={value => setVisibility('show-api-plugins', value)}
           />
-          Show API plugins
+          <span>Show API plugins</span>
         </CheckboxLabel>
         <CheckboxLabel>
           <Checkbox
             checked={showExperimentalPlugins}
-            disabled={!ready || saving}
             onChange={value =>
-              void setVisibility('show-experimental-plugins', value)
+              setVisibility('show-experimental-plugins', value)
             }
           />
-          Show experimental plugins
+          <span>Show experimental plugins</span>
         </CheckboxLabel>
         <Description>
           These preferences are saved in your private Atomic drive. Existing

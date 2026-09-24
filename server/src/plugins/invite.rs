@@ -45,7 +45,7 @@ pub fn handle_invite_request<'a>(
             None => {
                 return invite_endpoint()
                     .to_resource_response(store, subject.as_str())
-                    .await
+                    .await;
             }
         };
 
@@ -114,7 +114,7 @@ pub fn handle_invite_post<'a>(
             None => {
                 return invite_endpoint()
                     .to_resource_response(store, subject.as_str())
-                    .await
+                    .await;
             }
         };
 
@@ -131,12 +131,12 @@ pub fn handle_invite_post<'a>(
             }
         };
 
-        if agent.as_str().starts_with("did:ad:agent:")
+        if atomic_lib::identifiers::is_agent_id(agent.as_str())
             && store.get_resource(&agent.as_str().into()).await.is_err()
         {
             let mut new_agent = Resource::new_instance(urls::AGENT, store).await?;
             new_agent.set_subject(agent.to_string());
-            if let Some(pk) = agent.as_str().strip_prefix("did:ad:agent:") {
+            if let Some(pk) = atomic_lib::identifiers::agent_public_key(agent.as_str()) {
                 new_agent
                     .set_string(urls::PUBLIC_KEY.into(), pk, store)
                     .await?;

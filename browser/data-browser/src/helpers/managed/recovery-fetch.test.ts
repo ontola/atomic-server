@@ -1,6 +1,6 @@
 // @wc-ignore-file
-import { beforeEach, expect, it, vi } from 'vitest';
-import { getRecoverySecret } from './recovery';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { getRecoverySecret, getUnlockableRecoverySecret } from './recovery';
 import { getManagedAccount } from './session';
 import { managedFetch, getManagedApiBase } from './api';
 
@@ -12,6 +12,38 @@ beforeEach(() => {
   vi.mocked(getManagedApiBase).mockReturnValue('https://portal.example/api');
   vi.mocked(managedFetch).mockReset();
 });
+
+afterEach(() => vi.useRealTimers());
+
+it.each([undefined, '120', 'invalid'])(
+  'backs off repeated 429 reads (Retry-After: %s)',
+  async retryAfter => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-22T12:00:00Z'));
+    vi.mocked(getManagedApiBase).mockReturnValue(
+      `https://rate-${retryAfter}.example/api`,
+    );
+    vi.mocked(managedFetch).mockResolvedValue(
+      new Response(null, {
+        status: 429,
+        headers: retryAfter ? { 'Retry-After': retryAfter } : {},
+      }),
+    );
+    await expect(getRecoverySecret()).rejects.toThrow();
+
+    for (let i = 0; i < 10; i++) {
+      await expect(getRecoverySecret()).rejects.toThrow();
+    }
+
+    expect(managedFetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(retryAfter === '120' ? 120_000 : 60_000);
+    vi.mocked(managedFetch).mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    expect(await getRecoverySecret()).toBeNull();
+    expect(managedFetch).toHaveBeenCalledTimes(2);
+  },
+);
 
 it('shares concurrent recovery reads without caching settled responses', async () => {
   let resolve!: (response: Response) => void;
@@ -63,4 +95,14 @@ it('retries a failed read and makes no request while signed out', async () => {
   vi.mocked(getManagedAccount).mockResolvedValue(null);
   expect(await getRecoverySecret()).toBeNull();
   expect(managedFetch).toHaveBeenCalledTimes(2);
+});
+
+it('matches a backup saved under the legacy did:ad: spelling of the agent', async () => {
+  const backup = { agent_subject: 'did:ad:agent:abc', wrappers: [] };
+  vi.mocked(managedFetch).mockResolvedValue(
+    new Response(JSON.stringify(backup), { status: 200 }),
+  );
+  expect(await getUnlockableRecoverySecret('atomic:agent:abc')).toMatchObject(
+    backup,
+  );
 });

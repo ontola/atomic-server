@@ -74,6 +74,7 @@ fork review diff) are recorded in their owning plans, not here.
    [`plugins.md`](./plugins.md).
 
 ## Active
+- [`atomic:` identifier scheme](atomic-scheme.md) — #1584: canonical `atomic:` scheme, dual-accept `did:ad:`, genesis v2.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
 - [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.
 - [Assistant-authored websites](./assistant-websites.md) — prototype merged with #1500; plugin abstraction audit and remaining SaaS deployment work.
@@ -95,7 +96,7 @@ browser flow; standalone recovery remains self-managed.
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |
 | [`cloud-subscription-panel.md`](./cloud-subscription-panel.md) | **Partial.** Profile and link-invite steps shipped. Remaining: SaaS email invitation to drive authorization in one journey, invitation usage limits, paid-seat approval, real seat counts, 50 GB pool. |
 | [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461. Shard isolation and harness simplification landed (#1463, #1465, #1472); worker matrix, repeated zero-retry acceptance and budgets remain. |
-| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** `@smoke` tag, `test-e2e:light` and the Dagger mode exist; the light suite is about 15 tests against a 25 to 35 target. |
+| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** Automatic PR and feature-branch CI is paused; full Main runs on selected integration batches, `develop`, and tags. `@smoke` and Dagger light mode remain available locally. |
 | [`e2e-diagnostic-hygiene.md`](./e2e-diagnostic-hygiene.md) | **Mostly done.** Collector lifecycles shipped. Remaining: pre-release noise pass, pending-upload placeholder, full strict rerun, catalog flows. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Feedback and React error capture verified on staging. Remaining: independent email receipt check, private source-map upload, backend synthetic reporting. |
 | [`passkey-local-drive-unlock.md`](./passkey-local-drive-unlock.md) | **Fix shipped.** Remaining: original-tab NotFound after sign-out, physical passkey verification, deploy. |

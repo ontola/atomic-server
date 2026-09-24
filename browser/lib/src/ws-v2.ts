@@ -135,6 +135,9 @@ export const ErrorCode = {
    *  legacy `<server>/commits/<sig>`), which can never be edited. Terminal:
    *  drop the entry; nothing is lost, a Commit is whatever was signed. */
   IMMUTABLE_COMMIT: 10,
+  /** The server rejected a stale Loro write; preserve the local edit and
+   *  stop retrying until it can be based on current state. */
+  CAUSALITY_CONFLICT: 11,
 } as const;
 
 /** Capability names a server may advertise in its AUTH_OK payload (mirrors
@@ -159,11 +162,19 @@ export type ServerCapability =
   | 'rebind-on-auth'
   /** The binary `SYNC` payload may carry `probe` and `subjects`; a probe is
    *  answered with `SYNC_OK` or `SYNC_RESEND`. */
-  | 'sync-probe';
+  | 'sync-probe'
+  /** Understands `atomic:` subjects on the wire. A peer that does not list
+   *  it receives `did:ad:` subjects. */
+  | 'canonical-scheme'
+  | 'ephemeral'
+  | 'get-many';
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
-export const CLIENT_CAPABILITIES: readonly string[] = ['commit-ok-slim'];
+export const CLIENT_CAPABILITIES: readonly string[] = [
+  'commit-ok-slim',
+  'canonical-scheme',
+];
 
 /** What this client calls itself in its `HELLO`. Display only. */
 export const CLIENT_HELLO_NAME = '@tomic/lib browser';

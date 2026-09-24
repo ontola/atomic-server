@@ -19,6 +19,7 @@ artifact
 # One-off diagnostic agent evaluation artifacts
 /browser/diagnostic-evaluations/
 server/assets_tmp
+server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad

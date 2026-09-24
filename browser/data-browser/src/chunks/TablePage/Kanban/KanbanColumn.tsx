@@ -2,12 +2,14 @@ import { Property } from '@tomic/react';
 import { useDroppable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
 import { mix, setLightness } from 'polished';
-import { useCallback, useRef, useState, type JSX } from 'react';
-import { FaPlus } from 'react-icons/fa6';
+import { useCallback, useMemo, useRef, useState, type JSX } from 'react';
+import { FaEllipsis, FaPlus, FaStar } from 'react-icons/fa6';
 import { useTagData } from '@components/Tag';
 import { IconButton } from '@components/IconButton/IconButton';
 import { SkeletonButton } from '@components/SkeletonButton';
 import { InputStyled } from '@components/forms/InputStyles';
+import { DropdownMenu, type DropdownItem } from '@components/Dropdown';
+import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { KanbanCard } from './KanbanCard';
 
 /** Placeholder subject passed to `useTagData` for the uncategorized column,
@@ -32,6 +34,11 @@ interface KanbanColumnProps {
    *  whole column. Replaces the raw `isOver` flag, which never fired for a
    *  column that already had cards (a card intercepts the drop target). */
   isDropTarget?: boolean;
+  /** Whether new rows, added from any view, start in this column. */
+  isDefault?: boolean;
+  /** Make this the column new rows start in (`true`) or stop that (`false`).
+   *  Absent for the "No status" column. */
+  onSetDefault?: (isDefault: boolean) => void;
   /** Create a card in this column (its enum value is preset by the parent). */
   onAddCard: (name: string) => void | Promise<void>;
   /** Open a card's row in the expanded (modal) view. */
@@ -46,6 +53,8 @@ export function KanbanColumn({
   rowName,
   readOnly,
   isDropTarget = false,
+  isDefault = false,
+  onSetDefault,
   onAddCard,
   onOpenCard,
 }: KanbanColumnProps): JSX.Element {
@@ -75,6 +84,24 @@ export function KanbanColumn({
     inputRef.current?.focus();
   }, [draft, onAddCard]);
 
+  const lowerRowName = rowName.toLowerCase();
+  const menuItems = useMemo(
+    (): DropdownItem[] =>
+      onSetDefault
+        ? [
+            {
+              id: 'default-lane',
+              label: isDefault
+                ? `Stop starting new ${lowerRowName}s here`
+                : `Start new ${lowerRowName}s here`,
+              icon: <FaStar />,
+              onClick: () => onSetDefault(!isDefault),
+            },
+          ]
+        : [],
+    [onSetDefault, isDefault, lowerRowName],
+  );
+
   const openAdder = useCallback(() => {
     setAdding(true);
     // Focus after the input mounts.
@@ -89,11 +116,22 @@ export function KanbanColumn({
         ) : (
           <NoStatus>No status</NoStatus>
         )}
+        {isDefault && (
+          <DefaultMark
+            data-testid='kanban-column-default'
+            title={`New ${lowerRowName}s start here`}
+          >
+            <FaStar />
+          </DefaultMark>
+        )}
         <Count data-testid='kanban-column-count'>{cardSubjects.length}</Count>
         {!readOnly && (
           <HeaderAdd title={`Add ${rowName}`} type='button' onClick={openAdder}>
             <FaPlus />
           </HeaderAdd>
+        )}
+        {!readOnly && menuItems.length > 0 && (
+          <DropdownMenu Trigger={LaneMenuTrigger} items={menuItems} />
         )}
       </ColumnHeader>
       <CardList
@@ -187,8 +225,13 @@ const Count = styled.span`
   opacity: 0.8;
 `;
 
-const HeaderAdd = styled(IconButton)`
-  margin-left: auto;
+const DefaultMark = styled.span`
+  display: inline-flex;
+  font-size: 0.75em;
+  opacity: 0.85;
+`;
+
+const HeaderButton = styled(IconButton)`
   height: 1.6rem;
   width: 1.6rem;
   color: inherit;
@@ -198,6 +241,16 @@ const HeaderAdd = styled(IconButton)`
     background-color: rgba(255, 255, 255, 0.25);
   }
 `;
+
+const HeaderAdd = styled(HeaderButton)`
+  margin-left: auto;
+`;
+
+const LaneMenuTrigger = buildDefaultTrigger(
+  <FaEllipsis />,
+  'Lane options',
+  HeaderButton,
+);
 
 const AddButton = styled(SkeletonButton)`
   justify-content: flex-start;

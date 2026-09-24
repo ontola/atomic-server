@@ -127,6 +127,7 @@ impl CommitRefused {
                 | error_code::MISSING_CLASS
                 | error_code::SYNC_REJECTED
                 | error_code::INVALID_SIGNATURE
+                | error_code::CAUSALITY_CONFLICT
         )
     }
 }
@@ -309,7 +310,7 @@ impl Outbox {
     /// then drive roots, then everything else by depth, so a child's genesis
     /// never reaches the hub before its parent's.
     async fn tier(&self, subject: &str) -> (u8, u32) {
-        if subject.starts_with("did:ad:agent:") {
+        if crate::identifiers::is_agent_id(subject) {
             return (0, 0);
         }
         let mut depth = 0u32;
@@ -730,6 +731,16 @@ mod tests {
         async fn post_commit(&mut self, _: u16, _: &str) -> Result<String, CommitRefused> {
             Err(self.0.clone())
         }
+    }
+
+    #[test]
+    fn causality_conflict_is_blocking_not_terminal() {
+        let refusal = CommitRefused::from_message(
+            "Commit's Loro update produced no state changes — its writes were silently dropped",
+        );
+        assert_eq!(refusal.code, error_code::CAUSALITY_CONFLICT);
+        assert!(refusal.is_blocking());
+        assert!(!refusal.is_terminal());
     }
 
     #[tokio::test]

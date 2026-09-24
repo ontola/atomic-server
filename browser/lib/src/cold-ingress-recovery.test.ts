@@ -9,7 +9,7 @@ beforeAll(() => LoroLoader.initializeLoro());
 function fixture() {
   const store = new Store({ serverUrl: 'http://localhost', connect: false });
   const { records } = attachTestDb(store);
-  const subject = 'did:ad:cold-ingress';
+  const subject = 'atomic:cold-ingress';
   const base = new LoroLoader.Loro.LoroDoc();
   base.getMap('properties').set(core.properties.name, 'before');
   const snapshot = base.export({ mode: 'snapshot' });

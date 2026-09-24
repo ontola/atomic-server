@@ -6,6 +6,7 @@ export const FEEDBACK_MESSAGE_MAX_LENGTH = 4096;
 export async function submitFeedback(
   message: string,
   email: string,
+  source = 'sidebar',
   diagnostics?: string,
 ): Promise<string> {
   if (!message.trim()) throw new Error('Feedback is empty');
@@ -21,7 +22,7 @@ export async function submitFeedback(
       message: message.trim(),
       email: email.trim() || undefined,
       url: '',
-      source: 'sidebar',
+      source,
     },
     {
       includeReplay: false,
@@ -37,5 +38,13 @@ export async function submitFeedback(
           }
         : {}),
     },
+  );
+}
+
+/** Prefill a report without attaching a stack trace or the current resource URL. */
+export function errorFeedbackMessage(error: Error): string {
+  return `I encountered this error:\n${error.name}: ${error.message}`.slice(
+    0,
+    10_000,
   );
 }

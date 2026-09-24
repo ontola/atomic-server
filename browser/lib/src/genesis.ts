@@ -6,20 +6,24 @@
  * canonicalization ambiguity in the trust path) is what makes that reliable —
  * the `known byte vector` test is pinned identically on both sides.
  *
- * The resource subject is `did:ad:<base64url(signature)>`, where the signature
- * is an Ed25519 signature over {@link encodeGenesisCert}'s output by the
- * creating agent. The signature is therefore NOT stored in the certificate.
+ * The resource subject is `atomic:<base64url(signature)>` (legacy
+ * `did:ad:<signature>`), where the signature is an Ed25519 signature over
+ * {@link encodeGenesisCert}'s output by the creating agent. The signature is
+ * therefore NOT stored in the certificate.
  *
  * See `planning/genesis-self-verifying.md`.
  */
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { getPublicKey, hashes, sign, verify } from '@noble/ed25519';
 import { decodeB64, encodeB64Url } from './base64.js';
+import { agentSubject, resourceSubject, toLegacyScheme } from './subject.js';
 
 // Match `CryptoProvider.ts`: the synchronous noble API needs sha512 installed.
 hashes.sha512 = sha512;
 
 export const GENESIS_VERSION_V1 = 0x01;
+export const GENESIS_VERSION_V2 = 0x02;
+export const GENESIS_VERSION = GENESIS_VERSION_V2;
 
 /** Purpose string for the per-agent personal drive singleton. Version the
  *  suffix to derive a different subject without colliding. */
@@ -35,11 +39,28 @@ export function domainSeparatorNonce(purpose: string): Uint8Array {
  *  empty parent/drive, nonce = SHA-256(`atomic-personal-drive-v1`)[..16]. */
 export function privateDriveCert(signerPubkey: Uint8Array): GenesisCert {
   return {
+    version: GENESIS_VERSION_V1,
     signerPubkey,
     createdAt: 0,
     nonce: domainSeparatorNonce(PERSONAL_DRIVE_PURPOSE),
     parent: '',
     drive: '',
+  };
+}
+
+/** Stable storage location for AI chats, scoped to the signer and drive.
+ * No content hash: title and other folder metadata remain editable. */
+export function aiChatsFolderCert(
+  signerPubkey: Uint8Array,
+  drive: string,
+): GenesisCert {
+  return {
+    signerPubkey,
+    createdAt: 0,
+    nonce: domainSeparatorNonce('atomic-ai-chats-folder-v1'),
+    // This singleton predates atomic:. Keep its original signed bytes forever.
+    parent: toLegacyScheme(drive),
+    drive: toLegacyScheme(drive),
   };
 }
 
@@ -56,6 +77,8 @@ export async function privateDriveSubject(
 const FLAG_HAS_STATE_HASH = 0b0000_0001;
 
 export interface GenesisCert {
+  /** v1 for existing / personal-drive certs; v2 for new `atomic:` parent/drive. */
+  version?: number;
   /** Ed25519 public key of the creating agent (raw 32 bytes). */
   signerPubkey: Uint8Array;
   /** Creation time, Unix milliseconds. */
@@ -117,7 +140,7 @@ export function encodeGenesisCert(cert: GenesisCert): Uint8Array {
   const view = new DataView(out.buffer);
   let o = 0;
 
-  out[o++] = GENESIS_VERSION_V1;
+  out[o++] = cert.version ?? GENESIS_VERSION_V1;
   out[o++] = hasHash ? FLAG_HAS_STATE_HASH : 0;
   out.set(cert.signerPubkey, o);
   o += 32;
@@ -158,7 +181,7 @@ export function decodeGenesisCert(bytes: Uint8Array): GenesisCert {
   need(2);
   const version = bytes[o++];
 
-  if (version !== GENESIS_VERSION_V1) {
+  if (version !== GENESIS_VERSION_V1 && version !== GENESIS_VERSION_V2) {
     throw new Error(`Unsupported genesis certificate version ${version}`);
   }
 
@@ -204,17 +227,17 @@ export function decodeGenesisCert(bytes: Uint8Array): GenesisCert {
     throw new Error('Genesis certificate has trailing bytes');
   }
 
-  return { signerPubkey, createdAt, nonce, stateHash, parent, drive };
+  return { version, signerPubkey, createdAt, nonce, stateHash, parent, drive };
 }
 
-/** The signing agent's DID (`did:ad:agent:<pubkey>`). */
+/** The signing agent's identifier (`atomic:agent:<pubkey>`). */
 export function genesisSignerDid(cert: GenesisCert): string {
-  return `did:ad:agent:${encodeB64Url(cert.signerPubkey)}`;
+  return agentSubject(encodeB64Url(cert.signerPubkey));
 }
 
 /** The resource subject implied by a signature. */
 export function subjectForSignature(signature: string): string {
-  return `did:ad:${signature}`;
+  return resourceSubject(signature);
 }
 
 /** Sign the certificate with a raw 32-byte Ed25519 private key. Returns the

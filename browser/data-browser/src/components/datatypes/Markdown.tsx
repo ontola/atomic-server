@@ -10,6 +10,7 @@ import { truncateMarkdown } from '@helpers/markdown';
 import { tryExpandRef } from '@helpers/subjectRefs';
 import { FC, useState } from 'react';
 import { AtomicLink, AtomicLinkProps } from '@components/AtomicLink';
+import { isAtomicIdentifier } from '@tomic/react';
 import { remarkMention, Mention } from './markdown/MarkdownMention';
 import { addFieldsIf, addIf } from '@helpers/addIf';
 import { diffComponents, remarkDiff } from './markdown/MarkdownDiff';
@@ -44,7 +45,7 @@ const ExternalLinkComponent = ({
 
   // Links to atomic subjects navigate in-app; a plain anchor would trigger
   // a full page (re)load. Everything else stays a regular external link.
-  if (href?.startsWith('did:')) {
+  if (href && isAtomicIdentifier(href)) {
     return (
       <AtomicLink subject={href} {...(props as AtomicLinkProps)}>
         {linkChildren}
@@ -89,7 +90,7 @@ const Markdown: FC<Props> = ({
         // The default transform strips unknown protocols, which would turn
         // links to atomic subjects (did:...) into dead anchors.
         urlTransform={url =>
-          url.startsWith('did:') ? url : defaultUrlTransform(url)
+          isAtomicIdentifier(url) ? url : defaultUrlTransform(url)
         }
         disallowedElements={nestedInLink ? disableElementsInLink : undefined}
         components={

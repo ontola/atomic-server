@@ -29,7 +29,7 @@ pub(crate) const ATOMIC_ALPN: &[u8] = b"atomic/1";
 /// Canonical 64-char lowercase hex NodeID for map keys and UI matching.
 pub fn normalize_node_id(id: &str) -> String {
     let mut s = id.trim().to_string();
-    if let Some(rest) = s.strip_prefix("did:ad:node:") {
+    if let Some(rest) = crate::identifiers::node_id(&s) {
         s = rest.split(':').next().unwrap_or(rest).to_string();
     } else if let Some(rest) = s.strip_prefix("iroh:") {
         s = rest.to_string();
@@ -361,6 +361,9 @@ fn live_peers() -> std::sync::MutexGuard<'static, HashMap<String, LivePeer>> {
 struct LivePeer {
     generation: u64,
     tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+    /// The peer listed `canonical-scheme`: live frames carry `atomic:`
+    /// subjects. A peer that predates the rename gets `did:ad:`.
+    canonical_scheme: bool,
     /// Never read; held so the QUIC connection stays open exactly as long
     /// as the registration does.
     _connection: Option<iroh::endpoint::Connection>,
@@ -616,8 +619,12 @@ pub fn is_importing() -> bool {
     super::ws_apply::is_importing()
 }
 
-fn encode_live_update_wire_msg(subject_key: &str, loro_bytes: &[u8]) -> Vec<u8> {
-    let frame = super::protocol::encode_update(0, 0, subject_key, None, loro_bytes);
+fn encode_live_update_wire_msg(
+    subject_key: &str,
+    loro_bytes: &[u8],
+    wire: super::engine::WireScheme,
+) -> Vec<u8> {
+    let frame = super::protocol::encode_update(0, 0, &wire.subject(subject_key), None, loro_bytes);
     let len = frame.len() as u32;
     let mut msg = Vec::with_capacity(4 + frame.len());
     msg.extend_from_slice(&len.to_be_bytes());
@@ -637,7 +644,7 @@ fn encode_live_update_wire_msg(subject_key: &str, loro_bytes: &[u8]) -> Vec<u8> 
 /// may write the shared agent resource (`hierarchy::check_write`: "Agents can
 /// always edit themselves"), so handing it over as an ordinary UPDATE lets both
 /// merge its Loro state — `name` converges last-writer-wins, `drives` unions.
-fn own_agent_update_frame(store: &Db) -> Option<Vec<u8>> {
+fn own_agent_update_frame(store: &Db, wire: super::engine::WireScheme) -> Option<Vec<u8>> {
     let agent = store.get_default_agent().ok()?;
     let key = crate::Subject::from_raw(
         &agent.subject.to_string(),
@@ -650,20 +657,41 @@ fn own_agent_update_frame(store: &Db) -> Option<Vec<u8>> {
         .ok()
         .flatten()
         .filter(|b| !b.is_empty())?;
-    Some(encode_live_update_wire_msg(&key, &snapshot))
+    Some(encode_live_update_wire_msg(&key, &snapshot, wire))
 }
 
 /// Fan an UPDATE out to live peers, except `skip_peer` — the peer an imported
 /// update came from. Sending it back is what made two idle nodes trade the same
 /// snapshot indefinitely.
-fn send_live_update_wire_msg_except(msg: Vec<u8>, skip_peer: Option<&str>) {
+fn send_live_update_wire_msg_except(
+    build: &dyn Fn(super::engine::WireScheme) -> Vec<u8>,
+    skip_peer: Option<&str>,
+) {
     let mut dead_peers = Vec::new();
     let peers = live_peers();
+    // One encoding per identifier scheme, built on first use: most links
+    // speak the canonical scheme and the `did:ad:` copy is never made.
+    let mut by_scheme: [Option<Vec<u8>>; 2] = [None, None];
     {
-        for (peer_id, LivePeer { generation, tx, .. }) in peers.iter() {
+        for (
+            peer_id,
+            LivePeer {
+                generation,
+                tx,
+                canonical_scheme,
+                ..
+            },
+        ) in peers.iter()
+        {
             if skip_peer.is_some_and(|skip| normalize_node_id(skip) == *peer_id) {
                 continue;
             }
+            let wire = if *canonical_scheme {
+                super::engine::WireScheme::CANONICAL
+            } else {
+                super::engine::WireScheme::LEGACY
+            };
+            let msg = by_scheme[usize::from(*canonical_scheme)].get_or_insert_with(|| build(wire));
 
             match tx.try_send(msg.clone()) {
                 Ok(_) => {}
@@ -715,12 +743,24 @@ pub fn broadcast_ephemeral(
         return;
     }
 
-    let frame = super::protocol::encode_ephemeral(kind, drive, agent, payload);
-    let len = frame.len() as u32;
-    let mut msg = Vec::with_capacity(4 + frame.len());
-    msg.extend_from_slice(&len.to_be_bytes());
-    msg.extend_from_slice(&frame);
-    send_live_update_wire_msg_except(msg, skip_peer);
+    // The drive and agent identifiers ride in the frame header, so they
+    // follow the peer's scheme like every other subject on the link.
+    send_live_update_wire_msg_except(
+        &|wire| {
+            let frame = super::protocol::encode_ephemeral(
+                kind,
+                &wire.subject(drive),
+                &wire.subject(agent),
+                payload,
+            );
+            let len = frame.len() as u32;
+            let mut msg = Vec::with_capacity(4 + frame.len());
+            msg.extend_from_slice(&len.to_be_bytes());
+            msg.extend_from_slice(&frame);
+            msg
+        },
+        skip_peer,
+    );
 }
 
 /// Push an UPDATE frame to all connected live peers immediately (e.g. after a stroke save).
@@ -728,8 +768,10 @@ pub fn broadcast_live_update(subject_key: &str, loro_bytes: &[u8]) {
     if loro_bytes.is_empty() || super::ws_apply::is_importing() {
         return;
     }
-    let msg = encode_live_update_wire_msg(subject_key, loro_bytes);
-    send_live_update_wire_msg_except(msg, None);
+    send_live_update_wire_msg_except(
+        &|wire| encode_live_update_wire_msg(subject_key, loro_bytes, wire),
+        None,
+    );
 }
 
 /// Start the live sync system. Watches for local changes and pushes to all connected peers.
@@ -793,7 +835,8 @@ fn start_live_sync(store: Db) {
                     let mut msg = Vec::with_capacity(4 + frame.len());
                     msg.extend_from_slice(&len.to_be_bytes());
                     msg.extend_from_slice(&frame);
-                    send_live_update_wire_msg_except(msg, from_peer.as_deref());
+                    // Signed JSON: the same bytes whatever the peer speaks.
+                    send_live_update_wire_msg_except(&|_| msg.clone(), from_peer.as_deref());
                     continue;
                 }
                 crate::DbEvent::Destroyed {
@@ -809,8 +852,10 @@ fn start_live_sync(store: Db) {
             };
 
             if let Some(bytes) = loro_bytes {
-                let msg = encode_live_update_wire_msg(&subject_key, &bytes);
-                send_live_update_wire_msg_except(msg, from_peer.as_deref());
+                send_live_update_wire_msg_except(
+                    &|wire| encode_live_update_wire_msg(&subject_key, &bytes, wire),
+                    from_peer.as_deref(),
+                );
             }
         }
     });
@@ -936,6 +981,7 @@ fn invalidate_drive_cache_on_identity_change(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn register_live_peer(
     peer_id: String,
     send: iroh::endpoint::SendStream,
@@ -944,6 +990,7 @@ fn register_live_peer(
     agent: ForAgent,
     initiated_by_us: bool,
     connection: Option<iroh::endpoint::Connection>,
+    peer_caps: Vec<String>,
 ) {
     register_live_peer_with_pending(
         peer_id,
@@ -953,9 +1000,11 @@ fn register_live_peer(
         initiated_by_us,
         connection,
         Vec::new(),
+        peer_caps,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn register_live_peer_with_pending(
     peer_id: String,
     streams: (iroh::endpoint::SendStream, iroh::endpoint::RecvStream),
@@ -971,9 +1020,13 @@ fn register_live_peer_with_pending(
     // accept side's connection is owned by the protocol handler.
     connection: Option<iroh::endpoint::Connection>,
     pending: Vec<Vec<u8>>,
+    // What the peer listed in its `AUTH_OK` (dial side) or `HELLO` (accept
+    // side). Decides the identifier scheme on every frame this link carries.
+    peer_caps: Vec<String>,
 ) {
     let (mut send, mut recv) = streams;
     let key = normalize_node_id(&peer_id);
+    let wire = super::engine::WireScheme::from_caps(&peer_caps);
     // F9 minimal (planning/unified-sync.md): this function upgrades BOTH
     // the initiator's own explicitly-dialed connection AND an accept-side
     // connection into live mode — it must not unconditionally register
@@ -1008,6 +1061,7 @@ fn register_live_peer_with_pending(
             LivePeer {
                 generation,
                 tx,
+                canonical_scheme: wire.is_canonical(),
                 _connection: connection,
             },
         );
@@ -1063,7 +1117,7 @@ fn register_live_peer_with_pending(
     // resource only from that agent (see `admitted_for_drive`), so nobody can
     // forge someone else's from it. What it does reveal is our name and drive
     // DIDs, to a peer we authenticated with; that is the point, not a leak.
-    if let Some(frame) = own_agent_update_frame(&store) {
+    if let Some(frame) = own_agent_update_frame(&store, wire) {
         let _ = tx_for_read.try_send(frame);
     }
 
@@ -1450,7 +1504,7 @@ fn register_live_peer_with_pending(
             let agent_before_frame = agent.clone();
             let responses = super::ws_apply::import_scope(
                 Some(read_peer_id.clone()),
-                super::engine::handle_frame(&buf, &store, &mut agent),
+                super::engine::handle_frame_for_caps(&buf, &store, &mut agent, wire),
             )
             .await;
             invalidate_drive_cache_on_identity_change(
@@ -1739,7 +1793,14 @@ pub async fn sync_drive_with_peer_using_outcome(
     // same fragment slot the WS CHALLENGE nonce uses): a proof captured by
     // one responder must not open another node hosting the same drive.
     let agent = store.get_default_agent()?;
-    let auth_frame = super::protocol::encode_auth(&agent, &auth_subject_for(drive, &remote_key))?;
+    // AUTH goes out before the responder has said what it speaks, so it
+    // names the drive in the spelling every responder parses. A responder
+    // from before the rename cannot read `atomic:`; one from after binds
+    // the drive by identity, so either spelling opens the same SYNC.
+    let auth_frame = super::protocol::encode_auth(
+        &agent,
+        &auth_subject_for(&crate::identifiers::to_legacy_scheme(drive), &remote_key),
+    )?;
     send.write_u32(auth_frame.len() as u32)
         .await
         .map_err(io_err)?;
@@ -1774,6 +1835,9 @@ pub async fn sync_drive_with_peer_using_outcome(
     }
     let peer_caps = super::protocol::decode_auth_ok(&auth_buf[1..]);
     tracing::info!("Authenticated with peer (capabilities: {:?})", peer_caps);
+    // Subjects on this stream follow what the peer listed; a responder that
+    // predates the rename gets `did:ad:` and answers in kind.
+    let wire = super::engine::WireScheme::from_caps(&peer_caps);
 
     // Self-introduce. We send unprompted right after AUTH_OK; the accept
     // side does the same in `handle_stream`. Either side's HELLO can arrive
@@ -1832,11 +1896,12 @@ pub async fn sync_drive_with_peer_using_outcome(
                 counters[idx] = counter;
             }
         }
-        resources.insert(subject.clone(), counters);
+        resources.insert(wire.subject(subject), counters);
     }
 
     // Send SYNC frame
-    let sync_frame = super::protocol::encode_sync(drive, &drive_hash, &peers, &resources);
+    let sync_frame =
+        super::protocol::encode_sync(&wire.subject(drive), &drive_hash, &peers, &resources);
     send.write_u32(sync_frame.len() as u32)
         .await
         .map_err(io_err)?;
@@ -1944,17 +2009,8 @@ pub async fn sync_drive_with_peer_using_outcome(
                             )
                             .await;
                             if !entries.is_empty() {
-                                let refs: Vec<(&str, &[u8])> = entries
-                                    .iter()
-                                    .map(|(s, b)| (s.as_str(), b.as_slice()))
-                                    .collect();
-                                for chunk in super::protocol::encode_sync_push_chunks_with_envelopes(
-                                    drive,
-                                    &refs,
-                                    &crate::envelopes::for_subjects(
-                                        store,
-                                        entries.iter().map(|(s, _)| s.as_str()),
-                                    ),
+                                for chunk in super::engine::sync_push_chunks_for_wire(
+                                    store, drive, &entries, wire,
                                 ) {
                                     pending_acks += 1;
                                     send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
@@ -2039,18 +2095,9 @@ pub async fn sync_drive_with_peer_using_outcome(
                     )
                     .await;
                     if !entries.is_empty() {
-                        let refs: Vec<(&str, &[u8])> = entries
-                            .iter()
-                            .map(|(s, b)| (s.as_str(), b.as_slice()))
-                            .collect();
-                        for chunk in super::protocol::encode_sync_push_chunks_with_envelopes(
-                            drive,
-                            &refs,
-                            &crate::envelopes::for_subjects(
-                                store,
-                                entries.iter().map(|(s, _)| s.as_str()),
-                            ),
-                        ) {
+                        for chunk in
+                            super::engine::sync_push_chunks_for_wire(store, drive, &entries, wire)
+                        {
                             pending_acks += 1;
                             send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                             send.write_all(&chunk).await.map_err(io_err)?;
@@ -2143,13 +2190,24 @@ pub async fn sync_drive_with_peer_using_outcome(
         }
     }
 
+    // Verification reads the peer's acknowledgements and GET replies, which
+    // use the spelling this link negotiated, so compare in that spelling too.
+    let wire_snapshots: Vec<(String, Vec<u8>)> = sent_snapshots
+        .iter()
+        .map(|(subject, bytes)| (wire.subject(subject), bytes.clone()))
+        .collect();
+    let wire_envelopes: std::collections::HashMap<String, Vec<String>> =
+        crate::envelopes::for_subjects(store, sent_snapshots.iter().map(|(s, _)| s.as_str()))
+            .into_iter()
+            .map(|(subject, list)| (wire.subject(&subject), list))
+            .collect();
     let pending = super::peer_verification::verify(
         &mut send,
         &mut recv,
-        drive,
-        &sent_snapshots,
+        &wire.subject(drive),
+        &wire_snapshots,
         pending_acks,
-        &crate::envelopes::for_subjects(store, sent_snapshots.iter().map(|(s, _)| s.as_str())),
+        &wire_envelopes,
     )
     .await?;
 
@@ -2216,6 +2274,7 @@ pub async fn sync_drive_with_peer_using_outcome(
         true,
         Some(conn),
         pending,
+        peer_caps.clone(),
     );
 
     // Remember which drive this node syncs, so it can rebuild this link on its
@@ -2597,6 +2656,9 @@ async fn handle_stream(
     let mut hello_sent = false;
     let mut auth_sent = false;
     let mut peer_display_name: Option<String> = None;
+    // What the dialer listed in its HELLO, which precedes its SYNC. A dialer
+    // that sends none predates the rename and is answered in `did:ad:`.
+    let mut peer_caps: Vec<String> = Vec::new();
 
     while let Ok(n) = recv.read_u32().await {
         let len = n as usize;
@@ -2670,6 +2732,7 @@ async fn handle_stream(
         // sessions never see it (they don't speak peer-sync). Intercept here
         // so the engine doesn't have to know about it.
         if tag == super::protocol::tag::HELLO {
+            peer_caps = super::protocol::decode_hello_caps(&buf[1..]);
             if peer_display_name.is_none() {
                 peer_display_name = super::protocol::decode_hello(&buf[1..]);
                 if let Some(name) = &peer_display_name {
@@ -2727,7 +2790,13 @@ async fn handle_stream(
                 .await
             }
         } else {
-            super::engine::handle_frame(&buf, &store, &mut agent).await
+            super::engine::handle_frame_for_caps(
+                &buf,
+                &store,
+                &mut agent,
+                super::engine::WireScheme::from_caps(&peer_caps),
+            )
+            .await
         };
 
         // Track imports from SYNC_PUSH frames. A push the engine refused
@@ -2895,7 +2964,16 @@ async fn handle_stream(
             }
             // Accept side: the peer dialed us. No owned-drive relaxation — it
             // must hold real write rights to touch anything here.
-            register_live_peer(remote_key, send, recv, store, agent, false, None);
+            register_live_peer(
+                remote_key,
+                send,
+                recv,
+                store,
+                agent,
+                false,
+                None,
+                peer_caps.clone(),
+            );
             return Ok(total_imported);
         }
     }
@@ -2906,7 +2984,16 @@ async fn handle_stream(
             "[accept] SYNC_OK sent, entering live mode with {}",
             &remote_key[..remote_key.len().min(12)]
         );
-        register_live_peer(remote_key, send, recv, store, agent, false, None);
+        register_live_peer(
+            remote_key,
+            send,
+            recv,
+            store,
+            agent,
+            false,
+            None,
+            peer_caps.clone(),
+        );
     }
 
     Ok(total_imported)
@@ -3979,6 +4066,7 @@ mod live_peer_registry_tests {
             LivePeer {
                 generation,
                 tx,
+                canonical_scheme: true,
                 _connection: None,
             },
         );

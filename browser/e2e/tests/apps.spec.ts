@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
-import { before, waitForSynced } from './test-utils';
+import { createFromCatalog, before, waitForSynced } from './test-utils';
 
 /**
  * The one thing about apps that only a browser can answer.
@@ -171,11 +171,9 @@ test.describe('apps', () => {
     await page.reload();
 
     const reopened = page.frameLocator('iframe[title="App"]');
-    // Reload, app frame boot and its first query, measured at 13879 ms under
-    // four local workers, so the 10s default has nothing left on a box that
-    // carries more.
+    // Include cold database recovery and the bridge's bounded request wait.
     await expect(reopened.getByRole('listitem')).toHaveCount(1, {
-      timeout: 30_000,
+      timeout: 60_000,
     });
   });
 
@@ -222,10 +220,22 @@ test.describe('apps', () => {
  * the schema cheaper to create is its own change.
  */
 async function newApp(page: import('@playwright/test').Page) {
-  test.setTimeout(120000);
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('app');
-  await page.locator('[data-testid="menu-item-new-app"]').click();
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here would overwrite whatever the caller asked
+  // for, downward and without an error. `newPlugin` in `plugins.spec.ts` was
+  // the same shape and did exactly that: its sidebar test declared 240s two
+  // lines before calling it, ran on 120s, and died at a wall it had itself
+  // raised. Nothing in this file declares a budget today, which is the only
+  // reason this one was harmless, and that stops being true the first time
+  // someone adds one.
+  //
+  // So raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
+  await createFromCatalog(page, 'App');
   await expect(
     page.getByRole('main').locator('iframe[title="App"]'),
   ).toBeVisible({ timeout: 45000 });

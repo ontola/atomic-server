@@ -165,6 +165,12 @@ const columnSchema = z.object({
       "For 'relation' columns: the class the link points at (a class URL or #ref), so the cell picks from that class instead of searching everything.",
     ),
   description: z.string().optional(),
+  default: z
+    .union([z.string(), z.number(), z.boolean()])
+    .optional()
+    .describe(
+      "The value a new row starts with. For a 'select' column, one of its `options`, e.g. 'Todo', so a task added from a calendar or grid still lands in the board's Todo lane.",
+    ),
 });
 
 const derivedColumnSchema = z.object({
@@ -452,18 +458,20 @@ const getClassesString = async (
 interface UseAtomicMCPToolsProps {
   onResourceEdited?: (originalResource: Resource) => void;
   editModel: AIModelIdentifier;
+  hosted?: boolean;
 }
 
 export function useAtomicMCPTools({
   onResourceEdited,
   editModel,
+  hosted = false,
 }: UseAtomicMCPToolsProps) {
   const store = useStore();
   const openAppSetup = useAppSetup();
   const navigate = useNavigateWithTransition();
   const addToOntology = useAddToOntology();
   const { drive } = useSettings();
-  const runDocumentEdit = useDocumentEditAgent(editModel);
+  const runDocumentEdit = useDocumentEditAgent(editModel, hosted);
   const [favorites, addFavorite, removeFavorite] = useFavorites();
   const [currentSubject] = useCurrentSubject();
   const derivedActionTools = deriveActionTools(resourceActions, {
@@ -1033,9 +1041,9 @@ export function useAtomicMCPTools({
         strict: true,
       }),
       [TOOL_NAMES.EDIT_DOCUMENT_RESOURCE]: tool({
-        description: `Use this tool to instruct edits to a document-v2 resource.
+        description: `Use this tool to edit the rich-text body of a resource: a document-v2, or a meeting (its agenda, notes or minutes). Any resource that shows a \`_documentContent\` field can be edited with it.
 
-The current document body is available from \`get_atomic_resource\` as \`_documentContent\` (TipTap XML). Use that as the source of truth for existing text and structure.
+The current body is available from \`get_atomic_resource\` (or the attached resource) as \`_documentContent\` (TipTap XML). Use that as the source of truth for existing text and structure.
 
 A simple model will use it to apply the edit to the document. You should make it clear what the edit is but still make sure not to write too much unchanged text.
 The edit should be specified using an XML like syntax: include context in a \`<unchanged-text>\` tag, and the change in an \`<edit>\` tag.
@@ -1060,7 +1068,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         inputSchema: z.object({
           subject: z
             .string()
-            .describe('The subject of the document resource to edit'),
+            .describe('The subject (@id) of the document or meeting to edit'),
           instruction: z
             .string()
             .describe(

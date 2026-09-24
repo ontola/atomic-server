@@ -9,6 +9,7 @@ import { Store } from './store.js';
 import { Resource } from './resource.js';
 import { core } from './index.js';
 import { testStore } from './test-store.js';
+import { isAtomicIdentifier } from './subject.js';
 
 // Low-level signing primitives (CommitBuilder, _new: subjects, Ed25519
 // serialization) live in `sign.test.ts`. This file is the consumer-API
@@ -19,6 +20,7 @@ import { testStore } from './test-store.js';
 describe('isCommitSubject', () => {
   it('recognizes both the DID and the legacy URL form', ({ expect }) => {
     expect(isCommitSubject('did:ad:commit:abc123')).toBe(true);
+    expect(isCommitSubject('atomic:commit:abc123')).toBe(true);
     expect(
       isCommitSubject('https://staging.atomicdata.dev/commits//Ybe1N6Cu+xy=='),
     ).toBe(true);
@@ -65,7 +67,7 @@ describe('Resource save flow', () => {
     // before either has signed.
     await Promise.all([draft.save(), draft.save()]);
 
-    expect(draft.subject).toMatch(/^did:ad:/);
+    expect(isAtomicIdentifier(draft.subject)).toBe(true);
     expect(postCommitSpy.mock.calls.length).toBe(1);
     // The placeholder still resolves to the one persisted resource, and does
     // so stably: a dangling alias would mint a fresh Resource per read.
@@ -87,8 +89,9 @@ describe('Resource save flow', () => {
     });
 
     const genesisSubject = doc.subject;
-    expect(genesisSubject).toMatch(/^did:ad:/);
+    expect(isAtomicIdentifier(genesisSubject)).toBe(true);
     expect(genesisSubject).not.toBe('did:ad:genesis');
+    expect(genesisSubject).not.toBe('atomic:genesis');
 
     expect(await doc.save()).toBe('persisted');
 
@@ -207,7 +210,7 @@ describe('Resource save flow', () => {
     materialized.importLoroUpdate(genesis.loroUpdate!);
 
     expect(materialized.get('https://atomicdata.dev/properties/parent')).toBe(
-      parent,
+      'atomic:drive-parent',
     );
     expect(materialized.get('https://atomicdata.dev/properties/isA')).toEqual([
       core.classes.property,

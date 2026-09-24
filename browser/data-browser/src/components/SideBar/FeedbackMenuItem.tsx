@@ -28,15 +28,22 @@ import {
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
 import {
+  errorFeedbackMessage,
   FEEDBACK_MESSAGE_MAX_LENGTH,
   submitFeedback,
 } from '../../helpers/feedback';
 
-export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
+export function FeedbackMenuItem({
+  floating = false,
+  reportError,
+}: {
+  floating?: boolean;
+  reportError?: Error;
+}) {
   const store = useStore();
   const [diagnosticPreview, setDiagnosticPreview] =
     useState<DiagnosticPreview>();
-  const feedbackTitle = 'Send feedback';
+  const feedbackTitle = reportError ? 'Report this error' : 'Send feedback';
   const messageId = useId();
   const emailId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -58,6 +65,7 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
       await submitFeedback(
         message,
         email,
+        reportError ? 'error' : 'sidebar',
         currentDiagnosticText(store.diagnostics, diagnosticPreview),
       );
       setDiagnosticPreview(undefined);
@@ -70,29 +78,25 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
     setBusy(false);
   }
 
+  function open() {
+    setSent(false);
+    if (reportError) setMessage(errorFeedbackMessage(reportError));
+    showDialog();
+  }
+
   return (
     <>
       {floating ? (
-        <Button
-          subtle
-          ref={triggerRef}
-          onClick={() => {
-            setSent(false);
-            showDialog();
-          }}
-        >
+        <Button subtle ref={triggerRef} onClick={open}>
           <FaComment aria-hidden />
-          Feedback
+          {reportError ? 'Report this error' : 'Feedback'}
         </Button>
       ) : (
         <SideBarMenuRow
           as='button'
           ref={triggerRef}
           type='button'
-          onClick={() => {
-            setSent(false);
-            showDialog();
-          }}
+          onClick={open}
           style={{
             border: 0,
             font: 'inherit',

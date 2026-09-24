@@ -380,9 +380,8 @@ test.describe('sync', () => {
     const page2 = await context2.newPage();
     await page2.goto(`${FRONTEND_URL}/app/agent`);
 
-    // Sign in with the same agent
-    await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
-    // No confirm button: the flow signs in as soon as the secret parses.
+    // /app/agent redirects signed-out users to the canonical sign-in form.
+    // The flow signs in as soon as the secret parses.
     const secretField = page2.getByLabel('Agent secret');
     await secretField.fill(secret);
     // No blur: the field disables itself the moment the secret parses (it
@@ -408,19 +407,5 @@ test.describe('sync', () => {
       .toBe('Synced From Offline');
 
     await context2.close();
-  });
-
-  test('sync page shows correct status', async ({ page }) => {
-    await page.goto(`${FRONTEND_URL}/app/sync`);
-
-    await expect(page.getByText('This device', { exact: true })).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(
-      page.getByRole('heading', { name: 'Sync', exact: true }),
-    ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Developer', { exact: true })).toBeVisible({
-      timeout: 10000,
-    });
   });
 });

@@ -20,7 +20,7 @@ export interface AtomicConfig {
    * If left empty the public agent is used.
    */
   agentSecret?: string;
-  /** HTTP(S) origin used to fetch `did:ad:` ontology subjects via `/did?subject=`. */
+  /** HTTP(S) origin used to fetch `atomic:` / `did:ad:` ontology subjects via `/resource?subject=`. */
   serverUrl?: string;
   /** The list of subjects of your ontologies */
 

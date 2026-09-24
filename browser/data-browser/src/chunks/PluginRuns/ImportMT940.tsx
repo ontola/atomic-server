@@ -21,7 +21,7 @@ import { ExternalLink } from '@components/ExternalLink';
 import { AtomicLink } from '@components/AtomicLink';
 import { bankingSchema } from '../../../../../integrations/mt940/schema';
 import type { Config } from '../../../../../integrations/mt940/plugin';
-import source from '../../../../../integrations/mt940/plugin.js?raw';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 import { pluginClassesFor } from './runScript';
 import { ensureInstallationResource } from './installationResources';
 import { RunPluginDialog } from './RunPluginDialog';
@@ -95,6 +95,10 @@ export function ImportMT940({
         throw new Error(
           'Choose a statement smaller than 512 KB. Export a shorter period if needed.',
         );
+      const source = await fetchIntegrationSource(
+        'mt940',
+        store.getServerUrl(),
+      );
       const bytes = await file.arrayBuffer();
       // Prefer UTF-8, but older MT940 bank exports often use Windows-1252.
       let text: string;
@@ -144,7 +148,7 @@ export function ImportMT940({
         const pluginTerms = await pluginClassesFor(store, drive);
         const resource = await ensureInstallationResource(store, drive, {
           parent: drive,
-          localId: 'atomic:mt940:installation',
+          localId: 'plugin:mt940:installation',
           isA: [pluginTerms.classes['plugin-script']],
           propVals: {
             [core.properties.name]: 'Bank statements',
@@ -159,7 +163,7 @@ export function ImportMT940({
         const terms = await ensureSchema(store, drive, bankingSchema());
         const table = await ensureInstallationResource(store, drive, {
           parent: subject,
-          localId: 'atomic:mt940:table',
+          localId: 'plugin:mt940:table',
           isA: [dataBrowser.classes.table],
           propVals: {
             [core.properties.name]: 'Bank transactions',
@@ -169,7 +173,7 @@ export function ImportMT940({
         await table.save();
         const view = await ensureInstallationResource(store, drive, {
           parent: table.subject,
-          localId: 'atomic:mt940:default-view',
+          localId: 'plugin:mt940:default-view',
           isA: [dataBrowser.classes.view],
           propVals: {
             [core.properties.name]: 'Transactions',

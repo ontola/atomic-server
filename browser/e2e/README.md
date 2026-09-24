@@ -178,8 +178,10 @@ Comparing failure _sets_ against a known baseline beats expecting all-green.
 
 ## Light vs full
 
-Feature-branch CI runs **light**: `--grep @smoke`, about twenty first-hour
-journeys. `develop` and `v*` tags run the **full** suite. Tag a test with
+The light suite is a local diagnostic: `--grep @smoke`, about twenty
+first-hour journeys. Automatic feature-branch CI is paused. Manually
+dispatched integration batches, `develop`, and `v*` tags run the **full**
+suite. Tag a test with
 `smoke` from `./tests/test-utils.ts` only if a failure means the demo is
 dead. See [`planning/e2e-light-heavy.md`](../../planning/e2e-light-heavy.md).
 
@@ -188,7 +190,7 @@ dead. See [`planning/e2e-light-heavy.md`](../../planning/e2e-light-heavy.md).
 pnpm i
 # install chromium
 pnpm playwright-install
-# light suite (matches feature-branch CI)
+# light suite (local diagnostic)
 pnpm test-e2e:light
 # run all tests, creates a `playwright-report` folder with HTML files + images
 pnpm test-e2e

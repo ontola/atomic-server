@@ -5,6 +5,7 @@ import { describe, it, vi, afterEach, expect as assert } from 'vitest';
 import { LoroLoader } from './loro-loader.js';
 import { testStore } from './test-store.js';
 import { WSClient } from './websockets.js';
+import { canonicalizeScheme } from './subject.js';
 import {
   Tag,
   ErrorCode,
@@ -477,6 +478,65 @@ describe('WSClient drive sync probe', () => {
   });
 });
 
+describe('WSClient legacy scheme sync', () => {
+  const original = globalThis.WebSocket;
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  it('uses legacy nested subjects in reduced sync and its full fallback', async () => {
+    for (const fallback of [false, true]) {
+      const { client, socket, store } = await connectedClient();
+      const internal = client as unknown as {
+        authenticatedWith: string | undefined;
+        _pendingSyncState: Map<string, unknown>;
+        sendReducedSyncState: (drive: string) => Promise<void>;
+      };
+      internal.authenticatedWith = store.getAgent()?.subject;
+      internal._pendingSyncState.set('atomic:drive', {
+        drive: 'atomic:drive',
+        driveHash: 'hash',
+        peers: ['1'],
+        resources: { 'atomic:doc': [1] },
+      });
+      const fp = vi.spyOn(client, 'rbsrFingerprints');
+      if (fallback) fp.mockRejectedValue(new Error('test fallback'));
+      else fp.mockResolvedValue(['00'.repeat(32)]);
+      vi.spyOn(client, 'rbsrItems').mockResolvedValue([]);
+      await internal.sendReducedSyncState('did:ad:drive');
+      const frame = framesWithTag(socket, Tag.SYNC).at(-1)!;
+      const dl = (frame[1] << 8) | frame[2];
+      const ho = 3 + dl;
+      const hl = (frame[ho] << 8) | frame[ho + 1];
+      const body = JSON.parse(
+        new TextDecoder().decode(frame.subarray(ho + 2 + hl)),
+      );
+      assert(body.resources).toEqual({ 'did:ad:doc': [1] });
+      if (!fallback) assert(body.subjects).toEqual(['did:ad:doc']);
+      client.close();
+    }
+  });
+
+  it('exports canonical in-memory snapshots when a legacy peer requests them', async () => {
+    const { client, socket, store } = await connectedClient();
+    const resource = store.getResourceLoading('atomic:doc');
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'offline edit',
+    );
+    await (
+      client as unknown as { handleSyncDiff: (diff: unknown) => Promise<void> }
+    ).handleSyncDiff({
+      drive: 'did:ad:drive',
+      pull: ['did:ad:doc'],
+      push: [],
+    });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
+    client.close();
+  });
+});
+
 describe('WSClient live collaboration', () => {
   const original = globalThis.WebSocket;
 
@@ -666,6 +726,45 @@ describe('WSClient drive subscription', () => {
     client.close();
   });
 
+  it('waits for a new drive genesis acknowledgement before subscribing', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    socket.receive(encodeChallenge('new-drive'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    socket.sent.length = 0;
+    const drive = new Resource('did:ad:new-drive');
+    store.resources.set(drive.subject, drive);
+    store.outbox.setGenesisCommit(drive.subject, signedCommit());
+    // Locally stamped metadata does not prove the server has the genesis.
+    drive.setLastCommitValue('did:ad:commit:local');
+    vi.mocked(store.getDrive).mockReturnValue(drive.subject);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive: drive.subject,
+      driveHash: 'hash',
+      resources: {},
+      peers: [],
+    });
+    store.setDrive(drive.subject);
+    await Promise.resolve();
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(0);
+    expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+    store.outbox.clearGenesis(drive.subject);
+    drive.setLastCommitValue('did:ad:commit:ack');
+    await store.notifyResourceSaved(drive);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(1),
+    );
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(1);
+    client.close();
+  });
+
   it('UNSUBs the previous drive when the store switches drives', async ({
     expect,
   }) => {
@@ -848,16 +947,18 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
   it('verifies accepted chunks and retries only resources the server skipped', async () => {
     const { client, socket, store } = await connectedClient();
     const finish = vi.spyOn(store, 'finishDriveSync');
+    // The server speaks `did:ad:`; the store keys resources canonically.
     const subjects = ['did:ad:accepted', 'did:ad:skipped'];
+    const stored = subjects.map(canonicalizeScheme);
     vi.spyOn(store, 'getClientDb').mockReturnValue({
       getLoroSnapshot: async () => null,
-      envelopesFor: async () => ({ [subjects[1]]: ['signed-envelope'] }),
+      envelopesFor: async () => ({ [stored[1]]: ['signed-envelope'] }),
     } as unknown as NonNullable<ReturnType<typeof store.getClientDb>>);
-    const expected = subjects.map(subject => {
-      const resource = new Resource(subject);
+    const expected = subjects.map((subject, i) => {
+      const resource = new Resource(stored[i]);
       resource.getLoroDoc()!.getMap('properties').set('name', subject);
       resource.getLoroDoc()!.commit();
-      store.resources.set(subject, resource);
+      store.resources.set(stored[i], resource);
 
       return {
         subject,
@@ -898,7 +999,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
 
   it('retains local data and fails after two unsuccessful retries', async () => {
     const { client, socket, store } = await connectedClient();
-    const resource = new Resource('did:ad:missing');
+    const resource = new Resource('atomic:missing');
     resource.getLoroDoc()!.getMap('properties').set('name', 'keep me');
     resource.getLoroDoc()!.commit();
     store.resources.set(resource.subject, resource);
@@ -909,7 +1010,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
       syncFrame(
         Tag.SYNC_DIFF,
         'did:ad:drive',
-        JSON.stringify({ pull: [resource.subject], push: [] }),
+        JSON.stringify({ pull: ['did:ad:missing'], push: [] }),
       ),
     );
 
@@ -934,7 +1035,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
     'fences verification from later edits and disconnects (disconnect=%s)',
     async disconnect => {
       const { client, socket, store } = await connectedClient();
-      const resource = new Resource('did:ad:editing');
+      const resource = new Resource('atomic:editing');
       resource.getLoroDoc()!.getMap('properties').set('name', 'sent');
       resource.getLoroDoc()!.commit();
       store.resources.set(resource.subject, resource);
@@ -955,7 +1056,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
         syncFrame(
           Tag.SYNC_DIFF,
           'did:ad:drive',
-          JSON.stringify({ pull: [resource.subject], push: [] }),
+          JSON.stringify({ pull: ['did:ad:editing'], push: [] }),
         ),
       );
       await vi.waitFor(() =>
@@ -966,7 +1067,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
       resource.getLoroDoc()!.getMap('properties').set('name', 'later');
       resource.getLoroDoc()!.commit();
       if (disconnect) client.close();
-      resolve([{ subject: resource.subject, vv }]);
+      resolve([{ subject: 'did:ad:editing', vv }]);
 
       if (disconnect) {
         await new Promise(done => setTimeout(done, 0));
@@ -1317,7 +1418,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
       push: [],
     });
 
-    expect(exported).toEqual(['did:ad:clean']);
+    expect(exported).toEqual(['atomic:clean']);
     expect(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
     client.close();
   });
@@ -1423,11 +1524,12 @@ describe('WSClient.fetchMany', () => {
 
     const [found, missing, unauthorized] = await results;
     expect(found).toBeInstanceOf(Resource);
-    expect((found as Resource).subject).toBe('did:ad:found');
+    // Asked and answered in the legacy spelling; the store keys canonically.
+    expect((found as Resource).subject).toBe('atomic:found');
     expect(
       (found as Resource).get('https://atomicdata.dev/properties/name'),
     ).toBe('Batched');
-    expect(store.resources.get('did:ad:found')).toBe(found);
+    expect(store.resources.get('atomic:found')).toBe(found);
     expect(missing).toMatchObject({ type: ErrorType.NotFound });
     expect(unauthorized).toMatchObject({ type: ErrorType.Unauthorized });
     client.close();

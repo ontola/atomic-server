@@ -64,6 +64,12 @@ export interface TableColumnSpec {
    */
   targetClass?: string;
   description?: string;
+  /**
+   * The value a new row starts with, from whichever view it is added: an option
+   * name for a `select` column (e.g. 'Todo'), else the literal. Stored on the
+   * table as its row defaults.
+   */
+  default?: string | number | boolean;
 }
 
 /**
@@ -381,6 +387,42 @@ export async function createColumnOnClass(
  * cells map tag option names to their subjects and are wrapped into the
  * ResourceArray the datatype requires.
  */
+/**
+ * The columns' `default`s as the table's `table-row-defaults`: property subject
+ * to value, with a select option's name resolved to its tag.
+ */
+export function specRowDefaults(
+  specColumns: TableColumnSpec[],
+  columns: Record<string, string>,
+  tags: Record<string, Record<string, string>>,
+): Record<string, JSONValue> {
+  const defaults: Record<string, JSONValue> = {};
+
+  for (const column of specColumns) {
+    const property = columns[column.name];
+
+    if (column.default === undefined || !property) {
+      continue;
+    }
+
+    if (column.type === 'select') {
+      const tag = tags[column.name]?.[String(column.default)];
+
+      if (!tag) {
+        throw new Error(
+          `Column "${column.name}" has no option "${column.default}" to default to`,
+        );
+      }
+
+      defaults[property] = [tag];
+    } else {
+      defaults[property] = column.default;
+    }
+  }
+
+  return defaults;
+}
+
 function rowToPropVals(
   row: Record<string, JSONValue>,
   columns: Record<string, string>,
@@ -866,12 +908,16 @@ export async function buildTableFromSpec(
   await attachPropertiesToClass(store, rowClass, columnSubjects);
 
   const closeTable = perfSpan('table.tableResource');
+  const rowDefaults = specRowDefaults(spec.columns, columns, tags);
   const table = await store.newResource({
     parent: opts.parent,
     isA: dataBrowser.classes.table,
     propVals: {
       [core.properties.name]: spec.name,
       [core.properties.classtype]: rowClass.subject,
+      ...(Object.keys(rowDefaults).length > 0
+        ? { [dataBrowser.properties.tableRowDefaults]: rowDefaults }
+        : {}),
     },
   });
   await table.save();

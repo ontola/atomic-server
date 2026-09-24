@@ -11,6 +11,7 @@ import {
   useCanWrite,
   useResourceSnapshot,
   useStore,
+  isAtomicIdentifier,
 } from '@tomic/react';
 
 import { Dialog, useDialog } from '../Dialog';
@@ -27,7 +28,7 @@ import {
   FaChevronDown,
   FaChevronRight,
   FaLink,
-  FaShare,
+  FaUserLock,
 } from 'react-icons/fa6';
 import { useRights } from '../../routes/Share/useRights';
 import { AgentRights } from '../../routes/Share/AgentRights';
@@ -70,7 +71,10 @@ export function ShareDialog({
     });
   }, [resource.stable]);
   const [showInherited, setShowInherited] = useState(false);
-  const [view, setView] = useState<'share' | 'invite'>('share');
+  const [view, setView] = useState<'invite' | 'access'>('invite');
+  // Inviting is what people open Share for, so it comes first. Someone who
+  // cannot write can't invite, and only gets to see who has access.
+  const currentView = canWrite ? view : 'access';
 
   const handleSave = async () => {
     try {
@@ -84,7 +88,7 @@ export function ShareDialog({
 
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setView('share');
+    setView('invite');
     show();
   };
 
@@ -104,32 +108,39 @@ export function ShareDialog({
     <>
       {triggerWithOpen}
       <Dialog {...dialogProps} width='500px'>
-        {isOpen && view === 'share' && (
+        {isOpen && currentView === 'invite' && (
           <>
             <Dialog.Title>
-              <Title resource={resource} prefix='Share' />
+              <Title resource={resource} prefix='Invite people to' />
+            </Dialog.Title>
+            <InviteForm
+              target={resource}
+              inDialog
+              notice={isPrivateDrive && <PrivateDriveWarning />}
+              secondaryAction={
+                <Button subtle onClick={() => setView('access')}>
+                  <FaUserLock />
+                  <span>Manage access</span>
+                </Button>
+              }
+            />
+          </>
+        )}
+        {isOpen && currentView === 'access' && (
+          <>
+            <Dialog.Title>
+              {canWrite && (
+                <BackButton onClick={() => setView('invite')}>
+                  <FaArrowLeft /> <span>Invite</span>
+                </BackButton>
+              )}
+              <Title resource={resource} prefix='Access to' />
             </Dialog.Title>
             <Dialog.Content>
               <Column gap='1rem'>
-                {isPrivateDrive && (
-                  <PrivateDriveWarning role='alert'>
-                    <FaTriangleExclamation />
-                    <span>
-                      This is your <strong>private drive</strong>. Sharing it
-                      shares your drive list, favourites, notifications and AI
-                      chats along with it. To work with someone, make a drive
-                      for the work and share that instead.
-                    </span>
-                  </PrivateDriveWarning>
-                )}
+                {isPrivateDrive && <PrivateDriveWarning />}
                 <Row>
                   <CopyLinkButton subject={subject} />
-                  {canWrite && (
-                    <Button onClick={() => setView('invite')}>
-                      <FaShare />
-                      <span>Create Invite</span>
-                    </Button>
-                  )}
                 </Row>
                 <RightsCard>
                   <Column>
@@ -181,18 +192,21 @@ export function ShareDialog({
             </Dialog.Content>
           </>
         )}
-        {isOpen && view === 'invite' && (
-          <>
-            <Dialog.Title>
-              <BackButton onClick={() => setView('share')}>
-                <FaArrowLeft /> <span>Back</span>
-              </BackButton>
-            </Dialog.Title>
-            <InviteForm target={resource} inDialog />
-          </>
-        )}
       </Dialog>
     </>
+  );
+}
+
+function PrivateDriveWarning(): JSX.Element {
+  return (
+    <PrivateDriveWarningBox role='alert'>
+      <FaTriangleExclamation />
+      <span>
+        This is your <strong>private drive</strong>. Sharing it shares your
+        drive list, favourites, notifications and AI chats along with it. To
+        work with someone, make a drive for the work and share that instead.
+      </span>
+    </PrivateDriveWarningBox>
   );
 }
 
@@ -245,7 +259,7 @@ function CopyLinkButton({ subject }: { subject: string }): JSX.Element {
   const handleCopy = () => {
     let link: string;
 
-    if (subject.startsWith('did:')) {
+    if (isAtomicIdentifier(subject)) {
       const server = store.getServerUrl().replace(/\/$/, '');
       link = `${server}/${subject}`;
     } else {
@@ -285,14 +299,14 @@ function RightsHeader({ children }: React.PropsWithChildren): JSX.Element {
 }
 
 /**
- * Shown above the rights, not below them.
+ * Shown above the invite and the rights, not below them.
  *
  * By the time someone opens this dialog they have decided to share something;
  * a caution underneath the controls arrives after the decision. What makes it
  * work is naming what is actually in there — "private" alone reads as "not
  * shared yet", which is an invitation rather than a warning.
  */
-const PrivateDriveWarning = styled.div`
+const PrivateDriveWarningBox = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;

@@ -15,6 +15,11 @@ import { Client } from './client.js';
 import type { Collection } from './collection.js';
 import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, isCommitSubject, Commit } from './commit.js';
+import {
+  isAgentSubject,
+  isAtomicIdentifier,
+  commitSubject,
+} from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized, RequestCancelledError } from './error.js';
@@ -91,7 +96,9 @@ export type SaveResult = 'persisted' | 'offline' | 'queued' | 'noop';
  * (e.g. `atomic:system:datatypes`) if/when undo behavior needs to
  * differentiate them.
  */
-export const SYSTEM_COMMIT_ORIGIN = 'atomic:system';
+export const SYSTEM_COMMIT_ORIGIN = 'origin:system';
+/** Pre-rename Loro origin; still excluded from undo. */
+export const LEGACY_SYSTEM_COMMIT_ORIGIN = 'atomic:system';
 
 /**
  * True for the runtime's internal Loro change-message tokens: `c-<ulid>`
@@ -649,7 +656,7 @@ export class Resource<C extends OptionalClass = any> {
       //
       // Keep the bytes in `_auxValues` so they round-trip on `toObject`
       // and `getEntries`, but don't touch `_loroSnapshotBytes`.
-      if (this._subject.startsWith('did:ad:commit:')) {
+      if (isCommitSubject(this._subject)) {
         if (val === undefined) {
           this._auxValues.delete(prop);
         } else if (val instanceof Uint8Array) {
@@ -1925,7 +1932,7 @@ export class Resource<C extends OptionalClass = any> {
     // For DID subjects (or other non-HTTP URIs) we can't derive the server
     // origin from the subject itself — use the store's server URL instead.
     const base =
-      this.subject.startsWith('did:') || this.subject.startsWith('_')
+      this.subject.startsWith('_') || isAtomicIdentifier(this.subject)
         ? this.store.getServerUrl()
         : this.subject;
     const url = new URL('/query', base);
@@ -2377,7 +2384,7 @@ export class Resource<C extends OptionalClass = any> {
   /** Returns the subject URL of the Resource */
   public getSubjectNoParams(): string {
     // DID subjects (did:ad:...) don't have meaningful origin/pathname.
-    if (this.subject.startsWith('did:') || this.subject.startsWith('_')) {
+    if (this.subject.startsWith('_') || isAtomicIdentifier(this.subject)) {
       return this.subject;
     }
 
@@ -2876,7 +2883,10 @@ export class Resource<C extends OptionalClass = any> {
     const um = new UndoManager(doc, {
       maxUndoSteps: 200,
       mergeInterval: 0,
-      excludeOriginPrefixes: [SYSTEM_COMMIT_ORIGIN],
+      excludeOriginPrefixes: [
+        SYSTEM_COMMIT_ORIGIN,
+        LEGACY_SYSTEM_COMMIT_ORIGIN,
+      ],
     });
     this._loroUndoManager = um;
   }
@@ -3117,8 +3127,8 @@ export class Resource<C extends OptionalClass = any> {
     // agent then 404 in `get_propvals` and fall through to a synthetic
     // 4-property view (createdAt, isA, publicKey, read).
     const isDIDEligible =
-      this.subject.startsWith('_new:') || this.subject.startsWith('did:ad:');
-    const isAgent = this.subject.startsWith('did:ad:agent:');
+      this.subject.startsWith('_new:') || isAtomicIdentifier(this.subject);
+    const isAgent = isAgentSubject(this.subject);
 
     if (isDIDEligible && !isAgent && isFirstCommit) {
       this.#commitBuilder.setIsGenesis(true);
@@ -3412,8 +3422,8 @@ export class Resource<C extends OptionalClass = any> {
         (this.#commitBuilder.isGenesis ||
           this.subject.startsWith('_new:') ||
           (this.new &&
-            this.subject.startsWith('did:ad:') &&
-            !this.subject.startsWith('did:ad:agent:')))
+            isAtomicIdentifier(this.subject) &&
+            !isAgentSubject(this.subject)))
       ) {
         // Genesis path for resources NOT created via `store.newResource` —
         // the new-resource form / `NewInstanceButton`, which mint a
@@ -3537,7 +3547,7 @@ export class Resource<C extends OptionalClass = any> {
       settled.push(genesis);
       // The delta sign below uses lastCommit as the "already exists"
       // stamp — point it at the genesis first.
-      this.setLastCommitValue(`did:ad:commit:${genesis.signature}`);
+      this.setLastCommitValue(commitSubject(genesis.signature));
     }
 
     if (hasChanges) {
@@ -3559,7 +3569,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     for (const commit of settled) {
-      this.setLastCommitValue(`did:ad:commit:${commit.signature}`);
+      this.setLastCommitValue(commitSubject(commit.signature));
       this.store.logLocalOnlyCommitSettled(commit);
     }
 
@@ -3603,7 +3613,7 @@ export class Resource<C extends OptionalClass = any> {
     )?.signedGenesis;
 
     if (signedGenesis) {
-      this.setLastCommitValue(`did:ad:commit:${signedGenesis.signature}`);
+      this.setLastCommitValue(commitSubject(signedGenesis.signature));
     }
 
     // Capture the last-synced Loro version so a reload can rewind the save
@@ -3744,12 +3754,16 @@ export class Resource<C extends OptionalClass = any> {
      * Property is not present when set is called
      */
     validate = true,
+    /** A trusted built-in datatype: validate and tag without fetching Property metadata. */
+    knownDatatype?: Datatype,
   ): Promise<void> {
     if (value instanceof Uint8Array) {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
 
-    if (validate) {
+    if (knownDatatype) {
+      validateDatatype(value, knownDatatype);
+    } else if (validate) {
       let fullProp;
 
       try {
@@ -3789,6 +3803,14 @@ export class Resource<C extends OptionalClass = any> {
 
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
+
+    if (knownDatatype) {
+      const tags = this.getLoroDoc()?.getMap('datatypes');
+      const tag = datatypeTag(knownDatatype, value);
+      if (tag && tags?.get(prop) !== tag) tags?.set(prop, tag);
+      else if (!tag && tags?.get(prop) !== undefined) tags?.delete(prop);
+    }
+
     this.#cacheDirty = true;
 
     this._dirty = true;

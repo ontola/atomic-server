@@ -1,4 +1,5 @@
 mod build_assets;
+mod build_plugin_runtime;
 
 use std::{
     fs,
@@ -18,6 +19,13 @@ struct Dirs {
     /// All source directories to watch for changes
     src_dirs: Vec<PathBuf>,
     browser_root: PathBuf,
+    /// The monorepo's plugin sources. Only present when building inside the
+    /// full workspace checkout — see `embed_integrations`.
+    integrations_source: PathBuf,
+    /// Filtered copy (just `plugin.js` bundles) that gets embedded, so a
+    /// published crate tarball (which ships this dir but not `integrations/`
+    /// itself, per `include` in Cargo.toml) still has something to embed.
+    integrations_tmp: PathBuf,
 }
 
 fn main() -> std::io::Result<()> {
@@ -29,7 +37,7 @@ fn main() -> std::io::Result<()> {
     // is disabled, so this must be gated explicitly rather than relying on
     // module-level `cfg` attributes in the library.
     if std::env::var_os("CARGO_FEATURE_WASM_PLUGINS").is_some() {
-        build_plugin_runtime();
+        build_plugin_runtime::build();
     }
     // Uncomment this line if you want faster builds during development
     // return Ok(());
@@ -64,9 +72,12 @@ fn main() -> std::io::Result<()> {
                 PathBuf::from("../browser/pnpm-lock.yaml"),
             ],
             browser_root: PathBuf::from(BROWSER_ROOT),
+            integrations_source: PathBuf::from("../integrations"),
+            integrations_tmp: PathBuf::from("./integrations_assets_tmp"),
         }
     };
     println!("cargo:rerun-if-changed={}", BROWSER_ROOT);
+    println!("cargo:rerun-if-changed=../integrations");
 
     let start_should_build = Instant::now();
     let needs_build = should_build(&dirs);
@@ -131,6 +142,13 @@ fn main() -> std::io::Result<()> {
             start_copy.elapsed().as_secs_f32()
         );
     }
+
+    let start_integrations = Instant::now();
+    embed_integrations(&dirs)?;
+    p!(
+        "Embedding integration plugin assets took: {:.3}s",
+        start_integrations.elapsed().as_secs_f32()
+    );
 
     // Pre-compress big, compressible assets with brotli quality 11. The
     // runtime `middleware::Compress` only uses brotli at its default
@@ -612,110 +630,74 @@ fn is_newer_than_dist(dir_entry: &walkdir::DirEntry, dist_time: Duration) -> boo
     false
 }
 
-/// The WASM component that runs plugin JavaScript, embedded into the binary so
-/// a server is self-contained.
+/// Embeds the integration plugins' `plugin.js` bundles (checked-in build
+/// artifacts, not sources compiled by this build), plus the root
+/// `catalog.json` gate file, as a second, separate static-files resource
+/// map, served at `/integrations` (see `routes.rs`).
 ///
-/// Built for `wasm32-wasip2`, which is a different target than the server
-/// itself, so this only works where that target is installed. When it is not,
-/// the build still succeeds and the runtime is absent — a server without
-/// server-side plugins is a degraded server, not a broken build, and failing
-/// here would block anyone who never touches plugins. The absence is reported
-/// at the point someone tries to use it, not swallowed.
-/// CI sets ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME=true to fail the build instead
-/// of allowing this degradation in jobs that exercise server-side plugins.
-fn build_plugin_runtime() {
-    const TARGET: &str = "wasm32-wasip2";
-    const CRATE: &str = "atomic-plugin-runtime";
-
-    println!("cargo:rerun-if-changed=../plugin-runtime/src");
-    println!("cargo:rerun-if-changed=../plugin-runtime/wit");
-    println!("cargo:rerun-if-changed=../plugin-runtime/Cargo.toml");
-    println!("cargo:rerun-if-env-changed=ATOMICSERVER_SKIP_PLUGIN_RUNTIME");
-    println!("cargo:rerun-if-env-changed=ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME");
-    let required = std::env::var("ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME").is_ok_and(|v| v == "true");
-
-    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR is set by cargo");
-    let embedded = PathBuf::from(&out_dir).join("plugin_runtime.wasm");
-
-    if std::env::var("ATOMICSERVER_SKIP_PLUGIN_RUNTIME").is_ok_and(|v| v == "true") {
-        assert!(
-            !required,
-            "the plugin runtime cannot be both required and skipped"
-        );
-        p!("ATOMICSERVER_SKIP_PLUGIN_RUNTIME is set, skipping the plugin runtime.");
-        let _ = std::fs::write(&embedded, []);
-
-        return;
-    }
-
-    let has_target = std::process::Command::new("rustc")
-        .args(["--print", "target-list"])
-        .output()
-        .map(|out| {
-            String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .any(|t| t == TARGET)
-        })
-        .unwrap_or(false);
-
-    if !has_target {
-        assert!(
-            !required,
-            "the required {TARGET} plugin runtime target is unavailable"
-        );
-        p!("{TARGET} is unknown to this toolchain; plugins will not run server-side.");
-        let _ = std::fs::write(&embedded, []);
-
-        return;
-    }
-
-    // Always release: a debug build of QuickJS is ~8MB against ~1.2MB, and this
-    // is embedded in every server binary including debug ones.
-    let built =
-        std::process::Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-            .args(["build", "-p", CRATE, "--release", "--target", TARGET])
-            // Cargo sets these for *this* build; leaking them into the nested one
-            // makes it try to reuse the host target dir and deadlock.
-            .env_remove("CARGO_ENCODED_RUSTFLAGS")
-            .env_remove("RUSTFLAGS")
-            .env_remove("CARGO_BUILD_TARGET")
-            // rust-musl-cross exports TARGET_CC/AR for the native server.
-            // cc-rs prefers these over the CC/AR selected by rquickjs's
-            // WASI SDK, so leaking them compiles QuickJS with the Linux
-            // toolchain instead of clang for WebAssembly.
-            .env_remove("TARGET_CC")
-            .env_remove("TARGET_CXX")
-            .env_remove("TARGET_AR")
-            .env_remove("TARGET_RANLIB")
-            .env_remove("TARGET_CFLAGS")
-            .env_remove("TARGET_CXXFLAGS")
-            .current_dir("..")
-            .status();
-
-    let artifact = PathBuf::from("../target")
-        .join(TARGET)
-        .join("release/atomic_plugin_runtime.wasm");
-
-    match built {
-        Ok(status) if status.success() && artifact.exists() => {
-            std::fs::copy(&artifact, &embedded).expect("could not embed the plugin runtime");
-            p!(
-                "embedded the plugin runtime ({} KB)",
-                std::fs::metadata(&embedded)
-                    .map(|m| m.len() / 1024)
-                    .unwrap_or(0),
-            );
-        }
-        _ => {
-            assert!(
-                !required,
-                "could not build the required {CRATE} for {TARGET}; see the nested cargo build error above"
-            );
-            p!(
-                "could not build {CRATE} for {TARGET}; plugins will not run server-side. \
-                 Install the target with `rustup target add {TARGET}`.",
-            );
-            let _ = std::fs::write(&embedded, []);
+/// The `plugin.js` bundles used to be pulled into the data-browser's own JS
+/// bundle via Vite `?raw` imports, which meant every plugin's source lived
+/// twice: once here in the monorepo, once inlined into the SPA bundle.
+/// Embedding them directly and serving them over HTTP lets the browser
+/// `fetch()` a plugin's source at install time instead, and keeps the SPA
+/// bundle from growing with every new integration. `catalog.json` is
+/// embedded and served the same way, at `/integrations/catalog.json`, so a
+/// Tauri build (whose frontend is bundled separately and may talk to any
+/// paired server) can fetch it from whichever server it's actually
+/// connected to instead of a copy baked into the SPA at build time.
+///
+/// Only `plugin.js` files and the top-level `catalog.json` are collected —
+/// not the surrounding TypeScript sources, tests, fixtures or tooling, which
+/// remain source code compiled into the data-browser bundle like any other
+/// application logic.
+fn embed_integrations(dirs: &Dirs) -> std::io::Result<()> {
+    if dirs.integrations_source.exists() {
+        let _ = fs::remove_dir_all(&dirs.integrations_tmp);
+        for entry in walkdir::WalkDir::new(&dirs.integrations_source)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let is_plugin_bundle = entry.file_name() == "plugin.js";
+            let is_root_catalog = entry.file_name() == "catalog.json" && entry.depth() == 1;
+            if !is_plugin_bundle && !is_root_catalog {
+                continue;
+            }
+            let relative = entry
+                .path()
+                .strip_prefix(&dirs.integrations_source)
+                .expect("walked entry is under integrations_source");
+            let dest = dirs.integrations_tmp.join(relative);
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(entry.path(), &dest)?;
         }
     }
+
+    // Embed an empty set rather than failing the build — a server without
+    // bundled integrations is a degraded server, not a broken build. Two ways
+    // to land here with nothing copied: `cargo publish` of the standalone
+    // crate, where `integrations/` is outside the package and isn't shipped
+    // (see `include` in Cargo.toml); and CI containers that mount only a
+    // subtree of `integrations/` (a crate dependency such as
+    // `localthought/syncables`) to keep the Rust layer from being invalidated
+    // by every front-end edit. In the second case the source dir *does* exist,
+    // so the loop above runs, finds no `plugin.js` and no top-level
+    // `catalog.json`, and leaves the destination it just removed missing.
+    if !dirs.integrations_tmp.exists() {
+        fs::create_dir_all(&dirs.integrations_tmp)?;
+    }
+
+    let out_dir = std::env::var("OUT_DIR").expect("Cargo supplies OUT_DIR");
+    let mut resource_dir = static_files::resource_dir(&dirs.integrations_tmp);
+    resource_dir
+        .with_generated_filename(PathBuf::from(&out_dir).join("generated_integrations.rs"))
+        .with_generated_fn("generate_integrations");
+    resource_dir.build().unwrap_or_else(|_e| {
+        panic!(
+            "failed to open integrations assets from {}",
+            dirs.integrations_tmp.display()
+        )
+    });
+    Ok(())
 }

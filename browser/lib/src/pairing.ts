@@ -1,39 +1,33 @@
 /**
- * Device-pairing envelope: the payload behind the `atomic://pair` QR code /
- * deep link (see `planning/device-pairing.md`).
+ * Device-pairing envelope. A pairing code is a node identifier with routing
+ * hints in the query — the same shape as the `?drive=` hint on a resource:
+ *
+ *     atomic:node:{64 hex}?v=1&drives=*
  *
  * **A pairing code is routing only.** It says where to reach a node and which
  * drives to sync; it grants nothing. The dialed peer still has to prove it
- * holds the same agent key over AUTH before a single resource crosses. So the
- * code is safe to show on screen, print, or paste — and a tampered one can at
- * worst make a device dial a stranger who then fails AUTH.
+ * holds the same agent key over AUTH before a single resource crosses.
  *
- * Wire form is a plain, readable URI:
+ * Legacy `atomic://pair?v=1&node=…` codes still parse. New codes never use a
+ * reserved `pair` / `open` word: a node identifier starts pairing, anything
+ * else navigates.
  *
- *     atomic://pair?v=1&node=did:ad:node:<64 hex>&drives=*
- *
- * `atomic://` is the transport and `did:ad:node:` is the identity — they nest
- * rather than compete, so a node is written the same way here as everywhere
- * else. The scheme has to be one the app registers, because a QR scanned by
- * the system camera must launch it; `did:` can't serve that role (iOS
- * registers bare schemes, so claiming `did` would claim `did:key` and
- * `did:web` too). And a bare DID has nowhere to carry `drives` — the field
- * that tells a freshly signed-in device *which* drive to pull.
- *
- * Multi-drive envelopes repeat the parameter: `&drives=a&drives=b`.
- *
- * A code never carries an agent secret. It cannot: the private key is stored
- * non-extractable (`helpers/agentStorage.ts`), so no device can read its own
- * secret back out to put in a QR. A code that claims to carry one is refused
- * rather than imported — otherwise any link or poster could hand a fresh
- * install an attacker's identity, and everything written on it would sync to
- * the attacker. Provisioning an identity to a new device belongs on the
- * authenticated Iroh channel, behind an on-screen confirm; a new device signs
- * in by entering its secret.
+ * See `planning/atomic-scheme.md` and issue #1584.
  */
+import {
+  ATOMIC_NODE_PREFIX,
+  ATOMIC_PREFIX,
+  DID_AD_NODE_PREFIX,
+  isLegacyAtomicLink,
+  isNodeSubject,
+  nodeId,
+  nodeSubject,
+  startsWithAtomicScheme,
+} from './subject.js';
+
 export type PairingEnvelope = {
   v: 1;
-  /** Iroh node identity of the issuing device: `did:ad:node:<64 hex>`. */
+  /** Iroh node identity of the issuing device: `atomic:node:<64 hex>`. */
   node: string;
   /** Optional http(s) fast path (LAN/WS) — a routing hint, never identity. */
   url?: string;
@@ -41,13 +35,51 @@ export type PairingEnvelope = {
   drives: '*' | string[];
 };
 
-export const PAIRING_URI_PREFIX = 'atomic://pair?';
+/** New pairing codes are the node identifier plus query hints. */
+export const PAIRING_URI_PREFIX = `${ATOMIC_NODE_PREFIX}`;
 
-const NODE_DID_PREFIX = 'did:ad:node:';
+/** Legacy hierarchical link (`atomic://pair`, `atomic://open`). */
+export const LEGACY_ATOMIC_LINK_PREFIX = 'atomic://';
+
+/** Legacy deep-link form, still accepted on input. */
+export const LEGACY_PAIRING_URI_PREFIX = 'atomic://pair?';
+
+function toOpaqueAtomic(raw: string): string {
+  return isLegacyAtomicLink(raw)
+    ? 'atomic:' + raw.slice(LEGACY_ATOMIC_LINK_PREFIX.length)
+    : raw;
+}
+
+/** Body after `atomic:` / `atomic://`, with query/fragment stripped. */
+function opaqueAtomicBody(raw: string): string | undefined {
+  const opaque = toOpaqueAtomic(raw);
+
+  if (!startsWithAtomicScheme(opaque)) {
+    return undefined;
+  }
+
+  return opaque.slice(ATOMIC_PREFIX.length).split(/[?#]/)[0];
+}
+
+/** True for a legacy `atomic://pair?…` / `atomic:pair?…` pairing code. */
+export function isLegacyPairingUri(raw: string): boolean {
+  return opaqueAtomicBody(raw) === 'pair';
+}
+
+/** True when `raw` should start pairing rather than navigate. */
+export function looksLikePairingUri(raw: string): boolean {
+  return (
+    isNodeSubject(toOpaqueAtomic(raw).split(/[?#]/)[0]) ||
+    isLegacyPairingUri(raw)
+  );
+}
+
+/** Universal-link origin for sharing in chat (where only `scheme://` auto-links). */
+export const PAIRING_SHARE_ORIGIN = 'https://atomicserver.eu';
 
 /**
  * Why decoding failed. `unsupported-version` deserves its own UI ("update the
- * app") — per the plan, an unknown `v` must never be best-effort parsed.
+ * app") — an unknown `v` must never be best-effort parsed.
  */
 export class PairingEnvelopeError extends Error {
   public constructor(
@@ -60,13 +92,13 @@ export class PairingEnvelopeError extends Error {
 }
 
 function isValidNodeDid(value: unknown): value is string {
-  if (typeof value !== 'string' || !value.startsWith(NODE_DID_PREFIX)) {
+  if (typeof value !== 'string' || !isNodeSubject(value)) {
     return false;
   }
 
-  const raw = value.slice(NODE_DID_PREFIX.length);
+  const raw = nodeId(value);
 
-  return /^[0-9a-f]{64}$/i.test(raw);
+  return !!raw && /^[0-9a-f]{64}$/i.test(raw);
 }
 
 function isValidUrl(value: unknown): value is string {
@@ -91,15 +123,12 @@ function isValidDrives(value: unknown): value is '*' | string[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
-    // `*` means *all* drives; listing it alongside named ones is a
-    // contradiction, not a drive whose subject happens to be an asterisk.
     value.every(
       entry => typeof entry === 'string' && entry.length > 0 && entry !== '*',
     )
   );
 }
 
-/** Throws {@link PairingEnvelopeError} unless every field is well-formed. */
 function assertValid(envelope: PairingEnvelope): PairingEnvelope {
   if (envelope.v !== 1) {
     throw new PairingEnvelopeError(
@@ -113,6 +142,12 @@ function assertValid(envelope: PairingEnvelope): PairingEnvelope {
       'malformed',
       'Pairing code carries an invalid node identity.',
     );
+  }
+
+  const id = nodeId(envelope.node);
+
+  if (id) {
+    envelope = { ...envelope, node: nodeSubject(id) };
   }
 
   if (envelope.url !== undefined && !isValidUrl(envelope.url)) {
@@ -132,23 +167,12 @@ function assertValid(envelope: PairingEnvelope): PairingEnvelope {
   return envelope;
 }
 
-/**
- * Percent-encode a query value, but leave `:` and `*` alone. Both are legal in
- * a query per RFC 3986, and keeping them literal is the whole point: an
- * escaped `did%3Aad%3Anode%3A…` would be no more readable than the base64 blob
- * this format replaced.
- */
 function encodeValue(value: string): string {
   return encodeURIComponent(value).replace(/%3A/gi, ':').replace(/%2A/gi, '*');
 }
 
-/** Serialize an envelope into its `atomic://pair?…` QR / deep-link form. */
-export function encodePairingEnvelope(envelope: PairingEnvelope): string {
-  // Round-trip through the validator so we can never mint a QR this module
-  // would refuse to scan.
-  assertValid(envelope);
-
-  const params = [`v=${envelope.v}`, `node=${encodeValue(envelope.node)}`];
+function queryOf(envelope: PairingEnvelope): string {
+  const params = [`v=${envelope.v}`];
 
   if (envelope.url !== undefined) {
     params.push(`url=${encodeURIComponent(envelope.url)}`);
@@ -162,36 +186,35 @@ export function encodePairingEnvelope(envelope: PairingEnvelope): string {
     }
   }
 
-  return `${PAIRING_URI_PREFIX}${params.join('&')}`;
+  return params.join('&');
 }
 
-/**
- * Parse and strictly validate a scanned/pasted pairing code. Accepts the full
- * `atomic://pair?…` URI, or a bare `did:ad:node:…` (routing-only, all drives)
- * for someone who copied just the node identity. Throws
- * {@link PairingEnvelopeError} — check `code === 'unsupported-version'` to
- * show an "update the app" message instead of a generic scan error.
- */
-export function decodePairingEnvelope(input: string): PairingEnvelope {
-  const trimmed = input.trim();
+/** Serialize an envelope as `atomic:node:{id}?v=1&drives=…`. */
+export function encodePairingEnvelope(envelope: PairingEnvelope): string {
+  assertValid(envelope);
+  const id = nodeId(envelope.node) ?? envelope.node;
 
-  if (trimmed.startsWith(NODE_DID_PREFIX)) {
-    return assertValid({ v: 1, node: trimmed, drives: '*' });
-  }
+  return `${nodeSubject(id)}?${queryOf(envelope)}`;
+}
 
-  if (!trimmed.startsWith(PAIRING_URI_PREFIX)) {
-    throw new PairingEnvelopeError(
-      'malformed',
-      'Not a pairing code: expected an atomic://pair link.',
-    );
-  }
+/** https://atomicserver.eu/node/{id}?v=1&drives=… — tappable in chat. */
+export function encodePairingShareUrl(envelope: PairingEnvelope): string {
+  assertValid(envelope);
+  const id = nodeId(envelope.node) ?? envelope.node;
 
-  const params = new URLSearchParams(trimmed.slice(PAIRING_URI_PREFIX.length));
+  return `${PAIRING_SHARE_ORIGIN}/node/${id}?${queryOf(envelope)}`;
+}
 
+function parseQuery(query: string): URLSearchParams {
+  return new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
+}
+
+function envelopeFromParams(
+  node: string,
+  params: URLSearchParams,
+): PairingEnvelope {
   const version = params.get('v');
 
-  // An unknown version must never be best-effort parsed. A missing one is
-  // simply not our format.
   if (version !== null && version !== '1') {
     throw new PairingEnvelopeError(
       'unsupported-version',
@@ -199,15 +222,6 @@ export function decodePairingEnvelope(input: string): PairingEnvelope {
     );
   }
 
-  if (version === null) {
-    throw new PairingEnvelopeError('malformed', 'Pairing code has no version.');
-  }
-
-  // A pairing code never carries an identity (see the type doc). Refuse the
-  // whole code rather than ignoring the field: a device that silently accepted
-  // an attacker's secret would sync everything the user then wrote to the
-  // attacker's node, and `atomic://` links can be fired by any app or web page
-  // — not only by the camera.
   if (params.has('secret')) {
     throw new PairingEnvelopeError(
       'malformed',
@@ -220,11 +234,64 @@ export function decodePairingEnvelope(input: string): PairingEnvelope {
 
   return assertValid({
     v: 1,
-    node: params.get('node') as string,
+    node,
     ...(url !== null ? { url } : {}),
     drives:
-      drives.length === 1 && drives[0] === '*'
+      drives.length === 0 || (drives.length === 1 && drives[0] === '*')
         ? '*'
         : (drives as string[] | '*'),
   });
 }
+
+/**
+ * Parse a scanned/pasted pairing code. Accepts:
+ * - `atomic:node:{id}?v=1&drives=*` (canonical)
+ * - `did:ad:node:{id}` (bare node, all drives)
+ * - `atomic://pair?v=1&node=…` (legacy)
+ * - `https://atomicserver.eu/node/{id}?…` (share link)
+ */
+export function decodePairingEnvelope(input: string): PairingEnvelope {
+  const trimmed = input.trim();
+
+  if (
+    trimmed.startsWith(PAIRING_SHARE_ORIGIN + '/node/') ||
+    trimmed.startsWith(PAIRING_SHARE_ORIGIN + '/pair')
+  ) {
+    try {
+      const url = new URL(trimmed);
+      const id = url.pathname.split('/').filter(Boolean)[1];
+      const node = id && isNodeSubject(id) ? id : nodeSubject(id ?? '');
+
+      return envelopeFromParams(node, url.searchParams);
+    } catch {
+      throw new PairingEnvelopeError('malformed', 'Not a pairing code.');
+    }
+  }
+
+  const opaque = toOpaqueAtomic(trimmed);
+
+  if (isNodeSubject(opaque.split(/[?#]/)[0])) {
+    const node = opaque.split(/[?#]/)[0];
+    const qIndex = opaque.indexOf('?');
+    const params =
+      qIndex === -1 ? new URLSearchParams() : parseQuery(opaque.slice(qIndex));
+
+    return envelopeFromParams(node, params);
+  }
+
+  if (isLegacyPairingUri(trimmed)) {
+    const qIndex = opaque.indexOf('?');
+    const query = qIndex === -1 ? '' : opaque.slice(qIndex + 1);
+    const params = parseQuery(query);
+    const node = params.get('node') ?? '';
+
+    return envelopeFromParams(node, params);
+  }
+
+  throw new PairingEnvelopeError(
+    'malformed',
+    'Not a pairing code: expected an atomic:node identifier.',
+  );
+}
+
+export { ATOMIC_NODE_PREFIX, DID_AD_NODE_PREFIX };

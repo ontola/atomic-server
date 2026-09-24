@@ -234,7 +234,7 @@ async fn a_fresh_client_reads_a_replicated_resource_after_the_source_is_gone() {
     // A fresh client reads the child from the target, authenticated as Alice.
     // The signed message is the exact request URL (query string and all).
     let url = format!(
-        "http://localhost:{}/did?subject={}",
+        "http://localhost:{}/resource?subject={}",
         port,
         urlencoding::encode(&child)
     );

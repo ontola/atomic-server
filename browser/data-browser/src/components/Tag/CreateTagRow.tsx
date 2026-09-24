@@ -1,4 +1,10 @@
-import { Resource, core, dataBrowser, useStore } from '@tomic/react';
+import {
+  Resource,
+  core,
+  dataBrowser,
+  isAtomicIdentifier,
+  useStore,
+} from '@tomic/react';
 import { useState, useCallback } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { randomItem } from '../../helpers/randomItem';
@@ -24,7 +30,7 @@ export function CreateTagRow({ parent, onNewTag }: CreateTagRowProps) {
     // When the parent is a DID, subjects are derived from the genesis commit
     // signature and must not have a path appended. Only pre-compute a path-based
     // subject for HTTP parents.
-    const subject = parent.startsWith('did:')
+    const subject = isAtomicIdentifier(parent)
       ? undefined
       : await store.buildUniqueSubjectFromParts(['tag', tagName], parent);
 

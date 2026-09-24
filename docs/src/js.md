@@ -2,9 +2,11 @@
 
 # @tomic/lib: The Atomic Data library for typescript/javascript
 
-Core typescript library for fetching data, handling JSON-AD parsing, storing data, signing Commits, setting up WebSockets and full-text search and more.
+Core typescript library for creating and editing data locally, signing Commits, [syncing](sync.md) with servers and peers, handling JSON-AD parsing, full-text search and more.
 
 Runs in most common JS contexts like the browser, node, deno, bun etc.
+A server is optional: a `Store` with only an Agent can mint identifiers, create Drives and save signed edits on its own, and connect to a server later.
+The [local-first guide](local-first-guide/1-index.md) walks through that path end to end; the snippets below show the shortest route when you already have a server.
 
 ## Installation
 
@@ -24,7 +26,7 @@ import { Store, Agent, core } from '@tomic/lib';
 const store = new Store({
   // You can create a secret from the `User settings` page using the AtomicServer UI
   agent: Agent.fromSecret('my-secret-key'),
-  // Set a default server URL
+  // Optional. Leave it out to work locally and call store.setServerUrl() later.
   serverUrl: 'https://my-atomic-server.dev',
 });
 ```
@@ -46,7 +48,8 @@ const job = resource.get(myOntology.properties.job);
 ```ts
 resource.set(core.properties.description, 'Hello World');
 
-// Commit the changes to the server.
+// Sign the change and apply it locally. If a server is connected it is sent
+// right away; otherwise it waits in the outbox until one is.
 await resource.save();
 ```
 
@@ -60,16 +63,17 @@ const newResource = await store.newResource({
   },
 });
 
-// Commit the new resource to the server.
+// Sign the genesis and save. The subject is a did:ad: identifier minted here.
 await newResource.save();
 ```
 
 ### Subscribing to changes
 
 ```ts
-// --------- Subscribe to changes (using websockets) ---------
+// --------- Subscribe to changes ---------
 const unsub = store.subscribe('https://my-atomic-server.dev/some-resource', resource => {
-  // This callback is called each time a change is made to the resource on the server.
+  // Called for every change: your own local edits, and edits arriving from
+  // other devices over the sync connection.
   // Do something with the changed resource...
 });
 ```

@@ -472,6 +472,30 @@ describe('a commit naming a class the server lacks', () => {
   });
 });
 
+describe('a stale Loro write rejected by the causality guard', () => {
+  const MESSAGE =
+    "Commit's Loro update produced no state changes — its writes were silently dropped by LWW against stored state.";
+
+  it('blocks without discarding the local edit', ({ expect }) => {
+    expect(
+      isUnrecoverableCommitError(
+        'unrelated wording',
+        ErrorCode.CAUSALITY_CONFLICT,
+      ),
+    ).toBe(true);
+    expect(
+      isTerminalCommitError('unrelated wording', ErrorCode.CAUSALITY_CONFLICT),
+    ).toBe(false);
+  });
+
+  it('recognizes the deployed server message before the new code ships', ({
+    expect,
+  }) => {
+    expect(isUnrecoverableCommitError(MESSAGE, undefined)).toBe(true);
+    expect(isUnrecoverableCommitError(MESSAGE, ErrorCode.UNKNOWN)).toBe(true);
+  });
+});
+
 describe('isUnrecoverableCommitError (F5: code-first, planning/unified-sync.md)', () => {
   it('trusts a recognized code even with unrelated message text', ({
     expect,

@@ -165,6 +165,49 @@ pub async fn handle_auth_frame(
     }
 }
 
+/// Which identifier spelling a connection understands, from the capabilities
+/// the other side listed (`HELLO` for a client or an Iroh dialer, `AUTH_OK`
+/// for the responder). Every subject the engine puts on the wire goes
+/// through [`WireScheme::subject`]; a peer that listed nothing predates the
+/// rename and gets `did:ad:`, which it can parse. Signed material (commit
+/// JSON, envelopes) is never rewritten: it verifies as stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WireScheme {
+    canonical: bool,
+}
+
+impl WireScheme {
+    /// The peer listed [`crate::identifiers::CAP_CANONICAL_SCHEME`].
+    pub const CANONICAL: Self = Self { canonical: true };
+    /// The peer predates the rename.
+    pub const LEGACY: Self = Self { canonical: false };
+
+    pub fn from_caps(caps: &[impl AsRef<str>]) -> Self {
+        Self {
+            canonical: caps
+                .iter()
+                .any(|c| c.as_ref() == crate::identifiers::CAP_CANONICAL_SCHEME),
+        }
+    }
+
+    pub fn is_canonical(self) -> bool {
+        self.canonical
+    }
+
+    /// The spelling of `raw` this peer should receive.
+    pub fn subject(self, raw: &str) -> String {
+        if self.canonical {
+            crate::identifiers::canonicalize_scheme(raw)
+        } else {
+            crate::identifiers::to_legacy_scheme(raw)
+        }
+    }
+
+    pub fn subjects(self, raw: &[String]) -> Vec<String> {
+        raw.iter().map(|s| self.subject(s)).collect()
+    }
+}
+
 /// Side effects a transport must honour after [`handle_frame_full`].
 ///
 /// Reply frames always go back on the wire. `subscribe` / `unsubscribe` are
@@ -193,6 +236,18 @@ pub async fn handle_frame(
     handle_frame_full(frame, store, agent).await.frames
 }
 
+/// [`handle_frame`] for a connection whose identifier scheme is known.
+pub async fn handle_frame_for_caps(
+    frame: &[u8],
+    store: &Db,
+    agent: &mut crate::agents::ForAgent,
+    wire: WireScheme,
+) -> Vec<Vec<u8>> {
+    handle_frame_full_for_caps(frame, store, agent, wire)
+        .await
+        .frames
+}
+
 /// The answer to one fetched subject: an `UPDATE` carrying the full snapshot,
 /// or an `ERROR` when it is missing, unreadable or has no state. Shared by
 /// `GET` (one subject) and `GET_MANY` (one entry per subject).
@@ -201,6 +256,7 @@ async fn answer_get(
     agent: &crate::agents::ForAgent,
     request_id: u16,
     raw_subject: &str,
+    wire: WireScheme,
 ) -> Vec<u8> {
     let subject = crate::Subject::from_raw(raw_subject, store.get_base_domain().as_deref());
 
@@ -226,13 +282,13 @@ async fn answer_get(
                 let origin = store
                     .get_base_domain()
                     .unwrap_or_else(|| "http://localhost".to_string());
-                let subject_resolved = resource.get_subject().resolve(&origin);
+                let subject_resolved = wire.subject(&resource.get_subject().resolve(&origin));
                 // Include `lastCommit` so the recipient can stamp
                 // `_lastCommit` and not mis-detect genesis on save.
                 let last_commit = resource
                     .get(crate::urls::LAST_COMMIT)
                     .ok()
-                    .map(|v| v.to_string())
+                    .map(|v| wire.subject(&v.to_string()))
                     .filter(|s| !s.is_empty());
                 let mut flags = protocol::flags::SNAPSHOT;
                 if last_commit.is_some() {
@@ -257,6 +313,17 @@ pub async fn handle_frame_full(
     frame: &[u8],
     store: &Db,
     agent: &mut crate::agents::ForAgent,
+) -> HandleOutput {
+    handle_frame_full_for_caps(frame, store, agent, WireScheme::CANONICAL).await
+}
+
+/// [`handle_frame_full`] for a connection whose identifier scheme is known:
+/// the subjects in every answer follow `wire`.
+pub async fn handle_frame_full_for_caps(
+    frame: &[u8],
+    store: &Db,
+    agent: &mut crate::agents::ForAgent,
+    wire: WireScheme,
 ) -> HandleOutput {
     if frame.is_empty() {
         return HandleOutput::default();
@@ -285,7 +352,7 @@ pub async fn handle_frame_full(
 
         protocol::tag::GET => {
             if let Some(decoded) = protocol::decode_get(payload) {
-                vec![answer_get(store, agent, decoded.request_id, decoded.subject).await]
+                vec![answer_get(store, agent, decoded.request_id, decoded.subject, wire).await]
             } else {
                 vec![protocol::encode_error(
                     0,
@@ -302,13 +369,11 @@ pub async fn handle_frame_full(
                 // it asked. Evaluated concurrently: the batch is only worth its
                 // frame if it is not slower than the single GETs it replaces.
                 let agent: &crate::agents::ForAgent = agent;
-                let answers = futures::future::join_all(
-                    decoded
-                        .subjects
-                        .iter()
-                        .map(|subject| answer_get(store, agent, decoded.request_id, subject)),
-                )
-                .await;
+                let answers =
+                    futures::future::join_all(decoded.subjects.iter().map(|subject| {
+                        answer_get(store, agent, decoded.request_id, subject, wire)
+                    }))
+                    .await;
                 vec![protocol::encode_get_many_result(
                     decoded.request_id,
                     &answers,
@@ -369,11 +434,11 @@ pub async fn handle_frame_full(
             // readable subjects both so it can match the client's and so an
             // anonymous socket learns nothing about a drive it cannot read.
             Some(sync) if sync.probe => {
-                match drive_sync_hash_for(store, &sync.drive, agent).await {
+                match drive_sync_hash_for_wire(store, &sync.drive, agent, wire).await {
                     Ok(server_hash) if server_hash == sync.drive_hash => {
-                        vec![durable_sync_ok(&sync.drive, store)]
+                        vec![durable_sync_ok(&wire.subject(&sync.drive), store)]
                     }
-                    Ok(_) => vec![protocol::encode_sync_resend(&sync.drive)],
+                    Ok(_) => vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
                     Err(reason) => vec![protocol::encode_error(
                         0,
                         protocol::error_code::UNAUTHORIZED_READ,
@@ -396,6 +461,7 @@ pub async fn handle_frame_full(
                     filter.as_ref(),
                     store,
                     agent,
+                    wire,
                 )
                 .await
             }
@@ -414,7 +480,8 @@ pub async fn handle_frame_full(
                 // with trust_owned=true.
                 match import_sync_push(&push, store, agent, false).await {
                     Ok((_count, mut blob_requests)) => {
-                        let mut responses = vec![protocol::encode_sync_ok(&push.drive)];
+                        let mut responses =
+                            vec![protocol::encode_sync_ok(&wire.subject(&push.drive))];
                         responses.append(&mut blob_requests);
                         responses
                     }
@@ -806,7 +873,7 @@ pub async fn ingest_commit(
     if needs_agent_resource {
         let mut new_agent = crate::Resource::new_instance(crate::urls::AGENT, store).await?;
         new_agent.set_subject(signer_pure.clone());
-        if let Some(pk) = signer.as_str().strip_prefix("did:ad:agent:") {
+        if let Some(pk) = signer.agent_public_key() {
             new_agent
                 .set_string(crate::urls::PUBLIC_KEY.into(), pk, store)
                 .await?;
@@ -1047,6 +1114,22 @@ pub async fn drive_items_for(
     Ok(items)
 }
 
+/// Sorted inventory in the peer's spelling. Convert before range filtering or
+/// fingerprinting: both subject bytes and their ordering are part of RBSR.
+pub async fn drive_items_for_wire(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+    let mut items = drive_items_for(store, drive, agent).await?;
+    for (subject, _) in &mut items {
+        *subject = wire.subject(subject);
+    }
+    items.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(items)
+}
+
 /// [`drive_sync_hash`] over the subjects `agent` may read — the hash the
 /// probe compares against, so it agrees with what that client can hold.
 pub async fn drive_sync_hash_for(
@@ -1054,7 +1137,16 @@ pub async fn drive_sync_hash_for(
     drive: &str,
     agent: &crate::agents::ForAgent,
 ) -> Result<String, String> {
-    let items = drive_items_for(store, drive, agent).await?;
+    drive_sync_hash_for_wire(store, drive, agent, WireScheme::CANONICAL).await
+}
+
+pub async fn drive_sync_hash_for_wire(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+) -> Result<String, String> {
+    let items = drive_items_for_wire(store, drive, agent, wire).await?;
     let vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = items
         .into_iter()
         .map(|(subject, vv)| (subject, vv.into_iter().collect()))
@@ -1080,6 +1172,7 @@ pub async fn handle_sync_vv(
         None,
         store,
         agent,
+        WireScheme::CANONICAL,
     )
     .await
 }
@@ -1097,6 +1190,7 @@ pub async fn handle_sync_vv(
 /// backstop, below). A VV fingerprint cannot encode server-only blob presence,
 /// so that backstop does not run for pruned (VV-matching) subjects on the RBSR
 /// path — accepted and documented; the full path is unchanged.
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_sync_vv_filtered(
     drive: &str,
     drive_hash: &str,
@@ -1105,7 +1199,14 @@ pub async fn handle_sync_vv_filtered(
     subjects: Option<&std::collections::HashSet<String>>,
     store: &Db,
     agent: &crate::agents::ForAgent,
+    wire: WireScheme,
 ) -> Vec<Vec<u8>> {
+    let canonical_subjects = subjects.map(|set| {
+        set.iter()
+            .map(|s| crate::Subject::from_raw(s, None).pure_id())
+            .collect::<std::collections::HashSet<_>>()
+    });
+    let subjects = canonical_subjects.as_ref();
     let server_vvs = match subjects {
         // RBSR path: build VVs for only the differing subjects — no full-drive
         // parent walk, no full-drive snapshot reads.
@@ -1129,12 +1230,17 @@ pub async fn handle_sync_vv_filtered(
 
     // Fast path: hash match
     if !drive_hash.is_empty() {
-        let server_hash = compute_drive_hash(&server_vvs);
+        let server_hash = compute_drive_hash(
+            &server_vvs
+                .iter()
+                .map(|(s, vv)| (wire.subject(s), vv.clone()))
+                .collect(),
+        );
 
         if server_hash == drive_hash {
             tracing::info!("SYNC: drive {} — hashes match, in sync", drive);
 
-            return vec![durable_sync_ok(drive, store)];
+            return vec![durable_sync_ok(&wire.subject(drive), store)];
         }
     }
 
@@ -1153,7 +1259,13 @@ pub async fn handle_sync_vv_filtered(
             }
         }
 
-        client_vvs.insert(subject.clone(), vv);
+        let entry = client_vvs
+            .entry(crate::Subject::from_raw(subject, None).pure_id())
+            .or_default();
+        for (peer, counter) in vv {
+            let current = entry.entry(peer).or_default();
+            *current = (*current).max(counter);
+        }
     }
 
     let mut pull: Vec<String> = Vec::new();
@@ -1285,34 +1397,60 @@ pub async fn handle_sync_vv_filtered(
         remove.len(),
     );
 
+    // Every subject on the wire follows the peer's scheme; the map keys must
+    // match the lists they annotate, so they are rewritten together.
+    let pull_from_wire: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
+        pull_from
+            .into_iter()
+            .map(|(subject, vv)| (wire.subject(&subject), vv))
+            .collect();
+    let remove_commits_wire: std::collections::HashMap<String, String> = remove_commits
+        .into_iter()
+        .map(|(subject, json)| (wire.subject(&subject), json))
+        .collect();
+
     let mut frames = Vec::new();
     frames.push(protocol::encode_sync_diff(
-        drive,
-        &pull,
-        &push_subjects,
-        &remove,
-        &pull_from,
-        &remove_commits,
+        &wire.subject(drive),
+        &wire.subjects(&pull),
+        &wire.subjects(&push_subjects),
+        &wire.subjects(&remove),
+        &pull_from_wire,
+        &remove_commits_wire,
     ));
 
     if !push_entries.is_empty() {
-        let entries: Vec<(&str, &[u8])> = push_entries
-            .iter()
-            .map(|(s, b)| (s.as_str(), b.as_slice()))
-            .collect();
-        // `encode_sync_push_chunks` splits by entry count + byte budget and
-        // marks the final frame LAST. Each frame is independent on the wire;
-        // the receiver loops reading SYNC_PUSH until it sees LAST. Each
-        // subject's retained envelopes ride in its chunk so the receiver can
-        // attribute what it imports (`envelopes::import_envelope`).
-        let envelopes =
-            crate::envelopes::for_subjects(store, push_subjects.iter().map(String::as_str));
-        for chunk in protocol::encode_sync_push_chunks_with_envelopes(drive, &entries, &envelopes) {
-            frames.push(chunk);
-        }
+        frames.extend(sync_push_chunks_for_wire(store, drive, &push_entries, wire));
     }
 
     frames
+}
+
+/// `SYNC_PUSH` frames for `entries`, subjects spelled for `wire`.
+///
+/// `encode_sync_push_chunks` splits by entry count + byte budget and marks
+/// the final frame LAST. Each frame is independent on the wire; the receiver
+/// loops reading SYNC_PUSH until it sees LAST. Each subject's retained
+/// envelopes ride in its chunk so the receiver can attribute what it imports
+/// (`envelopes::import_envelope`); the envelope JSON is signed and travels
+/// as stored, only the key it is filed under follows the scheme.
+pub fn sync_push_chunks_for_wire(
+    store: &Db,
+    drive: &str,
+    entries: &[(String, Vec<u8>)],
+    wire: WireScheme,
+) -> Vec<Vec<u8>> {
+    let envelopes = crate::envelopes::for_subjects(store, entries.iter().map(|(s, _)| s.as_str()));
+    let envelopes_wire: std::collections::HashMap<String, Vec<String>> = envelopes
+        .into_iter()
+        .map(|(subject, list)| (wire.subject(&subject), list))
+        .collect();
+    let wire_entries: Vec<(String, &[u8])> = entries
+        .iter()
+        .map(|(s, b)| (wire.subject(s), b.as_slice()))
+        .collect();
+    let refs: Vec<(&str, &[u8])> = wire_entries.iter().map(|(s, b)| (s.as_str(), *b)).collect();
+    protocol::encode_sync_push_chunks_with_envelopes(&wire.subject(drive), &refs, &envelopes_wire)
 }
 
 /// Whether an incoming write to `drive_resource` should be accepted.
@@ -1844,10 +1982,7 @@ pub async fn collect_readable_snapshots(
             }
             Err(_) => continue,
         }
-        if let Ok(Some(snapshot)) = store
-            .kv
-            .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
-        {
+        if let Some(snapshot) = store.get_loro_snapshot_bytes(&subj.pure_id()) {
             entries.push((subject.clone(), snapshot));
         }
     }
@@ -1932,11 +2067,11 @@ mod bootstrap_and_sub_tests {
     async fn rejected_sync_entry_does_not_persist_snapshot() {
         let db = Db::init_temp("rejected_sync_snapshot").await.unwrap();
         let (alice, drive) = db.setup("Alice").await.unwrap();
-        let subject = "did:ad:unseen-victim-resource";
+        let subject = "atomic:unseen-victim-resource";
         let doc = AtomicLoroDoc::new();
         doc.set_property(
             crate::urls::DRIVE_PROP,
-            &crate::Value::AtomicUrl("did:ad:other-drive".into()),
+            &crate::Value::AtomicUrl("atomic:other-drive".into()),
         )
         .unwrap();
         doc.set_property(
@@ -2165,6 +2300,102 @@ mod bootstrap_and_sub_tests {
     }
 
     #[tokio::test]
+    async fn legacy_filtered_sync_finds_canonical_snapshots() {
+        let db = Db::init_temp("legacy_filtered_sync").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let legacy = crate::identifiers::to_legacy_scheme(&drive);
+        let filter = std::collections::HashSet::from([legacy.clone()]);
+        let frames = handle_sync_vv_filtered(
+            &legacy,
+            "",
+            &[],
+            &Default::default(),
+            Some(&filter),
+            &db,
+            &ForAgent::from(alice.clone()),
+            WireScheme::LEGACY,
+        )
+        .await;
+        let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
+        assert!(
+            diff.push.contains(&legacy),
+            "a legacy filtered request must receive the canonical snapshot"
+        );
+        let agent = ForAgent::from(alice);
+        let snapshots =
+            collect_readable_snapshots(&db, &agent, std::slice::from_ref(&legacy), None).await;
+        assert_eq!(
+            snapshots.len(),
+            1,
+            "legacy pull requests must find canonical snapshots"
+        );
+        let items = drive_items_for_wire(&db, &drive, &agent, WireScheme::LEGACY)
+            .await
+            .unwrap();
+        assert!(items.iter().all(|(s, _)| !s.starts_with("atomic:")));
+        let vv = &items.iter().find(|(s, _)| s == &legacy).unwrap().1;
+        let peers: Vec<String> = vv.keys().cloned().collect();
+        let counters: Vec<i32> = peers.iter().map(|p| vv[p]).collect();
+        let resources = std::collections::HashMap::from([(legacy.clone(), counters)]);
+        for filter in [Some(&filter), None] {
+            let frames = handle_sync_vv_filtered(
+                &legacy,
+                "",
+                &peers,
+                &resources,
+                filter,
+                &db,
+                &agent,
+                WireScheme::LEGACY,
+            )
+            .await;
+            let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
+            assert!(
+                !diff.pull.contains(&legacy),
+                "the same legacy VV must not be treated as missing"
+            );
+            assert!(
+                !diff.push.contains(&legacy),
+                "the same legacy VV must not need a snapshot"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn get_answers_in_the_scheme_the_peer_listed() {
+        let db = Db::init_temp("get_wire_scheme").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        assert!(drive.starts_with("atomic:"), "{drive}");
+        let mut agent = ForAgent::from(alice.clone());
+
+        // Asked with the legacy spelling by a peer that listed no
+        // capabilities: answered in the legacy spelling.
+        let legacy_drive = crate::identifiers::to_legacy_scheme(&drive);
+        let frame = protocol::encode_get(7, &legacy_drive);
+        let out = handle_frame_full_for_caps(&frame, &db, &mut agent, WireScheme::LEGACY).await;
+        let update = protocol::decode_update(&out.frames[0][1..]).unwrap();
+        assert_eq!(out.frames[0][0], tag::UPDATE);
+        assert_eq!(update.subject, legacy_drive);
+        if let Some(commit_id) = update.commit_id {
+            assert!(commit_id.starts_with("did:ad:commit:"), "{commit_id}");
+        }
+
+        // The same request from a peer that listed `canonical-scheme`.
+        let caps = vec![crate::identifiers::CAP_CANONICAL_SCHEME.to_string()];
+        let out =
+            handle_frame_full_for_caps(&frame, &db, &mut agent, WireScheme::from_caps(&caps)).await;
+        let update = protocol::decode_update(&out.frames[0][1..]).unwrap();
+        assert_eq!(update.subject, drive);
+
+        // GET_MANY takes the same path per entry.
+        let frame = protocol::encode_get_many(8, &[&drive]);
+        let out = handle_frame_full_for_caps(&frame, &db, &mut agent, WireScheme::LEGACY).await;
+        let result = protocol::decode_get_many_result(&out.frames[0][1..]).unwrap();
+        let first = protocol::decode_update(&result.frames[0][1..]).unwrap();
+        assert_eq!(first.subject, legacy_drive);
+    }
+
+    #[tokio::test]
     async fn sub_on_a_public_drive_is_a_session_command_not_an_error() {
         let db = Db::init_temp("sub_public").await.unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
@@ -2286,6 +2517,7 @@ mod bootstrap_and_sub_tests {
                 None,
                 &db,
                 &ForAgent::Public,
+                WireScheme::CANONICAL,
             )
             .await,
         );
@@ -2304,6 +2536,7 @@ mod bootstrap_and_sub_tests {
                 None,
                 &db,
                 &ForAgent::AgentSubject(alice.subject.clone()),
+                WireScheme::CANONICAL,
             )
             .await,
         );

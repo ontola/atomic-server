@@ -25,7 +25,11 @@ import { RequestCancelledError } from './error.js';
  */
 
 import type { Commit } from './commit.js';
-import { commitToJsonADObject, parseCommitJSON } from './commit.js';
+import {
+  commitToJsonADObject,
+  isCommitSubject,
+  parseCommitJSON,
+} from './commit.js';
 import { ErrorCode } from './ws-v2.js';
 
 export interface OutboxEntry {
@@ -151,20 +155,10 @@ export interface OutboxDrainContext {
  * string they correspond to.
  */
 /**
- * Whether `subject` names a Commit: the `did:ad:commit:<sig>` form, or the
- * older `https://host/commits/<sig>` the server minted for HTTP-subject drives.
- * Commits are immutable and never sync as edits — the server answers "Commits
- * cannot be edited." on every attempt.
+ * Whether `subject` names a Commit. Re-exported from `commit.ts` so outbox
+ * callers keep a stable import.
  */
-export function isCommitSubject(subject: string): boolean {
-  if (subject.startsWith('did:ad:commit:')) return true;
-
-  try {
-    return new URL(subject).pathname.startsWith('/commits/');
-  } catch {
-    return false;
-  }
-}
+export { isCommitSubject } from './commit.js';
 
 export function isTerminalCommitErrorMessage(message: string): boolean {
   // Server emits "Commits cannot be edited." (`commit.rs`) when the commit's
@@ -222,6 +216,12 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
  * rights change or the user abandoning the edit — neither helped by hammering.
  */
 export function isUnrecoverableCommitErrorMessage(message: string): boolean {
+  // A causality rejection is deterministic for the same Loro update. Keep the
+  // local edit visible, but stop sending it once the bounded retry window ends.
+  if (message.includes("Commit's Loro update produced no state changes")) {
+    return true;
+  }
+
   // Managed nodes refuse writes until enrollment/quota changes. Keep the edit,
   // but park it after bounded retries rather than flooding the node forever.
   if (
@@ -271,6 +271,7 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
   ErrorCode.MISSING_CLASS,
   ErrorCode.SYNC_REJECTED,
   ErrorCode.IMMUTABLE_COMMIT,
+  ErrorCode.CAUSALITY_CONFLICT,
 ]);
 
 /**
@@ -337,7 +338,8 @@ export function isUnrecoverableCommitError(
     return (
       code === ErrorCode.UNAUTHORIZED_WRITE ||
       code === ErrorCode.MISSING_CLASS ||
-      code === ErrorCode.SYNC_REJECTED
+      code === ErrorCode.SYNC_REJECTED ||
+      code === ErrorCode.CAUSALITY_CONFLICT
     );
   }
 

@@ -312,7 +312,7 @@ async fn text_and_isa_filter() {
     let file = add_classed(
         &store,
         &drive,
-        "did:ad:fts-avocado-file",
+        "atomic:fts-avocado-file",
         urls::FILE,
         "avocado",
     )
@@ -372,9 +372,12 @@ async fn filter_respects_parent_scope() {
 
     let hits = query(&store, "", &opts_filter(&folder_a, urls::IS_A, urls::FILE)).unwrap();
     let ids = subjects(&hits);
-    assert!(ids.contains(&child_a), "folder A file missing: {ids:?}");
     assert!(
-        !ids.contains(&child_b),
+        ids.contains(&crate::Subject::from(child_a.as_str()).pure_id()),
+        "folder A file missing: {ids:?}"
+    );
+    assert!(
+        !ids.contains(&crate::Subject::from(child_b.as_str()).pure_id()),
         "folder B file leaked into folder A: {ids:?}"
     );
 }
@@ -423,5 +426,5 @@ async fn index_resource_roundtrip() {
     index_resource(&store, &resource, &mut tx).unwrap();
     store.apply_transaction(&mut tx).unwrap();
     let hits = query(&store, "RoundtripName", &opts_parents(&drive)).unwrap();
-    assert_eq!(subjects(&hits), vec!["did:ad:fts-roundtrip".to_string()]);
+    assert_eq!(subjects(&hits), vec!["atomic:fts-roundtrip".to_string()]);
 }

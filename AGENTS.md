@@ -9,6 +9,30 @@ Guidance for coding agents working in this repo.
 
 The frontend auto-updates via HMR. If changes don't appear, reload the page. If you edit `@tomic/lib` or `@tomic/react`, those packages may need a rebuild first.
 
+## Fresh Worktrees
+
+A new `git worktree` starts with no installed `browser/node_modules` and no
+built `dist/` for the internal JS packages — none of that is git-tracked, so
+it doesn't come along with the checkout. Before your first `git commit` that
+touches any `.rs`, `Cargo.toml`/`Cargo.lock` file in a fresh worktree, run a
+full build so both sides are warm:
+
+```
+cd browser && pnpm install && pnpm run -r build
+cd ../server && cargo build
+```
+
+Skipping this turns a setup problem into a confusing commit-time failure:
+`scripts/pre-commit.mjs`'s Rust step (any staged `.rs`/`Cargo.*` file) runs
+`cargo clippy` against a snapshot containing only staged, git-tracked files —
+no `node_modules`, no `assets_tmp`. `server/build.rs` then has to run its own
+`pnpm install && pnpm run build` from scratch inside that snapshot to embed
+the frontend. If this worktree's own `browser/` was never fully installed and
+built, that inner build fails too, and it fails with errors that look
+unrelated to your change (a missing package, a stale/missing export from a
+workspace package) rather than anything obviously about "run pnpm install."
+Warming the worktree once up front avoids that entirely.
+
 ## Planning
 
 Use the `./planning` folder to write plans and keep track of progress.
@@ -26,6 +50,20 @@ branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 
 **Stop the vite dev server before any git operation that rewrites files** — a
 rebase, a branch switch, a `git checkout -- .`. See below for why.
+
+## GitHub issues
+
+Add labels to every GitHub issue you create or triage. Reuse the repo's
+existing labels (for example the type of issue and the area it touches) rather
+than inventing new ones.
+
+## Screenshots for UI changes
+
+Every PR that changes the UI needs screenshots of the actual screen. Run the
+app, open each changed view (Playwright or a browser), and capture it; include
+mobile width when layout is affected. Then either upload them to GitHub (in the
+PR description or a PR comment) or show them in chat to the developer you are
+working with. A text description of a UI change is not enough for review.
 
 ## Translation catalogs (`src/locales/*.po`)
 
@@ -109,6 +147,12 @@ Source: `browser/data-browser/src/helpers/devtools.ts`.
 ## Architecture Overview
 
 Atomic Server is a graph database with real-time sync, built on **Loro CRDT** for conflict-free collaborative editing.
+
+**Naming boundary:** Atomic Place (`atomic.place`) is the workspace product;
+AtomicServer is its self-hostable server component. Optional managed accounts,
+billing and signaling are implemented in the internal sibling `atomic-saas`
+repository. Keep that repository's implementation details out of public FOSS
+copy unless they explain an integration boundary.
 
 ### Crates
 
@@ -296,8 +340,8 @@ cargo test -p atomic-server --test it iroh_pairing  # two servers pair via POST 
 cargo test --manifest-path flutter/rust/Cargo.toml  # Flutter bridge (workspace-excluded, needs --manifest-path)
 cd browser/lib && pnpm test                      # JS unit tests
 cd browser && pnpm run -r build                  # Full workspace build
-cd browser && pnpm run test-e2e:light            # Playwright @smoke (feature-branch CI)
-cd browser && pnpm run test-e2e                  # Full Playwright suite (develop / tags)
+cd browser && pnpm run test-e2e:light            # Playwright @smoke (local diagnostic)
+cd browser && pnpm run test-e2e                  # Full Playwright suite (batch / develop / tags)
 ```
 
 When you restart an `atomic-server` for tests, gate on `curl` returning HTTP

@@ -367,7 +367,25 @@ const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
   font-size: 16px;
   line-height: 1.5;
   flex: unset !important;
-  min-height: ${p => (p.$large ? '8rem' : 'none')};
+  min-height: ${p => (p.$large ? '8rem' : '0')};
+  min-width: 0;
+
+  .tiptap > p:last-child {
+    margin-bottom: 0;
+  }
+
+  .tiptap p.is-editor-empty:first-child {
+    position: relative;
+    min-height: 3em;
+  }
+
+  && .tiptap p.is-editor-empty:first-child::before {
+    float: none;
+    position: absolute;
+    inset: 0;
+    height: auto;
+    overflow: hidden;
+  }
   @media (max-width: 600px) {
     padding: 0.25rem;
     min-height: 0;

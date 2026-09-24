@@ -8,6 +8,8 @@ import {
 import { CSSVar } from '@helpers/CSSVar';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useRightPanel } from './RightPanelContext';
+import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
+import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from './layout';
 
 const PANEL_WIDTH_PROP = new CSSVar('right-panel-width');
 
@@ -16,8 +18,6 @@ const PANEL_WIDTH_PROP = new CSSVar('right-panel-width');
  * tap-out backdrop) instead of pushing it aside — otherwise on a portrait
  * tablet/phone it would leave the main content too little room.
  */
-const PANEL_OVERLAY_BREAKPOINT = 1000;
-
 /** Default width leaves a strip of content for tapping out of the drawer.
  *  AI chat opts into full width on phones, with an explicit close button. */
 const PANEL_WIDTH = `min(${PANEL_WIDTH_PROP.var()}, calc(100vw - 3rem))`;
@@ -33,7 +33,7 @@ interface RightPanelProps {
  * and meeting panels; pair with {@link useRightPanel} so only one is open at a
  * time. On wide screens it docks in the layout and pushes the content; on small
  * screens it floats over the content and closes on tap-out. Either way it
- * animates like the left sidebar (0.3s slide + fade).
+ * shares its layout animation and timing with the left sidebar.
  */
 export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
   isOpen,
@@ -44,7 +44,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
   const targetRef = useRef<HTMLDivElement>(null);
   const { activePanel, setPanelOpen } = useRightPanel();
   const wide = useMediaQuery(
-    `(min-width: ${PANEL_OVERLAY_BREAKPOINT}px)`,
+    `(min-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT}px)`,
     true,
   );
   const overlay = !wide;
@@ -65,13 +65,17 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
 
   return (
     <>
-      {overlay && <Backdrop $visible={isOpen} onClick={close} aria-hidden />}
+      {overlay && (
+        <PanelBackdrop $visible={isOpen} onClick={close} aria-hidden />
+      )}
       <PanelContainer
         ref={targetRef}
         data-open={isOpen ? '' : undefined}
         $fullWidthOnMobile={fullWidthOnMobile}
         $overlay={overlay}
         $dragging={isDragging}
+        $expanded={isOpen}
+        $width={PANEL_WIDTH}
         size={size}
         data-testid={testId}
       >
@@ -93,10 +97,9 @@ interface PanelContainerProps {
   size: string;
   $fullWidthOnMobile: boolean;
   $overlay: boolean;
-  $dragging: boolean;
 }
 
-const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
+const PanelContainer = styled(PanelLayout).attrs<PanelContainerProps>(p => ({
   style: {
     [PANEL_WIDTH_PROP.raw]: p.size,
   } as Record<string, string>,
@@ -114,9 +117,7 @@ const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
           transform: translateX(100%);
           opacity: 0;
           box-shadow: ${p.theme.boxShadowIntense};
-          transition: ${p.$dragging
-            ? 'none'
-            : 'transform 0.3s ease, opacity 0.3s ease'};
+          transition: ${panelTransition(p.$dragging, 'transform', 'opacity')};
 
           &[data-open] {
             transform: translateX(0);
@@ -125,17 +126,11 @@ const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
         `
       : css`
           /* Docked: part of the layout, grows to push the content aside. */
-          position: relative;
-          width: 0;
-          min-width: 0;
           opacity: 0;
           overflow: hidden;
-          transition: ${p.$dragging
-            ? 'none'
-            : 'width 0.3s ease, opacity 0.3s ease'};
+          transition: ${panelTransition(p.$dragging, 'width', 'opacity')};
 
           &[data-open] {
-            width: ${PANEL_WIDTH};
             opacity: 1;
           }
         `}
@@ -178,19 +173,6 @@ const PanelInner = styled.div<{ $fullWidthOnMobile: boolean }>`
         padding: 0.25rem;
       `}
   }
-`;
-
-/** Dims the content and closes the drawer on tap (small screens only). */
-const Backdrop = styled.div<{ $visible: boolean }>`
-  position: fixed;
-  inset: 0;
-  z-index: ${p => p.theme.zIndex.sidebar - 1};
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-  background-color: ${p =>
-    p.$visible ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0)'};
-  pointer-events: ${p => (p.$visible ? 'auto' : 'none')};
-  -webkit-tap-highlight-color: transparent;
 `;
 
 const PanelDragArea = styled(DragAreaBase)<{ $fullWidthOnMobile: boolean }>`

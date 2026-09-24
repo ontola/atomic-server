@@ -1,3 +1,28 @@
+// browser/lib/src/subject.ts
+var ATOMIC_PREFIX = "atomic:";
+var DID_AD_PREFIX = "did:ad:";
+function isLegacyAtomicLink(raw) {
+  return raw.startsWith("atomic://");
+}
+function startsWithAtomicScheme(raw) {
+  return raw.startsWith(ATOMIC_PREFIX) && !isLegacyAtomicLink(raw);
+}
+function isAtomicIdentifier(raw) {
+  return startsWithAtomicScheme(raw) || raw.startsWith(DID_AD_PREFIX);
+}
+function canonicalizeScheme(raw) {
+  if (raw.startsWith(DID_AD_PREFIX)) {
+    return ATOMIC_PREFIX + raw.slice(DID_AD_PREFIX.length);
+  }
+  return raw;
+}
+function canonicalIdentifier(raw) {
+  if (!isAtomicIdentifier(raw)) {
+    return raw;
+  }
+  return canonicalizeScheme(raw.split(/[?#]/)[0]);
+}
+
 // browser/lib/src/import-resolution.ts
 var IMPORT_RESOLUTION = "https://atomicdata.dev/properties/importResolution";
 var IMPORT_REFERENCE_REVIEW = "https://atomicdata.dev/properties/importReferenceReview";
@@ -32,7 +57,7 @@ function equalImportValue(a, b) {
     ([key, value]) => Object.hasOwn(b, key) && equalImportValue(value, b[key])
   );
 }
-var pure = (s) => s.startsWith("did:") ? s.split("?")[0] : s;
+var pure = (s) => canonicalIdentifier(s);
 function marker(row) {
   const v = row[IMPORT_RESOLUTION];
   return v?.version === 1 && typeof v.id === "string" && typeof v.canonical === "string" && v.members && typeof v.members === "object" && Array.isArray(v.supersedes) ? v : void 0;
@@ -68,7 +93,7 @@ function canonical(value) {
   return JSON.stringify(value) ?? "undefined";
 }
 var same = (a, b) => canonical(a) === canonical(b);
-var pure2 = (subject) => typeof subject === "string" && subject.startsWith("did:") ? subject.split("?")[0] : subject;
+var pure2 = (subject) => typeof subject === "string" ? canonicalIdentifier(subject) : subject;
 function importRecords(host, records) {
   const intents = [], problems = [];
   const bindings = /* @__PURE__ */ new Map();
@@ -245,12 +270,38 @@ function demoPets() {
 }
 
 // integrations/pets/plugin.ts
-var manifest = { schemaVersion: 1, operations: [], secrets: [] };
+var manifest = {
+  schemaVersion: 1,
+  operations: [],
+  secrets: [],
+  // Declared so the host can check the install before starting the sandbox: a
+  // Pets import with nothing stored pauses on the field to set rather than on
+  // a destructuring error from inside run().
+  config: {
+    key: "pets",
+    properties: {
+      table: { type: "string", description: "Table the pets are written to" },
+      rowClass: { type: "string", description: "Class each imported pet gets" },
+      properties: {
+        type: "object",
+        description: "Pet ontology properties, by shortname"
+      }
+    },
+    required: ["table", "rowClass", "properties"]
+  }
+};
 var NAME = "https://atomicdata.dev/properties/name";
 function run(ctx) {
-  const { table, rowClass, properties: p } = ctx.config;
-  if (!table || !rowClass || !p)
-    throw new Error("Configure the connection before running it");
+  const { table, rowClass, properties: p } = ctx.config ?? {};
+  const missing = [
+    ["table", table],
+    ["rowClass", rowClass],
+    ["properties", p]
+  ].filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length)
+    throw new Error(
+      `Configure the connection before running it: missing ${missing.join(", ")}`
+    );
   const pets = demoPets();
   const records = pets.map((pet) => {
     const identity = `pets:demo:${pet.id}`;

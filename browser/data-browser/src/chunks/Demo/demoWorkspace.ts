@@ -4,6 +4,7 @@
 // React Compiler: plain creation helpers, not components (see DemoDirector.ts).
 'use no memo';
 import {
+  agentPublicKey,
   core,
   dataBrowser,
   canvas,
@@ -227,7 +228,7 @@ async function createGuestProfile(
 
   await profile.set(
     core.properties.publicKey,
-    agentSubject.replace('did:ad:agent:', ''),
+    agentPublicKey(agentSubject) ?? '',
   );
   await profile.set(core.properties.isA, [core.classes.agent, team.rowClass]);
   await profile.set(core.properties.name, 'Demo User');

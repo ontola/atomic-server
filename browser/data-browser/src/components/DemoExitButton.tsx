@@ -6,6 +6,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { leaveTemplatePreview } from '../chunks/Templates/leaveTemplatePreview';
 import { paths } from '../routes/paths';
 
 /**
@@ -45,15 +46,10 @@ export function DemoActionsBar(): React.JSX.Element | null {
           return;
         }
 
-        store.setDrive(templateDemo.previousDrive);
-        const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
-        await cleanupDemoDrive(store, templateDemo.drive);
-        localStorage.removeItem('atomic.templateDemo');
-        navigate(
-          adopt
-            ? `/app/new-drive?template=${encodeURIComponent(templateDemo.template)}`
-            : '/app/new-drive',
-        );
+        leaveTemplatePreview(store, templateDemo, navigate, async () => {
+          const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
+          await cleanupDemoDrive(store, templateDemo.drive);
+        });
 
         return;
       }

@@ -3,9 +3,10 @@ import { openLegacyGithubSetup } from './legacy-github-setup';
 import { test, expect } from '@playwright/test';
 import {
   before,
+  createFromCatalog,
   createTableFromDialog,
   getDevDriveSecret,
-  nodeReachableServerUrl,
+  openWorkspaceDialog,
   SERVER_URL,
 } from './test-utils';
 import {
@@ -35,7 +36,31 @@ test.describe('plugins', () => {
       !process.env.ATOMIC_MOCK_INTEGRATION_PROXY,
       'Run with the documented mock integration-proxy server configuration',
     );
-
+    // Failed all three attempts on develop run 4326, reported as the 60s test
+    // timeout and naming the `Last synced` wait below. That name is an
+    // artefact: the wall prints whichever assertion was in flight, and the
+    // longest ceiling in a test is the most likely one to be holding it. The
+    // step is not slow. Timed under four-worker load, three copies:
+    //
+    //   step                            budget   run A    run B    run C
+    //   integrations link through connect    -    5.7s     5.9s     4.9s
+    //   complete install, open folder        -    4.5s     5.1s     5.6s
+    //   `Last synced`                      60s    8.2s     7.1s     7.2s
+    //   open the Pets table            default    0.9s     0.6s     0.5s
+    //   rows and datatypes             default    2.5s     1.7s     0.5s
+    //   ------------------------------------- sum 21.9s   20.5s    18.8s
+    //   whole test                         60s   43.6s    38.6s    36.6s
+    //
+    // `Last synced` never passes 8.2s, and 18 to 22 seconds of each run are
+    // spent in `beforeEach` before the first step here begins. So the test is
+    // marginal as a whole, at 73% of its wall on the worst sample, and the
+    // wall lands wherever it happens to land.
+    //
+    // 120s for the test, matching the rest of this file. And `Last synced`
+    // comes DOWN to 30s: a ceiling equal to the wall can never fire, so it
+    // could only ever be reported as a wall casualty. At 30s against an 8.2s
+    // worst sample it can finally fail on its own terms and name itself.
+    test.setTimeout(120_000);
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     const pets = page.locator('[data-integration="proxy:pets"]');
     await expect(
@@ -61,11 +86,28 @@ test.describe('plugins', () => {
       })
       .click();
     await expect(page).not.toHaveURL(/connection_code=/);
-    await page.getByRole('button', { name: 'Complete installation' }).click();
+    // Losing `connection_code` only means the code was consumed. The button
+    // stays disabled until `describe(platform)` has answered with this
+    // connection's collections (`ConnectLocalThought.tsx`, the mount effect
+    // that calls `setCollections`), a proxy round trip that cannot even start
+    // before the page is back from the LocalThought redirect. Nothing waited
+    // for it, so the click's own 10s action timeout was the shortest budget in
+    // the test and it guarded the heaviest step: on develop run 4470 it
+    // expired on all three attempts with the button resolved and `disabled`.
+    //
+    // Wait for the state the click needs rather than widening the click. If
+    // the collections never arrive at all, this now fails saying the button
+    // stayed disabled, which is a product bug no budget fixes and which a
+    // click timeout would have gone on hiding.
+    const completeInstallation = page.getByRole('button', {
+      name: 'Complete installation',
+    });
+    await expect(completeInstallation).toBeEnabled({ timeout: 30_000 });
+    await completeInstallation.click();
     await page.getByRole('link', { name: 'Open folder', exact: true }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Last synced' }),
-    ).toBeVisible({ timeout: 60000 });
+    ).toBeVisible({ timeout: 30000 });
     await page
       .locator('[data-test="folder-list"]')
       .getByRole('link', { name: 'Pets', exact: true })
@@ -131,6 +173,9 @@ export function run() { return { intents: [] }; }
     await expect(
       page.getByRole('heading', { name: 'Integrations', exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole('checkbox', { name: 'Show experimental plugins' })
+      .check();
     const card = page
       .locator('[data-release]')
       .filter({
@@ -164,6 +209,31 @@ export function run() { return { intents: [] }; }
   test('Notion discovers databases through the proxy and reports revoked access without server OAuth', async ({
     page,
   }) => {
+    // Two 45s waits below on the suite's 60s default, so neither could ever
+    // fire: the wall always reported first and named itself instead of the
+    // step. The test next door already says why, in its own words, and every
+    // other test in this file carrying a 45s wait raises its budget. This was
+    // the one that did not.
+    //
+    // Timed step by step under four-worker load, three copies:
+    //
+    //   step                       budget   run A    run B    run C
+    //   setup through the alert         -    5.0s     4.2s     1.9s
+    //   approve-enabled               45s   29.9s    33.4s     8.3s
+    //   proxy-task visible       default     49ms     32ms      6ms
+    //   sync-complete                 45s     4.3s    (wall)    1.0s
+    //   whole test                    60s  (wall)   (wall)    34.0s
+    //
+    // The assertion budgets are not the problem: the worst `approve-enabled`
+    // sample is 33.4s of its 45s. Run B is the one that settles it, reaching
+    // the sync with 33s already spent and dying mid-step with its budget
+    // untouched. Only the wall was ever failing this test.
+    //
+    // 45s stays on both waits deliberately. At a 120s wall it can fire for the
+    // first time, so a future failure names the step that was slow rather than
+    // reporting the wall; 33.4s against 45s keeps eleven seconds of headroom on
+    // a box harsher than the shard.
+    test.setTimeout(120_000);
     const actor = Agent.fromSecret(await getDevDriveSecret(page), 'js').subject;
     const drive = new URL(page.url()).searchParams.get('subject')!;
     const origin = 'https://notion-proxy.test';
@@ -410,18 +480,23 @@ export function run() { return { intents: [] }; }
     });
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Notion', exact: true }),
+      page
+        .locator('[data-integration=notion]')
+        .getByRole('heading', { name: 'Notion', exact: true }),
     ).toBeVisible();
     await page.screenshot({
       path: '/tmp/atomic-integration-discovery.png',
       fullPage: true,
     });
 
-    for (const disclosure of await page
-      .locator('summary')
-      .filter({ hasText: 'Repository test results' })
-      .all()) {
-      await disclosure.click();
+    // The cards can re-render while evidence loads. Re-query closed
+    // disclosures instead of retaining nth locators from an earlier count.
+    const closedEvidence = page
+      .locator('details:not([open]) > summary')
+      .filter({ hasText: 'Repository test results' });
+
+    while (await closedEvidence.count()) {
+      await closedEvidence.first().click();
     }
 
     const evidence = page.locator('details').filter({
@@ -524,6 +599,9 @@ export function run() { return { intents: [] }; }
   test('Clockify discovers named workspaces and surfaces preview transport errors', async ({
     page,
   }) => {
+    // Discovery and the failed preview each have a 45s assertion budget,
+    // in addition to installing the connector and filling its setup form.
+    test.setTimeout(120_000);
     await page.route('**/plugin-run', route => {
       const body = route.request().postDataJSON();
       if (JSON.parse(body.input).phase !== 'discover')
@@ -794,9 +872,9 @@ export function run() { return { intents: [] }; }
       page.getByText('This run proposes no changes.', { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Apply 0 changes', exact: true }),
-    ).toBeDisabled();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      page.getByRole('button', { name: /^Apply \d+ changes$/ }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await page.evaluate(async subject => {
       const resource = await window.store!.getResource(subject);
       await resource.set(
@@ -831,7 +909,7 @@ export function run() { return { intents: [] }; }
       await expect(
         page.getByText('This run proposes no changes.', { exact: true }),
       ).toBeVisible();
-      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
     }
 
     await expect(
@@ -909,6 +987,9 @@ export function run() { return { intents: [] }; }
   test('GitHub setup through assistant reuses a task template table without replacing its views', async ({
     page,
   }) => {
+    // This creates a task template before the same sandbox installation that
+    // already needs a 120s total budget in the standalone GitHub scenario.
+    test.setTimeout(120_000);
     await createTableFromDialog(page, {
       template: /Project tasks/i,
       name: 'Shared project tasks',
@@ -970,14 +1051,13 @@ export function run() { return { intents: [] }; }
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
-    // The install is still running when that URL appears: the button here
-    // reads "Connecting…" and is disabled until the connection settles, so
-    // `Connections` does not exist yet. The 30s above covers the navigation
-    // and nothing after it. Measured here: the click succeeds at 45s and the
-    // whole test takes 48s, against a 10s default that it never met.
-    await page
-      .getByRole('button', { name: 'Connections', exact: true })
-      .click({ timeout: 45000 });
+    // The install is still running when that URL appears: the setup dialog
+    // stays open over the page, its button reading "Connecting…", until the
+    // connection settles, so the context menu cannot be opened yet. The 30s
+    // above covers the navigation and nothing after it. Measured here: the
+    // click succeeds at 45s and the whole test takes 48s, against a 10s
+    // default that it never met.
+    await openWorkspaceDialog(page, 'connections', 45000);
     await page
       .getByRole('link', { name: 'Connection settings', exact: true })
       .click();
@@ -1353,7 +1433,18 @@ export async function run(ctx) {
       .click();
     const { id } = await (await publication).json();
     await page.goto(original);
-    await page.getByRole('tab', { name: 'Code', exact: true }).click();
+    // The first interaction after a full navigation, so the editor has to
+    // remount and render its tab list before the click can land. This is the
+    // click that failed on develop run 4330, all three attempts, on
+    // `use.actionTimeout`'s 10s. Timed under four-worker load it took 1.5s,
+    // 3.9s and 5.4s across three copies of the same run, rising with the
+    // store rather than varying randomly, so the worst sample was already at
+    // 54% of the ceiling with the trend still going up. The click above,
+    // which follows an in-page edit rather than a navigation, measured 106ms,
+    // 103ms and 128ms and is left alone.
+    await page
+      .getByRole('tab', { name: 'Code', exact: true })
+      .click({ timeout: 30000 });
     await expect(
       page
         .getByRole('main')
@@ -1453,13 +1544,11 @@ export async function run(ctx) {
       };
     });
     const agent = await Agent.fromSecret(await getDevDriveSecret(page));
-    // `SERVER_URL` is the browser-facing origin, which in CI is
-    // `http://atomic.localhost:9883`. Chromium is told to map that name;
-    // this call runs in the Node test process, which is not, and resolves
-    // `.localhost` to 127.0.0.1 — a different container from the server.
+    // DNS maps the public hostname to the CI service. Sign the public URL:
+    // the server verifies against its canonical origin, not the service alias.
     const api = {
       getAgent: () => agent,
-      getServerUrl: () => nodeReachableServerUrl(SERVER_URL),
+      getServerUrl: () => SERVER_URL,
     };
     const reviewed = await getPluginSync(api, target);
     await page.getByRole('button', { name: 'Enable background sync' }).click();
@@ -1525,12 +1614,7 @@ export async function run(ctx) {
       },
       { connection: target.plugin, drive: target.drive },
     );
-    // Same two-runtime split as the `getServerUrl` above: `page.request` reads
-    // as browser-side but Playwright issues it from the Node test process,
-    // which resolves `atomic.localhost` to loopback rather than the server
-    // container. The signature is over this URL and the server derives the
-    // subject it checks from the `Host` it is reached on, so both move together.
-    const triggerURL = `${nodeReachableServerUrl(SERVER_URL)}/plugin-trigger`;
+    const triggerURL = `${SERVER_URL}/plugin-trigger`;
     const triggerResponse = await page.request.post(triggerURL, {
       headers: await signRequest(triggerURL, agent, {}),
       data: {
@@ -1681,8 +1765,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   }) => {
     const main = page.getByRole('main');
 
-    // `New plugin` is search-only: it creates the drive's plugin schema on
-    // first use, so it stays out of the default listing.
+    // The catalog starter creates the drive's plugin schema on first use.
     await newPlugin(page);
 
     // The starter source is what an author (or an LLM) reads first.
@@ -1783,7 +1866,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
 
     const dialog = page.locator('dialog[open]');
     await expect(dialog.getByText(/does not exist/)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Apply/ })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: /Apply/ })).toHaveCount(0);
 
     // Cancelling a blocked run still records it: a refusal that leaves no
     // trace reads the same as a plugin that never ran.
@@ -1871,10 +1954,17 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
  * the schema cheaper to create is its own change.
  */
 async function newPlugin(page: import('@playwright/test').Page) {
-  test.setTimeout(120000);
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('plugin');
-  await page.locator('[data-testid="menu-item-new-plugin"]').click();
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here overwrote whatever the caller asked for,
+  // downward and without an error. The sidebar test above declares 240s three
+  // lines before calling this, and had never once run on 240s: it ran on 120s
+  // and died at a wall it had itself raised. Raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
+  await createFromCatalog(page, 'Plugin');
   await expect(
     page.getByRole('main').getByRole('heading', {
       name: 'New plugin',

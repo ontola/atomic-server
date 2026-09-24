@@ -31,6 +31,7 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-*"
 
 jobs:
   # Nothing reaches a live host without a pipeline having passed on this exact
@@ -57,7 +58,7 @@ jobs:
 
       # Wait for the pipeline rather than demanding one that already finished.
       #
-      # `main.yml` is `on: [push]`, and a bare `push` includes TAG pushes — so
+      # `main.yml` includes `v*` tag pushes — so
       # pushing `v1.2.3` starts the main pipeline and this job simultaneously.
       # Asking only for `status=completed` runs then reads a pipeline that is
       # seconds old as "none" and blocks a release that was about to go green.

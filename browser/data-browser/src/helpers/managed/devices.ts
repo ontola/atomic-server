@@ -17,11 +17,10 @@ import { managedFetch } from './api';
 import { getManagedAccount } from './session';
 import { getLocalServerOrigin, isRunningInTauri } from '../tauri';
 import { pairAndSync } from '../pairing';
-import type { Agent } from '@tomic/lib';
+import { nodeId as parseNodeId, type Agent } from '@tomic/lib';
 
 const DEVICE_ID_KEY = 'atomic-device-id';
 const KNOWN_PEERS_KEY = 'atomic-peers';
-const NODE_DID_PREFIX = 'did:ad:node:';
 
 export type DeviceRecord = {
   device_id: string;
@@ -91,9 +90,7 @@ function describeThisDevice(): { name: string; platform: string } {
 }
 
 function isValidNodeDid(value: string): boolean {
-  const raw = value.startsWith(NODE_DID_PREFIX)
-    ? value.slice(NODE_DID_PREFIX.length)
-    : '';
+  const raw = parseNodeId(value)?.split(':')[0] ?? '';
 
   return /^[0-9a-f]{64}$/i.test(raw);
 }

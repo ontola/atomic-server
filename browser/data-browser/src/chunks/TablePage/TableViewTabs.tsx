@@ -543,7 +543,6 @@ function ColumnsMenu({
       Trigger={ColumnsTrigger}
       items={items}
       // Only worth a filter box once scanning the list stops being instant.
-      searchable={allColumns.length > 8}
     />
   );
 }

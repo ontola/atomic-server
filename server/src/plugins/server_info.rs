@@ -130,7 +130,7 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
                 propvals.insert(urls::IS_A.into(), vec![urls::PEER.to_string()].into());
                 propvals.insert(
                     urls::PEER_NODE_ID.into(),
-                    Value::String(format!("did:ad:node:{node_id}")),
+                    Value::String(atomic_lib::identifiers::node_subject(&node_id)),
                 );
 
                 if let Some(name) = name {
@@ -199,7 +199,7 @@ fn handle_get(
             if let Some(node_id) = crate::iroh_transport::get_node_id() {
                 resource.set_unsafe(
                     urls::SERVER_NODE_ID.into(),
-                    Value::String(format!("did:ad:node:{node_id}")),
+                    Value::String(atomic_lib::identifiers::node_subject(node_id)),
                 )?;
             }
 

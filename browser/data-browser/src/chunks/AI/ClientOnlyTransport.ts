@@ -1,5 +1,6 @@
 // @wc-ignore-file
 import {
+  generateText,
   stepCountIs,
   streamText,
   type ChatTransport,
@@ -23,11 +24,13 @@ import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
 import { createHostedModel } from '@helpers/managed/ai';
+import { hostedVoiceModel } from './hostedVoiceModel';
 
 export type Modalities = 'text' | 'image';
 
 export interface ClientOnlyTransportOptions {
   openRouterAPIKey?: string;
+  openRouterZdr?: boolean;
   ollamaURL?: string;
   selectedAgent: AIAgent;
   model: AIModelIdentifier;
@@ -59,6 +62,32 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
   public setOptions(options: ClientOnlyTransportOptions) {
     this.options = options;
+  }
+
+  /** Use the configured personal provider when present, otherwise SaaS credits. */
+  public async runLiveTask(
+    messages: AtomicUIMessage[],
+    abortSignal: AbortSignal,
+  ) {
+    const prepared = await this.options.addContextToMessages(
+      trimToLastSummary(messages),
+    );
+    const result = await generateText({
+      model: this.options.openRouterAPIKey
+        ? this.getModel(this.options.model)
+        : hostedVoiceModel(),
+      messages: await modelMessagesWithToolRecovery(prepared),
+      system: `${await this._prepareSystemPrompt(this.options.selectedAgent.systemPrompt)}\nYou are handling a delegated request from a live voice conversation. Use the latest user request and its corrections. Perform only requested actions. Return a brief factual result suitable for speech, including whether actions actually succeeded.`,
+      tools: this.options.tools,
+      abortSignal,
+      maxRetries: 0,
+      stopWhen: stepCountIs(8),
+    });
+
+    return (
+      result.text ||
+      'The task finished without a spoken result. Check the chat before repeating any action.'
+    );
   }
 
   public async sendMessages({
@@ -129,6 +158,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         apiKey: this.options.openRouterAPIKey,
         compatibility: 'strict',
         extraBody: {
+          ...(this.options.openRouterZdr ? { provider: { zdr: true } } : {}),
           modalities,
           plugins: [{ id: 'context-compression' }],
         },

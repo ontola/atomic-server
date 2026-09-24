@@ -9,15 +9,26 @@ import { ErrMessage } from '@components/forms/InputStyles';
 import { ConnectLocalThought } from './ConnectLocalThought';
 import { browserIntegrations, platformName } from './localThought';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
+import {
+  catalogByShortname,
+  isCatalogVisible,
+  useIntegrationCatalog,
+} from './pluginCatalog';
 
 export function LocalThoughtCatalog({
   drive,
   search,
+  showExperimentalPlugins,
+  onVisibilityChange,
 }: {
   drive?: string;
   search: string;
+  showExperimentalPlugins: boolean;
+  onVisibilityChange?: (hasResults: boolean) => void;
 }) {
   const origin = useIntegrationProxy();
+  const { entries: catalogEntries } = useIntegrationCatalog();
+  const catalogEntriesByShortname = catalogByShortname(catalogEntries);
   const [platforms, setPlatforms] = useState<string[]>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -35,9 +46,21 @@ export function LocalThoughtCatalog({
 
     return () => controller.abort();
   }, [origin]);
-  const visible = localThoughtCatalogEntries(platforms).filter(id =>
-    `${id} ${platformName(id)}`.toLowerCase().includes(search.toLowerCase()),
-  );
+  const visible = localThoughtCatalogEntries(platforms)
+    .filter(id =>
+      isCatalogVisible(
+        catalogEntriesByShortname.get(id),
+        showExperimentalPlugins,
+      ),
+    )
+    .filter(id =>
+      `${id} ${platformName(id)}`.toLowerCase().includes(search.toLowerCase()),
+    );
+  useEffect(() => {
+    // An error already explains the empty section; only report a genuine
+    // empty result once the fetch has actually settled.
+    onVisibilityChange?.(Boolean(error) || !platforms || visible.length > 0);
+  }, [error, platforms, visible.length, onVisibilityChange]);
 
   return (
     <>

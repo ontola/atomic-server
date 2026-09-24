@@ -6,6 +6,7 @@ import {
   checkAuthenticationCookie,
   setCookieAuthentication,
   signRequest,
+  legacyAgentForRequest,
 } from './authentication.js';
 import { AtomicError, ErrorType } from './error.js';
 import { pageRequestSignal } from './page-request-signal.js';
@@ -21,7 +22,7 @@ import {
 } from './commit.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
-import { extractDidSubject } from './subject.js';
+import { extractDidSubject, isAtomicIdentifier } from './subject.js';
 import {
   recordServerVersionFromResponse,
   shouldSkipDidAuthForLegacyServer,
@@ -97,7 +98,7 @@ export class Client {
 
     if (
       subject.startsWith('http') ||
-      subject.startsWith('did:ad:') ||
+      isAtomicIdentifier(subject) ||
       subject.startsWith('internal:')
     ) {
       if (subject.startsWith('http') || subject.startsWith('internal:')) {
@@ -222,8 +223,8 @@ export class Client {
       let url = subject;
       const wrappedDid = extractDidSubject(subject);
 
-      if (subject.startsWith('did:')) {
-        // We can't fetch DIDs directly, so we use the server's /did endpoint.
+      if (isAtomicIdentifier(subject)) {
+        // We can't fetch identifiers directly, so we use /resource (aliases /atomic, /did).
         const baseUrl = didResolutionBaseUrl(signInfo?.serverURL, serverURL);
 
         if (!baseUrl) {
@@ -234,18 +235,29 @@ export class Client {
           );
         }
 
-        url = `${baseUrl}/did?subject=${encodeURIComponent(subject)}`;
+        url = `${baseUrl}/resource?subject=${encodeURIComponent(subject)}`;
       } else if (wrappedDid && wrappedDid !== subject) {
-        // `https://host/did:ad:…` is an HTTP alias, not the resource's
-        // identity. Fetch via the host's /did endpoint so the response
-        // `@id` (the DID) matches what JSON-AD actually contains.
-        url = `${new URL(subject).origin}/did?subject=${encodeURIComponent(wrappedDid)}`;
+        // `https://host/did:ad:…` / `https://host/atomic:…` is an HTTP alias,
+        // not the resource's identity. Fetch via /resource so the response
+        // `@id` (the identifier) matches what JSON-AD actually contains.
+        url = `${new URL(subject).origin}/resource?subject=${encodeURIComponent(wrappedDid)}`;
       }
 
       // Sign the request with the actual URL being fetched (not the raw DID
       // subject) since the server verifies against the full HTTP URL.
       if (signInfo) {
-        if (shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)) {
+        const legacy = legacyAgentForRequest(url, signInfo.agent);
+
+        if (legacy) {
+          requestHeaders = await signRequest(
+            url,
+            signInfo.agent,
+            requestHeaders,
+            legacy,
+          );
+        } else if (
+          shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)
+        ) {
           warnDidAuthCompatibility(url);
         } else if (!subject.startsWith('https://atomicdata.dev')) {
           // Cookies only work in browsers for same-origin requests right now
@@ -458,7 +470,7 @@ export class Client {
   }
 }
 
-/** Origin used to turn a `did:ad:…` subject into `GET {origin}/did?subject=`. */
+/** Origin used to turn an identifier into `GET {origin}/resource?subject=`. */
 function didResolutionBaseUrl(
   ...candidates: Array<string | undefined>
 ): string | undefined {

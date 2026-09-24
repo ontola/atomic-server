@@ -42,7 +42,7 @@ describe('A delayed missing-resource response', () => {
   }) => {
     const store = await freshStore();
     store.setServerConnected(true);
-    const subject = 'did:ad:created-during-fetch';
+    const subject = 'atomic:created-during-fetch';
     let rejectFetch!: (error: Error) => void;
     const pending = new Promise<never>((_, reject) => {
       rejectFetch = reject;

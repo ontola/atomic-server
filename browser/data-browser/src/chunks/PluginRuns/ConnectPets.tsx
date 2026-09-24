@@ -14,7 +14,7 @@ import { ErrMessage } from '@components/forms/InputStyles';
 import { AtomicLink } from '@components/AtomicLink';
 import { petsSchema } from '../../../../../integrations/pets/schema';
 import type { Config } from '../../../../../integrations/pets/plugin';
-import source from '../../../../../integrations/pets/plugin.js?raw';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 import { pluginClassesFor } from './runScript';
 import { ensureInstallationResource } from './installationResources';
 import { RunPluginDialog } from './RunPluginDialog';
@@ -42,10 +42,11 @@ export function ConnectPets({ drive }: { drive: string }) {
     setImported(false);
 
     try {
+      const source = await fetchIntegrationSource('pets', store.getServerUrl());
       const pluginTerms = await pluginClassesFor(store, drive);
       const resource = await ensureInstallationResource(store, drive, {
         parent: drive,
-        localId: 'atomic:pets:installation',
+        localId: 'plugin:pets:installation',
         isA: [pluginTerms.classes['plugin-script']],
         propVals: {
           [core.properties.name]: 'Pets',
@@ -60,7 +61,7 @@ export function ConnectPets({ drive }: { drive: string }) {
       const terms = await ensureSchema(store, drive, petsSchema());
       const table = await ensureInstallationResource(store, drive, {
         parent: subject,
-        localId: 'atomic:pets:table',
+        localId: 'plugin:pets:table',
         isA: [dataBrowser.classes.table],
         propVals: {
           [core.properties.name]: 'Pets',
@@ -70,7 +71,7 @@ export function ConnectPets({ drive }: { drive: string }) {
       await table.save();
       const view = await ensureInstallationResource(store, drive, {
         parent: table.subject,
-        localId: 'atomic:pets:default-view',
+        localId: 'plugin:pets:default-view',
         isA: [dataBrowser.classes.view],
         propVals: {
           [core.properties.name]: 'Pets',

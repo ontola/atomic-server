@@ -59,6 +59,7 @@ export type AIMessageContext =
   | AISkillMessageContext;
 
 export type MessageMetadata = {
+  liveVoice?: boolean;
   userContext?: AIMessageContext[];
   serverContext?: string;
   inputTokensUsed?: number;

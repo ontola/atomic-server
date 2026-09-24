@@ -77,7 +77,7 @@ test.describe('offline create → online sync → disable localDB', () => {
       return drive.subject as string;
     });
     console.log(`[setup] offline-created drive: ${offlineDriveSubject}`);
-    expect(offlineDriveSubject).toMatch(/^did:ad:/);
+    expect(offlineDriveSubject).toMatch(/^atomic:/);
 
     // Confirm it's in the dirty queue (waiting to be synced).
     const pendingBeforeReconnect = await page.evaluate(
@@ -121,83 +121,77 @@ test.describe('offline create → online sync → disable localDB', () => {
     console.log('[setup] server-has check:', JSON.stringify(serverHas));
     expect(serverHas.fetched).toBe(true);
 
-    // 6. Make the offline-created drive the active one, then disable localDB.
-    await page.evaluate((subject: string) => {
-      window.store.setDrive(subject);
-      // Disable client DB — same mechanism SyncRoute uses.
+    // 6. Disable localDB, then select the offline-created drive through the
+    // app route. Store.setDrive alone is overwritten by AppSettings' drive
+    // state on the next React render.
+    await page.evaluate(() => {
       localStorage.setItem('atomic-disable-client-db', '1');
-    }, offlineDriveSubject);
+    });
 
-    // Navigate to the drive's page so the route's useResource(drive) fires.
+    // Navigate to the drive's page and explicitly select it as the workspace.
     await page.goto(
-      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(offlineDriveSubject)}`,
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(offlineDriveSubject)}&drive=${encodeURIComponent(offlineDriveSubject)}`,
     );
 
     // 8. Verify the drive auto-loads (the route's useResource, not an explicit
     // fetch). The real bug we are hunting is a resource stub that goes to
     // loading=false without props being populated.
-    await page
-      .waitForFunction(
-        () => {
-          if (!window.store?.getSyncStatus().serverConnected) {
-            return false;
+    //
+    // Read the state inside the wait rather than after it. This used to wait
+    // with `waitForFunction`, swallow its timeout, and then take a single
+    // snapshot to assert on, so that a failure named the field rather than
+    // the predicate. The snapshot is a second trip into the page, and the
+    // drive can re-enter `loading` between the two: a WS push or a resubscribe
+    // starts a refetch, and the snapshot catches a resource that is settling
+    // rather than one that is stuck. Seen locally at `260e7d8` twice in four
+    // runs, failing after 6.5s against the 30s this wait had, once on `drive`
+    // and once on `loading`, each time with `props` empty.
+    //
+    // Asserting inside `toPass` keeps the field-level message the snapshot was
+    // there for, since the last attempt is the one that reports, and closes the
+    // gap, since a transient reload is just another attempt. 30s total, as
+    // before, so the per-test wall is unchanged.
+    const readDriveState = () =>
+      page.evaluate(() => {
+        const status = window.store.getSyncStatus();
+        const drive = status.drive!;
+        const r = window.store.resources.get(drive);
+        const props: Record<string, unknown> = {};
+
+        if (r) {
+          for (const [k, v] of r.getEntries()) {
+            props[k] =
+              v instanceof Uint8Array ? `<Uint8Array ${v.byteLength}b>` : v;
           }
+        }
 
-          const drive = window.store.getSyncStatus().drive;
-
-          if (!drive) {
-            return false;
-          }
-
-          const r = window.store.resources.get(drive);
-
-          return (
-            r &&
-            !r.loading &&
-            !r.error &&
-            !!r.get('https://atomicdata.dev/properties/name')
-          );
-        },
-        undefined,
-        // 30s. With ClientDb disabled, fetching the drive goes server-only
-        // over a fresh WS handshake on each reload (init store → resolve
-        // agent from IDB → open WS → SYNC_VV handshake → first GET).
-        { timeout: 30000 },
-      )
-      .catch(() => {
-        /* surface via the assertions below instead of throwing here */
+        return {
+          drive,
+          serverConnected: status.serverConnected,
+          clientDbAttached: status.clientDbAttached,
+          loading: r?.loading,
+          error: r?.error?.message,
+          name: r?.get('https://atomicdata.dev/properties/name'),
+          props,
+        };
       });
 
-    const finalState = await page.evaluate(() => {
-      const status = window.store.getSyncStatus();
-      const drive = status.drive!;
-      const r = window.store.resources.get(drive);
-      const props: Record<string, unknown> = {};
+    let finalState: Awaited<ReturnType<typeof readDriveState>> | undefined;
 
-      if (r) {
-        for (const [k, v] of r.getEntries()) {
-          props[k] =
-            v instanceof Uint8Array ? `<Uint8Array ${v.byteLength}b>` : v;
-        }
-      }
+    await expect(async () => {
+      finalState = await readDriveState();
 
-      return {
-        drive,
-        serverConnected: status.serverConnected,
-        clientDbAttached: status.clientDbAttached,
-        loading: r?.loading,
-        error: r?.error?.message,
-        name: r?.get('https://atomicdata.dev/properties/name'),
-        props,
-      };
-    });
+      expect(finalState.drive).toBe(offlineDriveSubject);
+      expect(finalState.clientDbAttached).toBe(false); // localDB disabled
+      expect(finalState.loading).toBeFalsy();
+      expect(finalState.error).toBeFalsy();
+      expect(finalState.name).toBe('Offline-Created Drive');
+      // 30s. With ClientDb disabled, fetching the drive goes server-only over a
+      // fresh WS handshake on each reload (init store -> resolve agent from IDB
+      // -> open WS -> SYNC_VV handshake -> first GET).
+    }).toPass({ timeout: 30_000 });
+
     console.log('[final]', JSON.stringify(finalState, null, 2));
-
-    expect(finalState.drive).toBe(offlineDriveSubject);
-    expect(finalState.clientDbAttached).toBe(false); // localDB disabled
-    expect(finalState.loading).toBeFalsy();
-    expect(finalState.error).toBeFalsy();
-    expect(finalState.name).toBe('Offline-Created Drive');
 
     // Cleanup: re-enable localDB so subsequent tests start clean.
     await page.evaluate(() =>

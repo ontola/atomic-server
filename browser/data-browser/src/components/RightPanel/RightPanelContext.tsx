@@ -1,8 +1,13 @@
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useSettings } from '../../helpers/AppSettings';
+import { useMobilePanelHistory } from './useMobilePanelHistory';
+import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from './layout';
 import React, {
   useCallback,
   useContext,
   createContext,
   useEffect,
+  useLayoutEffect,
   useState,
 } from 'react';
 
@@ -46,6 +51,14 @@ export const RightPanelProvider: React.FC<
   const current = state.scope === scope ? state : emptyPanelState(scope);
   if (state.scope !== scope) setState(current);
   const { activePanel, selectedMeeting } = current;
+  const { setSideBarLocked } = useSettings();
+  const overlay = useMediaQuery(
+    `(max-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT - 1}px)`,
+  );
+
+  useLayoutEffect(() => {
+    if (overlay && activePanel) setSideBarLocked(false);
+  }, [overlay, activePanel, setSideBarLocked]);
 
   useEffect(() => {
     try {
@@ -60,6 +73,11 @@ export const RightPanelProvider: React.FC<
       setState(previous => updatePanelState(previous, scope, panel, action));
     },
     [scope],
+  );
+
+  const mobile = useMediaQuery('(max-width: 600px)', false);
+  useMobilePanelHistory(mobile && activePanel === 'ai', () =>
+    setPanelOpen('ai', false),
   );
 
   const togglePanel = useCallback(

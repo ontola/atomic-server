@@ -31,6 +31,7 @@ import {
   LoroLoader,
   core,
   server,
+  isAtomicIdentifier,
 } from '@tomic/lib';
 import type { LoroDoc } from 'loro-crdt';
 import { useOnValueChange } from './helpers/useOnValueChange.js';
@@ -732,8 +733,8 @@ export function useCanWrite(resource: Resource): boolean {
         if (result) {
           setCanWrite(true);
         } else if (
-          resource.subject?.startsWith('did:ad:') &&
-          agent.subject?.startsWith('did:ad:')
+          isAtomicIdentifier(resource.subject) &&
+          isAtomicIdentifier(agent.subject ?? '')
         ) {
           // DID resources are self-sovereign — the owning agent always has write access.
           // The normal canWrite check fails because DID drives don't have explicit write rights.
@@ -747,8 +748,8 @@ export function useCanWrite(resource: Resource): boolean {
 
         // Offline fallback: assume write access for DID resources
         if (
-          resource.subject?.startsWith('did:ad:') &&
-          agent.subject?.startsWith('did:ad:')
+          isAtomicIdentifier(resource.subject) &&
+          isAtomicIdentifier(agent.subject ?? '')
         ) {
           setCanWrite(true);
         }

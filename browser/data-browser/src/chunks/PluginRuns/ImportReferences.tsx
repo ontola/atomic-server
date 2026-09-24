@@ -8,6 +8,8 @@ import {
   type ImportReferenceChange,
   type ImportReferenceOutcome,
   type JSONValue,
+  canonicalIdentifier,
+  isCommitSubject,
 } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Column, Row } from '@components/Row';
@@ -36,7 +38,7 @@ export function ImportReferences({
     try {
       const drive = store.getDrive();
       if (!drive) throw new Error('Choose a drive first');
-      const pure = (s: string) => (s.startsWith('did:') ? s.split('?')[0] : s);
+      const pure = (s: string) => canonicalIdentifier(s);
       const retained = new Set(
         copies.map(pure).filter(s => s !== pure(primary)),
       );
@@ -52,7 +54,7 @@ export function ImportReferences({
           found.add(subject);
       }
 
-      const subjects = [...found].filter(s => !s.startsWith('did:ad:commit:'));
+      const subjects = [...found].filter(s => !isCommitSubject(s));
       if (subjects.length > 1000)
         throw new Error(
           'More than 1,000 records link to these copies. Review a smaller group of copies.',

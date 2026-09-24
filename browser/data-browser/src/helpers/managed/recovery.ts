@@ -1,3 +1,4 @@
+import { canonicalIdentifier } from '@tomic/lib';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
@@ -54,6 +55,14 @@ export type RecoverySecret = {
   created_at: number;
   updated_at: number;
 };
+
+/**
+ * Backups saved before the `did:ad:` → `atomic:` rename carry the legacy
+ * spelling of the same agent, so compare identities, not strings.
+ */
+function sameAgent(a: string, b: string): boolean {
+  return canonicalIdentifier(a) === canonicalIdentifier(b);
+}
 
 const RECOVERY_FORMAT_VERSION = 1;
 const ENVELOPE_V2_FORMAT_VERSION = 2;
@@ -1115,7 +1124,7 @@ export async function unifyAccountPasskey(
 
   if (
     !recovery ||
-    recovery.agent_subject !== agentSubject ||
+    !sameAgent(recovery.agent_subject, agentSubject) ||
     recovery.format_version !== 2
   ) {
     throw new Error(
@@ -1206,7 +1215,7 @@ export async function addPasskeyWrapper(
   // rather than overwriting a newer envelope with a cached version.
   const recovery = await getRecoverySecret();
 
-  if (!recovery || recovery.agent_subject !== agentSubject) {
+  if (!recovery || !sameAgent(recovery.agent_subject, agentSubject)) {
     throw new Error(
       'Sign in to the account holding this backup before adding a passkey.',
     );
@@ -1387,6 +1396,7 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
 }
 
 const pendingRecoveryReads = new Map<string, Promise<RecoverySecret | null>>();
+const recoveryReadCooldowns = new Map<string, number>();
 
 export async function getRecoverySecret(): Promise<RecoverySecret | null> {
   const account = await getManagedAccount();
@@ -1394,9 +1404,19 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
   // Reconciliation, the drive catalog and Vault can all ask during one render.
   // Share only an in-flight read: a later call must see newly saved wrappers.
   const key = JSON.stringify([getManagedApiBase(), account.email]);
+  const now = Date.now();
+
+  for (const [readKey, until] of recoveryReadCooldowns) {
+    if (until <= now) recoveryReadCooldowns.delete(readKey);
+  }
+
+  if (recoveryReadCooldowns.has(key)) {
+    throw new Error('Could not load encrypted recovery backup.');
+  }
+
   const pending = pendingRecoveryReads.get(key);
   if (pending) return pending;
-  const request = fetchRecoverySecret();
+  const request = fetchRecoverySecret(key);
   pendingRecoveryReads.set(key, request);
 
   try {
@@ -1407,11 +1427,29 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
   }
 }
 
-async function fetchRecoverySecret(): Promise<RecoverySecret | null> {
+async function fetchRecoverySecret(
+  key: string,
+): Promise<RecoverySecret | null> {
   // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
   // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
   // (PUT) above; 204/401/404 all mean "no recovery secret stored".
   const response = await managedFetch(`/recovery-secret`, {});
+
+  if (response.status === 429) {
+    // A failed read is unknown, never "no backup". Stop callers from hammering
+    // the endpoint between renders, while keeping successful reads fresh.
+    const retryAfter = response.headers.get(/* @wc-ignore */ 'Retry-After');
+    const seconds = retryAfter ? Number(retryAfter) : NaN;
+    const deadline = Number.isFinite(seconds)
+      ? Date.now() + seconds * 1000
+      : Date.parse(retryAfter ?? '');
+    recoveryReadCooldowns.set(
+      key,
+      Number.isFinite(deadline) && deadline > Date.now()
+        ? deadline
+        : Date.now() + 60_000,
+    );
+  }
 
   if (
     response.status === 204 ||
@@ -1454,7 +1492,7 @@ function cacheRecoverySecret(secret: RecoverySecret): void {
     // Keyed by agent, so a shared machine accumulates one entry per account
     // rather than each sign-in evicting the last.
     const others = readCachedBackups().filter(
-      entry => entry.agent_subject !== secret.agent_subject,
+      entry => !sameAgent(entry.agent_subject, secret.agent_subject),
     );
     localStorage.setItem(
       RECOVERY_CACHE_KEY,
@@ -1484,7 +1522,9 @@ export function readCachedBackups(): RecoverySecret[] {
     if (legacy) {
       const parsed = JSON.parse(legacy) as RecoverySecret;
 
-      if (!entries.some(e => e.agent_subject === parsed.agent_subject)) {
+      if (
+        !entries.some(e => sameAgent(e.agent_subject, parsed.agent_subject))
+      ) {
         entries.push(parsed);
       }
 
@@ -1519,7 +1559,7 @@ export function forgetCachedRecoverySecret(agentSubject?: string): void {
     }
 
     const remaining = readCachedBackups().filter(
-      entry => entry.agent_subject !== agentSubject,
+      entry => !sameAgent(entry.agent_subject, agentSubject),
     );
     localStorage.setItem(RECOVERY_CACHE_KEY, JSON.stringify(remaining));
   } catch {
@@ -1543,7 +1583,7 @@ export async function getUnlockableRecoverySecret(
 
     if (
       fromServer &&
-      (!agentSubject || fromServer.agent_subject === agentSubject)
+      (!agentSubject || sameAgent(fromServer.agent_subject, agentSubject))
     ) {
       return fromServer;
     }
@@ -1555,7 +1595,7 @@ export async function getUnlockableRecoverySecret(
 
   return (
     (agentSubject
-      ? cached.find(entry => entry.agent_subject === agentSubject)
+      ? cached.find(entry => sameAgent(entry.agent_subject, agentSubject))
       : cached.at(-1)) ?? null
   );
 }

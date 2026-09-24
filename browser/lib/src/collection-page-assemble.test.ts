@@ -18,11 +18,11 @@ import { Store, StoreEvents } from './store.js';
  * The same listener is what `useChildren` uses for the sidebar, so folder
  * children flash the same way.
  */
-const TABLE = 'did:ad:resource:table';
-const ALICE = 'did:ad:resource:alice';
-const BOB = 'did:ad:resource:bob';
-const CHARLIE = 'did:ad:resource:charlie';
-const DRIVE = 'did:ad:resource:drive';
+const TABLE = 'atomic:resource:table';
+const ALICE = 'atomic:resource:alice';
+const BOB = 'atomic:resource:bob';
+const CHARLIE = 'atomic:resource:charlie';
+const DRIVE = 'atomic:resource:drive';
 
 function jsonAd(
   subject: string,
@@ -33,7 +33,7 @@ function jsonAd(
     '@id': subject,
     [core.properties.parent]: TABLE,
     [core.properties.isA]: [dataBrowser.classes.folder],
-    [core.properties.name]: subject.slice('did:ad:resource:'.length),
+    [core.properties.name]: subject.slice('atomic:resource:'.length),
     [commits.properties.createdAt]: createdAt,
     ...(sortOrder !== undefined
       ? { [dataBrowser.properties.sortOrder]: sortOrder }
@@ -172,7 +172,7 @@ describe('collection page assemble does not flash unsorted members', () => {
     store.setDrive(DRIVE);
     store.finishDriveSync(DRIVE, 3, Date.now());
 
-    const created = 'did:ad:resource:created-during-query';
+    const created = 'atomic:resource:created-during-query';
     let releaseQuery!: () => void;
     const queryGate = new Promise<void>(resolve => {
       releaseQuery = resolve;
@@ -378,7 +378,7 @@ describe('deferred collection membership', () => {
     store.setDrive(DRIVE);
     const subjects = Array.from(
       { length: 40 },
-      (_, i) => `did:ad:resource:row-${i}`,
+      (_, i) => `atomic:resource:row-${i}`,
     );
     let queryCount = 0;
     store.setClientDb(
@@ -422,7 +422,7 @@ describe('deferred collection membership', () => {
     store.setDrive(DRIVE);
     const subjects = Array.from(
       { length: 90 },
-      (_, i) => `did:ad:resource:row-${i}`,
+      (_, i) => `atomic:resource:row-${i}`,
     );
     store.setClientDb(
       mockClientDb(async () => ({

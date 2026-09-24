@@ -200,16 +200,14 @@ function condenseErrorContext(body: string): string {
 }
 
 const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
-  // 4 shards × 2 workers ≈ 8 browsers. `ci()` runs endToEnd concurrently with
-  // clippy/nextest/flutter/vitest, so the box carries those browsers AND their
-  // four optimized atomic-servers AND cargoBuildJobs=8 AND a 6-wide nextest at the
-  // same time. Earlier 3-worker runs produced 12 browsers and the suite
-  // failed accordingly — including a chromium killed outright ("Target page,
-  // context or browser has been closed"), which is starvation, not a race.
-  // Raise this only alongside the cargo/nextest widths it shares the host with.
+  // Four browser workers total, one per shard/server. At eight, full develop
+  // runs repeatedly exhausted settings-save and app-creation waits while the
+  // same journeys passed in focused runs. The full local suite also passed
+  // with two workers and no retries. Keep browser headroom alongside the
+  // Rust, WASM and frontend jobs instead of widening every interaction wait.
   mancave: {
     e2eShardCount: 4,
-    e2ePlaywrightWorkers: '2',
+    e2ePlaywrightWorkers: '1',
     // Back to the suite's own documented default (playwright.config.ts): three
     // attempts catch a genuinely flaky path while a real regression still
     // fails all three. This branch dropped it to 1 for runtime, and that trade
@@ -1106,11 +1104,33 @@ export class AtomicServer {
     );
   }
 
-  /** Extracts the unique deploy URL from netlify output */
+  /**
+   * Extracts the unique deploy URL from netlify output.
+   *
+   * Says which of the two failures happened, because they need opposite
+   * responses and for weeks they printed the same sentence. `netlifyDeploy`
+   * exits 0 with a skip message when `NETLIFY_AUTH_TOKEN` is empty, so an
+   * unset secret and a parse miss both arrived as "Deploy URL not found" —
+   * which reads like the URL format changed and is the reason nobody noticed
+   * that every failed e2e run on develop was publishing no report at all.
+   *
+   * That report is not a nicety. `playwright.config.ts` records traces with
+   * `retain-on-failure`, and this deploy is the only path that carries them
+   * off the runner: Dagger keeps the traces in its container, which is
+   * discarded when the `ci` call throws. So with the token unset the
+   * per-shard 20k-char log tail is the entire evidence channel for a failed
+   * run, and "which assertion failed" arrives without "why".
+   */
   private extractDeployUrl(netlifyOutput: string): string {
     const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
 
-    return match ? match[0] : 'Deploy URL not found';
+    if (match) return match[0];
+
+    if (netlifyOutput.includes('NETLIFY_AUTH_TOKEN not set')) {
+      return 'no report deployed — NETLIFY_AUTH_TOKEN is empty on this runner, so traces and error-context for this shard were discarded with the container';
+    }
+
+    return 'Deploy URL not found (netlify ran but printed no deploy URL)';
   }
 
   @func()
@@ -1368,10 +1388,13 @@ export class AtomicServer {
       .withExec(['cargo', 'fetch', '--locked']);
 
     const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
-    const containerWithAssets = sourceContainer.withDirectory(
-      '/code/server/assets_tmp',
-      browserDir,
-    );
+    const containerWithAssets = sourceContainer
+      .withDirectory('/code/server/assets_tmp', browserDir)
+      // These static assets are fetched at runtime, separately from the SPA.
+      // Keep test fixtures and plugin TypeScript out of the Rust build input.
+      .withDirectory('/code/integrations', source.directory('integrations'), {
+        include: ['catalog.json', '*/plugin.js'],
+      });
 
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
@@ -1889,40 +1912,48 @@ export class AtomicServer {
         // server asks for a separate `.localhost` origin in development; this
         // is that, and it has to stay outside the API domain.
         .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
-        // `plugin.spec.ts:26` installs a plugin whose Release the server then
-        // fetches back by subject URL. The browser addressed it as
-        // `atomic.localhost:9883` rather than this container's own `atomic`,
-        // so `Subject::is_local()` (server/src/plugins/release.rs) reads it as
-        // remote and the fetch goes out over HTTP instead of reading the blob
-        // beside it. That fetch is the *untrusted* one, behind the SSRF guard,
-        // whose `PublicOnlyResolver` drops every non-public address it
-        // resolves to. So once the hosts line below makes the name resolve, it
-        // resolves to 127.0.0.1 and the guard refuses it — and reqwest reports
-        // an unresolvable name and a refused address with the same string,
-        // "error sending request for url", which is why adding that line alone
-        // did not change the log by one character. `resolve_public` and the
-        // `resolver_rejects_loopback_domain` test in lib/src/client/helpers.rs
-        // are that behaviour, deliberate and asserted.
+        // The name the server answers to, which until now was not the name it
+        // is addressed by. `ATOMIC_DOMAIN` above is the dagger hostname, and
+        // the server was given the same string, so its configured origin was
+        // `http://atomic:9883` while every browser-created subject carried
+        // `http://atomic.localhost:9883`. Those two are compared as authorities
+        // in `Subject::from_raw`, where `atomic.localhost:9883` matches neither
+        // `atomic:9883` nor the `.atomic:9883` suffix case, so the server read
+        // its own subjects as somebody else's:
         //
-        // This flag is the escape hatch that module documents, and only the
-        // e2e container gets it. A real deployment is addressed by its own
-        // configured domain, so `is_local()` is true there, the release is
-        // read locally and this fetch never happens: the guard stays on where
-        // it protects something.
-        .withEnvVariable('ATOMIC_ALLOW_PRIVATE_FETCH', '1')
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic:9883"))
+        //     -> is_local false
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic.localhost:9883"))
+        //     -> is_local true
+        //
+        // Splitting the two lets the server know its own name while dagger
+        // keeps addressing the container as `atomic`. Routing does not move
+        // with it: `map_request_subject` (lib/src/db.rs) only re-routes a host
+        // explicitly bound to a Drive, and `atomic` is not bound, so the
+        // containers that curl `http://atomic:9883` are unaffected.
+        .withEnvVariable('ATOMIC_DOMAIN', 'atomic.localhost')
         .withExposedPort(19090)
         .withEntrypoint([
           'sh',
           '-c',
-          // Resources the browser creates carry `atomic.localhost:9883`, the
-          // origin it was served from, so anything the server then fetches by
-          // subject goes to that name from inside this container. RFC 6761
+          // Makes `atomic.localhost` resolve inside this container. RFC 6761
           // gives `.localhost` to loopback, but that is a rule browsers and
           // Node implement and glibc does not: with `hosts: files dns` the
-          // name simply does not resolve, and reqwest fails with "error
-          // sending request for url" before any request goes out. It is why
-          // `plugin.spec.ts:26` has been red since 4194: the install 500s on
-          // `/releases/blake3:…` and the dialog it waits behind never closes.
+          // name does not resolve at all, and anything here that looks it up
+          // fails before a request goes out.
+          //
+          // This is no longer about `plugin.spec.ts:26`. That was fixed by
+          // giving the server its own `ATOMIC_DOMAIN` above, so it reads its
+          // own subjects locally instead of fetching them, and the run after
+          // that change was green on `:26`, `mt940:16` and
+          // `installation-recovery:96`. What this line covers now is
+          // everything else in the container that resolves the name: the
+          // server for any subject genuinely on another host, and the Node
+          // mock proxy, which is given `atomic.localhost:9883` as its frontend
+          // origin. That is a wider scope than the SSRF escape hatch removed
+          // alongside it, which reached only five Rust call sites, so the two
+          // were not a pair despite arriving in one commit.
+          //
           // Written at start rather than baked in, because the runtime mounts
           // its own `/etc/hosts` over the image's. The server binds `::`, so
           // once the name resolves it reaches itself.

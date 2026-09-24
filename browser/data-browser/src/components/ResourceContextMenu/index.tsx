@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Client, useDrive } from '@tomic/react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { ai, Client, useDrive } from '@tomic/react';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
-import { FaEllipsisVertical } from 'react-icons/fa6';
+import { FaEllipsisVertical, FaFlag } from 'react-icons/fa6';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
@@ -21,6 +21,8 @@ import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
+
+const ReportAIChatDialog = lazy(() => import('@chunks/AI/ReportAIChatDialog'));
 
 export {
   CustomContextItemsProvider,
@@ -48,6 +50,7 @@ export const ContextMenuOptions = {
   Export: 'export',
   Open: 'open',
   AddToChat: 'addToChat',
+  ReportAIChat: 'reportAIChat',
   Favorite: 'favorite',
   Parent: 'parent',
   EditAsFork: 'editAsFork',
@@ -81,9 +84,8 @@ export interface ResourceContextMenuProps {
   anchorPoint?: { x: number; y: number };
   /**
    * Render a filter input at the top so the user can type to narrow the
-   * actions and run one with Enter. Defaults to on for the main menu
-   * (navbar kebab / cmd+m) and for right-click menus, off for the small
-   * embedded ones (`simple`, custom triggers).
+   * actions and run one with Enter. Enabled by default for every menu,
+   * including sidebar buttons and embedded menus.
    */
   searchable?: boolean;
 }
@@ -105,7 +107,7 @@ export function ResourceContextMenu({
   bindActive,
   onAfterDelete,
   anchorPoint,
-  searchable,
+  searchable = true,
 }: ResourceContextMenuProps) {
   const [confirmingAction, setConfirmingAction] = useState<ActionDefinition>();
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
@@ -119,6 +121,7 @@ export function ResourceContextMenu({
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>();
   const [coverPickerOpen, setCoverPickerOpen] = useState<boolean>();
   const [pluginRunOpen, setPluginRunOpen] = useState<boolean>();
+  const [reportChatOpen, setReportChatOpen] = useState<boolean>();
   const openPluginRun = useCallback(() => setPluginRunOpen(true), []);
   const [currentDrive] = useDrive();
   const pluginClass = usePluginClass(currentDrive);
@@ -228,6 +231,15 @@ export function ResourceContextMenu({
     ...pageItems,
     ...addIf(pageItems.length > 0 && items.length > 0, DIVIDER),
     ...items,
+    ...addIf(ctx.resource.getClasses().includes(ai.classes.aiChat), DIVIDER),
+    ...addIf(ctx.resource.getClasses().includes(ai.classes.aiChat), {
+      id: ContextMenuOptions.ReportAIChat,
+      label: 'Report AI chat',
+      helper:
+        'Review the chat transcript before sharing it with the Atomic team',
+      icon: <FaFlag />,
+      onClick: () => setReportChatOpen(true),
+    }),
   ];
 
   const filteredItems = showOnly
@@ -255,7 +267,7 @@ export function ResourceContextMenu({
         items={filteredItems}
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
-        searchable={searchable ?? (!!isMainMenu || anchorPoint !== undefined)}
+        searchable={searchable}
         bindActive={handleBindActive}
         anchorPoint={anchorPoint}
       />
@@ -314,6 +326,16 @@ export function ResourceContextMenu({
           show={pluginRunOpen}
           onShowChange={setPluginRunOpen}
         />
+      )}
+      {reportChatOpen !== undefined && (
+        <Suspense fallback={null}>
+          <ReportAIChatDialog
+            subject={subject}
+            show={reportChatOpen}
+            onClose={() => setReportChatOpen(false)}
+            onClosed={() => setReportChatOpen(undefined)}
+          />
+        </Suspense>
       )}
     </>
   );

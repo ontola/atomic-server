@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { createFromCatalog, before } from './test-utils';
 import {
   enableAIForTesting,
   sendChatMessage,
@@ -19,9 +19,7 @@ test('website document preview, frozen release and reload', async ({
   await page
     .locator('#document-editor')
     .fill('This is the first published garden note.');
-  await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByPlaceholder(/filter actions/i).fill('website');
-  await page.getByTestId('menu-item-new-website').click();
+  await createFromCatalog(page, 'Website');
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const prepare = page.getByTestId('menu-item-website-prepare');
   await expect(prepare).toBeEnabled({ timeout: 30000 });
@@ -98,7 +96,7 @@ test('website document preview, frozen release and reload', async ({
     page.getByRole('button', { name: 'Update site', exact: true }),
   ).toHaveCount(0);
   await page.screenshot({
-    path: '/private/tmp/website-export-preview.png',
+    path: test.info().outputPath('website-export-preview.png'),
     fullPage: true,
   });
   await page.reload();
