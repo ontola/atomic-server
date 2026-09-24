@@ -1,3 +1,4 @@
+import { sanitizeFeedbackEvent } from './feedback-privacy';
 import * as Sentry from '@sentry/react';
 
 /**
@@ -53,4 +54,5 @@ export function initSentry(): void {
     // only when the user submits the sidebar form.
     tracesSampleRate: 0,
   });
+  Sentry.addEventProcessor(sanitizeFeedbackEvent);
 }

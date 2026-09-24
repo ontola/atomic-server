@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const db = vi.hoisted(() => ({
   putResource: vi.fn(),
+  putBlob: vi.fn(),
   putLoroSnapshot: vi.fn(),
   flush: vi.fn(),
 }));
@@ -17,9 +18,13 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-it.each([false, true])(
-  'a snapshot write acknowledges durability or reports its flush failure (%s)',
-  async fail => {
+it.each(
+  ['snapshot', 'blob'].flatMap(kind =>
+    [false, true].map(fail => ({ kind, fail })),
+  ),
+)(
+  '$kind acknowledges durability or reports its flush failure ($fail)',
+  async ({ kind, fail }) => {
     vi.useFakeTimers();
     const responses = new Map<
       number,
@@ -60,13 +65,26 @@ it.each([false, true])(
       order.push('flush');
       if (fail) throw new Error('disk unavailable');
     });
-    const response = await send({
-      type: 'putResourceWithSnapshot',
-      subject: 'did:ad:test',
-      jsonAd: '{"@id":"did:ad:test"}',
-      snapshot: new Uint8Array([1]),
+    db.putBlob.mockImplementation(() => {
+      order.push('blob');
     });
-    expect(order).toEqual(['properties', 'snapshot', 'flush']);
+    const response = await send(
+      kind === 'blob'
+        ? {
+            type: 'putBlob',
+            hash: new Uint8Array(32),
+            data: new Uint8Array([1]),
+          }
+        : {
+            type: 'putResourceWithSnapshot',
+            subject: 'did:ad:test',
+            jsonAd: '{"@id":"did:ad:test"}',
+            snapshot: new Uint8Array([1]),
+          },
+    );
+    expect(order).toEqual(
+      kind === 'blob' ? ['blob', 'flush'] : ['properties', 'snapshot', 'flush'],
+    );
     expect(response.type).toBe(fail ? 'error' : 'ok');
     if (fail) expect(response.message).toBe('disk unavailable');
 

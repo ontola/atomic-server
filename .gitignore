@@ -15,12 +15,18 @@ artifact
 # only, kept out of the dev store on purpose.
 /.e2e-store
 /.e2e-runs
+
+# One-off diagnostic agent evaluation artifacts
+/browser/diagnostic-evaluations/
 server/assets_tmp
 server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad
-.claude
+.claude/*
+!/.claude/settings.json
+.codex/*
+!/.codex/hooks.json
 .antigravitycli
 
 # Release binaries and one-off rustc scratch files at repo root
