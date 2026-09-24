@@ -1016,6 +1016,7 @@ msgid "Sorry, this invite has no usages left. Ask for a new one."
 msgstr "Sorry, this invite has no usages left. Ask for a new one."
 
 #: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account and accept"
 msgstr "Create account and accept"
 
@@ -1496,6 +1497,7 @@ msgstr "Textual Description <0/>"
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/routes/DataRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -6920,6 +6922,7 @@ msgstr "Local stays on your devices. Vault is encrypted backup. Server hosts a r
 
 #: src/components/SideBar/FeedbackMenuItem.tsx
 #: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackMenuItem.tsx
 msgid "Feedback"
 msgstr "Feedback"
 
@@ -6944,11 +6947,10 @@ msgstr "Feedback could not be sent. Your text is still here. Try again or email"
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
 msgstr "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-msgid "Feedback <0/>"
-msgstr "Feedback <0/>"
+#~ msgid "Feedback <0/>"
+#~ msgstr "Feedback <0/>"
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/chunks/AI/ReportAIChatDialog.tsx
 msgid "Email for a reply (optional) <0/>"
 msgstr "Email for a reply (optional) <0/>"
 
@@ -12406,6 +12408,7 @@ msgstr "Hide toolbar (type / or @ instead)"
 #: src/chunks/RTE/FormattingToolbar.tsx
 msgid "Formatting"
 msgstr "Formatting"
+
 #: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/MicrophoneSelect.tsx
 #: src/components/AI/SpeechSettings.tsx
@@ -12424,10 +12427,12 @@ msgstr "System default"
 #: src/components/AI/MicrophoneSelect.tsx
 msgid "Show microphone names…"
 msgstr "Show microphone names…"
+
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
 msgstr "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+
 #: src/components/Share/ShareDialog.tsx
 msgid "Invite people to"
 msgstr "Invite people to"
@@ -12447,6 +12452,7 @@ msgstr "Access to"
 #: src/components/Share/ShareDialog.tsx
 msgid "Inherited permissions"
 msgstr "Inherited permissions"
+
 #. 0: lowerRowName
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 msgid "Stop starting new {0}s here"
@@ -12465,3 +12471,67 @@ msgstr "New {0}s start here"
 #: src/components/AI/MicrophoneSelect.tsx
 msgid "Saved microphone"
 msgstr "Saved microphone"
+
+#: src/components/SideBar/FeedbackMenuItem.tsx
+msgid "Email for a reply (optional)"
+msgstr "Email for a reply (optional)"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Include diagnostic data"
+msgstr "Include diagnostic data"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Recording locally"
+msgstr "Recording locally"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Not recording"
+msgstr "Not recording"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Retry clearing diagnostics"
+msgstr "Retry clearing diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Stop and clear"
+msgstr "Stop and clear"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Start recording"
+msgstr "Start recording"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostic report preview"
+msgstr "Diagnostic report preview"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Kept in this tab only; it will be lost on reload."
+msgstr "Kept in this tab only; it will be lost on reload."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Couldn’t clear local diagnostics. Recording is stopped; retry before leaving this browser."
+msgstr "Couldn’t clear local diagnostics. Recording is stopped; retry before leaving this browser."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Reset in another tab. Reload to record again."
+msgstr "Reset in another tab. Reload to record again."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Recent save and connection activity only. No document content, names, URLs, or error messages. Nothing is shared unless you attach it below."
+msgstr "Recent save and connection activity only. No document content, names, URLs, or error messages. Nothing is shared unless you attach it below."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Review the timing and activity counts before sharing."
+msgstr "Review the timing and activity counts before sharing."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Download report"
+msgstr "Download report"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostic data"
+msgstr "Diagnostic data"
+
+#: src/routes/DataRoute.tsx
+msgid "Retry save"
+msgstr "Retry save"
