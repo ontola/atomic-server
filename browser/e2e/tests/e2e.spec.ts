@@ -280,14 +280,16 @@ test.describe('data-browser', async () => {
       ).toHaveCount(0);
       // Share opens straight on the invite form.
       await topBarShareButton(page).click();
-      await expect(page.getByLabel('Allow edits')).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Copy invite link' }),
+      ).toBeVisible();
       await expect(
         page.getByRole('heading', { name: 'How your colleagues see you' }),
       ).toHaveCount(0);
 
       const createAction = page
-        .locator('dialog[open] footer')
-        .getByRole('button', { name: 'Create', exact: true });
+        .locator('dialog[open]')
+        .getByRole('button', { name: 'Copy invite link', exact: true });
       await expect(createAction).toBeVisible();
       await createAction.hover();
       await page.screenshot({ path: 'test-results/invite-footer-hover.png' });
@@ -397,14 +399,13 @@ test.describe('data-browser', async () => {
     await page
       .getByRole('button', { name: 'Save and continue', exact: true })
       .click();
-    await page.getByLabel('Allow edits').check();
-    await page.getByRole('button', { name: 'Create' }).click();
-    await expect(page.locator('text=Invite created and copied ')).toBeVisible();
-    const inviteUrl = await page.evaluate(() =>
-      document
-        .querySelector('[data-code-content]')
-        ?.getAttribute('data-code-content'),
-    );
+    await page
+      .getByLabel('Role for people who join with the link')
+      .selectOption('write');
+    await page.getByRole('button', { name: 'Copy invite link' }).click();
+    const inviteUrl = await page
+      .locator('[data-invite-link]')
+      .getAttribute('data-invite-link');
     expect(inviteUrl).toBeTruthy();
     await waitForSynced(page);
 
