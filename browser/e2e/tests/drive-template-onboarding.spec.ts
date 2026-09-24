@@ -205,7 +205,8 @@ test('interactive demo returns to template selection from the top bar', async ({
   page,
 }) => {
   test.setTimeout(120000);
-  await devDrive(page);
+  // A guest, not a dev drive: a signed-in visitor who opens the demo is sent
+  // to their own workspace instead (DemoRoute's signedInDrive).
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/demo`);
   const exit = page.getByRole('button', { name: 'Back', exact: true });
