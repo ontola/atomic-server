@@ -90,7 +90,7 @@ jobs:
           # full for develop, tags, and dispatched integration batches.
           # Not `--e2e-mode`: Dagger maps that kebab to `e2EMode` and misses
           # the argument.
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}
   # Floating `:develop` image tracks the integration branch. There is no
   # `main` branch here — that clause could never fire, and left in place
   # it invites someone to conclude one exists. `master` is not a docker
@@ -159,4 +159,4 @@ jobs:
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: create-docker-images --tags ${{ steps.meta.outputs.tags }}
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} create-docker-images --tags ${{ steps.meta.outputs.tags }}
