@@ -56,7 +56,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
     id: 'issue-tracker',
     title: 'Issue Tracker',
     description:
-      'Status, Assignee and Priority, plus a kanban board and an issue list.',
+      'Status, Assignee and Priority, plus a kanban board and an Issues view.',
     rowName: 'Issue',
     icon: FaBug,
     spec: {

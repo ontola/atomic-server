@@ -19,21 +19,33 @@ import { withTableRowDefaults } from '../rowDefaults';
 export function useCreateRow(
   tableSubject: string,
   tableClass: Resource,
-): (name: string, extra?: Record<string, JSONValue>) => Promise<Resource> {
+): (
+  name: string,
+  extra?: Record<string, JSONValue | null>,
+) => Promise<Resource> {
   const store = useStore();
 
   return useCallback(
-    async (name: string, extra: Record<string, JSONValue> = {}) => {
-      const propVals = await withTableRowDefaults(store, tableSubject, {
-        [core.properties.name]: name,
-        [commits.properties.createdAt]: Date.now(),
-        ...extra,
-      });
+    async (name: string, extra: Record<string, JSONValue | null> = {}) => {
+      const preset: Record<string, JSONValue> = {};
+      const unset: string[] = [];
 
       for (const [property, value] of Object.entries(extra)) {
         if (value === null) {
-          delete propVals[property];
+          unset.push(property);
+        } else {
+          preset[property] = value;
         }
+      }
+
+      const propVals = await withTableRowDefaults(store, tableSubject, {
+        [core.properties.name]: name,
+        [commits.properties.createdAt]: Date.now(),
+        ...preset,
+      });
+
+      for (const property of unset) {
+        delete propVals[property];
       }
 
       const row = await store.newResource({

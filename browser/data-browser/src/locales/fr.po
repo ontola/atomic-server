@@ -119,6 +119,7 @@ msgstr "Agents IA"
 #: src/chunks/AI/AgentConfig.tsx src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -1217,6 +1218,7 @@ msgstr "Importation..."
 
 #: src/actions/resourceActions.tsx
 #: src/actions/resourceActions.tsx src/views/ImporterPage.tsx
+#: src/chunks/PluginRuns/PluginPage.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importer"
@@ -1496,6 +1498,7 @@ msgstr "Description textuelle <0/>"
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
+#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
@@ -2025,6 +2028,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/routes/IntegrationStore.tsx
 #: src/routes/IntegrationStore.tsx
@@ -3216,6 +3220,7 @@ msgstr "Copier le code"
 msgid "Enter valid JSON..."
 msgstr "Entrez un JSON valide..."
 
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Install"
 msgstr "Installer"
@@ -4449,6 +4454,7 @@ msgstr ""
 msgid "Could not copy — select and copy the code manually."
 msgstr ""
 
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -4709,6 +4715,7 @@ msgid "No {0} portal is configured for this server."
 msgstr ""
 
 #: src/chunks/PluginRuns/ConnectPets.tsx src/components/AccountRecoveryCard.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx src/routes/SyncRoute.tsx
@@ -8767,6 +8774,7 @@ msgstr ""
 
 #: node_modules/devonian/platform-lenses/atomic-integrations/ui/ConnectClockify.tsx
 #: src/chunks/PluginRuns/ConnectClockify.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/ImportMT940.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -8775,6 +8783,7 @@ msgstr ""
 
 #: node_modules/devonian/platform-lenses/atomic-integrations/ui/ConnectClockify.tsx
 #: src/chunks/PluginRuns/ConnectClockify.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/ImportMT940.tsx
 msgid "Preview import"
 msgstr ""
@@ -8943,6 +8952,7 @@ msgid "This replaces the importer code, including any custom edits. Your workspa
 msgstr ""
 
 #: node_modules/devonian/platform-lenses/atomic-integrations/ui/ClockifyUpgrade.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/PluginRuns/ClockifyUpgrade.tsx
 msgid "Updating…"
 msgstr ""
@@ -9073,7 +9083,7 @@ msgstr ""
 msgid "This import is paused. Review the issues below, then preview it again."
 msgstr ""
 
-#: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
 msgid "Loading importer…"
 msgstr ""
 
@@ -9338,10 +9348,10 @@ msgstr ""
 msgid "Integration proxy"
 msgstr ""
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Connect accounts and import records using a LocalThought integration-proxy server. This setting is saved in this browser."
-msgstr ""
+#~ msgid "Connect accounts and import records using a LocalThought integration-proxy server. This setting is saved in this browser."
+#~ msgstr ""
 
+#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Reset to default"
 msgstr ""
@@ -9702,7 +9712,9 @@ msgstr ""
 msgid "Previous version"
 msgstr ""
 
+#. 0: app.version
 #. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0}"
 msgstr ""
@@ -9891,9 +9903,8 @@ msgstr ""
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr ""
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show API plugins"
-msgstr ""
+#~ msgid "Show API plugins"
+#~ msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Show experimental plugins"
@@ -12612,4 +12623,116 @@ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Less than 1% used"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to connect an account."
+msgstr ""
+
+#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Use existing connection"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Connect an account"
+msgstr ""
+
+#. 0: String(reason)
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Could not set up this importer: {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up"
+msgstr ""
+
+#. 0: manifest.destination.table.name
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
+msgstr ""
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "File to import"
+msgstr ""
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr ""
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Open imported data"
+msgstr ""
+
+#. 0: bytes
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "{0} bytes"
+msgstr ""
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Finishing the connection…"
+msgstr ""
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Sign in to finish connecting this account."
+msgstr ""
+
+#. 0: app.name; 1: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "{0} updated to {1}"
+msgstr ""
+
+#. 0: mine.version ?? '(unknown version)'
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installed {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installing…"
+msgstr ""
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Install {0}"
+msgstr ""
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Open {0}"
+msgstr ""
+
+#. 0: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Update to {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Drive apps"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Plugin catalog URL"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr ""

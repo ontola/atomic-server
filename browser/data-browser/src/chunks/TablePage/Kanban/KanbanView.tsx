@@ -1,5 +1,6 @@
 import {
   Collection,
+  JSONValue,
   Property,
   Resource,
   core,
