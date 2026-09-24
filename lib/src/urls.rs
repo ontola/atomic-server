@@ -248,6 +248,9 @@ pub const PREVIOUS_RELEASE: &str = "https://atomicdata.dev/properties/previousRe
 pub const PUBLISHER: &str = "https://atomicdata.dev/properties/publisher";
 pub const RELEASE_PROP: &str = "https://atomicdata.dev/properties/release";
 pub const GRANTS: &str = "https://atomicdata.dev/properties/grants";
+/// Which plugin route request last created or changed a resource (JSON).
+/// Written by the host only.
+pub const ROUTE_PROVENANCE: &str = "https://atomicdata.dev/properties/routeProvenance";
 pub const INSTALLATION_STATUS: &str = "https://atomicdata.dev/properties/installationStatus";
 // ... for the integration proxy (ontola/atomic-plugins#54, phase 2)
 /// The installation's keyless app id at the integration proxy: an

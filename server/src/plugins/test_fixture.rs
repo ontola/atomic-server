@@ -208,6 +208,19 @@ pub fn well_known_release() -> atomic_lib::db::plugin_release::PluginRelease {
     )
 }
 
+/// `testdata/plugin-routes/inbox/`: a `drive-prefix` plugin whose `POST
+/// /inbox` creates a PlainText under `config.inbox`, and whose `PUT` /
+/// `DELETE /item` change or destroy one. Needs `--plugin-routes read-write`
+/// and a route grant.
+pub const INBOX_SOURCE: &str = include_str!("../../../testdata/plugin-routes/inbox/plugin.js");
+pub const INBOX_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/inbox/manifest.json");
+
+/// The inbox fixture as a release.
+pub fn inbox_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(INBOX_SOURCE, serde_json::from_str(INBOX_MANIFEST).unwrap())
+}
+
 /// A JS `extension` release of the trivial source with this manifest.
 pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
     js_release_with_source(HELLO_ROUTE_SOURCE, manifest)
@@ -235,11 +248,22 @@ pub async fn install_release(
     fixture: &Fixture,
     release: &atomic_lib::db::plugin_release::PluginRelease,
 ) -> Result<String, String> {
+    install_release_with(fixture, release, None, None).await
+}
+
+/// [`install_release`], also granting `route_grant` (the value of the
+/// `route-writes` grant: the approved write targets) and with this `config`.
+pub async fn install_release_with(
+    fixture: &Fixture,
+    release: &atomic_lib::db::plugin_release::PluginRelease,
+    route_grant: Option<serde_json::Value>,
+    config: Option<serde_json::Value>,
+) -> Result<String, String> {
     let store = &fixture.appstate.store;
     let id = store
         .publish_plugin_release(release)
         .map_err(|e| e.to_string())?;
-    let grants: Vec<serde_json::Value> = release
+    let mut grants: Vec<serde_json::Value> = release
         .manifest
         .get("capabilities")
         .and_then(|c| c.as_array())
@@ -247,7 +271,15 @@ pub async fn install_release(
         .flatten()
         .filter_map(|c| c.get("name").cloned())
         .collect();
+    if let Some(targets) = route_grant {
+        grants.push(serde_json::json!({ "route-writes": targets }));
+    }
     let mut resource = Resource::new("did:ad:placeholder".into());
+    if let Some(config) = config {
+        resource
+            .set_unsafe(urls::CONFIG.into(), Value::Json(config))
+            .map_err(|e| e.to_string())?;
+    }
     for (property, value) in [
         (
             urls::IS_A,

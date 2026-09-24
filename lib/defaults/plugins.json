@@ -235,6 +235,16 @@
     "https://atomicdata.dev/properties/shortname": "grants"
   },
   {
+    "@id": "https://atomicdata.dev/properties/routeProvenance",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Which plugin route request last created or changed this resource, as JSON: the Installation, the route, the request id, and the remote caller the host verified (null for an unauthenticated route). Written by the host, never by the plugin.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "route-provenance"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/installationStatus",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "Lifecycle of an Installation: `draft`, `active`, `paused` or `revoked`. Committing `active` installs; `revoked` or destroying uninstalls.",

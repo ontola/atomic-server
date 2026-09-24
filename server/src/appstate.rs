@@ -300,6 +300,11 @@ impl AppState {
             config.opts.write_rate_limit,
             config.opts.anonymous_write_rate_limit,
         ));
+        #[cfg(feature = "plugin-routes")]
+        let route_exec = Arc::new(
+            plugins::route_exec::RouteExecutor::default()
+                .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts)),
+        );
         Ok(AppState {
             store,
             config,
@@ -313,7 +318,7 @@ impl AppState {
             #[cfg(feature = "plugin-routes")]
             route_registry,
             #[cfg(feature = "plugin-routes")]
-            route_exec: Arc::new(Default::default()),
+            route_exec,
         })
     }
 
