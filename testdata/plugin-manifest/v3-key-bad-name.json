@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [],
+    "keys": [
+      {
+        "name": "Actor Key",
+        "alg": "rsa-sha256"
+      }
+    ]
+  }
+}

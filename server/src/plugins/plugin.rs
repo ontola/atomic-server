@@ -271,6 +271,7 @@ mod installation_hook {
         signer: &str,
         plugins_dir: &Path,
         plugin_cache_dir: &Path,
+        plugin_routes: &crate::plugin_routes::PluginRoutesConfig,
     ) -> AtomicResult<()> {
         let subject = resource.get_subject().to_string();
         let reference = string_value(resource, urls::RELEASE_PROP)
@@ -299,7 +300,11 @@ mod installation_hook {
             ));
         }
 
-        // 2. Grants against what the manifest declares. The grants on the
+        // 2. Public endpoints against this node's plugin-routes gates. On an
+        //    upgrade this refuses the commit, so the old release keeps running.
+        release::check_host_features(&release.manifest, plugin_routes)?;
+
+        // 3. Grants against what the manifest declares. The grants on the
         //    Installation are the approved set the host reads back.
         release::check_grants(&release.manifest, &json_value(resource, urls::GRANTS)?)?;
 
@@ -315,7 +320,7 @@ mod installation_hook {
             }
         }
 
-        // 3. Materialize by runtime.
+        // 4. Materialize by runtime.
         if release.is_wasip2() {
             // The exact release whose code is already on disk, by id: a config
             // change or the legacy migration then extracts and compiles
@@ -550,6 +555,7 @@ fn on_installation_before_commit(
     context: CommitExtenderContext,
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
+    plugin_routes: crate::plugin_routes::PluginRoutesConfig,
 ) -> BoxFuture<AtomicResult<()>> {
     Box::pin(async move {
         let CommitExtenderContext {
@@ -601,6 +607,7 @@ fn on_installation_before_commit(
                         commit.signer.as_str(),
                         &plugins_dir,
                         &plugin_cache_dir,
+                        &plugin_routes,
                     )
                     .await?
                 }
@@ -629,9 +636,12 @@ fn on_installation_before_commit(
     })
 }
 
+/// `plugin_routes` is this node's gates, resolved at startup: activating a
+/// release whose public endpoints they don't allow is refused.
 pub fn build_installation_extender(
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
+    plugin_routes: crate::plugin_routes::PluginRoutesConfig,
 ) -> ClassExtender {
     ClassExtender::builder()
         .id("installation".to_string())
@@ -640,7 +650,12 @@ pub fn build_installation_extender(
             on_resource_get(context)
         }))
         .before_commit(ClassExtender::wrap_commit_handler(move |context| {
-            on_installation_before_commit(context, plugins_dir.clone(), plugin_cache_dir.clone())
+            on_installation_before_commit(
+                context,
+                plugins_dir.clone(),
+                plugin_cache_dir.clone(),
+                plugin_routes.clone(),
+            )
         }))
         .build()
 }
@@ -1000,6 +1015,83 @@ mod installation_tests {
         )
         .await;
         assert!(db.get_resource(&draft.as_str().into()).await.is_ok());
+    }
+
+    /// The test fixture's node runs at `--plugin-routes off`, on every build.
+    #[actix_rt::test]
+    async fn public_endpoints_are_refused_while_the_gates_are_shut_and_an_upgrade_keeps_the_old_release(
+    ) {
+        let f = fixture("installation_gated").await;
+        let db = &f.appstate.store;
+        let js_v3 = |http: Option<serde_json::Value>| {
+            let mut manifest = json!({
+                "schemaVersion": 3,
+                "capabilities": [{"name": "storage", "reason": "keeps a cursor"}]
+            });
+            if let Some(http) = http {
+                manifest["http"] = http;
+            }
+            let mut release = PluginRelease::js(
+                "export function run() { return { intents: [] }; }".into(),
+                manifest,
+                Default::default(),
+            );
+            release.world = WORLD_EXTENSION.into();
+            db.publish_plugin_release(&release).unwrap()
+        };
+        let plain = js_v3(None);
+        let gated = js_v3(Some(json!({
+            "routes": [{"id": "profile", "path": "/users/{name}", "methods": ["GET"]}]
+        })));
+        let expected = if crate::plugin_routes::COMPILED {
+            "start AtomicServer with `--plugin-routes read-only`"
+        } else {
+            "built without plugin routes"
+        };
+
+        // Install: refused, nothing materialized.
+        let err = try_genesis(
+            db,
+            installation_props(&f.drive, "acme", "gated", &gated, &gated, "active"),
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains(expected), "{err}");
+        assert!(err.contains("route `GET /users/{name}`"), "{err}");
+        assert!(db
+            .get_plugin_meta(&PluginMetaKey::new(&f.drive, "acme", "gated"))
+            .unwrap()
+            .is_none());
+
+        // A v3 manifest without `http` installs on every build.
+        let installation = genesis(
+            db,
+            installation_props(&f.drive, "acme", "plain", &plain, &plain, "active"),
+        )
+        .await;
+        let key = PluginMetaKey::new(&f.drive, "acme", "plain");
+        let before = db.get_plugin_meta(&key).unwrap().unwrap();
+
+        // Upgrade to the gated release: refused, the old release stays.
+        let mut r = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        r.set_unsafe(urls::RELEASE_PROP.into(), Value::String(gated.clone()))
+            .unwrap();
+        r.set_unsafe(urls::RELEASE_ID.into(), Value::String(gated.clone()))
+            .unwrap();
+        let err = r.save(db).await.unwrap_err().to_string();
+        assert!(err.contains(expected), "{err}");
+        let stored = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        assert_eq!(stored.get(urls::RELEASE_ID).unwrap().to_string(), plain);
+        let after = db.get_plugin_meta(&key).unwrap().unwrap();
+        assert_eq!(after.manifest, before.manifest);
+        assert_eq!(after.release_id, before.release_id);
     }
 
     /// The capabilities `test-plugin.zip` declares in its `plugin.json`.

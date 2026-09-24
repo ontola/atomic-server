@@ -10,6 +10,11 @@
 //! version-one form: every version-two field is skipped when it holds its
 //! default, and `schemaVersion` keeps the value it was parsed with. Releases are
 //! content-addressed over the serialized manifest, so this must stay true.
+//!
+//! Version three adds the optional `http` block ([`super::manifest_http`]): the
+//! public endpoints a plugin asks for. It is left out when empty, so a version
+//! two manifest serializes exactly as before. A v3 manifest without it is
+//! accepted everywhere; one with it needs the plugin-routes gates.
 use atomic_lib::db::plugin_meta::{validate_plugin_identifiers, PermissionType, PluginManifest};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -35,6 +40,10 @@ pub struct Manifest {
     /// an operation id. It never widens what `operations` grant.
     #[serde(default, skip_serializing_if = "Network::is_default")]
     pub network: Network,
+    /// Public endpoints (routes, well-known claims, listeners, ...). Version
+    /// three only; see [`super::manifest_http`].
+    #[serde(default, skip_serializing_if = "super::manifest_http::http_is_empty")]
+    pub http: Option<super::manifest_http::Http>,
     /// What the plugin's user-editable config looks like. The host validates
     /// the stored config against it before a run; nothing here grants access,
     /// so it is carried rather than interpreted.
@@ -83,6 +92,7 @@ impl From<ManifestV1> for Manifest {
             operations: v1.operations,
             actions: v1.actions,
             network: Network::default(),
+            http: None,
             config: v1.config,
             config_schema: None,
             default_config: None,
@@ -332,7 +342,7 @@ impl Manifest {
             Some(1) => serde_json::from_value::<ManifestV1>(raw)
                 .map_err(|e| e.to_string())?
                 .into(),
-            Some(2) => serde_json::from_value(raw).map_err(|e| e.to_string())?,
+            Some(2) | Some(3) => serde_json::from_value(raw).map_err(|e| e.to_string())?,
             _ => return Err("unsupported manifest schemaVersion".into()),
         };
         manifest.validate()?;
@@ -425,6 +435,7 @@ impl Manifest {
         if let Some(name) = &self.name {
             validate_plugin_identifiers("namespace", name).map_err(|e| e.to_string())?;
         }
+        self.validate_http()?;
         Ok(())
     }
 
@@ -461,6 +472,42 @@ impl Manifest {
                 && endpoint.origin() == url.origin()
                 && matches_path(endpoint.path(), url.path())
         })
+    }
+}
+
+/// Version three: public endpoints, the gate they need, and the derived
+/// `requires`.
+impl Manifest {
+    fn validate_http(&self) -> Result<(), String> {
+        let Some(http) = &self.http else {
+            return Ok(());
+        };
+        if self.schema_version < 3 {
+            return Err("the http block needs schemaVersion 3".into());
+        }
+        http.validate(&super::manifest_http::Context {
+            server_extension: self.world == World::ServerExtension,
+            operations: self
+                .operations
+                .iter()
+                .map(|o| (o.id.as_str(), o.effect.as_str(), o.url.as_str()))
+                .collect(),
+        })
+    }
+
+    /// What this release needs from the node's plugin-routes gates.
+    pub fn gate(&self) -> super::manifest_http::Gate {
+        self.http.as_ref().map(|h| h.gate()).unwrap_or_default()
+    }
+
+    /// Derived from the declarations; authors do not write it.
+    pub fn requires(&self) -> Vec<String> {
+        super::manifest_http::derive_requires(
+            self.http.as_ref(),
+            &self.gate(),
+            !self.secrets.is_empty(),
+            self.runtime == Runtime::Wasip2v1 || self.entrypoints.run,
+        )
     }
 }
 
@@ -528,6 +575,7 @@ pub fn translate_plugin_json(
             origins,
             reason: network_reason,
         },
+        http: None,
         config: None,
         config_schema: plugin_json.config_schema.as_ref().map(sorted),
         default_config: plugin_json.default_config.as_ref().map(sorted),
@@ -635,6 +683,129 @@ mod tests {
         assert_eq!(manifest.world, World::Extension);
         assert!(manifest.entrypoints.run);
         assert_eq!(serde_json::json!(manifest), raw);
+    }
+
+    /// Releases are content-addressed over the serialized manifest, so every
+    /// manifest accepted before version three must keep its release id. The
+    /// ids in `release-ids.json` were computed before the `http` block existed.
+    #[test]
+    fn accepted_fixtures_keep_their_release_ids() {
+        let pinned = fixture("release-ids.json");
+        let pinned = pinned.as_object().unwrap();
+        let mut checked = 0;
+        for case in fixture("index.json").as_array().unwrap() {
+            if case.get("error").is_some() {
+                continue;
+            }
+            let file = case["file"].as_str().unwrap();
+            let manifest = Manifest::parse(fixture(file)).unwrap().unwrap();
+            let id = atomic_lib::db::plugin_release::PluginRelease::js(
+                "export function run() {}".into(),
+                serde_json::json!(manifest),
+                Default::default(),
+            )
+            .id()
+            .unwrap();
+            assert_eq!(
+                pinned.get(file).and_then(|v| v.as_str()),
+                Some(id.as_str()),
+                "{file}"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, pinned.len());
+    }
+
+    /// Shared with `browser/lib/src/plugin-manifest.test.ts`.
+    #[test]
+    fn shared_http_conformance() {
+        for case in fixture("http-index.json").as_array().unwrap() {
+            let name = &case["name"];
+            let result = Manifest::parse(fixture(case["file"].as_str().unwrap()));
+            match case["error"].as_str() {
+                None => {
+                    let manifest = result.unwrap_or_else(|e| panic!("{name}: {e}")).unwrap();
+                    if let Some(expected) = case.get("serialized") {
+                        assert_eq!(&serde_json::json!(manifest), expected, "{name}");
+                    }
+                    assert_eq!(manifest.gate().to_json(), case["gate"], "{name}");
+                    assert_eq!(
+                        serde_json::json!(manifest.requires()),
+                        case["requires"],
+                        "{name}"
+                    );
+                    // The canonical form parses to the same thing.
+                    let again = Manifest::parse(serde_json::json!(manifest))
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(again.gate(), manifest.gate(), "{name}");
+                }
+                Some(expected) => {
+                    let error = result.expect_err(&format!("{name} should be rejected"));
+                    assert!(
+                        error.contains(expected),
+                        "{name}: {error:?} lacks {expected:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The node described in `http-refusals.json`, built the way startup
+    /// builds it.
+    fn node(raw: &serde_json::Value) -> crate::plugin_routes::PluginRoutesConfig {
+        use crate::plugin_routes::{
+            resolve, OriginContext, PluginRoutesLevel, PluginRoutesOptions,
+        };
+        let level = match raw["level"].as_str().unwrap() {
+            "off" => PluginRoutesLevel::Off,
+            "read-only" => PluginRoutesLevel::ReadOnly,
+            "read-write" => PluginRoutesLevel::ReadWrite,
+            other => panic!("{other}"),
+        };
+        let names = |key: &str, entry: &dyn Fn(&str) -> String| {
+            raw[key]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|n| entry(n.as_str().unwrap()))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let listeners = names("listeners", &|n| format!("{n}:4455"));
+        let sidecars = names("sidecars", &|n| format!("{n}=http://127.0.0.1:2583"));
+        resolve(
+            PluginRoutesOptions {
+                level,
+                routes_origin: None,
+                listeners: Some(listeners.as_str()),
+                sidecars: Some(sidecars.as_str()),
+            },
+            raw["compiled"].as_bool().unwrap(),
+            OriginContext {
+                api_origin: "https://example.com",
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    /// One case per refusal message of design 0.4; shared with the TS mirror.
+    #[test]
+    fn shared_host_feature_refusals() {
+        for case in fixture("http-refusals.json").as_array().unwrap() {
+            let name = &case["name"];
+            let manifest = Manifest::parse(fixture(case["file"].as_str().unwrap()))
+                .unwrap()
+                .unwrap();
+            match manifest.gate().check(&node(&case["node"])) {
+                Ok(()) => assert!(case["refusal"].is_null(), "{name} should be refused"),
+                Err(refusal) => {
+                    assert_eq!(refusal.to_json(), case["refusal"], "{name}");
+                    assert_eq!(refusal.message(), case["message"], "{name}");
+                }
+            }
+        }
     }
 
     #[test]

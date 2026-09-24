@@ -1,0 +1,12 @@
+{
+  "v1-public-read.json": "blake3:5b21687d634672a594b73ac97fa5317569ae9893ffb2690e5e3bec0271f98779",
+  "v1-post-query.json": "blake3:c5b507a0969e57cbb3678c8db0ec20297e118b2957fdf4808dcc2debaf2ae8ff",
+  "v1-github-issues.json": "blake3:fd4609818cdf0d87a8bfb79251bd404efc274f7890cc97a6ee7e7db1279d7069",
+  "v2-js-extension.json": "blake3:6e6993738117e22c38e7cb7af41e11d0473981c2ffe7ffbc359b524189436677",
+  "v2-wasm-server-extension.json": "blake3:b993631a7a546cc28444af142fb6b9c65c394096bf988af5eddb60ce8211d350",
+  "v2-wasm-extension-run.json": "blake3:28c61969e8a3260809629fc11a09955cb427954b8a329eb9bc53de98bd8f637a",
+  "v2-js-server-extension.json": "blake3:93c1e7fc0cbc583d6f89ccc6ba694b52f158e0c8e77714863b60f0be4c99b74f",
+  "v2-minimal.json": "blake3:5bea99dd5c2522b5848ef67695b33f9a0bcbddaed4c88f701482da98afd00359",
+  "translated-notion-sync.json": "blake3:0f7b2c652fa5f081c7a7951d93685d15b393eccbb25a16cce7a1fda6ad31ecfb",
+  "translated-no-classes.json": "blake3:faa6a6f95fe7e7cb133e46f5336c3670d00c5438cc1da1efeb28350062623f23"
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [],
+    "ports": [
+      80
+    ]
+  }
+}

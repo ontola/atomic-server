@@ -133,6 +133,42 @@ A schema version 1 manifest is still accepted and is read as version 2 with `run
 Its stored form does not change.
 The server-side validator is `server/src/plugins/manifest.rs`, the browser mirror is `@tomic/lib`'s `validateManifest`, and both are checked against the fixtures in `testdata/plugin-manifest/`.
 
+## Manifest v3: public endpoints
+
+Version 3 is version 2 plus an optional `http` block: endpoints the plugin asks the server to open to the internet.
+A v3 manifest without `http` is accepted everywhere v3 is understood; an `http` block in a v2 manifest is rejected.
+
+```json
+{
+  "schemaVersion": 3,
+  "http": {
+    "mount": "installation-origin",
+    "routes": [
+      { "id": "actor", "path": "/users/{name}", "methods": ["GET", "HEAD"] },
+      { "id": "inbox", "path": "/users/{name}/inbox", "methods": ["POST"], "auth": "http-signature",
+        "body": "json", "writes": ["inbox-items"], "enqueues": ["deliver"] }
+    ],
+    "wellKnown": [{ "name": "webfinger", "kind": "shared", "match": { "resourcePrefix": "acct:" }, "route": "actor" }],
+    "writeTargets": [{ "id": "inbox-items", "parent": "config:inboxTable", "classes": ["https://example.com/classes/Activity"] }],
+    "keys": [{ "name": "actor-key", "alg": "rsa-sha256", "reason": "Signs deliveries" }],
+    "tokens": [{ "name": "storage" }],
+    "reason": "Lets other fediverse servers follow this drive's actor."
+  },
+  "operations": [{ "id": "deliver", "method": "POST", "url": "https://*/inbox", "effect": "write" }]
+}
+```
+
+- `mount`: `installation-origin` (default), `drive-host` or `drive-prefix`.
+- `routes`: at most 32. `path` is literal segments, whole-segment `{param}`s and a trailing `{*rest}` (one or more segments); no regex. Routes that share a method may not overlap. `methods` from `GET HEAD POST PUT PATCH DELETE`. `principal` is `anonymous` (default), `installation` or `caller`; `caller` needs `auth: atomic`, and on `drive-prefix` only `anonymous` is allowed unless `auth` is `atomic`. `auth` is `none` (default), `atomic`, `http-signature`, `bearer` (needs `tokens`) or `dpop`. `writes` name `writeTargets`, `enqueues` name declared write operations. `maxBodyBytes` is at most 1 MiB for inline bodies, `timeoutMs` at most 30000.
+- `wellKnown`: `webfinger` is shared and needs `match.resourcePrefix`; `nodeinfo`, `ocm`, `atproto-did`, `solid`, `oauth-authorization-server`, `oauth-protected-resource`, `openid-configuration` and `did.json` are exclusive. Nothing else can be claimed.
+- `listeners` (`world: server-extension` only) and `sidecars` name what the operator configures in `ATOMIC_PLUGIN_LISTENERS` and `ATOMIC_PLUGIN_SIDECARS`.
+- An operation with a wildcard host (`https://*/...`) must be listed in some route's `enqueues`.
+
+The server derives what a release needs from these declarations; the author never writes it.
+Anonymous `GET`/`HEAD` routes and well-known claims need `--plugin-routes read-only`; any other route, write target, key, token, delivery, listener or sidecar needs `read-write`.
+`GET /plugin-catalog` gives each entry a derived `requires` list, such as `["persistent-host", "plugin-routes:read-only", "public-origin", "wasm-sandbox"]`.
+Installing, upgrading or pinning a release that needs more than the server allows is refused with a message that names the endpoints and the switch to turn on (`/plugin-release-pin` answers `409` with the typed `host-feature-unavailable` problem) (see [Plugin public endpoints](../atomicserver/installation.md#plugin-public-endpoints-opt-in)). A refused upgrade leaves the old release running.
+
 ## The Plugin Manifest (legacy `plugin.json`)
 
 `plugin.json` is the legacy form for WASM packages.
