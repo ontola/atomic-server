@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "r",
+        "path": "/x",
+        "methods": [
+          "POST"
+        ],
+        "principal": "caller",
+        "auth": "bearer"
+      }
+    ],
+    "tokens": [
+      {
+        "name": "t"
+      }
+    ]
+  }
+}

@@ -150,7 +150,7 @@ describe('portable app package resources', () => {
       { runtime: 'other/1' },
       { source: '' },
       { token: 'secret' },
-      { manifest: { schemaVersion: 3 } },
+      { manifest: { schemaVersion: 4 } },
       { manifest: { schemaVersion: 2, capabilities: ['teleport'] } },
       { schemas: { item: 'local:item' } },
     ]) {

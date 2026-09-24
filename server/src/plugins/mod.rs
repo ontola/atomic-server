@@ -60,6 +60,8 @@ pub mod journal;
 pub mod js_runtime;
 #[cfg(feature = "wasm-plugins")]
 pub mod manifest;
+#[cfg(feature = "wasm-plugins")]
+pub mod manifest_http;
 pub mod path;
 #[cfg(feature = "wasm-plugins")]
 pub mod plan;

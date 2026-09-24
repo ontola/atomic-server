@@ -250,6 +250,8 @@ async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
     assert_eq!(entry["subject"], format!("{origin}/listings/{id}"));
     assert_eq!(entry["runtime"], "atomic-js/1");
     assert_eq!(entry["world"], "extension");
+    // Derived from the manifest, never written by the author.
+    assert_eq!(entry["requires"], serde_json::json!(["wasm-sandbox"]));
 
     let served = test::call_service(
         &service,
@@ -316,4 +318,78 @@ async fn a_publish_that_claims_the_wrong_world_stores_nothing() {
         .unwrap();
     assert_eq!(published, id);
     assert!(db.has_blob(hash.as_bytes()).await.unwrap());
+}
+
+/// Pinning a release is how a connection starts running it on this node, so
+/// its public endpoints are held to this node's gates: `off` in a test config,
+/// whatever the build. The refusal is the typed problem, not a bare string.
+#[actix_rt::test]
+async fn pinning_a_release_with_public_endpoints_is_refused_while_the_gates_are_shut() {
+    let mut f = fixture("plugin_release_pin_gated").await;
+    let service_state = f.appstate.clone();
+    let pin = |manifest: &str| {
+        format!("export const manifest = {manifest};\nexport function run() {{ return {{ intents: [] }}; }}")
+    };
+    crate::plugins::test_fixture::write_plugin(&mut f, "unused").await;
+    let set_source = |source: String| {
+        let db = service_state.store.clone();
+        let plugin = f.plugin.clone();
+        let property = f.terms.property("plugin-source").unwrap().to_string();
+        async move {
+            let mut r = db.get_resource(&plugin.as_str().into()).await.unwrap();
+            r.set_unsafe(property, atomic_lib::Value::Markdown(source))
+                .unwrap();
+            r.save_locally(&db).await.unwrap();
+        }
+    };
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(f.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let request = || {
+        signed("/plugin-release-pin", &f.appstate)
+            .method(actix_web::http::Method::POST)
+            .set_json(serde_json::json!({"drive": f.drive, "plugin": f.plugin}))
+            .to_request()
+    };
+
+    set_source(pin(
+        r#"{ schemaVersion: 3, secrets: [], operations: [], http: { routes: [
+            { id: "profile", path: "/users/{name}", methods: ["GET"] } ] } }"#,
+    ))
+    .await;
+    let refused = test::call_service(&service, request()).await;
+    assert_eq!(refused.status(), 409);
+    assert_eq!(
+        refused
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/problem+json")
+    );
+    let problem: serde_json::Value = serde_json::from_slice(&body_of(refused)).unwrap();
+    assert_eq!(problem["type"], "host-feature-unavailable");
+    assert_eq!(problem["feature"], "plugin-routes");
+    assert_eq!(problem["needed"], "read-only");
+    assert_eq!(problem["level"], "off");
+    assert_eq!(problem["compiled"], crate::plugin_routes::COMPILED);
+    assert_eq!(
+        problem["surfaces"],
+        serde_json::json!(["route `GET /users/{name}`"])
+    );
+    let detail = problem["detail"].as_str().unwrap();
+    assert!(
+        detail.starts_with("This plugin opens public endpoints on the server"),
+        "{detail}"
+    );
+
+    // Without an `http` block, version three pins like version two.
+    set_source(pin("{ schemaVersion: 3, secrets: [], operations: [] }")).await;
+    let pinned = test::call_service(&service, request()).await;
+    let status = pinned.status();
+    let body: serde_json::Value = serde_json::from_slice(&body_of(pinned)).unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["release"]["manifest"]["schemaVersion"], 3);
 }

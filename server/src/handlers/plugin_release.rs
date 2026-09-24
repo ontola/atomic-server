@@ -10,6 +10,7 @@ use crate::{
     errors::{AtomicServerError, AtomicServerResult},
     plugins::{
         js_runtime,
+        manifest_http::HostFeatureUnavailable,
         release::{self, ListingInput, Published},
     },
 };
@@ -69,6 +70,13 @@ async fn from_draft(
         .ok_or_else(|| {
             AtomicServerError::bad_request("Published releases require a versioned manifest")
         })?;
+    // A pinned release runs on this node, so its public endpoints must fit
+    // this node's gates. A public release is for any node's marketplace.
+    if !public {
+        if let Err(refusal) = manifest.gate().check(&appstate.config.plugin_routes) {
+            return Ok(host_feature_unavailable(&refusal));
+        }
+    }
     let host = js_runtime::StoreHost {
         db: std::sync::Arc::new(store.clone()),
         plugin: body.plugin.clone(),
@@ -103,6 +111,20 @@ async fn from_draft(
         None
     };
     respond(&appstate, &context, &release, &body.drive, &agent, listing).await
+}
+
+/// `409` with the typed problem `host-feature-unavailable` (RFC 9457 shape):
+/// `{ type, feature, needed, compiled, level, surfaces, listeners, sidecars,
+/// status, title, detail }`, where `detail` is the message of design 0.4.
+/// `@tomic/lib` turns it into a `HostFeatureUnavailableError`.
+pub fn host_feature_unavailable(refusal: &HostFeatureUnavailable) -> HttpResponse {
+    let mut body = refusal.to_json();
+    body["status"] = 409.into();
+    body["title"] = "This server can't open this plugin's public endpoints".into();
+    body["detail"] = refusal.message().into();
+    HttpResponse::Conflict()
+        .content_type("application/problem+json")
+        .body(body.to_string())
 }
 
 #[derive(serde::Deserialize)]
@@ -198,6 +220,10 @@ async fn respond(
 /// - `runtime` (`atomic-js/1` | `wasip2/1`) and `world` (`extension` |
 ///   `server-extension`), from the release; null when it is not in this
 ///   node's cache
+/// - `requires`: derived from the release manifest, e.g.
+///   `["plugin-routes:read-only", "public-origin", ...]`, so a client can
+///   compare it with `hostFeatures` without parsing manifests; null when the
+///   release is not cached or has no versioned manifest
 pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpResponse> {
     let store = &appstate.store;
     let listings = store
@@ -240,6 +266,7 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
                 "releaseId": release_id,
                 "runtime": cached.as_ref().map(|r| r.runtime.clone()),
                 "world": cached.as_ref().map(|r| r.world.clone()),
+                "requires": cached.as_ref().and_then(|r| release::derived_requires(&r.manifest)),
             })
         })
         .collect();

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [
+    {
+      "id": "deliver",
+      "method": "POST",
+      "url": "https://*/inbox",
+      "effect": "write"
+    }
+  ],
+  "http": {
+    "routes": [
+      {
+        "id": "r",
+        "path": "/x",
+        "methods": [
+          "GET"
+        ]
+      }
+    ]
+  }
+}
