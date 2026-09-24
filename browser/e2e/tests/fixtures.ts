@@ -174,39 +174,54 @@ export default test;
 
 /** Isolated UI fixtures do not depend on the public discovery service.
  *
- * The host list has to track `defaultPeerSignalingUrl`
- * (data-browser/src/helpers/browserPeerSync.ts), which picks the SaaS portal
- * for the origin the app is served from. It answers `atomic.place` for every
- * origin except staging, and an e2e app is served from localhost, so that is
- * the one this fixture meets. When #1699 introduced that default the pattern
- * here still named `atomicserver.eu` alone, the stub stopped matching, and
- * every context dialled production instead: a single unroutable websocket
- * that the diagnostics fixture turns into a console error, failing tests that
- * have nothing to do with peers. Twelve of nineteen in a five-spec mix here,
- * three runs of three, on meetings, saved-drives, second-device-load and
- * sign-in-without-data.
+ * Matched by PATH, deliberately, and not by host. This used to name
+ * `atomicserver.eu`, which is a copy of a decision made in
+ * `defaultPeerSignalingUrl` (data-browser/src/helpers/browserPeerSync.ts):
+ * that function picks the SaaS portal for the origin the app is served from,
+ * and when #1699 made it answer `atomic.place` for every non-staging origin,
+ * this pattern stopped matching and every context dialled production.
  *
- * It only shows up where that host is unreachable. On a machine that CAN
- * reach atomic.place the socket connects, nothing is logged, and the suite
- * looks fine while quietly depending on the public service this fixture
- * exists to remove. That is the more expensive half of the bug, and it is why
- * the hosts are matched by name rather than the whole path pattern: a local
- * signaling server, which some setups point at, must still reach its socket.
+ * What made that expensive is that it is silent where it matters. On a box
+ * that can reach the host the socket simply connects, nothing is logged, and
+ * the suite passes while depending on the public service this fixture exists
+ * to remove; only where the host is unreachable does it surface, and then as
+ * a console error failing twelve specs that have nothing to do with peers.
+ * A host list here cannot notice either case, so there is no host list.
+ *
+ * A signaling server running beside the test is a different thing from the
+ * public one and stays connected, so a setup pointing at a local one is not
+ * broken by intercepting everything.
  */
+function isLocalSignalingHost(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1' ||
+      hostname.endsWith('.localhost')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function installEmptyDiscoveryRoom(context: BrowserContext) {
-  await context.routeWebSocket(
-    /^wss:\/\/(?:(?:staging\.)?atomicserver\.eu|atomic\.place)\/webrtc-signal$/,
-    socket => {
-      socket.onMessage(message => {
-        if (
-          typeof message === 'string' &&
-          JSON.parse(message).type === 'join'
-        ) {
-          socket.send(
-            JSON.stringify({ type: 'joined', peers: [], iceServers: [] }),
-          );
-        }
-      });
-    },
-  );
+  await context.routeWebSocket(/\/webrtc-signal(\?|$)/, socket => {
+    if (isLocalSignalingHost(socket.url())) {
+      socket.connectToServer();
+
+      return;
+    }
+
+    socket.onMessage(message => {
+      if (typeof message === 'string' && JSON.parse(message).type === 'join') {
+        socket.send(
+          JSON.stringify({ type: 'joined', peers: [], iceServers: [] }),
+        );
+      }
+    });
+  });
 }
