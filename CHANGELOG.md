@@ -18,6 +18,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   limit without privileges, and the connection budget is computed from whatever
   is in force afterwards, so a refused raise is logged and not fatal.
 
+- Publishing a plugin release that is already recorded on the server (the
+  same zip, uploaded by someone else) now grants the new publisher read on
+  the `Release` and its package File. Before, their Installation could not
+  resolve the release and activation failed with a 401.
 - Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
   `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
   previous `did:ad:` spelling is accepted forever and names the same
