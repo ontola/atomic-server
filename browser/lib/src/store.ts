@@ -937,10 +937,10 @@ export class Store {
     };
 
     current();
-    const inventory = await ws.rbsrItems(drive, '');
+    const inventory = await ws.driveInventory(drive, '');
     await verifyLocalDriveCopy(db, drive, inventory);
     // A second inventory catches changes made while attachment verification ran.
-    await verifyLocalDriveCopy(db, drive, await ws.rbsrItems(drive, ''));
+    await verifyLocalDriveCopy(db, drive, await ws.driveInventory(drive, ''));
     current();
     this.registerLocalOnlyDrive(drive);
     ws.unsubscribeFromDrive(drive);

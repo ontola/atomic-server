@@ -517,8 +517,7 @@ Two things worth knowing about the runners:
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
-| RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
-| RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
+| Drive hashing; a filtered `SYNC` (`subjects`) diffs like the full one | `lib/src/sync/tests.rs` |
 | Remote update merge, drive-spoof rejection, tombstones | `lib/src/sync/ws_apply.rs`, `tombstones.rs` |
 | `DbEvent::Destroyed` for a removed resource and its cascade-deleted children arrives only after the removal is applied (the store no longer holds them when a listener hears), each subject announced exactly once | `lib/src/db/test.rs` (`destroyed_events_follow_the_applied_removal`) |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
@@ -686,7 +685,7 @@ that isolates concurrency as the cause.
 
 No known flaky tests. The one that was
 (`rbsr_reduced_matches_full_sync_vv`) turned out to be a genuine RBSR bug, not
-test noise — see below.
+test noise — see below. (RBSR itself was removed in 2026-09.)
 
 ---
 
@@ -741,6 +740,8 @@ Recorded because each one cost real debugging time.
   browser client sends the server, so an affected resource was never pulled.
   Both were fixed 2026-07-20, each with two deterministic regression tests.
 
+  (RBSR was removed in 2026-09; the lesson stands.)
+
   **Treat a flake as an unread bug report until proven otherwise** — and when
   an algorithm is ported, check the port for the same defect.
 
@@ -766,13 +767,7 @@ Recorded because each one cost real debugging time.
 
 ### Algorithms mirrored in two languages
 
-`lib/src/sync/rbsr.rs` ↔ `browser/lib/src/rbsr.ts` are line-for-line ports and
-must compute the same differing set on either end of the wire. Both carry the
-same test names. A fix to one is a fix to the other; the golden-vector tests
-(`item_fingerprint_matches_golden_vector`) pin the hashing, but the *traversal*
-is only kept in step by mirroring the tests, so do that deliberately.
-
-`lib/src/genesis.rs` ↔ `browser/lib/src/genesis.ts` also share a personal-drive
+`lib/src/genesis.rs` ↔ `browser/lib/src/genesis.ts` share a personal-drive
 derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
 vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
 
