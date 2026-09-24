@@ -10,9 +10,11 @@
 //! host, `nosniff`, a size cap.
 //!
 //! What a route may *cause* is decided by the node's level. At `read-only` a
-//! verdict with intents or enqueues is refused and nothing is applied.
-//! Applying route writes (AS-07) and enqueueing deliveries (AS-09) do not
-//! exist yet, so at `read-write` such a verdict is refused too, as not
+//! verdict with intents or enqueues is refused and nothing is applied. At
+//! `read-write`, intents into the route's declared write targets are applied
+//! under the Installation's route grant, within quotas, before the response
+//! is sent ([`super::route_writes`], AS-07). Enqueueing deliveries (AS-09)
+//! does not exist yet, so a verdict that enqueues is refused whole, as not
 //! implemented. Verifying `auth` other than `none` is AS-08: until then a
 //! route that needs it answers `501` without starting the sandbox.
 //!
@@ -277,6 +279,8 @@ pub struct RouteExecutor {
     /// address and installation (the "anonymous" budget).
     rate: WriteRateLimiter,
     stats: Mutex<HashMap<String, InstallationStats>>,
+    /// Route write quotas (AS-07); see [`super::route_writes`].
+    pub quotas: super::route_writes::QuotaLedger,
 }
 
 impl Default for RouteExecutor {
@@ -292,7 +296,14 @@ impl RouteExecutor {
             running: Mutex::new(HashMap::new()),
             rate: WriteRateLimiter::new(installation_per_minute, remote_per_minute),
             stats: Mutex::new(HashMap::new()),
+            quotas: Default::default(),
         }
+    }
+
+    /// This executor with these route write quotas.
+    pub fn with_quotas(mut self, quotas: super::route_writes::Quotas) -> Self {
+        self.quotas = super::route_writes::QuotaLedger::new(quotas);
+        self
     }
 
     fn running(&self, installation: &str) -> Arc<AtomicUsize> {
@@ -735,6 +746,8 @@ struct Loaded {
     manifest: Manifest,
     route: Route,
     config: Json,
+    /// The Installation's `grants`, for the route grant.
+    grants: Json,
 }
 
 fn text(resource: &atomic_lib::Resource, property: &str) -> Option<String> {
@@ -771,12 +784,18 @@ async fn load(store: &Db, installation: &str, route: &str) -> Result<Loaded, Str
         Ok(Value::String(s)) => serde_json::from_str(s).unwrap_or(Json::Null),
         _ => Json::Null,
     };
+    let grants = match resource.get(urls::GRANTS) {
+        Ok(Value::Json(json)) => json.clone(),
+        Ok(Value::String(s)) => serde_json::from_str(s).unwrap_or(Json::Null),
+        _ => Json::Null,
+    };
     Ok(Loaded {
         drive,
         source,
         manifest,
         route,
         config,
+        grants,
     })
 }
 
@@ -1018,10 +1037,11 @@ async fn run(
         "caller": null,
         "receivedAt": at,
     });
+    let request_id = format!("http:{}", ulid::Ulid::new().to_string().to_lowercase());
     let input = json!({
         "trigger": {
             "kind": "http",
-            "id": format!("http:{}", ulid::Ulid::new().to_string().to_lowercase()),
+            "id": request_id,
             "at": at,
             "route": route.id,
             "request": request,
@@ -1168,50 +1188,67 @@ async fn run(
         })
         .collect();
 
-    // What a route may cause. Nothing a verdict asks for is applied here.
+    // What a route may cause. Refusals here come before anything is applied.
     let non_empty = |v: &Json| match v {
         Json::Null => false,
         Json::Array(a) => !a.is_empty(),
         Json::Object(o) => !o.is_empty(),
         _ => true,
     };
-    let intents = non_empty(&verdict["intents"]) || non_empty(&verdict["integrationWaits"]);
+    let waits = non_empty(&verdict["integrationWaits"]);
+    let intents = non_empty(&verdict["intents"]);
     let enqueues = non_empty(&verdict["enqueue"]);
-    if intents || enqueues {
+    if intents || enqueues || waits {
         let declared =
             (!intents || !route.writes.is_empty()) && (!enqueues || !route.enqueues.is_empty());
-        let (status, kind, title, error) = if level < PluginRoutesLevel::ReadWrite || !declared {
-            (
+        let refusal = if level < PluginRoutesLevel::ReadWrite {
+            Some((
                 StatusCode::BAD_GATEWAY,
                 "route-write-refused",
                 "This plugin route tried to write",
-                if level < PluginRoutesLevel::ReadWrite {
-                    "the verdict has intents or enqueues, and at `--plugin-routes read-only` a route cannot write or enqueue; nothing was applied"
-                } else {
-                    "the verdict has intents or enqueues this route does not declare; nothing was applied"
-                },
-            )
-        } else {
-            (
+                "the verdict has intents or enqueues, and at `--plugin-routes read-only` a route cannot write or enqueue; nothing was applied",
+            ))
+        } else if waits {
+            Some((
+                StatusCode::BAD_GATEWAY,
+                "route-write-refused",
+                "This plugin route tried to write",
+                "a route cannot wait on integration actions; nothing was applied",
+            ))
+        } else if !declared {
+            Some((
+                StatusCode::BAD_GATEWAY,
+                "route-write-refused",
+                "This plugin route tried to write",
+                "the verdict has intents or enqueues this route does not declare; nothing was applied",
+            ))
+        } else if enqueues {
+            // The delivery queue is AS-09 (#1719). A verdict that also has
+            // intents is refused whole, so nothing is half-done.
+            Some((
                 StatusCode::NOT_IMPLEMENTED,
-                "route-writes-unavailable",
-                "Route writes are not supported yet",
-                "applying route intents and enqueues is not implemented on this server version; nothing was applied",
-            )
+                "route-enqueue-unavailable",
+                "Route deliveries are not supported yet",
+                "enqueueing deliveries is not implemented on this server version; nothing was applied",
+            ))
+        } else {
+            None
         };
-        return Outcome {
-            fuel,
-            problems,
-            ..Outcome::failed(
-                problem(
-                    status,
-                    kind,
-                    title,
-                    "The plugin's answer was refused and nothing was stored.",
-                ),
-                error,
-            )
-        };
+        if let Some((status, kind, title, error)) = refusal {
+            return Outcome {
+                fuel,
+                problems,
+                ..Outcome::failed(
+                    problem(
+                        status,
+                        kind,
+                        title,
+                        "The plugin's answer was refused and nothing was stored.",
+                    ),
+                    error,
+                )
+            };
+        }
     }
 
     let host = req
@@ -1230,13 +1267,59 @@ async fn run(
         },
         head: req.method() == actix_web::http::Method::HEAD,
     };
+    // The response is validated before anything is written, and the writes
+    // are stored before it is sent: a 2xx means stored (design 2.6).
     match build_response(&verdict["response"], &rules) {
         Ok(built) => {
+            let mut problems = problems;
+            if intents {
+                let Some(http) = loaded.manifest.http.as_ref() else {
+                    return Outcome {
+                        fuel,
+                        problems,
+                        ..Outcome::failed(handler_failed(), "the release has no http block")
+                    };
+                };
+                let written = super::route_writes::apply(
+                    super::route_writes::WriteRequest {
+                        store,
+                        ledger: &executor.quotas,
+                        installation,
+                        drive: &loaded.drive,
+                        http,
+                        route,
+                        config: &loaded.config,
+                        grants: &loaded.grants,
+                        request_id: &request_id,
+                        caller: &Json::Null,
+                        remote: &remote,
+                        at,
+                    },
+                    &verdict["intents"],
+                )
+                .await;
+                match written {
+                    Ok(applied) => problems.push(applied.summary),
+                    Err(refusal) => {
+                        let mut response =
+                            problem(refusal.status, refusal.kind, refusal.title, &refusal.detail);
+                        if let Some(secs) = refusal.retry_after_secs {
+                            response
+                                .headers_mut()
+                                .insert(header::RETRY_AFTER, HeaderValue::from(secs));
+                        }
+                        return Outcome {
+                            fuel,
+                            problems,
+                            ..Outcome::failed(response, refusal.error)
+                        };
+                    }
+                }
+            }
             let mut response = HttpResponse::build(built.status);
             for (name, value) in built.headers {
                 response.append_header((name, value));
             }
-            let mut problems = problems;
             if !built.dropped.is_empty() {
                 problems.push(format!(
                     "dropped response headers: {}",

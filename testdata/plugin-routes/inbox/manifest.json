@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 3,
+  "name": "inbox",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "inbox",
+        "path": "/inbox",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "maxBodyBytes": 65536,
+        "writes": ["inbox-items"]
+      },
+      {
+        "id": "items",
+        "path": "/items",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "item",
+        "path": "/item",
+        "methods": ["PUT", "DELETE"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "writes": ["inbox-items"]
+      }
+    ],
+    "writeTargets": [
+      {
+        "id": "inbox-items",
+        "parent": "config:inbox",
+        "classes": ["https://atomicdata.dev/classes/PlainText"]
+      }
+    ],
+    "reason": "Stores what is POSTed to /_routes/<slug>/inbox as a PlainText under the configured inbox. A fixture for route writes."
+  }
+}

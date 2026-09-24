@@ -577,6 +577,73 @@ impl Http {
     }
 }
 
+// -- the route grant (design 2.6, D4) -----------------------------------------
+
+/// The key of the route grant in an Installation's `grants`. Its value is the
+/// list of write targets the installer approved, exactly as the release
+/// declares them: `{"route-writes": [{"id", "parent", "classes"}]}`. In the
+/// array form of `grants` it is one object element among the capability
+/// names; in the object form it is a key.
+///
+/// The grant names the targets instead of saying "yes", so an upgrade that
+/// widens `writeTargets` cannot ride on an earlier approval: activation
+/// refuses a release with a target the grant does not list, and the old
+/// release keeps serving until someone reviews the new one.
+pub const ROUTE_WRITES_GRANT: &str = "route-writes";
+
+/// Whether this `grants` array element is the route grant rather than a
+/// capability name.
+pub fn is_route_grant_element(item: &serde_json::Value) -> bool {
+    item.as_object()
+        .is_some_and(|o| o.len() == 1 && o.contains_key(ROUTE_WRITES_GRANT))
+}
+
+/// The route grant in an Installation's `grants`, if it has one.
+pub fn route_grant(grants: &serde_json::Value) -> Result<Option<Vec<WriteTarget>>, String> {
+    let raw = match grants {
+        serde_json::Value::Array(items) => items
+            .iter()
+            .find(|item| is_route_grant_element(item))
+            .map(|item| &item[ROUTE_WRITES_GRANT]),
+        serde_json::Value::Object(map) => map.get(ROUTE_WRITES_GRANT),
+        _ => None,
+    };
+    raw.map(|targets| {
+        serde_json::from_value(targets.clone()).map_err(|e| {
+            format!("the `{ROUTE_WRITES_GRANT}` grant is not a list of write targets: {e}")
+        })
+    })
+    .transpose()
+}
+
+/// Refuses a release whose write targets a route grant does not cover.
+///
+/// Without a route grant the release still installs: its read routes serve,
+/// and every route write is refused until the grant is given. With one, each
+/// declared write target must be listed in it unchanged. A narrower release
+/// passes; a wider one (a new target, or a known id with another parent or
+/// more classes) needs a new review.
+pub fn check_route_grant(http: Option<&Http>, grants: &serde_json::Value) -> Result<(), String> {
+    let Some(approved) = route_grant(grants)? else {
+        return Ok(());
+    };
+    let widened: Vec<&str> = http
+        .map(|h| h.write_targets.as_slice())
+        .unwrap_or_default()
+        .iter()
+        .filter(|target| !approved.contains(target))
+        .map(|target| target.id.as_str())
+        .collect();
+    if widened.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the release writes to targets its route grant does not cover ({}); review the new write targets to approve them",
+            widened.join(", ")
+        ))
+    }
+}
+
 /// One thing that asks for a gate, as the refusal and the install review
 /// name it: "route `POST /users/{name}/inbox`".
 #[derive(Debug, Clone, PartialEq, Eq)]
