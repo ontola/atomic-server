@@ -465,3 +465,39 @@ it('forgets its capabilities for a platform once disconnected', async () => {
   });
   await expect(pending).rejects.toThrow('delegated to this app');
 });
+
+it('reads many resources in one round trip, with errors in place', async () => {
+  expect(isViewRequest(viewRequest(1, 'getMany', { subjects: [] }))).toBe(true);
+  const f = frame();
+  const store = generatedStore(f);
+
+  const pending = store.getMany(['did:ad:a', 'did:ad:secret']);
+  expect(f.parent.postMessage).toHaveBeenCalledTimes(1);
+  const ask = f.parent.postMessage.mock.calls[0][0];
+  expect(ask).toMatchObject({
+    op: 'getMany',
+    args: { subjects: ['did:ad:a', 'did:ad:secret'] },
+  });
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: ask.id,
+    result: [
+      { subject: 'did:ad:a', title: 'A', props: { name: 'A' }, loading: false },
+      { subject: 'did:ad:secret', error: 'Unauthorized' },
+    ],
+  });
+  const [a, secret] = await pending;
+  // A resource like getResource's: read, stage, save.
+  expect(a.subject).toBe('did:ad:a');
+  expect(a.get('name')).toBe('A');
+  expect(typeof a.save).toBe('function');
+  expect(secret).toEqual({ subject: 'did:ad:secret', error: 'Unauthorized' });
+
+  // Nothing to ask for, nothing asked.
+  expect(await store.getMany([])).toEqual([]);
+  await expect(
+    store.getMany(Array.from({ length: 101 }, (_, i) => `did:ad:${i}`)),
+  ).rejects.toThrow('at most 100');
+  expect(f.parent.postMessage).toHaveBeenCalledTimes(1);
+});

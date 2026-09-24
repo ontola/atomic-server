@@ -4,6 +4,8 @@ export type ViewOperation =
   | 'app'
   | 'data'
   | 'get'
+  /** Up to 100 `get`s in one round trip; per-subject errors in place. */
+  | 'getMany'
   | 'query'
   | 'create'
   | 'save'
@@ -77,6 +79,7 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'app',
       'data',
       'get',
+      'getMany',
       'query',
       'create',
       'save',
