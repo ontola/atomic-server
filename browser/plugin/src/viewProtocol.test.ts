@@ -501,3 +501,49 @@ it('reads many resources in one round trip, with errors in place', async () => {
   ).rejects.toThrow('at most 100');
   expect(f.parent.postMessage).toHaveBeenCalledTimes(1);
 });
+
+it('knows whether the host is light or dark, before and after a theme message', () => {
+  const f = frame();
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  // The shell applied the host stylesheet (`color-scheme: dark` on :root)
+  // before this module ran, so it missed that first message.
+  let computed = 'dark';
+  const store = new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    'document',
+    'getComputedStyle',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(
+    f.window,
+    () => 0,
+    () => undefined,
+    { documentElement: {} },
+    () => ({ colorScheme: computed }),
+  );
+  expect(store.getTheme()).toEqual({ colorScheme: 'dark' });
+  computed = 'normal';
+  expect(store.getTheme()).toEqual({ colorScheme: 'light' });
+
+  const seen: unknown[] = [];
+  const stop = store.onThemeChange((theme: unknown) => seen.push(theme));
+  const style = (colorScheme: unknown, source?: unknown) =>
+    f.reply({ type: '__atomic_style', css: '', colorScheme }, source);
+  style('dark');
+  style('dark');
+  style('purple');
+  style('light', {});
+  expect(seen).toEqual([{ colorScheme: 'dark' }]);
+  expect(store.getTheme()).toEqual({ colorScheme: 'dark' });
+  style('light');
+  stop();
+  style('dark');
+  expect(seen).toEqual([{ colorScheme: 'dark' }, { colorScheme: 'light' }]);
+});

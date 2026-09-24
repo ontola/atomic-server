@@ -4,6 +4,7 @@ import { canViewAccess, type ViewPolicy } from '@helpers/extensions/viewPolicy';
 // @wc-ignore-file
 import {
   FrameBridge,
+  type ColorScheme,
   type FrameSession,
 } from '@helpers/extensions/FrameBridge';
 import {
@@ -117,8 +118,8 @@ export class LegacyViewAdapter {
   public stopServer(): void {
     this.bridge.close();
   }
-  public setStyle(css: string): void {
-    this.bridge.setStyle(css);
+  public setStyle(css: string, colorScheme?: ColorScheme): void {
+    this.bridge.setStyle(css, colorScheme);
   }
 
   private async handleMessage(message: Request): Promise<void> {

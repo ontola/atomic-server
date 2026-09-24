@@ -12,7 +12,7 @@ The iframe receives a generated HTML document that:
 
 1. Loads a reset stylesheet.
 2. Optionally loads your `ui.css` file.
-3. Injects the current theme as CSS custom properties via a `<style>` block.
+3. Injects the current theme as CSS custom properties via a `<style>` block: colours such as `--t-color-bg`, `--t-color-text`, `--t-color-main`, `--t-color-alert`, `--t-color-warning` and `--t-color-success`, plus `color-scheme: light` or `dark` on `:root`. The theme message (`{ type: '__atomic_style', css, colorScheme }`, `ThemeMessage` in `@tomic/plugin`) also names `colorScheme: 'light' | 'dark'`, taken from the host's own setting, so a view does not have to guess dark mode from the background colour.
 4. Loads your `ui.js` as a `<script type="module">`.
 
 A strict Content Security Policy is applied: only scripts and styles with the correct nonce are allowed to run. External scripts or inline scripts without the nonce will be blocked.
@@ -210,6 +210,20 @@ Reads up to 100 resources in one round trip to the host, instead of one `getReso
 const subjects = await store.query({ property: PARENT, value: table });
 const rows = await store.getMany(subjects.slice(0, 100));
 for (const row of rows) if (!row.error) render(row.get(NAME));
+```
+
+#### `store.getTheme(): { colorScheme: 'light' | 'dark' }` and `store.onThemeChange(handler)`
+
+Whether the host is drawn light or dark, from the host's actual setting. `onThemeChange` calls back with `{ colorScheme }` when the person switches, and returns a function that stops it. For colours, use the `--t-color-*` CSS variables. They change with the theme, so CSS that uses them needs no JavaScript.
+
+```js
+const { colorScheme } = store.getTheme();
+chart.setDark(colorScheme === 'dark');
+store.onThemeChange(({ colorScheme }) => chart.setDark(colorScheme === 'dark'));
+```
+
+```css
+.saved { color: var(--t-color-success); }
 ```
 
 #### `store.openExternal(url): Promise<{ status: 'opened' | 'cancelled' }>`
