@@ -25,13 +25,12 @@ test('a fresh Mac install can start account recovery before it has an agent', as
   });
 
   await page.addInitScript(portalUrl => {
-    (
-      window as unknown as Window & {
-        __TAURI_INTERNALS__: object;
-        __ATOMIC_MANAGED__: { portalUrl: string };
-      }
-    ).__TAURI_INTERNALS__ = {};
-    window.__ATOMIC_MANAGED__ = { portalUrl };
+    const w = window as unknown as Window & {
+      __TAURI_INTERNALS__: object;
+      __ATOMIC_MANAGED__: { portalUrl: string };
+    };
+    w.__TAURI_INTERNALS__ = {};
+    w.__ATOMIC_MANAGED__ = { portalUrl };
   }, FRONTEND_URL);
   await page.route('**/api/me', route => route.fulfill({ status: 204 }));
 
