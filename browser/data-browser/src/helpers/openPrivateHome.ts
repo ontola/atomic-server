@@ -1,4 +1,4 @@
-import type { Store } from '@tomic/lib';
+import { core, type Resource, type Store } from '@tomic/lib';
 import { deviceHasDriveData } from './driveData';
 import { isOriginWithoutNode } from './originNode';
 import { restoreFromVault } from './managed/vaultAutoBackup';
@@ -51,12 +51,45 @@ async function prepare(
     if (await deviceHasDriveData(store, subject)) return 'existing';
   }
 
+  const name = agent.subject
+    ? await ownerName(store, agent.subject)
+    : undefined;
+
   // A sign-out or another sign-in during recovery must not create that
   // identity's home on behalf of the new session.
   if (store.getAgent() !== agent) return;
-  await store.ensurePrivateDrive('My drive', {
+  // No literal for the unnamed case: `ensurePrivateDrive` already defaults it,
+  // inside the library, where the i18n extractor cannot turn a plain string
+  // into an injected hook in this non-component function. `undefined` is how a
+  // default parameter is asked for, so the title stays one call. `InvitePage`
+  // leaves the name out for the same reason.
+  await store.ensurePrivateDrive(name ? `${name}'s Drive` : undefined, {
     localOnly: isOriginWithoutNode(store.getServerUrl()),
   });
 
   return 'created';
+}
+
+/**
+ * The owner's own name, as the Agent resource carries it.
+ *
+ * A title only lands while the drive is being created: `ensurePrivateDrive`
+ * returns an existing home untouched, so a name that arrives a moment later
+ * never reaches it. A returning session may not have read its Agent yet, so
+ * this is worth a fetch, but not worth holding the user out of their
+ * workspace for, hence the budget and the silent fallback to the default.
+ */
+async function ownerName(
+  store: Store,
+  agentSubject: string,
+): Promise<string | undefined> {
+  const agentResource = await withDeadline<Resource | undefined>(
+    store.getResource(agentSubject),
+    2_000,
+    undefined,
+  );
+
+  const name = agentResource?.get(core.properties.name);
+
+  return typeof name === 'string' && name.trim() ? name.trim() : undefined;
 }

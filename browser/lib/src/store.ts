@@ -5264,9 +5264,14 @@ export class Store {
 
     if (inherited.length === 0) return;
 
-    const privateDrive = await this.ensurePrivateDrive('My drive', {
-      agentName: legacy.get(core.properties.name) as string | undefined,
-    });
+    const agentName = legacy.get(core.properties.name) as string | undefined;
+    // A home is titled after whoever owns it, so a migrated account keeps its
+    // own name here too. No literal for the nameless case: `ensurePrivateDrive`
+    // has the default, and a copy of it here is a copy that can drift.
+    const privateDrive = await this.ensurePrivateDrive(
+      agentName?.trim() ? `${agentName.trim()}'s Drive` : undefined,
+      { agentName },
+    );
 
     if (privateDrive.error) return;
 
