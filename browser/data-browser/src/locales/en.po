@@ -119,6 +119,7 @@ msgstr "AI Agents"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/EndpointHealth.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
@@ -1170,6 +1171,7 @@ msgstr "Save failed: {0}"
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
 #: src/components/TeamProfileStep.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
@@ -10036,3 +10038,25 @@ msgstr "Requirements unknown"
 #: src/chunks/Plugins/PublicEndpoints.tsx
 msgid "This server couldn’t read what this release needs. The review checks it before installing."
 msgstr "This server couldn’t read what this release needs. The review checks it before installing."
+msgid "Config saved, rights moved"
+msgstr "Config saved, rights moved"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Config saved"
+msgstr "Config saved"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Set <0/> to the resource that should receive incoming items. The plugin's route grant stores them there, so this config can't be saved without it."
+msgstr "Set <0/> to the resource that should receive incoming items. The plugin's route grant stores them there, so this config can't be saved without it."
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "Move incoming items"
+msgstr "Move incoming items"
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "This config stores what other servers send somewhere else. Approve the new place to move the plugin’s write rights there, or save without it to stop accepting these items."
+msgstr "This config stores what other servers send somewhere else. Approve the new place to move the plugin’s write rights there, or save without it to stop accepting these items."
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "Save config"
+msgstr "Save config"

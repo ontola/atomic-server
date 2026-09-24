@@ -14,6 +14,8 @@ import {
   publishZipRelease,
   readInstallationReview,
   routeGrantOf,
+  routeWriteConfigChange,
+  saveInstallationConfig,
   server,
   updateInstallationRelease,
   withdrawRouteWriteRights,
@@ -26,6 +28,7 @@ import {
   type DeclaredWriteTarget,
   type InstallationStatus,
   type JSONValue,
+  type RouteWriteConfigChange,
   type Server,
 } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
@@ -70,6 +73,8 @@ import {
   InstallationReviewDialog,
   type PendingInstallation,
 } from '@chunks/Plugins/InstallationReviewDialog';
+import { unresolvedWriteTarget } from '@chunks/Plugins/RouteWriteApproval';
+import { RouteWriteMoveDialog } from '@chunks/Plugins/RouteWriteMoveDialog';
 
 const UPDATE_VERB = {
   title: 'Update plugin',
@@ -117,6 +122,11 @@ export const InstallationPage: React.FC<
   const [configValid, setConfigValid] = useState(true);
   const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
   const [configEdited, setConfigEdited] = useState(false);
+  // The config as saved, which the route grant's rights follow. The editor
+  // writes into the resource as you type, so this is kept apart.
+  const [savedConfig, setSavedConfig] = useState<unknown>(config);
+  const [routeWriteMove, setRouteWriteMove] =
+    useState<RouteWriteConfigChange>();
   const saveState = useSaveState(resource);
   const [changing, setChanging] = useState(false);
   const [pending, setPending] = useState<PendingInstallation>();
@@ -170,6 +180,47 @@ export const InstallationPage: React.FC<
     resource.subject,
     canWrite && currentStatus !== 'revoked' && needsProxy,
   );
+
+  useEffect(() => {
+    if (!configEdited) setSavedConfig(config);
+  }, [config, configEdited]);
+
+  // A target the edited config leaves unresolved refuses the save: the route
+  // grant would let other servers send items the plugin can't store.
+  const unresolved = routeGrant
+    ? unresolvedWriteTarget(routeGrant, config as JSONValue | undefined)
+    : undefined;
+
+  const commitConfig = async (approveRouteWrites: boolean) => {
+    await saveInstallationConfig(store, resource.subject, {
+      config: config as JSONValue | undefined,
+      previousConfig: savedConfig,
+      approveRouteWrites,
+    });
+    setConfigEdited(false);
+    setSavedConfig(config);
+  };
+
+  const saveConfig = async () => {
+    try {
+      const move = routeWriteConfigChange(
+        grants,
+        savedConfig,
+        config as JSONValue | undefined,
+      );
+
+      // A moved write target is approved again first, as in an upgrade.
+      if (move) {
+        setRouteWriteMove(move);
+
+        return;
+      }
+
+      await commitConfig(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const changeStatus = async (next: InstallationStatus) => {
     setChanging(true);
@@ -390,15 +441,12 @@ export const InstallationPage: React.FC<
                 disabled={
                   !configValid ||
                   !configSyntaxValid ||
+                  !!unresolved ||
                   saveState.kind === 'saving' ||
                   saveState.kind === 'scheduled' ||
                   (!configEdited && saveState.kind !== 'dirty')
                 }
-                onClick={() => {
-                  setConfigEdited(false);
-
-                  return resource.save();
-                }}
+                onClick={saveConfig}
               >
                 <FaFloppyDisk />
                 <span>Save</span>
@@ -421,6 +469,7 @@ export const InstallationPage: React.FC<
             showErrorStyling={!configValid}
             onValidationChange={setConfigValid}
           />
+          {unresolved && <UnresolvedConfigNote keyName={unresolved.key} />}
         </Column>
         {schema && <ConfigReference schema={schema as JSONSchema7} />}
         {declared.length > 0 && (
@@ -432,6 +481,23 @@ export const InstallationPage: React.FC<
         onClose={() => setPending(undefined)}
         onInstall={applyUpdate}
         verb={UPDATE_VERB}
+      />
+      <RouteWriteMoveDialog
+        plugin={title}
+        change={routeWriteMove}
+        config={config as JSONValue | undefined}
+        onSave={async approve => {
+          try {
+            await commitConfig(approve);
+            toast.success(
+              approve ? 'Config saved, rights moved' : 'Config saved',
+            );
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : String(err));
+            throw err;
+          }
+        }}
+        onClose={() => setRouteWriteMove(undefined)}
       />
       <ConfirmationDialog
         title='Revoke installation'
@@ -503,6 +569,23 @@ function ReleaseSource({
     </>
   );
 }
+
+// Wuchale drops a message with nested elements inside a condition, so the
+// note is its own component.
+function UnresolvedConfigNote({ keyName }: { keyName: string }) {
+  return (
+    <ConfigAlert role='alert' data-testid='route-write-unresolved'>
+      Set <code>{keyName}</code> to the resource that should receive incoming
+      items. The plugin&apos;s route grant stores them there, so this config
+      can&apos;t be saved without it.
+    </ConfigAlert>
+  );
+}
+
+const ConfigAlert = styled.p`
+  color: ${p => p.theme.colors.alert};
+  margin: 0;
+`;
 
 const PluginName = styled.span`
   font-weight: bold;
