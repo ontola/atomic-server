@@ -116,6 +116,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  // A test that stubs `window` and then throws before its own cleanup used to
+  // leave the stub in place for the whole file. `new Store()` reads
+  // `localStorage` whenever a `window` exists, so eleven later tests died on
+  // `localStorage is not defined` with nothing wrong in them.
+  vi.unstubAllGlobals();
 });
 
 describe('ensureVaultBackup', () => {
@@ -507,9 +512,11 @@ describe('restoreFromVault', () => {
    * as a red test.
    */
   it('stays quiet when the document is discarded mid-restore', async () => {
+    // Build the store before the stub: a stubbed `window` has no
+    // `localStorage`, and the Store constructor reads it.
+    const store = await signedInStore();
     const page = new EventTarget();
     vi.stubGlobal('window', page);
-    const store = await signedInStore();
     const deps = fakeDeps({
       restoreDrive: vi.fn(async () => {
         page.dispatchEvent(new Event('pagehide'));
