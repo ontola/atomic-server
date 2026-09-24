@@ -591,7 +591,17 @@ export async function newDrive(page: Page) {
   await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
     timeout: 30000,
   });
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  // The URL changes when the route does, but the header still shows the drive
+  // you came FROM until the new one's resource has loaded and its name has
+  // arrived, so this waits on a fetch and not on a render. The 10s default does
+  // not cover it: measured at four workers on 24 September 2026, the slowest
+  // few per run were 9.3s, 11.1s and 8.5s, so the budget was already being
+  // blown. Being marginal rather than short is why it presents as a flake,
+  // `saved-drives.spec.ts:81` red 4 of 10, reporting the title of the previous
+  // drive rather than a missing one. 30s, matching the `waitForURL` above it.
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
+    timeout: 30_000,
+  });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
 
