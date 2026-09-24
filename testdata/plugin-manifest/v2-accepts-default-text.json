@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "secrets": [],
+  "operations": [],
+  "accepts": [
+    {
+      "extensions": [
+        ".sta"
+      ]
+    }
+  ]
+}
