@@ -42,6 +42,15 @@ const TOUCH_WORKSPACE_SOURCES = [
 const RUN_STAMP = new Date().toISOString();
 
 /**
+ * Rust `target` volumes are private: a pipeline that finds the volume in use
+ * gets its own copy instead of building into the same directory. With several
+ * CI runners on Mancave, a shared target let one branch compile against an
+ * `atomic_lib` another branch was writing at the same moment, and the touch
+ * below cannot guard against a concurrent writer (2026-09-24).
+ */
+const RUST_TARGET_CACHE = { sharing: CacheSharingMode.Private };
+
+/**
  * Runs the touch above on every pipeline run. A `withExec` is a cached layer
  * keyed on its inputs, and the Rust sources are the same bytes across many
  * commits, so the touch was replayed from cache with its old mtimes. Any
@@ -817,6 +826,7 @@ export class AtomicServer {
         .withMountedCache(
           '/code/target',
           dag.cacheVolume('rust-wasm-target-v3'),
+          RUST_TARGET_CACHE,
         )
         .with(touchWorkspaceSources)
         .withWorkdir('/code/wasm')
@@ -877,7 +887,11 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          dag.cacheVolume('rust-slim-target-v3'),
+          RUST_TARGET_CACHE,
+        )
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
@@ -1382,7 +1396,11 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
+      .withMountedCache(
+        '/code/target',
+        dag.cacheVolume('rust-target-v3'),
+        RUST_TARGET_CACHE,
+      )
       .with(touchWorkspaceSources)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch', '--locked']);
@@ -1591,7 +1609,11 @@ export class AtomicServer {
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          dag.cacheVolume('rust-checks-target-v3'),
+          RUST_TARGET_CACHE,
+        )
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
