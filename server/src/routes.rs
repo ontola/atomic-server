@@ -323,6 +323,12 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
         )
         .service(
             web::resource("/plugin-run")
+                // A file handed to an importer travels in the body.
+                .app_data(
+                    web::JsonConfig::default()
+                        .limit(handlers::plugin_run::RUN_JSON_LIMIT)
+                        .error_handler(crate::jsonerrors::json_error_handler),
+                )
                 .route(web::post().to(handlers::plugin_run::handle_plugin_run)),
         )
         .service(

@@ -431,5 +431,104 @@
     "name": "v2 proxy operation with a query",
     "file": "v2-proxy-operation-query.json",
     "error": "atomic-proxy: URLs"
+  },
+  {
+    "name": "v2 accepts a file and declares a destination",
+    "file": "v2-accepts-destination.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "secrets": [],
+      "operations": [],
+      "config": {
+        "key": "statements",
+        "properties": {
+          "table": {
+            "type": "string"
+          },
+          "rowClass": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "table",
+          "rowClass",
+          "properties"
+        ]
+      },
+      "accepts": [
+        {
+          "extensions": [
+            ".sta",
+            ".xml"
+          ],
+          "mediaTypes": [
+            "text/plain",
+            "application/xml"
+          ],
+          "as": "text",
+          "maxBytes": 5000000
+        }
+      ],
+      "destination": {
+        "schema": {
+          "properties": [
+            {
+              "shortname": "statement-amount",
+              "name": "Amount",
+              "description": "Exact decimal string.",
+              "datatype": "https://atomicdata.dev/datatypes/string"
+            }
+          ],
+          "classes": [
+            {
+              "shortname": "statement-line",
+              "name": "Statement line",
+              "description": "One booked entry.",
+              "requires": [
+                "statement-amount"
+              ]
+            }
+          ]
+        },
+        "table": {
+          "name": "Statement lines",
+          "rowClass": "statement-line",
+          "columns": [
+            "statement-amount"
+          ]
+        }
+      },
+      "name": "statements",
+      "namespace": "example",
+      "version": "0.1.0"
+    }
+  },
+  {
+    "name": "v2 accepts maxBytes above the ceiling",
+    "file": "v2-accepts-max-bytes.json",
+    "error": "accepts maxBytes must be"
+  },
+  {
+    "name": "v2 accepts only text",
+    "file": "v2-accepts-not-text.json",
+    "error": "accepts entries must be read"
+  },
+  {
+    "name": "v2 accepts unknown field",
+    "file": "v2-accepts-unknown-field.json",
+    "error": "unknown field"
+  },
+  {
+    "name": "v2 accepts upper-case extension",
+    "file": "v2-accepts-extension.json",
+    "error": "accepts extensions must be"
+  },
+  {
+    "name": "v1 has no accepts",
+    "file": "v1-accepts.json",
+    "error": "unknown field"
   }
 ]
