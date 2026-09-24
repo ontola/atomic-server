@@ -18,6 +18,7 @@ use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtenderScope,
     commit::{CommitBuilder, CommitOpts},
+    db::app_agent::AppAgentKey,
     hierarchy,
     storelike::{Query, ResourceResponse},
     urls, Commit, Db, Resource, Storelike, Subject, Value,
@@ -398,6 +399,10 @@ pub struct HostCore {
     plugin: Option<String>,
     /// The key the installation signs with, when it may commit.
     agent: Option<Agent>,
+    /// This node's app agent for the installation, when it has one. Requests
+    /// to the integration proxy are signed with it; the key itself stays in
+    /// the store and is only ever lent to a closure.
+    signing_as: Option<AppAgentKey>,
     grant: Grant,
     world: World,
     fetch_policy: FetchPolicy,
@@ -441,6 +446,7 @@ impl HostCore {
             drive,
             plugin,
             agent,
+            signing_as: None,
             grant: Grant::new(caller, None)?,
             world: World::ServerExtension,
             remote_reads: !origins.is_empty(),
@@ -462,13 +468,13 @@ impl HostCore {
         caller: ForAgent,
         manifest: Option<Manifest>,
     ) -> Result<Self, String> {
-        let installation = match super::installation::resolve(&db, drive, plugin)
+        let signing_as = super::installation::resolve(&db, drive, plugin)
             .await?
-            .signing_as
-        {
+            .signing_as;
+        let installation = match &signing_as {
             Some(key) => {
                 let info = db
-                    .get_app_agent_info(&key)
+                    .get_app_agent_info(key)
                     .map_err(|e| e.to_string())?
                     .ok_or("app identity is missing")?;
                 Some(ForAgent::AgentSubject(info.agent.into()))
@@ -481,6 +487,7 @@ impl HostCore {
             drive: Some(drive.to_string()),
             plugin: Some(plugin.to_string()),
             agent: None,
+            signing_as,
             grant: Grant::new(caller, installation)?,
             world: World::Extension,
             fetch_policy: match manifest {
@@ -756,8 +763,20 @@ impl HostCore {
         effect: &str,
     ) -> Result<FetchResponse, String> {
         let authorized = self.authorize(request, effect)?;
-        let addresses = egress::checked_addresses(&authorized.url).await?;
-        let headers = self.substitute_secrets(&authorized.origin, authorized.headers)?;
+        let proxy = self.integration_proxy()?;
+        let addresses = egress::destination_addresses(&authorized.url, proxy.as_ref()).await?;
+        let mut headers = self.substitute_secrets(&authorized.origin, authorized.headers)?;
+        if proxy
+            .as_ref()
+            .is_some_and(|proxy| proxy.is_target_of(&authorized.url))
+        {
+            headers = self.sign_for_proxy(
+                authorized.method.as_str(),
+                &authorized.url,
+                authorized.body.as_deref(),
+                headers,
+            )?;
+        }
 
         let client = reqwest::Client::builder()
             // Only the checked addresses, and never through a proxy that would
@@ -814,6 +833,55 @@ impl HostCore {
             headers,
             body: String::from_utf8_lossy(&bytes).into_owned(),
         })
+    }
+
+    /// The integration proxy this node is configured with, if any.
+    fn integration_proxy(&self) -> Result<Option<egress::ProxyOrigin>, String> {
+        self.db
+            .integration_proxy()
+            .map(|raw| egress::ProxyOrigin::parse(&raw))
+            .transpose()
+    }
+
+    /// Signs a request to the integration proxy as this node's app agent for
+    /// the installation, with an Atomic v2 request signature over the method,
+    /// the full URL and the body (ontola/atomic-plugins#54, decision 8).
+    ///
+    /// The plugin never holds the key, and its own `x-atomic-*` headers are
+    /// dropped, so the only identity the proxy sees is the one the host vouches
+    /// for. An installation with no app agent on this node is refused here
+    /// rather than sent unsigned: the proxy would refuse it anyway, and this
+    /// says why.
+    fn sign_for_proxy(
+        &self,
+        method: &str,
+        url: &url::Url,
+        body: Option<&str>,
+        headers: Vec<(String, String)>,
+    ) -> Result<Vec<(String, String)>, String> {
+        let key = self.signing_as.as_ref().ok_or(
+            "this installation has no app agent on this node, so the host cannot sign its requests to the integration proxy",
+        )?;
+        let signed = self
+            .db
+            .with_app_agent(key, |agent| {
+                atomic_lib::client::get_authentication_headers_v2(
+                    method,
+                    url.as_str(),
+                    body.unwrap_or_default().as_bytes(),
+                    agent,
+                )
+            })
+            .map_err(|e| e.to_string())?
+            .ok_or("this installation's app agent is missing or revoked on this node")?
+            .map_err(|e| e.to_string())?;
+
+        let mut out: Vec<(String, String)> = headers
+            .into_iter()
+            .filter(|(name, _)| !name.to_ascii_lowercase().starts_with("x-atomic-"))
+            .collect();
+        out.extend(signed);
+        Ok(out)
     }
 
     /// Every check that needs no network: handles, policy, method.
@@ -1269,5 +1337,207 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(body.len(), 200);
+    }
+
+    /// A one-request HTTP server on loopback standing in for the integration
+    /// proxy. Returns its origin and the raw request it received.
+    async fn one_shot_proxy() -> (String, tokio::task::JoinHandle<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let served = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut raw = Vec::new();
+            let mut buf = [0u8; 4096];
+            // Headers, then as much body as Content-Length says.
+            loop {
+                let n = socket.read(&mut buf).await.unwrap();
+                raw.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&raw).to_string();
+                if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                    let length = head
+                        .lines()
+                        .find_map(|l| {
+                            let (k, v) = l.split_once(':')?;
+                            if k.eq_ignore_ascii_case("content-length") {
+                                v.trim().parse::<usize>().ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(0);
+                    if body.len() >= length {
+                        break;
+                    }
+                }
+                if n == 0 {
+                    break;
+                }
+            }
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok")
+                .await
+                .unwrap();
+            String::from_utf8_lossy(&raw).to_string()
+        });
+        (origin, served)
+    }
+
+    fn proxy_manifest(origin: &str, id: &str) -> Manifest {
+        Manifest::parse(serde_json::json!({
+            "schemaVersion": 1,
+            "operations": [{
+                "id": id,
+                "method": "POST",
+                "url": format!("{origin}/proxy/conn-1/github/search"),
+                "effect": "read",
+            }],
+        }))
+        .unwrap()
+        .unwrap()
+    }
+
+    fn proxy_request(origin: &str, id: &str) -> FetchRequest {
+        FetchRequest {
+            operation: Some(id.into()),
+            method: "POST".into(),
+            url: format!("{origin}/proxy/conn-1/github/search?q=atomic"),
+            headers: vec![
+                ("content-type".into(), "application/json".into()),
+                // A plugin must not be able to choose who it signs as.
+                ("x-atomic-agent".into(), "did:ad:agent:forged".into()),
+                ("X-Atomic-Signature".into(), "forged".into()),
+            ],
+            body: Some(r#"{"q":"atomic"}"#.into()),
+        }
+    }
+
+    /// A JS run host whose manifest declares `declared`, on a node configured
+    /// with `proxy`, where the plugin's app agent is `agent`.
+    async fn proxy_host(
+        name: &str,
+        proxy: &str,
+        declared: &str,
+        agent: Option<&Agent>,
+    ) -> (crate::plugins::test_fixture::Fixture, HostCore) {
+        let mut fixture = crate::plugins::test_fixture::fixture(name).await;
+        crate::plugins::test_fixture::write_plugin(&mut fixture, "probe").await;
+        let db = Arc::new(fixture.appstate.store.clone());
+        db.set_integration_proxy(Some(proxy.to_string()));
+        if let Some(agent) = agent {
+            db.set_app_agent(
+                &AppAgentKey::new(&fixture.drive, &fixture.plugin),
+                &atomic_lib::db::app_agent::AppAgent::new(
+                    agent.subject.to_string(),
+                    agent.build_secret().unwrap(),
+                    0,
+                ),
+            )
+            .unwrap();
+        }
+        let host = HostCore::for_run(
+            db.clone(),
+            &fixture.drive,
+            &fixture.plugin,
+            ForAgent::AgentSubject(db.get_default_agent().unwrap().subject),
+            Some(proxy_manifest(declared, "search")),
+        )
+        .await
+        .unwrap();
+        (fixture, host)
+    }
+
+    fn header<'a>(raw: &'a str, name: &str) -> Vec<&'a str> {
+        raw.split("\r\n\r\n")
+            .next()
+            .unwrap()
+            .lines()
+            .filter_map(|line| {
+                let (k, v) = line.split_once(':')?;
+                k.trim().eq_ignore_ascii_case(name).then_some(v.trim())
+            })
+            .collect()
+    }
+
+    #[actix_rt::test]
+    async fn a_request_to_the_configured_proxy_is_signed_v2_as_the_installations_node_agent() {
+        let (origin, served) = one_shot_proxy().await;
+        let node_agent = Agent::new(None).unwrap();
+        let (_fixture, host) =
+            proxy_host("host_core_proxy_signs", &origin, &origin, Some(&node_agent)).await;
+
+        let response = host
+            .fetch(proxy_request(&origin, "search"), "read")
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let raw = served.await.unwrap();
+
+        // Exactly one of each, and they are the host's, not the plugin's.
+        let agent = header(&raw, "x-atomic-agent");
+        assert_eq!(agent, vec![node_agent.subject.to_string().as_str()]);
+        assert_eq!(header(&raw, "x-atomic-signature-version"), vec!["2"]);
+        assert_eq!(header(&raw, "x-atomic-signature").len(), 1);
+
+        // What the proxy checks: method, full URL with query, body hash.
+        let url = format!("{origin}/proxy/conn-1/github/search?q=atomic");
+        let values = |body: &[u8]| atomic_lib::authentication::AuthValues {
+            public_key: header(&raw, "x-atomic-public-key")[0].to_string(),
+            timestamp: header(&raw, "x-atomic-timestamp")[0].parse().unwrap(),
+            signature: header(&raw, "x-atomic-signature")[0].to_string(),
+            requested_subject: url.clone(),
+            agent_subject: agent[0].to_string(),
+            request: Some(atomic_lib::authentication::RequestBinding::new(
+                "POST", body,
+            )),
+        };
+        atomic_lib::authentication::check_auth_signature(&url, &values(br#"{"q":"atomic"}"#))
+            .expect("a valid v2 signature over this method, URL and body");
+        // Bound to the body: another one does not verify.
+        assert!(
+            atomic_lib::authentication::check_auth_signature(&url, &values(br#"{"q":"x"}"#))
+                .is_err()
+        );
+    }
+
+    #[actix_rt::test]
+    async fn an_installation_without_an_agent_on_this_node_cannot_reach_the_proxy() {
+        // Nothing listens here: the refusal has to come before any connection.
+        let origin = "http://127.0.0.1:9";
+        let (_fixture, host) = proxy_host("host_core_proxy_no_agent", origin, origin, None).await;
+        let err = host
+            .fetch(proxy_request(origin, "search"), "read")
+            .await
+            .unwrap_err();
+        assert!(err.contains("no app agent on this node"), "{err}");
+    }
+
+    #[actix_rt::test]
+    async fn the_proxy_exception_does_not_open_other_loopback_origins() {
+        let node_agent = Agent::new(None).unwrap();
+        // Even a manifest that declares them cannot reach loopback origins
+        // other than the configured one.
+        for (i, other) in [
+            "http://127.0.0.1:7071",
+            "https://127.0.0.1:7070",
+            "http://localhost:7070",
+            "http://127.0.0.2:7070",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (_fixture, host) = proxy_host(
+                &format!("host_core_proxy_other_{i}"),
+                "http://127.0.0.1:7070",
+                other,
+                Some(&node_agent),
+            )
+            .await;
+            let err = host
+                .fetch(proxy_request(other, "search"), "read")
+                .await
+                .unwrap_err();
+            assert!(err.contains("refused address"), "{other}: {err}");
+        }
     }
 }

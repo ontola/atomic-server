@@ -7,6 +7,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Server-side plugins reach the integration proxy through `ctx.http` signed
+  by the host (ontola/atomic-plugins#54, decisions 8 and 12). New option
+  `--integration-proxy-url` / `ATOMIC_INTEGRATION_PROXY_URL`: the proxy's
+  origin, exactly its `BASE_URL`. A plugin request to that origin is signed
+  with a version 2 request signature as this node's app agent for the
+  installation; the plugin never holds the key and its own `x-atomic-*`
+  headers are dropped. An installation with no app agent on this node is
+  refused rather than sent unsigned. A loopback origin (`localhost`, `127.x`,
+  `::1`) is let through the public-address check for exactly that scheme,
+  host and port, connecting to loopback without a DNS lookup; every other
+  loopback or private destination stays refused. The option is validated at
+  startup. Unset, nothing changes.
 - Version 2 request signatures (ontola/atomic-plugins#54). A request sent
   with `x-atomic-signature-version: 2` is checked against
   `atomic-request-v2\n{METHOD}\n{full URL}\n{timestamp ms}\n{sha-256 hex of
