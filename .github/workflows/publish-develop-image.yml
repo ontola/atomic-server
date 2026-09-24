@@ -39,7 +39,7 @@ on:
 jobs:
   publish:
     name: Build and publish
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]') }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
     timeout-minutes: 120
     permissions:
       contents: read
