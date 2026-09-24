@@ -1133,6 +1133,7 @@ msgid "Importing..."
 msgstr "Importing..."
 
 #: src/actions/resourceActions.tsx
+#: src/chunks/PluginRuns/PluginPage.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Import"
@@ -4464,6 +4465,7 @@ msgstr "Your workspace hasn’t opened here yet. It may still be settling — re
 msgid "No {0} portal is configured for this server."
 msgstr "No {0} portal is configured for this server."
 
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/routes/SyncRoute.tsx
@@ -8018,6 +8020,7 @@ msgstr "Proposal cancelled."
 msgid "Review this external action before approving it."
 msgstr "Review this external action before approving it."
 
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Preparing preview…"
@@ -9488,3 +9491,43 @@ msgstr "Drive apps"
 #: src/chunks/PluginRuns/CatalogApps.tsx
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
+
+#. 0: String(reason)
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Could not set up this importer: {0}"
+msgstr "Could not set up this importer: {0}"
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Loading importer…"
+msgstr "Loading importer…"
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up"
+msgstr "Set up"
+
+#. 0: manifest.destination.table.name
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
+msgstr "Set up creates a {0} table for this importer. Nothing is imported yet."
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "File to import"
+msgstr "File to import"
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Preview import"
+msgstr "Preview import"
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Open imported data"
+msgstr "Open imported data"
+
+#. 0: bytes
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "{0} bytes"
+msgstr "{0} bytes"
