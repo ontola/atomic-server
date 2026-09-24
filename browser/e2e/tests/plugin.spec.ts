@@ -78,9 +78,10 @@ test.describe('Plugins', () => {
     });
 
     // Installing navigates to the new Installation, which the server has
-    // activated by the time the commit round-trips.
+    // activated by the time the commit round-trips. The page names the
+    // plugin twice: as its heading and inside a link.
     await expect(
-      page.getByRole('link', { name: 'ontola/test-plugin', exact: true }),
+      page.getByText('ontola/test-plugin', { exact: true }).first(),
     ).toBeVisible();
     await expect(page.getByLabel('Status: active')).toBeVisible();
 

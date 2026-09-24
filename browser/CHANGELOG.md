@@ -73,6 +73,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   Status), not only through `tags`, so Doing no longer reads "0 resources".
 - Move the Connections and Automations buttons above table views into the table's context menu, next to Export to CSV. They open the same dialog as before.
 
+- Plugins moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). The Integrations page lists what that catalog publishes (`catalog.json`, fetched at runtime; the URL is configurable under Settings > Integration) instead of plugins compiled into the app and server. The bundled GitHub issues, Notion, Pets, MT940/camt.053, Clockify and Google Calendar (Devonian) integrations, the `devonian` dependency and the `/app/devonian-demo` page are removed. The Todoist lens and the Moneybird administration picker are removed too. LocalThought connect and sync, and the "Show API plugins" toggle, are removed from the app: plugins will run in their own iframe and make proxy calls through the host.
+- Tracker tables get an Issues view: open and closed issues split by the status column (or a boolean column), filtering by title or `#number`, New issue, and Close/Reopen per row. The Issue Tracker template opens it as a tab.
+- Columns whose property has no name are labelled from its shortname, capitalised and with dashes shown as spaces, in the table heading, filter bar, property toggle and summary bar. A name someone typed is still shown exactly as written.
+- An import that stops early (for example at the 5,000-record cap) keeps what it fetched and shows "Synced with issues" instead of failing outright.
+- A plugin run that proposes no changes shows only Close, instead of a disabled "Apply 0 changes" button.
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value

@@ -186,7 +186,7 @@ Rules:
 | --- | --- | --- |
 | Zip upload | `Plugin` resource + `pluginFile` commit hook (`server/src/plugins/plugin.rs`) | `scoped/<drive>/` on disk |
 | Catalog JS | `/plugin-catalog` → `/plugin-package/{id}` → `createPlugin` (`routes/IntegrationStore.tsx:151`) | copied into a `plugin-script` resource, not pinned to the release |
-| Bundled integrations | hardcoded list in `IntegrationDiscovery.tsx:45` | app code |
+| Bundled integrations | hardcoded list in `IntegrationDiscovery.tsx` (history: replaced by the remote atomic-plugins catalog in PR #1549) | app code |
 | Global server extension | files in `global/` | disk |
 
 The catalog (`plugin-release/v1`, `plugin-catalog/v1`) lives in the `PluginMeta`

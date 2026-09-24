@@ -1,7 +1,14 @@
 # LocalThought browser integrations
 
+> **Currently broken on this branch.** The WASM Syncables engine was removed
+> (#1618), so `engine()` in
+> `browser/data-browser/src/chunks/PluginRuns/localThought.ts` throws and every
+> LocalThought proxy call (connect, validation, import, refresh) fails. The fix,
+> making those proxy calls inside the plugin iframe, is a follow-up. The rest of
+> this document describes the intended flow.
+
 The LocalThought flow runs entirely in the browser: catalog discovery, OAuth
-consent, PKCE-protected return handling, paginated Syncables reads, ontology
+consent, PKCE-protected return handling, paginated provider reads, ontology
 creation and local Store/OPFS writes. Installation validates access once, creates
 a folder, and starts an automatic inbound import without a proposal dialog. No AtomicServer HTTP
 instance is needed. LocalThought remains the remote OAuth and API proxy.
@@ -22,9 +29,7 @@ Web Locks serialize rotating codes across tabs; a request consumes its code
 before dispatch and saves the replacement before processing data. Uncertain
 requests cannot silently replay credentials.
 
-Syncables is vendored temporarily under `syncables/` with upstream provenance in
-`UPSTREAM.md`; the matching upstream branch is `codex/browser-integrations`.
-`wasm/src/integrations.rs` exposes its in-memory engine through wasm-bindgen.
+The vendored Syncables crate and its wasm-bindgen bridge were removed in #1618.
 The shipped pure import mapper reads a local snapshot and produces the existing
 reviewed intents; user-edited plugin source is not executed on this path.
 Local edits and repeated imports retain the existing reconciliation behavior.
@@ -73,9 +78,10 @@ silently take over the old plugin tables.
   preference is saved in this browser and applies without rebuilding. Connections
   are isolated by proxy origin; switching back restores that proxy’s connections.
   HTTPS or loopback HTTP origins only. **Reset to default** uses the deployment’s
-  `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset.
-- Existing bundled GitHub, Notion, Clockify and MT940 plugins remain available
-  independently. Proxy cards have an accent border and a “Via integration proxy” label.
+  `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset. A build-time
+  value that would not pass the same check is ignored, so a bad one cannot lock
+  you out of this screen.
+- Proxy cards have an accent border and a “Via integration proxy” label.
 - Deploy the companion integration-proxy CORS change. It handles preflights for
   explicit Authorization headers and exposes `X-Connection-Code`, `Link`,
   pagination/count headers, `ETag` and `Retry-After`. Cookie credentials are not
@@ -97,7 +103,6 @@ server plugin execution, actions and schedules are outside this migration.
 ```sh
 cargo check -p atomic-wasm --target wasm32-unknown-unknown
 browser/node_modules/.bin/vitest run --config integrations/localthought/vitest.config.ts
-node integrations/localthought/wasm-smoke.mjs # after building wasm/pkg
 ```
 
 For the browser-only mock journey (no AtomicServer on port 19999):
@@ -107,7 +112,7 @@ MOCK_PROXY_PORT=19091 MOCK_FRONTEND_ORIGIN=http://localhost:6748 node integratio
 # Separate terminal, browser/data-browser:
 VITE_INTEGRATION_PROXY_URL=http://127.0.0.1:19091 VITE_ATOMIC_SERVER_URL=http://127.0.0.1:19999 pnpm exec vite --host 127.0.0.1 --port 6748
 # Repository root:
-node integrations/localthought/browser-smoke.mjs
+node integrations/localthought/browser-smoke.mjs  # fails until the iframe move
 ```
 
 The mock is test-only. It uses a synthetic signed-in identity and data; never
@@ -141,98 +146,14 @@ An unbounded fetch successfully traversed multiple pages but exceeded the
 bounds and recurrence expansion are passed to Syncables as collection query
 settings. That historical verification exercised the earlier manual snapshot importer.
 
-## Calendar view
+## Google Calendar
 
-Google event imports now install a Calendar view alongside the source table.
-The projected date uses the day in Google's supplied start offset (or the
-unchanged all-day date), so mixed all-day/timed events share one DATE column.
-The original Start and End objects retain timezones and exclusive end values.
-All-day events display on every covered day, excluding the end date, and are
-marked All day. Their DATE projection does not shift with the viewing timezone.
-Timed events still display on their start day only. Refresh existing imports
-to install the new exclusive end-date projection. Additional notes identify recurring events, attendees,
-reminders and conferencing when those fields are returned by the catalog.
-Recurring instances are expanded by the existing bounded provider fetch.
-
-Open the installed folder or its Calendar table to refresh automatically.
-Existing source identities and import baselines prevent duplicates and preserve
-Atomic-only fields and local edits. Cancellation records are retained with a
-note; absence from a bounded fetch never deletes an Atomic resource. Google
-may omit cancelled events from list results, so this is not a deletion feed.
-Removed optional provider fields are not cleared by the shared snapshot importer.
-### Reviewed two-way event edits
-
-From the installed folder or table, use **Preview edits for
-Google** and **Apply edits to Google**. Name/Summary, Description, Location,
-Start and End on existing imported events sync back to their original calendar
-and event ID, including individual recurring instances. Incoming Google changes refresh automatically when the folder or table opens.
-
-Preview compares the import baseline with a fresh Google event. Conflicts block
-preview. Apply checks local values still match the review and sends only changed
-fields with `If-Match`; a changed Google ETag blocks the write. Successful writes
-checkpoint the baseline. After a lost checkpoint, preview acknowledges matching
-Google values without another PATCH. Uncertain transport requires reconnection.
-Partial batches retain completed checkpoints and must be previewed again.
-Google guest notifications are enabled (`sendUpdates=all`).
-
-New events, deletion, recurrence rules, guests/RSVP, reminders and conferencing
-remain managed in Google. Change Start/End together for timed/all-day conversions;
-projected Calendar day/all-day columns are display fields refreshed on import.
-Atomic-only fields are preserved. Outbound editing of existing events remains manual. Inbound refresh runs in
-the browser; this is not a complete Calendar mirror.
-
-**Deployment requirement:** deploy the companion integration-proxy change in
-`calendar-proxy.patch` (based on proxy main `71115c2`). It requests
-`calendar.events` and `calendar.calendarlist.readonly` and forwards/allows
-`If-Match` through CORS. Reconnect existing Google accounts for write access.
-Calendar reconnection retains the original installation identity and imported tables.
-The companion worktree is `/private/tmp/calendar-sync-proxy`, branch
-`codex/google-calendar-two-way`. No production deployment or live account writes
-were performed as part of these checks.
-
-`calendar-sync.test.ts` covers minimal patches, conflict detection, stale local
-and remote previews, write-in-flight edits, lost checkpoints, date validation,
-identity isolation, unsupported fields and denied writes. The browser transport
-test checks conditional headers alongside rotating credentials.
-
-`calendar.test.ts` exercises mixed dates, offset boundaries, exclusive ends,
-recurrence/attendee notes, cancellations, malformed starts, cross-calendar
-identity and repeated imports with private local fields.
-
-## Browser-only Calendar regression
-
-`browser/e2e/tests/google-calendar-import.spec.mts` starts the shared mock
-integration-proxy with a synthetic Google Calendar. The test selects Calendar,
-completes the mock PKCE consent and redemption, and exercises real browser
-credential rotation, one-request access validation, WASM pagination, local schema
-installation, automatic OPFS application, and Calendar rendering. It holds the
-initial import until the installed folder is open, refreshes changed provider
-data on reopening without a button, and checks that native identities and
-Atomic-only notes and local title edits survive reload. A browser clock verifies
-the five-minute timer. It also verifies failed refreshes preserve
-records and reopening recovers. Both expanded instances and retained recurring
-series are covered.
-AtomicServer HTTP and all WebSockets are blocked throughout; only GET requests
-are permitted for provider data. The configured LocalThought origin is forwarded
-to the isolated HTTP fixture, so no live provider credentials or data are used.
-
-Run with a dev frontend built from this branch and its matching WASM bundle:
-
-```sh
-FRONTEND_URL=http://127.0.0.1:6747 SERVER_URL=http://127.0.0.1:19999 \
-  browser/e2e/node_modules/.bin/playwright test \
-  --config browser/e2e/playwright.config.ts \
-  browser/e2e/tests/google-calendar-import.spec.mts --project chromium
-```
-
-If the frontend uses `VITE_INTEGRATION_PROXY_URL`, pass the same value to the
-test process. The test forwards that origin to its own fixture. Live Google
-OAuth on the browser path still depends on the proxy CORS deployment described
-above; this fixture test does not claim live-provider verification.
-
-Verification: the focused LocalThought fixture and frontend checks cover the
-redirect, PKCE, rotation and import paths. Live LocalThought login, consent,
-redemption and Google write verification remain pending.
+The Calendar lens (Calendar view projection, reviewed two-way event edits,
+`calendar.test.ts`, `calendar-sync.test.ts` and the
+`google-calendar-import.spec.mts` E2E) was removed from this repo. Provider
+plugins live in [atomic-plugins](https://github.com/ontola/atomic-plugins).
+`calendar-proxy.patch` remains as the companion proxy change for write scopes
+and `If-Match` CORS.
 
 Each OAuth authorization creates a separate import installation. The proxy does
 not provide a verified provider account identity, so reconnecting (even to the

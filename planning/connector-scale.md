@@ -1,5 +1,7 @@
 # Bidirectional connector ecosystem
 
+> **Partly moved (PR #1549):** provider implementations, fixture suites, evidence and certification now live in [atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps catalog discovery, install and the plugin runtime.
+
 **Status:** Active implementation, 2026-09-06. User direction: reliable bidirectional sync
 with many major and niche domain applications without bloating Atomic.
 GitHub and Notion pilots now run in the shared sandbox and have bounded live

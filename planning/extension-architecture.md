@@ -3,7 +3,11 @@
 Status: product direction agreed with the user, 2026-09-08; technical migration
 in progress. This describes the target, not guarantees already implemented. Current
 extension code reached `develop` with #1500 (2026-09-17); PR #1307 remains open
-for its remaining-work list. Reflector integration is proposed in PR #1383.
+for its remaining-work list. The Reflector integration proposed in PR #1383 (a
+Rust `reflector-rs` adapter) is superseded by
+[issue #1599](https://github.com/ontola/atomic-server/issues/1599): Reflector is a
+TS package (`localthought/reflector`) called from the plugin sandbox like any other
+provider API, not an in-process Rust adapter.
 Workspace navigation, shared view protocol and installation identity have implementation checkpoints below;
 the complete package and permission migration remains open.
 
@@ -203,12 +207,18 @@ adapters own provider-specific normalization, deletion interpretation and field
 support. No provider gets a second direct persistence path.
 
 OpenAPI describes transport and response shapes; overlays/code supply missing
-semantics. Reflector can discover endpoints and derive candidate mappings. Its
-first convergence milestone is emitting records into the shared importer, not
-introducing another UI, credential store or continuous scheduler. Initially it can
-remain a trusted Rust adapter behind the host. It cannot be advertised as equivalent
-to untrusted sandboxed JS until its isolation and authority are demonstrated.
-Do not require a new OpenAPI-to-JS compiler before testing this boundary.
+semantics. Reflector (the TS package at `localthought/reflector`, orchestrating
+`localthought/syncables` for OpenAPI+overlay sync and `localthought/devonian` for
+bidirectional reconciliation — see
+[issue #1599](https://github.com/ontola/atomic-server/issues/1599)) can discover
+endpoints and derive candidate mappings. Its first convergence milestone is
+emitting records into the shared importer, not introducing another UI, credential
+store or continuous scheduler. It runs as a separate hosted service and is called
+by a plugin through the existing sandboxed `fetch` capability, like any other
+provider API — not as a trusted Rust adapter behind the host; no in-process Rust
+integration path is required. It cannot be advertised as equivalent to untrusted
+sandboxed JS until its isolation and authority are demonstrated. Do not require a
+new OpenAPI-to-JS compiler before testing this boundary.
 
 Generated provider schemas are useful staging definitions, not automatically
 cross-provider standards. Prefer existing Atomic properties where meanings agree;

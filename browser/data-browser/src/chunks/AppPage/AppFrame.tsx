@@ -14,6 +14,8 @@ import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 
 import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars } from '@views/PluginView/useCreateThemeVars';
+import { getIntegrationProxy } from '@helpers/integrationProxy';
+import { isPlatformId, ProxyConnections } from '@helpers/proxyConnections';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -68,6 +70,10 @@ function AppFrameSession({
   const [entrypoint, setEntrypoint] = useState<string | null>();
   const [problem, setProblem] = useState<string>();
   const [appError, setAppError] = useState<AppError>();
+  // An app asking to connect a proxy platform. Drawn by this page, not the
+  // frame, so only a click the person makes here can navigate away.
+  const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
+  const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -172,6 +178,27 @@ function AppFrameSession({
 
       if (!isHostRequest(data)) return;
 
+      if (data.op === 'proxyConnect') {
+        if (!isPlatformId(data.platform)) {
+          session.post({ id: data.id, error: 'platform is required' });
+
+          return;
+        }
+
+        // One question at a time; a second ask answers the first.
+        const previous = connectAskRef.current;
+        previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
+        const ask = {
+          id: data.id,
+          platform: data.platform!,
+          reply: session.post,
+        };
+        connectAskRef.current = ask;
+        setConnectAsk(ask);
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
@@ -237,6 +264,37 @@ function AppFrameSession({
     return <LoaderBlock />;
   }
 
+  const connect = () => {
+    if (!connectAsk) return;
+    const actor = store.getAgent()?.subject;
+
+    if (!actor) {
+      connectAsk.reply({
+        id: connectAsk.id,
+        error: 'Sign in to connect an account.',
+      });
+      connectAskRef.current = undefined;
+      setConnectAsk(undefined);
+
+      return;
+    }
+
+    new ProxyConnections(localStorage, getIntegrationProxy())
+      .start({ drive, actor, app }, connectAsk.platform, location.href)
+      .then(url => location.assign(url))
+      .catch((e: Error) => {
+        connectAsk.reply({ id: connectAsk.id, error: e.message });
+        connectAskRef.current = undefined;
+        setConnectAsk(undefined);
+      });
+  };
+
+  const cancelConnect = () => {
+    connectAsk?.reply({ id: connectAsk.id, result: { status: 'cancelled' } });
+    connectAskRef.current = undefined;
+    setConnectAsk(undefined);
+  };
+
   const fixIt = () => {
     if (!appError) return;
 
@@ -273,6 +331,22 @@ function AppFrameSession({
             </Button>
           </Row>
         </ErrorBar>
+      )}
+      {connectAsk && (
+        <ConnectBar role='group' aria-label='Connect an account'>
+          <ErrorText>
+            This app wants to connect your{' '}
+            <strong>{platformName(connectAsk.platform)}</strong> account through{' '}
+            {getIntegrationProxy()}. The connection stays in this browser; the
+            app can only make requests through it.
+          </ErrorText>
+          <Row gap='0.5rem'>
+            <Button onClick={connect}>Connect</Button>
+            <Button subtle onClick={cancelConnect}>
+              Cancel
+            </Button>
+          </Row>
+        </ConnectBar>
       )}
       <Frame
         ref={frameRef}
@@ -317,11 +391,49 @@ async function answer(
   try {
     post({
       id: request.id,
-      result: await handleRequest(store, app, drive, request, table),
+      result: await handleRequest(
+        store,
+        app,
+        drive,
+        request,
+        table,
+        proxyRelay(store, app, drive),
+      ),
     });
   } catch (e) {
     post({ id: request.id, error: (e as Error).message });
   }
+}
+
+/** This app's proxy connections in this page, or none when signed out. */
+function proxyRelay(
+  store: ReturnType<typeof useStore>,
+  app: string,
+  drive: string,
+) {
+  const actor = store.getAgent()?.subject;
+
+  return actor
+    ? new ProxyConnections(localStorage, getIntegrationProxy()).relay({
+        drive,
+        actor,
+        app,
+      })
+    : undefined;
+}
+
+/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
+function platformName(id: string) {
+  return id
+    .split('-')
+    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
+    .join(' ');
+}
+
+interface ConnectAsk {
+  id: number | string;
+  platform: string;
+  reply: (reply: HostReply) => void;
 }
 
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
@@ -376,6 +488,19 @@ const Frame = styled.iframe`
   height: 100%;
   min-height: 20rem;
   background: ${p => p.theme.colors.bg};
+`;
+
+const ConnectBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+  margin-bottom: 0.5rem;
 `;
 
 /** Keeps the frame filling whatever is left once the bar has taken its height. */

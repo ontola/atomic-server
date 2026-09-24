@@ -42,13 +42,6 @@ const DemoRoute = createRoute({
   path: pathNames.demo,
 }).lazy(() => import('./DemoRoute').then(mod => mod.demoRouteLazy));
 
-const DevonianDemoRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/devonian-demo',
-}).lazy(() =>
-  import('./DevonianDemoRoute').then(mod => mod.devonianDemoRouteLazy),
-);
-
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.pruneTests,
@@ -98,7 +91,6 @@ const routeTree = rootRoute.addChildren({
     SandboxRoute,
     DevDriveRoute,
     DemoRoute,
-    DevonianDemoRoute,
     InviteRoute,
     LinkOpenRouter,
   }),

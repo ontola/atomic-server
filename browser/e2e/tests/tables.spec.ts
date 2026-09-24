@@ -463,9 +463,9 @@ test.describe('tables', async () => {
         'Before sort, first row should be the first-entered ("gamma")',
       ).toBeVisible();
 
-      // Click the "name" column header to sort by name (ascending).
+      // Click the "Name" column header to sort by name (ascending).
       await page
-        .getByRole('button', { name: 'name', exact: true })
+        .getByRole('button', { name: 'Name', exact: true })
         .first()
         .click();
 

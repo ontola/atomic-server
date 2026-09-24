@@ -30,7 +30,6 @@ describe('workspace identity across extension models', () => {
       { connection: { config: { table: 'did:ad:table' } } },
       { connection: JSON.stringify({ config: { table: 'did:ad:table' } }) },
       { schemas: { table: 'did:ad:table' } },
-      { schemas: { mt940: { table: 'did:ad:table' } } },
     ])
       expect(pluginWorkspace(resource(values), properties)).toBe(
         'did:ad:table',

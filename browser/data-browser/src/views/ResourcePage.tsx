@@ -1,4 +1,3 @@
-import { LocalThoughtSync } from '@chunks/PluginRuns/LocalThoughtSyncPanel';
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
@@ -265,7 +264,6 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
           {/* And on the original: the forks proposing changes to it. */}
           <PendingForks resource={resource} />
           <ImportResolutionNotice resource={resource} />
-          <LocalThoughtSync resource={resource} />
           <ReturnComponent resource={resource} />
         </Suspense>
       </ErrorBoundary>

@@ -220,7 +220,7 @@ function FilterMenu({
       },
       ...available.map(c => ({
         id: c.subject,
-        label: titles.get(c.subject) ?? c.shortname,
+        label: titles.get(c.subject)!,
         onClick: () => addFilter(c.subject),
       })),
       ...availableDerived.map(spec => ({
@@ -504,7 +504,7 @@ function ColumnsMenu({
 
         return {
           id: column.subject,
-          label: titles.get(column.subject) ?? column.shortname,
+          label: titles.get(column.subject)!,
           // A check on the shown ones, matching how the view-type section of
           // the tab menu marks its current choice.
           icon: shown ? <FaCheck /> : <CheckPlaceholder />,

@@ -1,13 +1,10 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
-import { LocalThoughtCatalog } from '../chunks/PluginRuns/LocalThoughtCatalog';
-import { LocalThoughtCallback } from '../chunks/PluginRuns/localThoughtCallback';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
-import {
-  IntegrationDiscovery,
-  visibleBundledIntegrations,
-} from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
-import { useIntegrationCatalog } from '../chunks/PluginRuns/pluginCatalog';
+import {
+  hasExperimentalEntries,
+  useIntegrationCatalog,
+} from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -75,11 +72,11 @@ export const IntegrationStoreRoute = createRoute({
 });
 
 function IntegrationStore(): React.JSX.Element {
-  const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
-  const { showApiPlugins, showExperimentalPlugins, setVisibility } =
-    useIntegrationVisibility();
+  // Opened from a workspace: new automations can belong to it.
+  const { workspace } = IntegrationStoreRoute.useSearch();
+  const { showExperimentalPlugins, setVisibility } = useIntegrationVisibility();
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -168,7 +165,6 @@ function IntegrationStore(): React.JSX.Element {
     };
   }, [store, drive]);
   const [search, setSearch] = useState('');
-  const [apiCatalogHasResults, setApiCatalogHasResults] = useState(true);
   const [creating, setCreating] = useState<string>();
   const [pending, setPending] = useState<
     PendingInstallation & { entry: Listing }
@@ -278,33 +274,16 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   const query = search.trim().toLocaleLowerCase();
-  const bundled = visibleBundledIntegrations(
-    catalogEntries,
-    showExperimentalPlugins,
-    showApiPlugins,
-  ).filter(entry =>
-    `${entry.name} ${entry.description} ${entry.capabilities} ${entry.events} ${entry.keywords}`
-      .toLocaleLowerCase()
-      .includes(query),
-  );
-  // Only offer a toggle when the catalog has something behind it: a checkbox
+  // Only offer the toggle when the catalog has something behind it: a checkbox
   // that reveals nothing reads as broken.
-  const hasApiPlugins = catalogEntries.some(
-    entry => entry.enabled && entry.requiresApiPlugins,
-  );
-  const hasExperimentalPlugins = catalogEntries.some(
-    entry => entry.enabled && entry.experimental,
-  );
-  const nothingToDiscover =
-    catalogReady &&
-    bundled.length === 0 &&
-    (!showApiPlugins || !apiCatalogHasResults);
+  const hasExperimentalPlugins = hasExperimentalEntries(catalogEntries);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')
       .toLocaleLowerCase()
       .includes(query),
   );
+  const nothingToDiscover = catalogReady && !visible?.length;
 
   return (
     <Main>
@@ -343,7 +322,11 @@ function IntegrationStore(): React.JSX.Element {
             <section aria-label='Your automations'>
               <Row center justify='space-between'>
                 <h2>Your automations</h2>
-                <NewAutomation drive={drive} connections={installed} />
+                <NewAutomation
+                  drive={drive}
+                  connections={installed}
+                  workspace={workspace}
+                />
               </Row>
               {automations.length === 0 && <AutomationEmptyState />}
               <Grid>
@@ -356,7 +339,6 @@ function IntegrationStore(): React.JSX.Element {
             </section>
           )}
           <h2>Discover integrations</h2>
-          <LocalThoughtCallback drive={drive} />
           <Input
             aria-label='Search integrations'
             placeholder='Search integrations, domains or standards'
@@ -376,48 +358,17 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {(hasApiPlugins || hasExperimentalPlugins) && (
-            <Column gap='0.5rem'>
-              {hasApiPlugins && (
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={showApiPlugins}
-                    onChange={value => setVisibility('show-api-plugins', value)}
-                  />
-                  Show API plugins
-                </CheckboxLabel>
-              )}
-              {hasExperimentalPlugins && (
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={showExperimentalPlugins}
-                    onChange={value =>
-                      setVisibility('show-experimental-plugins', value)
-                    }
-                  />
-                  Show experimental plugins
-                </CheckboxLabel>
-              )}
-            </Column>
+          {hasExperimentalPlugins && (
+            <CheckboxLabel>
+              <Checkbox
+                checked={showExperimentalPlugins}
+                onChange={value =>
+                  setVisibility('show-experimental-plugins', value)
+                }
+              />
+              Show experimental plugins
+            </CheckboxLabel>
           )}
-          <Grid>
-            {showApiPlugins && (
-              <LocalThoughtCatalog
-                drive={drive}
-                search={search}
-                showExperimentalPlugins={showExperimentalPlugins}
-                onVisibilityChange={setApiCatalogHasResults}
-              />
-            )}
-            {bundled.map(entry => (
-              <IntegrationDiscovery
-                key={entry.id}
-                entry={entry}
-                workspace={workspace}
-                drive={drive}
-              />
-            ))}
-          </Grid>
           {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (

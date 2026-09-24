@@ -7,7 +7,6 @@ import { AtomicLink } from '@components/AtomicLink';
 import { pluginWorkspace } from '@tomic/react';
 import { Tabs } from '@components/Tabs';
 import { IntegrationDefaultView } from './IntegrationDataView';
-import { ClockifyUpgrade } from './ClockifyUpgrade';
 import { AutomationIntegrations } from './AutomationIntegrations';
 import {
   AutomationWorkspace,
@@ -21,7 +20,7 @@ import { PluginTrigger } from './PluginTrigger';
 import toast from 'react-hot-toast';
 import { paths } from '../../routes/paths';
 import { publishPluginRelease } from '@tomic/react';
-import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaPencil, FaPlay } from 'react-icons/fa6';
 import {
@@ -43,10 +42,6 @@ import { PluginSchedule } from './PluginSchedule';
 import { RunPluginDialog } from './RunPluginDialog';
 import { usePluginManifest, usePluginSource } from './runScript';
 import { originsMentionedIn, secretsMentionedIn } from '@tomic/react';
-
-const FileImporter = lazy(() =>
-  import('./ImportMT940').then(m => ({ default: m.ImportMT940 })),
-);
 
 /**
  * A plugin's page.
@@ -80,21 +75,12 @@ export function PluginPage({
   const manifest = usePluginManifest(source);
   const connection = useIntegrationConnection(resource.subject, drive);
   const automation = useAutomationTrigger(resource.subject, drive);
-  const [fileImporter, setFileImporter] = useState(false);
   const [dataTable, setDataTable] = useState<string>();
   useEffect(() => {
     let active = true;
     void findSchema(store, drive, pluginSchema())
       .then(schema => {
-        const property = schema.properties?.['plugin-schemas'];
-        const config = property
-          ? (resource.get(property) as
-              | { table?: string; mt940?: { table?: string } }
-              | undefined)
-          : undefined;
-
         if (active) {
-          setFileImporter(!!config?.mt940);
           setDataTable(pluginWorkspace(resource, schema.properties ?? {}));
         }
       })
@@ -164,17 +150,10 @@ export function PluginPage({
         >
           <Panel value='manage'>
             <Column gap='1.5rem'>
-              {!connection && !automation && !fileImporter && (
+              {!connection && !automation && (
                 <Button onClick={run}>
                   <FaPlay aria-hidden /> Run
                 </Button>
-              )}
-              {source && (
-                <ClockifyUpgrade
-                  source={source}
-                  drive={drive}
-                  plugin={resource.subject}
-                />
               )}
               {automation && (
                 <AutomationWorkspace
@@ -194,7 +173,7 @@ export function PluginPage({
                   drive={drive}
                   definition={connection}
                 />
-              ) : !automation && !fileImporter ? (
+              ) : !automation ? (
                 <PluginSchedule
                   plugin={resource.subject}
                   drive={drive}
@@ -205,7 +184,7 @@ export function PluginPage({
                   reviewedNonce={reviewedNonce}
                 />
               ) : null}
-              {!connection && !fileImporter && (
+              {!connection && (
                 <PluginTrigger
                   plugin={resource.subject}
                   drive={drive}
@@ -214,14 +193,6 @@ export function PluginPage({
                     setRunning(true);
                   }}
                 />
-              )}
-              {fileImporter && (
-                <Suspense fallback={<p>Loading importer…</p>}>
-                  <FileImporter
-                    drive={drive}
-                    initialTarget={resource.subject}
-                  />
-                </Suspense>
               )}
             </Column>
           </Panel>
@@ -245,18 +216,17 @@ export function PluginPage({
           <Panel value='settings'>
             <Column gap='1.5rem'>
               {dataTable && <IntegrationDefaultView subject={dataTable} />}
-              {!fileImporter &&
-                (!automation ||
-                  manifest.secrets.length > 0 ||
-                  secretsMentionedIn(source ?? '').length > 0) && (
-                  <PluginSecrets
-                    plugin={resource.subject}
-                    drive={drive}
-                    declared={manifest.secrets}
-                    mentioned={secretsMentionedIn(source ?? '')}
-                    candidateOrigins={originsMentionedIn(source ?? '')}
-                  />
-                )}
+              {(!automation ||
+                manifest.secrets.length > 0 ||
+                secretsMentionedIn(source ?? '').length > 0) && (
+                <PluginSecrets
+                  plugin={resource.subject}
+                  drive={drive}
+                  declared={manifest.secrets}
+                  mentioned={secretsMentionedIn(source ?? '')}
+                  candidateOrigins={originsMentionedIn(source ?? '')}
+                />
+              )}
             </Column>
           </Panel>
           <Panel value='activity'>

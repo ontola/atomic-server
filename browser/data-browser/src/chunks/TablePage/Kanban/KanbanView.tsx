@@ -1,9 +1,7 @@
 import {
   Collection,
-  JSONValue,
   Property,
   Resource,
-  commits,
   core,
   dataBrowser,
   unknownSubject,
@@ -41,7 +39,9 @@ import { DEFAULT_STATUS_TAGS } from './createSelectProperty';
 import { TablePresenceContext } from '../TablePresence';
 import { KanbanFlipContext, type CardFlipRecord } from './cardFlip';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
-import { setRowDefault, withTableRowDefaults } from '../rowDefaults';
+import { setRowDefault } from '../rowDefaults';
+import { useAllMembers } from '../helpers/useAllMembers';
+import { useCreateRow } from '../helpers/useCreateRow';
 
 interface KanbanViewProps {
   /** The Table resource; new cards are created as its children. */
@@ -130,28 +130,8 @@ export function KanbanView({
 
   // All rows of the table, loaded up front so cards can be bucketed by their
   // group-by value (including the "no status" bucket, which the query index
-  // can't express as an "is empty" filter). Re-fetched when the collection
-  // identity or size changes (new/removed rows).
-  const [memberSubjects, setMemberSubjects] = useState<string[]>([]);
-  const totalMembers = collection.totalMembers;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void collection
-      .getAllMembers()
-      .then(members => {
-        if (!cancelled) {
-          setMemberSubjects(members);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [collection, totalMembers]);
-
+  // can't express as an "is empty" filter).
+  const memberSubjects = useAllMembers(collection);
   const rows = useResources(memberSubjects);
 
   const groupByResource = useResource(groupBy);
@@ -235,8 +215,8 @@ export function KanbanView({
   // Create a new card already assigned to a column: a row of the table's class
   // with its group-by property preset to that column's tag (empty for the
   // "No status" column, even when the table has a default lane). The table's
-  // other row defaults apply. `createdAt` is required for it to appear in the
-  // table.
+  // other row defaults apply (see `useCreateRow`).
+  const createRow = useCreateRow(tableSubject, tableClass);
   const handleCreateCard = useCallback(
     async (tagSubject: string | undefined, name: string) => {
       const trimmed = name.trim();
@@ -245,30 +225,16 @@ export function KanbanView({
         return;
       }
 
-      const propVals: Record<string, JSONValue> = await withTableRowDefaults(
-        store,
-        tableSubject,
-        {
-          [core.properties.name]: trimmed,
-          [commits.properties.createdAt]: Date.now(),
-        },
-      );
-
-      if (groupBy && tagSubject) {
-        propVals[groupBy] = [tagSubject];
-      } else if (groupBy) {
-        delete propVals[groupBy];
+      try {
+        await createRow(
+          trimmed,
+          groupBy ? { [groupBy]: tagSubject ? [tagSubject] : null } : {},
+        );
+      } catch (error) {
+        store.notifyError(error as Error);
       }
-
-      const row = await store.newResource({
-        parent: tableSubject,
-        isA: tableClass.subject,
-        propVals,
-      });
-      await row.save();
-      store.notifyResourceManuallyCreated(row);
     },
-    [store, tableSubject, tableClass, groupBy],
+    [createRow, store, groupBy],
   );
 
   const handleDragStart = useCallback(

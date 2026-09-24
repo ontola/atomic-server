@@ -153,4 +153,37 @@ export const store = {
       void send('unsubscribe', { subject });
     };
   },
+
+  /**
+   * The integration proxy, reached through the host.
+   *
+   * This frame never holds a credential: it names a connection by its public
+   * reference (`platform` + `connectionId`) and the host page, which holds the
+   * connection, makes the call and returns only status, a few headers and the
+   * body. A connection is usable only by the app it was made for.
+   */
+  proxy: {
+    /**
+     * One provider call. `path` is the provider path (after the proxy's
+     * `/proxy/<platform>` prefix); `body`, when given, is JSON text. Resolves
+     * to `{ status, headers, body }`, `body` parsed as JSON when it is JSON.
+     */
+    async request({ platform, connectionId, path, method, query, body, ifMatch }) {
+      return send('proxy', { platform, connectionId, path, method, query, body, ifMatch });
+    },
+
+    /** This app's connections for `platform` in this browser: `[{ connectionId, platform }]`. */
+    async connections({ platform }) {
+      return send('proxyConnections', { platform });
+    },
+
+    /**
+     * Asks the person, in the host's own UI, to connect `platform` for this
+     * app. On consent the page navigates to the proxy and back, reloading
+     * this view, so the promise only settles when they cancel.
+     */
+    async connect({ platform }) {
+      return send('proxyConnect', { platform });
+    },
+  },
 };
