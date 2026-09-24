@@ -436,6 +436,11 @@ impl RouteRegistry {
         self.config.level() != PluginRoutesLevel::Off
     }
 
+    /// The gates this registry serves under.
+    pub fn config(&self) -> &PluginRoutesConfig {
+        &self.config
+    }
+
     /// The routes origin's host name, if one is configured.
     fn routes_host(&self) -> Option<String> {
         self.config
@@ -577,18 +582,17 @@ impl RouteRegistry {
 
     /// What `method path` on `host` answers, or `None` when the request is
     /// not for a plugin mount at all.
-    pub fn answer(&self, host: &str, method: &str, path: &str, now: i64) -> Option<Answer> {
+    fn locate(&self, host: &str, path: &str) -> Option<(String, Mount, Host)> {
         if !self.enabled() {
             return None;
         }
-        let request = request_segments(path);
-        let (slug, mount, key) = match self.routes_host_label(host) {
+        Some(match self.routes_host_label(host) {
             Some(label) => (
                 label,
                 Mount::InstallationOrigin,
                 Host::Named(host_name(host)),
             ),
-            None => match request.as_slice() {
+            None => match request_segments(path).as_slice() {
                 [first, rest @ ..] if *first == atomic_lib::subject::PLUGIN_ROUTES_SEGMENT => (
                     rest.first().map(|s| s.to_string()).unwrap_or_default(),
                     Mount::DrivePrefix,
@@ -596,7 +600,35 @@ impl RouteRegistry {
                 ),
                 _ => return None,
             },
+        })
+    }
+
+    /// The installation a request on a plugin mount is for, its mount, and
+    /// the request path as the installation sees it (without
+    /// `/_routes/<slug>` on `drive-prefix`). Only for a route that
+    /// [`RouteRegistry::answer`] matched.
+    pub fn target(&self, host: &str, path: &str) -> Option<(String, Mount, String)> {
+        let (slug, mount, _) = self.locate(host, path)?;
+        let table = self.read();
+        let subject = table.by_slug.get(&slug)?.clone();
+        let own = match mount {
+            Mount::DrivePrefix => {
+                let prefix = format!("/{}/{slug}", atomic_lib::subject::PLUGIN_ROUTES_SEGMENT);
+                let rest = path.strip_prefix(&prefix).unwrap_or("");
+                if rest.is_empty() {
+                    "/".to_string()
+                } else {
+                    rest.to_string()
+                }
+            }
+            _ => path.to_string(),
         };
+        Some((subject, mount, own))
+    }
+
+    pub fn answer(&self, host: &str, method: &str, path: &str, now: i64) -> Option<Answer> {
+        let (slug, mount, key) = self.locate(host, path)?;
+        let request = request_segments(path);
         if !is_slug(&slug) {
             return Some(Answer::NotFound);
         }

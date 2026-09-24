@@ -249,7 +249,7 @@ tests cover slugs, `{param}`/`{*rest}` matching, both mounts, reserved paths
 (`/.well-known/` names, the API origin outside `/_routes/<slug>/`, and a check
 that every route in `routes.rs` is on the reserved list), collisions naming
 the other installation, pause/revoke/degraded answers and level `off`.
-`handlers/plugin_routes.rs` runs real installs through the app: 501 on a
+`handlers/plugin_routes.rs` runs real installs through the app: 200 on a
 match, 405, 503 + `Retry-After`, 410 after revoke, the routes host, refusal
 before anything is materialized, no registration from a peer's import, and a
 restart restoring or degrading routes. `plugins/route_levels_test.rs` installs
@@ -257,9 +257,21 @@ the shared fixture `testdata/plugin-routes/hello-route/` at every build and
 level. `lib/src/commit.rs` checks, in every build, that nothing can be created
 under `/_routes/`. `tests/it/plugin_routes.rs` (only with `--features
 plugin-routes`) installs over HTTP on a real server and gets both mounts'
-answers. Not covered: route execution (#1715), `drive-host` (#1716), removed
+answers, the fixture's `Hello, world` among them. Not covered: `drive-host` (#1716), removed
 routes answering `410` after an upgrade, and a peer `COMMIT` applied outside a
 sync import scope (the owner check relies on that scope).
+
+Plugin route execution (#1715): `server/src/plugins/route_exec.rs` runs real
+installs through the app: a route verdict with intents refused at `read-only`
+and `read-write` with nothing applied, the deadline and fuel and memory
+exhaustion answering `503`, body limits and content types (`413`, `415`,
+`400`), request and response header filtering through the server's CORS
+layers, declared CORS, HTML refused on `drive-prefix`, and the route status
+counts. `route_levels_test.rs` gets `200 Hello, alice` at both open levels;
+`tests/it/plugin_routes.rs` gets `200 Hello, world` from a real server. Not
+covered: the `installation` principal's reads, `ctx.http` from a route, the
+pool and per-installation concurrency limits under real load, and the
+`/plugin-route-status` endpoint over HTTP (its counts are unit-tested).
 
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
