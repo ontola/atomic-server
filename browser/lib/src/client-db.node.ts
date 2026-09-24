@@ -142,13 +142,10 @@ export class NodeClientDb {
   async getResourceWithSnapshot(
     subject: string,
   ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
-    const db = this.requireDb();
-    const jsonAd = (await db.getResource(subject)) as string | null;
-    const snapshot = jsonAd
-      ? (db.getLoroSnapshot(subject) as Uint8Array | null)
-      : null;
-
-    return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+    return (await this.requireDb().getResourceWithSnapshot(subject)) as {
+      jsonAd: string | null;
+      snapshot: Uint8Array | null;
+    };
   }
 
   async getResourcesWithSnapshots(

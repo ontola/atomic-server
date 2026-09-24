@@ -600,65 +600,41 @@ impl Db {
         let mut transaction = Transaction::new();
 
         if update_index {
-            // Persist DID routing hint if available
-            if let Subject::Did {
-                drive_hint: Some(hint),
-                ..
-            } = &subject
-            {
-                transaction.push(Operation {
-                    tree: Tree::DidMapping,
-                    method: Method::Insert,
-                    key: subject_str.as_bytes().to_vec(),
-                    val: Some(hint.as_bytes().to_vec()),
-                });
-            }
-
+            // Every atom is removed and filed again, not only the changed
+            // ones: this rewrite doubles as the repair for index keys left
+            // under another identifier spelling (see
+            // `basic_parent_query_deduplicates_legacy_and_canonical_subjects`).
+            // Identical re-puts from a tab are already skipped before they
+            // reach here (`Store.persistState`).
+            //
+            // Evict against the state that is going away, not the one
+            // replacing it. Whether an entry belongs in a watched query's
+            // member list, and under which sort key it was filed, are facts
+            // about the old values: asking the new resource instead makes a
+            // row edited out of a filtered view skip the one delete it needs.
             if let Some(pv) = existing {
-                let subject = resource.get_subject();
-                // Evict against the state that is going away, not the one
-                // replacing it. Whether an entry belongs in a watched query's
-                // member list — and under which sort key it was filed — are
-                // facts about the old values. Handing over the new resource
-                // asks instead whether the *new* values still match, and a row
-                // edited out of a filtered view answers no, so the entry that
-                // needs deleting is the one deletion is skipped for. The row
-                // then stays listed in that view until the index is rebuilt.
-                let old = Resource::from_propvals(pv.clone(), subject.clone());
-                for (prop, val) in pv.iter() {
-                    let remove_atom = crate::Atom::new(subject.clone(), prop.into(), val.clone());
-                    self.remove_atom_from_index(&remove_atom, &old, &mut transaction)
-                        .map_err(|e| {
-                            format!("Failed to remove atom from index {}. {}", remove_atom, e)
-                        })?;
+                let old = Resource::from_propvals(pv, resource.get_subject().clone());
+                for atom in old.to_atoms() {
+                    self.remove_atom_from_index(&atom, &old, &mut transaction)
+                        .map_err(|e| format!("Failed to remove atom from index {}. {}", atom, e))?;
                 }
             }
-            for a in resource.to_atoms() {
-                self.add_atom_to_index(&a, resource, &mut transaction)
-                    .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
+            for atom in resource.to_atoms() {
+                self.add_atom_to_index(&atom, resource, &mut transaction)
+                    .map_err(|e| format!("Failed to add atom to index {}. {}", atom, e))?;
             }
             crate::search::index_resource(self, resource, &mut transaction)?;
         }
         // The snapshot in `Tree::LoroSnapshots` is the authoritative CRDT
-        // state. Derive and
-        // persist it here UNCONDITIONALLY for every CRDT resource — in the
-        // same transaction as the `Tree::Resources` write — so the invariant
-        // holds that every resource blob is paired with a current snapshot.
-        // (The old code only wrote the snapshot when the propvals lacked a
-        // `loroUpdate`, so any resource that had been through `apply_state_doc`
-        // — i.e. every sync import — had its snapshot write silently skipped.)
-        // The `loroUpdate` propval is stripped from the `Tree::Resources`
-        // blob: that blob is a pure derived projection, not a second home for
-        // the CRDT state. Commits are native (immutable, not CRDT) — they get
-        // no snapshot and keep their `loroUpdate` payload in the blob.
-        let mut propvals = resource.get_propvals().clone();
-        canonical_scheme::canonicalize_propvals(&mut propvals);
+        // state. Store it for every CRDT resource in the same transaction as
+        // the `Tree::Resources` row, so every row is paired with a current
+        // snapshot. Commits are native (immutable, not CRDT): they get no
+        // snapshot and keep their `loroUpdate` payload in the row.
         if !subject.is_commit_did() {
             let snapshot = match snapshot {
                 Some(snapshot) => snapshot,
                 None => resource.build_state_doc()?.export_snapshot(),
             };
-            propvals.remove(crate::urls::LORO_UPDATE);
             transaction.push(Operation {
                 tree: Tree::LoroSnapshots,
                 method: Method::Insert,
@@ -666,16 +642,10 @@ impl Db {
                 val: Some(snapshot),
             });
         }
-
-        // Persist the resource data in the same transaction
-        let resource_bin = encode_propvals(&propvals)?;
-        transaction.push(Operation {
-            tree: Tree::Resources,
-            method: Method::Insert,
-            key: subject_str.as_bytes().to_vec(),
-            val: Some(resource_bin),
-        });
-        self.queue_delete_identifier_aliases(&subject_str, &mut transaction);
+        // The row (a projection without `loroUpdate`), its DID routing hint
+        // and the removal of other identifier spellings: the same write a
+        // commit makes.
+        self.add_resource_tx(resource, &mut transaction)?;
         self.apply_transaction(&mut transaction)?;
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
@@ -1436,6 +1406,12 @@ impl Db {
                 val: None,
             });
         }
+    }
+
+    /// The stored Loro snapshot of `subject`, under whichever spelling the
+    /// caller used: normalized to the `pure_id` key writers store it under.
+    pub fn get_loro_snapshot(&self, subject: &Subject) -> Option<Vec<u8>> {
+        self.get_loro_snapshot_bytes(&self.normalize_subject(subject).pure_id())
     }
 
     pub(crate) fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {

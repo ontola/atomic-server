@@ -221,6 +221,40 @@ impl ClientDb {
         }
     }
 
+    /// A resource's stored row as JSON-AD plus its Loro snapshot, as
+    /// `{ jsonAd, snapshot }` (either may be null), for hydrating a tab.
+    ///
+    /// Reads the stored projection instead of `getResource`'s path, which
+    /// decodes the whole CRDT history into a doc only to serialize it again,
+    /// and embeds the snapshot in the JSON-AD a second time. The tab imports
+    /// the snapshot into its own doc anyway, so that work was thrown away.
+    /// Falls back to `getResource`'s path for subjects without a stored row
+    /// (endpoints, agents resolved just in time).
+    #[wasm_bindgen(js_name = "getResourceWithSnapshot")]
+    pub async fn get_resource_with_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
+        let db = self.db();
+        let subject = Subject::from_raw(subject, db.get_base_domain().as_deref());
+        let json = match db.get_resource_shallow(&subject) {
+            Ok(resource) => Some(resource_to_json_ad(&resource, &self.origin())?),
+            Err(_) => match db.get_resource(&subject).await {
+                Ok(resource) => Some(resource_to_json_ad(&resource, &self.origin())?),
+                Err(_) => None,
+            },
+        };
+        let snapshot = json.as_ref().and_then(|_| db.get_loro_snapshot(&subject));
+
+        let row = js_sys::Object::new();
+        let json_ad = json.map(|j| JsValue::from_str(&j)).unwrap_or(JsValue::NULL);
+        let snapshot = snapshot
+            .map(|bytes| js_sys::Uint8Array::from(bytes.as_slice()).into())
+            .unwrap_or(JsValue::NULL);
+        js_sys::Reflect::set(&row, &"jsonAd".into(), &json_ad)
+            .map_err(|_| JsError::new("could not build the row"))?;
+        js_sys::Reflect::set(&row, &"snapshot".into(), &snapshot)
+            .map_err(|_| JsError::new("could not build the row"))?;
+        Ok(row.into())
+    }
+
     /// Store a resource from a JSON-AD string during initial bulk sync.
     /// Rebuilds the full index for this resource (all atoms).
     /// For incremental updates, use `applyCommit` instead — it only
@@ -530,12 +564,11 @@ impl ClientDb {
     }
 
     fn state_snapshot_js(db: &atomic_lib::Db, subject: &str) -> Result<JsValue, JsError> {
-        use atomic_lib::db::trees::Tree;
-        match db.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-            Ok(Some(data)) => Ok(js_sys::Uint8Array::from(data.as_slice()).into()),
-            Ok(None) => Ok(JsValue::NULL),
-            Err(e) => Err(to_js_err(e)),
-        }
+        let subject = Subject::from_raw(subject, db.get_base_domain().as_deref());
+        Ok(match db.get_loro_snapshot(&subject) {
+            Some(data) => js_sys::Uint8Array::from(data.as_slice()).into(),
+            None => JsValue::NULL,
+        })
     }
 
     /// Store a binary blob keyed by its BLAKE3 hash.

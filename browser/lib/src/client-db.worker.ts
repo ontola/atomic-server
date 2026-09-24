@@ -190,35 +190,20 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       }> = [];
 
       for (const subject of msg.subjects) {
-        const jsonAd = await db!.getResource(subject);
-        const snapshot = jsonAd ? await db!.getLoroSnapshot(subject) : null;
-        rows.push({ jsonAd: jsonAd ?? null, snapshot: snapshot ?? null });
+        rows.push(await db!.getResourceWithSnapshot(subject));
       }
 
       return rows;
     }
 
     case 'getResourceWithSnapshot': {
-      // Combined getter for the cold-load fast path: every
-      // `fetchResourceWithLocalFallback` used to do two sequential
-      // worker round-trips (one for the JSON-AD, one for the Loro
-      // snapshot). On a page that mounts 30 useResource hooks that's
-      // 60× postMessage cost serially. Returning both in a single
-      // response halves the worker traffic — and the caller already
-      // ignores the snapshot when JSON-AD is null, so the combined
-      // shape doesn't change semantics.
-      //
-      // Both calls MUST be awaited before being placed in the response
-      // object. wasm-bindgen renders `getResource` / `getLoroSnapshot`
-      // as Promise-returning JS functions; embedding a Promise in the
-      // response makes `postMessage` throw "could not be cloned" and
-      // every cold-load OPFS lookup fails — fell back to a much-slower
-      // WS GET path, which is what surfaced as widespread e2e timeouts.
+      // One wasm call reads the stored row and its snapshot, without
+      // decoding the CRDT history on the way (the tab imports the
+      // snapshot into its own doc). One round trip instead of two for
+      // every `fetchResourceWithLocalFallback`.
       await ensureInit();
-      const jsonAd = await db!.getResource(msg.subject);
-      const snapshot = jsonAd ? await db!.getLoroSnapshot(msg.subject) : null;
 
-      return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+      return db!.getResourceWithSnapshot(msg.subject);
     }
 
     case 'putResource': {

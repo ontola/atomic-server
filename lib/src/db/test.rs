@@ -3696,3 +3696,106 @@ async fn replica_keeps_the_callers_snapshot() {
     let read = store.get_resource(&subject.into()).await.unwrap();
     assert_eq!(read.get(urls::NAME).unwrap().to_string(), "kept");
 }
+
+/// A replica that is written again with a changed value only re-indexes that
+/// value, and the watched queries still follow it: a renamed row moves in a
+/// sorted view, a row whose class changes leaves a class-filtered view, and a
+/// re-put with nothing new leaves the index as it was.
+#[tokio::test]
+#[timeout(120000)]
+async fn replica_edits_keep_watched_queries_current() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("replica_edits_index").await.unwrap();
+    let drive =
+        "did:ad:driveEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let other_cls =
+        "did:ad:otherEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    t.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let replica = |i: usize, name: &str, class: &str| {
+        let subj = format!("did:ad:edit{:0>69}==", format!("{i}"));
+        let mut authored = crate::Resource::new(subj.clone());
+        authored
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(class.into())]),
+            )
+            .unwrap();
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(name.into()))
+            .unwrap();
+        let mut replica = crate::Resource::new(subj);
+        replica
+            .apply_state_doc(authored.build_state_doc().unwrap())
+            .unwrap();
+        replica
+    };
+
+    for (i, name) in ["a", "b", "c"].iter().enumerate() {
+        store
+            .persist_replicated_resource(&replica(i, name, cls))
+            .await
+            .unwrap();
+    }
+
+    let mut sorted = Query::new_prop_val(urls::PARENT, table);
+    sorted.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(cls.into())),
+        ..Default::default()
+    }];
+    sorted.sort_by = Some(urls::NAME.to_string());
+    sorted.drive = Some(drive.into());
+    sorted.limit = Some(100);
+    async fn names(store: &Db, q: &Query) -> Vec<String> {
+        let res = store.query(q).await.unwrap();
+        let mut out = Vec::new();
+        for subject in &res.subjects {
+            let r = store.get_resource(&subject.as_str().into()).await.unwrap();
+            out.push(r.get(urls::NAME).unwrap().to_string());
+        }
+        out
+    }
+    assert_eq!(names(&store, &sorted).await, ["a", "b", "c"]);
+
+    // Rename "a" to "z": it moves to the end of the sorted view.
+    store
+        .persist_replicated_resource(&replica(0, "z", cls))
+        .await
+        .unwrap();
+    assert_eq!(names(&store, &sorted).await, ["b", "c", "z"]);
+
+    // Change "b"'s class: it leaves the class-filtered view.
+    store
+        .persist_replicated_resource(&replica(1, "b", other_cls))
+        .await
+        .unwrap();
+    assert_eq!(names(&store, &sorted).await, ["c", "z"]);
+
+    // The same state again changes nothing.
+    store
+        .persist_replicated_resource(&replica(2, "c", cls))
+        .await
+        .unwrap();
+    assert_eq!(names(&store, &sorted).await, ["c", "z"]);
+}
