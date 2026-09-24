@@ -28,6 +28,7 @@ import { ChromeTheme } from '../styling';
 import { paths, pathNames } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 import { isHostedDistribution } from '../helpers/managedServer';
+import { isRunningInTauri } from '../helpers/tauri';
 
 interface NavWrapperProps {
   children: React.ReactNode;
@@ -221,9 +222,9 @@ const SideBarWrapper = styled.div<{
   right: 0;
 
   opacity: 1;
-  transition: opacity 0.3s ease-out;
+  transition: ${isRunningInTauri() ? 'none' : 'opacity 0.3s ease-out'};
   @starting-style {
-    opacity: 0;
+    opacity: ${isRunningInTauri() ? 1 : 0};
   }
 
   @media print {

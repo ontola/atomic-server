@@ -335,18 +335,18 @@ describe('localAgentIsDisposable', () => {
     ).toBe(true);
   });
 
-  it('treats an agent whose resource cannot load as disposable', async () => {
+  it('keeps an agent when its resource reports a read error', async () => {
     expect(
       await localAgentIsDisposable(
         reader({ error: new Error('nope') }),
         'did:ad:agent:a',
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('treats a throwing store as disposable rather than blocking', async () => {
+  it('keeps an agent when the local node cannot be read', async () => {
     const store = { getResource: () => Promise.reject(new Error('down')) };
 
-    expect(await localAgentIsDisposable(store, 'did:ad:agent:a')).toBe(true);
+    expect(await localAgentIsDisposable(store, 'did:ad:agent:a')).toBe(false);
   });
 });

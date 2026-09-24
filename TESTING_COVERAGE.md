@@ -2455,6 +2455,29 @@ no-data sign-in acceptance test. Focused lint/format checks passed. App and
 E2E typechecks report errors in unchanged files (including RTE CommandsExtension,
 AI, plugin, right-panel and website tests), not the edited coverage files.
 
+## Mac app account handoff
+
+`helpers/onboardingStorage.test.ts` covers the browser OPFS readiness check and
+the Tauri embedded-node `/server` and WebSocket readiness checks.
+`helpers/managed/reconcile.test.ts` protects an unreadable local identity from
+being treated as disposable. Managed API and device-link tests cover bearer
+requests without cookies from a native WebView. `lib/src/native-offline-writes.test.ts`
+checks that native saves fail visibly when the embedded node is disconnected,
+rather than reporting an OPFS-only offline save. The browser
+`native-account-restore.spec.ts` covers the fresh native sign-in and recovery
+entry, and `vault-backup-restore.spec.ts` checks Vault restore against a real
+S3-compatible store when the acceptance services are available.
+
+The packaged Mac app was launched and its embedded `/server` returned
+`internal:/server`. Its welcome, sign-in, and account creation entry screens
+were visually checked with their production styling; the native WebView had
+previously held entry animations at opacity zero while unfocused. A full
+account-first and Mac-first transfer
+with a fresh macOS test user, Vault canary, relaunch, and cross-device edit is
+still a manual acceptance check. See `desktop/ACCOUNT_ACCEPTANCE.md` for the
+isolated service setup and exact journeys. Browser E2E and an ad-hoc signed
+package do not establish production passkey, Developer ID, or update behavior.
+
 ## Rust build alignment
 
 `scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,

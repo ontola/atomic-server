@@ -295,11 +295,13 @@ export async function localAgentIsDisposable(
   try {
     const resource = await store.getResource(agentSubject);
 
-    if (resource.error) return true;
+    // A failed read does not establish that the identity has no workspace.
+    // Native first launch and account recovery can race the local node.
+    if (resource.error) return false;
 
     return !resource.get(core.properties.personalDrive);
   } catch {
-    return true;
+    return false;
   }
 }
 

@@ -112,3 +112,6 @@ default = ["custom-protocol"]
 # Web inspector in a release build: `cargo tauri build --features devtools`.
 # Debug builds (`cargo tauri dev`) have it without this.
 devtools = ["tauri/devtools"]
+# Enables the loopback-only WebView diagnostic bridge in the local acceptance
+# package. Shipping release builds do not enable this feature.
+account-acceptance = []

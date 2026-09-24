@@ -224,11 +224,11 @@ export function IdentityReconcileGate({
         <OnboardingWrap>
           <OnboardingCard data-testid='identity-conflict'>
             <Column gap='1rem'>
-              <CardTitle>This email already has an identity</CardTitle>
+              <CardTitle>Choose an identity for this browser</CardTitle>
               <CardSubtitle>
-                {conflict.managedAccountEmail} is backed up with an identity
-                that is not the one this browser is using. An account has one
-                identity — which one should this be?
+                This browser has an identity that is different from the one
+                saved for {conflict.managedAccountEmail}. Choose which identity
+                you want to use here.
               </CardSubtitle>
               <Button
                 type='button'
@@ -236,11 +236,12 @@ export function IdentityReconcileGate({
                 disabled={resolving}
                 data-testid='identity-conflict-switch'
               >
-                Switch to my account&apos;s identity
+                Use the account identity
               </Button>
               <CardSubtitle>
-                Restores it here. The identity you made in this browser stays
-                reachable only with its agent secret.
+                Loads the identity saved for {conflict.managedAccountEmail}. You
+                can still use this browser&apos;s current identity with its
+                agent secret.
               </CardSubtitle>
               <Button
                 type='button'
@@ -249,11 +250,12 @@ export function IdentityReconcileGate({
                 disabled={resolving}
                 data-testid='identity-conflict-keep'
               >
-                {resolving ? 'Signing out…' : 'Keep this one'}
+                {resolving ? 'Signing out…' : 'Keep this browser identity'}
               </Button>
               <CardSubtitle>
-                Signs this browser out of {PRODUCT_NAME}. Nothing here is backed
-                up until it has an account of its own.
+                Keeps the identity and data already on this browser, and signs
+                you out of {PRODUCT_NAME}. This identity won&apos;t be backed up
+                to {conflict.managedAccountEmail}.
               </CardSubtitle>
             </Column>
           </OnboardingCard>
