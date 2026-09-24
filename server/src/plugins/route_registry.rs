@@ -1739,6 +1739,11 @@ mod tests {
         }
         assert!(found.len() > 20, "{found:?}");
         for first in found {
+            // The `404` for unclaimed names. Plugins claim those names in
+            // `http.wellKnown`; `reserved` refuses routing them separately.
+            if first == ".well-known" {
+                continue;
+            }
             assert!(server_route(&first).is_some(), "`/{first}` is not reserved");
         }
     }

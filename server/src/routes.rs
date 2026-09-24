@@ -89,6 +89,19 @@ pub fn is_static_asset_segment(first: &str) -> bool {
         .any(|path| path.split('/').next() == Some(first))
 }
 
+/// `404` for a `/.well-known/` path that nothing serves, as a problem
+/// document instead of the single page app.
+async fn well_known_not_found(req: HttpRequest) -> HttpResponse {
+    HttpResponse::NotFound()
+        .content_type("application/problem+json")
+        .json(serde_json::json!({
+            "type": "about:blank",
+            "status": 404,
+            "title": "Not Found",
+            "detail": format!("Nothing is served at {}.", req.path()),
+        }))
+}
+
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
     let Some(rest) = atomic_lib::identifiers::node_id(node_did) else {
         return Err("Expected nodeId to use atomic:node:<node-id>");
@@ -441,6 +454,12 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .skip_handler_when_not_found()
             .do_not_resolve_defaults(),
     )
+    // A `/.well-known/` name nothing above served (with `plugin-routes`, the
+    // dispatcher answers claimed names first). Machine clients probe these
+    // without an `Accept` header, which would otherwise get the app's HTML
+    // with a 200 below.
+    .service(web::resource("/.well-known").to(well_known_not_found))
+    .service(web::resource("/.well-known/{tail:.*}").to(well_known_not_found))
     // Catch all (non-download) HTML requests and send them to the single page app
     .service(
         web::resource(ANY)
