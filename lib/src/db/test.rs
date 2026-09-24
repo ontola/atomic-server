@@ -3662,3 +3662,37 @@ async fn canonical_scheme_resumes_index_rebuild_after_rows_moved() {
         "restart must rebuild even when no rows remain to rename"
     );
 }
+
+/// A replica written with the snapshot the caller holds stores that snapshot
+/// byte for byte, beside the row and its index entries. Rebuilding it from
+/// the propvals instead would give the doc a fresh peer id, and the next
+/// merge with the caller's real history would duplicate every value.
+#[tokio::test]
+#[timeout(120000)]
+async fn replica_keeps_the_callers_snapshot() {
+    let store = Db::init_temp("replica_keeps_snapshot").await.unwrap();
+    let subject =
+        "did:ad:snapKEEPaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let mut authored = crate::Resource::new(subject.into());
+    authored
+        .set_unsafe(urls::NAME.into(), Value::String("kept".into()))
+        .unwrap();
+    let snapshot = authored.build_state_doc().unwrap().export_snapshot();
+    let mut replica = crate::Resource::new(subject.into());
+    replica
+        .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap())
+        .unwrap();
+
+    store
+        .persist_replicated_resource_with_snapshot(&replica, snapshot.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        store.get_loro_snapshot_bytes(subject),
+        Some(snapshot),
+        "the stored snapshot must be the caller's, not a re-seeded one"
+    );
+    let read = store.get_resource(&subject.into()).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "kept");
+}

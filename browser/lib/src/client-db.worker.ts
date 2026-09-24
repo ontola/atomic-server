@@ -246,12 +246,16 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     }
 
     case 'putResourceWithSnapshot': {
-      // Atomic write: JSON-AD index entry + (optional) Loro snapshot
-      // in one postMessage. Snapshot omitted for resources without
-      // a Loro doc (e.g. Commit resources).
+      // One transaction: row, index entries and the Loro snapshot as the
+      // tab holds it. Snapshot omitted for resources without a Loro doc
+      // (e.g. Commit resources).
       await ensureInit();
-      await db!.putResource(msg.jsonAd);
-      if (msg.snapshot) db!.putLoroSnapshot(msg.subject, msg.snapshot);
+
+      if (msg.snapshot) {
+        await db!.putResourceWithSnapshot(msg.jsonAd, msg.snapshot);
+      } else {
+        await db!.putResource(msg.jsonAd);
+      }
 
       // Per-write redb commits use `Durability::None` — see the periodic
       // `flush()` tick below. Everywhere else that's fine (the periodic

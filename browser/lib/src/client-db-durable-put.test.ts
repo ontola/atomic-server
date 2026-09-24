@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const db = vi.hoisted(() => ({
   putResource: vi.fn(),
-  putLoroSnapshot: vi.fn(),
+  putResourceWithSnapshot: vi.fn(),
   flush: vi.fn(),
 }));
 vi.mock('./client-db-open.js', () => ({
@@ -50,11 +50,8 @@ it.each([false, true])(
       wasmUrl: 'data:text/javascript,export default async function() {}',
     });
     const order: string[] = [];
-    db.putResource.mockImplementation(async () => {
-      order.push('properties');
-    });
-    db.putLoroSnapshot.mockImplementation(() => {
-      order.push('snapshot');
+    db.putResourceWithSnapshot.mockImplementation(async () => {
+      order.push('properties and snapshot');
     });
     db.flush.mockImplementation(() => {
       order.push('flush');
@@ -66,7 +63,8 @@ it.each([false, true])(
       jsonAd: '{"@id":"did:ad:test"}',
       snapshot: new Uint8Array([1]),
     });
-    expect(order).toEqual(['properties', 'snapshot', 'flush']);
+    expect(order).toEqual(['properties and snapshot', 'flush']);
+    expect(db.putResource).not.toHaveBeenCalled();
     expect(response.type).toBe(fail ? 'error' : 'ok');
     if (fail) expect(response.message).toBe('disk unavailable');
 

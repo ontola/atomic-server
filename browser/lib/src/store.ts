@@ -2341,40 +2341,24 @@ export class Store {
           emitResource.sealPendingEdits();
           const snapshot = doc?.export({ mode: 'snapshot' });
 
-          // One local-DB write costs ~9ms, three quarters of it rebuilding
-          // this resource's index entries. `addResource` runs on every merge
-          // and every notify, so the same unchanged state was being written
-          // repeatedly — a table built from a template did 64 writes for 15
-          // resources. Hash what we are about to write and skip the write when
-          // it matches the last one for this subject.
-          //
-          // Deliberately a content hash rather than `lastCommit`: local edits
-          // and merges change state without advancing it. The hash covers the
-          // Loro snapshot too, so a CRDT-only change still writes. A collision
-          // would skip one cache write, which the server copy repairs — this
-          // is a cache, not the record.
-          const stamp = hashPersistedState(jsonAd, snapshot);
-
-          if (this.lastPersistedStamp.get(emitResource.subject) !== stamp) {
-            this.lastPersistedStamp.set(emitResource.subject, stamp);
-            this.clientDb
-              .putResourceWithSnapshot(emitResource.subject, jsonAd, snapshot)
-              .catch(e => {
-                // Failed write: drop the stamp so the next attempt is not
-                // skipped as a duplicate of a write that never landed.
-                this.lastPersistedStamp.delete(emitResource.subject);
-
-                // A follower's in-flight write is deliberately cancelled on
-                // leader handoff. The stamp is cleared above for a later
-                // retry; this is not a storage fault to report as an error.
-                if (!(e instanceof RequestCancelledError)) {
-                  console.error(
-                    `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
-                    e,
-                  );
-                }
-              });
-          }
+          // Skipped when this exact state is already written: a table built
+          // from a template used to do 64 writes for 15 resources.
+          this.persistState(
+            this.clientDb,
+            emitResource.subject,
+            jsonAd,
+            snapshot,
+          ).catch(e => {
+            // A follower's in-flight write is deliberately cancelled on
+            // leader handoff; the next attempt retries it. That is not a
+            // storage fault to report as an error.
+            if (!(e instanceof RequestCancelledError)) {
+              console.error(
+                `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
+                e,
+              );
+            }
+          });
         }
       } catch (e) {
         console.error(
@@ -4917,7 +4901,7 @@ export class Store {
   public evictResource(subjectRaw: string, shouldNotify = true): void {
     const resolved = this.resolveSubject(subjectRaw);
     // A subsequently loaded resource must not inherit the old cache stamp.
-    this.lastPersistedStamp.delete(resolved);
+    this.lastPersisted.delete(resolved);
 
     if (this.resources.delete(resolved)) {
       if (shouldNotify) {
@@ -6607,27 +6591,74 @@ export class Store {
   /** Immutable read status and a stable mutation handle, replaced on notify. */
   private snapshots = new Map<string, ResourceSnapshot>();
 
-  /** Subject → content stamp of the last state written to the local DB, so
-   *  `addResource` can skip re-writing state that is already there. Entries are
-   *  dropped by `removeResource` and by a failed write. */
-  private lastPersistedStamp = new Map<string, number>();
+  /** Subject → the last state written to the local DB: which database, a
+   *  content stamp, and the write itself. While the write is in flight it also
+   *  holds the exact bytes, so a durable caller can match on content rather
+   *  than on the stamp. Entries are dropped by `removeResource` and by a
+   *  failed write. */
+  private lastPersisted = new Map<string, PersistedState>();
 
   /**
-   * Record that `jsonAd` + `snapshot` is what the local DB now holds for
-   * `subject`, so `addResource` skips re-writing that same state. Called by
-   * `Resource.persistToClientDb` after its durable write lands — without it
-   * the dedup cache only knew about writes `addResource` itself made, and
-   * rewrote the row on the next ingress.
+   * Write `jsonAd` + `snapshot` for `subject` to `db`, unless that state is
+   * already written or being written there, in which case this returns that
+   * write. `addResource` and `Resource.persistToClientDb` both go through
+   * here, so an online save that the drain already persisted does not write
+   * the same row (an index rebuild plus an fsync, ~9ms) a second time.
+   *
+   * Deliberately a content stamp rather than `lastCommit`: local edits and
+   * merges change state without advancing it, and the stamp covers the Loro
+   * snapshot so a CRDT-only change still writes. A stamp collision would skip
+   * one cache write, which the server copy repairs. `exact` callers cannot
+   * afford that (an offline edit has no server copy), so they only reuse a
+   * write that is still in flight with byte-identical content.
    *
    * @internal
    */
-  public recordPersistedState(
+  public persistState(
+    db: ClientDbWorker,
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
-  ): void {
-    // Keyed like `addResource` keys it: by the resource's own subject.
-    this.lastPersistedStamp.set(subject, hashPersistedState(jsonAd, snapshot));
+    { exact = false }: { exact?: boolean } = {},
+  ): Promise<void> {
+    const stamp = hashPersistedState(jsonAd, snapshot);
+    const last = this.lastPersisted.get(subject);
+
+    if (last && last.db === db && last.stamp === stamp) {
+      if (!exact) return last.done;
+
+      if (
+        last.inFlight &&
+        last.inFlight.jsonAd === jsonAd &&
+        bytesEqual(last.inFlight.snapshot, snapshot)
+      ) {
+        return last.done;
+      }
+    }
+
+    const entry: PersistedState = {
+      db,
+      stamp,
+      done: Promise.resolve(),
+      inFlight: { jsonAd, snapshot },
+    };
+    entry.done = db.putResourceWithSnapshot(subject, jsonAd, snapshot).then(
+      () => {
+        entry.inFlight = undefined;
+      },
+      e => {
+        // Failed write: forget it so the next attempt is not skipped as a
+        // duplicate of a write that never landed.
+        if (this.lastPersisted.get(subject) === entry) {
+          this.lastPersisted.delete(subject);
+        }
+
+        throw e;
+      },
+    );
+    this.lastPersisted.set(subject, entry);
+
+    return entry.done;
   }
 
   private snapshotReadDepth = 0;
@@ -6786,6 +6817,24 @@ export interface FetchOpts {
  * Not a security hash. The failure mode of a collision is one skipped cache
  * write, repaired by the next real change or by re-fetching from the server.
  */
+interface PersistedState {
+  db: ClientDbWorker;
+  stamp: number;
+  done: Promise<void>;
+  inFlight?: { jsonAd: string; snapshot?: Uint8Array };
+}
+
+function bytesEqual(a?: Uint8Array, b?: Uint8Array): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+
+  return true;
+}
+
 function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;

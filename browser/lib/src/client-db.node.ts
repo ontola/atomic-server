@@ -173,8 +173,12 @@ export class NodeClientDb {
     snapshot?: Uint8Array,
   ): Promise<void> {
     const db = this.requireDb();
-    await db.putResource(jsonAd);
-    if (snapshot) db.putLoroSnapshot(subject, snapshot);
+
+    if (snapshot) {
+      await db.putResourceWithSnapshot(jsonAd, snapshot);
+    } else {
+      await db.putResource(jsonAd);
+    }
   }
 
   /** Mirror of {@link ClientDbWorker.putResources} for the Node integration

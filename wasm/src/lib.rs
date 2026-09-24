@@ -227,6 +227,26 @@ impl ClientDb {
     /// touches changed properties via the Loro diff.
     #[wasm_bindgen(js_name = "putResource")]
     pub async fn put_resource(&self, json_ad: &str) -> Result<(), JsError> {
+        self.put_resource_inner(json_ad, None).await
+    }
+
+    /// [`Self::put_resource`] with the resource's Loro snapshot. The row, the
+    /// snapshot and the index entries are written in one transaction, and the
+    /// snapshot is stored as given rather than rebuilt from the propvals.
+    #[wasm_bindgen(js_name = "putResourceWithSnapshot")]
+    pub async fn put_resource_with_snapshot(
+        &self,
+        json_ad: &str,
+        snapshot: Vec<u8>,
+    ) -> Result<(), JsError> {
+        self.put_resource_inner(json_ad, Some(snapshot)).await
+    }
+
+    async fn put_resource_inner(
+        &self,
+        json_ad: &str,
+        snapshot: Option<Vec<u8>>,
+    ) -> Result<(), JsError> {
         // `SaveOpts::DontSave` keeps `parse_json_ad_resource` from calling
         // `store.add_resource()` (which validates required props) during
         // parsing. This is admitted replica state, not a new authored import:
@@ -242,10 +262,18 @@ impl ClientDb {
         )
         .await
         .map_err(to_js_err)?;
-        self.db()
-            .persist_replicated_resource(&resource)
-            .await
-            .map_err(to_js_err)?;
+        match snapshot {
+            Some(snapshot) => self
+                .db()
+                .persist_replicated_resource_with_snapshot(&resource, snapshot)
+                .await
+                .map_err(to_js_err)?,
+            None => self
+                .db()
+                .persist_replicated_resource(&resource)
+                .await
+                .map_err(to_js_err)?,
+        }
         Ok(())
     }
 
@@ -444,16 +472,6 @@ impl ClientDb {
         self.db()
             .get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string())
-    }
-
-    /// Store a Loro CRDT snapshot (raw bytes) for a resource subject.
-    #[wasm_bindgen(js_name = "putLoroSnapshot")]
-    pub fn put_loro_snapshot(&self, subject: &str, data: &[u8]) -> Result<(), JsError> {
-        use atomic_lib::db::trees::Tree;
-        self.db()
-            .kv
-            .insert(Tree::LoroSnapshots, subject.as_bytes(), data)
-            .map_err(to_js_err)
     }
 
     /// Who signed this resource's history, from the envelopes this client

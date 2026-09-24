@@ -2443,7 +2443,7 @@ export class Resource<C extends OptionalClass = any> {
    *
    * The one serializer for that row: `Store.addResource` and
    * {@link persistToClientDb} both write through it, so the store's
-   * "already persisted" stamp (`Store.recordPersistedState`) is computed over
+   * "already persisted" stamp (`Store.persistState`) is computed over
    * exactly the bytes either path writes.
    *
    * Returns `null` when the resource has no non-binary propvals at all.
@@ -3672,13 +3672,13 @@ export class Resource<C extends OptionalClass = any> {
     const closePersist = perfSpan('resource.persistToClientDb');
 
     try {
-      await clientDb.putResourceWithSnapshot(this.subject, jsonAd, snapshot);
       // This RPC includes the durable flush. A second RPC could race the
       // identity handoff closing this worker after the write has completed.
+      // When the drain already wrote this exact state, this awaits that write.
+      await this.store.persistState(clientDb, this.subject, jsonAd, snapshot, {
+        exact: true,
+      });
       closePersist();
-      // Tell the store's dedup cache what is now on disk, so the next
-      // `addResource` for this subject does not rewrite the same row.
-      this.store.recordPersistedState(this.subject, jsonAd, snapshot);
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 

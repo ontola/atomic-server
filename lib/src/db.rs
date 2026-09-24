@@ -530,6 +530,27 @@ impl Db {
     /// duplicate import identities. Keep both subjects available for review;
     /// authoring paths must still enforce identity uniqueness.
     pub async fn persist_replicated_resource(&self, resource: &Resource) -> AtomicResult<()> {
+        self.persist_replicated(resource, None).await
+    }
+
+    /// [`Self::persist_replicated_resource`] with the CRDT snapshot the caller
+    /// already holds. The row, its snapshot and its index entries land in one
+    /// transaction, and the stored snapshot keeps the caller's history instead
+    /// of a doc re-seeded from the propvals (which would carry a fresh peer id
+    /// and merge badly with the real one).
+    pub async fn persist_replicated_resource_with_snapshot(
+        &self,
+        resource: &Resource,
+        snapshot: Vec<u8>,
+    ) -> AtomicResult<()> {
+        self.persist_replicated(resource, Some(snapshot)).await
+    }
+
+    async fn persist_replicated(
+        &self,
+        resource: &Resource,
+        snapshot: Option<Vec<u8>>,
+    ) -> AtomicResult<()> {
         // Review validation holds this same identity lock while reading all
         // copies. Replica changes must not land halfway through that review.
         let _identity_guard = if let Some((parent, id)) = crate::import_identity::identity(resource)
@@ -545,7 +566,7 @@ impl Db {
         } else {
             None
         };
-        self.persist_resource_projection(resource, false, true, true)
+        self.persist_resource_projection(resource, false, true, true, snapshot)
             .await
     }
 
@@ -555,6 +576,7 @@ impl Db {
         check_required_props: bool,
         update_index: bool,
         overwrite_existing: bool,
+        snapshot: Option<Vec<u8>>,
     ) -> AtomicResult<()> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
@@ -632,7 +654,10 @@ impl Db {
         let mut propvals = resource.get_propvals().clone();
         canonical_scheme::canonicalize_propvals(&mut propvals);
         if !subject.is_commit_did() {
-            let snapshot = resource.build_state_doc()?.export_snapshot();
+            let snapshot = match snapshot {
+                Some(snapshot) => snapshot,
+                None => resource.build_state_doc()?.export_snapshot(),
+            };
             propvals.remove(crate::urls::LORO_UPDATE);
             transaction.push(Operation {
                 tree: Tree::LoroSnapshots,
@@ -4131,6 +4156,7 @@ impl Storelike for Db {
             check_required_props,
             update_index,
             overwrite_existing,
+            None,
         )
         .await
     }
