@@ -10,6 +10,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   restore did not finish in time, used to land in a workspace called "My
   drive" moments after proving who they are, which reads like the wrong
   account. An account with no name set still gets the default.
+- Fixed a private workspace being titled `[i18n-404:1664]`. That title is
+  written when the workspace is made, so it stayed. The app composed it from
+  the translation catalog while still starting up, and the catalog is not
+  always loaded by then; the default is a plain string again, and the name
+  beside it is deliberately kept out of the catalog for the same reason.
 - Fix: a presence announcement carrying something Loro cannot store no longer
   breaks the tab. A view's presence payload is typed as whatever that view
   likes, so a callback or a class with methods can travel in it, and Loro

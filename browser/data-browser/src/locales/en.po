@@ -3965,11 +3965,9 @@ msgstr "Undo (Ctrl+Z) — drag horizontally to scrub history, hold to see discar
 
 #. 0: username
 #. 0: username
-#. 0: name
 #. 0: name.trim()
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx src/views/InvitePage.tsx
-#: src/helpers/openPrivateHome.ts
 #: src/views/InvitePage.tsx
 msgid "{0}'s Drive"
 msgstr "{0}'s Drive"
@@ -7590,6 +7588,7 @@ msgstr "<0/> Loading"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/helpers/openPrivateHome.ts
 msgid "My drive"
 msgstr "My drive"
 

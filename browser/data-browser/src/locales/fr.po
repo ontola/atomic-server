@@ -3965,11 +3965,9 @@ msgstr ""
 
 #. 0: username
 #. 0: username
-#. 0: name
 #. 0: name.trim()
 #: src/components/NewIdentitySection.tsx
 #: src/components/NewIdentitySection.tsx src/views/InvitePage.tsx
-#: src/helpers/openPrivateHome.ts
 #: src/views/InvitePage.tsx
 msgid "{0}'s Drive"
 msgstr ""
@@ -7579,6 +7577,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/helpers/openPrivateHome.ts
 msgid "My drive"
 msgstr ""
 

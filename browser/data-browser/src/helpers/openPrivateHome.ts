@@ -1,4 +1,4 @@
-import { core, type Resource, type Store } from '@tomic/lib';
+import { core, type Store } from '@tomic/lib';
 import { deviceHasDriveData } from './driveData';
 import { isOriginWithoutNode } from './originNode';
 import { restoreFromVault } from './managed/vaultAutoBackup';
@@ -59,13 +59,21 @@ async function prepare(
   // identity's home on behalf of the new session.
   if (store.getAgent() !== agent) return;
   // No literal for the unnamed case: `ensurePrivateDrive` already defaults it,
-  // inside the library, where the i18n extractor cannot turn a plain string
-  // into an injected hook in this non-component function. `undefined` is how a
-  // default parameter is asked for, so the title stays one call. `InvitePage`
-  // leaves the name out for the same reason.
-  await store.ensurePrivateDrive(name ? `${name}'s Drive` : undefined, {
-    localOnly: isOriginWithoutNode(store.getServerUrl()),
-  });
+  // inside the library. `undefined` is how a default parameter is asked for, so
+  // the title stays one call. `InvitePage` leaves the name out too.
+  //
+  // The named case is kept away from the extractor on purpose. Left alone it
+  // becomes a catalog lookup, and this runs during boot: the catalog is not
+  // always loaded yet, and a home created in that window is titled
+  // `[i18n-404:845]` — permanently, since the title is written into the
+  // resource. Observed on a second device, not reasoned about. The message it
+  // would look up is `{0}'s Drive`, whose es, fr and de entries are all empty,
+  // so translating it here buys nothing and risks that. `NewIdentitySection`
+  // composes the same title from a component, where the catalog is up.
+  await store.ensurePrivateDrive(
+    name ? /* @wc-ignore */ `${name}'s Drive` : undefined,
+    { localOnly: isOriginWithoutNode(store.getServerUrl()) },
+  );
 
   return 'created';
 }
@@ -88,16 +96,46 @@ async function ownerName(
   // swallow. A name is a nicety and creating the home is not, so nothing here
   // may be the reason someone is left without one.
   try {
-    const agentResource = await withDeadline<Resource | undefined>(
-      store.getResource(agentSubject),
+    return await withDeadline<string | undefined>(
+      readName(store, agentSubject),
       2_000,
       undefined,
     );
-
-    const name = agentResource?.get(core.properties.name);
-
-    return typeof name === 'string' && name.trim() ? name.trim() : undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The name on the Agent resource, asking the server once when the copy in hand
+ * does not carry one.
+ *
+ * Signing in on a new device reads the Agent before the store finished
+ * assembling the identity, so what it caches is the view the server gives a
+ * stranger: `read`, `isA` and `publicKey`, and no name. It is a ready resource
+ * with no error, so nothing about it looks wrong, and every later reader gets
+ * that copy. Asked again, now signed in, the server answers with the profile.
+ * Same cache and same remedy as `deviceHasDriveData`'s `refresh`.
+ *
+ * A name that is genuinely not set costs one request that finds nothing, which
+ * is the same request the app makes moments later anyway.
+ */
+async function readName(
+  store: Store,
+  agentSubject: string,
+): Promise<string | undefined> {
+  const cached = await store.getResource(agentSubject);
+  const name = trimmed(cached?.get(core.properties.name));
+
+  if (name) return name;
+
+  return trimmed(
+    (await store.fetchResourceFromServer(agentSubject))?.get(
+      core.properties.name,
+    ),
+  );
+}
+
+function trimmed(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
