@@ -1016,6 +1016,7 @@ msgid "Sorry, this invite has no usages left. Ask for a new one."
 msgstr "Sorry, this invite has no usages left. Ask for a new one."
 
 #: src/views/InvitePage.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Create account and accept"
 msgstr "Create account and accept"
 
@@ -12406,6 +12407,7 @@ msgstr "Hide toolbar (type / or @ instead)"
 #: src/chunks/RTE/FormattingToolbar.tsx
 msgid "Formatting"
 msgstr "Formatting"
+
 #: src/chunks/AI/RealAIChat.tsx
 #: src/components/AI/MicrophoneSelect.tsx
 #: src/components/AI/SpeechSettings.tsx
@@ -12424,10 +12426,12 @@ msgstr "System default"
 #: src/components/AI/MicrophoneSelect.tsx
 msgid "Show microphone names…"
 msgstr "Show microphone names…"
+
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
 msgstr "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+
 #: src/components/Share/ShareDialog.tsx
 msgid "Invite people to"
 msgstr "Invite people to"
@@ -12447,6 +12451,7 @@ msgstr "Access to"
 #: src/components/Share/ShareDialog.tsx
 msgid "Inherited permissions"
 msgstr "Inherited permissions"
+
 #. 0: lowerRowName
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 msgid "Stop starting new {0}s here"

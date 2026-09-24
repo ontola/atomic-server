@@ -23,11 +23,22 @@ const state = vi.hoisted(() => ({
   account: null as { email: string } | null,
   hasData: true,
   agent: { subject: 'did:ad:agent:test' },
+  agentName: 'Robin' as string | undefined,
   store: {
     ensurePrivateDrive: vi.fn(async () => undefined),
     getServerUrl: () => 'https://node.example',
     getAgent: () => state.agent,
     privateDriveSubject: async () => 'did:ad:home',
+    // The home is titled after its owner, which means reading the Agent. The
+    // literal subject is `core.properties.name`; this block is hoisted above
+    // the imports, so it cannot say so by name.
+    getResource: async (subject: string) => ({
+      get: (prop: string) =>
+        subject === state.agent.subject &&
+        prop === 'https://atomicdata.dev/properties/name'
+          ? state.agentName
+          : undefined,
+    }),
   },
   restoreVault: vi.fn(),
 }));
@@ -281,7 +292,10 @@ it('opens its own home without requiring another device', async () => {
       target: { value: 'test-secret' },
     });
   });
-  expect(state.store.ensurePrivateDrive).toHaveBeenCalled();
+  expect(state.store.ensurePrivateDrive).toHaveBeenCalledWith(
+    "Robin's Drive",
+    expect.objectContaining({ localOnly: false }),
+  );
   expect(state.navigate).toHaveBeenCalledWith('/app/show?subject=did:ad:home');
   expect(screen.queryByText('Connect device')).toBeNull();
 });
