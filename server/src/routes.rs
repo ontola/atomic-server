@@ -357,6 +357,10 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
 }
 
 pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
+    // First: every path on a routes host, and `/_routes/...`, belong to
+    // plugins. Only matches while `--plugin-routes` is not `off`.
+    #[cfg(feature = "plugin-routes")]
+    handlers::plugin_routes::configure(app);
     handlers::website::control_routes(app);
     app.service(
         web::resource("/upload")

@@ -43,6 +43,10 @@ pub struct AppState {
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
     pub write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
+    /// Which installation answers which plugin route; see
+    /// `plugins::route_registry`.
+    #[cfg(feature = "plugin-routes")]
+    pub route_registry: Arc<plugins::route_registry::RouteRegistry>,
 }
 
 impl AppState {
@@ -110,6 +114,16 @@ impl AppState {
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
+        // Before the installation extender: an activation whose routes
+        // collide is refused before anything is materialized.
+        #[cfg(feature = "plugin-routes")]
+        let route_registry = {
+            let registry = Arc::new(plugins::route_registry::RouteRegistry::new(
+                config.plugin_routes.clone(),
+            ));
+            store.add_class_extender(plugins::route_registry::build_extender(registry.clone()))?;
+            registry
+        };
         store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
@@ -215,6 +229,15 @@ impl AppState {
             tracing::warn!("legacy plugin migration failed: {e}");
         }
 
+        // The routes of the installations this node owns, re-checked against
+        // the gates as they are now.
+        #[cfg(feature = "plugin-routes")]
+        match route_registry.rebuild(&store).await {
+            Ok(0) => {}
+            Ok(active) => tracing::info!("plugin routes: {active} active installation(s)"),
+            Err(e) => tracing::warn!("could not restore plugin routes: {e}"),
+        }
+
         // Who may put a *new* Drive here. Installed after populate so the scan
         // below sees every Drive already on disk, and before anything binds so
         // no request can slip in under the default open policy.
@@ -283,6 +306,8 @@ impl AppState {
             managed: server_info.managed,
             managed_dashboard_url: server_info.managed_dashboard_url,
             view_tokens: Arc::new(Default::default()),
+            #[cfg(feature = "plugin-routes")]
+            route_registry,
         })
     }
 

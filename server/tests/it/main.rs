@@ -15,6 +15,8 @@ mod iroh_pairing;
 mod loro_ephemeral_sync;
 mod multi_client_sync;
 mod plugin_proxy;
+#[cfg(feature = "plugin-routes")]
+mod plugin_routes;
 mod put_blob;
 mod rate_limit;
 mod replicate;
