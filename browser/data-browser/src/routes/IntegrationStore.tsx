@@ -2,6 +2,10 @@ import { usePluginClass } from '../chunks/PluginRuns/runScript';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
 import {
+  CatalogApps,
+  visibleCatalogApps,
+} from '../chunks/PluginRuns/CatalogApps';
+import {
   hasExperimentalEntries,
   useIntegrationCatalog,
 } from '../chunks/PluginRuns/pluginCatalog';
@@ -76,7 +80,8 @@ function IntegrationStore(): React.JSX.Element {
   const { drive } = useSettings();
   // Opened from a workspace: new automations can belong to it.
   const { workspace } = IntegrationStoreRoute.useSearch();
-  const { showExperimentalPlugins, setVisibility } = useIntegrationVisibility();
+  const { showExperimentalPlugins, showApiPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -283,7 +288,12 @@ function IntegrationStore(): React.JSX.Element {
       .toLocaleLowerCase()
       .includes(query),
   );
-  const nothingToDiscover = catalogReady && !visible?.length;
+  const appsShown = visibleCatalogApps(catalogEntries, {
+    query,
+    showExperimental: showExperimentalPlugins,
+    showApi: showApiPlugins,
+  }).length;
+  const nothingToDiscover = catalogReady && !visible?.length && !appsShown;
 
   return (
     <Main>
@@ -370,6 +380,15 @@ function IntegrationStore(): React.JSX.Element {
             </CheckboxLabel>
           )}
           {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
+          {drive && (
+            <CatalogApps
+              entries={catalogEntries}
+              drive={drive}
+              query={query}
+              showExperimental={showExperimentalPlugins}
+              showApi={showApiPlugins}
+            />
+          )}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
