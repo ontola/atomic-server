@@ -116,6 +116,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  // Here rather than at the end of each test that stubs: a test that throws
+  // before its own cleanup leaves a half-made `window` standing, and every
+  // later `new Store()` in this file then fails on `localStorage`. Twelve of
+  // them did.
+  vi.unstubAllGlobals();
 });
 
 describe('ensureVaultBackup', () => {
@@ -507,9 +512,12 @@ describe('restoreFromVault', () => {
    * as a red test.
    */
   it('stays quiet when the document is discarded mid-restore', async () => {
+    // The store first, then the stub: `new Store()` reads `localStorage` behind
+    // a `typeof window !== 'undefined'` guard, and a stubbed `window` with no
+    // `localStorage` beside it turns that read into a ReferenceError.
+    const store = await signedInStore();
     const page = new EventTarget();
     vi.stubGlobal('window', page);
-    const store = await signedInStore();
     const deps = fakeDeps({
       restoreDrive: vi.fn(async () => {
         page.dispatchEvent(new Event('pagehide'));
@@ -522,7 +530,6 @@ describe('restoreFromVault', () => {
     expect(warn).not.toHaveBeenCalled();
 
     warn.mockRestore();
-    vi.unstubAllGlobals();
   });
 });
 
