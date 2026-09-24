@@ -5,6 +5,7 @@ import {
   handleRequest,
   isHostRequest,
   isWithinApp,
+  MAX_GET_MANY,
   resourceToOpen,
 } from './hostStore';
 
@@ -552,4 +553,95 @@ describe('proxy.disconnect', () => {
     ).rejects.toThrow('Invalid platform');
     expect(p.disconnect).not.toHaveBeenCalled();
   });
+});
+
+describe('getMany', () => {
+  /** A store holding `rows` in memory; anything else cannot be read. */
+  function rowStore(rows: Record<string, Record<string, unknown>>) {
+    const getResource = vi.fn(async (subject: string) => ({
+      subject,
+      title: String(rows[subject]?.name ?? subject),
+      error: rows[subject] ? undefined : new Error(`Unauthorized: ${subject}`),
+      getPropVals: () => ({ ...rows[subject] }),
+    }));
+
+    return { store: { getResource } as unknown as Store, getResource, rows };
+  }
+
+  it('reads each subject as get does, in order, in one answer', async () => {
+    const { store, rows } = rowStore({
+      'did:ad:a': { name: 'A' },
+      'did:ad:b': { name: 'B' },
+    });
+
+    const many = (await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('getMany', { subjects: ['did:ad:b', 'did:ad:a'] }),
+    )) as unknown[];
+    expect(many).toEqual([
+      { subject: 'did:ad:b', title: 'B', props: { name: 'B' }, loading: false },
+      { subject: 'did:ad:a', title: 'A', props: { name: 'A' }, loading: false },
+    ]);
+
+    // Same store, same state as `get`: a write this page already applied is
+    // what both see.
+    rows['did:ad:a'] = { name: 'A, edited' };
+    const [one] = (await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('getMany', { subjects: ['did:ad:a'] }),
+    )) as Array<{ props: unknown }>;
+    const single = (await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('get', { subject: 'did:ad:a' }),
+    )) as { propVals: unknown };
+    expect(one.props).toEqual(single.propVals);
+    expect(one.props).toEqual({ name: 'A, edited' });
+    expect(sent).toEqual([]);
+  });
+
+  it('reports one it cannot read in its place, without failing the rest', async () => {
+    const { store } = rowStore({ 'did:ad:a': { name: 'A' } });
+
+    expect(
+      await handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('getMany', { subjects: ['did:ad:secret', 'did:ad:a'] }),
+      ),
+    ).toEqual([
+      { subject: 'did:ad:secret', error: 'Unauthorized: did:ad:secret' },
+      expect.objectContaining({ subject: 'did:ad:a' }),
+    ]);
+  });
+
+  it(`refuses more than ${MAX_GET_MANY} before reading any`, async () => {
+    const { store, getResource } = rowStore({});
+    const subjects = Array.from(
+      { length: MAX_GET_MANY + 1 },
+      (_, i) => `did:ad:${i}`,
+    );
+
+    await expect(
+      handleRequest(store, APP, DRIVE, req('getMany', { subjects })),
+    ).rejects.toThrow(`at most ${MAX_GET_MANY}`);
+    expect(getResource).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'did:ad:a', [42], [''], [{ subject: 'did:ad:a' }]])(
+    'refuses %j as subjects',
+    async subjects => {
+      const { store, getResource } = rowStore({});
+      await expect(
+        handleRequest(store, APP, DRIVE, req('getMany', { subjects })),
+      ).rejects.toThrow('array of subjects');
+      expect(getResource).not.toHaveBeenCalled();
+    },
+  );
 });
