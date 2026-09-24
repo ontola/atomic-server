@@ -9441,10 +9441,8 @@ msgstr "Finishing the connection…"
 msgid "Sign in to connect an account."
 msgstr "Sign in to connect an account."
 
-#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
-msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+#~ msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+#~ msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
@@ -9531,3 +9529,16 @@ msgstr "Open imported data"
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "{0} bytes"
 msgstr "{0} bytes"
+
+#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Use existing connection"
+msgstr "Use existing connection"
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Sign in to finish connecting this account."
+msgstr "Sign in to finish connecting this account."

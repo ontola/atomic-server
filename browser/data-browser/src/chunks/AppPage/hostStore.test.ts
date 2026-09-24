@@ -272,39 +272,42 @@ describe('isHostRequest', () => {
   });
 });
 
-describe('relaying the integration proxy', () => {
-  const relay = {
-    request: vi.fn(async () => ({ status: 200, headers: {}, body: [] })),
-    connections: vi.fn(() => [{ connectionId: 'c1', platform: 'pets' }]),
+describe('integration-proxy capabilities', () => {
+  const minted = {
+    capability: 'payload.sig',
+    aud: 'https://proxy.example',
+    exp: 1,
+    connectionId: 'c1',
+    platform: 'pets',
+  };
+  const proxy = {
+    capability: vi.fn(async () => minted),
+    connections: vi.fn(async () => [{ connectionId: 'c1', platform: 'pets' }]),
   };
 
-  it('passes a call to the relay by reference, never touching the server', async () => {
+  it('mints a capability for the frame key, never touching the server', async () => {
     const result = await handleRequest(
       fakeStore(),
       APP,
       DRIVE,
-      req('proxy', {
+      req('proxyCapability', {
         platform: 'pets',
         connectionId: 'c1',
-        path: '/pets',
-        query: { page: '2' },
+        publicKey: 'frame-key',
       }),
       undefined,
-      relay,
+      proxy,
     );
-    expect(result).toEqual({ status: 200, headers: {}, body: [] });
-    expect(relay.request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        platform: 'pets',
-        connectionId: 'c1',
-        path: '/pets',
-        query: { page: '2' },
-      }),
-    );
+    expect(result).toEqual(minted);
+    expect(proxy.capability).toHaveBeenCalledWith({
+      platform: 'pets',
+      connectionId: 'c1',
+      publicKey: 'frame-key',
+    });
     expect(sent).toEqual([]);
   });
 
-  it('lists connection references, and none without a relay', async () => {
+  it('lists connection references, and none without a proxy', async () => {
     expect(
       await handleRequest(
         fakeStore(),
@@ -312,7 +315,7 @@ describe('relaying the integration proxy', () => {
         DRIVE,
         req('proxyConnections', { platform: 'pets' }),
         undefined,
-        relay,
+        proxy,
       ),
     ).toEqual([{ connectionId: 'c1', platform: 'pets' }]);
     expect(
@@ -325,13 +328,17 @@ describe('relaying the integration proxy', () => {
     ).toEqual([]);
   });
 
-  it('refuses a proxy call without a relay or without a connection', async () => {
+  it('refuses without a proxy, a connection or a frame key', async () => {
     await expect(
       handleRequest(
         fakeStore(),
         APP,
         DRIVE,
-        req('proxy', { platform: 'pets', connectionId: 'c1', path: '/pets' }),
+        req('proxyCapability', {
+          platform: 'pets',
+          connectionId: 'c1',
+          publicKey: 'k',
+        }),
       ),
     ).rejects.toThrow('cannot reach the integration proxy');
     await expect(
@@ -339,10 +346,33 @@ describe('relaying the integration proxy', () => {
         fakeStore(),
         APP,
         DRIVE,
-        req('proxy', { platform: 'pets', path: '/pets' }),
+        req('proxyCapability', { platform: 'pets', publicKey: 'k' }),
         undefined,
-        relay,
+        proxy,
       ),
     ).rejects.toThrow('connectionId is required');
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyCapability', { platform: 'pets', connectionId: 'c1' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow('publicKey is required');
+  });
+
+  it('no longer relays proxy calls through the page', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxy', { platform: 'pets', connectionId: 'c1', path: '/pets' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow();
   });
 });
