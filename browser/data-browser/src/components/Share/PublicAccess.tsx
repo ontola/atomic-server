@@ -2,7 +2,7 @@ import { useId, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { useResource, useTitle } from '@tomic/react';
-import { FaGlobe, FaRegCircle } from 'react-icons/fa6';
+import { FaCheck, FaRegCircle } from 'react-icons/fa6';
 import type { ShareRole } from './RoleSelect';
 
 type PublicLevel = 'off' | ShareRole;
@@ -49,7 +49,7 @@ export function PublicAccess({
   return (
     <Card data-test='share-public'>
       <IconCircle $active={isPublic} aria-hidden>
-        {isPublic ? <FaGlobe /> : <FaRegCircle />}
+        {isPublic ? <FaCheck /> : <FaRegCircle />}
       </IconCircle>
       <Text>
         <strong>Public</strong>
@@ -115,6 +115,9 @@ const Card = styled.div`
   background-color: ${p => p.theme.colors.bg1};
 `;
 
+/** The presence dot's green, a shade darker so the white check stays legible. */
+const PUBLIC_GREEN = '#2e9e4c';
+
 const IconCircle = styled.span<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
@@ -123,9 +126,12 @@ const IconCircle = styled.span<{ $active: boolean }>`
   width: 2.6rem;
   height: 2.6rem;
   border-radius: 50%;
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.textLight)};
+  background-color: ${p => (p.$active ? PUBLIC_GREEN : p.theme.colors.bg)};
+  color: ${p => (p.$active ? 'white' : p.theme.colors.textLight)};
   font-size: 1.2rem;
+  transition:
+    background-color 150ms ease-in-out,
+    color 150ms ease-in-out;
 `;
 
 const Text = styled.div`
