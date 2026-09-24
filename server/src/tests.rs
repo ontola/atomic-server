@@ -1356,3 +1356,43 @@ async fn version_endpoints() {
         "reading a version must not move the live resource: {body}"
     );
 }
+
+/// An unclaimed `/.well-known/` name is `404`, also for a client that sends no
+/// `Accept` header (which otherwise gets the app's HTML), in every build.
+#[actix_rt::test]
+async fn unclaimed_well_known_names_are_not_found() {
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    for accept in [None, Some("text/html"), Some("application/json")] {
+        for path in [
+            "/.well-known/nodeinfo",
+            "/.well-known/webfinger?resource=acct:a@b",
+            "/.well-known/acme-challenge/token",
+            "/.well-known/",
+            "/.well-known",
+        ] {
+            let mut req = TestRequest::get().uri(path);
+            if let Some(accept) = accept {
+                req = req.insert_header(("Accept", accept));
+            }
+            let resp = test::call_service(&app, req.to_request()).await;
+            assert_eq!(resp.status().as_u16(), 404, "{path} {accept:?}");
+            assert_eq!(
+                resp.headers().get("content-type").unwrap(),
+                "application/problem+json",
+                "{path} {accept:?}"
+            );
+            let body = get_body(resp);
+            assert!(!body.contains("<html"), "{path} {accept:?}: {body}");
+        }
+    }
+    // The app itself is still served for other paths.
+    let resp = test::call_service(&app, TestRequest::get().uri("/app/x").to_request()).await;
+    assert!(resp.status().is_success());
+    assert!(get_body(resp).contains("html"));
+}
