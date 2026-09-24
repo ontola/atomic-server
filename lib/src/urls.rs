@@ -247,6 +247,9 @@ pub const PREVIOUS_RELEASE: &str = "https://atomicdata.dev/properties/previousRe
 pub const PUBLISHER: &str = "https://atomicdata.dev/properties/publisher";
 pub const RELEASE_PROP: &str = "https://atomicdata.dev/properties/release";
 pub const GRANTS: &str = "https://atomicdata.dev/properties/grants";
+/// Which plugin route request last created or changed a resource (JSON).
+/// Written by the host only.
+pub const ROUTE_PROVENANCE: &str = "https://atomicdata.dev/properties/routeProvenance";
 pub const INSTALLATION_STATUS: &str = "https://atomicdata.dev/properties/installationStatus";
 pub const DOMAINS: &str = "https://atomicdata.dev/properties/domains";
 pub const STANDARDS: &str = "https://atomicdata.dev/properties/standards";

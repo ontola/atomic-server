@@ -311,6 +311,37 @@ pub struct Opts {
     /// read-only` and the `plugin-routes` feature.
     #[clap(long, env = "ATOMIC_PLUGIN_API_WELL_KNOWN")]
     pub plugin_api_well_known: Option<String>,
+
+    /// Resources one remote caller may make one plugin installation's
+    /// routes create per hour (design 2.6, *proposed* there). Past it the
+    /// route answers `429`. `0` turns this quota off. Only used at
+    /// `--plugin-routes read-write`.
+    #[clap(
+        long,
+        default_value = "100",
+        env = "ATOMIC_PLUGIN_ROUTE_CREATES_PER_CALLER_HOUR"
+    )]
+    pub plugin_route_creates_per_caller_hour: u64,
+
+    /// Resources one plugin installation's routes may create per day, from
+    /// all callers together (design 2.6, *proposed* there). `0` turns this
+    /// quota off.
+    #[clap(
+        long,
+        default_value = "10000",
+        env = "ATOMIC_PLUGIN_ROUTE_CREATES_PER_DAY"
+    )]
+    pub plugin_route_creates_per_day: u64,
+
+    /// Bytes of property values one plugin installation's routes may write
+    /// per day, creates and changes together. The design gives no number;
+    /// the default is 64 MiB. `0` turns this quota off.
+    #[clap(
+        long,
+        default_value = "67108864",
+        env = "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY"
+    )]
+    pub plugin_route_bytes_per_day: u64,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -797,6 +828,18 @@ mod tests {
             ("plugin_listeners", "ATOMIC_PLUGIN_LISTENERS"),
             ("plugin_sidecars", "ATOMIC_PLUGIN_SIDECARS"),
             ("plugin_api_well_known", "ATOMIC_PLUGIN_API_WELL_KNOWN"),
+            (
+                "plugin_route_creates_per_caller_hour",
+                "ATOMIC_PLUGIN_ROUTE_CREATES_PER_CALLER_HOUR",
+            ),
+            (
+                "plugin_route_creates_per_day",
+                "ATOMIC_PLUGIN_ROUTE_CREATES_PER_DAY",
+            ),
+            (
+                "plugin_route_bytes_per_day",
+                "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY",
+            ),
         ] {
             let arg = command
                 .get_arguments()

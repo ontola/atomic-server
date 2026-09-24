@@ -237,3 +237,121 @@ async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
     assert!(err.contains("acme-challenge"), "{err}");
     Ok(())
 }
+
+/// `testdata/plugin-routes/inbox/`: `POST /inbox` writes a PlainText under
+/// the configured inbox (AS-07).
+const INBOX_SOURCE: &str = include_str!("../../../testdata/plugin-routes/inbox/plugin.js");
+const INBOX_MANIFEST: &str = include_str!("../../../testdata/plugin-routes/inbox/manifest.json");
+
+/// At `read-write`, a route with a route grant writes into its target: a
+/// POST from anyone is stored, signed by the installation, with provenance,
+/// and reads back. A write outside the target is refused.
+#[tokio::test]
+async fn a_route_write_is_stored_and_reads_back() -> AtomicResult<()> {
+    let port = start_server_with_args("plugin_route_writes", &["--plugin-routes", "read-write"]);
+    wait_for_server(port).await;
+    let server = format!("http://localhost:{port}");
+    let client = Client::new(&server).await?;
+    let agent = client.new_agent("Alice").await?;
+    let drive = client.new_public_drive(&agent, "Inbox Drive").await?;
+    let http = reqwest::Client::new();
+
+    // The inbox the installer points the plugin at.
+    let mut inbox = client.new_resource(&drive)?;
+    inbox.set_unsafe(urls::NAME.into(), Value::String("Inbox".into()))?;
+    inbox.save_remote(client.store()).await?;
+    let inbox = inbox.get_subject().to_string();
+
+    // Installed with the route grant its review shows: the write targets.
+    let manifest: serde_json::Value = serde_json::from_str(INBOX_MANIFEST)?;
+    let targets = manifest["http"]["writeTargets"].clone();
+    let mut release = PluginRelease::js(INBOX_SOURCE.into(), manifest, Default::default());
+    release.world = WORLD_EXTENSION.into();
+    let mut release_resource = client.new_resource(&drive)?;
+    release.write_to_resource(&mut release_resource, None)?;
+    release_resource.save_remote(client.store()).await?;
+    let mut installation = client.new_resource(&drive)?;
+    for (property, value) in [
+        (
+            urls::IS_A,
+            Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+        ),
+        (urls::NAME, Value::String("inbox".into())),
+        (urls::NAMESPACE, Value::String("fixtures".into())),
+        (
+            urls::RELEASE_PROP,
+            Value::String(release_resource.get_subject().to_string()),
+        ),
+        (urls::RELEASE_ID, Value::String(release.id()?)),
+        (urls::INSTALLATION_STATUS, Value::String("active".into())),
+        (
+            urls::GRANTS,
+            Value::Json(json!(["storage", {"route-writes": targets}])),
+        ),
+        (urls::CONFIG, Value::Json(json!({ "inbox": inbox }))),
+    ] {
+        installation.set_unsafe(property.into(), value)?;
+    }
+    installation.save_remote(client.store()).await?;
+    let installation = installation.get_subject().to_string();
+
+    // The installer lets the plugin's agent write to the inbox.
+    let plugin_agent = client
+        .get_resource(&installation)
+        .await?
+        .get(urls::PLUGIN_AGENT)?
+        .to_string();
+    let mut inbox_resource = client.get_resource(&inbox).await?;
+    inbox_resource.set_unsafe(
+        urls::WRITE.into(),
+        Value::ResourceArray(vec![plugin_agent.as_str().into()]),
+    )?;
+    inbox_resource.save_remote(client.store()).await?;
+
+    // Anyone on the internet POSTs.
+    let prefix = format!("{server}/_routes/{}", slug(&installation));
+    let resp = http
+        .post(format!("{prefix}/inbox"))
+        .json(&json!({"name": "hello", "text": "from far away"}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 202);
+
+    // It reads back, through the route and from the store.
+    let resp = http
+        .get(format!("{prefix}/items"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 200);
+    let items: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let item = items
+        .as_array()
+        .and_then(|items| items.iter().find(|i| i["name"] == "hello"))
+        .unwrap_or_else(|| panic!("the item is not listed: {items}"));
+    assert_eq!(item["description"], "from far away");
+    let provenance = &item["provenance"];
+    assert_eq!(provenance["installation"], installation);
+    assert_eq!(provenance["route"], "inbox");
+    assert!(provenance["request"]
+        .as_str()
+        .is_some_and(|r| r.starts_with("http:")));
+    let stored = client
+        .get_resource(item["subject"].as_str().unwrap())
+        .await?;
+    assert_eq!(stored.get(urls::PARENT)?.to_string(), inbox);
+    assert_eq!(stored.get(urls::DESCRIPTION)?.to_string(), "from far away");
+
+    // Outside the target: refused, and not stored.
+    let resp = http
+        .post(format!("{prefix}/inbox"))
+        .json(&json!({"name": "stray", "parent": drive}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 502);
+    let problem: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    assert_eq!(problem["type"], "route-write-refused");
+    Ok(())
+}
