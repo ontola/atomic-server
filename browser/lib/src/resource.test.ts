@@ -403,6 +403,43 @@ describe('resource.ts', () => {
   });
 
   /**
+   * A property removed elsewhere (another client, or the server writing for
+   * an app through `/app-write`) must stay removed when the full state
+   * replaces this copy. The replace path used to rebuild the doc from the
+   * snapshot and then "heal" it from the cache — which still held the
+   * pre-removal values — so the removed value came back as a local op.
+   */
+  it('a replacing snapshot drops properties the source removed', async ({
+    expect,
+  }) => {
+    const name = core.properties.name;
+    const description = core.properties.description;
+    const subject = 'https://example.com/replace-removes';
+
+    const server = new Resource(subject);
+    await server.set(name, 'Row', false);
+    await server.set(description, 'Goes away', false);
+    const before = server.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const page = new Resource(subject);
+    page.importLoroUpdate(before, true);
+    expect(page.get(description)).toBe('Goes away');
+
+    // The removal happens elsewhere, on top of the same state.
+    server.getLoroDoc()!.getMap('properties').delete(description);
+    server.getLoroDoc()!.commit();
+    const after = server.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    page.importLoroUpdate(after, true);
+
+    expect(page.get(name)).toBe('Row');
+    expect(page.get(description)).toBeUndefined();
+    expect(
+      page.getLoroDoc()!.getMap('properties').get(description),
+    ).toBeUndefined();
+  });
+
+  /**
    * Regression: drawing onto a canvas whose strokes were seeded in bulk via
    * `set()` (template/demo content) threw "pushContainer is not a function"
    * and the new stroke was dropped. `set()` must store an array of objects as
