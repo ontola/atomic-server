@@ -10,7 +10,7 @@
 pub mod discover;
 #[cfg(feature = "db")]
 pub mod engine;
-#[cfg(all(test, feature = "iroh", feature = "db-redb"))]
+#[cfg(all(test, feature = "iroh", feature = "db"))]
 mod iroh_e2e;
 /// The durable dirty-subject queue a device drains to a hub.
 #[cfg(feature = "db")]

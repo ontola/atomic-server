@@ -563,7 +563,7 @@ impl CommitTransport for crate::sync::transport::ChannelTransport {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
     use crate::sync::session::SyncSession;

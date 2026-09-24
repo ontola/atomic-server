@@ -90,7 +90,7 @@ impl BatchBuffer {
 /// boots `fsync` a much smaller file, which on macOS is the dominant
 /// cost of `Database::create` (see redb `begin_writable()` at
 /// `page_manager.rs:361-367`).
-#[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let mut db = redb::Database::create(path)
