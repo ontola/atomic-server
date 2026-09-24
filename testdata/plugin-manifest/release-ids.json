@@ -8,5 +8,10 @@
   "v2-js-server-extension.json": "blake3:93c1e7fc0cbc583d6f89ccc6ba694b52f158e0c8e77714863b60f0be4c99b74f",
   "v2-minimal.json": "blake3:5bea99dd5c2522b5848ef67695b33f9a0bcbddaed4c88f701482da98afd00359",
   "translated-notion-sync.json": "blake3:0f7b2c652fa5f081c7a7951d93685d15b393eccbb25a16cce7a1fda6ad31ecfb",
-  "translated-no-classes.json": "blake3:faa6a6f95fe7e7cb133e46f5336c3670d00c5438cc1da1efeb28350062623f23"
+  "translated-no-classes.json": "blake3:faa6a6f95fe7e7cb133e46f5336c3670d00c5438cc1da1efeb28350062623f23",
+  "v2-accepts-destination.json": "blake3:4d41ebf175cb12e05339b85698a8d9b91485523728826485025af20c51ace3ea",
+  "v2-proxy.json": "blake3:de569e43d16a543004ba7569a9b2e9070d6a2939a189b3f9d409d9837173a881",
+  "v1-proxy.json": "blake3:ae7d4a5be8b862df3fba1735a84d48a843305d12d2ace01feee2c3992dbb1847",
+  "v2-accepts-base64.json": "blake3:fe4f9d2f125081c41a045268f7e440b4088a864bf4eb9d451a442018016742db",
+  "v2-accepts-default-text.json": "blake3:23af18483d0f180824694a899d91fc3374c4495ab65da150de2d43fc7896cc9a"
 }
