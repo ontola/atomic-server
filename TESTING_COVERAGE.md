@@ -343,6 +343,26 @@ worker deliver a signed POST to a loopback receiver. Not covered: more than
 private address (only literal addresses are tested), and enqueues from query
 triggers (not implemented).
 
+Blob bodies (#1720): `server/src/plugins/route_blobs_test.rs` runs the shared
+fixture `testdata/plugin-routes/files/` (remoteStorage-like `PUT`/`GET
+/files/{*path}`) through the app at `read-write`: a 2 MiB upload stored in
+the blob store with the handler seeing only `{ hash, size, type, subject }`;
+a blob response with its content type, `ETag`, `nosniff`, the sandboxing CSP
+and the right length (also for `HEAD`); `304` and `412` for conditional
+`GET`s, and `If-None-Match: *` / a stale `If-Match` on `PUT` answering `412`
+with nothing stored; the operator's cap and a route's `maxBodyBytes`
+answering `413` with nothing stored; blob bytes counted in the daily byte
+quota (`429`); a foreign blob refused both as a response and as a value in a
+route write, and served once a File under the write target holds it; no
+route grant answering `403` before anything is read; HTML and SVG refused on
+`drive-prefix`; the blob release refused at `read-only`, where a GET-only
+release still serves a blob its installation stored. `route_blobs.rs` unit
+tests cover hash parsing, the limit, and the precondition rules.
+`tests/it/plugin_routes.rs` PUTs 2 MiB to a real server and GETs it back
+byte for byte, with `HEAD`, `304`, `412` and `413` over HTTP. Not covered: a
+body streamed without `Content-Length` (chunked; the limit is checked per
+chunk), an S3 blob backend, and two uploads racing the byte quota.
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

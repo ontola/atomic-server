@@ -343,6 +343,19 @@ pub struct Opts {
     )]
     pub plugin_route_bytes_per_day: u64,
 
+    /// The largest request body a plugin route with `body: blob` may store
+    /// (design 2.8: "operator-configured"). A route's `maxBodyBytes` is
+    /// capped by it; without one a route gets 16 MiB, or this if it is
+    /// smaller. Blob bytes also count toward
+    /// `--plugin-route-bytes-per-day`. Only used at `--plugin-routes
+    /// read-write`.
+    #[clap(
+        long,
+        default_value = "16777216",
+        env = "ATOMIC_PLUGIN_ROUTE_MAX_BLOB_BYTES"
+    )]
+    pub plugin_route_max_blob_bytes: u64,
+
     /// Deliveries one plugin installation may send per UTC day (design D5,
     /// *proposed* there: 10,000). Every outbound request counts, retries
     /// included. Past it, queued deliveries wait for the next day; they are
@@ -856,6 +869,10 @@ mod tests {
             (
                 "plugin_route_bytes_per_day",
                 "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY",
+            ),
+            (
+                "plugin_route_max_blob_bytes",
+                "ATOMIC_PLUGIN_ROUTE_MAX_BLOB_BYTES",
             ),
             (
                 "plugin_route_deliveries_per_day",
