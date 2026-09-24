@@ -667,9 +667,13 @@ export function run() { return { intents: [] }; }
   test('Clockify applies linked entries through the real sandbox and skips repeats', async ({
     page,
   }) => {
-    // Discovery plus an apply, both through the sandbox: a minute here, which
-    // is the suite's whole per-test default.
-    test.setTimeout(120_000);
+    // Discovery plus an apply, both through the sandbox: 60 to 66s alone, but
+    // 162 to 168s under four local workers, so 120s was not close, it was
+    // already past. It failed on the WALL, naming whatever line the clock ran
+    // out on rather than anything that was actually wrong. Red 3 of 3 loaded
+    // before, green 3 of 3 after. Same shape and same budget as the sidebar
+    // sync test below; every assertion in this test keeps its own.
+    test.setTimeout(240_000);
     // Replace only the provider transport inside the sandbox. Discovery, mapping,
     // runtime, planning, signed commits and the second run's DB query stay real.
     await createTableFromDialog(page, {
