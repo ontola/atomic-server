@@ -26,6 +26,11 @@ export type ViewOperation =
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
   | 'proxyConnect'
   /**
+   * Take this app's delegation off its connections for a platform. Never
+   * deletes a connection; other apps may share it.
+   */
+  | 'proxyDisconnect'
+  /**
    * Open an http(s) link in a new tab, once the person confirms it in host
    * UI that names the destination host. The frame gets no popup rights.
    */
@@ -87,6 +92,7 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'proxyCapability',
       'proxyConnections',
       'proxyConnect',
+      'proxyDisconnect',
       'openExternal',
       'openResource',
     ].includes(request.op) &&

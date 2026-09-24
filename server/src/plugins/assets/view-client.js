@@ -238,6 +238,23 @@ export const store = {
     async connect({ platform }) {
       return send('proxyConnect', { platform });
     },
+
+    /**
+     * Stops this app using `platform`: takes this app's delegation off its
+     * connections at the proxy (and, for an Installation, forgets the
+     * recorded one). The connection itself stays, since other apps may use
+     * it; deleting it is up to the person, on a page. Resolves to
+     * `{ status: 'disconnected', platform, connectionIds }`.
+     */
+    async disconnect({ platform }) {
+      const result = await send('proxyDisconnect', { platform });
+
+      for (const key of [...capabilities.keys()]) {
+        if (JSON.parse(key)[0] === platform) capabilities.delete(key);
+      }
+
+      return result;
+    },
   },
 };
 

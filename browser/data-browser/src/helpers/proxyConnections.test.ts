@@ -147,6 +147,24 @@ function fakeProxy() {
       return Response.json({ ok: true });
     }
 
+    const agent = /^\/connections\/([^/]+)\/agents\/([^/]+)$/.exec(path);
+    const row = agent && connections.find(c => c.connection_id === agent[1]);
+
+    if (agent && method === 'DELETE' && row) {
+      const gone = decodeURIComponent(agent[2]);
+      const kept = row.delegations.filter(d => d.agent !== gone);
+
+      if (kept.length === row.delegations.length)
+        return Response.json(
+          { error: 'not_found', message: 'no such delegation' },
+          { status: 404 },
+        );
+
+      row.delegations = kept;
+
+      return new Response(null, { status: 204 });
+    }
+
     return Response.json(
       { error: 'not_found', message: path },
       { status: 404 },
@@ -307,6 +325,47 @@ describe('ProxyConnections', () => {
     expect(await connections.delegated(APP_AGENT, 'pets')).toEqual([
       { connectionId: 'old', platform: 'pets' },
     ]);
+  });
+
+  it('disconnects only this app: its delegations go, the connections stay', async () => {
+    const { connections, proxy } = await connected();
+    const OTHER_APP = `atomic:agent:${'C'.repeat(42)}E`;
+    await connections.delegate('old', APP_AGENT, 'Pets app');
+    await connections.delegate('new', OTHER_APP, 'Other app');
+    proxy.calls.length = 0;
+
+    // `gone` was recorded somewhere but the proxy never had it: a 404 is
+    // already the state asked for.
+    expect(
+      await connections.disconnectApp(APP_AGENT, 'pets', ['gone']),
+    ).toEqual(['old', 'new', 'gone']);
+    expect(await connections.delegated(APP_AGENT, 'pets')).toEqual([]);
+    expect(await connections.delegated(OTHER_APP, 'pets')).toEqual([
+      { connectionId: 'new', platform: 'pets' },
+    ]);
+    expect(proxy.connections.map(c => c.connection_id)).toEqual(['old', 'new']);
+    const deletes = proxy.calls
+      .filter(c => c.method === 'DELETE')
+      .map(c => new URL(c.url).pathname);
+    expect(deletes).toEqual(
+      ['old', 'new', 'gone'].map(
+        id => `/connections/${id}/agents/${encodeURIComponent(APP_AGENT)}`,
+      ),
+    );
+  });
+
+  it('refuses an invalid platform before calling the proxy', async () => {
+    const proxy = fakeProxy();
+    const connections = new ProxyConnections(
+      new MemoryStorage(),
+      ORIGIN,
+      user,
+      proxy.http,
+    );
+    await expect(connections.disconnectApp(APP_AGENT, '../x')).rejects.toThrow(
+      'Invalid platform',
+    );
+    expect(proxy.calls).toEqual([]);
   });
 
   it('needs a signed-in user', async () => {
