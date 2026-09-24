@@ -3,6 +3,7 @@ import {
   managedDriveTest,
   expect as managedExpect,
 } from './deployment-fixtures';
+import { mockManagedPortal } from './managed-test-utils';
 import { FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
 
 managedDriveTest(
@@ -57,6 +58,48 @@ managedDriveTest(
     ).toHaveCount(0);
   },
 );
+
+test('a demo guest can create a template drive without an account', async ({
+  page,
+}) => {
+  test.setTimeout(180000);
+  await mockManagedPortal(page);
+  await page.route('**/server', async route => {
+    const response = await route.fetch({
+      url: nodeReachableServerUrl(route.request().url()),
+    });
+    const body = await response.json();
+    await route.fulfill({
+      json: {
+        ...body,
+        'https://atomicdata.dev/properties/server/managed': true,
+        'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
+      },
+    });
+  });
+  // "Try the app" visitors have no account, so the control plane has no session.
+  await page.route('**/api/me', route => route.fulfill({ status: 401 }));
+
+  await page.goto(`${FRONTEND_URL}/app/demo`);
+  const back = page.getByRole('button', { name: 'Back', exact: true });
+  await expect(back).toBeVisible({ timeout: 90000 });
+  await back.click();
+  await expect(page).toHaveURL(/new-drive/);
+
+  await page.goto(`${FRONTEND_URL}/app/new-drive?template=student`);
+  await expect(
+    page.getByRole('heading', { name: 'Give your space a name' }),
+  ).toBeVisible({ timeout: 60000 });
+  await page.getByRole('button', { name: 'Create drive' }).click();
+  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
+  await expect(
+    page.getByText('Sign in to check Cloud Server hosting'),
+  ).toHaveCount(0);
+  const createdLocal = await page.evaluate(() =>
+    window.store.isLocalOnlyDrive(window.store.getDrive()!),
+  );
+  expect(createdLocal).toBe(true);
+});
 
 managedDriveTest(
   'template setup errors can be reported with context',
