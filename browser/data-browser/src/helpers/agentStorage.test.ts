@@ -22,6 +22,7 @@ const AGENT_IDB_KEY = 'atomic.agent';
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
 const SESSION_KEY_PREFIX = 'atomic.clientdb.session-key.';
 const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key.';
+const WRAPPED_KEY_V2_PREFIX = 'atomic.clientdb.wrapped-key-v2.';
 
 async function makeSecret(): Promise<string> {
   const keys = await Agent.generateKeyPair();
@@ -94,6 +95,7 @@ describe('agent key storage', () => {
     store.set(AGENT_FALLBACK_KEY, { privateKey: 'x', subject: 'y' });
     store.set(`${SESSION_KEY_PREFIX}fingerprint`, 'session-copy');
     store.set(`${WRAPPED_KEY_PREFIX}fingerprint`, 'wrapped-copy');
+    store.set(`${WRAPPED_KEY_V2_PREFIX}fingerprint`, 'wrapped-copy-v2');
 
     await saveAgentToIDB(undefined);
 
@@ -105,6 +107,7 @@ describe('agent key storage', () => {
     // ...while the wrapped copy survives, so the owning agent's cache becomes
     // readable again on their next sign-in rather than being wiped.
     expect(store.has(`${WRAPPED_KEY_PREFIX}fingerprint`)).toBe(true);
+    expect(store.has(`${WRAPPED_KEY_V2_PREFIX}fingerprint`)).toBe(true);
   });
 });
 
