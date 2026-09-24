@@ -845,7 +845,7 @@ export function GettingStartedFlow({
       ) : step === 'welcome' ? (
         <WelcomeSwap key='welcome'>
           <WelcomeStack>
-            <VisuallyHiddenH1 key='heading'>AtomicServer</VisuallyHiddenH1>
+            <VisuallyHiddenH1 key='heading'>{PRODUCT_NAME}</VisuallyHiddenH1>
             {/* alt='' because the heading above already names the app. */}
             <AtomicServerLogo key='logo' alt='' />
             <ButtonStack key='buttons'>
@@ -922,7 +922,7 @@ export function GettingStartedFlow({
               <OwnedElsewhere key='elsewhere'>
                 Want a server of your own?{' '}
                 <PlainExternalLink
-                  href='https://atomicserver.eu'
+                  href='https://atomic.place'
                   target='_blank'
                   rel='noreferrer'
                 >

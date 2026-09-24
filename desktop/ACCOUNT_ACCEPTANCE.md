@@ -70,6 +70,34 @@ run directory. The
 launcher sets `ATOMIC_VAULT_REQUIRE_S3=1`, so the control plane cannot silently
 fall back to synthetic `memory://` upload URLs.
 
+## Existing production account in a Mac dev window
+
+For an interactive check with an existing account, stop the local acceptance
+stack above. Point the Tauri frontend at `https://atomic.place` with
+`VITE_MANAGED_PORTAL_URL` and at `https://atomic.place/api` with
+`VITE_MANAGED_API_BASE`. Use Vite on `localhost:6747` or `localhost:5173`:
+the production API accepts those development origins, but rejected the local
+acceptance port `6751` during this check. The frontend origin also separates
+its WebView local storage from the local acceptance portal link. Confirm the
+restore screen names `AtomicServer.eu` before requesting a device code.
+
+Keep the embedded node separate from an installed app by setting
+`ATOMIC_DATA_DIR`, `ATOMIC_CONFIG_DIR`, and `ATOMIC_CACHE_DIR` to a persistent
+test directory before `cargo tauri dev`. A different Tauri bundle identifier
+alone did not isolate the native server database. The WebView profile can still
+retain a last-used drive from another run; a missing-resource page does not
+prove account restore failed. Open `/app/welcome` and start the restore flow.
+
+In a worktree whose `browser/node_modules` is symlinked outside the checkout,
+Vite may return HTTP 403 for `loro_wasm_bg.wasm`. Give Vite's `server.fs.allow`
+the symlink's real path, or install dependencies within that worktree. Verify
+that the WASM request returns `application/wasm` and that the WebView console
+has no `[LoroLoader]` initialization error before testing an edit.
+
+This interactive dev check establishes only that the real portal can issue a
+device code and that the user can continue the account flow. Complete the
+packaged-app journeys below to establish Vault recovery and persistence.
+
 ## Build a packaged test app
 
 Stop the development frontend first. A running Vite server and the production

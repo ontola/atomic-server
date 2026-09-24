@@ -120,7 +120,7 @@ export function defaultPeerSignalingUrl(): string {
     (window.location.hostname === 'staging.atomicserver.eu' ||
     window.location.hostname.endsWith('.staging.atomicserver.eu')
       ? 'https://staging.atomicserver.eu'
-      : 'https://atomicserver.eu');
+      : 'https://atomic.place');
   const endpoint = new URL(
     import.meta.env.VITE_ATOMIC_SIGNALING_URL || '/webrtc-signal',
     portal,
