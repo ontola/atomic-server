@@ -189,7 +189,7 @@ features = ["derive"]
 version = "1"
 
 [dependencies.tokio]
-features = ["time"]
+features = ["time", "rt-multi-thread"]
 version = "1.52.3"
 
 [dependencies.image]

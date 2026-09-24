@@ -73,6 +73,8 @@ pub mod release;
 #[cfg(feature = "wasm-plugins")]
 pub mod release_binding;
 pub mod replicate;
+#[cfg(feature = "plugin-routes")]
+pub mod route_exec;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod route_levels_test;
 #[cfg(feature = "plugin-routes")]

@@ -47,6 +47,10 @@ pub struct AppState {
     /// `plugins::route_registry`.
     #[cfg(feature = "plugin-routes")]
     pub route_registry: Arc<plugins::route_registry::RouteRegistry>,
+    /// Admission, limits and status for running plugin routes; see
+    /// `plugins::route_exec`.
+    #[cfg(feature = "plugin-routes")]
+    pub route_exec: Arc<plugins::route_exec::RouteExecutor>,
 }
 
 impl AppState {
@@ -301,6 +305,8 @@ impl AppState {
             view_tokens: Arc::new(Default::default()),
             #[cfg(feature = "plugin-routes")]
             route_registry,
+            #[cfg(feature = "plugin-routes")]
+            route_exec: Arc::new(Default::default()),
         })
     }
 
