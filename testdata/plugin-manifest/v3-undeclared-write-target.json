@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "r",
+        "path": "/x",
+        "methods": [
+          "POST"
+        ],
+        "principal": "installation",
+        "auth": "atomic",
+        "writes": [
+          "nope"
+        ]
+      }
+    ]
+  }
+}

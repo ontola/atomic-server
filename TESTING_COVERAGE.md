@@ -219,6 +219,19 @@ and clippy once more with `--features plugin-routes`. Not covered: no e2e
 build has the feature yet (nothing is served behind it before #1714), and no
 UI reads `hostFeatures` yet.
 
+Manifest v3 `http` block (#1712): `testdata/plugin-manifest/http-index.json`
+(accepted and rejected cases, the gate each needs, the derived `requires`) and
+`http-refusals.json` (one case per refusal message of the design's 0.4) run
+against both `server/src/plugins/manifest.rs` and
+`browser/lib/src/plugin-manifest-http.test.ts`. `release-ids.json` pins the
+release ids of every accepted v1/v2 fixture, computed before v3 existed.
+`plugin.rs` installation tests check that an install and an upgrade of a
+gated release are refused on the test node (gate `off`) and that the old
+release stays; `plugin_release_test.rs` checks `/plugin-release-pin` answers
+`409` with the typed problem, and the catalog's `requires`. Not covered: an
+install on a node with the gates open (the test fixture's config is fixed at
+`off`), and no UI shows the refusal yet (#1713).
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

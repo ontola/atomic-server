@@ -1,4 +1,5 @@
 import type { JSONValue } from './value.js';
+import { validateHttp, type DeclaredHttp } from './plugin-manifest-http.js';
 
 /**
  * What a plugin declares it needs.
@@ -206,11 +207,24 @@ export interface PluginManifestV2 {
   author?: string;
 }
 
+/**
+ * Version three adds the optional `http` block: public endpoints, which need
+ * the node's plugin-routes gates. Without it, a v3 manifest is a v2 one.
+ */
+export interface PluginManifestV3 extends Omit<
+  PluginManifestV2,
+  'schemaVersion'
+> {
+  schemaVersion: 3;
+  http?: DeclaredHttp;
+}
+
 export interface PluginManifest extends Omit<
   PluginManifestV2,
   'schemaVersion'
 > {
-  schemaVersion?: 1 | 2;
+  schemaVersion?: 1 | 2 | 3;
+  http?: DeclaredHttp;
 }
 
 export interface DeclaredAction {
@@ -392,7 +406,7 @@ export function validateManifest(raw: unknown): PluginManifest {
 
   const entry = object(raw, 'manifest');
   const version = entry.schemaVersion;
-  if (version !== 1 && version !== 2)
+  if (version !== 1 && version !== 2 && version !== 3)
     throw new Error('unsupported manifest schemaVersion');
   known(
     entry,
@@ -419,6 +433,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           'version',
           'description',
           'author',
+          'http',
         ],
   );
 
@@ -791,13 +806,29 @@ export function validateManifest(raw: unknown): PluginManifest {
       );
   }
 
+  // Last, as in Rust: the http block is validated after everything else.
+  if (entry.http !== undefined && version !== 3)
+    throw new Error('the http block needs schemaVersion 3');
+  const http =
+    entry.http === undefined
+      ? undefined
+      : validateHttp(entry.http, {
+          serverExtension: world === 'server-extension',
+          operations: operations.map(o => ({
+            id: o.id,
+            effect: o.effect,
+            url: o.url,
+          })),
+        });
+
   const entrypointsDefault =
     entrypoints.run === true &&
     entrypoints.view === undefined &&
     entrypoints.classExtender === undefined;
 
   return {
-    schemaVersion: 2,
+    schemaVersion: version,
+    ...(http ? { http } : {}),
     ...(runtime !== 'atomic-js/1' ? { runtime } : {}),
     ...(world !== 'extension' ? { world } : {}),
     ...(entrypointsDefault

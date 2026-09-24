@@ -229,6 +229,7 @@ export {
   type ManifestWorld,
   type PluginManifest,
   type PluginManifestV2,
+  type PluginManifestV3,
 } from './plugin-manifest.js';
 export {
   acceptFor,
@@ -237,6 +238,31 @@ export {
   encodeBase64,
   type PluginUpload,
 } from './plugin-upload.js';
+export {
+  checkHostFeatures,
+  derivedRequires,
+  hostFeatureMessage,
+  httpGate,
+  isWildcardHost,
+  parseHostFeatureUnavailable,
+  HOST_FEATURE_UNAVAILABLE,
+  HostFeatureUnavailableError,
+  type DeclaredHttp,
+  type DeclaredKey,
+  type DeclaredOperatorNamed,
+  type DeclaredRoute,
+  type DeclaredWellKnown,
+  type DeclaredWriteTarget,
+  type GateSurface,
+  type HostFeatureUnavailable,
+  type PluginRoutesLevel,
+  type PluginRoutesStatus,
+  type ReleaseGate,
+  type RouteAuth,
+  type RouteMethod,
+  type RouteMount,
+  type RoutePrincipal,
+} from './plugin-manifest-http.js';
 export {
   pluginConfigFor,
   pluginConfigProblems,

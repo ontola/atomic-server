@@ -577,6 +577,45 @@ pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) ->
     Ok(())
 }
 
+/// Why this node can't run a release's public endpoints, if it can't (design
+/// 0.4). A version-one or version-two manifest, and a legacy `plugin.json`,
+/// need no gate.
+pub fn gate_refusal(
+    manifest: &serde_json::Value,
+    node: &crate::plugin_routes::PluginRoutesConfig,
+) -> AtomicResult<Option<super::manifest_http::HostFeatureUnavailable>> {
+    match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => Ok(parsed.gate().check(node).err()),
+        Ok(None) => Ok(None),
+        Err(e) => Err(AtomicError::from(format!(
+            "release manifest is invalid: {e}"
+        ))),
+    }
+}
+
+/// Refuses, with the message of design 0.4, a release that needs gates this
+/// node does not open. Checked at install, upgrade and release pin, so an
+/// upgrade that raises the needed level is refused and the old release keeps
+/// running.
+pub fn check_host_features(
+    manifest: &serde_json::Value,
+    node: &crate::plugin_routes::PluginRoutesConfig,
+) -> AtomicResult<()> {
+    match gate_refusal(manifest, node)? {
+        Some(refusal) => Err(AtomicError::from(refusal.message())),
+        None => Ok(()),
+    }
+}
+
+/// The `requires` a catalog entry carries, derived from its manifest. `None`
+/// for a legacy `plugin.json` or a manifest this node can't parse.
+pub fn derived_requires(manifest: &serde_json::Value) -> Option<Vec<String>> {
+    Manifest::parse(manifest.clone())
+        .ok()
+        .flatten()
+        .map(|m| m.requires())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
