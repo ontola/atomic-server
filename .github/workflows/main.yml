@@ -24,8 +24,12 @@ concurrency:
 # Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
 # selector and result jobs use hosted runners to avoid queueing a few seconds
 # of control work behind long Mancave builds. If Mancave is offline, heavy CI
-# queues; set CI_RUNNER = ["ubuntu-latest"] to explicitly use hosted runners.
+# queues; set CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
 # Deployments retain their existing runners.
+#
+# The old variable name, CI_RUNNER, is set to ["ubuntu-latest"] on purpose.
+# Branches cut before #1661 carry a main.yml that runs on every push and reads
+# CI_RUNNER, so that setting sends their runs to hosted runners, not Mancave.
 #
 # SECURITY: pull_request / pull_request_target are forced onto hosted
 # runners (never Mancave).
@@ -43,7 +47,7 @@ jobs:
     steps:
       - id: pick
         env:
-          FORCE_RUNNER: ${{ vars.CI_RUNNER }}
+          FORCE_RUNNER: ${{ vars.CI_RUNNER_OVERRIDE }}
           EVENT_NAME: ${{ github.event_name }}
           REPO: ${{ github.repository }}
         run: |
@@ -56,7 +60,7 @@ jobs:
           fi
 
           if [ "$FORCE_RUNNER" = '["ubuntu-latest"]' ]; then
-            echo "CI_RUNNER escape hatch — forcing GitHub-hosted"
+            echo "CI_RUNNER_OVERRIDE escape hatch — forcing GitHub-hosted"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -76,7 +80,7 @@ jobs:
       contents: read
       packages: write
     with:
-      runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
+      runner: ${{ vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]' }}
       host-profile: mancave
       e2e-mode: full
     secrets:
@@ -109,7 +113,7 @@ jobs:
       needs.pick.outputs.host == 'mancave' &&
       github.event_name != 'pull_request' &&
       github.event_name != 'pull_request_target'
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]') }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
     timeout-minutes: 30
     permissions:
       contents: read
