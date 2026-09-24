@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The Share dialog is one screen: invite people, see who has access and change
+  their role (Can write, Can read, Remove access), see who gets in through a
+  parent folder, and set public access to Off, Read or Write. On hosted Atomic
+  you can type email addresses and an optional message and the invite link is
+  emailed to them; on a self-hosted server the invite link, with its role, is
+  what you copy and send yourself. The title shows the resource's name.
+
 - Fix: a presence announcement carrying something Loro cannot store no longer
   breaks the tab. A view's presence payload is typed as whatever that view
   likes, so a callback or a class with methods can travel in it, and Loro
