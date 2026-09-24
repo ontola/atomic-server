@@ -2,8 +2,8 @@
 //! started with `--plugin-routes read-only` and a routes origin. A client
 //! installs version-three plugins over HTTP, and their mounts answer:
 //! `drive-prefix` at `/_routes/<slug>/...`, `installation-origin` on
-//! `<slug>.<routes origin>`. A matched route answers `501` until route
-//! execution lands (AS-05).
+//! `<slug>.<routes origin>`. A matched route runs the plugin's
+//! `handle(ctx, request)` (AS-05).
 //!
 //! Run: cargo test -p atomic-server --features plugin-routes --test it plugin_routes
 
@@ -92,13 +92,22 @@ async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
     let hello: serde_json::Value = serde_json::from_str(HELLO_ROUTE_MANIFEST)?;
     let prefixed = install(&client, &drive, hello).await?;
     let resp = http
-        .get(format!("{server}/_routes/{}/hello/alice", slug(&prefixed)))
+        .get(format!("{server}/_routes/{}/hello/world", slug(&prefixed)))
+        .header("origin", "https://elsewhere.example")
+        .header("cookie", "atomic_session=not-for-plugins")
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    assert_eq!(resp.status(), 501);
-    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    assert_eq!(body["type"], "route-execution-unavailable", "{body}");
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.headers()["content-type"], "text/plain; charset=utf-8");
+    assert_eq!(resp.headers()["x-content-type-options"], "nosniff");
+    // The server's own CORS layer does not speak for a route that declared
+    // none.
+    assert!(!resp.headers().contains_key("access-control-allow-origin"));
+    assert_eq!(
+        resp.text().await.map_err(|e| e.to_string())?,
+        "Hello, world"
+    );
     let resp = http
         .get(format!("{server}/_routes/{}/nothing-here", slug(&prefixed)))
         .send()
@@ -122,7 +131,11 @@ async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    assert_eq!(resp.status(), 501);
+    assert_eq!(resp.status(), 200);
+    assert_eq!(
+        resp.text().await.map_err(|e| e.to_string())?,
+        "Hello, alice"
+    );
 
     // A reserved path refuses the install.
     let err = install(

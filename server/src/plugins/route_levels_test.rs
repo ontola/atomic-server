@@ -1,13 +1,13 @@
 //! The hello-route fixture (`testdata/plugin-routes/hello-route/`, an
 //! anonymous `GET /hello/{name}` on the `drive-prefix` mount) at every build
-//! and level: whether it installs, and whether its mount answers.
+//! and level: whether it installs, and what its mount answers.
 //!
 //! | build              | `--plugin-routes` | installs | `/_routes/<slug>/hello/x` |
 //! | ------------------ | ----------------- | -------- | ------------------------- |
 //! | no `plugin-routes` | `off` (only one)  | no       | 404                       |
 //! | `plugin-routes`    | `off`             | no       | 404                       |
-//! | `plugin-routes`    | `read-only`       | yes      | 501 until AS-05           |
-//! | `plugin-routes`    | `read-write`      | yes      | 501 until AS-05           |
+//! | `plugin-routes`    | `read-only`       | yes      | 200 `Hello, x`            |
+//! | `plugin-routes`    | `read-write`      | yes      | 200 `Hello, x`            |
 //!
 //! Compiled into every `wasm-plugins` build, so both CI feature sets run it.
 use actix_web::{test, web, App};
@@ -69,7 +69,14 @@ async fn the_hello_route_fixture_at_every_build_and_level() {
                 .to_request(),
         )
         .await;
-        let expected = if should_install { 501 } else { 404 };
+        let expected = if should_install { 200 } else { 404 };
         assert_eq!(resp.status().as_u16(), expected, "{level}");
+        if should_install {
+            assert_eq!(
+                resp.headers().get("content-type").unwrap(),
+                "text/plain; charset=utf-8"
+            );
+            assert_eq!(test::read_body(resp).await, "Hello, alice", "{level}");
+        }
     }
 }

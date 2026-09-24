@@ -173,6 +173,36 @@ impl Guest for Component {
                     .map_err(|e| describe(&ctx, e, "manifest"));
             }
 
+            // A plugin route (`trigger.kind: "http"`): one request, answered
+            // by the exported `handle(ctx, request)`. It returns a response
+            // `{ status, headers, body }`, or a whole verdict with that
+            // response under `response`; the host validates either. Only a
+            // host built with plugin routes sends this trigger.
+            if ctx
+                .eval::<bool, _>("__atomic.trigger.kind === 'http'")
+                .unwrap_or(false)
+            {
+                let handle: Function = module.get("handle").map_err(|_| {
+                    "the plugin does not export a handle(ctx, request) function, which its routes need"
+                        .to_string()
+                })?;
+                globals
+                    .set("__handle", handle)
+                    .map_err(|e| e.to_string())?;
+                return ctx
+                    .eval::<rquickjs::Promise, _>(
+                        r#"(async () => {
+                            const out = await __handle(__atomic, __atomic.trigger.request);
+                            const verdict = out !== null && typeof out === 'object' && 'response' in out
+                                ? out
+                                : { response: out ?? null };
+                            return JSON.stringify(verdict);
+                        })()"#,
+                    )
+                    .and_then(|promise| promise.finish::<String>())
+                    .map_err(|e| describe(&ctx, e, "handle()"));
+            }
+
             let run: Function = module
                 .get("run")
                 .map_err(|_| "the plugin does not export a run() function".to_string())?;

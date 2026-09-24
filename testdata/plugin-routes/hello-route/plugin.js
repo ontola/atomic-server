@@ -4,9 +4,16 @@
 // `--plugin-routes read-only`. Its manifest is `manifest.json` next to this
 // file; the Rust tests load both with `include_str!`.
 //
-// Until route execution exists (AS-05, ontola/atomic-server#1715), a matched
-// route answers 501 and this source only has to load. #1715 gives it an
-// `http` handler that answers `Hello, <name>` and asserts on the body.
+// A route request runs `handle(ctx, request)` (the `http` trigger); `run`
+// is what every other trigger calls.
+export function handle(ctx, request) {
+  return {
+    status: 200,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    body: `Hello, ${request.params.name}`,
+  };
+}
+
 export function run() {
   return { intents: [] };
 }
