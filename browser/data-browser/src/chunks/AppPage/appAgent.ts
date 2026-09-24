@@ -1,5 +1,6 @@
 import {
   errorMessageFromResponse,
+  server,
   signRequest,
   type Store,
 } from '@tomic/react';
@@ -45,13 +46,16 @@ export async function handOverAppKey(
 }
 
 /**
- * The agent an app acts as (`atomic:agent:…` or the older `did:ad:agent:…`),
- * as the node that holds its key reports it. Integration-proxy connections
- * are delegated to this agent (ontola/atomic-plugins#54).
+ * The agent integration-proxy delegations and frame capabilities name for an
+ * app (ontola/atomic-plugins#54).
  *
- * Only apps made with `createApp` have one today. An installed catalog plugin
- * gets its own identity in a later step (#54 decision 2); until then it cannot
- * be given a proxy connection, and this says so rather than guessing.
+ * An Installation records its own keyless app id (`integrationAppAgent`,
+ * #1700 answer 1), which is the same on every node; each node's agent is only
+ * a runtime of it. That id wins. Asking the node (`GET /app-agent`) would
+ * name this node's runtime agent instead, so a delegation would reach one
+ * node and not the others. `createApp` apps, and Installations from before
+ * app ids, have no such property: for them the node that holds the app's
+ * key reports it.
  */
 export async function appAgentOf(
   store: Store,
@@ -60,6 +64,12 @@ export async function appAgentOf(
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use integration connections.');
+
+  const recorded = (await store.getResource(options.app)).get(
+    server.properties.integrationAppAgent,
+  );
+
+  if (typeof recorded === 'string' && recorded) return recorded;
 
   const url = new URL('/app-agent', store.getServerUrl());
   url.searchParams.set('drive', options.drive);
