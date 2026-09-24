@@ -508,9 +508,18 @@ export async function signIn(page: Page, secret?: string) {
     .locator('a[href$="/app/agent"]')
     .filter({ hasNotText: 'Login / New User' });
   const login = page.getByRole('link', { name: 'Login / New User' });
+  // The first thing this helper waits for is a cold app boot in whatever
+  // context it was handed: wasm, store init and the route all have to land
+  // before any of these four appear. It was on the 10s default while the two
+  // waits below it already had 20s, which is the tell that nobody chose it.
+  // Measured at four workers on 24 September 2026: 751ms to 6118ms, so on this
+  // box it was already at 61% of its budget. On a Mancave running four runners
+  // at once, where a shard took 44 to 50 minutes against the usual 19 to 25,
+  // that doubles and goes past 10s. `meetings.spec.ts:237` failed exactly there
+  // on run 4537, waiting for the `Sign in` button.
   await expect(
     input.or(signInButton).or(settings).or(login).first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
   // Not "is the settings link visible": the signed-in layout renders from
   // stored state and can be up before the agent is in the store, so that
   // check returned for sessions that had no agent at all. Ask the store.
@@ -521,7 +530,9 @@ export async function signIn(page: Page, secret?: string) {
     // unmount while onboarding takes over the initial route.
     if (!(await signInButton.isVisible()))
       await page.goto(`${FRONTEND_URL}/app/welcome`);
-    await signInButton.click();
+    // Same story: an action's own 10s default, guarding a button that only
+    // renders once onboarding has settled. 52ms to 5947ms at four workers.
+    await signInButton.click({ timeout: 20_000 });
   }
 
   await enterSecret(page, secret ?? (await getDevDriveSecret(page)));
