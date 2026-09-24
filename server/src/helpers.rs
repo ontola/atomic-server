@@ -277,6 +277,41 @@ fn session_cookies_from_header(header: &HeaderValue) -> AtomicServerResult<Vec<S
     Ok(found)
 }
 
+/// Parses `raw` as a public origin that must stay apart from this server's own
+/// names: the API origin (`api_origin`) and every host in `others` (the base
+/// domain, other dedicated origins), including their subdomains in either
+/// direction. HTTPS only, except `http://*.localhost` in development, where
+/// a `*.localhost` origin may share `localhost` with the API. No credentials,
+/// path, query or fragment. `None` when any rule fails.
+///
+/// Used for `ATOMIC_WEBSITE_ORIGIN` and `ATOMIC_ROUTES_ORIGIN`: content
+/// served there must never be same-site with the app.
+pub fn separate_origin(raw: &str, api_origin: &str, others: &[&str]) -> Option<url::Url> {
+    let url = url::Url::parse(raw).ok()?;
+    let host = url.host_str().unwrap_or("");
+    let api = url::Url::parse(api_origin).ok()?;
+    let api_host = api.host_str().unwrap_or("");
+    let overlaps = |other: &str| {
+        host == other
+            || host.ends_with(&format!(".{other}"))
+            || other.ends_with(&format!(".{host}"))
+    };
+    let local = host.ends_with(".localhost") && matches!(api_host, "localhost" | "127.0.0.1");
+    let refused = host.is_empty()
+        || !matches!(url.scheme(), "http" | "https")
+        || (url.scheme() == "http" && !host.ends_with(".localhost"))
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || (!local && overlaps(api_host))
+        || others
+            .iter()
+            .any(|other| !other.is_empty() && overlaps(other));
+    (!refused).then_some(url)
+}
+
 #[cfg(test)]
 mod test {
     use actix_web::http::header::{HeaderMap, HeaderValue};

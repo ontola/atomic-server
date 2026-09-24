@@ -152,6 +152,46 @@ That build needs `protoc` (`protobuf-compiler`) available. It does not currently
 
 With such a build, pass **`--enable-vector-index`** (or set **`ATOMIC_ENABLE_VECTOR_INDEX`**) to turn it on, since loading embedding models and indexing every write has a real performance cost. Passing the flag to a build that lacks the feature logs a warning and does nothing. Once enabled, the server runs [fastembed](https://github.com/Anush008/fastembed-rs) locally by default. To use [OpenRouter](https://openrouter.ai/) embeddings instead, pass **`--openrouter-api-key`** and **`--openrouter-embedding-model`** (or set **`OPENROUTER_API_KEY`** and **`OPENROUTER_EMBEDDING_MODEL`** in your environment or `.env`). **`--openrouter-embedding-dimensions`** / **`OPENROUTER_EMBEDDING_DIMENSIONS`** is optional (some models ignore it). **`--gpu-indexing`** / **`ATOMIC_GPU_INDEXING`** uses GPU acceleration for the default local embedding and reranker, not for OpenRouter.
 
+## Plugin public endpoints (opt-in)
+
+Some plugins want to answer requests from other servers: a WebFinger or
+ActivityPub endpoint, a `/.well-known/` name, a port for a sync protocol. That
+changes what your server is, so it needs three separate yeses:
+
+1. **Built in.** The binary was compiled with the `plugin-routes` feature. The
+   official release binaries, Docker images and the default
+   `cargo install atomic-server` build leave it out, and atomic.place never
+   includes it:
+
+   ```sh
+   cargo install atomic-server --features plugin-routes
+   ```
+
+2. **Switched on.** Pass **`--plugin-routes <level>`** (or set
+   **`ATOMIC_PLUGIN_ROUTES`**):
+   - `off` (default): nothing is exposed, even with the feature built in.
+   - `read-only`: anonymous `GET`/`HEAD` routes and `/.well-known/` claims. No
+     inbound request can write data or make the server send a request.
+   - `read-write`: also routes that accept writes, host-held keys and tokens,
+     deliveries, listeners and sidecars.
+3. **Approved per plugin.** Installing such a plugin shows every public
+   endpoint it opens, and someone who may install plugins has to approve it.
+
+Setting `--plugin-routes` to anything but `off`, or any of the options below,
+on a build without the feature stops the server at startup with a message
+telling you to rebuild with `--features plugin-routes`. It is never silently
+ignored.
+
+| Option | Env var | What it does |
+| --- | --- | --- |
+| `--routes-origin` | `ATOMIC_ROUTES_ORIGIN` | A dedicated origin, e.g. `https://routes.example.net`, where each plugin installation gets its own subdomain. It has to be separate from the API, drive and website domains (`http://routes.localhost:PORT` works in development). Without it, plugin routes are only served under `/_routes/` on each drive, and the server says so at startup. |
+| `--plugin-listeners` | `ATOMIC_PLUGIN_LISTENERS` | Ports you bind for server-extension plugins, as `name:port,...`, e.g. `willow-wgps:4455`. Needs `read-write`. |
+| `--plugin-sidecars` | `ATOMIC_PLUGIN_SIDECARS` | Loopback daemons plugins may call, as `name=http://127.0.0.1:port,...`, e.g. `pds=http://127.0.0.1:2583`. Only loopback addresses are accepted. Needs `read-write`. |
+
+Clients see what the server allows in `hostFeatures.pluginRoutes` of
+`GET /plugin-catalog`: `compiled`, `level`, `routesOrigin` and the names of
+listeners and sidecars (never their ports or URLs).
+
 ## Running using a tunneling service (easy mode)
 
 If you want to make your -server available on the web, but don't want (or cannot) deal with setting up port-forwarding and DNS, you can use a tunneling service.
