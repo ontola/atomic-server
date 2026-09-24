@@ -72,6 +72,30 @@ async function expectWritableHome(page: Page, home: string) {
   const title = `Private home canary ${Date.now()}`;
   await setTitle(page, title);
   const subject = await getCurrentSubject(page);
+  // Let the rename finish landing before reloading it away. `setTitle` returns
+  // once a commit for this subject has been posted, and `useValue`'s save is
+  // debounced, so under load the commit it returns on can be one the debounce
+  // fired part-way through the typing. Reloading then persists the prefix, and
+  // the assertion below reports the truncation several lines from its cause:
+  // seen at four workers on 24 September 2026 storing "Private home can" and
+  // "Private home canary 17902" for titles ending 1790211504841 and
+  // 1790210871258, each stable across 23 locator resolutions, so what was
+  // saved was short and not merely what was drawn.
+  //
+  // Waiting for the whole title ON SCREEN is not enough, and that is the
+  // useful half of this: with only that wait the reload still restored
+  // "Private home cana", 3 runs of 6, so the editor was ahead of the outbox
+  // rather than the store being ahead of the screen. What the reload must wait
+  // for is the write, so wait for the outbox to drain as well. Matching the
+  // commit body cannot substitute for either, because a rename travels as a
+  // binary `loroUpdate` and the title is never in it.
+  await expect(page.getByTestId('editable-title')).toHaveText(title);
+  await expect
+    .poll(
+      () => page.evaluate(() => window.store.getSyncStatus().pendingDirtyCount),
+      { timeout: 30_000 },
+    )
+    .toBe(0);
   await page.reload();
   await expect(page.locator(`main[about="${subject}"]`)).toBeVisible();
   await expect(page.getByTestId('editable-title')).toHaveText(title);
