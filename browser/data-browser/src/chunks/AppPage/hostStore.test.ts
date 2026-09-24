@@ -692,3 +692,119 @@ describe('route tokens', () => {
     ).rejects.toThrow('tokenId is required');
   });
 });
+
+describe('readRouteStatus', () => {
+  let calls: Array<{ url: string; method?: string }>;
+
+  beforeEach(() => {
+    calls = [];
+  });
+
+  const storeThatCanWrite = (canWrite: boolean) =>
+    ({
+      ...(fakeStore() as unknown as Record<string, unknown>),
+      getResource: async (subject: string) => ({
+        subject,
+        canWrite: async () => [canWrite, undefined],
+      }),
+    }) as unknown as Store;
+
+  const answer = (status: number, text: string) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, method: init.method });
+
+        return {
+          ok: status < 400,
+          status,
+          text: async () => text,
+        } as unknown as Response;
+      }),
+    );
+
+  it('answers the app’s endpoint health, read through the host', async () => {
+    answer(
+      200,
+      JSON.stringify({
+        installation: APP,
+        state: 'active',
+        level: 'read-write',
+        routes: [
+          {
+            id: 'inbox',
+            url: 'https://node.test/_routes/x/inbox',
+            methods: ['POST'],
+            auth: 'none',
+            requests24h: 3,
+            errors24h: 1,
+            lastError: { at: 1, status: 502, message: 'boom' },
+            queueDepth: 0,
+          },
+        ],
+        deliveries: {
+          queued: 0,
+          dead: 1,
+          sentToday: 2,
+          dailyCap: 10,
+          lastFailures: [],
+        },
+      }),
+    );
+
+    const result = await handleRequest(
+      storeThatCanWrite(true),
+      APP,
+      DRIVE,
+      req('readRouteStatus'),
+    );
+
+    expect(calls).toEqual([
+      {
+        url: 'https://node.test/plugin-route-status?installation=did%3Aad%3Aapp',
+        method: 'GET',
+      },
+    ]);
+    expect(result).toMatchObject({
+      installation: APP,
+      state: 'active',
+      routes: [
+        {
+          id: 'inbox',
+          methods: ['POST'],
+          requests24h: 3,
+          errors24h: 1,
+          lastError: { status: 502, message: 'boom' },
+        },
+      ],
+      deliveries: { dead: 1, sentToday: 2, dailyCap: 10 },
+    });
+  });
+
+  it('answers null on a server without plugin routes', async () => {
+    answer(404, 'Not found');
+
+    expect(
+      await handleRequest(
+        storeThatCanWrite(true),
+        APP,
+        DRIVE,
+        req('readRouteStatus'),
+      ),
+    ).toBeNull();
+  });
+
+  it('refuses someone who may not write the app, before asking the server', async () => {
+    answer(200, '{}');
+
+    await expect(
+      handleRequest(
+        storeThatCanWrite(false),
+        APP,
+        DRIVE,
+        req('readRouteStatus'),
+      ),
+    ).rejects.toThrow('Only people who can edit this app see this');
+    expect(calls).toEqual([]);
+  });
+});

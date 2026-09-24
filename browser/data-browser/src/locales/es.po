@@ -117,6 +117,7 @@ msgstr "Agentes de IA"
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
@@ -8876,9 +8877,7 @@ msgid "v"
 msgstr ""
 
 #. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#. 0: release && release !== releaseId && ( <> <br /> from{' '} {/^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )} </> )
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
-#: src/views/Installation/InstallationPage.tsx
 msgid "Pinned to <0/> {0}"
 msgstr ""
 
@@ -8940,6 +8939,7 @@ msgstr ""
 msgid "Update"
 msgstr "Actualizar"
 
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke"
@@ -9565,6 +9565,59 @@ msgstr ""
 #. 0: platformName(platform)
 #: src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Sign in to answer this request."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Loading the request…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allowing…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Denying…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to give"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "a token for its"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+#: src/routes/RouteConsentRoute.tsx
+msgid "endpoints."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to issue a token for its"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "No specific permissions."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "With these permissions"
+msgstr ""
+
+#. 0: ask.redirectOrigin
+#: src/routes/RouteConsentRoute.tsx
+msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allow access?"
 msgstr ""
 
 #: src/chunks/Plugins/PublicEndpoints.tsx
@@ -9743,56 +9796,186 @@ msgstr ""
 msgid "Route writes"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "This link is incomplete. Start again from the app that sent you here."
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/> <1/>"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "Sign in to answer this request."
+#. 0: link
+#: src/views/Installation/InstallationPage.tsx
+msgid "<0/> from {0}"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "Loading the request…"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Serving"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "Allowing…"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Paused"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "Denying…"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retired"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "asks to give"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Turned off"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "a token for its"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Not active"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-#: src/routes/RouteConsentRoute.tsx
-msgid "endpoints."
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "asks to issue a token for its"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Public endpoints are turned off on this server"
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "No specific permissions."
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "With these permissions"
+#. 0: status; 1: when(at); 2: message
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Last error ({0}, {1}): {2}"
 msgstr ""
 
-#. 0: ask.redirectOrigin
-#: src/routes/RouteConsentRoute.tsx
-msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No address yet: <0/> is not set."
 msgstr ""
 
-#: src/routes/RouteConsentRoute.tsx
-msgid "Allow access?"
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries waiting: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Requests (24 h): <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors (24 h): <0/>"
+msgstr ""
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letter (gave up after attempt {0})"
+msgstr ""
+
+#. 0: failure.attempts; 1: when(failure.nextAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0}), next at {1}"
+msgstr ""
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0})"
+msgstr ""
+
+#. 0: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No answer; it may have arrived. {0}"
+msgstr ""
+
+#. 0: failure.status; 1: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Answered {0}. {1}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "<0/> to <1/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/>"
+msgstr ""
+
+#. 0: cap
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/> of {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Queued: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sending: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Delivered (24 h): <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letters: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Waiting for tomorrow’s cap: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Held while the endpoints are off: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No failed deliveries."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Recent failures"
+msgstr ""
+
+#. 0: when(token.issuedAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No scopes"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Scopes: <0/>"
+msgstr ""
+
+#. 0: when(expiresAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Expires {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Revoke token"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued tokens"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Refresh"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No tokens issued."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Endpoints"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Token revoked"
 msgstr ""

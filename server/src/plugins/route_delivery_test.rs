@@ -1047,6 +1047,12 @@ async fn a_route_enqueues_a_signed_delivery_that_the_stub_receives() {
             .clone()
     };
     assert_eq!(route(&status)["queueDepth"], 1, "{status}");
+    // How the route is called, from the manifest (#1721).
+    assert_eq!(route(&status)["path"], "/deliver");
+    assert_eq!(route(&status)["methods"], json!(["POST"]));
+    assert_eq!(route(&status)["auth"], "none");
+    assert_eq!(status["mount"], "drive-prefix");
+    assert!(status["refusal"].is_null(), "{status}");
     assert_eq!(status["deliveries"]["queued"], 1);
     assert_eq!(status["deliveries"]["dailyCap"], 10_000);
 

@@ -547,3 +547,26 @@ it('knows whether the host is light or dark, before and after a theme message', 
   style('dark');
   expect(seen).toEqual([{ colorScheme: 'dark' }, { colorScheme: 'light' }]);
 });
+
+it('carries the route ops, and store.routes sends them', async () => {
+  for (const op of [
+    'readRouteStatus',
+    'routeTokens',
+    'revokeRouteToken',
+  ] as const)
+    expect(isViewRequest(viewRequest(1, op))).toBe(true);
+  const f = frame();
+  const store = generatedStore(f);
+  void store.routes.status();
+  void store.routes.tokens();
+  void store.routes.revokeToken('tok_1');
+  // No token id, nothing asked.
+  await expect(store.routes.revokeToken('')).rejects.toThrow('token id');
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args])).toEqual([
+    ['readRouteStatus', {}],
+    ['routeTokens', {}],
+    ['revokeRouteToken', { tokenId: 'tok_1' }],
+  ]);
+});

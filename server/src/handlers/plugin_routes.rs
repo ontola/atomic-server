@@ -262,8 +262,32 @@ pub async fn status(
             route["oldestQueueFailure"] = queue
                 .map(|q| q["oldestQueueFailure"].clone())
                 .unwrap_or_default();
+            // What the manifest declares, so the Installation page and the
+            // plugin's view can say how each route is called (#1721).
+            let declared = route["id"]
+                .as_str()
+                .and_then(|id| http.and_then(|h| h.routes.iter().find(|r| r.id == id)));
+            if let Some(declared) = declared {
+                route["path"] = declared.path.clone().into();
+                route["methods"] = declared.methods.clone().into();
+                route["auth"] = serde_json::to_value(declared.auth).unwrap_or_default();
+                route["principal"] =
+                    serde_json::to_value(declared.principal).unwrap_or_default();
+            }
         }
     }
+    // Why the gates hold the release back, as the typed problem of design
+    // 0.4, so a client words it with `hostFeatureMessage`. `degraded` stays
+    // the server's sentence, which also covers a route collision.
+    body["refusal"] = manifest
+        .as_ref()
+        .filter(|m| m.http.as_ref().is_some_and(|h| !h.routes.is_empty()))
+        .and_then(|m| m.gate().check(registry.config()).err())
+        .map(|refusal| refusal.to_json())
+        .unwrap_or_default();
+    body["mount"] = http
+        .map(|h| serde_json::to_value(h.mount).unwrap_or_default())
+        .unwrap_or_default();
     let mut deliveries = deliveries;
     if let Some(summary) = deliveries.as_object_mut() {
         summary.remove("routes");

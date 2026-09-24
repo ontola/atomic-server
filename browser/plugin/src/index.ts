@@ -36,5 +36,15 @@ export type {
   ViewRequest,
   ViewResponse,
 } from './viewProtocol.js';
+// The shapes `store.routes.*` answers with in an app frame.
+export type {
+  DeliveryFailure,
+  DeliveryHealth,
+  InstallationRouteState,
+  InstallationRouteStatus,
+  RouteHealth,
+  RouteLastError,
+  RouteToken,
+} from '@tomic/lib';
 export { parseSetupDeclaration, validateSetupArguments } from '@tomic/lib';
 export type { SetupDeclaration, SetupField, SetupArguments } from '@tomic/lib';

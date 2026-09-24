@@ -52,6 +52,7 @@ import { AssignRights } from './AssignRights';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
+import { EndpointHealth } from '@chunks/Plugins/EndpointHealth';
 import {
   unregisterInstallationRuntimes,
   unregisterRuntimesInBackground,
@@ -343,19 +344,7 @@ export const InstallationPage: React.FC<
           <h3>Release</h3>
           <Identity>
             Pinned to <code>{releaseId}</code>
-            {release && release !== releaseId && (
-              <>
-                <br />
-                from{' '}
-                {/^https?:\/\//.test(release) ? (
-                  <a href={release} target='_blank' rel='noreferrer'>
-                    {release}
-                  </a>
-                ) : (
-                  release
-                )}
-              </>
-            )}
+            <ReleaseSource release={release} releaseId={releaseId} />
           </Identity>
         </Column>
         <Column as='section' aria-label='Grants'>
@@ -378,6 +367,7 @@ export const InstallationPage: React.FC<
             connected={connected}
           />
         )}
+        {canWrite && <EndpointHealth installation={resource.subject} />}
         {pluginAgent && (
           <Column as='section' aria-label='Plugin agent'>
             <h3>Plugin agent</h3>
@@ -484,6 +474,35 @@ export const InstallationPage: React.FC<
     </ContainerNarrow>
   );
 };
+
+/**
+ * Where the pinned release came from. Its own component: wuchale drops a
+ * message with nested elements inside a `{condition && (...)}`.
+ */
+function ReleaseSource({
+  release,
+  releaseId,
+}: {
+  release?: string;
+  releaseId?: string;
+}) {
+  if (!release || release === releaseId) return null;
+
+  const link = /^https?:\/\//.test(release) ? (
+    <a href={release} target='_blank' rel='noreferrer'>
+      {release}
+    </a>
+  ) : (
+    release
+  );
+
+  return (
+    <>
+      <br />
+      from {link}
+    </>
+  );
+}
 
 const PluginName = styled.span`
   font-weight: bold;

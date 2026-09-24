@@ -242,6 +242,19 @@ Shows a resource in the host page, leaving the app. Only a resource the signed-i
 await store.openResource(table.subject);
 ```
 
+#### `store.routes.status()`, `store.routes.tokens()` and `store.routes.revokeToken(id)`
+
+This app's public endpoints (plugin routes), as the Installation page's **Endpoints** section shows them. Only for a person who can edit the app's Installation; for anyone else they reject. The view never calls a route itself.
+
+- `status()` (view op `readRouteStatus`) resolves to `{ state, degraded, refusal, level, mount, routes, deliveries }` (`RouteStatusResult` in `@tomic/plugin`): per route its `url`, `path`, `methods`, `auth`, `requests24h`, `errors24h`, `lastError`, `queueDepth` and `oldestQueueFailure`; `deliveries` has the queue's counts, today's use of the daily cap and the last failures; `refusal` is the `host-feature-unavailable` problem when the server's gates hold the release back. `null` on a server built without plugin routes.
+- `tokens()` (`routeTokens`) resolves to `{ tokens: [{ id, name, scopes, client, issuedAt, expiresAt, approvedBy }] }`: the bearer tokens this app's routes issued, never their values (the server keeps only hashes).
+- `revokeToken(id)` (`revokeRouteToken`, `{ tokenId }`) revokes one; it resolves to `{ revoked }`, `false` when it was already gone.
+
+```js
+const status = await store.routes.status();
+if (status) for (const route of status.routes) show(route.url, route.errors24h);
+```
+
 #### `store.proxy.disconnect({ platform }): Promise<{ status: 'disconnected', platform, connectionIds }>`
 
 Stops this app using an integration-proxy platform. The host takes this app's delegation off each `platform` connection delegated to it (`DELETE /connections/{id}/agents/{app agent}` at the proxy, signed by the user), and for an Installation also removes `integrationConnections[platform]`, as the Installation page's **Disconnect** does. The connection itself is never deleted: other apps may share it, so deleting it stays something the person does on a page. `connectionIds` lists the connections the delegation was taken off. The frame drops its cached capabilities for that platform; `store.proxy.connect({ platform })` connects again.

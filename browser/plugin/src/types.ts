@@ -1,3 +1,5 @@
+import type { InstallationRouteStatus, RouteToken } from '@tomic/lib';
+
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
@@ -129,6 +131,26 @@ export type ProxyDisconnectResult = {
 export type GetManyEntry =
   | (Resource & { error?: undefined })
   | { subject: string; error: string };
+
+/**
+ * What `store.routes.status()` resolves to in an app frame: this app's public
+ * endpoints (plugin routes), their 24-hour counts and last errors, and the
+ * delivery queue. `null` on a server built without plugin routes. Only for a
+ * person who can edit the app's Installation.
+ */
+export type RouteStatusResult = InstallationRouteStatus | null;
+
+/**
+ * What `store.routes.tokens()` resolves to in an app frame: the bearer tokens
+ * this app's routes issued. Never their values; the server keeps only hashes.
+ */
+export type RouteTokensResult = { tokens: RouteToken[] };
+
+/**
+ * What `store.routes.revokeToken(id)` resolves to in an app frame; `revoked`
+ * is `false` when the token was already gone.
+ */
+export type RevokeRouteTokenResult = { revoked: boolean };
 
 /** Whether the host is drawn light or dark. */
 export type ColorScheme = 'light' | 'dark';

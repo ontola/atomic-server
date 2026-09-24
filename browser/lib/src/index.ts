@@ -267,6 +267,17 @@ export {
   type RoutePrincipal,
 } from './plugin-manifest-http.js';
 export {
+  parseRouteStatus,
+  parseRouteTokens,
+  type DeliveryFailure,
+  type DeliveryHealth,
+  type InstallationRouteState,
+  type InstallationRouteStatus,
+  type RouteHealth,
+  type RouteLastError,
+  type RouteToken,
+} from './plugin-route-status.js';
+export {
   pluginConfigFor,
   pluginConfigProblems,
   type StoredPluginConfig,

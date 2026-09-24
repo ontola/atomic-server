@@ -335,6 +335,36 @@ export const store = {
       return result;
     },
   },
+
+  /**
+   * This app's public endpoints (plugin routes), for the person viewing it
+   * when they may edit the app. The view never calls a route itself.
+   */
+  routes: {
+    /**
+     * `readRouteStatus`: `{ state, degraded, refusal, level, mount, routes,
+     * deliveries }`. Per route its `url`, `methods`, `auth`,
+     * `requests24h`, `errors24h`, `lastError`, `queueDepth` and
+     * `oldestQueueFailure`; `deliveries` has the queue's counts, today's
+     * use of the daily cap and the last failures. `null` when the server
+     * has no plugin routes.
+     */
+    async status() {
+      return send('readRouteStatus', {});
+    },
+
+    /** The tokens this app's routes issued: `{ tokens: [{ id, name, scopes, ... }] }`, never their values. */
+    async tokens() {
+      return send('routeTokens', {});
+    },
+
+    /** Revokes one issued token. Resolves to `{ revoked }`. */
+    async revokeToken(tokenId) {
+      if (typeof tokenId !== 'string' || tokenId === '') throw new Error('revokeToken takes a token id');
+
+      return send('revokeRouteToken', { tokenId });
+    },
+  },
 };
 
 // ---- Integration proxy: frame key, capabilities, signed requests ----

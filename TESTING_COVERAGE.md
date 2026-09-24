@@ -390,6 +390,22 @@ byte for byte, with `HEAD`, `304`, `412` and `413` over HTTP. Not covered: a
 body streamed without `Content-Length` (chunked; the limit is checked per
 chunk), an S3 blob backend, and two uploads racing the byte quota.
 
+Endpoint health (#1721): `EndpointHealth.test.tsx` renders the Installation
+page's Endpoints section from server-shaped `/plugin-route-status` bodies:
+nothing yet (zero counts, URLs with copy buttons, method and auth), a route
+with errors and its last error, the queue (depth, today's cap use, a retry
+and a dead letter), the gates off (`hostFeatureMessage`'s words and the
+switch as code), degraded for another reason, and a token revoked after
+confirming; the container renders nothing without plugin routes or routes,
+drops a revoked token, and shows a read error. `hostStore.test.ts` covers the
+view op `readRouteStatus` (answered, `null` on a server without plugin
+routes, refused before any request for someone who can't write the app) and
+`viewProtocol.test.ts` that `store.routes.*` sends the three route ops.
+`route_delivery_test` checks the status carries each route's path, methods
+and auth, the mount, and no `refusal` when the gates are open. Not covered:
+`refusal` on a degraded installation through the handler (only by hand, with
+a restart at `read-only`), and an e2e run of the section.
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

@@ -38,7 +38,17 @@ export type ViewOperation =
    */
   | 'openExternal'
   /** Show a resource the person can already read in the host page. */
-  | 'openResource';
+  | 'openResource'
+  /**
+   * This app's endpoint health (plugin routes, #1721): per route its URL,
+   * method and auth, 24-hour counts and last error, and the delivery queue.
+   * `null` on a server without plugin routes.
+   */
+  | 'readRouteStatus'
+  /** The tokens this app's routes issued (never their values). */
+  | 'routeTokens'
+  /** Revoke one of them: `{ tokenId }`. */
+  | 'revokeRouteToken';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -98,6 +108,9 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'proxyDisconnect',
       'openExternal',
       'openResource',
+      'readRouteStatus',
+      'routeTokens',
+      'revokeRouteToken',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&
