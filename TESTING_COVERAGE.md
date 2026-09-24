@@ -278,10 +278,20 @@ runtime child whose genesis the named agent signed, nothing posted again in
 the same page or when the proxy already lists it, a re-post when the label
 changes, `DELETE /runtimes/{agent}` on revoke, and a retry after a proxy error.
 `chunks/AppPage/appAgent.test.ts` checks that `appAgentOf` prefers the
-Installation's `integrationAppAgent` and falls back to `GET /app-agent`. Not
-covered: the page writing `integrationConnections` when it delegates, a real
-proxy accepting the page's calls, a second node publishing its own runtime
-child, and syncing those children between nodes.
+Installation's `integrationAppAgent` and falls back to `GET /app-agent`.
+`helpers/installationConnections.test.ts` checks connecting a platform on an
+Installation against a fake proxy: `/connect`, the signed redeem and the
+delegation to the app id end in `integrationConnections[platform]` written on
+the Installation (and a frame's own connect writes nothing); reusing an
+existing connection delegates and records it; disconnecting calls
+`DELETE /connections/{id}/agents/{app}` and removes the key (the property once
+empty), keeping it when the proxy refuses; and a plain Installation (no
+`proxy` in the manifest, no recorded connection) makes zero fetches to the
+proxy. `views/Installation/InstallationConnections.test.tsx` checks the
+controls are hidden from non-writers and the connected state per platform.
+Not covered: a real proxy accepting the page's calls, the `/connect` return
+end to end in a browser, a second node publishing its own runtime child, and
+syncing those children between nodes.
 
 `atomic-proxy:` URLs (#1700, answer 4): the shared fixtures in
 `testdata/plugin-manifest/` (Rust `shared_manifest_conformance` and the

@@ -136,6 +136,7 @@ msgstr "AI Agents"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -300,6 +301,7 @@ msgstr "Ollama URL"
 msgid "Ollama"
 msgstr "Ollama"
 
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -5838,6 +5840,7 @@ msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault is not available here: {0}."
 
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Disconnect"
 msgstr "Disconnect"
 
@@ -5847,6 +5850,7 @@ msgstr "Reconnect"
 
 #: src/helpers/browserPeerSync.ts
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Not connected"
 msgstr "Not connected"
 
@@ -8232,6 +8236,8 @@ msgstr "Choose which view opens when you visit this workspace."
 
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/views/Installation/InstallationConnections.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connections"
 msgstr "Connections"
 
@@ -9445,6 +9451,7 @@ msgstr "Sign in to connect an account."
 #~ msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
 
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connect an account"
 msgstr "Connect an account"
 
@@ -9536,9 +9543,42 @@ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keep
 msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
 
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Use existing connection"
 msgstr "Use existing connection"
 
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Sign in to finish connecting this account."
 msgstr "Sign in to finish connecting this account."
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr "Disconnecting…"
+
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect {0}"
+msgstr "Connect {0}"
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected ·"
+msgstr "Connected ·"
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr "Use this connection"
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr "{0} connected"
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
+msgstr "{0} disconnected"

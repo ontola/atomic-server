@@ -136,6 +136,7 @@ msgstr ""
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -300,6 +301,7 @@ msgstr ""
 msgid "Ollama"
 msgstr ""
 
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -5827,6 +5829,7 @@ msgid "Cloud Vault is not available here: {0}."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Disconnect"
 msgstr ""
 
@@ -5836,6 +5839,7 @@ msgstr ""
 
 #: src/helpers/browserPeerSync.ts
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Not connected"
 msgstr ""
 
@@ -8221,6 +8225,8 @@ msgstr ""
 
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/views/Installation/InstallationConnections.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connections"
 msgstr ""
 
@@ -9427,6 +9433,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connect an account"
 msgstr ""
 
@@ -9516,9 +9523,42 @@ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keep
 msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Use existing connection"
 msgstr ""
 
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Sign in to finish connecting this account."
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr ""
+
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect {0}"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected ·"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr ""
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
 msgstr ""
