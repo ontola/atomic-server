@@ -292,6 +292,38 @@ pub fn get_authentication_headers(url: &str, agent: &Agent) -> AtomicResult<Vec<
     Ok(headers)
 }
 
+/// Version 2 authentication headers: the signature also covers `method` and
+/// the SHA-256 of `body`, and `x-atomic-signature-version: 2` says so. See
+/// [crate::authentication::request_signature_message_v2]. `url` must be the
+/// full URL the request goes to, query included, as the server sees it.
+pub fn get_authentication_headers_v2(
+    method: &str,
+    url: &str,
+    body: &[u8],
+    agent: &Agent,
+) -> AtomicResult<Vec<(String, String)>> {
+    use crate::authentication::{
+        request_signature_message_v2, sha256_hex, SIGNATURE_VERSION_2, SIGNATURE_VERSION_HEADER,
+    };
+    let now = crate::utils::now();
+    let message = request_signature_message_v2(method, url, now, &sha256_hex(body));
+    let signature = sign_message(
+        &message,
+        agent
+            .private_key
+            .as_ref()
+            .ok_or("No private key in agent")?,
+        &agent.public_key,
+    )?;
+    Ok(vec![
+        ("x-atomic-public-key".into(), agent.public_key.to_string()),
+        ("x-atomic-signature".into(), signature),
+        ("x-atomic-timestamp".into(), now.to_string()),
+        ("x-atomic-agent".into(), agent.subject.to_string()),
+        (SIGNATURE_VERSION_HEADER.into(), SIGNATURE_VERSION_2.into()),
+    ])
+}
+
 /// Fetches a URL, returns its body.
 /// Uses the store's Agent agent (if set) to sign the request.
 /// For a URL the system itself determined (a resource's own subject, a
@@ -581,6 +613,35 @@ async fn post_commit_custom_endpoint(
 #[cfg(test)]
 mod test {
     use super::*;
+
+    /// What the Rust client signs, the server-side check accepts, and only
+    /// for that method and body.
+    #[test]
+    fn v2_headers_verify() {
+        let agent = Agent::new(None).unwrap();
+        let url = "https://proxy.example/connect/redeem?x=1";
+        let body = br#"{"code":"c","code_verifier":"v"}"#;
+        let headers = get_authentication_headers_v2("post", url, body, &agent).unwrap();
+        let get = |name: &str| {
+            headers
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+                .unwrap()
+        };
+        assert_eq!(get("x-atomic-signature-version"), "2");
+        let auth = |method: &str, body: &[u8]| crate::authentication::AuthValues {
+            public_key: get("x-atomic-public-key"),
+            timestamp: get("x-atomic-timestamp").parse().unwrap(),
+            signature: get("x-atomic-signature"),
+            requested_subject: url.to_string(),
+            agent_subject: get("x-atomic-agent"),
+            request: Some(crate::authentication::RequestBinding::new(method, body)),
+        };
+        crate::authentication::check_auth_signature(url, &auth("POST", body)).unwrap();
+        assert!(crate::authentication::check_auth_signature(url, &auth("POST", b"{}")).is_err());
+        assert!(crate::authentication::check_auth_signature(url, &auth("PUT", body)).is_err());
+    }
 
     #[test]
     fn authentication_origin_rejects_lookalikes() {

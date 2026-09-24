@@ -12,19 +12,86 @@ use std::str::FromStr;
 use crate::errors::{AppErrorType, AtomicServerError};
 use crate::{appstate::AppState, content_types::ContentType, errors::AtomicServerResult};
 
-/// Returns the authentication headers from the request
+/// The method and the body bytes a handler acts on, which a version 2
+/// request signature (`x-atomic-signature-version: 2`) must cover.
+#[derive(Clone, Copy)]
+pub struct SignedRequest<'a> {
+    pub method: &'a str,
+    pub body: &'a [u8],
+}
+
+/// Which request signature version the headers ask for. Absent is 1.
+/// Anything but `1` or `2` is refused rather than guessed at.
+fn requested_signature_version(map: &HeaderMap) -> AtomicServerResult<u8> {
+    match map.get(atomic_lib::authentication::SIGNATURE_VERSION_HEADER) {
+        None => Ok(1),
+        Some(v) => match v.to_str().map(str::trim) {
+            Ok("1") => Ok(1),
+            Ok(atomic_lib::authentication::SIGNATURE_VERSION_2) => Ok(2),
+            _ => Err(AtomicError::unauthorized(
+                "Unsupported x-atomic-signature-version; this server accepts 1 and 2".into(),
+            )
+            .into()),
+        },
+    }
+}
+
+/// Returns the authentication headers from the request.
+///
+/// For a caller that cannot say what method and body it acts on (a WebSocket
+/// upgrade, most handlers today), so a version 2 signature is refused here
+/// rather than checked as version 1. See [get_auth_headers_for_request].
 #[tracing::instrument(skip_all)]
 pub fn get_auth_headers(
     map: &HeaderMap,
     requested_subject: &str,
 ) -> AtomicServerResult<Option<AuthValues>> {
-    if let Some(bearer) = map.get("authorization") {
-        let bearer = bearer
-            .to_str()
-            .map_err(|_e| "Only string headers allowed in authorization header")?
-            .trim_start_matches("Bearer ");
-        let auth_vals = get_auth_from_base64(bearer, requested_subject)?;
-        return Ok(Some(auth_vals));
+    get_auth_headers_for_request(map, requested_subject, None)
+}
+
+/// Returns the authentication headers from the request, checking a version 2
+/// signature against `request` when the headers ask for one.
+///
+/// Version 2 never falls back to version 1: a v2 request that this caller
+/// cannot bind (`request` is `None`), or that comes as a bearer token instead
+/// of headers, is refused.
+#[tracing::instrument(skip_all)]
+pub fn get_auth_headers_for_request(
+    map: &HeaderMap,
+    requested_subject: &str,
+    request: Option<SignedRequest>,
+) -> AtomicServerResult<Option<AuthValues>> {
+    let binding = match requested_signature_version(map)? {
+        1 => None,
+        _ => {
+            let Some(request) = request else {
+                return Err(AtomicError::unauthorized(
+                    "This endpoint does not check version 2 request signatures yet. Sign it with version 1 (omit x-atomic-signature-version).".into(),
+                )
+                .into());
+            };
+            if map.get("authorization").is_some() {
+                return Err(AtomicError::unauthorized(
+                    "A version 2 request signature goes in the x-atomic-* headers, not in Authorization".into(),
+                )
+                .into());
+            }
+            Some(atomic_lib::authentication::RequestBinding::new(
+                request.method,
+                request.body,
+            ))
+        }
+    };
+
+    if binding.is_none() {
+        if let Some(bearer) = map.get("authorization") {
+            let bearer = bearer
+                .to_str()
+                .map_err(|_e| "Only string headers allowed in authorization header")?
+                .trim_start_matches("Bearer ");
+            let auth_vals = get_auth_from_base64(bearer, requested_subject)?;
+            return Ok(Some(auth_vals));
+        }
     }
 
     let public_key = map.get("x-atomic-public-key");
@@ -51,7 +118,13 @@ pub fn get_auth_headers(
                 .parse::<i64>()
                 .map_err(|_e| "Timestamp must be a number (milliseconds since unix epoch)")?,
             requested_subject: requested_subject.to_string(),
+            request: binding,
         })),
+        // Asking for v2 and sending no proof is not "anonymous": a cookie
+        // must not stand in for the signature that was promised.
+        (None, None, None, None) if binding.is_some() => Err(
+            "x-atomic-signature-version: 2 without the x-atomic-* authentication headers".into(),
+        ),
         (None, None, None, None) => Ok(None),
         _missing => Err("Missing authentication headers. You need `x-atomic-public-key`, `x-atomic-signature`, `x-atomic-agent` and `x-atomic-timestamp` for authentication checks.".into()),
     }
@@ -154,11 +227,14 @@ fn get_auth_from_base64(base64: &str, requested_subject: &str) -> AtomicServerRe
     Ok(auth_values)
 }
 
-pub fn get_auth(
+/// Authentication from the `x-atomic-*` headers, or else from the session
+/// cookie. A version 2 signature is checked against `request`.
+pub fn get_auth_for_request(
     map: &HeaderMap,
     requested_subject: &str,
+    request: Option<SignedRequest>,
 ) -> AtomicServerResult<Option<AuthValues>> {
-    let from_header = get_auth_headers(map, requested_subject)?;
+    let from_header = get_auth_headers_for_request(map, requested_subject, request)?;
 
     match from_header {
         Some(v) => Ok(Some(v)),
@@ -168,9 +244,39 @@ pub fn get_auth(
 
 /// Checks for authentication headers and returns Some agent's subject if everything is well.
 /// Skips these checks in public_mode and returns Ok(None).
+///
+/// A version 2 request signature is refused here, since this caller does not
+/// say which method and body it acts on; see [get_client_agent_for_request].
 #[tracing::instrument(skip(appstate))]
 pub async fn get_client_agent(
     headers: &HeaderMap,
+    appstate: &AppState,
+    requested_subject: &str,
+) -> AtomicServerResult<ForAgent> {
+    get_client_agent_checked(headers, None, appstate, requested_subject).await
+}
+
+/// [get_client_agent] for a handler that knows the body it acts on, so it
+/// also accepts a version 2 request signature (`x-atomic-signature-version:
+/// 2`, ontola/atomic-plugins#54), which covers the method and that body.
+/// Pass `&[]` for a handler that reads no body. Version 1 is still accepted.
+#[tracing::instrument(skip(appstate, req, body))]
+pub async fn get_client_agent_for_request(
+    req: &actix_web::HttpRequest,
+    body: &[u8],
+    appstate: &AppState,
+    requested_subject: &str,
+) -> AtomicServerResult<ForAgent> {
+    let request = SignedRequest {
+        method: req.method().as_str(),
+        body,
+    };
+    get_client_agent_checked(req.headers(), Some(request), appstate, requested_subject).await
+}
+
+async fn get_client_agent_checked(
+    headers: &HeaderMap,
+    request: Option<SignedRequest<'_>>,
     appstate: &AppState,
     requested_subject: &str,
 ) -> AtomicServerResult<ForAgent> {
@@ -183,7 +289,8 @@ pub async fn get_client_agent(
     // claim to be, which is a 401, not a 500. Converting the error to a
     // string here used to lose the lib's `Unauthorized` type, so every
     // failed sign-in reported itself as a server crash (security audit D).
-    let auth_header_values = get_auth(headers, requested_subject).map_err(unauthorized)?;
+    let auth_header_values =
+        get_auth_for_request(headers, requested_subject, request).map_err(unauthorized)?;
     // `_or_public`, not `_and_check`: nothing here asked to be authenticated.
     // A proof that has aged out makes this caller nobody, and the rights check
     // below decides whether that matters for what was requested.
