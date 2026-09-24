@@ -31,6 +31,7 @@ import {
   type DeclaredHttp,
   type CatalogRequires,
   type HostFeatureUnavailable,
+  type DeclaredWriteTarget,
   type JSONValue,
   type PluginRoutesStatus,
   type PublishedRelease,
@@ -272,6 +273,7 @@ function IntegrationStore(): React.JSX.Element {
     p: PendingInstallation,
     config: JSONValue | undefined,
     grants: string[],
+    routeWrites: DeclaredWriteTarget[] | undefined,
   ) => {
     if (!drive) return;
     const subject = await installRelease(store, {
@@ -283,6 +285,7 @@ function IntegrationStore(): React.JSX.Element {
       version: p.review.version,
       config,
       grants,
+      routeWrites,
     });
     navigate(constructOpenURL(subject));
   };
