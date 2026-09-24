@@ -1,18 +1,15 @@
 import { useId, Fragment, type JSX } from 'react';
 import { GroupedVersions } from './HistoryViewProps';
-import { Version, useStore } from '@tomic/react';
+import { Version } from '@tomic/react';
 import { styled } from 'styled-components';
 import { Column } from '../../components/Row';
 import { VersionButton } from './VersionButton';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
-import { AtomicLink } from '../../components/AtomicLink';
-import { versionsURL } from '../../helpers/navigation';
 
 interface VersionScrollerProps {
   groupedVersions: GroupedVersions;
   selectedVersion: Version | undefined;
-  subject: string;
   onSelectVersion: (version: Version) => void;
   onNextItem?: () => void;
   onPreviousItem?: () => void;
@@ -26,13 +23,11 @@ export function VersionScroller({
   selectedVersion,
   title,
   className,
-  subject,
   persistSelection = false,
   onNextItem,
   onPreviousItem,
   onSelectVersion,
 }: VersionScrollerProps): JSX.Element {
-  const store = useStore();
   const scrollerTitleId = useId();
 
   return (
@@ -69,10 +64,6 @@ export function VersionScroller({
           </IconButton>
         </ButtonWrapper>
       )}
-      <AllVersionsLink path={versionsURL(subject, store.getServerUrl())}>
-        All versions
-        <FaChevronRight size='0.9rem' />
-      </AllVersionsLink>
     </ScrollerSection>
   );
 }
@@ -86,18 +77,6 @@ const ScrollerSection = styled.section`
   display: grid;
   grid-template-rows: auto 1fr auto;
   position: relative;
-`;
-
-const AllVersionsLink = styled(AtomicLink)`
-  position: absolute;
-  bottom: -2rem;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5ch;
-  vertical-align: middle;
-  line-height: 1;
 `;
 
 const Scroller = styled.div`

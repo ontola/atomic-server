@@ -151,6 +151,23 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: form inputs validate before writing. `InputString` and `InputURI` no longer put an invalid value into the resource while showing an error; all inputs share one validate-then-set hook (`useValidatedInput`) and surface the datatype's actual error message (e.g. "Not an integer") instead of a generic "Invalid value". `ResourceField` now accepts and forwards `commit` / `commitDebounceInterval`, and every input honours `commitDebounceInterval` (Markdown, Number, Boolean, Date, Timestamp, Resource, ResourceArray and FilePicker previously fell back to the 100 ms default). A required field whose value loads after the first render is now flagged correctly.
 - Fix: `Resource.remove()` and `Resource.push()` emit `LocalChange` like `set()` does, so `useValue` / `useArray` re-render when a field is cleared or an item is appended. `useValue`'s setter clears a previously reported validation error when called with `undefined`. `useArray`'s `push` saves through the same debounced scheduler and error handling (`handleValidationError` / `store.notifyError`) as `set`, instead of an immediate `resource.save()` that only logged failures. `StoreContext` no longer defaults to a phantom `Store`: `useStore()` throws when no `<StoreContext.Provider>` is mounted.
 - `@tomic/lib`: one list of server-managed properties (`server-managed-props.ts`) replaces the three copies in `resource.ts` and `store.ts` that had drifted apart; the OPFS cold-load guard now also treats an inline `genesis` certificate as skeleton, not content. One serializer (`Resource.toClientDbJsonAd()`) writes the local-database row from both `Store.addResource` and `Resource.persistToClientDb`, and a durable save now records its write in the store's dedup stamp so the next ingress does not rewrite the same row.
+
+
+- Fix: the fork bar no longer fetches the server root on every resource page.
+  It renders above every resource and only returns `null` for a non-fork after
+  its hooks have run, so `useResource(originalSubject ?? '')` fired for all of
+  them; an empty subject resolves against the page origin, which serves no
+  resource (no Drive is created at `/`), so each page load spent a request on a
+  404 and logged a console error. It asks for `unknownSubject` instead, which
+  the store answers from memory without touching the network. This is what made
+  the `offline-persistence` and `offline-tables` e2e specs fail: they assert on
+  unexpected browser console errors, and with the WebSocket disconnected the
+  miss surfaced over HTTP as a logged 404 rather than a silent protocol answer.
+
+- The "All versions" link is gone from the version scroller. It pointed at the
+  server's `/all-versions` endpoint, which rendered the same history the
+  scroller was already showing, paginated and without attribution. Both
+  endpoints behind it are removed.
 - Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.
 - A dashboard is reachable from its table: "Add view" offers **Dashboard**, which creates an empty Dashboard as a child of the table and shows it as a tab (`view-kind: dashboard`, `view-dashboard`). Switching an existing tab to Dashboard does the same. The Dashboard stays a resource of its own, so a Drive page or a document can still embed it.
 - Fix: creating a second table column with a name that already exists in the drive's ontology (e.g. two "Status" columns) no longer mints a colliding property shortname that silently corrupts the ontology. A compatible existing property is reused instead; an incompatible one gets a disambiguated shortname (`status-2`) ([#1504](https://github.com/ontola/atomic-server/issues/1504)).
