@@ -4,6 +4,7 @@ import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import {
   installRelease,
+  saveInstallationConfig,
   updateInstallationRelease,
   withdrawRouteWriteRights,
 } from './plugin-install.js';
@@ -14,6 +15,7 @@ import {
   grantsWithRouteWrites,
   newWriteTargets,
   routeGrantOf,
+  routeWriteConfigChange,
 } from './plugin-route-grant.js';
 import type { Store } from './store.js';
 import { testStore } from './test-store.js';
@@ -248,6 +250,131 @@ describe('revoking route writes', () => {
 
     expect(posted.length).toBe(before);
     expect(fetchAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('a config change that moves a write target', () => {
+  async function installed() {
+    const t = await testStore();
+    const { drive, inbox } = await driveWithInbox(t.store);
+    const fetchAgent = serveAgent(t.store);
+    const subject = await installRelease(t.store, {
+      drive,
+      release: RELEASE,
+      name: 'inbox',
+      config: { inbox },
+      grants: ['storage'],
+      routeWrites: TARGETS,
+    });
+    const elsewhere = await t.store.newResource({
+      parent: drive,
+      propVals: { [core.properties.name]: 'Elsewhere' },
+    });
+    await elsewhere.save();
+    fetchAgent.mockClear();
+
+    return { ...t, subject, inbox, elsewhere: elsewhere.subject, fetchAgent };
+  }
+
+  it('is detected, and only when a resolved parent changes', () => {
+    const grants = grantsWithRouteWrites(['storage'], TARGETS);
+
+    expect(
+      routeWriteConfigChange(grants, { inbox: 'a' }, { inbox: 'b' }),
+    ).toEqual({ targets: TARGETS, moved: TARGETS });
+    // A config stored as a JSON string reads the same.
+    expect(
+      routeWriteConfigChange(
+        grants,
+        JSON.stringify({ inbox: 'a' }),
+        { inbox: 'b' },
+      )?.moved,
+    ).toEqual(TARGETS);
+    expect(
+      routeWriteConfigChange(grants, { inbox: 'a' }, { inbox: 'a', x: 1 }),
+    ).toBeUndefined();
+    expect(
+      routeWriteConfigChange(['storage'], { inbox: 'a' }, { inbox: 'b' }),
+    ).toBeUndefined();
+    expect(() =>
+      routeWriteConfigChange(grants, { inbox: 'a' }, { inbox: '' }),
+    ).toThrow(UnresolvedWriteTargetError);
+  });
+
+  it('moves the plugin agent’s write to the new parent when approved', async () => {
+    const { store, posted, agentDID, subject, inbox, elsewhere } =
+      await installed();
+    const before = posted.length;
+
+    await saveInstallationConfig(store, subject, {
+      config: { inbox: elsewhere },
+      previousConfig: { inbox },
+      approveRouteWrites: true,
+    });
+
+    const installation = store.getResourceLoading(subject);
+    const config = installation.get(server.properties.config);
+    expect(typeof config === 'string' ? JSON.parse(config) : config).toEqual({
+      inbox: elsewhere,
+    });
+    expect(routeGrantOf(installation.get(server.properties.grants))).toEqual(
+      TARGETS,
+    );
+    expect(writers(store, elsewhere)).toEqual([PLUGIN_AGENT]);
+    expect(writers(store, inbox)).toEqual([OTHER_WRITER]);
+    // The Installation, then the new parent's grant, then the old one's
+    // withdrawal, all signed by the installer.
+    const commits = posted.slice(before);
+    expect(commits.map(c => c.subject)).toEqual([subject, elsewhere, inbox]);
+    expect(commits.every(c => c.signer === agentDID)).toBe(true);
+  });
+
+  it('drops the route grant and the rights when the approval is declined', async () => {
+    const { store, posted, subject, inbox, elsewhere } = await installed();
+    const before = posted.length;
+
+    await saveInstallationConfig(store, subject, {
+      config: { inbox: elsewhere },
+      previousConfig: { inbox },
+      approveRouteWrites: false,
+    });
+
+    const installation = store.getResourceLoading(subject);
+    expect(installation.get(server.properties.grants)).toEqual(['storage']);
+    expect(writers(store, inbox)).toEqual([OTHER_WRITER]);
+    expect(writers(store, elsewhere)).toEqual([]);
+    expect(posted.slice(before).map(c => c.subject)).toEqual([subject, inbox]);
+  });
+
+  it('refuses a config that leaves a target unresolved, committing nothing', async () => {
+    const { store, posted, subject, inbox, fetchAgent } = await installed();
+    const before = posted.length;
+
+    await expect(
+      saveInstallationConfig(store, subject, {
+        config: { inbox: '' },
+        previousConfig: { inbox },
+        approveRouteWrites: true,
+      }),
+    ).rejects.toThrow(UnresolvedWriteTargetError);
+    expect(posted.length).toBe(before);
+    expect(fetchAgent).not.toHaveBeenCalled();
+    expect(writers(store, inbox)).toContain(PLUGIN_AGENT);
+  });
+
+  it('just saves the config when no target moves', async () => {
+    const { store, posted, subject, inbox, fetchAgent } = await installed();
+    const before = posted.length;
+
+    await saveInstallationConfig(store, subject, {
+      config: { inbox, note: 'hi' },
+      previousConfig: { inbox },
+      approveRouteWrites: true,
+    });
+
+    expect(posted.slice(before).map(c => c.subject)).toEqual([subject]);
+    expect(fetchAgent).not.toHaveBeenCalled();
+    expect(writers(store, inbox)).toContain(PLUGIN_AGENT);
   });
 });
 
