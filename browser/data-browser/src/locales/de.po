@@ -134,6 +134,7 @@ msgstr ""
 #: src/components/AvatarCropper.tsx src/components/ConfirmationDialog.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
@@ -1130,6 +1131,7 @@ msgid "Chat input"
 msgstr ""
 
 #: src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr ""
@@ -1495,7 +1497,6 @@ msgstr ""
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1733,7 +1734,6 @@ msgstr ""
 msgid "History"
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Share settings saved"
@@ -1743,7 +1743,6 @@ msgstr ""
 msgid "Permissions for"
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Permissions set here:"
@@ -1754,7 +1753,6 @@ msgid "Inherited permissions:"
 msgstr ""
 
 #: src/chunks/AI/AgentConfig.tsx
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Installation/AssignRights.tsx
@@ -1763,7 +1761,6 @@ msgid "Read"
 msgstr ""
 
 #: src/chunks/AI/AgentConfig.tsx
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Installation/AssignRights.tsx
@@ -1856,6 +1853,7 @@ msgid "Load anyway ({0})"
 msgstr ""
 
 #: src/chunks/RTE/CollaborativeEditor.tsx
+#: src/components/Share/useClassLabel.ts
 #: src/components/forms/NewForm/NewFormTitle.tsx
 #: src/hooks/useCreateAndNavigate.ts
 #: src/hooks/useCreateAndNavigate.ts src/routes/History/HistoryDesktopView.tsx
@@ -2931,9 +2929,8 @@ msgstr ""
 msgid "Open tag page"
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Link copied to clipboard"
-msgstr ""
+#~ msgid "Link copied to clipboard"
+#~ msgstr ""
 
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "More"
@@ -3057,6 +3054,7 @@ msgstr ""
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx src/components/LoroDocValue.tsx
 #: src/components/LoroDocValue.tsx
+#: src/components/Share/PeopleWithAccess.tsx
 msgid "Hide"
 msgstr ""
 
@@ -4521,7 +4519,9 @@ msgstr ""
 msgid "{0}% of storage used"
 msgstr ""
 
+#. 0: Math.min(100, Math.round(percent))
 #. 0: usagePct
+#: src/components/Vault/VaultPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "{0}% used"
 msgstr ""
@@ -5020,7 +5020,9 @@ msgid "Languages"
 msgstr ""
 
 #. 0: tag
+#. 0: email
 #: src/components/EditLanguagesDialog.tsx
+#: src/components/Share/EmailInviteInput.tsx
 msgid "Remove {0}"
 msgstr ""
 
@@ -6197,10 +6199,8 @@ msgstr ""
 msgid "Nothing has been backed up to {0} yet."
 msgstr ""
 
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes); 3: PRODUCT_NAME
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} encrypted object{1} · {2} stored in {3}."
-msgstr ""
+#~ msgid "{0} encrypted object{1} · {2} stored in {3}."
+#~ msgstr ""
 
 #: src/helpers/managed/deviceLink.test.ts
 msgid "Joep’s Pixel"
@@ -6942,9 +6942,8 @@ msgstr ""
 msgid "Private"
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Copy link"
-msgstr ""
+#~ msgid "Copy link"
+#~ msgstr ""
 
 #: src/components/forms/ResourceForm.tsx
 msgid "Advanced"
@@ -7569,7 +7568,6 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/helpers/openPrivateHome.ts
 msgid "My drive"
 msgstr ""
 
@@ -9532,6 +9530,7 @@ msgid "Viewers are free."
 msgstr ""
 
 #: src/components/InviteForm.tsx
+#: src/components/Share/ShareDialog.tsx
 msgid "Preparing invite…"
 msgstr ""
 
@@ -10068,12 +10067,8 @@ msgstr ""
 msgid "v"
 msgstr ""
 
-#. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#. 0: release && release !== releaseId && ( <> <br /> from{' '} {/^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )} </> )
-#: src/chunks/Plugins/InstallationReviewDialog.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Pinned to <0/> {0}"
-msgstr ""
+#~ msgid "Pinned to <0/> {0}"
+#~ msgstr ""
 
 #: src/chunks/RTE/loroSelection.test.ts
 msgid "Server acknowledgement"
@@ -11922,8 +11917,9 @@ msgstr ""
 #~ msgid "Open live tracker"
 #~ msgstr ""
 
-#~ msgid "Done"
-#~ msgstr ""
+#: src/components/Share/ShareDialog.tsx
+msgid "Done"
+msgstr ""
 
 #~ msgid "Setup did not finish. Check your integrations for a partially created connection before starting again."
 #~ msgstr ""
@@ -12385,25 +12381,20 @@ msgstr ""
 msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Invite people to"
-msgstr ""
+#~ msgid "Invite people to"
+#~ msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Manage access"
-msgstr ""
+#~ msgid "Manage access"
+#~ msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Invite"
-msgstr ""
+#~ msgid "Invite"
+#~ msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Access to"
-msgstr ""
+#~ msgid "Access to"
+#~ msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Inherited permissions"
-msgstr ""
+#~ msgid "Inherited permissions"
+#~ msgstr ""
 
 #. 0: lowerRowName
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
@@ -12461,4 +12452,164 @@ msgstr ""
 
 #: src/helpers/onboardingStorage.ts
 msgid "The local node is taking too long to start."
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "from"
+msgstr ""
+
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/>"
+msgstr ""
+
+#. 0: pending.release.url
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+msgid "from {0}"
+msgstr ""
+
+#. 0: title
+#. 0: title
+#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+msgid "Share {0}"
+msgstr ""
+
+#. 0: invalid
+#: src/components/Share/ShareDialog.tsx
+msgid "{0} is not an email address."
+msgstr ""
+
+#. 0: recipients[0]
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite sent to {0}"
+msgstr ""
+
+#. 0: recipients.length
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite sent to {0} people"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Message"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "(optional)"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Add a note for the people you're inviting"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Sending…"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite link copied"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Could not copy the link. Select it and copy it by hand."
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+msgid "Role for people who join with the link"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+msgid "Copy invite link"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Owner"
+msgstr ""
+
+#: src/components/Share/EmailInviteInput.tsx
+#: src/components/Share/EmailInviteInput.tsx
+msgid "Add people by email"
+msgstr ""
+
+#: src/components/Share/EmailInviteInput.tsx
+msgid "Role for invited people"
+msgstr ""
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "People with access"
+msgstr ""
+
+#. 0: name
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Removed {0}"
+msgstr ""
+
+#. 0: name
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Access for {0}"
+msgstr ""
+
+#. 0: agents.length; 1: classLabel
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "{0} more through {1} <0/>"
+msgstr ""
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Show"
+msgstr ""
+
+#: src/components/Share/RoleSelect.tsx
+msgid "Remove access"
+msgstr ""
+
+#: src/components/Share/RoleSelect.tsx
+#: src/components/Share/RoleSelect.tsx
+msgid "Can write"
+msgstr ""
+
+#: src/components/Share/RoleSelect.tsx
+#: src/components/Share/RoleSelect.tsx
+msgid "Can read"
+msgstr ""
+
+#: src/components/Share/PublicAccess.tsx
+msgid "Public"
+msgstr ""
+
+#: src/components/Share/PublicAccess.tsx
+msgid "Public access"
+msgstr ""
+
+#: src/components/Share/PublicAccess.tsx
+msgid "Anyone can open and edit it without joining"
+msgstr ""
+
+#: src/components/Share/PublicAccess.tsx
+msgid "Anyone can open it without joining"
+msgstr ""
+
+#. 0: parentTitle
+#: src/components/Share/PublicAccess.tsx
+msgid "Anyone can edit it through {0}"
+msgstr ""
+
+#. 0: parentTitle
+#: src/components/Share/PublicAccess.tsx
+msgid "Anyone can open it through {0}"
+msgstr ""
+
+#. 0: classLabel.toLowerCase()
+#: src/components/Share/PublicAccess.tsx
+msgid "This {0} is not public"
+msgstr ""
+
+#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: PRODUCT_NAME; 3: formatShareUsed( enrollment.used_bytes, enrollment.quota_bytes, )
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} encrypted object{1} stored in {2} · {3}."
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Less than 1% used"
 msgstr ""
