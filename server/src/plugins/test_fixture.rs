@@ -43,17 +43,26 @@ pub async fn genesis(store: &Db, propvals: Vec<(&str, Value)>) -> String {
 }
 
 pub async fn fixture(name: &str) -> Fixture {
+    fixture_with_args(name, &[]).await
+}
+
+/// [`fixture`] with extra command-line options, e.g. `--plugin-routes read-only`.
+pub async fn fixture_with_args(name: &str, extra_args: &[&str]) -> Fixture {
     use clap::Parser;
 
     let unique = format!("{name}_{}", atomic_lib::utils::random_string(10));
-    let opts = crate::config::Opts::parse_from([
+    let data_dir = format!("./.temp/{unique}/db");
+    let config_dir = format!("./.temp/{unique}/config");
+    let mut args = vec![
         "atomic-server",
         "--initialize",
         "--data-dir",
-        &format!("./.temp/{unique}/db"),
+        &data_dir,
         "--config-dir",
-        &format!("./.temp/{unique}/config"),
-    ]);
+        &config_dir,
+    ];
+    args.extend_from_slice(extra_args);
+    let opts = crate::config::Opts::parse_from(args);
 
     let mut config = crate::config::build_config(opts).unwrap();
     config.search_index_path = format!("./.temp/{unique}/search").into();
@@ -167,6 +176,78 @@ pub async fn fixture(name: &str) -> Fixture {
         plugin: String::new(),
         terms,
     }
+}
+
+/// `testdata/plugin-routes/hello-route/`: a version-three JS plugin with one
+/// anonymous `GET /hello/{name}` on the `drive-prefix` mount. It needs
+/// `--plugin-routes read-only`. Shared by the gate, registry and (AS-05)
+/// route execution tests; `server/tests/it/plugin_routes.rs` loads the same
+/// files.
+pub const HELLO_ROUTE_SOURCE: &str =
+    include_str!("../../../testdata/plugin-routes/hello-route/plugin.js");
+pub const HELLO_ROUTE_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/hello-route/manifest.json");
+
+/// The hello-route fixture as a release.
+pub fn hello_route_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release(serde_json::from_str(HELLO_ROUTE_MANIFEST).unwrap())
+}
+
+/// A JS `extension` release of the trivial source with this manifest.
+pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
+    let mut release = atomic_lib::db::plugin_release::PluginRelease::js(
+        HELLO_ROUTE_SOURCE.into(),
+        manifest,
+        Default::default(),
+    );
+    release.world = atomic_lib::db::plugin_release::WORLD_EXTENSION.into();
+    release
+}
+
+/// Publishes `release` and installs it on the fixture's drive as an active
+/// Installation, granting every capability it declares. Namespace and name
+/// come from the manifest. Returns the Installation's subject, or the
+/// commit's refusal.
+pub async fn install_release(
+    fixture: &Fixture,
+    release: &atomic_lib::db::plugin_release::PluginRelease,
+) -> Result<String, String> {
+    let store = &fixture.appstate.store;
+    let id = store
+        .publish_plugin_release(release)
+        .map_err(|e| e.to_string())?;
+    let grants: Vec<serde_json::Value> = release
+        .manifest
+        .get("capabilities")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c.get("name").cloned())
+        .collect();
+    let mut resource = Resource::new("did:ad:placeholder".into());
+    for (property, value) in [
+        (
+            urls::IS_A,
+            Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+        ),
+        (
+            urls::PARENT,
+            Value::AtomicUrl(fixture.drive.as_str().into()),
+        ),
+        (urls::RELEASE_PROP, Value::String(id.clone())),
+        (urls::RELEASE_ID, Value::String(id)),
+        (urls::INSTALLATION_STATUS, Value::String("active".into())),
+        (urls::GRANTS, Value::Json(grants.into())),
+    ] {
+        resource
+            .set_unsafe(property.into(), value)
+            .map_err(|e| e.to_string())?;
+    }
+    resource
+        .save_as_genesis(store)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(resource.get_subject().to_string())
 }
 
 /// A plugin whose every run proposes one new resource with this name.

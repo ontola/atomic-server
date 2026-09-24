@@ -232,6 +232,23 @@ release stays; `plugin_release_test.rs` checks `/plugin-release-pin` answers
 install on a node with the gates open (the test fixture's config is fixed at
 `off`), and no UI shows the refusal yet (#1713).
 
+Plugin route registry (#1714): `server/src/plugins/route_registry.rs` unit
+tests cover slugs, `{param}`/`{*rest}` matching, both mounts, reserved paths
+(`/.well-known/` names, the API origin outside `/_routes/<slug>/`, and a check
+that every route in `routes.rs` is on the reserved list), collisions naming
+the other installation, pause/revoke/degraded answers and level `off`.
+`handlers/plugin_routes.rs` runs real installs through the app: 501 on a
+match, 405, 503 + `Retry-After`, 410 after revoke, the routes host, refusal
+before anything is materialized, no registration from a peer's import, and a
+restart restoring or degrading routes. `plugins/route_levels_test.rs` installs
+the shared fixture `testdata/plugin-routes/hello-route/` at every build and
+level. `lib/src/commit.rs` checks, in every build, that nothing can be created
+under `/_routes/`. `tests/it/plugin_routes.rs` (only with `--features
+plugin-routes`) installs over HTTP on a real server and gets both mounts'
+answers. Not covered: route execution (#1715), `drive-host` (#1716), removed
+routes answering `410` after an upgrade, and a peer `COMMIT` applied outside a
+sync import scope (the owner check relies on that scope).
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
