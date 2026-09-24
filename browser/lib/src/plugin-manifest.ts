@@ -63,6 +63,69 @@ export interface DeclaredConfig {
   required?: string[];
 }
 
+/** What the host accepts when no `maxBytes` is declared: 5 MiB. */
+export const DEFAULT_ACCEPT_MAX_BYTES = 5 * 1024 * 1024;
+/**
+ * The largest `maxBytes` a plugin may declare: 20 MiB. The file is held
+ * several times over during a run (request body, host string, sandbox string,
+ * parse output), so this stays well under the sandbox's 256 MiB default.
+ */
+export const ACCEPT_MAX_BYTES_CEILING = 20 * 1024 * 1024;
+
+/**
+ * A file a plugin can be handed by the host, instead of fetching data itself.
+ *
+ * The host draws the picker, enforces `maxBytes`, decodes the file and passes
+ * it as `input.upload` = `{ name, mediaType, size, text }`. `extensions` and
+ * `mediaTypes` only filter the picker; the plugin must still validate the
+ * content it is given. Only `as: 'text'` exists so far: UTF-8, falling back to
+ * Windows-1252.
+ */
+export interface DeclaredAccept {
+  /** Lower-case, with the leading dot: `.xml`. */
+  extensions?: string[];
+  mediaTypes?: string[];
+  as: 'text';
+  /** Bytes, at most {@link ACCEPT_MAX_BYTES_CEILING}. */
+  maxBytes?: number;
+}
+
+/**
+ * Where an importer writes, declared so the host can create it before the
+ * first run instead of a plugin-specific setup screen.
+ *
+ * The host ensures `schema` in the drive's ontology, creates one table (and a
+ * default table view of `table.columns`) beneath the plugin, and stores
+ * `{ table, rowClass, properties }` as the plugin's config (under
+ * `config.key` when the manifest declares one): the table subject, the
+ * subject of the `table.rowClass` class, and every property's subject by
+ * shortname. Repeating setup resumes the same resources.
+ */
+export interface DeclaredDestination {
+  schema: {
+    properties: {
+      shortname: string;
+      name: string;
+      description: string;
+      datatype: string;
+    }[];
+    classes: {
+      shortname: string;
+      name: string;
+      description: string;
+      requires?: string[];
+      recommends?: string[];
+    }[];
+  };
+  table: {
+    name: string;
+    /** Shortname of a class in `schema`. */
+    rowClass: string;
+    /** Property shortnames shown by the default view, in order. */
+    columns: string[];
+  };
+}
+
 export type ManifestRuntime = 'atomic-js/1' | 'wasip2/1';
 
 /** The trust boundary, independent of the language. */
@@ -113,6 +176,8 @@ export interface PluginManifestV2 {
   config?: DeclaredConfig;
   configSchema?: Record<string, JSONValue>;
   defaultConfig?: Record<string, JSONValue>;
+  accepts?: DeclaredAccept[];
+  destination?: DeclaredDestination;
   name?: string;
   namespace?: string;
   version?: string;
@@ -325,6 +390,8 @@ export function validateManifest(raw: unknown): PluginManifest {
           'config',
           'configSchema',
           'defaultConfig',
+          'accepts',
+          'destination',
           'name',
           'namespace',
           'version',
@@ -592,6 +659,64 @@ export function validateManifest(raw: unknown): PluginManifest {
       throw new Error('view entrypoint requires the custom-view capability');
   }
 
+  const accepts = list(entry.accepts, 'accepts').map(value => {
+    const accept = object(value, 'accepts entry');
+    known(accept, ['extensions', 'mediaTypes', 'as', 'maxBytes']);
+    if (accept.as !== 'text')
+      throw new Error('accepts entries must be read `as` text');
+    const extensions = list(accept.extensions, 'accepts.extensions').map(
+      extension => {
+        if (
+          typeof extension !== 'string' ||
+          !/^\.[a-z0-9][a-z0-9._-]{0,31}$/.test(extension)
+        )
+          throw new Error(
+            'accepts extensions must be lower-case and start with a dot',
+          );
+
+        return extension;
+      },
+    );
+    const mediaTypes = list(accept.mediaTypes, 'accepts.mediaTypes').map(
+      mediaType => {
+        if (
+          typeof mediaType !== 'string' ||
+          !/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(mediaType)
+        )
+          throw new Error('accepts mediaTypes must be type/subtype');
+
+        return mediaType;
+      },
+    );
+    if (
+      accept.maxBytes !== undefined &&
+      (typeof accept.maxBytes !== 'number' ||
+        !Number.isInteger(accept.maxBytes) ||
+        accept.maxBytes < 1 ||
+        accept.maxBytes > ACCEPT_MAX_BYTES_CEILING)
+    )
+      throw new Error(
+        `accepts maxBytes must be a whole number from 1 to ${ACCEPT_MAX_BYTES_CEILING}`,
+      );
+
+    return {
+      ...(extensions.length ? { extensions } : {}),
+      ...(mediaTypes.length ? { mediaTypes } : {}),
+      as: 'text' as const,
+      ...(accept.maxBytes !== undefined
+        ? { maxBytes: accept.maxBytes as number }
+        : {}),
+    };
+  });
+  if (entry.accepts !== undefined && accepts.length === 0)
+    throw new Error('accepts must list at least one entry');
+  if (accepts.length > 8) throw new Error('at most 8 accepts entries');
+
+  const destination =
+    entry.destination === undefined
+      ? undefined
+      : validateDestination(object(entry.destination, 'destination'));
+
   const metadata: Partial<
     Pick<
       PluginManifestV2,
@@ -672,6 +797,117 @@ export function validateManifest(raw: unknown): PluginManifest {
           >,
         }
       : {}),
+    ...(accepts.length ? { accepts } : {}),
+    ...(destination ? { destination } : {}),
     ...metadata,
+  };
+}
+
+const SHORTNAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Checks a destination declaration; see {@link DeclaredDestination}. */
+function validateDestination(
+  entry: Record<string, unknown>,
+): DeclaredDestination {
+  const fail = (message: string): never => {
+    throw new Error(`destination: ${message}`);
+  };
+
+  const object = (value: unknown, keys: string[]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      fail('expected a map');
+    const result = value as Record<string, unknown>;
+    for (const key of Object.keys(result))
+      if (!keys.includes(key)) fail(`unknown field \`${key}\``);
+
+    return result;
+  };
+
+  const text = (value: unknown, what: string) => {
+    if (typeof value !== 'string' || !value.trim() || value.length > 1024)
+      fail(`${what} must be nonempty text`);
+
+    return value as string;
+  };
+
+  const shortnames = (value: unknown, what: string) => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) fail(`${what} must be a list`);
+
+    return (value as unknown[]).map(item => {
+      if (typeof item !== 'string' || !SHORTNAME.test(item))
+        fail(`${what} must list shortnames`);
+
+      return item as string;
+    });
+  };
+
+  object(entry, ['schema', 'table']);
+  const schema = object(entry.schema, ['properties', 'classes']);
+  if (!Array.isArray(schema.properties) || !Array.isArray(schema.classes))
+    fail('schema needs properties and classes lists');
+  const properties = (schema.properties as unknown[]).map(raw => {
+    const property = object(raw, [
+      'shortname',
+      'name',
+      'description',
+      'datatype',
+    ]);
+    const shortname = text(property.shortname, 'property shortname');
+    if (!SHORTNAME.test(shortname)) fail(`invalid shortname ${shortname}`);
+    const datatype = text(property.datatype, 'property datatype');
+    if (!/^https:\/\/atomicdata\.dev\/datatypes\/[a-zA-Z]+$/.test(datatype))
+      fail(`unsupported datatype ${datatype}`);
+
+    return {
+      shortname,
+      name: text(property.name, 'property name'),
+      description: text(property.description, 'property description'),
+      datatype,
+    };
+  });
+  const known = new Set(properties.map(p => p.shortname));
+  if (known.size !== properties.length || known.size > 64)
+    fail('property shortnames must be unique, at most 64');
+  const classes = (schema.classes as unknown[]).map(raw => {
+    const klass = object(raw, [
+      'shortname',
+      'name',
+      'description',
+      'requires',
+      'recommends',
+    ]);
+    const shortname = text(klass.shortname, 'class shortname');
+    if (!SHORTNAME.test(shortname)) fail(`invalid shortname ${shortname}`);
+    const requires = shortnames(klass.requires, 'requires');
+    const recommends = shortnames(klass.recommends, 'recommends');
+    if ([...requires, ...recommends].some(name => !known.has(name)))
+      fail(`class ${shortname} names an undeclared property`);
+
+    return {
+      shortname,
+      name: text(klass.name, 'class name'),
+      description: text(klass.description, 'class description'),
+      ...(klass.requires !== undefined ? { requires } : {}),
+      ...(klass.recommends !== undefined ? { recommends } : {}),
+    };
+  });
+  if (
+    classes.length === 0 ||
+    classes.length > 8 ||
+    new Set(classes.map(c => c.shortname)).size !== classes.length
+  )
+    fail('declare one to eight uniquely named classes');
+  const table = object(entry.table, ['name', 'rowClass', 'columns']);
+  const rowClass = text(table.rowClass, 'table rowClass');
+  if (!classes.some(c => c.shortname === rowClass))
+    fail('table rowClass must name a class in schema');
+  const columns = shortnames(table.columns, 'table columns');
+  if (columns.some(name => !known.has(name)))
+    fail('table columns must name properties in schema');
+
+  return {
+    schema: { properties, classes },
+    table: { name: text(table.name, 'table name'), rowClass, columns },
   };
 }
