@@ -234,7 +234,13 @@ async function newApp(page: import('@playwright/test').Page) {
   // `Math.max` here would be the same bug pointing the other way.
   const currentTimeout = test.info().timeout;
 
-  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
+  // 180s, raised with `createFromCatalog`'s own ceiling. That step may now
+  // wait 90s and the frame below it another 45s, so a 120s wall could expire
+  // while a budget underneath it still had room — and a wall failure names
+  // whichever assertion happened to be in flight, not the step that ran long.
+  // The wall has to stay above what the budgets under it can spend, or they
+  // cannot fire and say so themselves.
+  if (currentTimeout !== 0 && currentTimeout < 180000) test.setTimeout(180000);
   await createFromCatalog(page, 'App');
   await expect(
     page.getByRole('main').locator('iframe[title="App"]'),

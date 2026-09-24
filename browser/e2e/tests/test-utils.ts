@@ -1101,7 +1101,25 @@ export async function createFromCatalog(page: Page, title: string) {
       .getByRole('region', { name: 'Start blank' })
       .getByRole('button', { name: title, exact: true })
       .click();
-    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+    // 90s, not the 45s this used to be. Develop run 4547 failed `apps:180`
+    // here on all three attempts with the page still on `/app/new` and the
+    // console silent, which is the branch below saying the creation had not
+    // finished rather than that it threw — the distinction `62871ba` added
+    // this diagnostic for, answering the question it was left open on.
+    //
+    // Measured since, click to leaving `/app/new`, at four workers over 108
+    // samples across two mixes: 9.6s min, 16.6s median, 25.2s max, and 29.7s
+    // in the 22 September run of the same measurement. So 45s was already
+    // two thirds spent on this box, and Mancave now runs four CI runners at
+    // once: 4547's shards took 31 to 38 minutes against 19.1 on 4512.
+    //
+    // App is what this budget is really for. The other catalog titles are far
+    // cheaper — Plugin 9.9s and Website 4.8s worst — so they pay nothing for
+    // the headroom. An App builds its drive's plugin schema first, nineteen
+    // properties and classes as separate signed commits, which is the same
+    // cost `newPlugin` documents and is a product finding of its own rather
+    // than something a test can shorten.
+    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 90_000 });
   } catch (waitFailed) {
     console.error(
       complaints.length > 0
