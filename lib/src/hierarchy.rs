@@ -464,13 +464,31 @@ fn check_rights_impl<'a, S: Storelike>(
                 );
                 return check_rights_cached(store, &parent, for_agent_enum, right, cache).await;
             }
+            // No `parent` at all: the walk reached a root (a drive) without a
+            // grant. That is the ordinary answer "no", not a fault — the
+            // drive-first probe above lands here for every agent granted
+            // below the drive (an app's own agent on each `/app-write`), and
+            // so does a query filtering out members the agent cannot see.
+            // Logged at warn, it buried the case that is one.
+            Err(parent_err) if resource.get(urls::PARENT).is_err() => {
+                tracing::debug!(
+                    subject = %resource.get_subject(),
+                    agent = %for_agent,
+                    ?right,
+                    %parent_err,
+                    "rights walk: reached a root without a grant"
+                );
+            }
+            // A parent is named but could not be loaded (not synced yet, or
+            // missing). The walk cannot see the grants above it, so this is
+            // where a 401 for someone who does have rights originates.
             Err(parent_err) => {
                 tracing::warn!(
                     subject = %resource.get_subject(),
                     agent = %for_agent,
                     ?right,
                     parent_err = %parent_err,
-                    "rights walk TERMINATED: get_parent failed (this is where the 401 originates)"
+                    "rights walk TERMINATED: parent could not be loaded (this is where the 401 originates)"
                 );
             }
         }
