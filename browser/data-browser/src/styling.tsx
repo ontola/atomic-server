@@ -219,6 +219,8 @@ export const buildTheme = (
       alert: '#cf5b5b',
       alertLight: '#e66f6f',
       warning: '#f5a623',
+      // Readable on bg in both modes; for confirmations and "done" states.
+      success: darkMode ? '#4cc27a' : '#237a42',
       diff: {
         addedBg: '#e4ffe4',
         addedFg: '#003500',
@@ -324,6 +326,8 @@ declare module 'styled-components' {
       alert: string;
       alertLight: string;
       warning: string;
+      /** Confirmation / done color */
+      success: string;
       diff: {
         addedBg: string;
         addedFg: string;

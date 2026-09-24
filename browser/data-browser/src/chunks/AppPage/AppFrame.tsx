@@ -24,7 +24,10 @@ import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 
 import resetCss from '../../reset.css?raw';
-import { useCreateThemeVars } from '@views/PluginView/useCreateThemeVars';
+import {
+  useCreateThemeVars,
+  useFrameColorScheme,
+} from '@views/PluginView/useCreateThemeVars';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
 import {
   isPlatformId,
@@ -112,6 +115,7 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
+  const colorScheme = useFrameColorScheme();
 
   // Which plugin renders it. Resolved here rather than by each caller: a
   // table tab and an app page both need it, and two copies would drift.
@@ -312,8 +316,8 @@ function AppFrameSession({
   }, [store, app, drive, table, src]);
 
   useEffect(() => {
-    bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
-  }, [stylesheet, src]);
+    bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
+  }, [stylesheet, colorScheme, src]);
 
   // The app never got as far as running: no token, no entry point, no source.
   // Reported as a failure like any other, so a caller waiting on an outcome

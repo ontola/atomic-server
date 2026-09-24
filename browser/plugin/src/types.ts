@@ -130,6 +130,23 @@ export type GetManyEntry =
   | (Resource & { error?: undefined })
   | { subject: string; error: string };
 
+/** Whether the host is drawn light or dark. */
+export type ColorScheme = 'light' | 'dark';
+
+/**
+ * The theme message a host posts to a view frame on load and whenever its
+ * theme changes. `css` sets the `--t-*` variables (including
+ * `--t-color-success`) and `color-scheme` on `:root`; `colorScheme` is the
+ * host's actual setting, so a view need not guess it from a background
+ * colour. In an app frame, `store.getTheme()` and `store.onThemeChange()`
+ * read it.
+ */
+export interface ThemeMessage {
+  type: '__atomic_style';
+  css: string;
+  colorScheme?: ColorScheme;
+}
+
 export interface PageContext {
   /** The current page resource */
   resource: Resource;
