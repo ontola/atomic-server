@@ -28,7 +28,7 @@ describe('recording a new drive on the personal drive', () => {
 
   it('refuses, rather than making a drive nobody can find', async () => {
     const { store } = await testStore();
-    const before = store.getAllSubjects().length;
+    const before = store.resources.size;
 
     vi.spyOn(store, 'ensurePrivateDrive').mockRejectedValue(
       new Error(
@@ -47,7 +47,7 @@ describe('recording a new drive on the personal drive', () => {
     ).rejects.toThrow('Sign in with the secret again');
 
     // And nothing was written on the way out.
-    expect(store.getAllSubjects().length).toBe(before);
+    expect(store.resources.size).toBe(before);
   });
 });
 

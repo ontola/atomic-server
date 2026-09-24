@@ -36,7 +36,6 @@ import {
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
 import {
-  copyResource,
   forkResource,
   isFork,
   mergeFork,
@@ -186,7 +185,6 @@ export class Resource<C extends OptionalClass = any> {
   private _recovering = false;
   private _dirty = false;
 
-  #commitBuilder: CommitBuilder;
   private _subject: string;
   /** Memoized read cache derived from Loro. Rebuilt lazily when #cacheDirty. */
   #cache: Record<string, JSONValue> = Object.create(null);
@@ -255,7 +253,6 @@ export class Resource<C extends OptionalClass = any> {
 
     this.new = !!newResource;
     this._subject = subject;
-    this.#commitBuilder = new CommitBuilder(subject);
   }
 
   public get __internalObject(): Resource<C> {
@@ -1462,38 +1459,6 @@ export class Resource<C extends OptionalClass = any> {
       : undefined;
   }
 
-  /** Checks if the content of two Resource instances is equal */
-  public equals(resourceB: Resource): boolean {
-    if (this === resourceB.__internalObject) {
-      return true;
-    }
-
-    if (this.subject !== resourceB.subject) {
-      return false;
-    }
-
-    if (this.new !== resourceB.new) {
-      return false;
-    }
-
-    if (this.error !== resourceB.error) {
-      return false;
-    }
-
-    if (this.loading !== resourceB.loading) {
-      return false;
-    }
-
-    if (
-      JSON.stringify(this.getEntries()) !==
-      JSON.stringify(resourceB.getEntries())
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
   /** Checks if the agent has write rights by traversing the graph. Recursive function. */
   public async canWrite(
     agent?: string,
@@ -1575,7 +1540,6 @@ export class Resource<C extends OptionalClass = any> {
     res.new = this.new;
     res.error = structuredClone(this.error);
     res.commitError = this.commitError;
-    res.#commitBuilder = this.#commitBuilder.clone();
     res._dirty = this._dirty;
     res.appliedCommitSignatures = this.appliedCommitSignatures;
 
@@ -1895,7 +1859,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns true if the resource has unsaved local changes. */
   public hasUnsavedChanges(): boolean {
-    return this.#commitBuilder.hasUnsavedChanges() || this._dirty;
+    return this._dirty;
   }
 
   /** Clear the dirty flag after a successful drain has signed + POSTed
@@ -1919,23 +1883,6 @@ export class Resource<C extends OptionalClass = any> {
     this._dirty = true;
     this.armStagedCommitToken();
     this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
-  }
-
-  public getCommitsCollectionSubject(): string {
-    // For DID subjects (or other non-HTTP URIs) we can't derive the server
-    // origin from the subject itself — use the store's server URL instead.
-    const base =
-      this.subject.startsWith('_') || isAtomicIdentifier(this.subject)
-        ? this.store.getServerUrl()
-        : this.subject;
-    const url = new URL('/query', base);
-    url.searchParams.append('property', commits.properties.subject);
-    url.searchParams.append('value', this.subject);
-    url.searchParams.append('sort_by', commits.properties.createdAt);
-    url.searchParams.append('include_nested', 'true');
-    url.searchParams.append('page_size', '9999');
-
-    return url.toString();
   }
 
   /** Returns a Collection with all children of this resource
@@ -2226,7 +2173,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // Bucket by the Loro Change message. Two token families exist:
     // `e-<token>` written by the logical-edit mutation methods
-    // (pushListItem / replaceListItems / removeListItem / undo / redo —
+    // (pushListItem / replaceListItems / undo / redo —
     // see `commitLoroEdit`), and `c-<ulid>` written by the drain for
     // ops that were still pending at export time (property `set()`s).
     // All ops of one edit/commit share a message and form one version.
@@ -2748,39 +2695,6 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
-  /** Remove an item from a Loro list property by index. Used for canvas stroke deletion. */
-  public removeListItem(propUrl: string, index: number): void {
-    const map = this.getLoroMap();
-    if (!map) return;
-
-    const existing = map.get(propUrl);
-
-    if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
-      // A plain-array value (seeded via `.set()`, not yet a container) has no
-      // `delete`. Promote it to a container minus the item so erasing a
-      // baked-in stroke actually persists.
-      if (Array.isArray(existing)) {
-        const next = existing.slice();
-        next.splice(index, 1);
-        this.replaceListItems(propUrl, next as JSONArray);
-      }
-
-      return;
-    }
-
-    const list = existing as LoroList;
-    list.delete(index, 1);
-    this.commitLoroEdit();
-    this.rebuildCacheFromLoro();
-    this.#cacheDirty = false;
-    this._dirty = true;
-    this.eventManager.emit(
-      ResourceEvents.LocalChange,
-      propUrl,
-      this.#cache[propUrl],
-    );
-  }
-
   private writeJsonToLoroMap(
     map: InstanceType<typeof LoroLoader.Loro.LoroMap>,
     obj: JSONObject,
@@ -3098,14 +3012,13 @@ export class Resource<C extends OptionalClass = any> {
       isFirstCommit ? agent.subject : undefined,
     );
 
-    if (!this.#commitBuilder.hasUnsavedChanges() && !loroDelta) {
+    if (!loroDelta) {
       this._dirty = false;
       throw new Error(`No changes to sign for ${this.subject}`);
     }
 
-    if (loroDelta) {
-      this.#commitBuilder.setLoroUpdate(loroDelta);
-    }
+    const builder = new CommitBuilder(this.subject);
+    builder.setLoroUpdate(loroDelta);
 
     // Auto-detect genesis: no lastCommit stamp means this is a new resource.
     // The server requires is_genesis=true for DID resources that do not
@@ -3124,12 +3037,9 @@ export class Resource<C extends OptionalClass = any> {
     const isAgent = isAgentSubject(this.subject);
 
     if (isDIDEligible && !isAgent && isFirstCommit) {
-      this.#commitBuilder.setIsGenesis(true);
+      builder.setIsGenesis(true);
     }
 
-    // Clone the builder so new changes after this call go into a fresh one.
-    const builder = this.#commitBuilder.clone();
-    this.#commitBuilder = new CommitBuilder(this.subject);
     this._dirty = false;
 
     // Advance the save cursor: everything in the doc up to here is now
@@ -3146,8 +3056,6 @@ export class Resource<C extends OptionalClass = any> {
     if (commit.subject !== this.subject) {
       const oldSubject = this.subject;
       this._subject = commit.subject;
-      // Update the fresh #commitBuilder to use the real subject.
-      this.#commitBuilder = new CommitBuilder(commit.subject);
 
       if (this._store) {
         // Silently move the resource in the store map — don't use removeResource()
@@ -3213,16 +3121,6 @@ export class Resource<C extends OptionalClass = any> {
    */
   public fork(parent: string): Promise<Resource> {
     return forkResource(this.store, this, parent);
-  }
-
-  /**
-   * Duplicate this resource into a new, independent resource under `parent`,
-   * carrying its content but not its identity, ACL, or history. Unlike
-   * {@link fork}, the copy has no link back and cannot be merged in. See
-   * {@link copyResource}.
-   */
-  public copyTo(parent: string): Promise<Resource> {
-    return copyResource(this.store, this, parent);
   }
 
   /**
@@ -3401,8 +3299,7 @@ export class Resource<C extends OptionalClass = any> {
         this._pendingGenesis = undefined;
       } else if (
         hasChanges &&
-        (this.#commitBuilder.isGenesis ||
-          this.subject.startsWith('_new:') ||
+        (this.subject.startsWith('_new:') ||
           (this.new &&
             isAtomicIdentifier(this.subject) &&
             !isAgentSubject(this.subject)))
@@ -3443,14 +3340,14 @@ export class Resource<C extends OptionalClass = any> {
         // localStorage dirty bit survives.
         await this.saveOffline();
 
-        if (hasChanges && !this.#commitBuilder.isGenesis) {
+        if (hasChanges) {
           this.store.outbox.markDirty(this.subject);
         }
 
         return 'offline';
       }
 
-      if (hasChanges && !this.#commitBuilder.isGenesis) {
+      if (hasChanges) {
         // Online non-genesis: mark dirty. The store-level drain
         // exports the accumulated Loro delta, signs ONE commit, sends.
         this.store.outbox.markDirty(this.subject);
@@ -3934,15 +3831,11 @@ export class Resource<C extends OptionalClass = any> {
   public setSubject(subject: string): void {
     const normalized = this._store?.normalizeSubject(subject) ?? subject;
     Client.tryValidSubject(normalized);
-    this.#commitBuilder.setSubject(normalized);
     this._subject = normalized;
   }
 
   /** Refetches the resource from the server. Will reset all changes to the latest saved version */
   public async refresh(): Promise<void> {
-    // Reset the commit builder so our changes don't get merged with the server version.
-    this.#commitBuilder = new CommitBuilder(this.subject);
-
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
     });

@@ -3651,8 +3651,8 @@ export class Store {
     // Don't clobber an in-memory resource that has unsaved local edits
     // — `hydrateOfflineReplay` would overwrite the in-flight Loro state
     // with the (older) clientDb snapshot. The signal is in-memory only:
-    // `hasUnsavedChanges()` (commitBuilder / `_dirty` between a `set()`
-    // and the next drain).
+    // `hasUnsavedChanges()` (`_dirty` between a `set()` and the next
+    // drain).
     //
     // We deliberately do NOT gate on `hasPendingCommits` (the outbox
     // genesis/dirty bit): that survives reload via localStorage, so on
@@ -3926,10 +3926,6 @@ export class Store {
     // so a fetch by the address-bar URL returns the resource stored under
     // its canonical `@id`.
     return this.resources.get(this.resolveSubject(normalizedSubject))!;
-  }
-
-  public getAllSubjects(): string[] {
-    return Array.from(this.resources.keys());
   }
 
   /** Returns the WebSocket for the current Server URL */
@@ -5733,10 +5729,6 @@ export class Store {
     return Array.from(this.loroSyncSubscribers.keys());
   }
 
-  public getLoroEphemeralSubjects(): string[] {
-    return Array.from(this.loroEphemeralSubscribers.keys());
-  }
-
   /** @internal An `EPHEMERAL` frame of kind `DOC`: an edit in progress. */
   public __handleLoroSyncMessage(subject: string, update: Uint8Array): void {
     this.dispatchLoroMessage(this.loroSyncSubscribers, subject, update);
@@ -6287,8 +6279,8 @@ export class Store {
       // into the outbox and drains it. (Stashing rather than enqueuing here
       // means a never-saved upload is never POSTed; here we always `save()`,
       // but the genesis MUST be stashed or `save()` has nothing to POST —
-      // `signChanges` resets `commitBuilder.isGenesis`, so the genesis would
-      // otherwise be silently dropped.)
+      // `signChanges` builds the genesis flag into the returned commit only,
+      // so the genesis would otherwise be silently dropped.)
       if (useDid) {
         const genesis = await resource.signChanges(this.getAgent()!);
         resource.stashGenesis(genesis);
