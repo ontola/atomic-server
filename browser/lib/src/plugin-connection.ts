@@ -1,6 +1,11 @@
 import { signRequest } from './authentication.js';
 import type { Store } from './store.js';
 import type { PluginManifest } from './plugin-manifest.js';
+import {
+  HostFeatureUnavailableError,
+  parseHostFeatureUnavailable,
+  type HostFeatureUnavailable,
+} from './plugin-manifest-http.js';
 
 export interface PluginRelease {
   source: string;
@@ -44,7 +49,26 @@ async function post<T>(
     },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await response.text());
+
+  if (!response.ok) {
+    const text = await response.text();
+
+    // A node whose plugin-routes gates don't allow the release answers with
+    // a typed problem; keep it typed so a caller can show why.
+    if (response.headers.get('content-type')?.includes('problem+json')) {
+      let problem: HostFeatureUnavailable | undefined;
+
+      try {
+        problem = parseHostFeatureUnavailable(JSON.parse(text));
+      } catch {
+        problem = undefined;
+      }
+
+      if (problem) throw new HostFeatureUnavailableError(problem);
+    }
+
+    throw new Error(text);
+  }
 
   return response.json() as Promise<T>;
 }
@@ -152,7 +176,11 @@ export function checkpointConnection(
   );
 }
 
-/** Pin a private connection package without publishing it to the catalog. */
+/**
+ * Pin a private connection package without publishing it to the catalog.
+ * Throws `HostFeatureUnavailableError` when the release opens public endpoints
+ * this node's plugin-routes gates don't allow.
+ */
 export function pinPluginRelease(
   store: ConnectionStore,
   target: PluginTarget,

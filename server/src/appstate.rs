@@ -113,6 +113,7 @@ impl AppState {
         store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
+            config.plugin_routes.clone(),
         ))?;
         #[cfg(feature = "wasm-plugins")]
         store.add_class_extender(plugins::connection_requests::build_extender())?;

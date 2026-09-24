@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [
+      {
+        "id": "any",
+        "path": "/users/{name}",
+        "methods": [
+          "GET"
+        ]
+      },
+      {
+        "id": "me",
+        "path": "/users/me",
+        "methods": [
+          "GET"
+        ]
+      }
+    ]
+  }
+}

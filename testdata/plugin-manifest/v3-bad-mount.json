@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "mount": "api-origin"
+  }
+}
