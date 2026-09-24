@@ -22,6 +22,7 @@ export async function prepareTemplateDrive(store: Store): Promise<void> {
   // guest in this gallery, so treat its home as unenrolled. A real account
   // without a session still has to sign in: its home may be hosted.
   if (
+    agent.subject &&
     !(await getManagedAccount()) &&
     (await localAgentIsDisposable(store, agent.subject))
   ) {
