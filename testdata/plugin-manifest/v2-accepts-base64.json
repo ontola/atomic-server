@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "accepts": [
+    {
+      "extensions": [
+        ".willow"
+      ],
+      "as": "base64",
+      "maxBytes": 1000000
+    }
+  ]
+}

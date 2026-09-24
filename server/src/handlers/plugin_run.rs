@@ -102,12 +102,18 @@ pub async fn handle_plugin_run(
 pub const RUN_JSON_LIMIT: usize = crate::serve::PAYLOAD_MAX;
 
 /// A file handed to the plugin (`input.upload`) must be one it declared it
-/// accepts, and no larger than it said. The browser checks this too, before
-/// reading the file; this is the check that holds.
+/// accepts, in the encoding it declared (`text` or `base64`, named by the
+/// field that carries it), and no larger than it said. The limit is on the
+/// file's bytes: for base64 that is the decoded length, not the string's. The
+/// browser checks this too, before reading the file; this is the check that
+/// holds.
 fn check_upload(
     manifest: Option<&crate::plugins::manifest::Manifest>,
     input: &str,
 ) -> AtomicServerResult<()> {
+    use crate::plugins::manifest::AcceptAs;
+    use base64::Engine as _;
+
     let input: serde_json::Value = serde_json::from_str(input)
         .map_err(|e| AtomicServerError::bad_request(format!("input is not JSON: {e}")))?;
     let Some(upload) = input.get("upload") else {
@@ -119,16 +125,44 @@ fn check_upload(
             "This plugin does not accept files",
         ));
     }
-    let Some(text) = upload.get("text").and_then(|t| t.as_str()) else {
+    let carried: Vec<AcceptAs> = [AcceptAs::Text, AcceptAs::Base64]
+        .into_iter()
+        .filter(|encoding| upload.get(encoding.field()).is_some())
+        .collect();
+    let [encoding] = carried[..] else {
         return Err(AtomicServerError::bad_request(
-            "input.upload needs the file as text",
+            "input.upload needs the file as exactly one of text or base64",
         ));
     };
-    let max = accepts.iter().map(|a| a.max_bytes()).max().unwrap_or(0);
-    if text.len() as u64 > max {
+    let Some(content) = upload.get(encoding.field()).and_then(|c| c.as_str()) else {
         return Err(AtomicServerError::bad_request(format!(
-            "This file is {} bytes; this plugin accepts at most {max}",
-            text.len()
+            "input.upload.{} must be a string",
+            encoding.field()
+        )));
+    };
+    let Some(max) = accepts
+        .iter()
+        .filter(|a| a.encoding() == encoding)
+        .map(|a| a.max_bytes())
+        .max()
+    else {
+        return Err(AtomicServerError::bad_request(format!(
+            "This plugin does not accept files as {}",
+            encoding.field()
+        )));
+    };
+    let size = match encoding {
+        AcceptAs::Text => content.len(),
+        AcceptAs::Base64 => base64::engine::general_purpose::STANDARD
+            .decode(content)
+            .map_err(|e| {
+                AtomicServerError::bad_request(format!("input.upload.base64 is not base64: {e}"))
+            })?
+            .len(),
+    };
+    if size as u64 > max {
+        return Err(AtomicServerError::bad_request(format!(
+            "This file is {size} bytes; this plugin accepts at most {max}"
         )));
     }
     Ok(())
@@ -162,5 +196,73 @@ mod tests {
         assert!(check_upload(Some(&accepting), r#"{"upload":{}}"#).is_err());
         // A run without a file is not affected.
         assert!(check_upload(None, r#"{"trigger":{"kind":"manual"}}"#).is_ok());
+    }
+
+    fn base64_upload(bytes: &[u8]) -> String {
+        use base64::Engine as _;
+        serde_json::json!({"upload": {
+            "base64": base64::engine::general_purpose::STANDARD.encode(bytes),
+        }})
+        .to_string()
+    }
+
+    #[test]
+    fn a_base64_upload_is_limited_by_its_raw_size() {
+        let every_byte: Vec<u8> = (0..=255u8).collect();
+        let accepting = manifest(serde_json::json!({
+            "schemaVersion": 2,
+            "accepts": [{"as": "base64", "maxBytes": 256}],
+        }));
+
+        // 344 base64 characters, 256 bytes: the bytes are what counts.
+        assert!(check_upload(Some(&accepting), &base64_upload(&every_byte)).is_ok());
+        let over = [every_byte.as_slice(), &[0]].concat();
+        assert!(check_upload(Some(&accepting), &base64_upload(&over))
+            .unwrap_err()
+            .message
+            .contains("257 bytes"));
+    }
+
+    #[test]
+    fn an_upload_must_use_the_encoding_the_plugin_declared() {
+        let text_only = manifest(serde_json::json!({
+            "schemaVersion": 2,
+            "accepts": [{"maxBytes": 100}],
+        }));
+        let base64_only = manifest(serde_json::json!({
+            "schemaVersion": 2,
+            "accepts": [{"as": "base64", "maxBytes": 100}],
+        }));
+        let text = serde_json::json!({"upload": {"text": "x"}}).to_string();
+
+        // `as` left out means text.
+        assert!(check_upload(Some(&text_only), &text).is_ok());
+        assert!(check_upload(Some(&text_only), &base64_upload(b"x")).is_err());
+        assert!(check_upload(Some(&base64_only), &text).is_err());
+        assert!(check_upload(Some(&base64_only), &base64_upload(b"x")).is_ok());
+        // Not base64, or both at once: refused rather than guessed at.
+        assert!(
+            check_upload(Some(&base64_only), r#"{"upload":{"base64":"not base64!"}}"#).is_err()
+        );
+        assert!(check_upload(
+            Some(&base64_only),
+            r#"{"upload":{"base64":"eA==","text":"x"}}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn text_mode_is_unchanged_for_mt940() {
+        let accepting = manifest(serde_json::json!({
+            "schemaVersion": 2,
+            "accepts": [{"extensions": [".sta"], "as": "text", "maxBytes": 128}],
+        }));
+        let mt940 = ":20:STARTUMSE\r\n:25:NL91ABNA0417164300\r\n:28C:00001/001\r\n\
+                     :60F:C240101EUR1000,00\r\n:61:2401020102D12,50NTRFNONREF\r\n:86:Café\r\n";
+        let upload = |text: &str| serde_json::json!({"upload": {"text": text}}).to_string();
+
+        assert_eq!(mt940.len(), 122);
+        assert!(check_upload(Some(&accepting), &upload(mt940)).is_ok());
+        assert!(check_upload(Some(&accepting), &upload(&mt940.repeat(2))).is_err());
     }
 }

@@ -127,6 +127,11 @@ Every field except `schemaVersion` is optional; unknown fields and malformed dec
 - `secrets`, `operations`, `actions`: as in schema version 1. Secrets name an exact origin a credential may be sent to; operations are exact endpoints with an `effect` of `read` or `write`; actions reference operations.
 - `network.origins`: exact origins (no wildcards, paths or ports beyond the origin) for packages that call the host `fetch` without an operation id. It never widens what `operations` grant.
 - `configSchema`, `defaultConfig`: objects, as in `plugin.json`.
+- `accepts`: files the host may hand the plugin, up to eight entries of `{ extensions?, mediaTypes?, as?, maxBytes? }`. `extensions` (lower-case, with the dot) and `mediaTypes` only filter the file picker. `maxBytes` (default 5 MiB, at most 20 MiB) bounds the file's raw byte size. `as` says how the file arrives in `ctx.upload`, in a field named after it:
+  - `"text"`, the default when `as` is left out: `{ name, mediaType, size, text }`, decoded as UTF-8, falling back to Windows-1252.
+  - `"base64"`: `{ name, mediaType, size, base64 }`, the file's exact bytes in standard padded base64, with no charset detection. `atob(ctx.upload.base64)` gives it back as a binary string, one character per byte.
+
+  `size` is the byte size of the file in both cases. Leaving `as` out does not add it to the stored manifest, so the release id stays the same.
 - `name`, `namespace`, `version`, `description`, `author`: metadata. `name` and `namespace` must be safe path segments.
 
 A schema version 1 manifest is still accepted and is read as version 2 with `runtime: atomic-js/1`, `world: extension` and `entrypoints: { run: true }`.

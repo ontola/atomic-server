@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from 'react';
 import {
+  acceptFor,
   core,
   dataBrowser,
   ensureSchema,
   executeServerPlugin,
   pluginConfigFor,
   pluginConfigProblems,
+  readUpload,
   useStore,
   DEFAULT_ACCEPT_MAX_BYTES,
   type DeclaredAccept,
@@ -28,9 +30,11 @@ import { RunPluginDialog } from './RunPluginDialog';
  * The generic entry point for a plugin that declares `accepts`: choose a file,
  * preview what the plugin proposes for it, approve.
  *
- * The host owns acquisition: it enforces the declared size, decodes the file
- * and hands it over as `input.upload`. The plugin runs on the server (it may
- * need `ctx.query`/`ctx.read` to recognise earlier imports), and nothing is
+ * The host owns acquisition: it enforces the declared size on the file's
+ * bytes, reads the file as its `accepts` entry declares (decoded text, or
+ * base64 of the exact bytes) and hands it over as `input.upload`. The plugin
+ * runs on the server (it may need `ctx.query`/`ctx.read` to recognise earlier
+ * imports), and nothing is
  * written until the proposal is approved in {@link RunPluginDialog}. A plugin
  * that also declares a `destination` gets a Set up step first, which creates
  * that table and stores it as the plugin's config.
@@ -105,23 +109,23 @@ export function FileImport({
     setImported(false);
 
     try {
-      const max = maxBytes(accepts);
+      const accept = acceptFor(file, accepts);
+      if (!accept) throw new Error('This plugin does not accept files.');
+      // The server bounds an upload by the entries sharing its encoding.
+      const max = maxBytes(
+        accepts.filter(other => (other.as ?? 'text') === (accept.as ?? 'text')),
+      );
       if (file.size > max)
         throw new Error(
           `This file is ${formatBytes(file.size)}; this importer accepts at most ${formatBytes(max)}. Export a shorter period.`,
         );
-      const text = decode(await file.arrayBuffer());
+      const upload = readUpload(file, await file.arrayBuffer(), accept);
       const result = await executeServerPlugin(store, {
         drive,
         plugin: resource.subject,
         source,
         input: {
-          upload: {
-            name: file.name,
-            mediaType: file.type,
-            size: file.size,
-            text,
-          },
+          upload,
           config,
           trigger: {
             kind: 'manual',
@@ -231,15 +235,6 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
 
   return `${bytes} bytes`;
-}
-
-/** UTF-8 when the file is valid UTF-8; older bank exports are often Windows-1252. */
-export function decode(bytes: ArrayBuffer): string {
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    return new TextDecoder('windows-1252').decode(bytes);
-  }
 }
 
 async function storedConfig(
