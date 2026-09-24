@@ -288,3 +288,85 @@ async function ensureLocalDbKey(
     console.warn('Failed to prepare local database key:', e);
   }
 }
+
+const PREVIOUS_IDENTITIES_KEY = 'atomic.previousIdentities';
+
+/**
+ * An identity this device used to be, kept when the account's identity
+ * replaced it. In IndexedDB rather than localStorage: a non-extractable
+ * keypair survives structured clone but has no string form, and in a secure
+ * context that keypair is all there is — the secret itself is gone.
+ */
+export interface PreviousIdentity {
+  subject: string;
+  savedAt: number;
+  /** The stored record as it was, keypair (or readable key) included. */
+  record: StoredAgent | StoredAgentFallback;
+  /** Only where the key was readable (insecure context). */
+  secret?: string;
+  /**
+   * Local-only drives. They live in this identity's own encrypted database,
+   * so they are reachable only by signing in as it again.
+   */
+  localOnlyDrives: string[];
+}
+
+export async function readPreviousIdentities(): Promise<PreviousIdentity[]> {
+  const list = (await get(PREVIOUS_IDENTITIES_KEY)) as
+    | PreviousIdentity[]
+    | undefined;
+
+  return Array.isArray(list) ? list : [];
+}
+
+/**
+ * Copy the stored agent `subject` aside before another identity overwrites
+ * it, so switching never locks anything away. Idempotent: archiving the same
+ * identity again only adds drives it did not list yet.
+ *
+ * Throws when the device holds no key for `subject`: switching would then
+ * lose the identity for good, which the caller must not do silently.
+ */
+export async function archiveStoredAgent(
+  subject: string,
+  localOnlyDrives: string[] = [],
+): Promise<void> {
+  const list = await readPreviousIdentities();
+  const existing = list.find(entry => entry.subject === subject);
+
+  if (existing) {
+    existing.localOnlyDrives = [
+      ...new Set([...existing.localOnlyDrives, ...localOnlyDrives]),
+    ];
+    await set(PREVIOUS_IDENTITIES_KEY, list);
+
+    return;
+  }
+
+  const stored = (await get(AGENT_IDB_KEY)) as StoredAgent | undefined;
+  const fallback = (await get(AGENT_FALLBACK_KEY)) as
+    | StoredAgentFallback
+    | undefined;
+  const record =
+    stored?.subject === subject
+      ? stored
+      : fallback?.subject === subject
+        ? fallback
+        : undefined;
+
+  if (!record) {
+    throw new Error(`no stored key for ${subject}`);
+  }
+
+  list.push({
+    subject,
+    savedAt: Date.now(),
+    record,
+    secret:
+      'privateKey' in record
+        ? Agent.buildSecret(record.privateKey, subject, record.initialDrive)
+        : undefined,
+    localOnlyDrives: [...new Set(localOnlyDrives)],
+  });
+  await set(PREVIOUS_IDENTITIES_KEY, list);
+}

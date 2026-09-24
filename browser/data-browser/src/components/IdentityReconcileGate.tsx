@@ -1,17 +1,32 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useStore } from '@tomic/react';
+import { useStore, type Store } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
+import * as Sentry from '@sentry/react';
 import { useSettings } from '../helpers/AppSettings';
+import { archiveStoredAgent } from '../helpers/agentStorage';
 import {
   clearManagedAccountBinding,
   evaluateIdentityReconciliation,
   evaluateServerReconciliation,
-  localAgentIsDisposable,
+  localAgentWorkspace,
   logoutManagedSession,
   PRODUCT_NAME,
   syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
+import {
+  applyPendingDriveHandover,
+  handOverDrives,
+} from '../helpers/managed/driveHandover';
+import {
+  importDriveCarryOver,
+  stageDriveCarryOver,
+} from '../helpers/managed/driveCarryOver';
+import { isClientDbEnabled } from '../helpers/clientDbMode';
+import {
+  readInteractiveDemo,
+  readTemplateDemo,
+} from '../chunks/Templates/demoSession';
 import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
@@ -27,28 +42,88 @@ type GateProps = {
   children: React.ReactNode;
 };
 
-/** A local identity worth asking about, and the account that wants to replace it. */
+/** The account whose identity could not take over without losing drives. */
 type Conflict = {
   managedAccountEmail: string;
 };
 
 /**
+ * Keep `from`'s key on this device before the switch, without handing its
+ * drives to anyone. False when that failed, reported like a failed handover.
+ */
+async function archiveOrReport(from: string): Promise<boolean> {
+  try {
+    await archiveStoredAgent(from);
+
+    return true;
+  } catch (error) {
+    Sentry.captureException(
+      new Error('keeping the previous identity failed; asking instead', {
+        cause: error,
+      }),
+      { tags: { flow: 'identity-reconcile' } },
+    );
+
+    return false;
+  }
+}
+
+/**
+ * Hand `from`'s drives to `to` before the switch (see `driveHandover.ts`).
+ * False when that failed, reported: the one case the gate still asks about.
+ * Outside the component, where the React Compiler handles try/catch.
+ */
+async function handOverOrReport(
+  store: Store,
+  from: string,
+  to: string,
+): Promise<boolean> {
+  try {
+    await handOverDrives(store, {
+      from,
+      to,
+      personalDrive: store.getAgent()?.privateDrive,
+      skip: [readInteractiveDemo()?.drive, readTemplateDemo()?.drive],
+      archiveIdentity: archiveStoredAgent,
+      // Without a local database there is no identity database to leave the
+      // drives behind in.
+      carryOver: isClientDbEnabled()
+        ? drives => stageDriveCarryOver(store, { from, to, drives })
+        : undefined,
+    });
+
+    return true;
+  } catch (error) {
+    Sentry.captureException(
+      new Error(
+        'drive handover to the account identity failed; asking instead',
+        {
+          cause: error,
+        },
+      ),
+      { tags: { flow: 'identity-reconcile' } },
+    );
+
+    return false;
+  }
+}
+
+/**
  * Keeps the device's Atomic agent aligned with the signed-in Managed Sync account
- * — silently wherever silence loses nothing. The agent layer is not surfaced
- * to a user who only thinks in terms of their account (see the control-plane
- * contract doc, decision 2026-06-25); the one exception below is the case
- * where staying silent throws a workspace away.
+ * — silently. The agent layer is not surfaced to a user who only thinks in
+ * terms of their account (see the control-plane contract doc, decision
+ * 2026-06-25).
  *
  * On a Managed Sync session whose account agent differs from the device agent:
- * - **Account has a restorable backup** (`recovery_agent`) and the local agent
- *   is disposable (the demo guest, an identity with no workspace) → send the
- *   user to the welcome/recover flow ("unlock your data"), which replaces the
- *   local agent. Nothing is dropped here; the local agent stays until recovery
- *   lands.
- * - **Same, but the local agent has a workspace** → ask. Someone who made an
- *   identity here and then signed in to the portal with an email that already
- *   has one was, until 2026-09-03, switched to the old identity without a
- *   word. One email has one identity; which one that is stays their call.
+ * - **Account has a restorable backup** (`recovery_agent`) → the account's
+ *   identity wins: send the user to the welcome/recover flow ("unlock your
+ *   data"), which replaces the local agent. When the local agent has (or may
+ *   have) a workspace, first hand its drives to the account agent, copy
+ *   its local-only drives for the account's database, and keep its key on
+ *   the device (see `driveHandover.ts`), so the switch loses nothing. Asking which identity to keep (2026-09-03) put a question about
+ *   agents in front of people who only know their account.
+ * - **Same, but the handover failed** → ask, as a last resort: switching now
+ *   could lock a workspace away.
  * - **Otherwise** → adopt this device's agent (bind it to the account) so it
  *   becomes the account's agent. No prompt, no logout.
  *
@@ -107,20 +182,35 @@ export function IdentityReconcileGate({
       if (!isCurrent()) return;
 
       if (!result.ok && result.issue.reason === 'recovery_agent') {
-        const disposable =
-          !result.issue.localAgentSubject ||
-          (await localAgentIsDisposable(store, result.issue.localAgentSubject));
+        const { localAgentSubject: from, expectedAgentSubject: to } =
+          result.issue;
+        // Unknown counts as having a workspace: an agent that is merely
+        // offline must not be switched out with its drives still on it.
+        const workspace = from
+          ? await localAgentWorkspace(store, from)
+          : 'none';
         if (!isCurrent()) return;
 
-        if (!disposable) {
-          // Two identities that both have something on them. Render the
-          // question instead of the app, so nothing is used as the wrong one
-          // meanwhile.
-          setConflict({
-            managedAccountEmail: result.issue.managedAccountEmail,
-          });
+        if (workspace !== 'none' && from && to) {
+          // Only a demo guest's work moves into the account. A guest has no
+          // account of its own, so its drives belong to whoever is signing in
+          // here. Any other identity may be someone else's on a shared
+          // browser: its key is kept on this device and nothing is copied or
+          // shared with the account.
+          const handedOver = store.isLocalOnlyDrive(from)
+            ? await handOverOrReport(store, from, to)
+            : await archiveOrReport(from);
+          if (!isCurrent()) return;
 
-          return;
+          if (!handedOver) {
+            // Switching now could lock a workspace away. Render the question
+            // instead of the app, so nothing is used as the wrong one meanwhile.
+            setConflict({
+              managedAccountEmail: result.issue.managedAccountEmail,
+            });
+
+            return;
+          }
         }
 
         // The account has a restorable identity. Unlock it via the recover flow;
@@ -137,6 +227,15 @@ export function IdentityReconcileGate({
 
         return;
       }
+
+      // The switch the handover above prepared has landed: import the
+      // local-only drives it carried over and list the drives it handed over
+      // in the account's home. Fire-and-forget, like the device
+      // directory below; it retries on the next check until it succeeds.
+      if (localAgent)
+        void applyPendingDriveHandover(store, localAgent, subject =>
+          importDriveCarryOver(store, subject),
+        );
 
       if (!result.ok && result.issue.localAgentSubject) {
         // Adopt this device's agent as the account's agent — no UI.

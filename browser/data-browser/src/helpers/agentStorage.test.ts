@@ -11,7 +11,12 @@ vi.mock('idb-keyval', () => ({
   keys: async () => [...store.keys()],
 }));
 
-const { getAgentFromIDB, saveAgentToIDB } = await import('./agentStorage');
+const {
+  archiveStoredAgent,
+  getAgentFromIDB,
+  readPreviousIdentities,
+  saveAgentToIDB,
+} = await import('./agentStorage');
 
 const AGENT_IDB_KEY = 'atomic.agent';
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
@@ -115,4 +120,32 @@ it('persists folder identities through non-extractable key restoration and keypa
   };
   await saveAgentToIDB(stored.keyPair, stored.subject);
   expect((await getAgentFromIDB())?.aiChatsFolders).toEqual(expected);
+});
+
+describe('keeping a replaced identity', () => {
+  beforeEach(() => store.clear());
+
+  it('keeps the stored key aside, once, even after another agent is saved', async () => {
+    await saveAgentToIDB(await makeSecret(), { adoptOnDevice: false });
+    const { subject, keyPair } = store.get(AGENT_IDB_KEY) as {
+      subject: string;
+      keyPair: CryptoKeyPair;
+    };
+
+    await archiveStoredAgent(subject, ['did:ad:kept']);
+    await archiveStoredAgent(subject, ['did:ad:kept', 'did:ad:other']);
+    await saveAgentToIDB(await makeSecret(), { adoptOnDevice: false });
+
+    const [previous, ...rest] = await readPreviousIdentities();
+    expect(rest).toEqual([]);
+    expect(previous.subject).toBe(subject);
+    expect((previous.record as { keyPair: CryptoKeyPair }).keyPair).toBe(
+      keyPair,
+    );
+    expect(previous.localOnlyDrives).toEqual(['did:ad:kept', 'did:ad:other']);
+  });
+
+  it('refuses when the device holds no key for the identity', async () => {
+    await expect(archiveStoredAgent('did:ad:agent:missing')).rejects.toThrow();
+  });
 });
