@@ -456,12 +456,6 @@ impl ClientDb {
             .map_err(to_js_err)
     }
 
-    /// Opaque versioned state bytes for a resource. Returns null if not found.
-    #[wasm_bindgen(js_name = "getStateSnapshot")]
-    pub fn get_state_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
-        Self::state_snapshot_js(self.db(), subject)
-    }
-
     /// Who signed this resource's history, from the envelopes this client
     /// kept (`atomic_lib::envelopes::attribute_history`). JSON string with
     /// `attributions[]` (signer, createdAt, signature, verified, tokens,
@@ -511,7 +505,7 @@ impl ClientDb {
         Ok(kept)
     }
 
-    /// Back-compat alias for browser client-db (`getLoroSnapshot`).
+    /// The stored Loro snapshot of a resource. Returns null if not found.
     #[wasm_bindgen(js_name = "getLoroSnapshot")]
     pub fn get_loro_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
         Self::state_snapshot_js(self.db(), subject)
