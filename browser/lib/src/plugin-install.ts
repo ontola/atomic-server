@@ -10,10 +10,12 @@
  * marketplace".
  */
 import { signRequest } from './authentication.js';
+import { generateKeyPair } from './CryptoProvider.js';
 import { Datatype } from './datatypes.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
+import { agentSubject } from './subject.js';
 import type { JSONValue } from './value.js';
 
 export const RUNTIME_JS = 'atomic-js/1';
@@ -218,6 +220,19 @@ export function installationIdentifier(name: string): string {
   return cleaned || 'plugin';
 }
 
+/**
+ * A fresh app id for an Installation at the integration proxy
+ * (ontola/atomic-plugins#54, phase 2): the public `atomic:agent:<key>` of a
+ * keypair whose private key is dropped here, so nobody can ever sign as it.
+ * Proxy delegations and frame capabilities name it; every node that runs the
+ * Installation signs as its own agent, registered as a runtime of this one.
+ */
+export async function mintInstallationAppId(): Promise<string> {
+  const { publicKey } = await generateKeyPair();
+
+  return agentSubject(publicKey);
+}
+
 export interface InstallReleaseOptions {
   drive: string;
   release: ReleaseReference;
@@ -265,6 +280,9 @@ export async function installRelease(
     [server.properties.releaseId]: release.id,
     [server.properties.installationStatus]: status,
     [server.properties.grants]: grants,
+    // In the genesis, so the user's own signature is what records it. The
+    // server refuses to change it afterwards.
+    [server.properties.integrationAppAgent]: await mintInstallationAppId(),
   };
   if (namespace) propVals[server.properties.namespace] = namespace;
   if (description) propVals[core.properties.description] = description;
@@ -288,6 +306,7 @@ export async function installRelease(
       [server.properties.namespace]: Datatype.STRING,
       [server.properties.version]: Datatype.STRING,
       [server.properties.config]: Datatype.JSON,
+      [server.properties.integrationAppAgent]: Datatype.ATOMIC_URL,
     },
   });
   await installation.save();
