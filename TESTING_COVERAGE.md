@@ -294,6 +294,29 @@ the item back through the route and from the store. Not covered: the daily
 and byte quotas end to end (only in the ledger's unit test), concurrent
 requests racing one quota, and a write that fails halfway (`500`).
 
+Host crypto (#1718): `server/src/plugins/http_signatures.rs` checks the
+published vectors in `testdata/http-signatures/vectors.json` (draft-cavage-12
+appendix C, RFC 9421 B.2.1, B.2.3, B.2.6 and 4.3; B.2.2's `@query-param` is
+refused), reproduces the deterministic ones by signing, and holds signatures
+to the host's policy (coverage, ±5 min, body digest). `route_auth.rs` covers
+key fetch caching, the negative cache, refetch after rotation, key documents,
+and the egress guard refusing loopback, private and metadata addresses.
+`route_keys.rs` and `route_tokens.rs` cover generation, signing (checked
+independently with the `rsa` crate), wrapping at rest, erasing, hashed
+tokens, and consent requests and codes. `route_crypto_test.rs` runs the
+inbox fixture through the app: a signed POST filling `request.caller` and
+provenance in both schemes; another key, another body, a stale date and no
+signature each `401` without a fetch or a sandbox run; the host signing with
+the installation key and verifying its own `keyId` locally; bearer tokens
+issued, used, listed, revoked; the consent flow approved, replayed and
+denied; no key material in anything the plugin sees or answers; keys and
+tokens erased on revocation. `tests/it/plugin_routes.rs` delivers one signed
+POST end to end on a real server. The consent page's two calls have a
+vitest in `hostStore.test.ts` only for the token ops; the page itself is not
+e2e-tested. Not covered: DPoP and `auth: atomic` (not implemented), ECDSA
+keys, and a real remote key fetch (the egress fetcher is only tested
+refusing).
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

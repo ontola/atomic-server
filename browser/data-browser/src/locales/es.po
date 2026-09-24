@@ -2319,10 +2319,12 @@ msgstr "Permitir todas las lecturas realizadas por este complemento"
 msgid "Allow all writes done by this plugin"
 msgstr "Permitir todas las escrituras realizadas por este complemento"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
 msgstr "Denegar"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr "Permitir"
@@ -9423,4 +9425,58 @@ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Sign in to answer this request."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Loading the request…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allowing…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Denying…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to give"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "a token for its"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+#: src/routes/RouteConsentRoute.tsx
+msgid "endpoints."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to issue a token for its"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "No specific permissions."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "With these permissions"
+msgstr ""
+
+#. 0: ask.redirectOrigin
+#: src/routes/RouteConsentRoute.tsx
+msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allow access?"
 msgstr ""

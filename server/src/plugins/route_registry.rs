@@ -411,7 +411,7 @@ pub fn matches(pattern: &[Segment], request: &[&str]) -> bool {
     }
 }
 
-fn request_segments(path: &str) -> Vec<&str> {
+pub fn request_segments(path: &str) -> Vec<&str> {
     let path = path.strip_prefix('/').unwrap_or(path);
     if path.is_empty() {
         Vec::new()
@@ -1252,6 +1252,13 @@ impl RouteRegistry {
                 self.retire(&subject, now);
                 persist(store, &subject, Some(now));
             }
+            // Keys and tokens go with the identity (design 2.9): erased
+            // wherever they exist, with the revocation tombstone.
+            let keys = super::route_keys::erase(store, &subject);
+            let tokens = super::route_tokens::erase(store, &subject);
+            if keys + tokens > 0 {
+                tracing::info!(%subject, keys, tokens, "erased plugin route keys and tokens");
+            }
             return;
         }
         if status == STATUS_PAUSED || status == STATUS_DRAFT {
@@ -1277,6 +1284,22 @@ impl RouteRegistry {
             _ => tracing::info!(%subject, slug = %slug(&subject), "plugin routes registered"),
         }
         persist(store, &subject, None);
+        // Keys are generated on activation, on the node that serves the
+        // routes (design 2.9, D3). An upgrade keeps them.
+        let keys = manifest
+            .http
+            .as_ref()
+            .map(|h| h.keys.as_slice())
+            .unwrap_or_default();
+        if !keys.is_empty() && self.config().allows(PluginRoutesLevel::ReadWrite) {
+            match super::route_keys::ensure(store, &subject, keys) {
+                Ok(generated) if !generated.is_empty() => {
+                    tracing::info!(%subject, ?generated, "generated plugin route keys")
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!(%subject, "could not generate plugin route keys: {e}"),
+            }
+        }
     }
 }
 

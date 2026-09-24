@@ -29,6 +29,8 @@ pub mod plugin_release;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod plugin_release_test;
 #[cfg(feature = "plugin-routes")]
+pub mod plugin_route_tokens;
+#[cfg(feature = "plugin-routes")]
 pub mod plugin_routes;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_run;

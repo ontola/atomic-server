@@ -362,6 +362,17 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     #[cfg(feature = "plugin-routes")]
     app.service(
         web::resource("/plugin-route-status").route(web::get().to(handlers::plugin_routes::status)),
+    )
+    // The host's consent page's API (D6) and an installation's route tokens.
+    .service(
+        web::resource("/plugin-route-consent")
+            .route(web::get().to(handlers::plugin_route_tokens::consent))
+            .route(web::post().to(handlers::plugin_route_tokens::decide)),
+    )
+    .service(
+        web::resource("/plugin-route-tokens")
+            .route(web::get().to(handlers::plugin_route_tokens::tokens))
+            .route(web::post().to(handlers::plugin_route_tokens::revoke)),
     );
 }
 

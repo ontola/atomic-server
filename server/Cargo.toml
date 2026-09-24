@@ -102,6 +102,14 @@ libc = "0.2"
 anyhow = "1"
 actix-web-static-files = { version = "4.1.1", features = ["static-files-03"] }
 rand = "0.8.6"
+# Host crypto for plugin routes (#1718): installation keys, HTTP signatures
+# and hashed tokens. Only with the `plugin-routes` feature. `rsa` is for the
+# fediverse's `rsa-sha256`; Ed25519 is the same `ed25519-dalek` 2 atomic_lib
+# signs with.
+rsa = { version = "0.9", optional = true, features = ["sha2"] }
+ed25519-dalek = { version = "2", optional = true, features = ["rand_core"] }
+sha2 = { version = "0.10", optional = true }
+httpdate = { version = "1", optional = true }
 fastembed = { version = "5", optional = true, default-features = false, features = [
   "ort-download-binaries-rustls-tls",
   "hf-hub-rustls-tls",
@@ -267,7 +275,13 @@ wasm-plugins = ["wasmtime", "wasmtime-wasi", "wasmtime-wasi-http", "zip"]
 # `light` or any release feature set: atomic.place builds must never contain
 # it. `plugin_routes::tests::release_feature_sets_exclude_plugin_routes`
 # fails if one does.
-plugin-routes = ["wasm-plugins"]
+plugin-routes = [
+  "wasm-plugins",
+  "dep:rsa",
+  "dep:ed25519-dalek",
+  "dep:sha2",
+  "dep:httpdate",
+]
 image = ["dep:image"]
 tonic = ["dep:tonic"]
 tracing-opentelemetry = ["dep:tracing-opentelemetry"]

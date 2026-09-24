@@ -29,6 +29,7 @@ export const pathNames = {
   devDrive: '/dev-drive',
   demo: '/demo',
   invite: '/invite',
+  routeConsent: '/route-consent',
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
