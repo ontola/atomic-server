@@ -221,7 +221,18 @@ that an installation with no app agent on this node is refused before
 connecting, and that other loopback origins stay refused even when a manifest
 declares them. `plugins::egress` tests pin the exception to exactly the
 configured origin (another port, the other scheme, another loopback address,
-`localhost` for `127.0.0.1`, and credentials in the URL are all refused).
+`localhost` for `127.0.0.1`, and credentials in the URL are all refused). They
+also use a table resolver to check that a proxy *name* may resolve to a
+private, CGNAT, ULA or loopback address (`host.docker.internal`, a LAN host),
+resolved once and pinned, while another name, port or scheme resolving to the
+same address is refused, and link-local/metadata is refused even when it is
+the configured proxy. End to end, `it plugin_proxy` starts a real server with
+`--integration-proxy-url` pointing at a loopback stub, pins and installs a JS
+release over HTTP, runs it through `POST /plugin-run`, and checks that
+`ctx.http("atomic-proxy:/demo/items")` arrives as `GET
+/proxy/conn-1/demo/items` with a v2 signature from the installation's node
+agent, that the plugin gets the stub's response, and that an undeclared
+platform is refused before connecting.
 `app_endpoints_test::an_active_installation_reports_its_agent_on_this_node`
 checks `GET /app-agent` reports the identity activation mints for a JS
 Installation. Not covered: a real integration proxy (atomic-plugins#122)

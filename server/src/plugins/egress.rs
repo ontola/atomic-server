@@ -182,8 +182,40 @@ pub async fn refuse_url(url: &str) -> Option<String> {
     None
 }
 
+/// How the host turns a name into addresses. The system resolver in
+/// production; tests pass one that answers from a table, so a name can
+/// "resolve" to a private address without touching real DNS.
+pub trait Resolve: Sync {
+    fn resolve<'a>(
+        &'a self,
+        host: &'a str,
+        port: u16,
+    ) -> futures::future::BoxFuture<'a, std::io::Result<Vec<std::net::SocketAddr>>>;
+}
+
+/// The operating system's resolver, via `tokio::net::lookup_host`.
+pub struct SystemResolver;
+
+impl Resolve for SystemResolver {
+    fn resolve<'a>(
+        &'a self,
+        host: &'a str,
+        port: u16,
+    ) -> futures::future::BoxFuture<'a, std::io::Result<Vec<std::net::SocketAddr>>> {
+        Box::pin(async move { Ok(tokio::net::lookup_host((host, port)).await?.collect()) })
+    }
+}
+
 /// Resolve once and return only checked destinations for the host HTTP client.
 pub async fn checked_addresses(url: &url::Url) -> Result<Vec<std::net::SocketAddr>, String> {
+    checked_addresses_with(url, &SystemResolver).await
+}
+
+/// [checked_addresses] with the resolver given.
+pub async fn checked_addresses_with(
+    url: &url::Url,
+    resolver: &dyn Resolve,
+) -> Result<Vec<std::net::SocketAddr>, String> {
     if !matches!(url.scheme(), "http" | "https") {
         return Err("only HTTP and HTTPS are fetchable".into());
     }
@@ -192,10 +224,10 @@ pub async fn checked_addresses(url: &url::Url) -> Result<Vec<std::net::SocketAdd
     }
     let host = url.host_str().ok_or("URL has no host")?;
     let port = url.port_or_known_default().ok_or("URL has no port")?;
-    let addresses: Vec<_> = tokio::net::lookup_host((host.trim_matches(['[', ']']), port))
+    let addresses = resolver
+        .resolve(host.trim_matches(['[', ']']), port)
         .await
-        .map_err(|e| format!("could not resolve {host}: {e}"))?
-        .collect();
+        .map_err(|e| format!("could not resolve {host}: {e}"))?;
     if addresses.is_empty() {
         return Err("host resolved to no addresses".into());
     }
@@ -209,26 +241,50 @@ pub async fn checked_addresses(url: &url::Url) -> Result<Vec<std::net::SocketAdd
     Ok(addresses)
 }
 
+/// Whether the configured integration proxy may be at this address.
+///
+/// The operator named the proxy, so it may be on this machine or on a network
+/// only this machine can reach: loopback, the private ranges, carrier-grade NAT
+/// and IPv6 unique-local are where a self-hosted proxy lives
+/// (`host.docker.internal` is 192.168.65.x on Docker Desktop and 172.17.0.1 on
+/// Linux; a LAN proxy is 192.168.x.x). Link-local is not: it is where cloud
+/// instance metadata answers, and that is never a legitimate proxy. Nor are
+/// the unspecified and multicast addresses, which are not a host at all.
+pub fn refuse_proxy_address(addr: IpAddr) -> Option<Refusal> {
+    match refuse_address(addr)? {
+        Refusal::Loopback | Refusal::Private | Refusal::UniqueLocal => None,
+        Refusal::MappedV4("loopback" | "private") => None,
+        refusal => Some(refusal),
+    }
+}
+
 /// The integration proxy this node is configured with (ontola/atomic-plugins#54,
 /// decisions 8 and 12).
 ///
-/// It is the one destination that may be on loopback: a proxy on the same
-/// machine, even one embedded in the same executable, is reached over HTTP so
-/// every check the proxy runs still runs. The exception is for exactly this
-/// origin, scheme and port included, and the host connects to the loopback
-/// address itself rather than resolving the name, so DNS cannot redirect it.
+/// It is the one destination that may be on loopback or a private network: a
+/// proxy on the same machine (even one embedded in the same executable), in a
+/// sibling container or on the operator's LAN is reached over HTTP so every
+/// check the proxy runs still runs. The exception is for exactly this origin,
+/// scheme and port included, and never covers link-local or metadata
+/// addresses ([refuse_proxy_address]). A literal address or `localhost` is
+/// connected to without a lookup; any other name is resolved once per
+/// request, and exactly the addresses that were checked are the ones
+/// connected to, so DNS cannot redirect it between the check and the connect.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProxyOrigin {
     origin: String,
-    /// For a proxy on this machine, the addresses to connect to. `None` for a
-    /// proxy elsewhere, which gets the ordinary checks like any other host.
-    loopback: Option<Vec<std::net::SocketAddr>>,
+    /// The addresses to connect to when they are known without a lookup: a
+    /// literal address, or loopback for `localhost`. `None` for a name, which
+    /// is resolved per request.
+    fixed: Option<Vec<std::net::SocketAddr>>,
 }
 
 impl ProxyOrigin {
     /// An origin: `http` or `https`, a host, an optional port, and nothing
     /// else. A path, query or credentials would suggest the proxy is only part
     /// of that origin, and the exception must never cover more than the proxy.
+    /// A literal link-local, unspecified or multicast address is refused here,
+    /// at startup, rather than on the first request.
     pub fn parse(raw: &str) -> Result<Self, String> {
         let url = url::Url::parse(raw.trim())
             .map_err(|e| format!("integration proxy URL {raw:?} is not a URL: {e}"))?;
@@ -252,16 +308,23 @@ impl ProxyOrigin {
             .port_or_known_default()
             .ok_or("integration proxy URL has no port")?;
         let at = |ip: IpAddr| std::net::SocketAddr::new(ip, port);
-        let loopback = match url.host() {
-            Some(url::Host::Ipv4(ip)) if ip.is_loopback() => Some(vec![at(ip.into())]),
-            Some(url::Host::Ipv6(ip)) if ip.is_loopback() => Some(vec![at(ip.into())]),
+        let fixed = match url.host() {
+            Some(url::Host::Ipv4(ip)) => Some(vec![at(ip.into())]),
+            Some(url::Host::Ipv6(ip)) => Some(vec![at(ip.into())]),
             Some(url::Host::Domain(name)) if name.eq_ignore_ascii_case("localhost") => Some(vec![
                 at(Ipv4Addr::LOCALHOST.into()),
                 at(Ipv6Addr::LOCALHOST.into()),
             ]),
             _ => None,
         };
-        Ok(Self { origin, loopback })
+        for address in fixed.iter().flatten() {
+            if let Some(refusal) = refuse_proxy_address(address.ip()) {
+                return Err(format!(
+                    "integration proxy URL {raw:?} is a refused address ({refusal:?}); link-local and metadata addresses are never a proxy"
+                ));
+            }
+        }
+        Ok(Self { origin, fixed })
     }
 
     /// `scheme://host[:port]`, as [origin_of] writes it.
@@ -275,23 +338,51 @@ impl ProxyOrigin {
     }
 }
 
-/// [checked_addresses], except for exactly the configured proxy on this
-/// machine, which gets its loopback addresses without a lookup.
+/// [checked_addresses], except for exactly the configured proxy, which may be
+/// on loopback or a private network (see [ProxyOrigin]).
 pub async fn destination_addresses(
     url: &url::Url,
     proxy: Option<&ProxyOrigin>,
 ) -> Result<Vec<std::net::SocketAddr>, String> {
-    if let Some(ProxyOrigin {
-        loopback: Some(addresses),
-        ..
-    }) = proxy.filter(|proxy| proxy.is_target_of(url))
-    {
-        if !url.username().is_empty() || url.password().is_some() {
-            return Err("credentials belong in host-owned secrets, not URLs".into());
-        }
-        return Ok(addresses.clone());
+    destination_addresses_with(url, proxy, &SystemResolver).await
+}
+
+/// [destination_addresses] with the resolver given. The addresses returned
+/// are the ones to connect to: the caller pins them into its client and never
+/// resolves the name again.
+pub async fn destination_addresses_with(
+    url: &url::Url,
+    proxy: Option<&ProxyOrigin>,
+    resolver: &dyn Resolve,
+) -> Result<Vec<std::net::SocketAddr>, String> {
+    let Some(proxy) = proxy.filter(|proxy| proxy.is_target_of(url)) else {
+        return checked_addresses_with(url, resolver).await;
+    };
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("credentials belong in host-owned secrets, not URLs".into());
     }
-    checked_addresses(url).await
+    let host = url.host_str().ok_or("URL has no host")?;
+    let addresses = match &proxy.fixed {
+        Some(addresses) => addresses.clone(),
+        None => {
+            let port = url.port_or_known_default().ok_or("URL has no port")?;
+            resolver
+                .resolve(host, port)
+                .await
+                .map_err(|e| format!("could not resolve {host}: {e}"))?
+        }
+    };
+    if addresses.is_empty() {
+        return Err(format!("{host} resolved to no addresses"));
+    }
+    for address in &addresses {
+        if let Some(refusal) = refuse_proxy_address(address.ip()) {
+            return Err(format!(
+                "the integration proxy {host} resolves to a refused address ({refusal:?})"
+            ));
+        }
+    }
+    Ok(addresses)
 }
 
 /// The `scheme://host[:port]` of a URL, which is what an origin allowlist and a
@@ -616,12 +707,194 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_proxy_elsewhere_gets_no_exception() {
-        // A public proxy passes the ordinary checks on its own; configuring
-        // one must not turn a name that resolves to loopback into an exception.
+    async fn a_proxy_name_that_does_not_resolve_is_refused() {
         let proxy = ProxyOrigin::parse("http://proxy.invalid:7070").unwrap();
         assert!(
             destination_addresses(&url("http://proxy.invalid:7070/x"), Some(&proxy))
+                .await
+                .is_err()
+        );
+    }
+
+    /// Answers from a table, and counts the lookups, so a test can make a
+    /// name resolve to a private address and see that it was resolved once.
+    struct Table {
+        entries: Vec<(&'static str, Vec<std::net::IpAddr>)>,
+        lookups: std::sync::atomic::AtomicUsize,
+    }
+
+    impl Table {
+        fn new(entries: &[(&'static str, &[&str])]) -> Self {
+            Self {
+                entries: entries
+                    .iter()
+                    .map(|(name, ips)| (*name, ips.iter().map(|ip| ip.parse().unwrap()).collect()))
+                    .collect(),
+                lookups: Default::default(),
+            }
+        }
+    }
+
+    impl Resolve for Table {
+        fn resolve<'a>(
+            &'a self,
+            host: &'a str,
+            port: u16,
+        ) -> futures::future::BoxFuture<'a, std::io::Result<Vec<std::net::SocketAddr>>> {
+            self.lookups
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            // A literal resolves to itself, as it does with the system resolver.
+            let literal = host.parse::<IpAddr>().ok().map(|ip| vec![ip]);
+            let found = literal
+                .or_else(|| {
+                    self.entries
+                        .iter()
+                        .find(|(name, _)| *name == host)
+                        .map(|(_, ips)| ips.clone())
+                })
+                .map(|ips| {
+                    ips.into_iter()
+                        .map(|ip| std::net::SocketAddr::new(ip, port))
+                        .collect()
+                });
+            Box::pin(async move { found.ok_or_else(|| std::io::Error::other("no such host")) })
+        }
+    }
+
+    #[tokio::test]
+    async fn a_configured_proxy_name_may_resolve_to_a_private_address() {
+        // Docker Desktop, Docker on Linux, a LAN, a Tailscale-style CGNAT
+        // address and a v6 ULA: all places a self-hosted proxy lives.
+        let table = Table::new(&[
+            ("host.docker.internal", &["192.168.65.254"]),
+            ("proxy.lan", &["192.168.1.10"]),
+            ("bridge.internal", &["172.17.0.1"]),
+            ("tail.net", &["100.100.1.2"]),
+            ("ula.lan", &["fd00::10"]),
+            ("self.lan", &["127.0.0.1", "::1"]),
+        ]);
+        for (origin, path) in [
+            ("http://host.docker.internal:8787", "/proxy/c/github/x?y=1"),
+            ("http://proxy.lan:8787", "/runtimes"),
+            ("https://bridge.internal", "/x"),
+            ("http://tail.net:8787", "/x"),
+            ("http://ula.lan:8787", "/x"),
+            ("http://self.lan:8787", "/x"),
+        ] {
+            let proxy = ProxyOrigin::parse(origin).unwrap();
+            let before = table.lookups.load(std::sync::atomic::Ordering::SeqCst);
+            let addresses =
+                destination_addresses_with(&url(&format!("{origin}{path}")), Some(&proxy), &table)
+                    .await
+                    .unwrap_or_else(|e| panic!("{origin}: {e}"));
+            // Exactly what the one lookup answered: these are pinned into the
+            // client, which never resolves the name again.
+            assert!(!addresses.is_empty(), "{origin}");
+            assert_eq!(
+                table.lookups.load(std::sync::atomic::Ordering::SeqCst),
+                before + 1,
+                "{origin} was resolved more than once"
+            );
+        }
+        let proxy = ProxyOrigin::parse("http://proxy.lan:8787").unwrap();
+        assert_eq!(
+            destination_addresses_with(&url("http://proxy.lan:8787/x"), Some(&proxy), &table)
+                .await
+                .unwrap(),
+            vec!["192.168.1.10:8787".parse().unwrap()]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_private_exception_is_for_exactly_the_configured_origin() {
+        let table = Table::new(&[
+            ("proxy.lan", &["192.168.1.10"]),
+            ("other.lan", &["192.168.1.10"]),
+            ("printer.lan", &["192.168.1.20"]),
+        ]);
+        let proxy = ProxyOrigin::parse("http://proxy.lan:8787").unwrap();
+        for other in [
+            // Another port on the proxy's host.
+            "http://proxy.lan:8788/x",
+            "http://proxy.lan/x",
+            // The other scheme.
+            "https://proxy.lan:8787/x",
+            // Another name for the very same address.
+            "http://other.lan:8787/x",
+            // The same address as a literal.
+            "http://192.168.1.10:8787/x",
+            // Another host on the same network.
+            "http://printer.lan:8787/x",
+            // Credentials, even to the proxy itself.
+            "http://u:p@proxy.lan:8787/x",
+        ] {
+            let result = destination_addresses_with(&url(other), Some(&proxy), &table).await;
+            assert!(result.is_err(), "{other} was let through: {result:?}");
+        }
+        // With no proxy configured, the proxy's own name is refused too.
+        assert!(
+            destination_addresses_with(&url("http://proxy.lan:8787/x"), None, &table)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn metadata_is_never_a_proxy() {
+        for literal in [
+            "http://169.254.169.254",
+            "http://169.254.169.254:80",
+            "http://[fe80::1]:8787",
+            "http://[::ffff:169.254.169.254]:8787",
+            "http://0.0.0.0:8787",
+            "http://224.0.0.1:8787",
+        ] {
+            assert!(ProxyOrigin::parse(literal).is_err(), "{literal}");
+        }
+        // A name that resolves there is refused per request, including when
+        // only one of its answers is link-local.
+        let table = Table::new(&[
+            ("metadata.lan", &["169.254.169.254"]),
+            ("mixed.lan", &["192.168.1.10", "169.254.169.254"]),
+            ("v6.lan", &["fe80::1"]),
+        ]);
+        for origin in [
+            "http://metadata.lan",
+            "http://mixed.lan:8787",
+            "http://v6.lan:8787",
+        ] {
+            let proxy = ProxyOrigin::parse(origin).unwrap();
+            let err = destination_addresses_with(
+                &url(&format!("{origin}/latest/meta-data/")),
+                Some(&proxy),
+                &table,
+            )
+            .await
+            .unwrap_err();
+            assert!(err.contains("LinkLocal"), "{origin}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_private_literal_proxy_is_accepted() {
+        assert!(ProxyOrigin::parse("http://192.168.1.10:8787").is_ok());
+        assert!(ProxyOrigin::parse("http://172.17.0.1:8787").is_ok());
+        assert!(ProxyOrigin::parse("http://[fd00::10]:8787").is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_private_literal_proxy_is_reached_at_that_address_without_a_lookup() {
+        let table = Table::new(&[]);
+        let proxy = ProxyOrigin::parse("http://172.17.0.1:8787").unwrap();
+        assert_eq!(
+            destination_addresses_with(&url("http://172.17.0.1:8787/x"), Some(&proxy), &table)
+                .await
+                .unwrap(),
+            vec!["172.17.0.1:8787".parse().unwrap()]
+        );
+        assert_eq!(table.lookups.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert!(
+            destination_addresses_with(&url("http://172.17.0.2:8787/x"), Some(&proxy), &table)
                 .await
                 .is_err()
         );
