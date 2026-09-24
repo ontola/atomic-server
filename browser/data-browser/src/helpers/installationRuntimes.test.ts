@@ -418,6 +418,9 @@ describe('registerInstallationRuntimes', () => {
     const store = fakeStore(
       fakeResource(INSTALLATION, {
         [server.properties.integrationAppAgent]: APP,
+        // Something that needs the proxy; see installationConnections.test.ts
+        // for an Installation that doesn't.
+        [server.properties.integrationConnections]: { demo: 'c1' },
       }),
       [
         runtimeChild('did:ad:rt-a', NODE_A, 'Laptop'),

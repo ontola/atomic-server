@@ -25,6 +25,7 @@ import {
   type Store,
 } from '@tomic/react';
 import { canonicalAgent, type ProxyConnections } from './proxyConnections';
+import { installationUsesProxy } from './installationConnections';
 
 /** A node's agent, as published on an `InstallationRuntime` child. */
 export interface InstallationRuntime {
@@ -215,7 +216,9 @@ export async function unregisterRuntimes(
 /**
  * Registers `installation`'s runtimes with its app id. A no-op for anything
  * that is not an Installation with an app id (a `createApp` app, or an
- * Installation from before app ids), and when signed out.
+ * Installation from before app ids), when signed out, and for an Installation
+ * that neither declares a `proxy` platform nor has a recorded connection:
+ * that one never contacts the proxy.
  */
 export async function registerInstallationRuntimes(
   store: Store,
@@ -228,6 +231,7 @@ export async function registerInstallationRuntimes(
   const resource = await store.getResource(installation);
   const app = installationAppId(resource);
   if (!app) return [];
+  if (!(await installationUsesProxy(store, resource))) return [];
   const runtimes = await readInstallationRuntimes(
     store,
     installation,

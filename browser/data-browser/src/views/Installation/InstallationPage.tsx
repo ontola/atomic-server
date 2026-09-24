@@ -15,6 +15,7 @@ import {
   server,
   updateInstallationRelease,
   useCanWrite,
+  useResource,
   useSaveState,
   useStore,
   useString,
@@ -53,6 +54,13 @@ import {
   useInstallationRuntimes,
 } from '@helpers/useInstallationRuntimes';
 import { readInstallationRuntimes } from '@helpers/installationRuntimes';
+import {
+  connectionsOf,
+  loadableRelease,
+  proxyPlatformsOf,
+  usesProxy,
+} from '@helpers/installationConnections';
+import { InstallationConnections } from './InstallationConnections';
 import {
   InstallationReviewDialog,
   type PendingInstallation,
@@ -130,12 +138,30 @@ export const InstallationPage: React.FC<
       ? Object.keys(grants)
       : [];
 
+  // The proxy platforms the pinned release declares, and the connections
+  // already delegated to this Installation (#1700). Neither → the page never
+  // contacts the proxy.
+  const releaseResource = useResource(
+    loadableRelease(release) ? release : undefined,
+  );
+  const [manifest] = useValue(releaseResource, server.properties.manifest);
+  const [connectionsValue] = useValue(
+    resource,
+    server.properties.integrationConnections,
+  );
+  const declaredPlatforms = proxyPlatformsOf(manifest);
+  const connected = connectionsOf(connectionsValue);
+  const proxyPlatforms = [
+    ...new Set([...declaredPlatforms, ...Object.keys(connected)]),
+  ];
+  const needsProxy = usesProxy(declaredPlatforms, connected);
+
   // Each node that runs this Installation publishes its agent on a child;
   // the proxy lets it act for the app once the owner registers it (#1700).
   useInstallationRuntimes(
     store,
     resource.subject,
-    canWrite && currentStatus !== 'revoked',
+    canWrite && currentStatus !== 'revoked' && needsProxy,
   );
 
   const changeStatus = async (next: InstallationStatus) => {
@@ -329,6 +355,14 @@ export const InstallationPage: React.FC<
             </Row>
           )}
         </Column>
+        {currentStatus !== 'revoked' && (
+          <InstallationConnections
+            resource={resource}
+            canWrite={canWrite}
+            platforms={proxyPlatforms}
+            connected={connected}
+          />
+        )}
         {pluginAgent && (
           <Column as='section' aria-label='Plugin agent'>
             <h3>Plugin agent</h3>
