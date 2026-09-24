@@ -92,7 +92,7 @@ function NewDrivePage(): JSX.Element {
       <SetupContent>
         <Logo style={{ width: '14rem', maxWidth: '55%' }} />
         <DriveTemplateSetup
-          renderBar={({ naming, back, busy }) => (
+          renderBar={({ naming, back, busy, create }) => (
             <FixedBar>
               <SetupBar
                 title={naming ? 'Name your drive' : 'Choose a template'}
@@ -127,6 +127,15 @@ function NewDrivePage(): JSX.Element {
                 {naming && demo?.kind !== 'template' && (
                   <Button subtle disabled={busy} onClick={back}>
                     <ShortLabel full='Back to templates' short='Back' />
+                  </Button>
+                )}
+                {naming && (
+                  <Button
+                    type='submit'
+                    form={create.form}
+                    disabled={create.disabled}
+                  >
+                    {create.label}
                   </Button>
                 )}
               </SetupBar>

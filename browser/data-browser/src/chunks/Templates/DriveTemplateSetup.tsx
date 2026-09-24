@@ -28,7 +28,12 @@ export interface TemplateSetupStep {
   /** From the name step back to the gallery. */
   back: () => void;
   busy: boolean;
+  /** The name step's submit, for a Create button outside the form (its
+   *  `form` attribute names the form). */
+  create: { form: string; disabled: boolean; label: string };
 }
+
+const FORM_ID = 'new-drive-form';
 
 export function DriveTemplateSetup({
   onCreated,
@@ -151,6 +156,11 @@ export function DriveTemplateSetup({
         naming,
         back: () => setNaming(false),
         busy: busy || !!partial,
+        create: {
+          form: FORM_ID,
+          disabled: busy || !!partial || !name.trim(),
+          label: busy ? 'Creating…' : 'Create drive',
+        },
       })}
       {error && (
         <>
@@ -181,6 +191,7 @@ export function DriveTemplateSetup({
             </>
           )}
           <form
+            id={FORM_ID}
             onSubmit={e => {
               e.preventDefault();
               void create();
@@ -232,12 +243,14 @@ export function DriveTemplateSetup({
                   </Column>
                 </Card>
               )}
-              <Button
-                type='submit'
-                disabled={busy || !!partial || !name.trim()}
-              >
-                {busy ? 'Creating…' : 'Create drive'}
-              </Button>
+              {!renderBar && (
+                <Button
+                  type='submit'
+                  disabled={busy || !!partial || !name.trim()}
+                >
+                  {busy ? 'Creating…' : 'Create drive'}
+                </Button>
+              )}
             </Column>
           </form>
         </>
