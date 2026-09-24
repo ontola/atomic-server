@@ -65,6 +65,18 @@ interface Listing {
   world: string | null;
 }
 
+/**
+ * `/plugin-catalog` answers `{ entries, hostFeatures }`; servers before the
+ * plugin-routes gates (#1711) answered the bare array.
+ */
+function catalogListings(body: unknown): Listing[] {
+  if (Array.isArray(body)) return body as Listing[];
+
+  const entries = (body as { entries?: unknown } | null)?.entries;
+
+  return Array.isArray(entries) ? (entries as Listing[]) : [];
+}
+
 export const IntegrationStoreRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.integrations,
@@ -188,7 +200,7 @@ function IntegrationStore(): React.JSX.Element {
     void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
-        const entries = await response.json();
+        const entries = catalogListings(await response.json());
         if (!controller.signal.aborted) setListings(entries);
       })
       .catch(reason => {

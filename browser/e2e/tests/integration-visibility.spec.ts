@@ -30,26 +30,37 @@ test('experimental plugins default off and the preference survives reload', asyn
     catalogRequests.push(route.request().url());
     await route.fulfill({
       // The shape `/plugin-catalog` actually answers with: one flat object per
-      // Listing, as `plugin_release::catalog` builds it. The nested
+      // Listing in `entries`, as `plugin_release::catalog` builds it. The nested
       // `{ metadata, verification }` this used to send is the *publish*
       // payload, and reading `entry.domains` off it threw
       // "domains is not iterable" out of the store's filter, which took the
       // whole page down with an error boundary instead of rendering anything.
-      json: [
-        {
-          subject: 'https://example.com/listings/fixture',
-          name: 'Community fixture',
-          emoji: null,
-          description: 'Test listing',
-          publisher: 'test',
-          domains: [],
-          standards: [],
-          release: 'https://example.com/releases/fixture',
-          releaseId: 'fixture-release',
-          runtime: null,
-          world: null,
+      json: {
+        entries: [
+          {
+            subject: 'https://example.com/listings/fixture',
+            name: 'Community fixture',
+            emoji: null,
+            description: 'Test listing',
+            publisher: 'test',
+            domains: [],
+            standards: [],
+            release: 'https://example.com/releases/fixture',
+            releaseId: 'fixture-release',
+            runtime: null,
+            world: null,
+          },
+        ],
+        hostFeatures: {
+          pluginRoutes: {
+            compiled: false,
+            level: 'off',
+            routesOrigin: null,
+            listeners: [],
+            sidecars: [],
+          },
         },
-      ],
+      },
     });
   });
   await page.goto(new URL('/app/integrations', page.url()).href);

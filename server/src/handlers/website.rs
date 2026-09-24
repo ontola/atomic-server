@@ -36,36 +36,16 @@ fn base_origin(state: &AppState) -> AtomicServerResult<url::Url> {
             "Website hosting is disabled. Configure ATOMIC_WEBSITE_ORIGIN on your server.",
         )
     })?;
-    let url = url::Url::parse(raw)
-        .map_err(|_| AtomicServerError::bad_request("Invalid website origin"))?;
-    let host = url.host_str().unwrap_or("");
-    let api = url::Url::parse(&state.config.get_origin())
-        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
-    let api_host = api.host_str().unwrap_or("");
-    let overlaps = |other: &str| {
-        host == other
-            || host.ends_with(&format!(".{other}"))
-            || other.ends_with(&format!(".{host}"))
-    };
-    let local = host.ends_with(".localhost") && matches!(api_host, "localhost" | "127.0.0.1");
-    if host.is_empty()
-        || !matches!(url.scheme(), "http" | "https")
-        || (url.scheme() == "http" && !host.ends_with(".localhost"))
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.path() != "/"
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || (!local && overlaps(api_host))
-        || state
-            .config
-            .opts
-            .base_domain
-            .as_deref()
-            .is_some_and(overlaps)
-    {
-        return Err(AtomicServerError::bad_request("Use a separate HTTPS website domain (or http://sites.localhost:PORT for development), outside API/drive domains."));
-    }
+    url::Url::parse(raw).map_err(|_| AtomicServerError::bad_request("Invalid website origin"))?;
+    let others: Vec<&str> = state
+        .config
+        .opts
+        .base_domain
+        .as_deref()
+        .into_iter()
+        .collect();
+    let url = crate::helpers::separate_origin(raw, &state.config.get_origin(), &others)
+        .ok_or_else(|| AtomicServerError::bad_request("Use a separate HTTPS website domain (or http://sites.localhost:PORT for development), outside API/drive domains."))?;
     Ok(url)
 }
 fn public_url(state: &AppState, project: &str) -> AtomicServerResult<String> {

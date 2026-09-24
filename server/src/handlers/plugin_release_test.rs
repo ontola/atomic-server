@@ -221,7 +221,19 @@ async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
     )
     .await;
     assert_eq!(catalog.status(), 200);
-    let entries: Vec<serde_json::Value> = serde_json::from_slice(&body_of(catalog)).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body_of(catalog)).unwrap();
+    // A default test config: the gate is closed, whatever the build.
+    assert_eq!(
+        body["hostFeatures"]["pluginRoutes"],
+        serde_json::json!({
+            "compiled": crate::plugin_routes::COMPILED,
+            "level": "off",
+            "routesOrigin": null,
+            "listeners": [],
+            "sidecars": [],
+        })
+    );
+    let entries: Vec<serde_json::Value> = serde_json::from_value(body["entries"].clone()).unwrap();
     assert_eq!(entries.len(), 1, "{entries:?}");
     let entry = &entries[0];
     assert_eq!(entry["name"], "Example");
