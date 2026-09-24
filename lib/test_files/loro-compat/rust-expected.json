@@ -1,0 +1,134 @@
+{
+  "changedByUpdate": [
+    "https://atomicdata.dev/properties/isA",
+    "https://atomicdata.dev/properties/name",
+    "https://example.com/done"
+  ],
+  "v1": {
+    "deep": {
+      "datatypes": {
+        "https://atomicdata.dev/properties/createdAt": "timestamp",
+        "https://atomicdata.dev/properties/description": "markdown",
+        "https://atomicdata.dev/properties/isA": "resourceArray",
+        "https://atomicdata.dev/properties/parent": "atomicUrl",
+        "https://example.com/config": "json",
+        "https://example.com/label": "localizedText"
+      },
+      "doc": {
+        "children": [
+          {
+            "children": [
+              "Hello rich world"
+            ],
+            "nodeName": "paragraph"
+          }
+        ],
+        "nodeName": "doc"
+      },
+      "properties": {
+        "https://atomicdata.dev/properties/createdAt": 1700000000000,
+        "https://atomicdata.dev/properties/description": "# Heading\n\nSome *markdown*",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Document"
+        ],
+        "https://atomicdata.dev/properties/name": "Written by Rust",
+        "https://atomicdata.dev/properties/parent": "https://example.com/drive",
+        "https://example.com/config": {
+          "columns": [
+            1.0,
+            2.0
+          ],
+          "wide": false
+        },
+        "https://example.com/count": 42,
+        "https://example.com/done": true,
+        "https://example.com/label": {
+          "en": "Hello",
+          "nl": "Hallo"
+        },
+        "https://example.com/ratio": 0.25
+      }
+    },
+    "delta": [
+      {
+        "insert": "Hello "
+      },
+      {
+        "attributes": {
+          "bold": true
+        },
+        "insert": "rich"
+      },
+      {
+        "insert": " world"
+      }
+    ],
+    "vv": {
+      "11": 47
+    }
+  },
+  "v2": {
+    "deep": {
+      "datatypes": {
+        "https://atomicdata.dev/properties/createdAt": "timestamp",
+        "https://atomicdata.dev/properties/description": "markdown",
+        "https://atomicdata.dev/properties/isA": "resourceArray",
+        "https://atomicdata.dev/properties/parent": "atomicUrl",
+        "https://example.com/config": "json",
+        "https://example.com/label": "localizedText"
+      },
+      "doc": {
+        "children": [
+          {
+            "children": [
+              "Hello rich world!"
+            ],
+            "nodeName": "paragraph"
+          }
+        ],
+        "nodeName": "doc"
+      },
+      "properties": {
+        "https://atomicdata.dev/properties/createdAt": 1700000000000,
+        "https://atomicdata.dev/properties/description": "# Heading\n\nSome *markdown*",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Document",
+          "https://atomicdata.dev/classes/Article"
+        ],
+        "https://atomicdata.dev/properties/name": "Renamed in Rust",
+        "https://atomicdata.dev/properties/parent": "https://example.com/drive",
+        "https://example.com/config": {
+          "columns": [
+            1.0,
+            2.0
+          ],
+          "wide": false
+        },
+        "https://example.com/count": 42,
+        "https://example.com/label": {
+          "en": "Hello",
+          "nl": "Hallo"
+        },
+        "https://example.com/ratio": 0.25
+      }
+    },
+    "delta": [
+      {
+        "insert": "Hello "
+      },
+      {
+        "attributes": {
+          "bold": true
+        },
+        "insert": "rich"
+      },
+      {
+        "insert": " world!"
+      }
+    ],
+    "vv": {
+      "11": 47,
+      "12": 4
+    }
+  }
+}
