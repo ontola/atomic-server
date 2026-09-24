@@ -13,6 +13,13 @@ test('a fresh Mac install can start account recovery before it has an agent', as
       const response = await route.fetch({ url });
       await route.fulfill({ response });
     });
+    // The HTTP proxy above cannot carry a socket, and nothing here needs
+    // live updates. Accept it and stay silent, so the app sees no failed
+    // connection instead of retrying an unreachable port.
+    await page.routeWebSocket(
+      `${embeddedOrigin.replace('http', 'ws')}/ws`,
+      () => {},
+    );
   }
 
   await page.route('http://localhost:9885/**', async route => {
