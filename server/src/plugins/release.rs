@@ -531,13 +531,23 @@ pub fn declared_capabilities(manifest: &serde_json::Value) -> AtomicResult<Vec<C
 /// from the manifest at every fetch.
 ///
 /// `grants` is a JSON array of capability names, an object keyed by them, or
-/// null (no grants). The Installation stores them as the approved set.
+/// null (no grants). The Installation stores them as the approved set. Either
+/// form may also carry the route grant
+/// ([`super::manifest_http::ROUTE_WRITES_GRANT`]). That is not a capability:
+/// it is checked against the release's write targets instead.
 pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) -> AtomicResult<()> {
+    use super::manifest_http::{check_route_grant, is_route_grant_element, ROUTE_WRITES_GRANT};
     let declared = declared_capabilities(manifest)?;
+    let http = match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => parsed.http,
+        _ => None,
+    };
+    check_route_grant(http.as_ref(), grants).map_err(AtomicError::from)?;
     let granted: Vec<String> = match grants {
         serde_json::Value::Null => Vec::new(),
         serde_json::Value::Array(items) => items
             .iter()
+            .filter(|item| !is_route_grant_element(item))
             .map(|item| match item {
                 serde_json::Value::String(s) => Ok(s.clone()),
                 other => Err(AtomicError::from(format!(
@@ -545,7 +555,11 @@ pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) ->
                 ))),
             })
             .collect::<AtomicResult<_>>()?,
-        serde_json::Value::Object(map) => map.keys().cloned().collect(),
+        serde_json::Value::Object(map) => map
+            .keys()
+            .filter(|key| *key != ROUTE_WRITES_GRANT)
+            .cloned()
+            .collect(),
         other => {
             return Err(AtomicError::from(format!(
                 "grants must be a JSON array or object, got {other}"
@@ -620,6 +634,30 @@ pub fn derived_requires(manifest: &serde_json::Value) -> Option<Vec<String>> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn the_route_grant_must_cover_every_write_target() {
+        let inbox: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../testdata/plugin-routes/inbox/manifest.json"
+        ))
+        .unwrap();
+        let targets = inbox["http"]["writeTargets"].clone();
+        // Array form (an object element) and object form; or no grant at all.
+        check_grants(&inbox, &json!(["storage", {"route-writes": targets}])).unwrap();
+        check_grants(&inbox, &json!({"storage": true, "route-writes": targets})).unwrap();
+        check_grants(&inbox, &json!(["storage"])).unwrap();
+        // A grant for fewer classes than the release asks: a widened upgrade.
+        let mut narrower = targets.clone();
+        narrower[0]["classes"] = json!([]);
+        let err = check_grants(&inbox, &json!(["storage", {"route-writes": narrower}]))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("does not cover (inbox-items)"), "{err}");
+        // Not a list of targets.
+        assert!(check_grants(&inbox, &json!(["storage", {"route-writes": "yes"}])).is_err());
+        // Anything else that is not a capability is still refused.
+        assert!(check_grants(&inbox, &json!(["storage", {"other": []}])).is_err());
+    }
 
     fn v2() -> serde_json::Value {
         json!({

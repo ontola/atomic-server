@@ -279,6 +279,21 @@ and host-meta from a claimed name on a real server. Not covered: a
 signed `/bind-drive` on that host), and resources created later at a route's
 path (they are shadowed on the drive's hosts by design).
 
+Route writes (#1717): `server/src/plugins/route_writes.rs` runs the shared
+fixture `testdata/plugin-routes/inbox/` through the app at `read-write`: a
+POST stored under the configured inbox, signed by the installation's agent,
+with `routeProvenance`; an update and a delete of its own item; a create
+under another parent or with another class, and an update or delete of a
+resource someone else created, refused (`502`) with nothing written; the
+per-caller quota answering `429` with `Retry-After` and nothing written; no
+route grant answering `403`; a grant that does not cover the release's
+write targets, or level `read-only`, refusing the install. The quota ledger
+(windows, refunds, `0` = off) and `check_grants` with the route grant are
+unit-tested. `tests/it/plugin_routes.rs` POSTs to a real server and reads
+the item back through the route and from the store. Not covered: the daily
+and byte quotas end to end (only in the ledger's unit test), concurrent
+requests racing one quota, and a write that fails halfway (`500`).
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.

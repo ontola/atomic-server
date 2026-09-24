@@ -79,6 +79,8 @@ pub mod route_exec;
 mod route_levels_test;
 #[cfg(feature = "plugin-routes")]
 pub mod route_registry;
+#[cfg(feature = "plugin-routes")]
+pub mod route_writes;
 #[cfg(feature = "wasm-plugins")]
 pub mod run_log;
 #[cfg(feature = "wasm-plugins")]
