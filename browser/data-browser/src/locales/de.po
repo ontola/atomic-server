@@ -1895,6 +1895,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -3013,6 +3014,7 @@ msgstr ""
 msgid "Enter valid JSON..."
 msgstr ""
 
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Install"
 msgstr ""
@@ -8485,7 +8487,9 @@ msgstr ""
 msgid "Previous version"
 msgstr ""
 
+#. 0: app.version
 #. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0}"
 msgstr ""
@@ -9423,4 +9427,46 @@ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
+msgstr ""
+
+#. 0: app.name; 1: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "{0} updated to {1}"
+msgstr ""
+
+#. 0: mine.version ?? '(unknown version)'
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installed {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installing…"
+msgstr ""
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Install {0}"
+msgstr ""
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Open {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Updating…"
+msgstr ""
+
+#. 0: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Update to {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Drive apps"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr ""

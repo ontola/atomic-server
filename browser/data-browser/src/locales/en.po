@@ -1895,6 +1895,7 @@ msgstr "Toggle whether this resource appears in your Favorites."
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -3013,6 +3014,7 @@ msgstr "Copy code"
 msgid "Enter valid JSON..."
 msgstr "Enter valid JSON..."
 
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Install"
 msgstr "Install"
@@ -8496,7 +8498,9 @@ msgstr "Publish site"
 msgid "Previous version"
 msgstr "Previous version"
 
+#. 0: app.version
 #. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0}"
 msgstr "Version {0}"
@@ -9442,3 +9446,45 @@ msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The conne
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
 msgstr "Connect an account"
+
+#. 0: app.name; 1: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "{0} updated to {1}"
+msgstr "{0} updated to {1}"
+
+#. 0: mine.version ?? '(unknown version)'
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installed {0}"
+msgstr "Installed {0}"
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installing…"
+msgstr "Installing…"
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Install {0}"
+msgstr "Install {0}"
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Open {0}"
+msgstr "Open {0}"
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Updating…"
+msgstr "Updating…"
+
+#. 0: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Update to {0}"
+msgstr "Update to {0}"
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Drive apps"
+msgstr "Drive apps"
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
+msgstr "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
