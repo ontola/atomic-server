@@ -5,7 +5,14 @@ import { styled } from 'styled-components';
 import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  resolveAppImporter,
+  type HostReply,
+} from './hostStore';
+import { AppImporterRun, type ImporterAsk } from './AppImporterRun';
+import { describePluginSource } from '@chunks/PluginRuns/runScript';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -24,6 +31,8 @@ import {
 import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
 import { appAgentOf } from './appAgent';
 import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
+
+const IMPORT_WAITING = 'An import from this app is already waiting for you.';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -82,6 +91,11 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  // An app asking to run its own importer: a picker and a review, both drawn
+  // by this page. One at a time, so a review is never swapped out under the
+  // person.
+  const [importerAsk, setImporterAsk] = useState<ImporterAsk>();
+  const importerAskRef = useRef<ImporterAsk | undefined>(undefined);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -222,6 +236,40 @@ function AppFrameSession({
             setConnectAsk(withExisting);
           })
           .catch(() => undefined);
+
+        return;
+      }
+
+      if (data.op === 'runImporter') {
+        if (importerAskRef.current) {
+          session.post({
+            id: data.id,
+            error: IMPORT_WAITING,
+          });
+
+          return;
+        }
+
+        resolveAppImporter(store, drive, table, data, describePluginSource)
+          .then(resolved => {
+            if (importerAskRef.current) {
+              session.post({
+                id: data.id,
+                error: IMPORT_WAITING,
+              });
+
+              return;
+            }
+
+            const ask: ImporterAsk = {
+              id: data.id,
+              resolved,
+              reply: session.post,
+            };
+            importerAskRef.current = ask;
+            setImporterAsk(ask);
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
 
         return;
       }
@@ -411,6 +459,17 @@ function AppFrameSession({
             </Button>
           </Row>
         </ProxyConsentBar>
+      )}
+      {importerAsk && (
+        <AppImporterRun
+          key={String(importerAsk.id)}
+          ask={importerAsk}
+          drive={drive}
+          onDone={() => {
+            importerAskRef.current = undefined;
+            setImporterAsk(undefined);
+          }}
+        />
       )}
       <Frame
         ref={frameRef}

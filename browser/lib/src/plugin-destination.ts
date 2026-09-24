@@ -224,18 +224,18 @@ function readTables(
 }
 
 /**
- * The keyed tables of the destination `table` belongs to, if Set up created it
- * together with others. How a drive app shown as a view of one of those tables
- * finds its siblings (`store.getData().tables`).
+ * The plugin whose destination `table` is, with the config Set up stored for
+ * it: the table's parent, and only when that parent's stored config names the
+ * table (as `table` or one of `tables`). A table merely parked beneath a
+ * plugin is not its destination.
  *
- * Read-only, and only reads what the app could already read: the table's
- * parent plugin and the config Set up stored on it.
+ * Read-only, and only reads what the caller could already read.
  */
-export async function destinationTablesFor(
+async function destinationOf(
   store: SchemaStore,
   drive: string,
   table: string,
-): Promise<Record<string, DestinationTable> | undefined> {
+): Promise<{ plugin: string; config: Record<string, unknown> } | undefined> {
   const tableResource = await store.getResource(table);
   const parent = tableResource.get(core.properties.parent);
   if (typeof parent !== 'string' || !parent) return undefined;
@@ -250,14 +250,47 @@ export async function destinationTablesFor(
 
   // Flat, or under the manifest's config key.
   for (const candidate of [stored, ...Object.values(stored).map(asObject)]) {
-    const tables = readTables(candidate?.tables);
-    if (!tables) continue;
+    if (!candidate) continue;
+    const tables = readTables(candidate.tables);
     if (
-      candidate?.table === table ||
-      Object.values(tables).some(entry => entry.table === table)
+      candidate.table === table ||
+      Object.values(tables ?? {}).some(entry => entry.table === table)
     )
-      return tables;
+      return { plugin: parent, config: candidate };
   }
 
   return undefined;
+}
+
+/**
+ * The keyed tables of the destination `table` belongs to, if Set up created it
+ * together with others. How a drive app shown as a view of one of those tables
+ * finds its siblings (`store.getData().tables`).
+ *
+ * Read-only, and only reads what the app could already read: the table's
+ * parent plugin and the config Set up stored on it.
+ */
+export async function destinationTablesFor(
+  store: SchemaStore,
+  drive: string,
+  table: string,
+): Promise<Record<string, DestinationTable> | undefined> {
+  const found = await destinationOf(store, drive, table);
+
+  return found ? readTables(found.config.tables) : undefined;
+}
+
+/**
+ * The importer whose Set up created `table`, if any.
+ *
+ * How a drive app shown as a view of that table reaches its own importer
+ * (`store.importer.run()`): the host resolves it from the table, so the app
+ * never names a plugin it could not otherwise run.
+ */
+export async function destinationOwnerOf(
+  store: SchemaStore,
+  drive: string,
+  table: string,
+): Promise<string | undefined> {
+  return (await destinationOf(store, drive, table))?.plugin;
 }

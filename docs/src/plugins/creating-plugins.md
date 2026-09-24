@@ -177,6 +177,42 @@ Declaring `table`, `tables` or both is allowed.
 A drive app shown as a view of one of these tables finds the others through `await store.getData()`, which returns `{ table, rowClass, tables }`, with `tables` keyed the same way.
 For every other table, `getData()` returns `{ table, rowClass }` as before.
 
+### Running the importer from its drive app
+
+A drive app shown as a view of an importer's table can start that importer with `store.importer.run()`.
+The person sees the same preview and review as on the importer's own Import tab, and nothing is written unless they apply it.
+
+```js
+// A file the app already read (the app can check it first):
+const result = await store.importer.run({
+  file: { name: file.name, mediaType: file.type, text: await file.text() },
+});
+
+// Or let the host show its own file picker (the frame is sandboxed):
+const result = await store.importer.run();
+```
+
+The host draws a bar above the app that names the file and the importer.
+The person chooses **Preview import**, or **Choose file** when the app passed no file, or **Cancel**.
+The importer then runs on the server with the file as `input.upload`, and its proposal opens in the review dialog.
+The promise resolves after the person is done:
+
+- `{ status: 'applied', importer, created, updated, destroyed, failed, errors }`: the person applied the review. The counts are changes applied by kind. `errors` has one message per failed change.
+- `{ status: 'nothing', importer }`: the importer proposed no changes, for example because everything was imported before.
+- `{ status: 'blocked', importer, errors }`: the importer refused the file, or its proposal is blocked.
+- `{ status: 'cancelled', importer }`: the person cancelled the bar or closed the review without applying.
+
+The app reads the new rows from its table as usual, for example through `subscribe`.
+This op has no 60-second timeout, because it waits for a person.
+
+Rules:
+
+- The host chooses the importer, not the app. It is the plugin whose Set up created the table the app is shown on, and whose stored config still names that table. The app may pass `importer` as a check. A different subject is refused with "This app may only run its own importer".
+- An app on its own page, or on a table that no importer created, has no importer, and the call is refused.
+- The importer must declare `accepts` and be set up. A file from the app must have a `name` and `text`, and be no larger than the importer's `maxBytes`.
+- One import per app at a time. A second call while the first is waiting is refused.
+- There is no way to apply without the review.
+
 A schema version 1 manifest is still accepted and is read as version 2 with `runtime: atomic-js/1`, `world: extension` and `entrypoints: { run: true }`.
 Its stored form does not change.
 The server-side validator is `server/src/plugins/manifest.rs`, the browser mirror is `@tomic/lib`'s `validateManifest`, and both are checked against the fixtures in `testdata/plugin-manifest/`.

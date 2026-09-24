@@ -8022,6 +8022,8 @@ msgstr "Proposal cancelled."
 msgid "Review this external action before approving it."
 msgstr "Review this external action before approving it."
 
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -9515,10 +9517,12 @@ msgstr "Set up"
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr "Set up creates a {0} table for this importer. Nothing is imported yet."
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "File to import"
 msgstr "File to import"
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Preview import"
 msgstr "Preview import"
@@ -9533,7 +9537,7 @@ msgid "Open imported data"
 msgstr "Open imported data"
 
 #. 0: bytes
-#: src/chunks/PluginRuns/FileImport.tsx
+#: src/chunks/PluginRuns/importFile.ts
 msgid "{0} bytes"
 msgstr "{0} bytes"
 
@@ -9541,3 +9545,20 @@ msgstr "{0} bytes"
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Choose file"
+msgstr "Choose file"
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Import with this app"
+msgstr "Import with this app"
+
+#. 0: ' '
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+msgstr "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+msgstr "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
