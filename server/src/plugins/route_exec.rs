@@ -13,9 +13,9 @@
 //! verdict with intents or enqueues is refused and nothing is applied. At
 //! `read-write`, intents into the route's declared write targets are applied
 //! under the Installation's route grant, within quotas, before the response
-//! is sent ([`super::route_writes`], AS-07). Enqueueing deliveries (AS-09)
-//! does not exist yet, so a verdict that enqueues is refused whole, as not
-//! implemented. `auth: http-signature` and `auth: bearer` are verified by
+//! is sent ([`super::route_writes`], AS-07), and the deliveries it enqueues
+//! into the route's declared `enqueues` are stored in the durable queue
+//! ([`super::route_delivery`], AS-09), which sends them later. `auth: http-signature` and `auth: bearer` are verified by
 //! [`super::route_auth`] before the sandbox starts (AS-08), and a failure is
 //! a `401`; `auth: atomic`, `auth: dpop` and the `caller` principal still
 //! answer `501` without starting it. At `read-write` a handler also gets the
@@ -369,7 +369,8 @@ impl RouteExecutor {
 
     /// `readRouteStatus`: per route, 24 h request and error counts and the
     /// last error; the sampled run log, newest first. The queue fields are
-    /// filled in by the delivery queue (AS-09); until then they are `null`.
+    /// `null` here; the status endpoint fills them from the delivery queue
+    /// ([`super::route_delivery::status`]).
     pub fn status(&self, installation: &str, routes: &[(String, String)], now: i64) -> Json {
         let stats = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         let stats = stats.get(installation);
@@ -1354,15 +1355,6 @@ async fn run(
                 "This plugin route tried to write",
                 "the verdict has intents or enqueues this route does not declare; nothing was applied",
             ))
-        } else if enqueues {
-            // The delivery queue is AS-09 (#1719). A verdict that also has
-            // intents is refused whole, so nothing is half-done.
-            Some((
-                StatusCode::NOT_IMPLEMENTED,
-                "route-enqueue-unavailable",
-                "Route deliveries are not supported yet",
-                "enqueueing deliveries is not implemented on this server version; nothing was applied",
-            ))
         } else {
             None
         };
@@ -1406,6 +1398,48 @@ async fn run(
     match build_response(&verdict["response"], &rules) {
         Ok(built) => {
             let mut problems = problems;
+            // Deliveries are checked before anything is applied, and stored
+            // after the intents, before the response (design 2.6).
+            let mut deliveries = Vec::new();
+            if enqueues {
+                match super::route_delivery::prepare(
+                    &loaded.manifest,
+                    &route.enqueues,
+                    &verdict["enqueue"],
+                    installation,
+                    &format!("route:{}", route.id),
+                    at,
+                ) {
+                    Ok(jobs)
+                        if !super::route_delivery::has_room(store, installation, jobs.len()) =>
+                    {
+                        return Outcome {
+                            fuel,
+                            problems,
+                            ..Outcome::failed(
+                                queue_full(),
+                                "the delivery queue is full; nothing was applied",
+                            )
+                        };
+                    }
+                    Ok(jobs) => deliveries = jobs,
+                    Err(e) => {
+                        return Outcome {
+                            fuel,
+                            problems,
+                            ..Outcome::failed(
+                                problem(
+                                    StatusCode::BAD_GATEWAY,
+                                    "route-enqueue-refused",
+                                    "This plugin route asked for a delivery it may not make",
+                                    "The plugin's answer was refused and nothing was stored.",
+                                ),
+                                format!("{e}; nothing was applied"),
+                            )
+                        };
+                    }
+                }
+            }
             if intents {
                 let Some(http) = loaded.manifest.http.as_ref() else {
                     return Outcome {
@@ -1446,6 +1480,24 @@ async fn run(
                             fuel,
                             problems,
                             ..Outcome::failed(response, refusal.error)
+                        };
+                    }
+                }
+            }
+            if !deliveries.is_empty() {
+                match super::route_delivery::enqueue(store, deliveries, at) {
+                    Ok(enqueued) => {
+                        problems.push(format!(
+                            "queued {} deliveries ({} duplicates)",
+                            enqueued.queued, enqueued.duplicates
+                        ));
+                        appstate.route_delivery.wake();
+                    }
+                    Err(e) => {
+                        return Outcome {
+                            fuel,
+                            problems,
+                            ..Outcome::failed(queue_full(), e)
                         };
                     }
                 }
@@ -1495,6 +1547,20 @@ fn unauthorized(auth: Auth, slug: &str, refused: super::http_signatures::Refused
             .insert(header::WWW_AUTHENTICATE, value);
     }
     Outcome::failed(response, format!("not verified: {refused}"))
+}
+
+/// `503`: the installation's delivery queue has no room.
+fn queue_full() -> HttpResponse {
+    let mut response = problem(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "route-queue-full",
+        "This plugin has too many deliveries waiting",
+        "Nothing was stored. Try again later.",
+    );
+    response
+        .headers_mut()
+        .insert(header::RETRY_AFTER, HeaderValue::from(60));
+    response
 }
 
 fn handler_failed() -> HttpResponse {

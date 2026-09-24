@@ -17,7 +17,7 @@ use atomic_lib::{
 use atomic_server_lib::plugins::route_registry::slug;
 use serde_json::json;
 
-use crate::common::{start_server_with_args, wait_for_server};
+use crate::common::{start_server_with, start_server_with_args, wait_for_server};
 
 /// `testdata/plugin-routes/hello-route/`, shared with the unit tests.
 const HELLO_ROUTE_SOURCE: &str =
@@ -246,15 +246,12 @@ const INBOX_MANIFEST: &str = include_str!("../../../testdata/plugin-routes/inbox
 /// At `read-write`, a route with a route grant writes into its target: a
 /// POST from anyone is stored, signed by the installation, with provenance,
 /// and reads back. A write outside the target is refused.
-#[tokio::test]
-async fn a_route_write_is_stored_and_reads_back() -> AtomicResult<()> {
-    let port = start_server_with_args("plugin_route_writes", &["--plugin-routes", "read-write"]);
-    wait_for_server(port).await;
-    let server = format!("http://localhost:{port}");
-    let client = Client::new(&server).await?;
+/// Installs the inbox fixture in a new public drive of a new agent, with the
+/// route grant its review shows and an inbox its agent may write to.
+/// Returns the drive, the inbox and the Installation.
+async fn install_inbox(client: &Client) -> AtomicResult<(String, String, String)> {
     let agent = client.new_agent("Alice").await?;
     let drive = client.new_public_drive(&agent, "Inbox Drive").await?;
-    let http = reqwest::Client::new();
 
     // The inbox the installer points the plugin at.
     let mut inbox = client.new_resource(&drive)?;
@@ -307,6 +304,17 @@ async fn a_route_write_is_stored_and_reads_back() -> AtomicResult<()> {
         Value::ResourceArray(vec![plugin_agent.as_str().into()]),
     )?;
     inbox_resource.save_remote(client.store()).await?;
+    Ok((drive, inbox, installation))
+}
+
+#[tokio::test]
+async fn a_route_write_is_stored_and_reads_back() -> AtomicResult<()> {
+    let port = start_server_with_args("plugin_route_writes", &["--plugin-routes", "read-write"]);
+    wait_for_server(port).await;
+    let server = format!("http://localhost:{port}");
+    let client = Client::new(&server).await?;
+    let http = reqwest::Client::new();
+    let (drive, inbox, installation) = install_inbox(&client).await?;
 
     // Anyone on the internet POSTs.
     let prefix = format!("{server}/_routes/{}", slug(&installation));
@@ -421,5 +429,162 @@ async fn a_route_write_is_stored_and_reads_back() -> AtomicResult<()> {
         .collect();
     assert_eq!(signed_items.len(), 1, "{items}");
     assert_eq!(signed_items[0]["provenance"]["caller"]["keyId"], key_id);
+    Ok(())
+}
+
+/// What a receiver got: method, path, lowercased headers and body.
+type Received = (String, String, Vec<(String, String)>, Vec<u8>);
+
+/// A receiver on loopback that records each request and answers `202`.
+async fn receiver() -> (String, std::sync::Arc<std::sync::Mutex<Vec<Received>>>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let received: std::sync::Arc<std::sync::Mutex<Vec<Received>>> = Default::default();
+    let log = received.clone();
+    tokio::spawn(async move {
+        while let Ok((mut socket, _)) = listener.accept().await {
+            let log = log.clone();
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 4096];
+                let end = loop {
+                    let n = socket.read(&mut chunk).await.unwrap_or(0);
+                    if n == 0 {
+                        return;
+                    }
+                    buf.extend_from_slice(&chunk[..n]);
+                    if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                        break i;
+                    }
+                };
+                let head = String::from_utf8_lossy(&buf[..end]).to_string();
+                let mut lines = head.split("\r\n");
+                let mut start = lines.next().unwrap_or_default().split(' ');
+                let method = start.next().unwrap_or_default().to_string();
+                let path = start.next().unwrap_or_default().to_string();
+                let headers: Vec<(String, String)> = lines
+                    .filter_map(|l| l.split_once(':'))
+                    .map(|(n, v)| (n.trim().to_ascii_lowercase(), v.trim().to_string()))
+                    .collect();
+                let length: usize = headers
+                    .iter()
+                    .find(|(n, _)| n == "content-length")
+                    .and_then(|(_, v)| v.parse().ok())
+                    .unwrap_or(0);
+                let mut body = buf[end + 4..].to_vec();
+                while body.len() < length {
+                    let n = socket.read(&mut chunk).await.unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    body.extend_from_slice(&chunk[..n]);
+                }
+                log.lock().unwrap().push((method, path, headers, body));
+                let _ = socket
+                    .write_all(
+                        b"HTTP/1.1 202 Accepted\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                    )
+                    .await;
+            });
+        }
+    });
+    (origin, received)
+}
+
+/// A route enqueues a delivery (#1719), end to end on a real server: the
+/// route answers `202` at once, and the server's own worker delivers a POST
+/// to a receiver, signed by the host with the installation's key, which
+/// verifies against the key the actor publishes. Deliveries reach loopback
+/// only through a test seam that has no option or env var.
+#[tokio::test]
+async fn a_route_enqueues_a_delivery_the_server_sends_signed() -> AtomicResult<()> {
+    use atomic_server_lib::plugins::http_signatures::{self, Message, PublicKey};
+
+    let port = start_server_with(
+        "plugin_route_delivery",
+        &["--plugin-routes", "read-write"],
+        |config| config.plugin_delivery_loopback = true,
+    );
+    wait_for_server(port).await;
+    let server = format!("http://localhost:{port}");
+    let client = Client::new(&server).await?;
+    let http = reqwest::Client::new();
+    let (_, _, installation) = install_inbox(&client).await?;
+    let prefix = format!("{server}/_routes/{}", slug(&installation));
+    let (origin, received) = receiver().await;
+
+    let activity = r#"{"type":"Follow","id":"https://example.com/follow/1"}"#;
+    let deliver = || {
+        http.post(format!("{prefix}/deliver"))
+            .json(&json!({
+                "to": format!("{origin}/inbox"),
+                "operation": "deliver-local",
+                "activity": activity,
+                "id": "follow-1",
+            }))
+            .send()
+    };
+    let resp = deliver().await.map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 202);
+
+    // The worker sends it within a few seconds.
+    let mut delivered = None;
+    for _ in 0..100 {
+        if let Some(first) = received.lock().unwrap().first().cloned() {
+            delivered = Some(first);
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let (method, path, headers, body) = delivered.expect("the receiver got the delivery");
+    assert_eq!(method, "POST");
+    assert_eq!(path, "/inbox");
+    assert_eq!(body, activity.as_bytes());
+
+    // Signed with the key the actor publishes.
+    let actor: serde_json::Value = http
+        .get(format!("{prefix}/actor"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    let authority = headers
+        .iter()
+        .find(|(n, _)| n == "host")
+        .map(|(_, v)| v.clone())
+        .unwrap();
+    let message = Message {
+        method: &method,
+        scheme: "http",
+        authority: &authority,
+        path: &path,
+        query: None,
+        headers: &headers,
+    };
+    let parsed = http_signatures::parse(&message).map_err(|e| e.to_string())?;
+    assert_eq!(parsed[0].key_id, actor["publicKey"]["id"]);
+    let key = PublicKey::from_pem(actor["publicKey"]["publicKeyPem"].as_str().unwrap())?;
+    http_signatures::verify(&parsed[0], &key).map_err(|e| e.to_string())?;
+    http_signatures::check_policy(&parsed[0], &message, &body, atomic_lib::utils::now() / 1000)
+        .map_err(|e| e.to_string())?;
+
+    // The same idempotency key again is accepted and not sent twice.
+    let resp = deliver().await.map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 202);
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert_eq!(received.lock().unwrap().len(), 1);
+
+    // Plain HTTP is only the fixture's `deliver-local`: the declared
+    // `https://*/inbox` refuses it before anything is queued.
+    let resp = http
+        .post(format!("{prefix}/deliver"))
+        .json(&json!({ "to": format!("{origin}/inbox"), "activity": activity }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 502);
     Ok(())
 }

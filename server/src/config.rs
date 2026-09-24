@@ -342,6 +342,18 @@ pub struct Opts {
         env = "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY"
     )]
     pub plugin_route_bytes_per_day: u64,
+
+    /// Deliveries one plugin installation may send per UTC day (design D5,
+    /// *proposed* there: 10,000). Every outbound request counts, retries
+    /// included. Past it, queued deliveries wait for the next day; they are
+    /// not dropped. `0` turns the cap off. Only used at `--plugin-routes
+    /// read-write`.
+    #[clap(
+        long,
+        default_value_t = crate::plugin_routes::DEFAULT_DELIVERIES_PER_DAY,
+        env = "ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY"
+    )]
+    pub plugin_route_deliveries_per_day: u64,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -482,6 +494,10 @@ pub struct Config {
     /// The plugin-routes gates, resolved once at boot. See
     /// [`crate::plugin_routes`].
     pub plugin_routes: crate::plugin_routes::PluginRoutesConfig,
+    /// A test seam, not an option: lets plugin deliveries reach loopback
+    /// addresses, which the egress guard otherwise refuses, so tests can
+    /// deliver to a stub on this machine. No flag or env var sets it.
+    pub plugin_delivery_loopback: bool,
 }
 
 impl Config {
@@ -695,6 +711,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
     let mut config = Config {
         plugin_routes: Default::default(),
+        plugin_delivery_loopback: false,
         host_mode,
         compaction,
         initialize,
@@ -839,6 +856,10 @@ mod tests {
             (
                 "plugin_route_bytes_per_day",
                 "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY",
+            ),
+            (
+                "plugin_route_deliveries_per_day",
+                "ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY",
             ),
         ] {
             let arg = command

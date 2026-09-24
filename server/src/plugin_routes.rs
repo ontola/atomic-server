@@ -24,6 +24,12 @@ pub const COMPILED: bool = true;
 #[cfg(not(feature = "plugin-routes"))]
 pub const COMPILED: bool = false;
 
+/// Deliveries one installation may send per UTC day, the default of
+/// `--plugin-route-deliveries-per-day` (design D5, *proposed* there). The
+/// number still waits for a product decision; this is the one place to
+/// change it.
+pub const DEFAULT_DELIVERIES_PER_DAY: u64 = 10_000;
+
 /// `/.well-known/` names the host multiplexes between installations
 /// (design 2.4).
 pub const SHARED_WELL_KNOWN: [&str; 1] = ["webfinger"];
