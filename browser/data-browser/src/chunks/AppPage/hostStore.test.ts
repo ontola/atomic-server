@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { core } from '@tomic/react';
+import { core, server } from '@tomic/react';
 import type { Store } from '@tomic/react';
 import {
   handleRequest,
@@ -211,6 +211,12 @@ describe('integration-proxy capabilities', () => {
   const proxy = {
     capability: vi.fn(async () => minted),
     connections: vi.fn(async () => [{ connectionId: 'c1', platform: 'pets' }]),
+    disconnect: vi.fn(
+      async (_platform: string, also: readonly string[] = []) => [
+        'c1',
+        ...also,
+      ],
+    ),
   };
 
   it('mints a capability for the frame key, never touching the server', async () => {
@@ -354,5 +360,119 @@ describe('openResource', () => {
       'openResource takes a resource subject',
     );
     expect(store.getResource).not.toHaveBeenCalled();
+  });
+});
+
+describe('proxy.disconnect', () => {
+  const proxy = () => ({
+    capability: vi.fn(),
+    connections: vi.fn(),
+    disconnect: vi.fn(
+      async (_platform: string, also: readonly string[] = []) => [
+        'c1',
+        ...also,
+      ],
+    ),
+  });
+
+  /** An app resource that may carry `integrationConnections`, and records saves. */
+  function appStore(recorded?: Record<string, string>) {
+    let props: Record<string, unknown> = recorded
+      ? { [server.properties.integrationConnections]: recorded }
+      : {};
+    const saved: Array<Record<string, unknown>> = [];
+    const resource = {
+      subject: APP,
+      error: undefined,
+      get: (p: string) => props[p],
+      getPropVals: () => props,
+      set: async (p: string, v: unknown) => {
+        props = { ...props, [p]: v };
+      },
+      remove: (p: string) => {
+        const { [p]: _gone, ...rest } = props;
+        props = rest;
+      },
+      save: async () => {
+        saved.push(props);
+      },
+    };
+
+    return {
+      store: {
+        getResource: async () => resource,
+      } as unknown as Store,
+      saved,
+    };
+  }
+
+  it('takes only this app delegation away and never touches the server', async () => {
+    const p = proxy();
+    const { store, saved } = appStore();
+
+    expect(
+      await handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+        undefined,
+        p,
+      ),
+    ).toEqual({
+      status: 'disconnected',
+      platform: 'pets',
+      connectionIds: ['c1'],
+    });
+    expect(p.disconnect).toHaveBeenCalledWith('pets', []);
+    // A `createApp` app records nothing on itself.
+    expect(saved).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it('on an Installation, also forgets integrationConnections[platform]', async () => {
+    const p = proxy();
+    const { store, saved } = appStore({ pets: 'recorded', other: 'c-other' });
+
+    const result = await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('proxyDisconnect', { platform: 'pets' }),
+      undefined,
+      p,
+    );
+
+    // The recorded id is undelegated even when the proxy no longer lists it
+    // as this app's, as the Installation page's Disconnect does.
+    expect(p.disconnect).toHaveBeenCalledWith('pets', ['recorded']);
+    expect(result).toMatchObject({ connectionIds: ['c1', 'recorded'] });
+    expect(saved).toEqual([
+      { [server.properties.integrationConnections]: { other: 'c-other' } },
+    ]);
+  });
+
+  it('refuses without a proxy or with a bad platform', async () => {
+    const { store } = appStore();
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: 'pets' }),
+      ),
+    ).rejects.toThrow('cannot reach the integration proxy');
+    const p = proxy();
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('proxyDisconnect', { platform: '../pets' }),
+        undefined,
+        p,
+      ),
+    ).rejects.toThrow('Invalid platform');
+    expect(p.disconnect).not.toHaveBeenCalled();
   });
 });
