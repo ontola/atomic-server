@@ -29,6 +29,9 @@ function saveDemoDrives(drives: string[]): void {
   localStorage.setItem(DEMO_DRIVES_KEY, JSON.stringify(drives));
 }
 
+/** Where demo setup is, so a report of a stalled setup can say where. */
+export type DemoSetupStep = 'storage' | 'identity' | 'cleanup' | 'workspace';
+
 /**
  * Start the demo: mint a guest agent if nobody is signed in, tear down
  * EVERY previous demo drive, build a FRESH workspace, start the
@@ -39,16 +42,23 @@ function saveDemoDrives(drives: string[]): void {
  * demo drive this browser ever created (tracked in localStorage), not
  * just the last one, covering runs whose manifest was lost.
  */
-export async function startDemoWorkspace(store: Store): Promise<DemoManifest> {
+export async function startDemoWorkspace(
+  store: Store,
+  onStep: (step: DemoSetupStep) => void = () => {},
+): Promise<DemoManifest> {
+  onStep('storage');
   await enableLoro();
 
+  onStep('identity');
   const isGuest = await ensureAgentForDemo(store);
 
   activeDirector?.stop();
   activeDirector = undefined;
 
+  onStep('cleanup');
   await cleanupAllDemoDrives(store);
 
+  onStep('workspace');
   const manifest = await createDemoWorkspace(store, { guest: isGuest });
 
   saveDemoDrives([manifest.drive]);
