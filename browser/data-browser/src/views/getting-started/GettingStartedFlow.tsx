@@ -841,7 +841,7 @@ export function GettingStartedFlow({
           </OnboardingWrap>
         </Swap>
       ) : step === 'welcome' ? (
-        <Swap key='welcome'>
+        <CenteredSwap key='welcome'>
           <WelcomeStack>
             <VisuallyHiddenH1 key='heading'>AtomicServer</VisuallyHiddenH1>
             {/* alt='' because the heading above already names the app. */}
@@ -943,7 +943,7 @@ export function GettingStartedFlow({
               </CardError>
             ) : null}
           </WelcomeStack>
-        </Swap>
+        </CenteredSwap>
       ) : step === 'signin' ? (
         <Swap key='signin'>
           <OnboardingWrap>
@@ -1486,6 +1486,15 @@ const Swap = styled.div`
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
+  }
+`;
+
+/* The welcome choice is short and has nothing below it, so it sits in the
+   middle of the screen rather than at the top like the forms. Auto margins
+   (not justify-content) keep it scrollable when it outgrows a small screen. */
+const CenteredSwap = styled(Swap)`
+  && {
+    margin-block: auto;
   }
 `;
 
