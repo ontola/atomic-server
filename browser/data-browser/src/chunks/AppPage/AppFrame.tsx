@@ -21,6 +21,7 @@ import {
   type ProxyConnection,
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
+import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -114,6 +115,14 @@ function AppFrameSession({
       cancelled = true;
     };
   }, [store, drive, app]);
+
+  // An Installation's nodes act for its app id at the proxy only once they
+  // are registered as its runtimes. Covers coming back from a connect
+  // handoff, which delegates and then reloads this page. A no-op for
+  // `createApp` apps.
+  useEffect(() => {
+    registerRuntimesInBackground(store, app);
+  }, [store, app]);
 
   useEffect(() => {
     if (!entrypoint) return;
@@ -320,7 +329,10 @@ function AppFrameSession({
         await appLabel(store, app),
       );
     })()
-      .then(() =>
+      .then(() => {
+        // An Installation's nodes act for its app id only once registered
+        // as runtimes; not waited on, failures are toasted.
+        registerRuntimesInBackground(store, app);
         finishAsk({
           id: connectAsk.id,
           result: {
@@ -328,8 +340,8 @@ function AppFrameSession({
             connectionId: connection.connection_id,
             platform: connection.platform,
           },
-        }),
-      )
+        });
+      })
       .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
   };
 

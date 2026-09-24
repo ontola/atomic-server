@@ -67,6 +67,18 @@ export interface ProxyConnection {
   delegations: { agent: string; label?: string }[];
 }
 
+/** One row of `runtimes` in `GET /connections`. */
+export interface ProxyRuntime {
+  agent: string;
+  app: string;
+  label?: string | null;
+  created_at?: string | number;
+  last_used_at?: string | number | null;
+}
+
+/** The proxy refuses longer labels. */
+const MAX_LABEL = 200;
+
 /** What the frame gets: the capability, and where to use it. */
 export interface MintedCapability {
   capability: string;
@@ -431,6 +443,42 @@ export class ProxyConnections {
     await this.call(
       'DELETE',
       `/connections/${encodeURIComponent(connectionId)}/agents/${encodeURIComponent(canonicalAgent(agent))}`,
+    );
+  }
+
+  /**
+   * This user's runtimes at the proxy (`runtimes` of `GET /connections`):
+   * node agents that may act for an installation's app id.
+   */
+  async runtimes(): Promise<ProxyRuntime[]> {
+    const result = (await this.call('GET', '/connections')) as {
+      runtimes?: unknown;
+    } | null;
+    const rows = Array.isArray(result?.runtimes) ? result.runtimes : [];
+
+    return (rows as ProxyRuntime[]).filter(
+      row => typeof row?.agent === 'string' && typeof row.app === 'string',
+    );
+  }
+
+  /**
+   * Registers a node's agent as a runtime of installation `app`
+   * (`POST /runtimes {app, agent, label?}`), signed by the owner. The proxy
+   * upserts on (owner, agent), so registering again is harmless.
+   */
+  async registerRuntime(app: string, agent: string, label?: string) {
+    await this.call('POST', '/runtimes', {
+      app: canonicalAgent(app),
+      agent: canonicalAgent(agent),
+      ...(label ? { label: [...label].slice(0, MAX_LABEL).join('') } : {}),
+    });
+  }
+
+  /** Removes a runtime; the proxy refuses that agent from then on. */
+  async unregisterRuntime(agent: string) {
+    await this.call(
+      'DELETE',
+      `/runtimes/${encodeURIComponent(canonicalAgent(agent))}`,
     );
   }
 
