@@ -136,6 +136,7 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
             resource={resource}
             doc={doc}
             property={dataBrowser.properties.documentContent}
+            toolbar
           />
         </Suspense>
       </DocumentContainer>

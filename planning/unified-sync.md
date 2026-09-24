@@ -80,7 +80,7 @@ is the shape around that call — see [Outbox modernization](#outbox-modernizati
 Issue: https://github.com/ontola/atomic-server/issues/1396.
 
 The product requirement is sync and collaboration without a Cloud subscription.
-The Sync page creates an eight-browser room invitation. The subscription-independent Atomic SaaS signaling
+The Sync page creates an eight-browser room invitation. The subscription-independent managed signaling
 endpoint introduces peers; WebRTC carries drive data directly or through optional
 TURN. Operator setup and product limits are in `docs/src/browser-peer-sync.md`.
 

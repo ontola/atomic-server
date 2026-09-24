@@ -10,7 +10,7 @@ import {
   CLOUD_SERVER_SETUP,
 } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
-import { Column } from '../components/Row';
+import { Checkbox } from '../components/forms/Checkbox';
 import { resumePeerLinks } from '../helpers/browserPeerSync';
 import { syncSummary, showSavedServer } from '../helpers/syncPresentation';
 import { driveBillingUrl } from '../helpers/driveBillingUrl';
@@ -216,6 +216,7 @@ type ServerCardProps = {
   status: StoreSyncStatus;
   managedInfo: ManagedInfo;
   cloudHosted: boolean;
+  cloudEnrolled: boolean | null;
   /** Sync status of the server actually in use. */
   serverStatus: NodeStatus;
   hasWorkingLocalStore: boolean;
@@ -270,6 +271,7 @@ function ServerCard({
   status,
   managedInfo,
   cloudHosted,
+  cloudEnrolled,
   serverStatus,
   hasWorkingLocalStore,
   nodeUsage,
@@ -279,10 +281,26 @@ function ServerCard({
   onRemove,
 }: ServerCardProps) {
   const store = useStore();
+  const [syncChange, setSyncChange] = useState<{
+    drive: string;
+    next: boolean;
+  } | null>(null);
+  const [syncError, setSyncError] = useState<{
+    drive: string;
+    message: string;
+  } | null>(null);
+  const isSelectedServer =
+    sameOrigin(server, status.serverUrl) && !!status.drive;
+  const localOnlyDrive =
+    isSelectedServer && !!status.drive && store.isLocalOnlyDrive(status.drive);
   const isActive =
-    sameOrigin(server, status.serverUrl) &&
-    !!status.drive &&
-    store.isLiveSyncedDrive(status.drive);
+    isSelectedServer && !!status.drive && store.isLiveSyncedDrive(status.drive);
+  const showWorkspaceSyncToggle =
+    isSelectedServer &&
+    !isRunningInTauri() &&
+    !isOriginWithoutNode(server) &&
+    isCloudSyncAvailable(managedInfo) &&
+    cloudEnrolled === false;
   const isCloud = isActive && cloudHosted;
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
@@ -336,6 +354,33 @@ function ServerCard({
     facts.push(syncedAgo ? `Synced ${syncedAgo}` : 'Synced just now');
   }
 
+  async function toggleWorkspaceSync(next: boolean) {
+    const drive = status.drive;
+    if (!drive || syncChange) return;
+    setSyncChange({ drive, next });
+    setSyncError(null);
+
+    try {
+      if (next) {
+        await store.promoteLocalDrive(drive);
+        toast.success('Syncing this workspace…');
+      } else {
+        await store.makeDriveLocal(drive);
+        resumePeerLinks(store);
+      }
+    } catch (error) {
+      setSyncError({
+        drive,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not change workspace sync.',
+      });
+    } finally {
+      setSyncChange(null);
+    }
+  }
+
   return (
     <SyncCard
       active={isActive}
@@ -345,27 +390,31 @@ function ServerCard({
       iconTone={isCloud ? 'provider' : 'neutral'}
       title={isCloud ? 'Cloud Server' : serverLabel(server)}
       status={
-        isActive
-          ? { tone: serverStatus, label: statusLabel(serverStatus) }
-          : { tone: 'unknown', label: 'Not connected' }
+        localOnlyDrive
+          ? { tone: 'unknown', label: 'Workspace sync off' }
+          : isActive
+            ? { tone: serverStatus, label: statusLabel(serverStatus) }
+            : { tone: 'unknown', label: 'Not connected' }
       }
       controls={
-        isActive ? (
+        isSelectedServer ? (
           status.serverConnected ? (
             // Without a working local store (embedded node or ready OPFS
             // cache), the server is the only data source — disconnecting
             // would leave the app with no data at all.
-            <NodeAction
-              onClick={() => store.disconnect()}
-              disabled={!hasWorkingLocalStore}
-              title={
-                hasWorkingLocalStore
-                  ? undefined
-                  : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
-              }
-            >
-              Disconnect
-            </NodeAction>
+            !localOnlyDrive && (
+              <NodeAction
+                onClick={() => store.disconnect()}
+                disabled={!hasWorkingLocalStore}
+                title={
+                  hasWorkingLocalStore
+                    ? undefined
+                    : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
+                }
+              >
+                Disconnect
+              </NodeAction>
+            )
           ) : (
             <NodeAction
               onClick={() => store.reconnect().catch(e => store.notifyError(e))}
@@ -401,7 +450,7 @@ function ServerCard({
           >
             {'Manage this drive’s plan →'}
           </ManagedLink>
-        ) : !isActive ? (
+        ) : !isSelectedServer ? (
           // Removing the server you're using would strand the app.
           <NodeActionSubtle onClick={() => onRemove(server)}>
             Remove
@@ -414,6 +463,40 @@ function ServerCard({
           This status describes data synchronization. View this drive’s
           subscription and price in billing.
         </ConnMeta>
+      )}
+      {showWorkspaceSyncToggle && (
+        <WorkspaceSyncRow>
+          <WorkspaceSyncControl>
+            <Checkbox
+              id='workspace-server-sync'
+              checked={!localOnlyDrive}
+              disabled={
+                syncChange !== null ||
+                !status.serverConnected ||
+                !hasWorkingLocalStore
+              }
+              onChange={next => void toggleWorkspaceSync(next)}
+            />
+            <label htmlFor='workspace-server-sync'>
+              Sync this workspace with this server
+            </label>
+          </WorkspaceSyncControl>
+          <ConnMeta>
+            Off stops server sync for this workspace on this browser. The
+            server’s existing copy and other devices are unchanged; browser sync
+            can still connect open browsers.
+          </ConnMeta>
+          {syncChange && syncChange.drive === status.drive && (
+            <ConnMeta role='status'>
+              {syncChange.next
+                ? 'Starting server sync…'
+                : 'Checking local copy…'}
+            </ConnMeta>
+          )}
+          {syncError && syncError.drive === status.drive && (
+            <ConnError role='alert'>{syncError.message}</ConnError>
+          )}
+        </WorkspaceSyncRow>
       )}
       {/* Status details belong to the server actually in use. */}
       {isActive && !status.serverConnected && status.serverConnectionError && (
@@ -571,11 +654,6 @@ function SyncPage() {
   const { setServer, setDrive, baseURL } = useSettings();
   const { drive: requestedDrive } = SyncRoute.useSearch();
   const [confirmCloud, setConfirmCloud] = useState(false);
-  const [localizing, setLocalizing] = useState(false);
-  const [localizeError, setLocalizeError] = useState<{
-    drive: string;
-    message: string;
-  } | null>(null);
   const [hostedCopy, setHostedCopy] = useState<{
     drive: string;
     origin: string;
@@ -1469,45 +1547,6 @@ function SyncPage() {
       <ContainerNarrow>
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
-        {showServerConn &&
-          cloudEnrolled === false &&
-          isCloudSyncAvailable(managedInfo) &&
-          !isNode && (
-            <Column>
-              <Button
-                subtle
-                disabled={localizing || !hasWorkingLocalStore}
-                onClick={async () => {
-                  if (!status.drive) return;
-                  setLocalizing(true);
-                  setLocalizeError(null);
-
-                  try {
-                    await store.makeDriveLocal(status.drive);
-                    resumePeerLinks(store);
-                  } catch (error) {
-                    setLocalizeError({
-                      drive: status.drive,
-                      message:
-                        error instanceof Error
-                          ? error.message
-                          : 'Could not verify the local copy. The server connection has been kept.',
-                    });
-                  } finally {
-                    setLocalizing(false);
-                  }
-                }}
-              >
-                {localizing
-                  ? 'Checking local copy…'
-                  : 'Use browser sync only on this device'}
-              </Button>
-              {localizeError && localizeError.drive === status.drive && (
-                <p role='alert'>{localizeError.message}</p>
-              )}
-            </Column>
-          )}
-
         {/* Everything our paid services own, in one card.
 
             These used to be loose entries in the Devices list, on the reasoning
@@ -1666,6 +1705,7 @@ function SyncPage() {
                   status={status}
                   managedInfo={managedInfo}
                   cloudHosted={cloudHosted}
+                  cloudEnrolled={cloudEnrolled}
                   serverStatus={nodes.server}
                   hasWorkingLocalStore={hasWorkingLocalStore}
                   nodeUsage={nodeUsage}
@@ -1934,7 +1974,9 @@ function SyncPage() {
                 showSavedServer({
                   managed: isCloudSyncAvailable(managedInfo),
                   activeForDrive:
-                    showServerConn && sameOrigin(server, status.serverUrl),
+                    (showServerConn ||
+                      (localOnlyDrive && cloudEnrolled === false)) &&
+                    sameOrigin(server, status.serverUrl),
                 }),
             )
             .map(server => (
@@ -1944,6 +1986,7 @@ function SyncPage() {
                 status={status}
                 managedInfo={managedInfo}
                 cloudHosted={cloudHosted}
+                cloudEnrolled={cloudEnrolled}
                 serverStatus={nodes.server}
                 hasWorkingLocalStore={hasWorkingLocalStore}
                 nodeUsage={nodeUsage}
@@ -2739,6 +2782,19 @@ const ConnBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+`;
+
+const WorkspaceSyncRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+`;
+
+const WorkspaceSyncControl = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 const ConnTopRow = styled.div`

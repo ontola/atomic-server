@@ -21,8 +21,8 @@ test.describe('onboarding', () => {
     // shape mt940 had: a test winning a coin toss rather than passing.
     test.slow();
 
-    // Navigate to user settings
-    await page.goto(`${FRONTEND_URL}/app/agent`);
+    // Start at the canonical signed-out onboarding surface.
+    await page.goto(`${FRONTEND_URL}/app/welcome`);
 
     // Card → create account (then NewIdentitySection auto-starts)
     await page.getByRole('button', { name: 'Create account' }).click();
@@ -97,18 +97,14 @@ test.describe('onboarding', () => {
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
 
-    // Sign in with the secret on the SettingsAgent page (card → Sign in → secret)
+    // The signed-out SettingsAgent route opens the canonical sign-in form.
     await page2.goto(`${FRONTEND_URL}/app/agent`);
-    await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page2.getByLabel('Agent secret').fill(secret!);
 
-    // Signing in lands the user on their home drive (sign-in is unified through
-    // /app/welcome now; /app/agent no longer hosts its own login form). Wait for
-    // the signed-in drive URL, then open settings to confirm the account.
-    await expect(page2).toHaveURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    // The agent route passes return_to=agent through the unified sign-in flow.
+    await expect(page2).toHaveURL(/\/app\/agent$/, {
       timeout: 10000,
     });
-    await page2.goto(`${FRONTEND_URL}/app/agent`);
     await expect(
       page2.getByRole('heading', { name: 'User', exact: true }),
     ).toBeVisible({ timeout: 10000 });

@@ -139,6 +139,9 @@ test('mobile sidebar stays an overlay and closes from its backdrop', async ({
   const sidebar = page.getByTestId('sidebar');
   await expect(sidebar).toHaveCSS('opacity', '0');
   const main = page.getByRole('main');
+  // The closed sidebar is already at opacity 0 before the page has laid out
+  // `main`, which then has no box yet and the comparisons below read null.
+  await expect(main).toBeVisible();
   const initial = await main.boundingBox();
   await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
   await expect(sidebar).toHaveCSS('opacity', '1');

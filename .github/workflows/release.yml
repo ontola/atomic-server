@@ -271,7 +271,6 @@ jobs:
             cat pnpm-publish-summary.json
           fi
 
-  # I'd like to skip this one, as the publish-tauri action already creates a release
   create-release:
     if: github.event_name == 'push'
     name: Create Release on GitHub
@@ -280,13 +279,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2.0.1
-        name: Install pnpm
-        id: pnpm-install
-        with:
-          version: 8
-          run_install: false
-
       - uses: taiki-e/create-gh-release-action@v1
         with:
           # (optional)

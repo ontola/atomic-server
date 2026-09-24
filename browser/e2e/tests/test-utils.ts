@@ -591,7 +591,17 @@ export async function newDrive(page: Page) {
   await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
     timeout: 30000,
   });
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  // The URL changes when the route does, but the header still shows the drive
+  // you came FROM until the new one's resource has loaded and its name has
+  // arrived, so this waits on a fetch and not on a render. The 10s default does
+  // not cover it: measured at four workers on 24 September 2026, the slowest
+  // few per run were 9.3s, 11.1s and 8.5s, so the budget was already being
+  // blown. Being marginal rather than short is why it presents as a flake,
+  // `saved-drives.spec.ts:81` red 4 of 10, reporting the title of the previous
+  // drive rather than a missing one. 30s, matching the `waitForURL` above it.
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
+    timeout: 30_000,
+  });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
 
@@ -1849,6 +1859,33 @@ export async function contextMenuClick(text: string, page: Page) {
   const item = page.getByTestId(`menu-item-${text}`);
   await item.waitFor({ state: 'visible' });
   await item.click();
+}
+
+/**
+ * Open the Connections or Automations dialog of the table page on screen.
+ * Both live in the table's context menu, which only lists them once the table
+ * page has mounted. `timeout` covers opening the menu too, since whatever is
+ * still in front of the page (a setup dialog, say) blocks that click.
+ */
+export async function openWorkspaceDialog(
+  page: Page,
+  section: 'connections' | 'automations',
+  timeout?: number,
+) {
+  // A top-level dialog left over from an earlier step covers the table and
+  // swallows this click: the GitHub setup dialog stays up, its button reading
+  // "Connecting…", until the install settles. A bigger budget does work,
+  // because Playwright retries until the dialog goes, but it makes the budget
+  // the thing under test. Measured on develop at `2c581ff`, running this file
+  // at four workers, the click cost 41.1s against the 45s it had, and 9.8s
+  // unloaded against the 10s it had before that.
+  //
+  // So wait for the dialog to go, the way `waitForTableBuild` above does, and
+  // let the clicks keep their ordinary budgets. A dialog that never closes now
+  // says so, instead of arriving as a click that could not reach its target.
+  await currentDialog(page).waitFor({ state: 'hidden', timeout });
+  await page.click(contextMenu, { timeout });
+  await page.getByTestId(`menu-item-${section}`).click({ timeout });
 }
 
 export const anyValue = Symbol('any');

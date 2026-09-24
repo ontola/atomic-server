@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { enableIntegrationDiscovery } from './integration-settings-utils';
+import {
+  enableIntegrationDiscovery,
+  exposeTestIntegrations,
+} from './integration-settings-utils';
 import { waitForClientDbFlush } from './test-utils';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:6747';
 const SERVER_URL = process.env.SERVER_URL ?? 'http://localhost:9883';
@@ -129,6 +132,9 @@ for (const keepSeries of [false, true]) {
 
       return route.continue();
     });
+    // Playwright uses the most recently registered matching route. Restore
+    // the test catalog after the offline catch-all route above.
+    await exposeTestIntegrations(page);
 
     try {
       // Open the drive by subject, not through `/app/dev-drive`: that route

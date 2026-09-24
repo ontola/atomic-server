@@ -128,6 +128,8 @@ msgstr ""
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx src/components/ConfirmationDialog.tsx
 #: src/components/ConfirmationDialog.tsx
@@ -297,7 +299,6 @@ msgstr ""
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/AISetupPanel.tsx src/components/DemoExitButton.tsx
 #: src/components/DemoExitButton.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Back"
 msgstr ""
 
@@ -834,6 +835,7 @@ msgstr ""
 msgid "v{0}"
 msgstr ""
 
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/chunks/Website/WebsiteHosting.tsx src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -1492,6 +1494,7 @@ msgstr ""
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -2448,7 +2451,6 @@ msgstr ""
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx src/components/Share/ShareDialog.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr ""
 
@@ -2552,9 +2554,8 @@ msgstr ""
 msgid "Allow edits"
 msgstr ""
 
-#: src/components/InviteForm.tsx
-msgid "Invite text (optional)"
-msgstr ""
+#~ msgid "Invite text (optional)"
+#~ msgstr ""
 
 #: src/components/InviteForm.tsx
 msgid "Invite created and copied to clipboard! 🚀"
@@ -3221,6 +3222,11 @@ msgid "Install"
 msgstr ""
 
 #: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
 msgid "unset"
 msgstr ""
 
@@ -3325,23 +3331,23 @@ msgstr ""
 msgid "Heading 6"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle bold"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle italic"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle strikethrough"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle blockquote"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle inline code"
 msgstr ""
 
@@ -4157,7 +4163,6 @@ msgstr ""
 msgid "as a classtype."
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Create Invite"
@@ -4885,6 +4890,7 @@ msgstr ""
 msgid "Your data lives on the device you’re connected to."
 msgstr ""
 
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing this workspace…"
 msgstr ""
@@ -7482,14 +7488,6 @@ msgstr ""
 msgid "Checking local copy…"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Use browser sync only on this device"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Could not verify the local copy. The server connection has been kept."
-msgstr ""
-
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Change template"
 msgstr ""
@@ -9606,7 +9604,9 @@ msgid "Frozen release"
 msgstr ""
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Website preview"
 msgstr ""
 
@@ -9686,11 +9686,14 @@ msgid "Release"
 msgstr ""
 
 #: src/chunks/Website/WebsiteExportPage.tsx src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Download website"
 msgstr ""
 
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Publishing…"
 msgstr ""
@@ -9761,7 +9764,9 @@ msgstr ""
 
 #: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Retry preview"
 msgstr ""
 
@@ -9837,6 +9842,7 @@ msgid "Updating preview…"
 msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 msgid "Website versions"
 msgstr ""
 
@@ -9853,7 +9859,7 @@ msgstr ""
 msgid "{0} editable fields and {1} documents"
 msgstr ""
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/LinkPopoverButton.tsx
 msgid "Set link"
 msgstr ""
 
@@ -12238,4 +12244,181 @@ msgstr ""
 #: src/components/SideBar/FeedbackMenuItem.tsx
 #: src/components/SideBar/FeedbackMenuItem.tsx
 msgid "Report this error"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Report AI chat"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Sending report"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Copy report"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Send report"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Thank you. Your AI chat report has been sent."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Preparing chat transcript…"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "The chat could not be loaded. Try again."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "earlier messages were omitted to fit the report. The most recent messages are included."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Feedback reporting is unavailable on this installation. You can copy the report instead."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Report copied to clipboard."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Could not copy. Select the text above to copy it manually."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "The report could not be sent. Your text is still here; try again."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "What went wrong? <0/>"
+msgstr ""
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Chat transcript (editable) <0/>"
+msgstr ""
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Review the chat transcript before sharing it with the Atomic team"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Buy AI credits"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Could not change workspace sync."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Starting server sync…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Sync this workspace with this server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Off stops server sync for this workspace on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Workspace sync off"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Show formatting toolbar"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Bullet list"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Numbered list"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Task list"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Insert image"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Mention a resource (@)"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Hide toolbar (type / or @ instead)"
+msgstr ""
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Formatting"
+#: src/chunks/AI/RealAIChat.tsx
+#: src/components/AI/MicrophoneSelect.tsx
+#: src/components/AI/SpeechSettings.tsx
+msgid "Microphone"
+msgstr ""
+
+#. 0: index + 1
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "Microphone {0}"
+msgstr ""
+
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "System default"
+msgstr ""
+
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "Show microphone names…"
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite people to"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Manage access"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Access to"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Inherited permissions"
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Stop starting new {0}s here"
+msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Start new {0}s here"
+msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "New {0}s start here"
+msgstr ""
+
+#: src/components/AI/MicrophoneSelect.tsx
+msgid "Saved microphone"
 msgstr ""

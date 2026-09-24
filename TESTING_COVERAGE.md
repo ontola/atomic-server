@@ -15,6 +15,8 @@ PR #1585 frontend regressions: Vault backup tests verify a legacy drive ID reads
 
 PR #1585 upgrade regressions: library tests pin the pre-rename AI Chats singleton and restored alias cache, negotiate nested reduced/full sync identifiers, and export canonical snapshots for legacy requests. Rust tests cover legacy filtered/full version vectors and restarting an interrupted scheme migration after rows moved but before indexes finished. These are library/frame-level checks; a deployed mixed-version browser/Iroh pairing is not exercised.
 
+Collection alias indexing: `sorted_parent_query_deduplicates_legacy_and_canonical_subjects` reproduces an old `did:ad:` query-member key beside its `atomic:` key, then verifies one member, a count of one, canonical output in both sort directions, correct pagination, and stale-key removal on update. It also checks a Table View's class-filtered query without an explicit sort. `basic_parent_query_deduplicates_legacy_and_canonical_subjects` covers the separate property/value and value-only index paths, including both primary index trees and offset pagination. The production drive's duplicate labels were observed on two devices, but their individual resource IDs have not been inspected; these tests prove the alias failure paths rather than the identity of each live row.
+
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
@@ -51,6 +53,11 @@ lifecycle tests remain for its retained, separate backend implementation.
 Plugin configuration: hook tests retain a release's validation schema when a save
 receipt omits computed metadata, and clear it when the release or installation
 changes. The plugin-install E2E checks invalid config after saving valid config.
+`browser/lib/src/plugin-install.test.ts` checks that installation and release
+updates validate built-in fields without public Property fetches and preserve
+JSON tags for grants and config. `embedded-vocabulary-routing.test.ts` covers
+host routing for plugin classes, while `plugin.spec.ts` installs a release and
+verifies the active plugin in Chromium.
 
 Editor sync formatting: unit tests cover both enabling and disabling bold before
 an incoming property update, so sync receipts cannot reset the next typed text's
@@ -528,15 +535,16 @@ A flow is only genuinely safe when all three are covered.
 
 ### Playwright light vs full
 
-Only the browser suite splits. Lint, Rust, vitest, JS integration, and
-Flutter run on every CI job.
+Only the browser suite has light/full modes. Lint, Rust, vitest, JS
+integration, and Flutter run on every Main CI job. Automatic CI on PR events
+and feature-branch pushes is paused while runner capacity is limited.
 
 | Trigger | Playwright |
 |---|---|
-| Feature-branch push | **light** (`@smoke`), required |
+| PR event or feature-branch push | No automatic repository CI |
 | `develop` push | **full**, required (staging) |
-| stable `v*` tag | **full**, required (production) |
-| `workflow_dispatch` `e2e_mode=full`, `[full-e2e]` in the commit, or PR label `full-e2e` | **full** |
+| `v*` tag | **full**, required (release) |
+| Manual `workflow_dispatch` on a temporary branch combining PR heads | **full** |
 
 Tag a new journey `@smoke` (`smoke` from `browser/e2e/tests/test-utils.ts`)
 only if a failure means the first-hour demo is dead. Extra operators,
@@ -553,8 +561,8 @@ templates, and offline variants stay in the full suite. Policy:
 | Server integration | `cargo test -p atomic-server --test it <module>` | `rustTest` |
 | Browser unit (vitest) | `cd browser && pnpm run -r test` | `jsTest` |
 | Browser integration (vitest + real server) | `cd browser/lib && pnpm run test:integration` | `jsTestIntegration` |
-| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | `endToEnd` on feature branches |
-| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on `develop` and `v*` tags |
+| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | Local diagnostic |
+| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on dispatched batches, `develop`, and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
 
@@ -1025,6 +1033,13 @@ count document-body changes in the causality guard while retaining rejection of
 property writes that lose completely; expression tests exercise browser operator
 aliases. The editor Link lifecycle test preserves telephone links across multiple
 mounts without resetting or re-registering the global parser.
+
+`lib/src/sync/protocol.rs` classifies a causality refusal as a conflict, and
+`server/src/errors.rs` checks its HTTP 409 response. `browser/lib/src/local-outbox.test.ts`
+classifies both the structured code and the older server message as blocking,
+not terminal; the outbox's existing tests cover bounded retries and keeping
+blocked edits pending. `lib/src/sync/outbox.rs` checks the same verdict for
+native clients.
 
 ### Save durability and identity lifecycle regressions
 
@@ -1748,8 +1763,10 @@ missing/corrupt attachments.
 
 `managed-sync-presentation.spec.ts` uses a real local node and OPFS with mocked
 account/enrollment/Vault responses. It reproduces both reported connection states,
-checks refusal when local history cannot be read, switches to browser-only sync,
+checks refusal when local history cannot be read, confirms the extra Sync-page
+button is absent, switches to browser-only sync with the server-card toggle,
 and verifies an edit plus attachment survive reload without HTTP/WS data writes.
+It turns server sync back on and checks that the local edit is sent.
 It also exercises the compiled Vault session error path (no React hook in an
 error constructor). Actual staging billing/admission and multi-device migration
 remain separate acceptance checks.
@@ -2253,8 +2270,10 @@ missing/corrupt attachments.
 
 `managed-sync-presentation.spec.ts` uses a real local node and OPFS with mocked
 account/enrollment/Vault responses. It reproduces both reported connection states,
-checks refusal when local history cannot be read, switches to browser-only sync,
+checks refusal when local history cannot be read, confirms the extra Sync-page
+button is absent, switches to browser-only sync with the server-card toggle,
 and verifies an edit plus attachment survive reload without HTTP/WS data writes.
+It turns server sync back on and checks that the local edit is sent.
 It also exercises the compiled Vault session error path (no React hook in an
 error constructor). Actual staging billing/admission and multi-device migration
 remain separate acceptance checks.
@@ -2484,3 +2503,21 @@ The sign-in/profile/sign-out smoke test also requires explicit sign-out to
 clear the local identity and land on the welcome screen without an account
 settings continuation, both immediately and after reload. The settings guard
 must not override an intentional sign-out or device lock.
+
+
+## Legacy HTTP compatibility
+
+| Behavior | Tests | Scope |
+| --- | --- | --- |
+| Foreign HTTP parent/drive collections query their own origin despite an empty or partial local cache and disconnected home server | `browser/lib/src/legacy-http-collection.test.ts` | HTTP subjects preserved; unrelated default personal-drive scope omitted; explicit server respected; DID queries remain local-first |
+| Pre-DID queries retry without unsupported parameters and filter locally | `browser/lib/src/legacy-http-collection.test.ts` | Preserves drive ancestry and AND filters, sorts before pagination, keeps undated rows; a loaded parent Drive overrides stale default scope |
+| Migrated agents authenticate legacy HTTP reads at their original origin | `browser/lib/src/client-legacy-auth.test.ts` | Original HTTP identity, padded standard-base64 key/signature, real Ed25519 verification; other hosts, schemes, ports and lookalikes never receive the legacy identity |
+| Public legacy HTTP drive and its children load from a nodeless home | `browser/lib/src/legacy-http-live-check.test.ts` | Opt-in `ATOMIC_LEGACY_LIVE=1`; live atomicdata.dev read verified 2026-09-23. Does not cover private legacy auth or browser sidebar rendering |
+
+## Agent secrets from app.atomic.place (#1649)
+
+`browser/lib/src/agent-secret-1649.test.ts` passes a synthetic secret in the
+deployed app's base64 JSON format with an `atomic:agent:` subject through the
+same `Agent.fromSecret` parser used by the local welcome form. It verifies
+the identity and public key. Browser sign-in and data recovery are separate
+flows.

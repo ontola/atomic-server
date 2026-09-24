@@ -137,6 +137,8 @@ type CreateResourceOptions = {
   isA?: string | string[];
   /** Any additional properties the resource should have */
   propVals?: Record<string, JSONValue>;
+  /** Known datatypes for propVals that should not fetch Property metadata. */
+  propDatatypes?: Record<string, Datatype>;
   /** Set to true if the resource should have a DID as subject. Defaults to `true` for `did:ad` agents, otherwise `false`. */
   did?: boolean;
   /** When set, the resource is minted from this cert (deterministic DID)
@@ -431,6 +433,12 @@ export function isEmbeddedVocabulary(subject: string): boolean {
 const embeddedVocabulary = new Set<string>([
   ...Object.values(taskSchema.properties),
   ...Object.values(taskSchema.tags),
+  // These classes ship in lib/defaults/plugins.json on every host. Their
+  // public atomicdata.dev URLs are not published on the catalog yet.
+  server.classes.plugin,
+  server.classes.release,
+  server.classes.installation,
+  server.classes.listing,
   core.properties.importBaseline,
   core.properties.importResolution,
   core.properties.importReferenceReview,
@@ -2344,10 +2352,16 @@ export class Store {
                 // Failed write: drop the stamp so the next attempt is not
                 // skipped as a duplicate of a write that never landed.
                 this.lastPersistedStamp.delete(emitResource.subject);
-                console.error(
-                  `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
-                  e,
-                );
+
+                // A follower's in-flight write is deliberately cancelled on
+                // leader handoff. The stamp is cleared above for a later
+                // retry; this is not a storage fault to report as an error.
+                if (!(e instanceof RequestCancelledError)) {
+                  console.error(
+                    `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
+                    e,
+                  );
+                }
               });
           }
         }
@@ -2378,6 +2392,7 @@ export class Store {
     parent,
     isA,
     propVals,
+    propDatatypes,
     noParent,
     did,
     genesisCert,
@@ -2459,7 +2474,8 @@ export class Store {
 
     if (propVals) {
       for (const [key, value] of Object.entries(propVals)) {
-        await resource.set(key, value);
+        const datatype = propDatatypes?.[key];
+        await resource.set(key, value, datatype === undefined, datatype);
       }
     }
 
@@ -3405,6 +3421,25 @@ export class Store {
     subject: string,
     opts: FetchOpts = {},
   ): Promise<void> {
+    // Foreign HTTP identities are served by their own authority. A local
+    // database attachment/lock must not delay that read (in particular the
+    // bounded legacy-account lookup during sign-in). Keep OPFS as an offline
+    // fallback, but do not make it a prerequisite for contacting the server.
+    if (
+      /^https?:\/\//.test(subject) &&
+      new URL(subject).origin !== new URL(this.serverUrl).origin &&
+      !isEmbeddedVocabulary(subject) &&
+      !this.isLocalOnlySubject(subject)
+    ) {
+      try {
+        const remote = await this.fetchResourceFromServer(subject, opts);
+        if (!isTransportError(remote.error)) return;
+      } catch (e) {
+        if (e instanceof RequestCancelledError) throw e;
+        if (!isTransportError(e)) throw e;
+      }
+    }
+
     // Embedded vocabulary skips the local-first detour while there is a server
     // to ask. It is about twenty fixed, tiny resources that the installed host
     // serves from its own store, so the client database can only ever hold a

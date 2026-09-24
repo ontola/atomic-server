@@ -6,6 +6,7 @@ import {
   createFromCatalog,
   createTableFromDialog,
   getDevDriveSecret,
+  openWorkspaceDialog,
   SERVER_URL,
 } from './test-utils';
 import {
@@ -85,7 +86,24 @@ test.describe('plugins', () => {
       })
       .click();
     await expect(page).not.toHaveURL(/connection_code=/);
-    await page.getByRole('button', { name: 'Complete installation' }).click();
+    // Losing `connection_code` only means the code was consumed. The button
+    // stays disabled until `describe(platform)` has answered with this
+    // connection's collections (`ConnectLocalThought.tsx`, the mount effect
+    // that calls `setCollections`), a proxy round trip that cannot even start
+    // before the page is back from the LocalThought redirect. Nothing waited
+    // for it, so the click's own 10s action timeout was the shortest budget in
+    // the test and it guarded the heaviest step: on develop run 4470 it
+    // expired on all three attempts with the button resolved and `disabled`.
+    //
+    // Wait for the state the click needs rather than widening the click. If
+    // the collections never arrive at all, this now fails saying the button
+    // stayed disabled, which is a product bug no budget fixes and which a
+    // click timeout would have gone on hiding.
+    const completeInstallation = page.getByRole('button', {
+      name: 'Complete installation',
+    });
+    await expect(completeInstallation).toBeEnabled({ timeout: 30_000 });
+    await completeInstallation.click();
     await page.getByRole('link', { name: 'Open folder', exact: true }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Last synced' }),
@@ -155,6 +173,9 @@ export function run() { return { intents: [] }; }
     await expect(
       page.getByRole('heading', { name: 'Integrations', exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole('checkbox', { name: 'Show experimental plugins' })
+      .check();
     const card = page
       .locator('[data-release]')
       .filter({
@@ -468,11 +489,14 @@ export function run() { return { intents: [] }; }
       fullPage: true,
     });
 
-    for (const disclosure of await page
-      .locator('summary')
-      .filter({ hasText: 'Repository test results' })
-      .all()) {
-      await disclosure.click();
+    // The cards can re-render while evidence loads. Re-query closed
+    // disclosures instead of retaining nth locators from an earlier count.
+    const closedEvidence = page
+      .locator('details:not([open]) > summary')
+      .filter({ hasText: 'Repository test results' });
+
+    while (await closedEvidence.count()) {
+      await closedEvidence.first().click();
     }
 
     const evidence = page.locator('details').filter({
@@ -643,9 +667,13 @@ export function run() { return { intents: [] }; }
   test('Clockify applies linked entries through the real sandbox and skips repeats', async ({
     page,
   }) => {
-    // Discovery plus an apply, both through the sandbox: a minute here, which
-    // is the suite's whole per-test default.
-    test.setTimeout(120_000);
+    // Discovery plus an apply, both through the sandbox: 60 to 66s alone, but
+    // 162 to 168s under four local workers, so 120s was not close, it was
+    // already past. It failed on the WALL, naming whatever line the clock ran
+    // out on rather than anything that was actually wrong. Red 3 of 3 loaded
+    // before, green 3 of 3 after. Same shape and same budget as the sidebar
+    // sync test below; every assertion in this test keeps its own.
+    test.setTimeout(240_000);
     // Replace only the provider transport inside the sandbox. Discovery, mapping,
     // runtime, planning, signed commits and the second run's DB query stay real.
     await createTableFromDialog(page, {
@@ -1027,14 +1055,13 @@ export function run() { return { intents: [] }; }
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
-    // The install is still running when that URL appears: the button here
-    // reads "Connecting…" and is disabled until the connection settles, so
-    // `Connections` does not exist yet. The 30s above covers the navigation
-    // and nothing after it. Measured here: the click succeeds at 45s and the
-    // whole test takes 48s, against a 10s default that it never met.
-    await page
-      .getByRole('button', { name: 'Connections', exact: true })
-      .click({ timeout: 45000 });
+    // The install is still running when that URL appears: the setup dialog
+    // stays open over the page, its button reading "Connecting…", until the
+    // connection settles, so the context menu cannot be opened yet. The 30s
+    // above covers the navigation and nothing after it. Measured here: the
+    // click succeeds at 45s and the whole test takes 48s, against a 10s
+    // default that it never met.
+    await openWorkspaceDialog(page, 'connections', 45000);
     await page
       .getByRole('link', { name: 'Connection settings', exact: true })
       .click();
@@ -1843,7 +1870,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
 
     const dialog = page.locator('dialog[open]');
     await expect(dialog.getByText(/does not exist/)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Apply/ })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: /Apply/ })).toHaveCount(0);
 
     // Cancelling a blocked run still records it: a refusal that leaves no
     // trace reads the same as a plugin that never ran.

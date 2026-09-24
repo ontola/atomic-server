@@ -1,18 +1,25 @@
-![AtomicServer](./logo.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./logo-dark.svg">
+  <img alt="Atomic Place" src="./logo.svg">
+</picture>
 
 [![crates.io](https://img.shields.io/crates/v/atomic-server)](https://crates.io/crates/atomic-server)
 [![Discord chat](https://img.shields.io/discord/723588174747533393.svg?logo=discord)](https://discord.gg/a72Rv2P)
 [![MIT licensed](https://img.shields.io/github/license/atomicdata-dev/atomic-server.svg?color=blue&logo=github&logoColor=blue)](./LICENSE)
 [![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/atomicdata-dev/atomic-server)
 
-**AtomicServer is an all-in one workspace / CMS / Graph Database.
-Docs on [docs.atomicdata.dev](https://docs.atomicdata.dev/atomic-data-overview)**
+**Atomic Place is a local-first workspace for documents, tables, files, chat and apps.**
+It works on your device and can sync through a self-hosted AtomicServer or optional
+[managed services](https://atomic.place). The underlying [Atomic Data](https://docs.atomicdata.dev/atomic-data-overview)
+specification is open.
 
 This repo includes:
 
-- **AtomicServer**, our main product, as [self-hostable server](/server) or as [desktop / mobile app](/desktop).
+- **Atomic Place**, the workspace in the [browser](/browser/data-browser), on [desktop](/desktop)
+  and on mobile.
+- **AtomicServer**, the [self-hostable server](/server) for storage, search, sharing and sync.
 - [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
-- [Atomic Data Browser](/browser/data-browser/README.md), the React front-end powering Atomic-Server.
+- [Atomic Data Browser](/browser/data-browser/README.md), the React front-end for Atomic Place.
 - [`@tomic/lib`](/browser/lib/README.md) JS NPM library.
 - [`@tomic/react`](/browser/react/README.md) React NPM library.
 - [`@tomic/svelte`](/browser/svelte/README.md) Svelte NPM library.
@@ -22,7 +29,7 @@ This repo includes:
 
 _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 
-## AtomicServer
+## Atomic Place
 
 <!-- We re-use this table in various places, such as README.md and in the docs repo. Consider this the source. -->
 - 🏠  **Local-first**: works offline in the browser, syncs when you reconnect with [Atomic Sync](https://docs.atomicdata.dev/sync).

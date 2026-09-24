@@ -12,7 +12,9 @@ repositories.
 
 | File | Used for |
 | --- | --- |
-| `src/atomic-mark.svg` | Atomic Server — everything: server, data-browser, desktop, iOS, docs, portal, marketing site |
+| `src/place-mark.svg` | Atomic Place — browser app, portal and marketing site |
+| `src/place-mark-mono.svg` | single-ink Atomic Place favicon contexts |
+| `src/atomic-mark.svg` | AtomicServer — server and existing native/docs/package icons |
 | `src/atomic-mark-mono.svg` | single-ink contexts (Safari pinned tab). Ring and orb are separated by a real gap instead of the colour mark's white keyline, which carries no information once flattened |
 | `src/canvas-mark.svg` | Atomic Canvas — the open sweep. Same orb, same gradient, same family |
 
@@ -98,105 +100,26 @@ path appears that the framework did not already dictate.
 
 ## Wordmarks are hand-maintained
 
-Five lockups embed the mark and are **not** generated:
+The Atomic Place wordmark is an SVG lockup with a normal `o` in “atomic” and a
+gradient full stop before “place”. Its letterforms and dot are currently kept
+in sync by hand across these surfaces:
 
-| File | Lockup | Used by |
-| --- | --- | --- |
-| `logo.svg` | AtomicServer, with an 8px white keyline for placement on photos | main README, Dagger mounts it at `/logo.svg` |
-| `browser/logo.svg` | Atomic Data Browser + TS badge | `browser/README.md` |
-| `browser/data-browser/logo.svg` | identical copy of the above | nothing — unreferenced, safe to delete |
-| `browser/data-browser/index.html` | AtomicServer, **animated** — inline in the boot splash | the app's first paint |
-| `browser/data-browser/src/components/Logo.tsx` | AtomicServer, inline JSX, inked from the dark-mode setting | `AboutRoute.tsx`, `InvitePage.tsx`, `GettingStartedFlow.tsx` |
-
-In each one the mark **is the letter `o`** of "Atomic": the glyph is not drawn
-as a letter at all, the mark stands in for it. That is why they cannot be
-generated from `src/` — position, scale and optical weight are tuned per
-lockup against the surrounding letterforms.
-
-They were updated by hand when the sweep replaced the ring in 2026. If the
-mark ever changes again, these need re-cutting, and the tell that it was
-missed is an `o` that no longer matches the icons. Note the sweep's band is
-proportionally lighter than the old ring's (0.45 of its outer radius against
-0.52), so it reads very slightly light next to bold letterforms — acceptable
-at these sizes, but worth knowing before scaling a lockup down.
-
-The splash and `Logo.tsx` were exactly that miss: both are lockups, but they
-live inside an HTML and a TSX file rather than an `.svg`, so neither was on
-this list and both kept the old ring until 2026-08. They are listed now.
-
-Neither can become an `<img>` of `logo.svg`, which is what would have kept
-them honest. The splash has to ink itself from `--text-splash` — the in-app
-dark-mode override is applied before first paint, and an external image cannot
-see it — and its `o` has to animate. `Logo.tsx` inks from the `darkMode`
-setting, which is React state an image also cannot see.
-
-In-app surfaces use `Logo.tsx`, not an `<img>` of `logo.svg`. The keyline is
-the reason: it exists so the wordmark survives on a photo, and nothing removes
-it again. A dark-mode `filter: brightness(0) invert(1)` over the image inks the
-letters white but also keeps the keyline white — bloating the glyphs, closing
-the counters of `o`, `e` and `r`, and flattening the orb's gradient to a plain
-white dot. That was shipped on the welcome screen until 2026-08.
-
-### What the letters are
-
-Recovered by fitting candidates against the committed outlines, because
-re-cutting a lockup for a new word is otherwise guesswork:
-
-| | |
+| File | Use |
 | --- | --- |
-| Typeface | Montserrat **Bold (700)** |
-| Size | 104 units (cap height 72.8, baseline at y=74) |
-| Tracking | -4.182 units per gap, on top of the font's own kerning |
-| `i` | **dotless** (`U+0131`) — the orb is the only dot in the logo |
+| `logo.svg` and `logo-dark.svg` | Repository README in light and dark themes; Dagger mounts `logo.svg` at `/logo.svg` |
+| `browser/data-browser/index.html` | Browser boot splash, using `--text-splash` for the letters |
+| `browser/data-browser/src/components/Logo.tsx` | App UI, using the current theme for the letters |
+| `atomic-saas/portal/src/PlaceLogo.tsx` | Managed portal header in the sibling repo |
 
-Shaping `Atomic Data` with those settings reproduces every glyph in the
-existing lockups to within 0.07 units, so they can be trusted for a new word.
-Use a shaper that applies GPOS (fontkit, HarfBuzz); opentype.js reports
-Montserrat's GPOS table but returns no kerning from it, which silently leaves
-`At` about 4 units loose.
+When changing the lockup, update all four from the same geometry. The root
+`logo.svg` uses black letters and `logo-dark.svg` uses white letters; the
+inline versions use their surface's current text colour. The dot keeps its
+cyan-to-blue gradient.
+The browser splash and React logo need to remain inline so their letters can
+follow the app theme before and after startup.
 
-The mark is then dropped on the `o`'s centre by embedding `atomic-mark.svg`
-unchanged under `translate(cx,cy) scale(30/31) translate(-50,-52)` — the scale
-takes the mark's ring outer radius (31 in its own space) to 30, and the ring
-sits 1 unit above the font `o`'s centre, which is the overshoot a round letter
-needs to look the same size as a flat one.
-
-### The animated `o`
-
-The splash's mark spins while the app boots, and the sweep reads as the orb's
-wake: opacity falling off with distance behind it. Three details are
-deliberate.
-
-**The falloff bottoms out at 30%, not 0.** The standalone spinners elsewhere do
-fade to nothing, but this mark is also a **letter**: at zero the word reads
-"At micServer" for a quarter of every revolution.
-
-**The falloff is geometry, not a mask.** It was first written as
-`mask-image: conic-gradient(…)` on the sweep path, which is by far the tidiest
-way to express it and works in Chrome and Safari. Firefox rendered it as an
-opaque block instead. CSS masking of SVG *geometry* is the unreliable case —
-a path has no CSS box, so the reference box the mask resolves against is not
-something to rely on. SVG has no angular gradient either, so the ramp is built
-from arcs that all end at the orb and start progressively further back, each
-adding a little alpha. Do not "simplify" this back into a mask.
-
-Two consequences worth knowing:
-
-- The arcs are **nested**, not laid end to end, so the only edge each one
-  contributes is its start. Butt caps make that a clean radial step; round caps
-  bulge into a visible scallop. The full-length base and the final segment keep
-  round caps, because those two are the mark's own terminals.
-- Band count trades DOM size against banding, and **has to scale with how
-  large the mark is drawn** — the alpha step between bands is what the eye
-  picks up. ~40 bands is smooth at spinner and splash size; a watermark several
-  hundred pixels across visibly steps until roughly 200.
-
-**Rotation is written as an explicit transform chain**,
-`translate(50px,52px) rotate(…) translate(-50px,-52px)`, rather than a
-`transform-origin`. Inside a transformed SVG subtree the origin depends on
-`transform-box`, and the explicit chain has one meaning in every engine.
-Placement stays an SVG `transform` attribute, copied from `logo.svg`, so a
-stylesheet failure still leaves a correct static lockup.
+`browser/logo.svg` and `browser/data-browser/logo.svg` are older Atomic Data
+Browser lockups, separate from the Atomic Place wordmark.
 
 ## Atomic Place web identity — September 2026
 

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { Agent, generateKeyPair } from '@tomic/lib';
+import { Agent, generateKeyPair, toLegacyScheme } from '@tomic/lib';
 import {
   FRONTEND_URL,
   getCurrentSubject,
@@ -72,6 +72,30 @@ async function expectWritableHome(page: Page, home: string) {
   const title = `Private home canary ${Date.now()}`;
   await setTitle(page, title);
   const subject = await getCurrentSubject(page);
+  // Let the rename finish landing before reloading it away. `setTitle` returns
+  // once a commit for this subject has been posted, and `useValue`'s save is
+  // debounced, so under load the commit it returns on can be one the debounce
+  // fired part-way through the typing. Reloading then persists the prefix, and
+  // the assertion below reports the truncation several lines from its cause:
+  // seen at four workers on 24 September 2026 storing "Private home can" and
+  // "Private home canary 17902" for titles ending 1790211504841 and
+  // 1790210871258, each stable across 23 locator resolutions, so what was
+  // saved was short and not merely what was drawn.
+  //
+  // Waiting for the whole title ON SCREEN is not enough, and that is the
+  // useful half of this: with only that wait the reload still restored
+  // "Private home cana", 3 runs of 6, so the editor was ahead of the outbox
+  // rather than the store being ahead of the screen. What the reload must wait
+  // for is the write, so wait for the outbox to drain as well. Matching the
+  // commit body cannot substitute for either, because a rename travels as a
+  // binary `loroUpdate` and the title is never in it.
+  await expect(page.getByTestId('editable-title')).toHaveText(title);
+  await expect
+    .poll(
+      () => page.evaluate(() => window.store.getSyncStatus().pendingDirtyCount),
+      { timeout: 30_000 },
+    )
+    .toBe(0);
   await page.reload();
   await expect(page.locator(`main[about="${subject}"]`)).toBeVisible();
   await expect(page.getByTestId('editable-title')).toHaveText(title);
@@ -83,11 +107,20 @@ test(
   async ({ page }) => {
     const { secret, home } = await unknownAccount();
     await signIn(page, secret);
+    // The nudge is a toast, raised from `ShowRoute`'s effect once
+    // `openPrivateHome` reports `created`, so this waits on a home drive being
+    // built on the server and not on a render. `signIn` returns as soon as the
+    // agent is in the store, which is what STARTS that effect, so the whole
+    // creation falls inside this budget. The 10s default cannot cover it:
+    // measured at four workers on 24 September 2026, the step cost 12.9s, 13.9s
+    // and 14.6s, and the test failed 3 of 3 with the link never found. It is
+    // green 5 of 5 unloaded, which is why this reads as a flake rather than as
+    // the fixed shortfall it is. CI saw the same test on run 4485.
     await expect(
       page.getByRole('link', {
         name: 'Connect another device or restore a backup',
       }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expectWritableHome(page, home);
   },
 );
@@ -103,7 +136,7 @@ test('an unavailable legacy home does not prevent a writable derived home', asyn
     /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
     'The deliberately unavailable legacy drive returns 404.',
     1,
-    new RegExp(`/did\\?subject=${encodeURIComponent(legacy)}$`),
+    new RegExp(`/(?:did|resource)\\?subject=${encodeURIComponent(legacy)}$`),
     { optional: true },
   );
   browserDiagnostics.expect(
@@ -126,7 +159,7 @@ test('a restored session can initialize its missing private home from a direct l
   browserDiagnostics.expect(
     'warning',
     new RegExp(
-      `^\\[WS\\] refused: (SUB|SYNC) refused for ${home}: not readable$`,
+      `^\\[WS\\] refused: (SUB|SYNC) refused for (?:${home}|${toLegacyScheme(home)}): not readable$`,
     ),
     'The persisted identity has no drive on the node while recovery and initialization run; bounded sync retries may be refused.',
     16,
