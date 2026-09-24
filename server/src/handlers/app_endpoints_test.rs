@@ -764,3 +764,72 @@ async fn v2_is_never_downgraded_to_v1() {
     .await;
     assert_eq!(relabelled.status(), 401);
 }
+
+/// An installed catalog plugin has an app identity on this node, as an app
+/// from `createApp` does: activating the Installation mints it, and
+/// `GET /app-agent` reports it. That is the agent a page delegates an
+/// integration-proxy connection to, or registers as this node's runtime of the
+/// installation (ontola/atomic-plugins#54, decisions 2 and 10), and the one
+/// the host signs the plugin's proxy requests with.
+#[actix_rt::test]
+async fn an_active_installation_reports_its_agent_on_this_node() {
+    let fixture = fixture("installation_app_agent").await;
+    let db = &fixture.appstate.store;
+    let release = atomic_lib::db::plugin_release::PluginRelease::js(
+        "export function run() { return { intents: [] }; }".into(),
+        serde_json::json!({"schemaVersion":2,"capabilities":[{"name":"storage","reason":"keeps a cursor"}]}),
+        Default::default(),
+    );
+    let id = db.publish_plugin_release(&release).unwrap();
+    let installation = genesis(
+        db,
+        vec![
+            (
+                urls::IS_A,
+                Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+            ),
+            (
+                urls::PARENT,
+                Value::AtomicUrl(fixture.drive.as_str().into()),
+            ),
+            (urls::NAME, Value::String("importer".into())),
+            (urls::NAMESPACE, Value::String("acme".into())),
+            (urls::RELEASE_PROP, Value::String(id.clone())),
+            (urls::RELEASE_ID, Value::String(id)),
+            (urls::INSTALLATION_STATUS, Value::String("active".into())),
+            (urls::GRANTS, Value::Json(serde_json::json!(["storage"]))),
+        ],
+    )
+    .await;
+
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let response = test::call_service(
+        &service,
+        signed(
+            &format!(
+                "/app-agent?drive={}&app={}",
+                urlencoding::encode(&fixture.drive),
+                urlencoding::encode(&installation),
+            ),
+            &fixture.appstate,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    let reported: serde_json::Value = serde_json::from_str(&body_of(response)).expect("json");
+
+    let stored = db
+        .get_app_agent_info(&AppAgentKey::new(&fixture.drive, &installation))
+        .unwrap()
+        .expect("activation minted an identity for the installation")
+        .agent;
+    assert_eq!(reported["agent"], stored.as_str());
+    // Its own agent, not the server's.
+    assert_ne!(stored, db.get_default_agent().unwrap().subject.to_string());
+}
