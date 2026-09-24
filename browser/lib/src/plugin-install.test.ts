@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AtomicError, ErrorType, PROBLEM_MARKER } from './error.js';
+import { HostFeatureUnavailableError } from './plugin-manifest-http.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import {
@@ -333,6 +335,82 @@ describe('updateInstallationRelease', () => {
     expect(propertyLookup).not.toHaveBeenCalledWith(
       server.properties.releaseId,
     );
+  });
+});
+
+describe('a release the server’s plugin-routes gates refuse', () => {
+  const problem = {
+    type: 'host-feature-unavailable',
+    feature: 'plugin-routes',
+    needed: 'read-only',
+    compiled: true,
+    level: 'off',
+    surfaces: ['route `GET /users/{name}`'],
+    listeners: [],
+    sidecars: [],
+  } as const;
+  const message =
+    'This plugin opens public endpoints on the server (route `GET /users/{name}`). The server operator hasn’t enabled them.';
+  // The `/commit` Error resource the server answers a refused commit with.
+  const refusal = () =>
+    new AtomicError(
+      JSON.stringify({
+        [core.properties.description]:
+          message + PROBLEM_MARKER + JSON.stringify({ ...problem, detail: message }),
+        'https://atomicdata.dev/properties/errorCode': 11,
+      }),
+      ErrorType.Client,
+    );
+
+  it('throws the typed error from a refused install and forgets the Installation', async () => {
+    const { store, postCommitSpy } = await testStore();
+    postCommitSpy.mockRejectedValue(refusal());
+
+    const error = await installRelease(store, {
+      drive: 'https://example.com/drive',
+      release: { url: 'https://example.com/releases/x', id: 'blake3:x' },
+      name: 'gated',
+      grants: [],
+    }).catch(e => e);
+
+    expect(error).toBeInstanceOf(HostFeatureUnavailableError);
+    expect(error.problem).toEqual(problem);
+    // Nothing is left to install it later, unreviewed.
+    expect(store.outbox.pending()).toEqual([]);
+  });
+
+  it('throws the typed error from a refused upgrade', async () => {
+    const { store, postCommitSpy } = await testStore();
+    const subject = await installRelease(store, {
+      drive: 'https://example.com/drive',
+      release: { url: 'https://example.com/releases/one', id: 'blake3:one' },
+      name: 'plain',
+      grants: [],
+    });
+    postCommitSpy.mockRejectedValue(refusal());
+
+    const error = await updateInstallationRelease(store, subject, {
+      release: { url: 'https://example.com/releases/two', id: 'blake3:two' },
+      grants: [],
+    }).catch(e => e);
+
+    expect(error).toBeInstanceOf(HostFeatureUnavailableError);
+    expect(error.problem).toEqual(problem);
+  });
+
+  it('passes any other refusal through', async () => {
+    const { store, postCommitSpy } = await testStore();
+    postCommitSpy.mockRejectedValue(new AtomicError('No write right'));
+
+    const error = await installRelease(store, {
+      drive: 'https://example.com/drive',
+      release: { url: 'https://example.com/releases/x', id: 'blake3:x' },
+      name: 'gated',
+      grants: [],
+    }).catch(e => e);
+
+    expect(error).toBeInstanceOf(AtomicError);
+    expect(error.message).toBe('No write right');
   });
 });
 

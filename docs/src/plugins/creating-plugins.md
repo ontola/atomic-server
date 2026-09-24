@@ -166,8 +166,11 @@ A v3 manifest without `http` is accepted everywhere v3 is understood; an `http` 
 
 The server derives what a release needs from these declarations; the author never writes it.
 Anonymous `GET`/`HEAD` routes and well-known claims need `--plugin-routes read-only`; any other route, write target, key, token, delivery, listener or sidecar needs `read-write`.
-`GET /plugin-catalog` gives each entry a derived `requires` list, such as `["persistent-host", "plugin-routes:read-only", "public-origin", "wasm-sandbox"]`.
-Installing, upgrading or pinning a release that needs more than the server allows is refused with a message that names the endpoints and the switch to turn on (`/plugin-release-pin` answers `409` with the typed `host-feature-unavailable` problem) (see [Plugin public endpoints](../atomicserver/installation.md#plugin-public-endpoints-opt-in)). A refused upgrade leaves the old release running.
+`GET /plugin-catalog` gives each entry a derived `requires` list, such as `["persistent-host", "plugin-routes:read-only", "public-origin", "wasm-sandbox"]`, or `null` for a release without versioned declarations.
+A release that isn't in the server's cache is read from the `Release` resource its Listing names and checked against the listed id; a remote one is fetched within a short timeout, a few per request.
+When that fails, `requires` is `"unknown"`: a client marks such an entry rather than hiding it, and the install review reads the manifest before anything is installed.
+Installing, upgrading or pinning a release that needs more than the server allows is refused with a message that names the endpoints and the switch to turn on (see [Plugin public endpoints](../atomicserver/installation.md#plugin-public-endpoints-opt-in)). A refused upgrade leaves the old release running.
+Both refusals are typed: `/plugin-release-pin` answers `409` with the `host-feature-unavailable` problem, and a refused Installation commit carries the same problem after its message, with error code `11` (see [WebSockets](../websockets.md)). `@tomic/lib` raises `HostFeatureUnavailableError` for both.
 
 ## The Plugin Manifest (legacy `plugin.json`)
 

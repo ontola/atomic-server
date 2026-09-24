@@ -1059,6 +1059,7 @@ mod installation_tests {
         .to_string();
         assert!(err.contains(expected), "{err}");
         assert!(err.contains("route `GET /users/{name}`"), "{err}");
+        assert_typed_refusal(&err, expected).await;
         assert!(db
             .get_plugin_meta(&PluginMetaKey::new(&f.drive, "acme", "gated"))
             .unwrap()
@@ -1084,6 +1085,7 @@ mod installation_tests {
             .unwrap();
         let err = r.save(db).await.unwrap_err().to_string();
         assert!(err.contains(expected), "{err}");
+        assert_typed_refusal(&err, expected).await;
         let stored = db
             .get_resource(&installation.as_str().into())
             .await
@@ -1092,6 +1094,50 @@ mod installation_tests {
         let after = db.get_plugin_meta(&key).unwrap().unwrap();
         assert_eq!(after.manifest, before.manifest);
         assert_eq!(after.release_id, before.release_id);
+    }
+
+    /// A gate refusal on the commit path carries the typed problem, the way
+    /// commit errors can: after the message, classified on both wire paths,
+    /// and answered `409` over HTTP with the problem in the Error resource.
+    async fn assert_typed_refusal(err: &str, expected: &str) {
+        use atomic_lib::sync::protocol::{classify_commit_error, error_code, split_problem};
+        let (message, problem) = split_problem(err);
+        let problem = problem.expect("the refusal carries the typed problem");
+        assert!(message.contains(expected), "{message}");
+        assert_eq!(problem["type"], "host-feature-unavailable");
+        assert_eq!(problem["feature"], "plugin-routes");
+        assert_eq!(problem["needed"], "read-only");
+        assert_eq!(problem["compiled"], crate::plugin_routes::COMPILED);
+        assert_eq!(problem["level"], "off");
+        assert_eq!(problem["surfaces"], json!(["route `GET /users/{name}`"]));
+        assert_eq!(problem["listeners"], json!([]));
+        assert_eq!(problem["sidecars"], json!([]));
+        assert!(
+            message.ends_with(problem["detail"].as_str().unwrap()),
+            "{message}"
+        );
+        assert_eq!(
+            classify_commit_error(err),
+            error_code::HOST_FEATURE_UNAVAILABLE
+        );
+
+        let response_error = crate::errors::AtomicServerError::from(err.to_string());
+        use actix_web::ResponseError;
+        assert_eq!(
+            response_error.status_code(),
+            actix_web::http::StatusCode::CONFLICT
+        );
+        let response = response_error.error_response();
+        let body = actix_web::body::to_bytes(response.into_body())
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body[urls::ERROR_CODE],
+            json!(error_code::HOST_FEATURE_UNAVAILABLE)
+        );
+        let (_, from_body) = split_problem(body[urls::DESCRIPTION].as_str().unwrap());
+        assert_eq!(from_body.unwrap(), problem);
     }
 
     /// The capabilities `test-plugin.zip` declares in its `plugin.json`.

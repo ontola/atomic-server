@@ -52,10 +52,14 @@ impl ResponseError for AtomicServerError {
     fn status_code(&self) -> StatusCode {
         // A managed node refusing enrollment/quota is an expected admission
         // decision, not an internal failure or a request to sign in again.
-        if atomic_lib::sync::protocol::classify_commit_error(&self.message)
-            == atomic_lib::sync::protocol::error_code::SYNC_REJECTED
-        {
-            return StatusCode::FORBIDDEN;
+        match atomic_lib::sync::protocol::classify_commit_error(&self.message) {
+            atomic_lib::sync::protocol::error_code::SYNC_REJECTED => return StatusCode::FORBIDDEN,
+            // A release this node's gates don't allow: the same `409` as
+            // `/plugin-release-pin`'s typed problem.
+            atomic_lib::sync::protocol::error_code::HOST_FEATURE_UNAVAILABLE => {
+                return StatusCode::CONFLICT
+            }
+            _ => {}
         }
         match self.error_type {
             AppErrorType::NotFound => StatusCode::NOT_FOUND,

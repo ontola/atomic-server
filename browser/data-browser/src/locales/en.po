@@ -9583,3 +9583,11 @@ msgid "# plugin needs server features this server doesn’t have."
 msgid_plural "# plugins need server features this server doesn’t have."
 msgstr[0] "# plugin needs server features this server doesn’t have."
 msgstr[1] "# plugins need server features this server doesn’t have."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Requirements unknown"
+msgstr "Requirements unknown"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "This server couldn’t read what this release needs. The review checks it before installing."
+msgstr "This server couldn’t read what this release needs. The review checks it before installing."
