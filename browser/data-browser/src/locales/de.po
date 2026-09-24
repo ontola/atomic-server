@@ -9485,6 +9485,7 @@ msgstr ""
 
 #: src/chunks/PluginRuns/CatalogApps.tsx
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
+msgstr ""
 
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
@@ -9499,15 +9500,17 @@ msgstr ""
 msgid "Set up"
 msgstr ""
 
-#. 0: manifest.destination.table.name
+#. 0: names[0]
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr ""
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "File to import"
 msgstr ""
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Preview import"
 msgstr ""
@@ -9522,8 +9525,9 @@ msgid "Open imported data"
 msgstr ""
 
 #. 0: bytes
-#: src/chunks/PluginRuns/FileImport.tsx
+#: src/chunks/PluginRuns/importFile.ts
 msgid "{0} bytes"
+msgstr ""
 
 #. 0: ' '; 1: ' '; 2: getIntegrationProxy()
 #: src/chunks/AppPage/AppFrame.tsx
@@ -9569,6 +9573,7 @@ msgstr ""
 #. 0: platformName(platform)
 #: src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
+msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
 msgid "This link is incomplete. Start again from the app that sent you here."
@@ -9588,9 +9593,6 @@ msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
 msgid "Denying…"
-#. 0: names[0]
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
@@ -9599,9 +9601,6 @@ msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
 msgid "a token for its"
-#: src/chunks/AppPage/AppImporterRun.tsx
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "File to import"
 msgstr ""
 
 #: src/routes/RouteConsentRoute.tsx
@@ -9781,6 +9780,7 @@ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
+msgstr ""
 
 #: src/chunks/Plugins/RouteWriteApproval.tsx
 msgid "the resource in the config key <0/>, which is not set"
@@ -9988,9 +9988,6 @@ msgstr ""
 
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
-#. 0: bytes
-#: src/chunks/PluginRuns/importFile.ts
-msgid "{0} bytes"
 msgstr ""
 
 #. 0: names.length
@@ -10013,12 +10010,17 @@ msgstr ""
 
 #: src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+msgstr ""
+
 #: src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Requirements unknown"
 msgstr ""
 
 #: src/chunks/Plugins/PublicEndpoints.tsx
 msgid "This server couldn’t read what this release needs. The review checks it before installing."
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
 msgid "Config saved, rights moved"
 msgstr ""
 

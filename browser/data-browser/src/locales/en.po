@@ -9518,15 +9518,17 @@ msgstr "Loading importer…"
 msgid "Set up"
 msgstr "Set up"
 
-#. 0: manifest.destination.table.name
+#. 0: names[0]
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr "Set up creates a {0} table for this importer. Nothing is imported yet."
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "File to import"
 msgstr "File to import"
 
+#: src/chunks/AppPage/AppImporterRun.tsx
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Preview import"
 msgstr "Preview import"
@@ -9541,7 +9543,7 @@ msgid "Open imported data"
 msgstr "Open imported data"
 
 #. 0: bytes
-#: src/chunks/PluginRuns/FileImport.tsx
+#: src/chunks/PluginRuns/importFile.ts
 msgid "{0} bytes"
 msgstr "{0} bytes"
 
@@ -10005,10 +10007,6 @@ msgstr "Endpoints"
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Token revoked"
 msgstr "Token revoked"
-#. 0: String(reason)
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "Could not set up this importer: {0}"
-msgstr "Could not set up this importer: {0}"
 
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
@@ -10031,6 +10029,7 @@ msgstr "This app wants to import <0/> with{0} <1/>. You review the changes befor
 #: src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
 msgstr "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+
 #: src/chunks/Plugins/PublicEndpoints.tsx
 msgid "Requirements unknown"
 msgstr "Requirements unknown"
@@ -10038,6 +10037,8 @@ msgstr "Requirements unknown"
 #: src/chunks/Plugins/PublicEndpoints.tsx
 msgid "This server couldn’t read what this release needs. The review checks it before installing."
 msgstr "This server couldn’t read what this release needs. The review checks it before installing."
+
+#: src/views/Installation/InstallationPage.tsx
 msgid "Config saved, rights moved"
 msgstr "Config saved, rights moved"
 
