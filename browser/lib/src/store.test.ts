@@ -566,6 +566,7 @@ describe('Store', () => {
       resource.subject,
       expect.any(String),
       undefined,
+      undefined,
     );
   });
 

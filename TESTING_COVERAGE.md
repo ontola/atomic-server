@@ -973,6 +973,18 @@ native clients.
   `applyIncoming` / `hydrateResourceFromJsonAd` and is excluded from
   `computeDriveSyncState`. Not covered: a real server round trip for the
   reconnect drain (no `*.integration.test.ts` or Playwright variant yet).
+- The outbox is stored in the client DB (`Tree::Outbox`).
+  `local-outbox-database.test.ts` covers the storage layer against a fake
+  database: the one-time import of a localStorage queue (durable before the key
+  is removed, kept when the import fails), reads after a reload, which writes
+  are durable, the not-hydrated window, edits made while rows load, a rebind
+  during an attach, and the localStorage fallback. `outbox-client-db.test.ts`
+  runs offline edit, create and delete through `Store` + `Resource` with a
+  reload (a second `Store` on the same database) and the reconnect drain.
+  `tests/outbox-client-db.integration.test.ts` repeats those against the real
+  WASM database in Node, plus per-agent isolation. `client-db-durable-put.test.ts`
+  checks the worker writes the row with the snapshot under one flush. Not
+  covered: the OPFS worker and leader handoff in a real browser (Playwright).
 
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded
