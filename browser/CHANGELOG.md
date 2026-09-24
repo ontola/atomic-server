@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- A private workspace the app has to recreate is titled after whoever it
+  belongs to, like the one onboarding and an accepted invitation already
+  make. A returning account on a second device, and a sign-in whose cloud
+  restore did not finish in time, used to land in a workspace called "My
+  drive" moments after proving who they are, which reads like the wrong
+  account. An account with no name set still gets the default.
 - Fix: a presence announcement carrying something Loro cannot store no longer
   breaks the tab. A view's presence payload is typed as whatever that view
   likes, so a callback or a class with methods can travel in it, and Loro
