@@ -1627,9 +1627,8 @@ export class Store {
     // Did this commit capture everything, or did the user type more
     // during the `await postCommit` round-trip? Compute BEFORE firing
     // `notifyResourceSaved` so the `_dirty` flag is already cleared
-    // when `UnsavedIndicator`'s ResourceSaved handler re-reads
-    // `hasUnsavedChanges()` — otherwise it reads a stale `true` and the
-    // editable-title `*` never clears (rename-regression e2e).
+    // when a ResourceSaved listener re-reads `hasUnsavedChanges()` or
+    // `getSaveState()`; otherwise it reads a stale `true`.
     const caughtUp = !resource.hasOpsPastSaveCursor();
 
     if (caughtUp) {
