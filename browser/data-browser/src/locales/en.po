@@ -12584,3 +12584,20 @@ msgstr "Open a link"
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Choose file"
+msgstr "Choose file"
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Import with this app"
+msgstr "Import with this app"
+
+#. 0: ' '
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+msgstr "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+msgstr "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."

@@ -2453,3 +2453,15 @@ out. It does not drive a real browser's throttling.
 right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
 reaches the other subscriber without a retry, and that an update held for a
 refused subscribe is dropped.
+## Drive app runs its own importer (#1739)
+
+| Flow | Layer | Where |
+| --- | --- | --- |
+| Which importer an app may run: the owner of the table it shows, from any of its destination tables; none on its own page or an unrelated table; a named foreign importer refused; Set up required; app file shape and size checked | vitest | `browser/data-browser/src/chunks/AppPage/hostStore.test.ts` |
+| A host that cannot draw the review refuses `runImporter` instead of applying unseen | vitest | same |
+| Summary: applied counts by kind and failed-change errors; cancelled, nothing and blocked | vitest | same |
+| The owning plugin of a destination table (single and keyed); a table merely parked under the plugin has none | vitest | `browser/lib/src/plugin-destination.test.ts` |
+| `store.importer.run()` sends `runImporter` with no 60 s timeout | vitest | `browser/plugin/src/viewProtocol.test.ts` |
+| App button → host bar → host picker or app file → review → apply writes rows → summary in the app; cancel; refused file; foreign importer | Playwright | `browser/e2e/tests/app-importer.spec.ts` |
+
+Not covered: an Installation-based (wasip2) importer, and the money app itself (ontola/atomic-plugins#148 has its own e2e).
