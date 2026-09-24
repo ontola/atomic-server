@@ -46,7 +46,7 @@ export interface EnsuredSchema {
   classes: Record<string, string>;
 }
 
-interface SchemaResource {
+export interface SchemaResource {
   subject: string;
   get(property: string): unknown;
   set(property: string, value: JSONValue): Promise<void>;

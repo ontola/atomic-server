@@ -9492,7 +9492,7 @@ msgstr ""
 msgid "Set up"
 msgstr ""
 
-#. 0: manifest.destination.table.name
+#. 0: names[0]
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr ""
@@ -9517,4 +9517,9 @@ msgstr ""
 #. 0: bytes
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "{0} bytes"
+msgstr ""
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr ""
