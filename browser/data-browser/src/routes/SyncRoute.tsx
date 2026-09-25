@@ -2286,26 +2286,7 @@ function SyncPage() {
                     <LogSummaryText>{entry.summary}</LogSummaryText>
                   </LogSubjectRow>
 
-                  {entry.propertySummaries &&
-                    entry.propertySummaries.length > 0 && (
-                      <PropertyList>
-                        {entry.propertySummaries.map((ps, j) => (
-                          <PropertyRow
-                            key={`${ps.property}-${j}`}
-                            data-change-type={ps.changeType}
-                          >
-                            <span aria-hidden='true'>
-                              {ps.changeType === 'changed' ? '+' : '−'}
-                            </span>
-                            <PropertyName propertyURL={ps.property} />
-                            <PropertyValueDisplay
-                              propertyURL={ps.property}
-                              value={ps.value}
-                            />
-                          </PropertyRow>
-                        ))}
-                      </PropertyList>
-                    )}
+                  <CommitPropertyList entry={entry} />
 
                   {entry.error && <ErrorText>{entry.error}</ErrorText>}
                 </CommitCard>
@@ -3084,6 +3065,31 @@ const LogHeaderLeft = styled.div`
   align-items: center;
   gap: 0.5rem;
 `;
+
+/** The properties a logged commit changed, diffed when shown. */
+function CommitPropertyList({ entry }: { entry: CommitLogEntry }) {
+  const store = useStore();
+  const propertySummaries = store.getCommitPropertySummaries(entry);
+
+  if (!propertySummaries || propertySummaries.length === 0) return null;
+
+  return (
+    <PropertyList>
+      {propertySummaries.map((ps, j) => (
+        <PropertyRow
+          key={`${ps.property}-${j}`}
+          data-change-type={ps.changeType}
+        >
+          <span aria-hidden='true'>
+            {ps.changeType === 'changed' ? '+' : '−'}
+          </span>
+          <PropertyName propertyURL={ps.property} />
+          <PropertyValueDisplay propertyURL={ps.property} value={ps.value} />
+        </PropertyRow>
+      ))}
+    </PropertyList>
+  );
+}
 
 const StatusBadge = styled.span<{ $status: CommitLogEntry['status'] }>`
   font-size: 0.8rem;
