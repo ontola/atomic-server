@@ -1433,7 +1433,35 @@ export async function waitForSynced(page: Page, timeoutMs = 30_000) {
               }),
             ) ?? [];
 
-        return { status, entries };
+        // `pendingDirtyCount` is a sum:
+        //
+        //     outbox.size - blockedCount + inFlightSaves + _scheduledSaves
+        //
+        // so a timeout with an empty outbox says only that one of the other
+        // two terms is stuck, and the sum cannot say which. Develop run 4596
+        // (25 September) timed out here with `entries: []`, `blockedCount: 0`
+        // and `pendingDirtyCount: 1`, and there was nothing in the message to
+        // tell a save that never settled from a debounce slot that was never
+        // balanced. Split it, so the next one names its own cause.
+        const savingSubjects = [...(store?.resources.values() ?? [])]
+          .filter(resource => resource.isSaving)
+          .map(resource => resource.subject);
+        const outboxSize = store?.outbox?.size ?? 0;
+        const blocked = status?.blockedCount ?? 0;
+        const breakdown = {
+          outboxSize,
+          blocked,
+          savingSubjects,
+          // The store does not expose the debounce counter, so take it as what
+          // the other terms cannot account for.
+          scheduledSaves:
+            (status?.pendingDirtyCount ?? 0) -
+            outboxSize +
+            blocked -
+            savingSubjects.length,
+        };
+
+        return { status, breakdown, entries };
       })
       .catch(() => undefined);
     throw new Error(
