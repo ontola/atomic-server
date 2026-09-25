@@ -71,6 +71,10 @@ jobs:
         with:
           version: 10.15.1
           run_install: false
+          # The default, ~/setup-pnpm, is shared by every runner on the host.
+          # Two jobs installing at once failed with ENOTEMPTY (2026-09-25,
+          # run 4596), so each job installs into its own runner's temp dir.
+          dest: ${{ runner.temp }}/setup-pnpm
       - name: Install Dagger regression test dependencies
         run: pnpm --dir .dagger install --frozen-lockfile
       - name: Dagger regression tests
