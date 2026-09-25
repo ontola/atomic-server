@@ -12318,3 +12318,7 @@ msgstr "Nothing open."
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
 msgstr "Nothing closed."
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Some recurring meetings could not be displayed"
+msgstr "Some recurring meetings could not be displayed"
