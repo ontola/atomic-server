@@ -271,8 +271,7 @@ pub async fn status(
                 route["path"] = declared.path.clone().into();
                 route["methods"] = declared.methods.clone().into();
                 route["auth"] = serde_json::to_value(declared.auth).unwrap_or_default();
-                route["principal"] =
-                    serde_json::to_value(declared.principal).unwrap_or_default();
+                route["principal"] = serde_json::to_value(declared.principal).unwrap_or_default();
             }
         }
     }
