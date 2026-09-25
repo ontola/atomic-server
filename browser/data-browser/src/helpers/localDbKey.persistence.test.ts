@@ -23,6 +23,8 @@ import {
   getOrCreateSessionDbKey,
   getSessionDbKey,
   hasWrappedDbKey,
+  trackDbKeySignIn,
+  waitForSessionDbKey,
   wrapDbKey,
   type DbKeyWrapOps,
   type SignInCredentials,
@@ -221,5 +223,32 @@ describe('persistent local database keys', () => {
         new Uint8Array(64).fill(3),
       ),
     ).toEqual(legacyKey);
+  });
+
+  it('a database opener waits for a sign-in whose wasm loads slowly', async () => {
+    const original = await ensureDbKeyOnSignIn(subject, credentials, withWasm);
+    await clearSessionDbKeys();
+
+    // Signing in again after sign-out: the wrapped record is there and the
+    // session key is not. The app attaches the database as soon as the agent
+    // is set, while the sign-in is still fetching the wasm bundle it needs to
+    // unwrap the v2 record. On a cold page that takes seconds, longer than the
+    // opener's own patience (scaled down here).
+    const slowWasm = () =>
+      new Promise<DbKeyWrapOps>(resolve =>
+        setTimeout(() => resolve(fakeOps), 600),
+      );
+    const signIn = ensureDbKeyOnSignIn(subject, credentials, slowWasm);
+    trackDbKeySignIn(subject, signIn);
+
+    expect(await waitForSessionDbKey(subject, 200)).toEqual(original);
+    expect(await signIn).toEqual(original);
+  });
+
+  it('a database opener gives up without a sign-in in flight', async () => {
+    await ensureDbKeyOnSignIn(subject, credentials, withWasm);
+    await clearSessionDbKeys();
+
+    expect(await waitForSessionDbKey(subject, 200)).toBeUndefined();
   });
 });

@@ -3,10 +3,15 @@ import { Agent } from '@tomic/react';
 
 /** In-memory stand-in for IndexedDB, so we can inspect exactly what got stored. */
 const store = new Map<string, unknown>();
+/** Extra latency on every write, for tests that race a slow sign-in. */
+let writeDelayMs = 0;
 
 vi.mock('idb-keyval', () => ({
   get: async (key: string) => store.get(key),
-  set: async (key: string, value: unknown) => void store.set(key, value),
+  set: async (key: string, value: unknown) => {
+    if (writeDelayMs) await new Promise(r => setTimeout(r, writeDelayMs));
+    store.set(key, value);
+  },
   del: async (key: string) => void store.delete(key),
   keys: async () => [...store.keys()],
 }));
@@ -17,6 +22,7 @@ const {
   readPreviousIdentities,
   saveAgentToIDB,
 } = await import('./agentStorage');
+const { waitForSessionDbKey } = await import('./localDbKey');
 
 const AGENT_IDB_KEY = 'atomic.agent';
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
@@ -49,6 +55,22 @@ function withoutSubtleCrypto(run: () => Promise<void>): Promise<void> {
 describe('agent key storage', () => {
   beforeEach(() => store.clear());
   afterEach(() => store.clear());
+
+  it('announces a sign-in before its first await, so the database opener waits for it', async () => {
+    const secret = await makeSecret();
+    const order: string[] = [];
+    // A sign-in slower than the opener's own patience, as one that loads the
+    // wasm bundle on a cold page is.
+    writeDelayMs = 300;
+    // What callers do: set the agent (which starts the opener), then save.
+    const saving = saveAgentToIDB(secret).then(() => order.push('saved'));
+    const opening = waitForSessionDbKey('atomic:agent:test', 100).then(() =>
+      order.push('opened'),
+    );
+    await Promise.all([saving, opening]).finally(() => (writeDelayMs = 0));
+
+    expect(order).toEqual(['saved', 'opened']);
+  });
 
   it('never stores a readable private key where Web Crypto is available', async () => {
     await saveAgentToIDB(await makeSecret());

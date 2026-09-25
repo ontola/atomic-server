@@ -8,6 +8,7 @@ import {
   getOrCreateSessionDbKey,
   getSessionDbKey,
   hasWrappedDbKey,
+  waitForSessionDbKey,
 } from './localDbKey';
 import { wasmJsUrl } from './wasmUrls';
 
@@ -109,7 +110,7 @@ async function dbNameForAgent(agentSubject: string): Promise<string> {
  * The encryption key for an agent's database, preferring the active-session
  * record. A wrapped record without a session record means a sign-in is
  * unwrapping it right now (`ensureDbKeyOnSignIn` runs alongside the
- * AgentChanged event) — wait for that instead of generating a fresh key that
+ * AgentChanged event, announced by `trackDbKeySignIn`) — wait for that instead of generating a fresh key that
  * couldn't open the existing encrypted file.
  *
  * Returns null when there is a wrapped record but no session key, which means
@@ -126,12 +127,9 @@ async function resolveDbKey(agentSubject: string): Promise<Uint8Array | null> {
   if (existing) return existing;
 
   if (await hasWrappedDbKey(agentSubject)) {
-    for (let attempt = 0; attempt < 30; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const key = await getSessionDbKey(agentSubject);
+    const key = await waitForSessionDbKey(agentSubject);
 
-      if (key) return key;
-    }
+    if (key) return key;
 
     // The sign-in never delivered the key (e.g. an agent restored from a
     // non-extractable keypair, where no secret enters JS).

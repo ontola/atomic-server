@@ -1,3 +1,4 @@
+import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
 import type { VaultKeyOps } from './vault';
 
 /**
@@ -12,7 +13,7 @@ import type { VaultKeyOps } from './vault';
  * store has exactly one writer.
  */
 type VaultWasmModule = {
-  default: () => Promise<unknown>;
+  default: (init?: { module_or_path: string }) => Promise<unknown>;
   vaultGenerateKey: () => Uint8Array;
   vaultProofMessage: () => Uint8Array;
   vaultWrapKey: (driveKey: Uint8Array, agentSecret: Uint8Array) => string;
@@ -24,14 +25,21 @@ let modulePromise: Promise<VaultWasmModule> | null = null;
 async function loadVaultWasm(): Promise<VaultWasmModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
-      const url = `${window.location.origin}/wasm/atomic_wasm.js`;
+      // Versioned like every other load of this pair (see `wasmUrls.ts`):
+      // sign-in now waits on this, and an unversioned url can be served an
+      // older build's cached glue or binary.
       const wasmModule = (await import(
-        /* @vite-ignore */ url
+        /* @vite-ignore */ wasmJsUrl()
       )) as VaultWasmModule;
-      await wasmModule.default();
+      await wasmModule.default({ module_or_path: wasmBinaryUrl() });
 
       return wasmModule;
-    })();
+    })().catch(error => {
+      // A failed fetch must not stick for the page's lifetime: the next
+      // sign-in retries it.
+      modulePromise = null;
+      throw error;
+    });
   }
 
   return modulePromise;
