@@ -85,6 +85,7 @@ import {
   envelopeWrapperKinds,
   getRecoverySecret,
   readCachedBackups,
+  sameAgent,
 } from '../helpers/managed/recovery';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
@@ -860,7 +861,7 @@ function SyncPage() {
         const agentSubject = store.getAgent()?.subject;
         const cached = readCachedBackups();
         const mine = agentSubject
-          ? cached.some(entry => entry.agent_subject === agentSubject)
+          ? cached.some(entry => sameAgent(entry.agent_subject, agentSubject))
           : cached.length > 0;
 
         setRecoveryBackup(mine ? 'device-only' : 'none');

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
+  evaluateIdentityReconciliation,
   evaluateServerReconciliation,
   connectHostedDrive,
   localAgentIsDisposable,
@@ -16,6 +17,7 @@ import type { ManagedEnrollmentSummary } from './enrollmentApi';
 function mockFetch(opts: {
   account?: { email: string } | null;
   enrollments?: ManagedEnrollmentSummary[];
+  recovery?: { agent_subject: string } | null;
 }) {
   globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
@@ -37,6 +39,23 @@ function mockFetch(opts: {
         ok: true,
         status: 200,
         json: () => Promise.resolve(opts.enrollments ?? []),
+      } as Response);
+    }
+
+    if (url.endsWith('/recovery-secret')) {
+      if (!opts.recovery) {
+        return Promise.resolve({ status: 404, ok: false } as Response);
+      }
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            owner_email: opts.account?.email,
+            wrappers: [],
+            ...opts.recovery,
+          }),
       } as Response);
     }
 
@@ -304,6 +323,61 @@ describe('evaluateServerReconciliation', () => {
     );
 
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe('evaluateIdentityReconciliation', () => {
+  beforeEach(() =>
+    vi.stubEnv('VITE_MANAGED_API_BASE', 'https://portal.example/api'),
+  );
+  afterEach(() => vi.unstubAllEnvs());
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    vi.restoreAllMocks();
+  });
+
+  // A backup saved before the `did:ad:` → `atomic:` rename, read by an agent
+  // loaded under the new spelling (or the other way round), is the same
+  // agent. Calling it a mismatch sent the gate into the account switch and
+  // the secret sign-in into ending the portal session.
+  it('treats the legacy did:ad: spelling of the backup agent as the same agent', async () => {
+    mockFetch({
+      account: { email: 'legacy-backup@example.com' },
+      recovery: { agent_subject: 'did:ad:agent:abc' },
+      enrollments: [enrollment({ agent_subject: 'did:ad:agent:abc' })],
+    });
+
+    await expect(
+      evaluateIdentityReconciliation('atomic:agent:abc'),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it('treats the new atomic: spelling of the backup agent as the same agent', async () => {
+    mockFetch({
+      account: { email: 'new-backup@example.com' },
+      recovery: { agent_subject: 'atomic:agent:abc' },
+      enrollments: [enrollment({ agent_subject: 'atomic:agent:abc' })],
+    });
+
+    await expect(
+      evaluateIdentityReconciliation('did:ad:agent:abc'),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it('still reports a genuinely different agent', async () => {
+    mockFetch({
+      account: { email: 'other-agent@example.com' },
+      recovery: { agent_subject: 'did:ad:agent:abc' },
+    });
+
+    await expect(
+      evaluateIdentityReconciliation('atomic:agent:xyz'),
+    ).resolves.toMatchObject({
+      ok: false,
+      issue: { reason: 'recovery_agent' },
+    });
   });
 });
 

@@ -9,7 +9,7 @@ import {
   getManagedEnrollments,
   type ManagedEnrollmentSummary,
 } from './enrollmentApi';
-import { getRecoverySecret } from './recovery';
+import { getRecoverySecret, sameAgent } from './recovery';
 import { getManagedAccount, type ManagedAccount } from './session';
 
 export type IdentityMismatchReason =
@@ -32,17 +32,19 @@ export type IdentityReconcileResult =
 function activeEnrollmentAgents(
   enrollments: ManagedEnrollmentSummary[],
 ): string[] {
-  const agents = new Set<string>();
+  const agents: string[] = [];
 
   for (const enrollment of enrollments) {
     if (enrollment.status === 'Disabled') continue;
 
-    if (enrollment.agent_subject) {
-      agents.add(enrollment.agent_subject);
+    const subject = enrollment.agent_subject;
+
+    if (subject && !agents.some(agent => sameAgent(agent, subject))) {
+      agents.push(subject);
     }
   }
 
-  return [...agents];
+  return agents;
 }
 
 /**
@@ -80,7 +82,7 @@ export async function evaluateIdentityReconciliation(
     return { ok: true, managedAccount };
   }
 
-  if (recoveryAgent && recoveryAgent !== localAgentSubject) {
+  if (recoveryAgent && !sameAgent(recoveryAgent, localAgentSubject)) {
     return {
       ok: false,
       issue: {
@@ -94,7 +96,7 @@ export async function evaluateIdentityReconciliation(
 
   if (
     enrollmentAgents.length > 0 &&
-    !enrollmentAgents.includes(localAgentSubject)
+    !enrollmentAgents.some(agent => sameAgent(agent, localAgentSubject))
   ) {
     return {
       ok: false,
@@ -107,7 +109,7 @@ export async function evaluateIdentityReconciliation(
     };
   }
 
-  if (bindingAgent && bindingAgent !== localAgentSubject) {
+  if (bindingAgent && !sameAgent(bindingAgent, localAgentSubject)) {
     return {
       ok: false,
       issue: {

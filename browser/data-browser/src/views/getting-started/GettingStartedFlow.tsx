@@ -53,6 +53,7 @@ import {
   decryptEnvelopeV2,
   decryptEnvelopeWithPasskey,
   envelopeWrapperKinds,
+  sameAgent,
   upgradeToEnvelopeV2,
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
@@ -591,7 +592,7 @@ export function GettingStartedFlow({
     try {
       const stored = await getRecoverySecret();
 
-      if (stored && stored.agent_subject !== agentSubject) {
+      if (stored && !sameAgent(stored.agent_subject, agentSubject)) {
         clearManagedAccountBinding();
         await logoutManagedSession();
         toast(
