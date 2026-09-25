@@ -16,9 +16,11 @@ export function ProxyTrafficNotice(): React.JSX.Element {
 
   return (
     <Notice data-testid='proxy-traffic-notice'>
-      This traffic goes through <strong>{host}</strong>. If you want to run
-      your own atomic-integration-proxy, follow the instructions here:{' '}
-      <ExternalLink to={PROXY_SELF_HOSTING_URL}>self-hosting guide</ExternalLink>
+      This traffic goes through <strong>{host}</strong>. If you want to run your
+      own atomic-integration-proxy, follow the instructions here:{' '}
+      <ExternalLink to={PROXY_SELF_HOSTING_URL}>
+        self-hosting guide
+      </ExternalLink>
     </Notice>
   );
 }
