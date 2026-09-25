@@ -203,6 +203,22 @@ it('carries the proxy ops; the relay op is gone', () => {
   ]);
 });
 
+it('asks about and for row access over the canonical wire (#1740)', () => {
+  for (const op of ['rowAccess', 'requestRowAccess'] as const)
+    expect(isViewRequest(viewRequest(1, op))).toBe(true);
+
+  const f = frame();
+  const store = generatedStore(f);
+  void store.rowAccess();
+  void store.requestRowAccess();
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args])).toEqual([
+    ['rowAccess', {}],
+    ['requestRowAccess', {}],
+  ]);
+});
+
 it('calls the proxy directly with a capability and a v2 signature by its own key', async () => {
   const f = frame();
   const store = generatedStore(f);

@@ -6,6 +6,7 @@ import {
   useTitle,
 } from '@tomic/react';
 import { useContext, useMemo, useState, type JSX } from 'react';
+import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
 import {
   FaCheck,
@@ -16,6 +17,8 @@ import {
   FaTableColumns,
   FaWindowMaximize,
   FaTrash,
+  FaLock,
+  FaLockOpen,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -36,6 +39,7 @@ import type { DerivedColumnSpec } from './derivedColumns';
 import { derivedFilterKey, filterKey } from './tableFiltering';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
 import {
+  appViewOf,
   normalizeViewKind,
   VIEW_KINDS,
   VIEW_KIND_LABELS,
@@ -43,16 +47,25 @@ import {
   ViewKind,
 } from './tableViewKinds';
 import { QuickAddDialog } from './QuickAddDialog';
+import { RowGrantDialog } from './RowGrantDialog';
+import { addAppView } from './appViewGrant';
+import { grantRowAccess, revokeRowAccess } from '@chunks/AppPage/rowGrant';
+import { useRowGrant } from '@chunks/AppPage/useRowGrant';
 import type { QuickAddSpec } from './quickAdd';
 
 interface TableViewTabsProps {
+  /** The table these are views of. An app view's row grant is scoped to it. */
+  table: string;
   /** The class of this table's rows, which decides what apps can show it. */
   rowClass: string;
   views: string[];
   activeView: string | undefined;
   setActiveView: (subject: string) => void;
-  createView: (kind?: ViewKind | string, label?: string) => void;
-  setViewKind: (subject: string, kind: ViewKind | string) => void;
+  createView: (
+    kind?: ViewKind | string,
+    label?: string,
+  ) => Promise<string | undefined>;
+  setViewKind: (subject: string, kind: ViewKind | string) => Promise<void>;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
   viewName: string;
@@ -84,6 +97,7 @@ interface TableViewTabsProps {
  * tab is renamed inline by double-clicking it.
  */
 export function TableViewTabs({
+  table,
   rowClass,
   views,
   activeView,
@@ -107,7 +121,36 @@ export function TableViewTabs({
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
   const tabs = views.length > 0 ? views : [undefined];
-  const apps = appsForClass(useDriveApps(useStore().getDrive()), rowClass);
+  const store = useStore();
+  const drive = store.getDrive();
+  const apps = appsForClass(useDriveApps(drive), rowClass);
+  // An app about to become a view, waiting on the person's answer to "may
+  // it edit rows?" (#1740). `view` is set when an existing tab is switched.
+  const [pendingApp, setPendingApp] = useState<{
+    app: DriveApp;
+    view?: string;
+  }>();
+
+  const onAppViewChosen = (allowEditing: boolean) => {
+    const pending = pendingApp;
+    if (!pending || !drive) return;
+
+    addAppView({
+      app: pending.app,
+      view: pending.view,
+      allowEditing,
+      createView,
+      setViewKind,
+      grant: (view, via) =>
+        grantRowAccess(store, {
+          drive,
+          table,
+          app: pending.app.subject,
+          view,
+          via,
+        }),
+    }).catch((e: Error) => toast.error(e.message));
+  };
 
   return (
     <Bar>
@@ -122,6 +165,8 @@ export function TableViewTabs({
             onSelect={() => subject && setActiveView(subject)}
             onRename={renameView}
             setViewKind={setViewKind}
+            chooseApp={(view, app) => setPendingApp({ app, view })}
+            table={table}
             apps={apps}
             duplicateView={duplicateView}
             deleteView={deleteView}
@@ -130,8 +175,23 @@ export function TableViewTabs({
             setQuickAdd={setQuickAdd}
           />
         ))}
-        {canWrite && <AddViewMenu createView={createView} apps={apps} />}
+        {canWrite && (
+          <AddViewMenu
+            createView={createView}
+            chooseApp={app => setPendingApp({ app })}
+            apps={apps}
+          />
+        )}
       </Tabs>
+      {pendingApp && (
+        <RowGrantDialog
+          show
+          appName={pendingApp.app.name}
+          bindShow={show => !show && setPendingApp(undefined)}
+          onChoose={onAppViewChosen}
+          readOnlyLabel='Read-only'
+        />
+      )}
       <Actions>
         <FilterMenu columns={columns} derivedColumns={derivedColumns} />
         <ColumnsMenu
@@ -153,9 +213,12 @@ const AddViewTrigger = buildDefaultTrigger(<FaPlus />, 'Add view');
 /** The `+` tab: a dropdown to add a new view of a chosen kind (Table/Kanban). */
 function AddViewMenu({
   createView,
+  chooseApp,
   apps,
 }: {
-  createView: (kind?: ViewKind | string, label?: string) => void;
+  createView: (kind?: ViewKind | string, label?: string) => unknown;
+  /** An app is added only after the person answers whether it may edit. */
+  chooseApp: (app: DriveApp) => void;
   apps: DriveApp[];
 }): JSX.Element {
   const items = useMemo(
@@ -176,10 +239,10 @@ function AddViewMenu({
         id: app.subject,
         label: app.name,
         icon: <FaWindowMaximize />,
-        onClick: () => createView(app.subject, app.name),
+        onClick: () => chooseApp(app),
       })),
     ],
-    [createView, apps],
+    [createView, chooseApp, apps],
   );
 
   return <DropdownMenu Trigger={AddViewTrigger} items={items} />;
@@ -253,6 +316,8 @@ function ViewTab({
   onSelect,
   onRename,
   setViewKind,
+  chooseApp,
+  table,
   apps,
   duplicateView,
   deleteView,
@@ -266,7 +331,10 @@ function ViewTab({
   canWrite: boolean;
   onSelect: () => void;
   onRename: (name: string) => void;
-  setViewKind: (subject: string, kind: ViewKind | string) => void;
+  setViewKind: (subject: string, kind: ViewKind | string) => unknown;
+  /** Switching this tab to an app asks first whether it may edit rows. */
+  chooseApp: (view: string, app: DriveApp) => void;
+  table: string;
   /** Resolved once by the tab bar rather than once per tab. */
   apps: DriveApp[];
   duplicateView: (subject: string) => void;
@@ -289,6 +357,18 @@ function ViewTab({
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
   const [showDelete, setShowDelete] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showRowGrant, setShowRowGrant] = useState(false);
+
+  // The app this tab shows, if any, and whether it may edit the rows.
+  const viewApp = appViewOf(storedKind);
+  const appName =
+    apps.find(app => app.subject === viewApp)?.name ?? (title || 'This app');
+  const store = useStore();
+  const drive = store.getDrive();
+  const rowGrant = useRowGrant(
+    canWrite && subject ? table : undefined,
+    viewApp,
+  );
 
   const startRename = () => {
     setDraft(name);
@@ -342,6 +422,34 @@ function ViewTab({
               },
             ]
           : []),
+        // An app view's permission to edit rows, given or taken back here as
+        // well as by adding or removing the view.
+        ...(viewApp && rowGrant !== undefined
+          ? [
+              DIVIDER,
+              rowGrant
+                ? {
+                    id: 'row-grant-revoke',
+                    label: `Stop ${appName} editing rows`,
+                    helper: 'It keeps showing the rows, read-only.',
+                    icon: <FaLock />,
+                    onClick: () => {
+                      if (!drive) return;
+                      revokeRowAccess(store, {
+                        drive,
+                        table,
+                        app: viewApp,
+                      }).catch((e: Error) => toast.error(e.message));
+                    },
+                  }
+                : {
+                    id: 'row-grant',
+                    label: `Let ${appName} edit rows`,
+                    icon: <FaLockOpen />,
+                    onClick: () => setShowRowGrant(true),
+                  },
+            ]
+          : []),
         DIVIDER,
         {
           id: 'view-type',
@@ -362,7 +470,7 @@ function ViewTab({
           id: `kind-${app.subject}`,
           label: app.name,
           icon: app.subject === storedKind ? <FaCheck /> : undefined,
-          onClick: () => setViewKind(subject, app.subject),
+          onClick: () => app.subject !== storedKind && chooseApp(subject, app),
         })),
       ]
     : [];
@@ -429,6 +537,23 @@ function ViewTab({
           classProperties={classProperties}
           editing={quickAdd}
           onSave={setQuickAdd}
+        />
+      )}
+      {showRowGrant && subject && viewApp && (
+        <RowGrantDialog
+          show
+          appName={appName}
+          bindShow={setShowRowGrant}
+          onChoose={allow => {
+            if (!allow || !drive) return;
+            grantRowAccess(store, {
+              drive,
+              table,
+              app: viewApp,
+              view: subject,
+              via: 'menu',
+            }).catch((e: Error) => toast.error(e.message));
+          }}
         />
       )}
       {subject && (

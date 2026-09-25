@@ -677,6 +677,30 @@ So `view` moves onto that substrate, and the work is:
   write its own subtree, so its agent kept there would be a public key the
   app could replace.
 
+  **Row grants for an app shown as a table's view (#1740, 2026-09-25).** The
+  one write outside its subtree an app may be given. Decided: choosing an app
+  as a view (setting `view-kind`) grants nothing; someone who can edit the
+  table confirms "<App> can edit rows in this table" (from "+ Add view", a
+  tab's "View type", the tab's menu, or the app's
+  `store.requestRowAccess()`), and the server records a grant with
+  `grantedBy` (the request's signer), `grantedAt`, `via` and the View it is
+  tied to (`server/src/plugins/app_row_grant.rs`).
+
+  This is a server record, not a `write` right for the app's agent on the
+  table, and it is not a return of the removed `plugin-grant`: it is
+  enforced on the server, in `/app-write`, which is the only path a view
+  writes through. A right would reach the table itself (name, schema,
+  views, rights) and every row whatever its class, and would be a plain
+  value anyone with write could add by hand, the same hole as `view-kind`.
+  The grant is narrower: rows whose parent is the table and whose class is
+  its row class, only the row class's properties, `create` of that class,
+  never `destroy`. It deliberately does not reach an app's unattended runs:
+  it was given to the app as a view, with a person present, and the person's
+  own rights still bound every such write. Removing or switching the View
+  revokes it (a class extender on View), as do the tab's menu, the granter
+  losing write, and the app being re-keyed; revoked grants stay in the record
+  for #1785.
+
   **Unattended runs sign as the app (2026-08-23).** The key lives on the node,
   in a tree of its own and wrapped by the node key. It has to live there
   rather than with the person: an app importing at 3am has nobody to ask for

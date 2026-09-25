@@ -2597,3 +2597,20 @@ flows.
 | App button → host bar → host picker or app file → review → apply writes rows → summary in the app; cancel; refused file; foreign importer | Playwright | `browser/e2e/tests/app-importer.spec.ts` |
 
 Not covered: an Installation-based (wasip2) importer, and the money app itself (ontola/atomic-plugins#148 has its own e2e).
+
+## App row grants for a table's view (#1740, 2026-09-25)
+
+`server/src/handlers/app_row_grant_test.rs` runs `/app-row-grant` and
+`/app-write` against a real store: adding the view with a grant lets the app
+save and remove a row property and create a row (signed by the app);
+`view-kind` alone grants nothing; a request confirmed as `via: request` works;
+the record has `grantedBy` (the signer), `grantedAt` and `via`; a grant needs a
+gesture, a View of that table showing the app, and a granter who can edit the
+table; it reaches neither another table, the table itself, its views, rights,
+non-column properties nor `destroy`; revoking from the menu, destroying the
+View, or switching its kind away and back all refuse further writes.
+`hostStore.test.ts` covers the frame ops (`rowAccess`, a bare host refusing
+`requestRowAccess`, row writes going to the server, deletes refused),
+`rowGrant.test.ts` the in-app request, and `appViewGrant.test.ts` the "+ Add
+view" / "View type" confirmation choices. Gap: no Playwright test clicks the
+confirmation; the money app's host E2E (atomic-plugins#148) is the natural one.

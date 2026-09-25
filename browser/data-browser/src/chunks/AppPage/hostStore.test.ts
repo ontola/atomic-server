@@ -12,6 +12,7 @@ import {
   MAX_GET_MANY,
   resolveAppImporter,
   resourceToOpen,
+  ROW_DESTROY_REFUSED,
 } from './hostStore';
 
 vi.mock('@tomic/react', async () => {
@@ -1074,5 +1075,117 @@ describe('the summary the app gets back', () => {
       importer: IMPORTER,
       errors: ['Not a bank statement'],
     });
+  });
+});
+
+describe('the rows of the table an app is a view of (#1740)', () => {
+  const TABLE = 'did:ad:transactions';
+
+  it("sends a row's save to the server, which holds the grant", async () => {
+    const store = fakeStore({ 'did:ad:row': TABLE });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:row', propVals: { p: 'v' } }),
+      TABLE,
+    );
+
+    expect(sent).toEqual([
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'save',
+        subject: 'did:ad:row',
+        propVals: { p: 'v' },
+      },
+    ]);
+  });
+
+  it('sends a new row to the server as well', async () => {
+    await handleRequest(
+      fakeStore(),
+      APP,
+      DRIVE,
+      req('create', { parent: TABLE, isA: ['did:ad:class'] }),
+      TABLE,
+    );
+
+    expect(sent).toMatchObject([{ op: 'create', parent: TABLE }]);
+  });
+
+  it('still refuses rows of other tables before anything leaves', async () => {
+    const store = fakeStore({ 'did:ad:elsewhere': 'did:ad:other-table' });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('save', { subject: 'did:ad:elsewhere', propVals: {} }),
+        TABLE,
+      ),
+    ).rejects.toThrow('may only write its own data');
+    expect(sent).toEqual([]);
+  });
+
+  it('never deletes a row: editing is not deleting', async () => {
+    const store = fakeStore({ 'did:ad:row': TABLE });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('destroy', { subject: 'did:ad:row' }),
+        TABLE,
+      ),
+    ).rejects.toThrow(ROW_DESTROY_REFUSED);
+    expect(sent).toEqual([]);
+  });
+
+  it('tells the app whether it may edit the rows', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        sent.push({ url });
+
+        return {
+          ok: true,
+          json: async () => ({
+            grant: {
+              grantedBy: 'did:ad:agent:me',
+              grantedAt: 1790000000000,
+              via: 'add-view',
+            },
+            history: [],
+          }),
+          text: async () => '',
+        } as unknown as Response;
+      }),
+    );
+
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('rowAccess'), TABLE),
+    ).toEqual({
+      status: 'granted',
+      grantedBy: 'did:ad:agent:me',
+      grantedAt: 1790000000000,
+      via: 'add-view',
+    });
+    expect(String(sent[0].url)).toContain('/app-row-grant?');
+  });
+
+  it('has no rows to give when it is not a table view', async () => {
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('rowAccess')),
+    ).toEqual({ status: 'unavailable' });
+  });
+
+  it('cannot be granted by a host with no one to ask', async () => {
+    await expect(
+      handleRequest(fakeStore(), APP, DRIVE, req('requestRowAccess'), TABLE),
+    ).rejects.toThrow('cannot ask');
   });
 });

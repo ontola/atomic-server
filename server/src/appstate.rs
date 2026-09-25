@@ -140,6 +140,9 @@ impl AppState {
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
         ))?;
+        // Revokes an app's row grant when its View goes or stops showing it.
+        #[cfg(feature = "wasm-plugins")]
+        store.add_class_extender(plugins::app_row_grant::build_view_extender())?;
 
         // Owned here rather than in the AppState literal below, because the
         // `/server` endpoint closes over them to report this node's status.

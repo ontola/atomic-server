@@ -373,6 +373,11 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
                 .route(web::post().to(handlers::app_write::handle_app_write)),
         )
         .service(
+            web::resource("/app-row-grant")
+                .route(web::get().to(handlers::app_row_grant::get_row_grant))
+                .route(web::post().to(handlers::app_row_grant::post_row_grant)),
+        )
+        .service(
             web::resource("/plugin-trigger")
                 .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))
                 .route(web::get().to(handlers::plugin_trigger::handle_get_trigger)),
