@@ -17,6 +17,10 @@ import styled from 'styled-components';
 import ValueComp from '@components/ValueComp';
 import type { AtomicDiff } from '@components/ResourceDiff/resourceDiffUtils';
 import { LoroDocMarkdownDiff } from './LoroDocMarkdownDiff';
+import {
+  calendarDateToLocalDate,
+  formatCalendarDate,
+} from '@helpers/dates/calendarDate';
 
 export interface ResourceDiffProps {
   diff: AtomicDiff;
@@ -133,6 +137,7 @@ export const ChangeSwitcher: React.FC<ChangeSwitcherProps> = ({
   ) {
     return (
       <DateTimeChange
+        datatype={property.datatype}
         oldValue={oldResource.get(property.subject)}
         newValue={newResource.get(property.subject)}
       />
@@ -232,31 +237,45 @@ const MarkdownChange = ({
   return <Markdown preserveLineBreaks text={diff} />;
 };
 
-const DateTimeChange = ({
-  oldValue,
-  newValue,
-}: {
-  oldValue?: number;
-  newValue?: number;
-}) => {
+/** A date or timestamp as the diff shows it, or undefined when it is unset. */
+export function formatDiffDate(
+  val: string | number | undefined,
+  datatype: Datatype,
+): string | undefined {
+  if (val === undefined || val === null) {
+    return undefined;
+  }
+
+  // A civil date has no time, and `new Date()` would put it in UTC.
+  if (datatype === Datatype.DATE && calendarDateToLocalDate(val)) {
+    return formatCalendarDate(val, { dateStyle: 'medium' });
+  }
+
   const formatter = new Intl.DateTimeFormat('default', {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
 
-  const format = (val?: number) => {
-    if (val === undefined || val === null) {
-      return <Empty>unset</Empty>;
-    }
+  const date = new Date(val as string | number);
 
-    const date = new Date(val as string | number);
+  if (isNaN(date.getTime())) {
+    return val.toString();
+  }
 
-    if (isNaN(date.getTime())) {
-      return val.toString();
-    }
+  return formatter.format(date);
+}
 
-    return formatter.format(date);
-  };
+const DateTimeChange = ({
+  datatype,
+  oldValue,
+  newValue,
+}: {
+  datatype: Datatype;
+  oldValue?: number;
+  newValue?: number;
+}) => {
+  const format = (val?: number) =>
+    formatDiffDate(val, datatype) ?? <Empty>unset</Empty>;
 
   if (oldValue === undefined) {
     return <span>{format(newValue)}</span>;

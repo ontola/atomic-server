@@ -1,3 +1,5 @@
+Date-only values (#1795, 2026-09-25): `browser/data-browser/src/helpers/dates/calendarDate.test.tsx` renders a `date` value through `ValueComp` (row dialog, resource page), the table cell, a min/max aggregate, day and month group headings and the history diff, in Europe/Amsterdam and America/New_York. Each must show the same civil day with no time. The tests set `process.env.TZ` themselves, so they fail on the bug in any CI zone.
+
 Server descriptor budget (2026-09-22): `server/src/serve.rs` tests the HTTP
 connection budget at small, staging-sized, and effectively unlimited process
 descriptor limits. Startup reads the process soft `RLIMIT_NOFILE`, limits Actix

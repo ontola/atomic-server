@@ -8,6 +8,10 @@ import {
   type Property,
 } from '@tomic/react';
 import {
+  calendarDateToLocalDate,
+  formatCalendarDate,
+} from '@helpers/dates/calendarDate';
+import {
   DERIVED_COLUMN_GENERATORS,
   toExpression,
   type DerivedColumnSpec,
@@ -312,8 +316,10 @@ export function formatAggregateValue(
   ) {
     const date = new Date(value);
 
+    // A date column's extreme is UTC midnight of a civil date: read it back in
+    // UTC, or it is the day before west of Greenwich.
     return property.datatype === Datatype.DATE
-      ? date.toLocaleDateString()
+      ? date.toLocaleDateString(undefined, { timeZone: 'UTC' })
       : date.toLocaleString();
   }
 
@@ -329,28 +335,25 @@ export function formatGroupKey(
     return '(none)';
   }
 
+  // Day and month keys are civil dates, already in the viewer's zone.
   if (granularity === 'day') {
-    const parsed = Date.parse(key);
-
-    return Number.isNaN(parsed)
-      ? key
-      : new Date(parsed).toLocaleDateString(undefined, {
+    return calendarDateToLocalDate(key)
+      ? formatCalendarDate(key, {
           weekday: 'short',
           day: 'numeric',
           month: 'short',
           year: 'numeric',
-        });
+        })
+      : key;
   }
 
   if (granularity === 'month') {
-    const parsed = Date.parse(`${key}-01`);
-
-    return Number.isNaN(parsed)
-      ? key
-      : new Date(parsed).toLocaleDateString(undefined, {
+    return calendarDateToLocalDate(`${key}-01`)
+      ? formatCalendarDate(`${key}-01`, {
           month: 'long',
           year: 'numeric',
-        });
+        })
+      : key;
   }
 
   return key;
