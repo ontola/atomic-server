@@ -551,8 +551,8 @@ it('knows whether the host is light or dark, before and after a theme message', 
 
   const seen: unknown[] = [];
   const stop = store.onThemeChange((theme: unknown) => seen.push(theme));
-  const style = (colorScheme: unknown, source?: unknown) =>
-    f.reply({ type: '__atomic_style', css: '', colorScheme }, source);
+  const style = (colorScheme: unknown, from?: unknown) =>
+    f.reply({ type: '__atomic_style', css: '', colorScheme }, from);
   style('dark');
   style('dark');
   style('purple');

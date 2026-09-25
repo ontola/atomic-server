@@ -284,11 +284,9 @@ describe('a config change that moves a write target', () => {
     ).toEqual({ targets: TARGETS, moved: TARGETS });
     // A config stored as a JSON string reads the same.
     expect(
-      routeWriteConfigChange(
-        grants,
-        JSON.stringify({ inbox: 'a' }),
-        { inbox: 'b' },
-      )?.moved,
+      routeWriteConfigChange(grants, JSON.stringify({ inbox: 'a' }), {
+        inbox: 'b',
+      })?.moved,
     ).toEqual(TARGETS);
     expect(
       routeWriteConfigChange(grants, { inbox: 'a' }, { inbox: 'a', x: 1 }),

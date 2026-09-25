@@ -14,7 +14,12 @@ import {
   type PluginRoutesStatus,
 } from './plugin-manifest-http.js';
 import { pinPluginRelease } from './plugin-connection.js';
-import { AtomicError, ErrorType, PROBLEM_MARKER, splitProblem } from './error.js';
+import {
+  AtomicError,
+  ErrorType,
+  PROBLEM_MARKER,
+  splitProblem,
+} from './error.js';
 vi.mock('./authentication.js', () => ({
   signRequest: async () => ({ authorization: 'signed' }),
 }));
@@ -124,14 +129,20 @@ describe('a refused Installation commit', () => {
     (c: { name: string }) =>
       c.name === 'read-only route on a feature build at off',
   );
-  const trailer = PROBLEM_MARKER + JSON.stringify({
-    ...entry.refusal,
-    detail: entry.message,
-  });
+  const trailer =
+    PROBLEM_MARKER +
+    JSON.stringify({
+      ...entry.refusal,
+      detail: entry.message,
+    });
 
   it('carries the typed problem on the WS ERROR frame', () => {
     // `websockets.ts` builds this from the frame's code and message.
-    const error = new AtomicError(entry.message + trailer, ErrorType.Server, 11);
+    const error = new AtomicError(
+      entry.message + trailer,
+      ErrorType.Server,
+      11,
+    );
 
     expect(error.message).toBe(entry.message);
     const typed = hostFeatureUnavailableError(error);
@@ -154,7 +165,9 @@ describe('a refused Installation commit', () => {
   });
 
   it('is left alone when it is another error', () => {
-    expect(hostFeatureUnavailableError(new AtomicError('nope'))).toBeUndefined();
+    expect(
+      hostFeatureUnavailableError(new AtomicError('nope')),
+    ).toBeUndefined();
     expect(hostFeatureUnavailableError(new Error('nope'))).toBeUndefined();
     const other = new AtomicError(
       `nope${PROBLEM_MARKER}{"type":"something-else"}`,

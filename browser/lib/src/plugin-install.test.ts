@@ -385,7 +385,9 @@ describe('a release the server’s plugin-routes gates refuse', () => {
     new AtomicError(
       JSON.stringify({
         [core.properties.description]:
-          message + PROBLEM_MARKER + JSON.stringify({ ...problem, detail: message }),
+          message +
+          PROBLEM_MARKER +
+          JSON.stringify({ ...problem, detail: message }),
         'https://atomicdata.dev/properties/errorCode': 11,
       }),
       ErrorType.Client,

@@ -349,6 +349,7 @@ export async function installRelease(
       [server.properties.integrationAppAgent]: Datatype.ATOMIC_URL,
     },
   });
+
   try {
     await installation.save();
   } catch (e) {

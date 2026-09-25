@@ -31,7 +31,7 @@ import {
   type PluginManifest,
   type RunPlan,
 } from '@tomic/react';
-import type { ImporterFile, ImporterRunResult } from '@tomic/plugin';
+import type { ImporterRunResult } from '@tomic/plugin';
 import {
   checkSize,
   sameEncoding,

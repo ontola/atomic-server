@@ -1093,11 +1093,13 @@ export function parseProxyRelative(raw: string): ProxyRelativeUrl | undefined {
   const platform = pathPart.slice(1, slash);
   const path = pathPart.slice(slash + 1);
   if (!PROXY_PLATFORM.test(platform) || !path) throw new Error(PROXY_URL_RULE);
+
   const dot = (segment: string) => {
     const decoded = segment.toLowerCase().replaceAll('%2e', '.');
 
     return decoded === '.' || decoded === '..';
   };
+
   if (path.split('/').some(dot) || path.toLowerCase().includes('%2f'))
     throw new Error(PROXY_URL_RULE);
 

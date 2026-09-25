@@ -32,7 +32,11 @@ vi.mock('@tomic/react', async () => {
       table: string,
     ) => (table === 'did:ad:transactions' ? DESTINATION_TABLES : undefined),
     // Likewise: which plugin's Set up made a table is tested in @tomic/lib.
-    destinationOwnerOf: async (_store: unknown, _drive: string, table: string) =>
+    destinationOwnerOf: async (
+      _store: unknown,
+      _drive: string,
+      table: string,
+    ) =>
       table === 'did:ad:transactions' || table === 'did:ad:statements'
         ? IMPORTER
         : undefined,
@@ -868,7 +872,9 @@ describe('running its own importer', () => {
   const describePlugin = async () => MANIFEST;
 
   /** The importer as Set up leaves it: its source, and its config under its key. */
-  function importerStore(stored: Record<string, unknown> = { table: 'did:ad:transactions' }) {
+  function importerStore(
+    stored: Record<string, unknown> = { table: 'did:ad:transactions' },
+  ) {
     const values: Record<string, Record<string, unknown>> = {
       [IMPORTER]: {
         [PLUGIN_TERMS['plugin-source']]: 'export function run() {}',
@@ -908,7 +914,12 @@ describe('running its own importer', () => {
         importer: IMPORTER,
       }),
     ).resolves.toMatchObject({
-      upload: { name: 'a.sta', mediaType: 'text/plain', size: 5, text: ':20:X' },
+      upload: {
+        name: 'a.sta',
+        mediaType: 'text/plain',
+        size: 5,
+        text: ':20:X',
+      },
     });
     await expect(
       resolve('did:ad:transactions', {
@@ -954,9 +965,9 @@ describe('running its own importer', () => {
     await expect(run({ name: 'a.sta', base64: 'AAAA' })).rejects.toThrow(
       'pass file.text',
     );
-    await expect(run({ name: 'a.willow', base64: 'not base64!' })).rejects.toThrow(
-      'standard, padded base64',
-    );
+    await expect(
+      run({ name: 'a.willow', base64: 'not base64!' }),
+    ).rejects.toThrow('standard, padded base64');
     await expect(
       run({ name: 'a.willow', base64: 'AAAA', text: 'x' }),
     ).rejects.toThrow('file must be');
