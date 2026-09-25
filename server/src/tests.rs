@@ -1396,3 +1396,39 @@ async fn unclaimed_well_known_names_are_not_found() {
     assert!(resp.status().is_success());
     assert!(get_body(resp).contains("html"));
 }
+
+/// A `/_routes/` path no active route serves is `404`, for any method and
+/// `Accept`, in every build: without the `plugin-routes` feature, and with
+/// it at the default level (`off`).
+#[actix_rt::test]
+async fn unserved_plugin_route_paths_are_not_found() {
+    use actix_web::http::Method;
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    for accept in [None, Some("text/html"), Some("application/json")] {
+        for method in [Method::GET, Method::POST, Method::HEAD, Method::DELETE] {
+            for path in ["/_routes/x/y", "/_routes/x", "/_routes/", "/_routes"] {
+                let mut req = TestRequest::default().method(method.clone()).uri(path);
+                if let Some(accept) = accept {
+                    req = req.insert_header(("Accept", accept));
+                }
+                let resp = test::call_service(&app, req.to_request()).await;
+                assert_eq!(resp.status().as_u16(), 404, "{method} {path} {accept:?}");
+                assert_eq!(
+                    resp.headers().get("content-type").unwrap(),
+                    "application/problem+json",
+                    "{method} {path} {accept:?}"
+                );
+                if method != Method::HEAD {
+                    let body = get_body(resp);
+                    assert!(!body.contains("<html"), "{path} {accept:?}: {body}");
+                }
+            }
+        }
+    }
+}
