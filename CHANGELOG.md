@@ -7,6 +7,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Plugins reach the integration proxy without naming its origin (#1700,
+  answer 4). A manifest declares `proxy: ["clockify"]`, and the plugin calls
+  `ctx.http` with `atomic-proxy:/clockify/...`, as its operations declare it.
+  The host resolves that to
+  `{--integration-proxy-url}/proxy/{connection_id}/clockify/...` with the
+  connection the Installation was delegated for that platform, and signs it.
+  It refuses a platform the manifest does not declare, a platform with no
+  delegated connection, dot segments, and a node with no proxy configured.
+  Absolute proxy URLs keep working and log a deprecation warning.
 - Installations carry what the integration proxy needs (#1700, answers 1–3;
   provisional):
   - `integrationAppAgent`: the installation's app id, a keyless

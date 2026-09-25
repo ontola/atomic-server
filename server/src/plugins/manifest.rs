@@ -35,6 +35,13 @@ pub struct Manifest {
     /// an operation id. It never widens what `operations` grant.
     #[serde(default, skip_serializing_if = "Network::is_default")]
     pub network: Network,
+    /// Integration-proxy platforms the plugin calls through `ctx.http` with
+    /// `atomic-proxy:/<platform>/...` URLs. The host resolves those to the
+    /// connection the installation was delegated for that platform on the
+    /// configured proxy, and signs them. Operations name such URLs; a platform
+    /// grants no request an operation does not.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proxy: Vec<String>,
     /// What the plugin's user-editable config looks like. The host validates
     /// the stored config against it before a run; nothing here grants access,
     /// so it is carried rather than interpreted.
@@ -68,6 +75,8 @@ struct ManifestV1 {
     #[serde(default)]
     actions: Vec<super::actions::Action>,
     #[serde(default)]
+    proxy: Vec<String>,
+    #[serde(default)]
     config: Option<serde_json::Value>,
 }
 
@@ -83,6 +92,7 @@ impl From<ManifestV1> for Manifest {
             operations: v1.operations,
             actions: v1.actions,
             network: Network::default(),
+            proxy: v1.proxy,
             config: v1.config,
             config_schema: None,
             default_config: None,
@@ -352,7 +362,23 @@ impl Manifest {
             if operation.id.is_empty() || !names.insert(&operation.id) {
                 return Err("operation IDs must be nonempty and unique".into());
             }
-            endpoint(&operation.url)?;
+            match ProxyRelative::parse(&operation.url) {
+                Some(relative) => {
+                    let relative = relative?;
+                    if relative.query.is_some() {
+                        return Err(PROXY_URL_RULE.into());
+                    }
+                    if !self.proxy.contains(&relative.platform) {
+                        return Err(format!(
+                            "operation {} does not declare proxy platform '{}' in `proxy`",
+                            operation.id, relative.platform
+                        ));
+                    }
+                }
+                None => {
+                    endpoint(&operation.url)?;
+                }
+            }
             if !matches!(
                 operation.method.as_str(),
                 "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -364,6 +390,15 @@ impl Manifest {
             }
         }
         super::actions::validate_actions(self)?;
+        names.clear();
+        for platform in &self.proxy {
+            if !is_proxy_platform(platform) || !names.insert(platform) {
+                return Err(
+                    "proxy platforms must be unique identifiers of letters, digits, `-` and `_`"
+                        .into(),
+                );
+            }
+        }
         names.clear();
         for origin in &self.network.origins {
             exact_origin(origin, "network origin")?;
@@ -438,6 +473,29 @@ impl Manifest {
         self.network
             .origins
             .contains(&url.origin().ascii_serialization())
+    }
+
+    /// Whether a declared operation admits this proxy-relative request: the
+    /// platform is declared, and an operation with this id, method and effect
+    /// names this platform and path.
+    pub fn allows_proxy_effect(
+        &self,
+        id: Option<&str>,
+        method: &str,
+        request: &ProxyRelative,
+        effect: &str,
+    ) -> bool {
+        self.proxy.contains(&request.platform)
+            && self.operations.iter().any(|operation| {
+                let Some(Ok(declared)) = ProxyRelative::parse(&operation.url) else {
+                    return false;
+                };
+                id == Some(operation.id.as_str())
+                    && operation.method == method
+                    && operation.effect == effect
+                    && declared.platform == request.platform
+                    && matches_path(&declared.path, &request.path)
+            })
     }
 
     pub fn allows_read(&self, id: Option<&str>, method: &str, url: &url::Url) -> bool {
@@ -528,6 +586,7 @@ pub fn translate_plugin_json(
             origins,
             reason: network_reason,
         },
+        proxy: Vec::new(),
         config: None,
         config_schema: plugin_json.config_schema.as_ref().map(sorted),
         default_config: plugin_json.default_config.as_ref().map(sorted),
@@ -579,6 +638,71 @@ fn endpoint(value: &str) -> Result<url::Url, String> {
         );
     }
     Ok(url)
+}
+
+/// The scheme of a proxy-relative URL: `atomic-proxy:/<platform>/<path>`.
+pub const PROXY_SCHEME: &str = "atomic-proxy:";
+
+const PROXY_URL_RULE: &str =
+    "atomic-proxy: URLs are `atomic-proxy:/<platform>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query";
+
+fn is_proxy_platform(platform: &str) -> bool {
+    !platform.is_empty()
+        && platform.len() <= 64
+        && platform
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+}
+
+/// A request to the integration proxy, relative to it and to the connection:
+/// `atomic-proxy:/clockify/api/v1/user?page=2` is platform `clockify`, path
+/// `/api/v1/user` and query `page=2`. The host resolves it to
+/// `{proxy origin}/proxy/{connection id}/{platform}{path}?{query}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProxyRelative {
+    pub platform: String,
+    /// Starts with `/`, and has at least one segment after the platform.
+    pub path: String,
+    pub query: Option<String>,
+}
+
+impl ProxyRelative {
+    /// `None` when `raw` is not an `atomic-proxy:` URL at all, and an error
+    /// when it is one that is malformed.
+    pub fn parse(raw: &str) -> Option<Result<Self, String>> {
+        let rest = raw.strip_prefix(PROXY_SCHEME)?;
+        Some(Self::parse_rest(rest))
+    }
+
+    fn parse_rest(rest: &str) -> Result<Self, String> {
+        let rule = || PROXY_URL_RULE.to_string();
+        if rest.contains('#') || rest.contains('\\') {
+            return Err(rule());
+        }
+        let (path, query) = match rest.split_once('?') {
+            Some((path, query)) => (path, Some(query.to_string())),
+            None => (rest, None),
+        };
+        let path = path.strip_prefix('/').ok_or_else(rule)?;
+        let (platform, path) = path.split_once('/').ok_or_else(rule)?;
+        if !is_proxy_platform(platform) || path.is_empty() {
+            return Err(rule());
+        }
+        // The proxy refuses dot segments too, but the signature covers the
+        // URL as sent, so nothing that normalises differently goes out.
+        let dot = |segment: &str| {
+            let decoded = segment.to_ascii_lowercase().replace("%2e", ".");
+            decoded == "." || decoded == ".."
+        };
+        if path.split('/').any(dot) || path.to_ascii_lowercase().contains("%2f") {
+            return Err(rule());
+        }
+        Ok(Self {
+            platform: platform.to_string(),
+            path: format!("/{path}"),
+            query,
+        })
+    }
 }
 
 fn exact_origin(value: &str, what: &str) -> Result<(), String> {
@@ -757,6 +881,46 @@ mod path_tests {
             "/repos/owner/repo/issues/..",
         ] {
             assert!(!matches_path(pattern, path));
+        }
+    }
+}
+
+#[cfg(test)]
+mod proxy_relative_tests {
+    use super::ProxyRelative;
+
+    #[test]
+    fn a_proxy_relative_url_names_a_platform_a_path_and_a_query() {
+        assert_eq!(
+            ProxyRelative::parse("atomic-proxy:/clockify/api/v1/user?page=2&q=a%20b"),
+            Some(Ok(ProxyRelative {
+                platform: "clockify".into(),
+                path: "/api/v1/user".into(),
+                query: Some("page=2&q=a%20b".into()),
+            }))
+        );
+        assert_eq!(ProxyRelative::parse("https://proxy.test/proxy/c/p/x"), None);
+    }
+
+    #[test]
+    fn a_malformed_proxy_relative_url_is_refused() {
+        for bad in [
+            "atomic-proxy:clockify/x",
+            "atomic-proxy:/clockify",
+            "atomic-proxy:/clockify/",
+            "atomic-proxy://clockify/x",
+            "atomic-proxy:/clock ify/x",
+            "atomic-proxy:/clockify/../x",
+            "atomic-proxy:/clockify/a/%2E%2e/x",
+            "atomic-proxy:/clockify/a/./x",
+            "atomic-proxy:/clockify/a%2Fb",
+            "atomic-proxy:/clockify/a\\b",
+            "atomic-proxy:/clockify/x#frag",
+        ] {
+            assert!(
+                matches!(ProxyRelative::parse(bad), Some(Err(_))),
+                "{bad} should be refused"
+            );
         }
     }
 }
