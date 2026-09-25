@@ -16,6 +16,8 @@ artifact
 /.e2e-store
 /.e2e-runs
 server/assets_tmp
+# Same, for the plugin assets `build.rs` stages before embedding them.
+server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad
