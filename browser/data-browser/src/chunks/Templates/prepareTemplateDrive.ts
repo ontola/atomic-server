@@ -18,7 +18,8 @@ export async function prepareTemplateDrive(store: Store): Promise<void> {
   if (store.isLocalOnlyDrive(home)) return;
 
   // A demo guest has no account, so nothing can be hosted for it, and asking
-  // the control plane only fails with "Sign in". Its home was never on the
+  // the control plane only fails with "Sign in". Leaving the demo lands the
+  // guest in this gallery with such a home. Its home was never on the
   // server either (only a real signup creates one there), so there is no
   // server copy to verify against: asking the node for its inventory just
   // times out. Its home lives on this device only. A real account without a

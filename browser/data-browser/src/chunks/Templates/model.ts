@@ -24,8 +24,7 @@ export type TemplatePart =
       name: string;
       text: string;
       exampleText?: string;
-    }
-  | { key: string; kind: 'interactive-demo' };
+    };
 export interface TemplatePlan {
   release: { id: string; version: string };
   title: string;

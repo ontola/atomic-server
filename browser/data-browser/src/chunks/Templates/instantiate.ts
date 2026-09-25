@@ -26,11 +26,6 @@ export async function instantiateTemplate(
 ): Promise<TemplateInstance> {
   // Reject unsupported plans before any writes, including missing catalog entries.
   for (const part of plan.parts) {
-    if (part.kind === 'interactive-demo')
-      throw new Error(
-        'The interactive demo must be opened using its demo adapter.',
-      );
-
     if (
       part.kind === 'table' &&
       !TABLE_TEMPLATES.some(t => t.id === part.catalogId && t.spec)

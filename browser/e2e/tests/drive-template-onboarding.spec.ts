@@ -201,7 +201,7 @@ test('blank drive remains a short path without feedback covering it on mobile', 
   await expect(page).not.toHaveURL(/new-drive/);
 });
 
-test('interactive demo returns to template selection from the top bar', async ({
+test('interactive demo leads to template selection and back from the top bar', async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -209,21 +209,38 @@ test('interactive demo returns to template selection from the top bar', async ({
   // to their own workspace instead (DemoRoute's signedInDrive).
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/demo`);
-  const exit = page.getByRole('button', { name: 'Back', exact: true });
-  await expect(exit).toBeVisible({ timeout: 90000 });
-  await expect(exit).toHaveCount(1);
-  const bar = await page
-    .getByRole('region', { name: 'Template preview' })
-    .boundingBox();
+  const bar = page.getByRole('region', { name: 'Setup' });
+  const choose = bar.getByRole('button', { name: 'Choose a template' });
+  await expect(choose).toBeVisible({ timeout: 90000 });
+  await expect(bar.getByRole('button', { name: 'Leave demo' })).toBeVisible();
+  const barBox = await bar.boundingBox();
   const nav = await page
     .getByLabel('navigation', { exact: true })
     .boundingBox();
-  expect(bar!.y + bar!.height).toBeLessThanOrEqual(nav!.y);
-  await exit.click();
-  await expect(exit).toHaveCount(0);
+  expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(nav!.y);
+
+  // A stale template-preview record must not hide the demo's bar.
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'atomic.templateDemo',
+      JSON.stringify({
+        drive: 'did:ad:stale',
+        template: 'student',
+        previousDrive: '',
+      }),
+    ),
+  );
+  await page.reload();
+  await expect(choose).toBeVisible({ timeout: 30000 });
+
+  // The demo is not a template, and the gallery keeps the way back.
+  await choose.click();
   await expect(
-    page.getByRole('link', { name: 'create a blank drive', exact: true }),
+    page.getByRole('button', { name: 'Preview template' }).first(),
   ).toBeVisible();
+  await expect(page.getByText('Meet the demo team')).toHaveCount(0);
+  await bar.getByRole('button', { name: 'Back to the demo' }).click();
+  await expect(choose).toBeVisible();
 });
 
 test('AI setup can be dismissed and reopened without trapping the gallery', async ({

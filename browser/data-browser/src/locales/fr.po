@@ -7378,6 +7378,7 @@ msgid "Drive name"
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/DemoExitButton.tsx
 msgid "Back to templates"
 msgstr ""
 
@@ -7418,9 +7419,8 @@ msgstr ""
 msgid "Or, tell Atomic what you need"
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Template preview"
-msgstr ""
+#~ msgid "Template preview"
+#~ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "<0/> Include example content"
@@ -7450,9 +7450,8 @@ msgstr ""
 msgid "Could not open the preview. Please refresh."
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Back to template selection"
-msgstr ""
+#~ msgid "Back to template selection"
+#~ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "/app/new-drive?blank=1"
@@ -12271,4 +12270,38 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "This page no longer exists"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted, for example when you left a demo or a preview."
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "Open your drive"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+#: src/views/ErrorPage.tsx
+msgid "Choose a template"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+msgid "Leave demo"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+msgid "Demo workspace"
+msgstr ""
+
+#. 0: resource.title
+#: src/components/DemoExitButton.tsx
+msgid "Preview: {0}"
+msgstr ""
+
+#: src/components/SetupBar.tsx
+msgid "Setup"
 msgstr ""

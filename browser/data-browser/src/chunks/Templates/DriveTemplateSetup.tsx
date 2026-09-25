@@ -1,5 +1,5 @@
 import { getIconForClass } from '../../helpers/iconMap';
-import { useState, useRef, lazy, Suspense } from 'react';
+import { useState, useRef, lazy, Suspense, type ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { dataBrowser, useStore, type Resource } from '@tomic/react';
 import { SIDEBAR_TOGGLE_WIDTH } from '../../components/SideBar';
@@ -22,12 +22,29 @@ import { keepTemplateDemo } from './keepTemplateDemo';
 import { prepareTemplateDrive } from './prepareTemplateDrive';
 const TemplateChat = lazy(() => import('./TemplateChat'));
 
+export interface TemplateSetupStep {
+  /** The name step (a template or a blank drive chosen), or the gallery. */
+  naming: boolean;
+  /** From the name step back to the gallery. */
+  back: () => void;
+  busy: boolean;
+  /** The name step's submit, for a Create button outside the form (its
+   *  `form` attribute names the form). */
+  create: { form: string; disabled: boolean; label: string };
+}
+
+const FORM_ID = 'new-drive-form';
+
 export function DriveTemplateSetup({
   onCreated,
   onPreview,
+  renderBar,
 }: {
   onCreated: (resource: Resource) => void;
   onPreview?: () => void;
+  /** Where a full page puts the step's title and back action: in its setup
+   *  bar. Without it (the new-drive dialog) they stay inline. */
+  renderBar?: (step: TemplateSetupStep) => ReactNode;
 }) {
   const store = useStore();
   const navigate = useNavigateWithTransition();
@@ -80,13 +97,6 @@ export function DriveTemplateSetup({
   async function preview(template: TemplateDefinition) {
     await run(async () => {
       setPreparingTemplate(template.id);
-
-      if (template.id === 'interactive-demo') {
-        onPreview?.();
-        navigate('/app/demo');
-
-        return;
-      }
 
       const subject = await startTemplateDemo(
         store,
@@ -142,6 +152,16 @@ export function DriveTemplateSetup({
 
   return (
     <Column gap='1.5rem'>
+      {renderBar?.({
+        naming,
+        back: () => setNaming(false),
+        busy: busy || !!partial,
+        create: {
+          form: FORM_ID,
+          disabled: busy || !!partial || !name.trim(),
+          label: busy ? 'Creating…' : 'Create drive',
+        },
+      })}
       {error && (
         <>
           <ErrorBlock error={error} />
@@ -158,15 +178,20 @@ export function DriveTemplateSetup({
       )}
       {naming ? (
         <>
-          <Button
-            subtle
-            disabled={busy || !!partial}
-            onClick={() => setNaming(false)}
-          >
-            Back to templates
-          </Button>
-          <h1>Give your space a name</h1>
+          {!renderBar && (
+            <>
+              <Button
+                subtle
+                disabled={busy || !!partial}
+                onClick={() => setNaming(false)}
+              >
+                Back to templates
+              </Button>
+              <h1>Give your space a name</h1>
+            </>
+          )}
           <form
+            id={FORM_ID}
             onSubmit={e => {
               e.preventDefault();
               void create();
@@ -218,12 +243,14 @@ export function DriveTemplateSetup({
                   </Column>
                 </Card>
               )}
-              <Button
-                type='submit'
-                disabled={busy || !!partial || !name.trim()}
-              >
-                {busy ? 'Creating…' : 'Create drive'}
-              </Button>
+              {!renderBar && (
+                <Button
+                  type='submit'
+                  disabled={busy || !!partial || !name.trim()}
+                >
+                  {busy ? 'Creating…' : 'Create drive'}
+                </Button>
+              )}
             </Column>
           </form>
         </>
@@ -290,7 +317,6 @@ export function DriveTemplateSetup({
 
 const TableIcon = getIconForClass(dataBrowser.classes.table);
 const DocumentIcon = getIconForClass(dataBrowser.classes.documentV2);
-const ChatIcon = getIconForClass(dataBrowser.classes.chatroom);
 
 /** Shared by the gallery and the selected-template summary. */
 function TemplatePreview({ template }: { template: TemplateDefinition }) {
@@ -300,33 +326,16 @@ function TemplatePreview({ template }: { template: TemplateDefinition }) {
         {template.icon} {template.title}
       </strong>
       <SidebarPreview aria-label={`${template.title} contents`}>
-        {planTemplate(template, TEMPLATE_CATALOG).parts.map(part =>
-          part.kind === 'interactive-demo' ? (
-            <div key={part.key}>
-              <PreviewRow>
-                <DocumentIcon aria-hidden />
-                <span>Welcome</span>
-              </PreviewRow>
-              <PreviewRow>
-                <TableIcon aria-hidden />
-                <span>Board</span>
-              </PreviewRow>
-              <PreviewRow>
-                <ChatIcon aria-hidden />
-                <span>Team chat</span>
-              </PreviewRow>
-            </div>
-          ) : (
-            <PreviewRow key={part.key}>
-              {part.kind === 'table' ? (
-                <TableIcon aria-hidden />
-              ) : (
-                <DocumentIcon aria-hidden />
-              )}
-              <span>{part.name}</span>
-            </PreviewRow>
-          ),
-        )}
+        {planTemplate(template, TEMPLATE_CATALOG).parts.map(part => (
+          <PreviewRow key={part.key}>
+            {part.kind === 'table' ? (
+              <TableIcon aria-hidden />
+            ) : (
+              <DocumentIcon aria-hidden />
+            )}
+            <span>{part.name}</span>
+          </PreviewRow>
+        ))}
       </SidebarPreview>
     </>
   );
