@@ -1063,6 +1063,181 @@ mod tests {
         assert_ne!(commit.get(urls::SIGNER).unwrap().to_string(), server_agent,);
     }
 
+    /// Gives the fixture's plugin an app agent the way `createApp` does: an
+    /// agent resource in the drive's app-identities folder, granted write on
+    /// the plugin. Everything here is ordinary resource data, so a second node
+    /// that syncs the drive has all of it. It does not get the key.
+    async fn issue_app_identity(fixture: &Fixture) -> atomic_lib::agents::Agent {
+        let store = &fixture.appstate.store;
+        let folder = crate::plugins::test_fixture::genesis(
+            store,
+            vec![
+                (
+                    urls::PARENT,
+                    atomic_lib::Value::AtomicUrl(fixture.drive.as_str().into()),
+                ),
+                (
+                    urls::NAME,
+                    atomic_lib::Value::String("App identities".into()),
+                ),
+            ],
+        )
+        .await;
+        let mut drive = store
+            .get_resource(&fixture.drive.as_str().into())
+            .await
+            .unwrap();
+        drive
+            .set_unsafe(
+                fixture.terms.property("app-identities").unwrap().into(),
+                atomic_lib::Value::AtomicUrl(folder.as_str().into()),
+            )
+            .unwrap();
+        drive.save(store).await.unwrap();
+
+        let app_agent = atomic_lib::agents::Agent::new(Some("the app")).unwrap();
+        let mut agent_resource = app_agent.to_resource().unwrap();
+        agent_resource
+            .set_unsafe(
+                urls::PARENT.into(),
+                atomic_lib::Value::AtomicUrl(folder.as_str().into()),
+            )
+            .unwrap();
+        agent_resource.save_locally(store).await.unwrap();
+
+        let mut plugin = store
+            .get_resource(&fixture.plugin.as_str().into())
+            .await
+            .unwrap();
+        plugin
+            .set_unsafe(
+                urls::WRITE.into(),
+                atomic_lib::Value::ResourceArray(vec![app_agent.subject.to_string().into()]),
+            )
+            .unwrap();
+        plugin.save(store).await.unwrap();
+
+        app_agent
+    }
+
+    /// ontola/atomic-plugins#41. A node that received an app by sync has its
+    /// agent resource but not its key. The run must refuse, not fall back to
+    /// signing as this node's own agent.
+    #[actix_rt::test]
+    async fn an_app_whose_key_is_not_on_this_node_does_not_run() {
+        let mut fixture = fixture("app_key_elsewhere").await;
+        write_plugin(&mut fixture, "Must not be written as the server").await;
+        let app_agent = issue_app_identity(&fixture).await;
+        assert!(matches!(
+            fixture
+                .appstate
+                .store
+                .get_app_agent_state(&atomic_lib::db::app_agent::AppAgentKey::new(
+                    &fixture.drive,
+                    &fixture.plugin,
+                ))
+                .unwrap(),
+            atomic_lib::db::app_agent::AppAgentState::Legacy
+        ));
+        let key = arm(&fixture, true).await;
+
+        assert_eq!(run_due(&fixture.appstate).await, 1);
+
+        let error = fixture
+            .appstate
+            .store
+            .get_plugin_schedule(&key)
+            .unwrap()
+            .unwrap()
+            .last_error
+            .expect("the run should have been refused");
+        assert!(error.contains("holds no key"), "{error}");
+        assert!(error.contains(&app_agent.subject.to_string()), "{error}");
+        assert_eq!(
+            children_named(
+                &fixture,
+                &fixture.drive,
+                "Must not be written as the server"
+            )
+            .await,
+            0
+        );
+    }
+
+    /// The same app, with its key handed to this node, runs as itself: the
+    /// refusal above is about the missing key, not about the identity.
+    #[actix_rt::test]
+    async fn the_same_app_runs_once_its_key_is_on_this_node() {
+        let mut fixture = fixture("app_key_here").await;
+        write_plugin(&mut fixture, "Written as the app").await;
+        let app_agent = issue_app_identity(&fixture).await;
+        let store = &fixture.appstate.store;
+        store
+            .set_app_agent(
+                &atomic_lib::db::app_agent::AppAgentKey::new(&fixture.drive, &fixture.plugin),
+                &atomic_lib::db::app_agent::AppAgent::new(
+                    app_agent.subject.to_string(),
+                    app_agent.build_secret().unwrap(),
+                    0,
+                ),
+            )
+            .unwrap();
+        let mut drive = store
+            .get_resource(&fixture.drive.as_str().into())
+            .await
+            .unwrap();
+        let mut writers = drive
+            .get(urls::WRITE)
+            .ok()
+            .and_then(|v| v.to_subjects(None).ok())
+            .unwrap_or_default();
+        writers.push(app_agent.subject.to_string());
+        drive
+            .set_unsafe(
+                urls::WRITE.into(),
+                atomic_lib::Value::ResourceArray(writers.into_iter().map(Into::into).collect()),
+            )
+            .unwrap();
+        drive.save(store).await.unwrap();
+        let key = arm(&fixture, true).await;
+
+        assert_eq!(run_due(&fixture.appstate).await, 1);
+        assert_eq!(
+            store.get_plugin_schedule(&key).unwrap().unwrap().last_error,
+            None
+        );
+        assert_eq!(
+            children_named(&fixture, &fixture.drive, "Written as the app").await,
+            1
+        );
+    }
+
+    /// A plugin that was never issued an app agent keeps the legacy signer.
+    /// The refusal is for apps that have an identity somewhere, not for every
+    /// plugin without a key.
+    #[actix_rt::test]
+    async fn a_plugin_with_no_app_identity_still_runs_as_the_server() {
+        let mut fixture = fixture("no_app_identity").await;
+        write_plugin(&mut fixture, "Written as the server").await;
+        let key = arm(&fixture, true).await;
+
+        assert_eq!(run_due(&fixture.appstate).await, 1);
+        assert_eq!(
+            fixture
+                .appstate
+                .store
+                .get_plugin_schedule(&key)
+                .unwrap()
+                .unwrap()
+                .last_error,
+            None
+        );
+        assert_eq!(
+            children_named(&fixture, &fixture.drive, "Written as the server").await,
+            1
+        );
+    }
+
     #[actix_rt::test]
     async fn a_grant_writes_only_where_its_agent_could_have() {
         let mut fixture = fixture("plugin_wrong_agent").await;

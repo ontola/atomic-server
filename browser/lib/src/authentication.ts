@@ -214,6 +214,41 @@ export async function signRequest(
   return newHeaders;
 }
 
+/** A request body {@link signedRequestInit} can hash and send as it is. */
+export type SignedRequestBody = string | Uint8Array | ArrayBuffer;
+
+/**
+ * The `fetch` options for a state-changing request to an AtomicServer
+ * endpoint, signed with version 2 over the method, the full `url` and exactly
+ * the `body` that is sent. Those endpoints (`/plugin-run`, `/app-write`,
+ * `/plugin-secret`, and the others listed in `docs/src/authentication.md`)
+ * refuse a version 1 signature and a session cookie, and accept each
+ * signature once, so sign every request anew rather than reusing the result.
+ *
+ * Pass the body as the string or bytes to send, not an object: it is hashed
+ * as given.
+ */
+export async function signedRequestInit(
+  url: string,
+  agent: Agent,
+  request: {
+    method: string;
+    body?: SignedRequestBody;
+    headers?: HeadersObject;
+  },
+): Promise<RequestInit & { headers: HeadersObject }> {
+  const headers = await signRequest(url, agent, request.headers ?? {}, {
+    method: request.method,
+    body: request.body,
+  });
+
+  return {
+    method: request.method,
+    headers,
+    ...(request.body === undefined ? {} : { body: request.body as BodyInit }),
+  };
+}
+
 /**
  * How long a signed authentication proof stays valid, mirroring the server's
  * `AUTH_MAX_AGE_MS` in `lib/src/authentication.rs`. Before 0.41 a proof never

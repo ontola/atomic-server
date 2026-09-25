@@ -7,6 +7,37 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- A plugin run no longer falls back to the server's agent for an app or
+  installation whose key is not on this node (#1644), and that check sees
+  installation identities (#1700, answer 8): an Installation's keyless
+  `integrationAppAgent` and the agents nodes publish on its
+  `InstallationRuntime` children. An Installation that carries one and was
+  not activated on this node is refused ("activate it on this node"), as is
+  a resource naming an identity of such an Installation; an installed plugin
+  on a node that activated it runs as that node's agent, whatever identities
+  its resources name. A `createApp` agent whose key is elsewhere is still
+  refused.
+- State-changing endpoints require a version 2 request signature, and accept
+  each one once (#1700, piece 6 and answer 7). `POST`/`DELETE` on
+  `/app-agent`, `/app-write`, `/plugin-view-token`, `/plugin-secret`,
+  `/plugin-run`, `/plugin-schedule`, `/plugin-resume`, `/plugin-auto-apply`,
+  `/plugin-trigger`, the `/plugin-release*`, `/plugin-sync-*`,
+  `/plugin-connection-*` and `/plugin-external-*` routes, the 13
+  `/integration-action*` routes, `/bind-drive`, `/forget-peer`, `/iroh-sync`
+  and the `/website-hosting` writes refuse version 1 signatures, bearer
+  tokens and session cookies with a `401`. A middleware reads the body before
+  the handler, checks the signature over exactly those bytes, and hands them
+  on. An in-memory replay cache per node remembers every accepted v2
+  signature (by the SHA-256 of its bytes) until it can no longer be fresh,
+  and refuses a second use; it holds at most 100,000 and answers `429` when
+  full rather than forget a live one. `GET` on the same paths still takes
+  version 1. `/commit`, `PUT /blob`, `/upload` and `POST` on other resources
+  are unchanged. See docs/src/authentication.md.
+- wasip2 class extenders do not reach the integration proxy (#1700, answer
+  5). They were already refused, because the host has no installation agent
+  to sign as for them; the refusal now comes first, whether the extender uses
+  the proxy's URL or `atomic-proxy:`, and says why. Documented under
+  "Class extenders and the integration proxy" in the plugin docs.
 - Plugins reach the integration proxy without naming its origin (#1700,
   answer 4). A manifest declares `proxy: ["clockify"]`, and the plugin calls
   `ctx.http` with `atomic-proxy:/clockify/...`, as its operations declare it.

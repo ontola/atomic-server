@@ -348,11 +348,25 @@ async fn pinning_a_release_with_public_endpoints_is_refused_while_the_gates_are_
             .configure(crate::routes::config_routes),
     )
     .await;
+    // `/plugin-release-pin` requires a version 2 signature (#1700).
     let request = || {
-        signed("/plugin-release-pin", &f.appstate)
+        let body = serde_json::json!({"drive": f.drive, "plugin": f.plugin}).to_string();
+        let origin = f.appstate.config.get_origin();
+        let headers = atomic_lib::client::get_authentication_headers_v2(
+            "POST",
+            &format!("{origin}/plugin-release-pin"),
+            body.as_bytes(),
+            &f.appstate.store.get_default_agent().unwrap(),
+        )
+        .expect("auth headers");
+        let mut request = TestRequest::with_uri("/plugin-release-pin")
             .method(actix_web::http::Method::POST)
-            .set_json(serde_json::json!({"drive": f.drive, "plugin": f.plugin}))
-            .to_request()
+            .insert_header(("Content-Type", "application/json"))
+            .set_payload(body);
+        for (key, value) in headers {
+            request = request.insert_header((key, value));
+        }
+        with_host(request, &origin).to_request()
     };
 
     set_source(pin(

@@ -55,6 +55,9 @@ pub struct AppState {
     /// `plugins::route_delivery`. Its worker runs only at `read-write`.
     #[cfg(feature = "plugin-routes")]
     pub route_delivery: Arc<plugins::route_delivery::DeliveryQueue>,
+    /// The version 2 request signatures this node accepted and that are still
+    /// fresh, so none is accepted twice; see `crate::replay_cache`.
+    pub replay_cache: Arc<crate::replay_cache::ReplayCache>,
 }
 
 impl AppState {
@@ -341,6 +344,7 @@ impl AppState {
             route_exec,
             #[cfg(feature = "plugin-routes")]
             route_delivery,
+            replay_cache: Arc::new(Default::default()),
         })
     }
 

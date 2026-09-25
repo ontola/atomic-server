@@ -5,7 +5,7 @@ use actix_web::{test, web::Data, App};
 use atomic_lib::{agents::Agent, db::app_agent::AppAgentKey, urls, Storelike, Value};
 use serde_json::{json, Value as Json};
 
-use super::app_endpoints_test::{app_fixture, body_of, share, signed, signed_as};
+use super::app_endpoints_test::{app_fixture, body_of, share, signed, signed_as, signed_v2_as};
 use crate::plugins::app_row_grant::{TABLE_VIEWS, VIEW_CLASS, VIEW_KIND};
 use crate::plugins::test_fixture::{genesis, Fixture};
 
@@ -109,25 +109,35 @@ macro_rules! service {
 }
 
 /// Posts JSON, signed as the node's agent or as `$agent`; `(status, body)`.
+/// `/app-write` requires a version 2 signature (#1700), so it gets one.
 macro_rules! post {
-    (@send $service:expr, $request:expr, $body:expr) => {{
-        let response = test::call_service(
-            &$service,
-            $request
+    (@send $service:expr, $fixture:expr, $path:expr, $body:expr, $agent:expr) => {{
+        let path: &str = $path;
+        let body = ($body).to_string();
+        let request = if path == "/app-write" {
+            signed_v2_as(
+                path,
+                &$fixture.appstate,
+                $agent,
+                actix_web::http::Method::POST,
+                &body,
+            )
+        } else {
+            signed_as(path, &$fixture.appstate, $agent)
                 .method(actix_web::http::Method::POST)
                 .insert_header(("Content-Type", "application/json"))
-                .set_payload(($body).to_string())
-                .to_request(),
-        )
-        .await;
+                .set_payload(body)
+        };
+        let response = test::call_service(&$service, request.to_request()).await;
         let status = response.status().as_u16();
         (status, body_of(response))
     }};
-    ($service:expr, $fixture:expr, $path:expr, $body:expr) => {
-        post!(@send $service, signed($path, &$fixture.appstate), $body)
-    };
+    ($service:expr, $fixture:expr, $path:expr, $body:expr) => {{
+        let agent = $fixture.appstate.store.get_default_agent().unwrap();
+        post!(@send $service, $fixture, $path, $body, &agent)
+    }};
     ($service:expr, $fixture:expr, $path:expr, $body:expr, $agent:expr) => {
-        post!(@send $service, signed_as($path, &$fixture.appstate, $agent), $body)
+        post!(@send $service, $fixture, $path, $body, $agent)
     };
 }
 

@@ -112,6 +112,7 @@ pub async fn fixture_with_args(name: &str, extra_args: &[&str]) -> Fixture {
         ("run-problems", urls::JSON),
         ("run-outcomes", urls::JSON),
         ("run-cursor", urls::STRING),
+        ("app-identities", urls::ATOMIC_URL),
     ] {
         let subject = genesis(
             &store,

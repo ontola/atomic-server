@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   dataBrowser,
-  signRequest,
+  signedRequestInit,
   useStore,
   ensureSchema,
   pluginSchema,
@@ -66,21 +66,21 @@ export function CreateEventAutomation({
       await script.set(dataBrowser.properties.emoji, '⚡');
       await script.save();
       const url = `${store.getServerUrl()}/plugin-trigger`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          ...(await signRequest(url, store.getAgent()!, {})),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          drive,
-          plugin: subject,
-          filters: selected.filters,
-          onEnter: true,
-          onLeave: false,
-          autoApply: false,
+      const response = await fetch(
+        url,
+        await signedRequestInit(url, store.getAgent()!, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drive,
+            plugin: subject,
+            filters: selected.filters,
+            onEnter: true,
+            onLeave: false,
+            autoApply: false,
+          }),
         }),
-      });
+      );
       if (!response.ok) throw new Error(await response.text());
       navigate(constructOpenURL(subject));
       if (withAssistant)

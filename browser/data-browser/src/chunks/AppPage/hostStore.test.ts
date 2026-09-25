@@ -41,6 +41,15 @@ vi.mock('@tomic/react', async () => {
         ? IMPORTER
         : undefined,
     findSchema: async () => ({ properties: PLUGIN_TERMS }),
+    signedRequestInit: async (
+      _url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: { ...request.headers },
+      body: request.body,
+    }),
   };
 });
 

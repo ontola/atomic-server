@@ -26,6 +26,15 @@ They can also access a few functions provided by the server:
 These functions are documented and typed in the [class-extender.wit](https://github.com/ontola/atomic-server/blob/c2a1aaf814e73381e597fc6472bf0dca9689084c/server/wit/class-extender.wit) file.
 You can use this file to generate bindings for your programming language of choice.
 
+### Class extenders and the integration proxy
+
+A wasip2 class extender cannot reach the integration proxy (`--integration-proxy-url`), whether it calls it by its URL or with an `atomic-proxy:` URL, even when its manifest lists the proxy's origin in `network.origins`.
+The server refuses the request before it connects, with an error that says so.
+
+The proxy only accepts requests signed as an installation's agent on this node, which the page registers with the proxy as a runtime of the installation, and which the connections delegated to the installation name.
+A class extender has no such agent: it signs as its own plugin agent, which no installation or delegated connection names.
+An integration that needs the proxy belongs in a JS plugin (`runtime: atomic-js/1`) installed from the catalog, which gets an agent on every node that activates it.
+
 ## Namespaces
 
 A plugin is identified by a namespace and a name.
@@ -126,8 +135,7 @@ Every field except `schemaVersion` is optional; unknown fields and malformed dec
 - `capabilities`: `storage`, `full-drive-access`, `extended-fuel`, `extended-memory`, `custom-view`, each either as a name or as `{name, reason}`. The reason is shown at review. Network access is not a capability: declare destinations instead.
 - `secrets`, `operations`, `actions`: as in schema version 1. Secrets name an exact origin a credential may be sent to; operations are exact endpoints with an `effect` of `read` or `write`; actions reference operations.
 - `network.origins`: exact origins (no wildcards, paths or ports beyond the origin) for packages that call the host `fetch` without an operation id. It never widens what `operations` grant.
-- `proxy`: integration-proxy platforms the plugin uses, for example `["clockify"]`, also accepted in schema version 1. The plugin calls `ctx.http` with a proxy-relative URL such as `atomic-proxy:/clockify/api/v1/user`, and the operation that admits it is declared with that URL too. The server resolves it to `{--integration-proxy-url}/proxy/{connection_id}/clockify/api/v1/user`, taking the connection id from the Installation's `integrationConnections` (also passed to the plugin as `ctx.connections`), and signs it as the node's agent for the installation. A request is refused when the platform is not declared, when no connection is delegated for it, or when the node has no proxy configured. Calling the proxy by its absolute URL still works but is deprecated.
-  The proxy the operator configures with `--integration-proxy-url` (`ATOMIC_INTEGRATION_PROXY_URL`) may live on this machine or a private network, such as `http://host.docker.internal:8787` or `http://proxy.lan:8787`: exactly that scheme, host and port may resolve to loopback, private, carrier-grade NAT or IPv6 unique-local addresses, which every other plugin destination is refused. The name is resolved once per request and the host connects to exactly the addresses it checked. Link-local and cloud-metadata addresses (`169.254.0.0/16`, `fe80::/10`) are refused even for the proxy, and credentials in the URL are refused.
+- `proxy`: integration-proxy platforms the plugin uses, for example `["clockify"]`, also accepted in schema version 1. The plugin calls `ctx.http` with a proxy-relative URL such as `atomic-proxy:/clockify/api/v1/user`, and the operation that admits it is declared with that URL too. The server resolves it to `{--integration-proxy-url}/proxy/{connection_id}/clockify/api/v1/user`, taking the connection id from the Installation's `integrationConnections` (also passed to the plugin as `ctx.connections`), and signs it as the node's agent for the installation. A request is refused when the platform is not declared, when no connection is delegated for it, or when the node has no proxy configured. Calling the proxy by its absolute URL still works but is deprecated. Only JS installations reach the proxy; see [class extenders and the integration proxy](#class-extenders-and-the-integration-proxy).
 - `configSchema`, `defaultConfig`: objects, as in `plugin.json`.
 - `accepts`: files the host may hand the plugin, up to eight entries of `{ extensions?, mediaTypes?, as?, maxBytes? }`. `extensions` (lower-case, with the dot) and `mediaTypes` only filter the file picker. `maxBytes` (default 5 MiB, at most 20 MiB) bounds the file's raw byte size. `as` says how the file arrives in `ctx.upload`, in a field named after it:
   - `"text"`, the default when `as` is left out: `{ name, mediaType, size, text }`, decoded as UTF-8, falling back to Windows-1252.
