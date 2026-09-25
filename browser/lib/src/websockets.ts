@@ -72,7 +72,7 @@ import { hexToBytes } from './value.js';
 import {
   livenessAction,
   LIVENESS_CHECK_MS,
-  LIVENESS_DEADLINE_MS,
+  LIVENESS_PROBE_TIMEOUT_MS,
 } from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
@@ -248,13 +248,14 @@ export class WSClient {
   private _rbsrItemsQueue: Array<(items: Item[]) => void> = [];
   /** What the server said it speaks, from its `AUTH_OK` payload. */
   private _serverCaps: string[] = [];
-  /** Liveness: when the last inbound frame arrived, whether a `KEEPALIVE`
-   *  probe is outstanding, and the timer that checks both. A browser cannot
+  /** Liveness: when the last inbound frame arrived, when the outstanding
+   *  `KEEPALIVE` probe was sent (`undefined` when none is), and the timer
+   *  that checks both. A browser cannot
    *  observe the server's protocol-level pings, so without this a socket
    *  the network silently dropped stays "connected" until the next write
    *  fails — every subscription push in between is lost. */
   private _lastFrameAt = 0;
-  private _probeSent = false;
+  private _probeSentAt: number | undefined;
   private _livenessTimer: ReturnType<typeof setInterval> | undefined;
 
   /** When true, all WS frames are logged to the console in human-readable form. */
@@ -1105,7 +1106,7 @@ export class WSClient {
   private handleMessage(ev: MessageEvent) {
     // Any inbound frame proves the socket is alive.
     this._lastFrameAt = Date.now();
-    this._probeSent = false;
+    this._probeSentAt = undefined;
 
     if (ev.data instanceof ArrayBuffer) {
       this.handleBinary(new Uint8Array(ev.data));
@@ -1675,28 +1676,29 @@ export class WSClient {
    * Start the liveness timer for the current socket. Only probes a server
    * that advertised `keepalive` (older servers do not echo the frame, and a
    * probe that is never answered would make an idle socket look dead every
-   * `LIVENESS_DEADLINE_MS`). Anonymous sessions never authenticate, so they
+   * `LIVENESS_PROBE_TIMEOUT_MS`). Anonymous sessions never authenticate, so they
    * learn no capabilities and keep the pre-2026-09 reactive behaviour.
    */
   private startLiveness() {
     this.stopLiveness();
     this._lastFrameAt = Date.now();
-    this._probeSent = false;
+    this._probeSentAt = undefined;
     this._livenessTimer = setInterval(() => {
       if (this.readyState !== WebSocket.OPEN) return;
       if (!this._serverCaps.includes('keepalive')) return;
 
+      const now = Date.now();
       const action = livenessAction(
-        Date.now() - this._lastFrameAt,
-        this._probeSent,
+        now - this._lastFrameAt,
+        this._probeSentAt === undefined ? undefined : now - this._probeSentAt,
       );
 
       if (action === 'probe') {
-        this._probeSent = true;
+        this._probeSentAt = now;
         this.sendBinary(encodeKeepalive());
       } else if (action === 'close') {
         console.warn(
-          `[WS] no frame from the server for ${LIVENESS_DEADLINE_MS}ms (probe unanswered); closing so the reconnect loop takes over`,
+          `[WS] keepalive probe unanswered for ${LIVENESS_PROBE_TIMEOUT_MS}ms; closing so the reconnect loop takes over`,
         );
         this.stopLiveness();
         // Closing fires the `close` handler, which reports disconnection,

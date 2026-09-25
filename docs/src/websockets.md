@@ -828,9 +828,11 @@ saturated renderer can stall pong delivery for seconds.
 
 A browser cannot observe protocol-level pings, so it has its own probe. When
 the server advertised `keepalive`, the client checks every 5 s: after 20 s
-with no inbound frame it sends one `KEEPALIVE (0x41)`; if nothing has arrived
-after 45 s it closes the socket and lets the reconnect loop take over. Any
-inbound frame resets both. The server **echoes** `KEEPALIVE` verbatim, which
+with no inbound frame it sends one `KEEPALIVE (0x41)`; if that probe is still
+unanswered 25 s after it was sent, it closes the socket and lets the reconnect
+loop take over. Any inbound frame resets both. Silence alone never closes the
+socket: a hidden tab's timers can fire a minute apart, and the first check
+after such a gap must ask the server rather than give up on it. The server **echoes** `KEEPALIVE` verbatim, which
 is the whole point of it. Against a server that did not advertise
 `keepalive` the client does not probe, since an unanswered probe would make
 every idle socket look dead.
