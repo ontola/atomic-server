@@ -3807,6 +3807,7 @@ export class Resource<C extends OptionalClass = any> {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
       this.resetLoroState();
+
       // The cache holds the state being replaced, not values that arrived with
       // these bytes. Left in place, `getLoroDoc()`'s heal pass writes every key
       // the snapshot lacks back into the doc — so a property removed at the
@@ -3815,6 +3816,7 @@ export class Resource<C extends OptionalClass = any> {
       for (const key of Object.keys(this.#cache)) {
         if (!isDerivedByServer(key)) delete this.#cache[key];
       }
+
       // Point `getLoroDoc()` at these bytes so it imports the snapshot
       // instead of seeding a *new* LoroList per array from `#cache`.
       // Seeding-then-merging was the OPFS cold-load flash: two concurrent
