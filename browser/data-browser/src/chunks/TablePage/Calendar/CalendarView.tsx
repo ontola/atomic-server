@@ -30,6 +30,7 @@ import { Button, ButtonClean } from '@components/Button';
 import { ExpandedRowDialog } from '../ExpandedRowDialog';
 import { useCalendarDateProp } from './useCalendarDateProp';
 import { CalendarDay } from './CalendarDay';
+import { CalendarDayList } from './CalendarDayList';
 import { withTableRowDefaults } from '../rowDefaults';
 import { calendarFields, isAllDayOnDate, nextCalendarDate } from '@tomic/lib';
 
@@ -290,6 +291,15 @@ export function CalendarView({
     setShowExpanded(true);
   };
 
+  // The day list ("+N more", or a click on a day's empty space).
+  const [listedDay, setListedDay] = useState<string>();
+  const [showDayList, setShowDayList] = useState(false);
+
+  const handleOpenDay = (dayKey: string) => {
+    setListedDay(dayKey);
+    setShowDayList(true);
+  };
+
   // Create a new item already placed on a day: a row of the table's class with
   // its date property preset. `createdAt` is required for it to appear in the
   // table. Timestamps are set to local noon so timezone shifts can't flip days.
@@ -394,10 +404,20 @@ export function CalendarView({
               readOnly={readOnly}
               onAddItem={handleAddItem}
               onOpenItem={handleOpenItem}
+              onOpenDay={handleOpenDay}
             />
           ))}
         </Grid>
       </CalendarWrapper>
+      <CalendarDayList
+        dayKey={listedDay}
+        open={showDayList}
+        bindOpen={setShowDayList}
+        eventSubjects={(listedDay && buckets.get(listedDay)) || []}
+        occurrences={(listedDay && occurrenceBuckets.get(listedDay)) || []}
+        allDaySubjects={allDaySubjects}
+        onOpenItem={handleOpenItem}
+      />
       <ExpandedRowDialog
         subject={expandedSubject ?? unknownSubject}
         open={showExpanded}

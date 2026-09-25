@@ -85,6 +85,82 @@ test.describe('calendar view', () => {
   });
 });
 
+// #1798: a crowded day clipped its events with no hint, and clicking a day did
+// nothing, so there was no way to read a busy day in full.
+test.describe('calendar day list', () => {
+  test.beforeEach(before);
+
+  test('a crowded day shows "+N more", and its day list shows every event', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await createIssueTracker(page, 'Busy day');
+    await page.getByRole('button', { name: 'Add view' }).click();
+    await page.getByTestId('menu-item-calendar').click();
+    await expect(page.getByTestId('calendar-view')).toBeVisible();
+
+    const todayCell = page.locator(
+      `[data-testid="calendar-day"][data-date="${localDayKey(new Date())}"]`,
+    );
+    const titles = ['Standup', 'Invoice due', 'Payday', 'Lunch', 'Dentist'];
+
+    for (const title of titles) {
+      await todayCell.hover();
+      await todayCell.getByTestId('calendar-day-add').click();
+      const input = todayCell.getByPlaceholder('New item…');
+      await input.fill(title);
+      await input.press('Enter');
+      await expect(input).toHaveCount(0);
+    }
+
+    // Not every title fits: the rest are counted, not silently clipped.
+    const more = todayCell.getByTestId('calendar-day-more');
+    await expect(more).toBeVisible();
+    const shown = await todayCell.getByTestId('calendar-event').count();
+    expect(shown).toBeLessThan(titles.length);
+    await expect(more).toContainText(`+${titles.length - shown}`);
+
+    await more.click();
+    const list = page.getByTestId('calendar-day-list');
+    await expect(list).toBeVisible();
+
+    for (const title of titles) {
+      await expect(
+        list.getByTestId('calendar-event').filter({ hasText: title }),
+      ).toBeVisible();
+    }
+
+    // An event opens its row on top; closing the row returns to the list.
+    await list
+      .getByTestId('calendar-event')
+      .filter({ hasText: 'Lunch' })
+      .click();
+    await expect(page.locator('dialog[open]')).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog[open]')).toHaveCount(1);
+    await expect(list).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog[open]')).toHaveCount(0);
+    // Focus returns to what opened the list.
+    await expect(more).toBeFocused();
+
+    // Keyboard: the day number is a button that opens the same list.
+    const dayNumber = todayCell.getByTestId('calendar-day-open');
+    await dayNumber.focus();
+    await page.keyboard.press('Enter');
+    await expect(list).toBeVisible();
+    await expect(list.getByTestId('calendar-event')).toHaveCount(titles.length);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await expect(dayNumber).toBeFocused();
+
+    // A click on the day's empty space opens it too.
+    const box = await todayCell.boundingBox();
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height - 4);
+    await expect(list).toBeVisible();
+  });
+});
+
 /** Left/right edges of each element a locator matches, in whole pixels. */
 async function columnEdges(locator: ReturnType<Page['locator']>) {
   return locator.evaluateAll(els =>
