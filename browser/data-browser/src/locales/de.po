@@ -8858,12 +8858,8 @@ msgstr ""
 msgid "v"
 msgstr ""
 
-#. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#. 0: release && release !== releaseId && ( <> <br /> from{' '} {/^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )} </> )
-#: src/chunks/Plugins/InstallationReviewDialog.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Pinned to <0/> {0}"
-msgstr ""
+#~ msgid "Pinned to <0/> {0}"
+#~ msgstr ""
 
 #: src/chunks/Plugins/CapabilityList.tsx
 msgid "No permissions required"
@@ -9423,4 +9419,18 @@ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
+msgstr ""
+
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/>"
+msgstr ""
+
+#. 0: pending.release.url
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+msgid "from {0}"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "from"
 msgstr ""
