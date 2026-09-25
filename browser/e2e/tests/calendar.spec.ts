@@ -81,7 +81,7 @@ test.describe('calendar view', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('Ship calendar');
-    await expect(dialog).toContainText('date');
+    await expect(dialog).toContainText('Date');
   });
 });
 
