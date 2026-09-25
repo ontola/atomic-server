@@ -1,5 +1,6 @@
 import {
   Agent,
+  decodeSecret,
   SubtleCryptoProvider,
   JSCryptoProvider,
   legacySubjectFromSecret,
@@ -9,6 +10,7 @@ import { adoptAgentOnDevice } from './adoptAgent';
 import {
   clearSessionDbKeys,
   ensureDbKeyOnSignIn,
+  trackDbKeySignIn,
   type SignInCredentials,
 } from './localDbKey';
 
@@ -181,7 +183,15 @@ export async function saveAgentToIDB(
   }
 
   if (typeof keyPairOrSecret === 'string') {
-    await storeSecret(keyPairOrSecret);
+    const stored = storeSecret(keyPairOrSecret);
+    // Announced before anything is awaited: callers often set the agent first,
+    // and the database opener that event starts must know a sign-in is about
+    // to deliver this agent's key (see `waitForSessionDbKey`).
+    const signingIn = subjectOfSecret(keyPairOrSecret);
+
+    if (signingIn) trackDbKeySignIn(signingIn, stored);
+
+    await stored;
 
     // The device now holds this agent; its node should sign as this agent too.
     // Best-effort and last, so a node that isn't up yet can't block sign-in.
@@ -214,6 +224,18 @@ export async function saveAgentToIDB(
       previous?.subject === subject ? previous.aiChatsFolders : undefined,
     vaultProof: previous?.subject === subject ? previous.vaultProof : undefined,
   } satisfies StoredAgent);
+}
+
+/**
+ * The agent subject a secret signs in as (the same one `storeSecret` stores),
+ * or undefined when the secret cannot be read.
+ */
+function subjectOfSecret(secret: string): string | undefined {
+  try {
+    return decodeSecret(secret).subject;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Persist the agent's key, preferring a non-extractable keypair. */

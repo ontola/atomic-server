@@ -245,6 +245,64 @@ export async function getSessionDbKey(
 }
 
 /**
+ * Sign-ins that are preparing an agent's DbKey right now, by agent subject.
+ * Settles (never rejects) when that sign-in is done, whatever its outcome.
+ */
+const signInsInFlight = new Map<string, Promise<void>>();
+
+/**
+ * Announce that `work` — a sign-in that ends in {@link ensureDbKeyOnSignIn} —
+ * will put this agent's session key in place, so a database opener waits for
+ * it instead of giving up. Call it before the first `await` of the sign-in:
+ * the opener runs as soon as the agent is set, which can be before the
+ * sign-in even starts.
+ */
+export function trackDbKeySignIn(
+  agentSubject: string,
+  work: Promise<unknown>,
+): void {
+  const settled = work.then(
+    () => undefined,
+    () => undefined,
+  );
+  signInsInFlight.set(agentSubject, settled);
+  void settled.then(() => {
+    if (signInsInFlight.get(agentSubject) === settled) {
+      signInsInFlight.delete(agentSubject);
+    }
+  });
+}
+
+/**
+ * The session key for a database whose wrapped record exists but whose
+ * session record does not yet: a sign-in is unwrapping it. Waits for a sign-in
+ * announced through {@link trackDbKeySignIn} however long it takes — a v2
+ * record needs the wasm bundle, which on a cold page takes seconds — and
+ * otherwise polls for up to `timeoutMs` (a sign-in in another tab, or one that
+ * was not announced). Undefined when no key appeared.
+ */
+export async function waitForSessionDbKey(
+  agentSubject: string,
+  timeoutMs = 3_000,
+): Promise<Uint8Array | undefined> {
+  for (let waited = 0; waited < timeoutMs; waited += 100) {
+    const inFlight = signInsInFlight.get(agentSubject);
+
+    if (inFlight) {
+      await inFlight;
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    const key = await getSessionDbKey(agentSubject);
+
+    if (key) return key;
+  }
+
+  return undefined;
+}
+
+/**
  * Get the existing session key or generate+store a fresh one (used when a DB
  * must open before any secret is available).
  */
