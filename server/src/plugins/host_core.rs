@@ -284,6 +284,10 @@ pub async fn installation_grants(
 // Grant, world and fetch policy
 // ---------------------------------------------------------------------------
 
+/// Why a wasip2 class extender's request to the integration proxy is refused.
+/// Documented in `docs/src/plugins/creating-plugins.md`.
+pub const CLASS_EXTENDER_PROXY_REFUSAL: &str = "wasip2 class extenders cannot reach the integration proxy: the proxy only accepts requests signed as an installation's agent on this node, and a class extender signs as its own plugin agent, which no installation or delegated connection names. Move the integration into a JS plugin installed from the catalog.";
+
 /// The trust boundary an installation lives in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum World {
@@ -769,6 +773,7 @@ impl HostCore {
         effect: &str,
     ) -> Result<FetchResponse, String> {
         let proxy = self.integration_proxy()?;
+        self.refuse_class_extender_at_proxy(&request.url, proxy.as_ref())?;
         let (request, relative) = self.resolve_proxy_relative(request, proxy.as_ref()).await?;
         let authorized = self.authorize(request, effect, relative.as_ref())?;
         if relative.is_none()
@@ -909,6 +914,33 @@ impl HostCore {
                 .unwrap_or_default(),
         );
         Ok((request, Some(relative)))
+    }
+
+    /// wasip2 class extenders do not reach the integration proxy (#1700,
+    /// answer 5), whether by `atomic-proxy:` or by the proxy's absolute URL.
+    ///
+    /// The proxy accepts only requests signed as an installation's node agent,
+    /// registered as a runtime of the installation's app. A class extender
+    /// has no such agent: its identity is the plugin's own agent, kept in
+    /// `PluginMeta`, which no installation names and no delegation reaches.
+    /// Checked first, so the refusal says this rather than whichever later
+    /// check (the manifest's platforms, the missing app agent) trips.
+    fn refuse_class_extender_at_proxy(
+        &self,
+        url: &str,
+        proxy: Option<&egress::ProxyOrigin>,
+    ) -> Result<(), String> {
+        if self.world != World::ServerExtension {
+            return Ok(());
+        }
+        let to_proxy = ProxyRelative::parse(url).is_some()
+            || proxy.is_some_and(|proxy| {
+                url::Url::parse(url).is_ok_and(|url| proxy.is_target_of(&url))
+            });
+        if to_proxy {
+            return Err(CLASS_EXTENDER_PROXY_REFUSAL.into());
+        }
+        Ok(())
     }
 
     /// The integration proxy this node is configured with, if any.
@@ -1608,6 +1640,47 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains("no app agent on this node"), "{err}");
+    }
+
+    /// #1700, answer 5: a wasip2 class extender does not reach the proxy, even
+    /// when its manifest declares the proxy's origin and the node has a proxy
+    /// configured, and whether it names the proxy by URL or `atomic-proxy:`.
+    #[actix_rt::test]
+    async fn a_class_extender_is_refused_at_the_proxy_and_told_why() {
+        // Nothing listens here: the refusal has to come before any connection.
+        let origin = "http://127.0.0.1:9";
+        let mut fixture = crate::plugins::test_fixture::fixture("host_core_proxy_wasip2").await;
+        crate::plugins::test_fixture::write_plugin(&mut fixture, "probe").await;
+        let db = Arc::new(fixture.appstate.store.clone());
+        db.set_integration_proxy(Some(origin.to_string()));
+        let host = HostCore::for_class_extender(
+            db.clone(),
+            &ClassExtenderScope::Drive(fixture.drive.clone()),
+            Some(fixture.plugin.clone()),
+            Some(db.get_default_agent().unwrap()),
+            Some(&class_extender_manifest(&[origin])),
+        )
+        .unwrap();
+
+        for url in [
+            format!("{origin}/proxy/conn-1/github/search"),
+            "atomic-proxy:/github/search".to_string(),
+        ] {
+            let err = host
+                .fetch(
+                    FetchRequest {
+                        operation: None,
+                        method: "GET".into(),
+                        url: url.clone(),
+                        headers: vec![],
+                        body: None,
+                    },
+                    "read",
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(err, CLASS_EXTENDER_PROXY_REFUSAL, "{url}");
+        }
     }
 
     #[actix_rt::test]

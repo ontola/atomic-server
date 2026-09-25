@@ -7,6 +7,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- wasip2 class extenders do not reach the integration proxy (#1700, answer
+  5). They were already refused, because the host has no installation agent
+  to sign as for them; the refusal now comes first, whether the extender uses
+  the proxy's URL or `atomic-proxy:`, and says why. Documented under
+  "Class extenders and the integration proxy" in the plugin docs.
 - Plugins reach the integration proxy without naming its origin (#1700,
   answer 4). A manifest declares `proxy: ["clockify"]`, and the plugin calls
   `ctx.http` with `atomic-proxy:/clockify/...`, as its operations declare it.
