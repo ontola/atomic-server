@@ -20,11 +20,13 @@ import type {
   DeclaredWriteTarget,
 } from './plugin-manifest-http.js';
 import {
+  capabilityGrantNames,
   fetchPluginAgent,
   giveRouteWriteRights,
   grantsWithRouteWrites,
   removeRouteWriteRights,
   resolveWriteTargetParents,
+  routeGrantOf,
   routeWriteParentsOf,
   routeWriteRightsDiff,
 } from './plugin-route-grant.js';
@@ -451,6 +453,68 @@ export async function withdrawRouteWriteRights(
       ? known
       : await fetchPluginAgent(store, installation, { attempts: 1 });
   await removeRouteWriteRights(store, agent, parents);
+}
+
+export interface SaveConfigOptions {
+  config: JSONValue | undefined;
+  /** The config the Installation had before this edit (its saved value). */
+  previousConfig: unknown;
+  /**
+   * Whether the installer approved the route-write targets at the parents
+   * `config` resolves them to. Declining drops the route grant and the rights
+   * it came with, as declining an upgrade review's new targets does. Ignored
+   * without a route grant.
+   */
+  approveRouteWrites: boolean;
+}
+
+/**
+ * Saves an Installation's config and moves the route-write rights with it.
+ * When the config points a `config:` write target at another resource, the
+ * plugin's agent gets `write` on the new parent and loses it on the old one,
+ * in commits the signed-in agent signs, and `route-writes` in `grants` is
+ * rewritten: kept when approved, dropped when declined. A target the new
+ * config leaves unresolved refuses the save before anything is committed.
+ */
+export async function saveInstallationConfig(
+  store: Store,
+  installation: string,
+  options: SaveConfigOptions,
+): Promise<void> {
+  const { config, previousConfig, approveRouteWrites } = options;
+  const resource = await store.getResource<Server.Installation>(installation);
+  const grants = resource.get(server.properties.grants);
+  const targets = routeGrantOf(grants);
+  const keep = !!targets && targets.length > 0 && approveRouteWrites;
+  const before = targets ? routeWriteParentsOf(grants, previousConfig) : [];
+  // Throws before anything is committed.
+  const after = keep ? resolveWriteTargetParents(targets, config) : [];
+  const { give, remove } = routeWriteRightsDiff(before, after);
+  const agent =
+    give.length > 0 || remove.length > 0
+      ? await fetchPluginAgent(store, installation)
+      : undefined;
+
+  await resource.set(server.properties.config, config, false, Datatype.JSON);
+
+  if (targets) {
+    await resource.set(
+      server.properties.grants,
+      grantsWithRouteWrites(
+        capabilityGrantNames(grants),
+        keep ? targets : undefined,
+      ) as JSONValue,
+      false,
+      Datatype.JSON,
+    );
+  }
+
+  await resource.save();
+
+  if (agent) {
+    await giveRouteWriteRights(store, agent, give);
+    await removeRouteWriteRights(store, agent, remove);
+  }
 }
 
 type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;

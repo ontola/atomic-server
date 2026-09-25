@@ -312,14 +312,21 @@ installation's agent). `browser/lib/src/plugin-route-grant.test.ts` checks
 `installRelease` produces exactly that, signed by the installer; that a
 `config:` target that doesn't resolve refuses before anything is committed;
 that revoking takes the agent off the parent and leaves other writers; and
-that an upgrade replaces the grant and moves the rights.
+that an upgrade replaces the grant and moves the rights. A config edit on the
+Installation page that moves a `config:` target (#1758): the same file checks
+`routeWriteConfigChange` finds the moved targets and refuses an unresolved one,
+and that `saveInstallationConfig` moves `write` to the new parent when
+approved, drops the grant and the rights when declined, commits nothing for an
+unresolved target and only saves when nothing moves.
+`RouteWriteMoveDialog.test.tsx` checks the dialog marks the new parent New,
+starts unchecked and saves with the choice.
 `route_writes::http_tests::a_page_shaped_install_stores_a_post` installs that
 fixture and POSTs (`2xx`). `RouteWriteApproval.test.tsx` covers the review:
 unchecked by default, the targets passed only once approved, install disabled
 while a target doesn't resolve, not offered below `read-write`, and an update
 kept approved or asked again. Not covered: a Playwright run of install, POST
-and revoke (done by hand for #1717's follow-up), and the rights following a
-config edit on the Installation page.
+and revoke (done by hand for #1717's follow-up), and a Playwright run of the
+config edit (done by hand for #1758).
 
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls

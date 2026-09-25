@@ -287,6 +287,8 @@ export {
   installRelease,
   updateInstallationRelease,
   withdrawRouteWriteRights,
+  saveInstallationConfig,
+  type SaveConfigOptions,
   publishZipRelease,
   readInstallationReview,
   grantsFor,
@@ -315,7 +317,9 @@ export {
   routeGrantOf,
   routeWriteParentsOf,
   routeWriteRightsDiff,
+  routeWriteConfigChange,
   type InstallationGrant,
+  type RouteWriteConfigChange,
 } from './plugin-route-grant.js';
 export * from './integration-actions.js';
 

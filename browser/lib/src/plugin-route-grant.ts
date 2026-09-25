@@ -324,3 +324,42 @@ export function routeWriteRightsDiff(
     remove: before.filter(p => !after.includes(p)),
   };
 }
+
+/** What a config change does to an Installation's route grant. */
+export interface RouteWriteConfigChange {
+  /** The targets the route grant approves, unchanged by the config. */
+  targets: DeclaredWriteTarget[];
+  /**
+   * The targets whose parent the new config resolves elsewhere: the ones to
+   * approve again, as an upgrade review asks for new targets.
+   */
+  moved: DeclaredWriteTarget[];
+}
+
+/**
+ * Whether saving `after` over `before` moves a route-write target. Undefined
+ * when the Installation has no route grant, or every target keeps its parent.
+ * Throws {@link UnresolvedWriteTargetError} when `after` leaves a target
+ * unresolved: that save is refused, since the plugin could not store what the
+ * grant still lets other servers send.
+ */
+export function routeWriteConfigChange(
+  grants: unknown,
+  before: unknown,
+  after: JSONValue | undefined,
+): RouteWriteConfigChange | undefined {
+  const targets = routeGrantOf(grants);
+  if (!targets || targets.length === 0) return undefined;
+  const previous = parseGrants(before) as JSONValue | undefined;
+  const moved = targets.filter(target => {
+    const next = resolveWriteTargetParent(target, after);
+
+    try {
+      return resolveWriteTargetParent(target, previous) !== next;
+    } catch {
+      return true;
+    }
+  });
+
+  return moved.length > 0 ? { targets, moved } : undefined;
+}
