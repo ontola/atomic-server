@@ -25,10 +25,9 @@ pub const COMPILED: bool = true;
 pub const COMPILED: bool = false;
 
 /// Deliveries one installation may send per UTC day, the default of
-/// `--plugin-route-deliveries-per-day` (design D5, *proposed* there). The
-/// number still waits for a product decision; this is the one place to
-/// change it.
-pub const DEFAULT_DELIVERIES_PER_DAY: u64 = 10_000;
+/// `--plugin-route-deliveries-per-day` (design D5). Michiel set it to 1,000
+/// (the design proposed 10,000); operators can raise or lower it.
+pub const DEFAULT_DELIVERIES_PER_DAY: u64 = 1_000;
 
 /// `/.well-known/` names the host multiplexes between installations
 /// (design 2.4).
