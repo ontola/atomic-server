@@ -447,8 +447,10 @@ pub async fn handle_frame_full_for_caps(
                 }
             }
             Some(sync) => {
-                // `subjects`, when present, is the RBSR-reduced set: build
-                // version vectors for just those instead of walking the drive.
+                // `subjects`, when present, limits the reconcile to that set:
+                // build version vectors for just those instead of walking the
+                // drive. The bundled browser client no longer sends it (it
+                // came from the removed RBSR descent); kept for other clients.
                 let filter = sync
                     .subjects
                     .as_ref()
@@ -462,6 +464,8 @@ pub async fn handle_frame_full_for_caps(
                     store,
                     agent,
                     wire,
+                    // Dialed into us: the same gate `SYNC_PUSH` applies below.
+                    false,
                 )
                 .await
             }
@@ -1065,23 +1069,28 @@ pub fn build_drive_vvs(
     vvs
 }
 
-/// The drive's RBSR items as `agent` may see them: the drive resource itself
+/// One drive inventory entry: a subject and its version vector (peer →
+/// counter). A sorted list of these is what the probe hash is computed over
+/// and what `RBSR_ITEMS` returns.
+pub type DriveItem = (String, std::collections::BTreeMap<String, i32>);
+
+/// The drive's inventory as `agent` may see them: the drive resource itself
 /// must be readable (else `Err`, the caller refuses with
 /// `UNAUTHORIZED_READ`), and every subject the agent cannot `check_read` is
 /// left out. This is the gate the full `SYNC` path has always applied per
-/// subject; the hash-first probe and the `RBSR_FP` / `RBSR_ITEMS` frames
+/// subject; the hash-first probe and the `RBSR_ITEMS` inventory frame
 /// used to skip it, which let an anonymous socket enumerate every subject
 /// and version vector of any drive it could name.
 ///
-/// Filtering per agent also makes the fingerprints *match*: a client only
-/// ever fingerprints what it holds, which is what it may read, so a server
-/// fingerprint over the unfiltered set would never agree with it for a
-/// drive with any private subject.
+/// Filtering per agent also makes the probe hash *match*: a client only
+/// ever hashes what it holds, which is what it may read, so a server hash
+/// over the unfiltered set would never agree with it for a drive with any
+/// private subject.
 pub async fn drive_items_for(
     store: &Db,
     drive: &str,
     agent: &crate::agents::ForAgent,
-) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+) -> Result<Vec<DriveItem>, String> {
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
     let drive_resource = store
         .get_resource(&drive_subject)
@@ -1094,7 +1103,7 @@ pub async fn drive_items_for(
     let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
     let vvs = build_drive_vvs(store, &drive_subjects);
 
-    let mut items: Vec<crate::sync::rbsr::Item> = Vec::with_capacity(vvs.len());
+    let mut items: Vec<DriveItem> = Vec::with_capacity(vvs.len());
     for (subject, vv) in vvs {
         let readable = match store
             .get_resource(&crate::Subject::from_raw(
@@ -1115,13 +1124,13 @@ pub async fn drive_items_for(
 }
 
 /// Sorted inventory in the peer's spelling. Convert before range filtering or
-/// fingerprinting: both subject bytes and their ordering are part of RBSR.
+/// hashing: subject bytes and their ordering are part of both.
 pub async fn drive_items_for_wire(
     store: &Db,
     drive: &str,
     agent: &crate::agents::ForAgent,
     wire: WireScheme,
-) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+) -> Result<Vec<DriveItem>, String> {
     let mut items = drive_items_for(store, drive, agent).await?;
     for (subject, _) in &mut items {
         *subject = wire.subject(subject);
@@ -1173,23 +1182,28 @@ pub async fn handle_sync_vv(
         store,
         agent,
         WireScheme::CANONICAL,
+        false,
     )
     .await
 }
 
 /// Same as [`handle_sync_vv`], but when `subjects` is `Some(set)` only that set
-/// is reconciled — the RBSR-differing set (`planning/drive-reconciliation.md`
-/// Phase 2b). The server then builds VVs for only those subjects (O(|set|)
-/// rather than O(drive)) and both loops skip anything outside it, so the client
-/// sending version vectors for just the differing subjects is processed exactly
-/// like the full path processes those same subjects.
+/// is reconciled: a differing set the client chose (it used to come from the
+/// RBSR descent, removed 2026-09). The server then builds VVs for only those
+/// subjects (O(|set|) rather than O(drive)) and both loops skip anything
+/// outside it, so the client sending version vectors for just the differing
+/// subjects is processed exactly like the full path processes those subjects.
 ///
-/// **RBSR-path limitation:** the filtered path relies purely on version-vector
+/// **Filtered-path limitation:** it relies purely on version-vector
 /// divergence. The full path (`subjects == None`) additionally pulls a subject
 /// whose VV *matches* but whose blob the server lacks (an HTTP-POST-metadata
-/// backstop, below). A VV fingerprint cannot encode server-only blob presence,
-/// so that backstop does not run for pruned (VV-matching) subjects on the RBSR
-/// path — accepted and documented; the full path is unchanged.
+/// backstop, below). That backstop does not run for subjects left out of the
+/// set.
+///
+/// `pull` only names subjects the peer's `SYNC_PUSH` would be admitted for:
+/// when `agent` may not write the drive ([`may_accept_drive_write`] with
+/// `trust_owned`, the same check [`import_sync_push`] applies), `pull` stays
+/// empty, so a read-only session is never asked to push what would be refused.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_sync_vv_filtered(
     drive: &str,
@@ -1200,6 +1214,7 @@ pub async fn handle_sync_vv_filtered(
     store: &Db,
     agent: &crate::agents::ForAgent,
     wire: WireScheme,
+    trust_owned: bool,
 ) -> Vec<Vec<u8>> {
     let canonical_subjects = subjects.map(|set| {
         set.iter()
@@ -1208,7 +1223,7 @@ pub async fn handle_sync_vv_filtered(
     });
     let subjects = canonical_subjects.as_ref();
     let server_vvs = match subjects {
-        // RBSR path: build VVs for only the differing subjects — no full-drive
+        // Filtered path: build VVs for only the differing subjects — no full-drive
         // parent walk, no full-drive snapshot reads.
         Some(set) => {
             let mut vvs = std::collections::HashMap::new();
@@ -1359,7 +1374,7 @@ pub async fn handle_sync_vv_filtered(
 
     // Client resources not on server: pull new data, or tell client to delete tombstones.
     for subject in client_vvs.keys() {
-        // On the RBSR path, only reconcile the differing set even if the client
+        // On the filtered path, only reconcile the differing set even if the client
         // sent extra version vectors.
         if subjects.is_some_and(|set| !set.contains(subject)) {
             continue;
@@ -1383,6 +1398,27 @@ pub async fn handle_sync_vv_filtered(
             } else {
                 pull.push(subject.clone());
                 pull_from.entry(subject.clone()).or_default();
+            }
+        }
+    }
+
+    // Only ask for what `import_sync_push` would accept from this agent.
+    // Without this, a read-only reader is told to push (a subject outside the
+    // drive tree it happens to hold, or a file whose blob we lack) and its
+    // push is then refused as a whole. A drive we have never stored is left
+    // alone: `import_sync_push` bootstraps it.
+    if !pull.is_empty() {
+        let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+        if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
+            if !may_accept_drive_write(store, &drive_resource, agent, trust_owned).await {
+                tracing::debug!(
+                    "SYNC: drive {} — agent {:?} may not write, not asking for {} subjects",
+                    drive,
+                    agent,
+                    pull.len()
+                );
+                pull.clear();
+                pull_from.clear();
             }
         }
     }
@@ -2291,6 +2327,7 @@ mod bootstrap_and_sub_tests {
             &db,
             &ForAgent::from(alice.clone()),
             WireScheme::LEGACY,
+            false,
         )
         .await;
         let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
@@ -2324,6 +2361,7 @@ mod bootstrap_and_sub_tests {
                 &db,
                 &agent,
                 WireScheme::LEGACY,
+                false,
             )
             .await;
             let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
@@ -2467,6 +2505,110 @@ mod bootstrap_and_sub_tests {
             .expect("reconcile answers with a SYNC_DIFF")
     }
 
+    /// A reader who may not write the drive is never asked to push: its
+    /// `SYNC_PUSH` would be refused as a whole (`import_sync_push`). Covers
+    /// both ways the full reconcile asks for a subject: one the client holds
+    /// that the drive tree lacks, and one whose VV matches but whose blob the
+    /// server does not have. The owner, on the same state, is still asked.
+    #[tokio::test]
+    async fn full_sync_asks_only_drive_writers_to_push() {
+        let db = Db::init_temp("pull_write_gate").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let bob = db.create_agent(Some("Bob")).await.unwrap();
+        let drive_subject = crate::Subject::from_raw(&drive, None);
+        let mut drive_res = db.get_resource(&drive_subject).await.unwrap();
+        drive_res
+            .set_unsafe(
+                crate::urls::READ.into(),
+                crate::Value::ResourceArray(vec![bob.subject.to_string().into()]),
+            )
+            .unwrap();
+        db.add_resource_opts(&drive_res, false, true, true)
+            .await
+            .unwrap();
+
+        // A file whose blob this server never received.
+        let file = secret_child(&db, &drive).await;
+        let file_subject = crate::Subject::from_raw(&file, None);
+        let mut file_res = db.get_resource(&file_subject).await.unwrap();
+        file_res
+            .set_unsafe(
+                crate::urls::BLOB.into(),
+                crate::Value::String(format!("did:ad:blob:{}", "ab".repeat(32))),
+            )
+            .unwrap();
+        db.add_resource_opts(&file_res, false, true, true)
+            .await
+            .unwrap();
+
+        let bob_agent = ForAgent::AgentSubject(bob.subject.clone());
+        let mut items = drive_items_for(&db, &drive, &bob_agent).await.unwrap();
+        assert!(
+            items.iter().any(|(s, _)| s == &file_subject.pure_id()),
+            "Bob can read the file"
+        );
+        // Something the client holds that is not in the drive tree.
+        items.push((
+            "atomic:outside-the-drive".to_string(),
+            std::collections::BTreeMap::from([("client-peer".to_string(), 3)]),
+        ));
+        let mut peers: Vec<String> = items
+            .iter()
+            .flat_map(|(_, vv)| vv.keys().cloned())
+            .collect();
+        peers.sort();
+        peers.dedup();
+        let resources: std::collections::HashMap<String, Vec<i32>> = items
+            .iter()
+            .map(|(s, vv)| {
+                let counters = peers
+                    .iter()
+                    .map(|p| vv.get(p).copied().unwrap_or(0))
+                    .collect();
+                (s.clone(), counters)
+            })
+            .collect();
+
+        let reconcile = |agent: ForAgent| {
+            let (drive, peers, resources, db) = (&drive, &peers, &resources, &db);
+            async move {
+                decode_diff(
+                    handle_sync_vv_filtered(
+                        drive,
+                        "",
+                        peers,
+                        resources,
+                        None,
+                        db,
+                        &agent,
+                        WireScheme::CANONICAL,
+                        false,
+                    )
+                    .await,
+                )
+            }
+        };
+
+        let reader = reconcile(bob_agent.clone()).await;
+        assert!(
+            reader.pull.is_empty() && reader.pull_from.is_empty(),
+            "a read-only session must not be asked to push: {:?}",
+            reader.pull
+        );
+
+        let owner = reconcile(ForAgent::AgentSubject(alice.subject.clone())).await;
+        assert!(
+            owner.pull.contains(&file_subject.pure_id()),
+            "the owner is asked for the missing blob's file: {:?}",
+            owner.pull
+        );
+        assert!(
+            owner.pull.contains(&"atomic:outside-the-drive".to_string()),
+            "the owner is asked for what the server lacks: {:?}",
+            owner.pull
+        );
+    }
+
     /// The destroyed resource is gone, so the only thing left to check the
     /// envelope against is the drive: a session that may not read the
     /// drive gets the subject-only `remove[]` entry and no envelope.
@@ -2495,6 +2637,7 @@ mod bootstrap_and_sub_tests {
                 &db,
                 &ForAgent::Public,
                 WireScheme::CANONICAL,
+                false,
             )
             .await,
         );
@@ -2514,6 +2657,7 @@ mod bootstrap_and_sub_tests {
                 &db,
                 &ForAgent::AgentSubject(alice.subject.clone()),
                 WireScheme::CANONICAL,
+                false,
             )
             .await,
         );

@@ -82,6 +82,7 @@ import {
 } from './genesis.js';
 import type {
   ClientDbWorker,
+  ClientDbOutboxWrite,
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
@@ -89,6 +90,7 @@ import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
+  isOutboxDatabase,
   isSettledDestroyErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
@@ -816,6 +818,49 @@ export class Store {
    */
   public expectClientDb(): void {
     this.clientDbExpected = true;
+    // The outbox lives in that database: until it attaches, the queue may be
+    // missing entries only the database holds.
+    this.outbox.expectDatabase();
+    void this.bindOutboxDatabase();
+  }
+
+  /**
+   * Move the current agent's outbox into the attached client database (see
+   * `LocalOutbox.attachDatabase`), or settle for the localStorage queue when
+   * none arrives or it cannot open. Safe to call repeatedly: the outbox
+   * ignores a database it already holds, and a call that an identity change
+   * or a newer database overtook stops.
+   */
+  private async bindOutboxDatabase(): Promise<void> {
+    const agent = this.agent?.subject;
+    const attached = await this.waitForClientDb(CLIENT_DB_ATTACH_GRACE);
+
+    if (this.agent?.subject !== agent) return;
+
+    const db = this.clientDb;
+
+    if (!attached || !db || !isOutboxDatabase(db)) {
+      // Nothing to move into (yet). A later `setClientDb` binds it then.
+      if (!db) this.outbox.databaseUnavailable(agent);
+
+      return;
+    }
+
+    const ready = await db.waitForInit();
+
+    if (this.agent?.subject !== agent || this.clientDb !== db) return;
+
+    if (!ready) {
+      this.outbox.databaseUnavailable(agent);
+
+      return;
+    }
+
+    const added = await this.outbox.attachDatabase(agent, db);
+
+    for (const entry of added) this.hydrateCommitLogFromOutbox(entry);
+
+    this.scheduleOutboxDrain();
   }
 
   /**
@@ -854,13 +899,21 @@ export class Store {
     // post-init, post-init-error) to refresh sync status. Only the
     // first call introduces a new worker; the others just want
     // `emitSyncStatus`.
+    const attached = !!clientDb && clientDb !== this.clientDb;
     this.clientDb = clientDb;
+
+    if (isOutboxDatabase(clientDb)) this.outbox.expectDatabase();
 
     // Release fetches that started before the attach and would otherwise be
     // about to fail a resource this database can answer for.
     if (clientDb) {
       for (const waiter of [...this.clientDbWaiters]) waiter();
+      void this.bindOutboxDatabase();
     }
+
+    // Everything the server delivered while nothing was attached is in memory
+    // only; this is the first moment it can be written.
+    if (attached) this.flushPendingClientDbWrites();
 
     this.emitSyncStatus();
   }
@@ -937,10 +990,10 @@ export class Store {
     };
 
     current();
-    const inventory = await ws.rbsrItems(drive, '');
+    const inventory = await ws.driveInventory(drive, '');
     await verifyLocalDriveCopy(db, drive, inventory);
     // A second inventory catches changes made while attachment verification ran.
-    await verifyLocalDriveCopy(db, drive, await ws.rbsrItems(drive, ''));
+    await verifyLocalDriveCopy(db, drive, await ws.driveInventory(drive, ''));
     current();
     this.registerLocalOnlyDrive(drive);
     ws.unsubscribeFromDrive(drive);
@@ -1113,6 +1166,12 @@ export class Store {
    * which exports the subject's Loro delta, signs one commit and posts it.
    */
   public async syncDirtyResources(): Promise<void> {
+    // Entries still in the database are invisible until it attaches. The
+    // reconnect sequence refetches and reconciles after this resolves, and
+    // must not do so over an offline edit the queue has not loaded yet.
+    if (!this.getAgent()) return;
+    await this.outbox.whenHydrated();
+
     if (this.outbox.size === 0 || !this.getAgent()) return;
     perfMark('store.syncDirtyResources.subjects', { count: this.outbox.size });
     this.emitSyncStatus();
@@ -1381,7 +1440,7 @@ export class Store {
 
     if (!resource) {
       // Cold drain: resource not in memory. Typical shape: the entry was
-      // restored from localStorage after a page load, and nothing on the
+      // restored from storage after a page load, and nothing on the
       // current page renders this subject — so no view will EVER load it,
       // and waiting for "the hydration path" would strand the entry (and
       // `pendingDirtyCount`) forever. Load it ourselves and drain on top.
@@ -1413,7 +1472,7 @@ export class Store {
     // hydrate completes) shows up here as `loading=true` with an
     // empty Loro doc — draining it would `exportLoroDeltaForDrain →
     // undefined → clearDirty`, permanently dropping the
-    // localStorage-restored offline edit before its real state has
+    // restored offline edit before its real state has
     // a chance to land.
     const hasLoroState =
       resource.hasLoroDoc() && !!resource.getLoroDoc()?.oplogVersion();
@@ -1573,9 +1632,8 @@ export class Store {
     // Did this commit capture everything, or did the user type more
     // during the `await postCommit` round-trip? Compute BEFORE firing
     // `notifyResourceSaved` so the `_dirty` flag is already cleared
-    // when `UnsavedIndicator`'s ResourceSaved handler re-reads
-    // `hasUnsavedChanges()` — otherwise it reads a stale `true` and the
-    // editable-title `*` never clears (rename-regression e2e).
+    // when a ResourceSaved listener re-reads `hasUnsavedChanges()` or
+    // `getSaveState()`; otherwise it reads a stale `true`.
     const caughtUp = !resource.hasOpsPastSaveCursor();
 
     if (caughtUp) {
@@ -2143,7 +2201,7 @@ export class Store {
     // edits need that local hydration to merge their durable copy back in.
     const resource =
       existing ??
-      (this.outbox.hasPending(subject)
+      (this.outbox.mayHavePending(subject)
         ? this.getResourceLoading(subject, { newResource: false })
         : new Resource(subject));
     resource.setStore(this);
@@ -2157,7 +2215,7 @@ export class Store {
     // `hasUnsavedChanges()` is in-memory only, so it's blind on a cold
     // reload: a WS reconnect can deliver the server's stale (pre-offline-
     // edit) snapshot for a subject whose offline edit only exists in
-    // clientDb + the outbox's durable (localStorage-backed) dirty bit —
+    // clientDb + the outbox's durable dirty bit —
     // nothing has called `set()` on THIS freshly-created Resource object
     // yet. Without also checking `outbox.hasPending`, `replace: true`
     // wipes the doc via `resetLoroState()` before the OPFS-based local
@@ -2171,7 +2229,7 @@ export class Store {
       !!change.replaceLoroDocsFromRemote &&
       !isCommitSubject(subject) &&
       !resource.hasUnsavedChanges() &&
-      !this.outbox.hasPending(subject);
+      !this.outbox.mayHavePending(subject);
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
     // Commit-detail resources (`did:ad:commit:<sig>`) carry a single
@@ -2307,17 +2365,56 @@ export class Store {
     // resource. Skip for new/loading/incomplete/unsynced — those are
     // persisted by the save path once they are real, or are
     // placeholders.
+    if (this.clientDb) {
+      this.writeToClientDb(emitResource);
+    } else if (this.clientDbExpected && isPersistableState(emitResource)) {
+      // No local database attached YET. `initClientDb` detaches synchronously
+      // when the identity changes and re-attaches only once that agent's own
+      // database has been opened, which spans seconds on a cold load — so a
+      // sign-in has a window where every resource the server delivers is held
+      // in memory and written nowhere.
+      //
+      // Nothing re-adds a resource that was applied once, so that used to be
+      // permanent: a drive sync landing in the window left the resources in
+      // memory and out of the local index, `finishDriveSync` vouched for the
+      // drive anyway, and `Collection.finishLocalDbPage` then treated the empty
+      // index as authoritative and never asked the server. A second device
+      // could open a drive and show none of its contents for the whole
+      // session. Remember them and write them when the database arrives.
+      this.pendingClientDbWrites.add(emitResource.subject);
+    }
+
+    this.notify(emitResource);
+  }
+
+  /** Subjects whose state arrived while no local database was attached, to be
+   *  written once one is. Bounded by the attach window, which is one cold load
+   *  or one identity change. */
+  private pendingClientDbWrites = new Set<string>();
+
+  /** Write what arrived while the local database was detached. A different
+   *  worker is a different database file, so what {@link lastPersisted}
+   *  says was already written does not apply to it. */
+  private flushPendingClientDbWrites(): void {
+    if (this.pendingClientDbWrites.size === 0) return;
+
+    const subjects = [...this.pendingClientDbWrites];
+    this.pendingClientDbWrites.clear();
+
+    for (const subject of subjects) {
+      this.lastPersisted.delete(subject);
+      const resource = this._resources.get(
+        this.aliases.get(subject) ?? subject,
+      );
+
+      if (resource) this.writeToClientDb(resource);
+    }
+  }
+
+  /** Persist a resource's current state to the local database, if there is one
+   *  and this state is worth writing. */
+  private writeToClientDb(resource: Resource): void {
     if (
-      this.clientDb &&
-      // A Collection is a derived query result, not a record: a page is either
-      // assembled from `queryLocalDb` over the index or fetched from the
-      // server, and neither ever reads it back out of the local database.
-      // Writing it there costs a full index rebuild and an fsync for something
-      // nothing reads — and because collections are deliberately exempt from
-      // the `lastCommit` skip above, they are re-added (and so re-written) on
-      // every refresh. Building one table from a template wrote a single
-      // collection page seven times.
-      !emitResource.hasClasses(collections.classes.collection) &&
       // Skip persisting when the worker has a known init failure (e.g.
       // OPFS leader-election couldn't steal the lock — Firefox doesn't
       // support `navigator.locks.request({ steal: true })`). Without this
@@ -2325,66 +2422,49 @@ export class Store {
       // that fails with the same error, flooding the console with one
       // stack trace per resource. The worker itself has already warned
       // once when init failed — that single line is the actionable signal.
-      !this.clientDb.initError &&
-      !emitResource.loading &&
-      !emitResource.new &&
-      !emitResource.hasPendingCommits &&
-      !emitResource.get(core.properties.incomplete)
+      !this.clientDb ||
+      this.clientDb.initError ||
+      !isPersistableState(resource)
     ) {
-      try {
-        const jsonAd = emitResource.toClientDbJsonAd();
-
-        if (jsonAd) {
-          const doc = emitResource.getLoroDoc?.();
-          // A snapshot export commits pending ops, untagged; keep a
-          // mid-edit persist from stripping the edit's history token.
-          emitResource.sealPendingEdits();
-          const snapshot = doc?.export({ mode: 'snapshot' });
-
-          // One local-DB write costs ~9ms, three quarters of it rebuilding
-          // this resource's index entries. `addResource` runs on every merge
-          // and every notify, so the same unchanged state was being written
-          // repeatedly — a table built from a template did 64 writes for 15
-          // resources. Hash what we are about to write and skip the write when
-          // it matches the last one for this subject.
-          //
-          // Deliberately a content hash rather than `lastCommit`: local edits
-          // and merges change state without advancing it. The hash covers the
-          // Loro snapshot too, so a CRDT-only change still writes. A collision
-          // would skip one cache write, which the server copy repairs — this
-          // is a cache, not the record.
-          const stamp = hashPersistedState(jsonAd, snapshot);
-
-          if (this.lastPersistedStamp.get(emitResource.subject) !== stamp) {
-            this.lastPersistedStamp.set(emitResource.subject, stamp);
-            this.clientDb
-              .putResourceWithSnapshot(emitResource.subject, jsonAd, snapshot)
-              .catch(e => {
-                // Failed write: drop the stamp so the next attempt is not
-                // skipped as a duplicate of a write that never landed.
-                this.lastPersistedStamp.delete(emitResource.subject);
-
-                // A follower's in-flight write is deliberately cancelled on
-                // leader handoff. The stamp is cleared above for a later
-                // retry; this is not a storage fault to report as an error.
-                if (!(e instanceof RequestCancelledError)) {
-                  console.error(
-                    `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
-                    e,
-                  );
-                }
-              });
-          }
-        }
-      } catch (e) {
-        console.error(
-          `[ClientDb] put serialization threw for ${emitResource.subject.slice(0, 60)}:`,
-          e,
-        );
-      }
+      return;
     }
 
-    this.notify(emitResource);
+    // Captured, because the write is reported asynchronously and the worker
+    // can be swapped out from under it by an identity change.
+    const clientDb = this.clientDb;
+
+    try {
+      const jsonAd = resource.toClientDbJsonAd();
+
+      if (!jsonAd) return;
+
+      const doc = resource.getLoroDoc?.();
+      // A snapshot export commits pending ops, untagged; keep a mid-edit
+      // persist from stripping the edit's history token.
+      resource.sealPendingEdits();
+      const snapshot = doc?.export({ mode: 'snapshot' });
+
+      // Skipped when this exact state is already written there: a table
+      // built from a template used to do 64 writes for 15 resources.
+      this.persistState(clientDb, resource.subject, jsonAd, snapshot).catch(
+        e => {
+          // A follower's in-flight write is deliberately cancelled on leader
+          // handoff; the next attempt retries it. That is not a storage fault
+          // to report as an error.
+          if (!(e instanceof RequestCancelledError)) {
+            console.error(
+              `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
+              e,
+            );
+          }
+        },
+      );
+    } catch (e) {
+      console.error(
+        `[ClientDb] put serialization threw for ${resource.subject.slice(0, 60)}:`,
+        e,
+      );
+    }
   }
 
   /**
@@ -3667,11 +3747,11 @@ export class Store {
     // Don't clobber an in-memory resource that has unsaved local edits
     // — `hydrateOfflineReplay` would overwrite the in-flight Loro state
     // with the (older) clientDb snapshot. The signal is in-memory only:
-    // `hasUnsavedChanges()` (commitBuilder / `_dirty` between a `set()`
-    // and the next drain).
+    // `hasUnsavedChanges()` (`_dirty` between a `set()` and the next
+    // drain).
     //
     // We deliberately do NOT gate on `hasPendingCommits` (the outbox
-    // genesis/dirty bit): that survives reload via localStorage, so on
+    // genesis/dirty bit): that survives a reload, so on
     // a cold load a freshly-created placeholder for an offline-saved
     // resource has `hasPendingCommits === true` but NO in-memory state
     // to protect. Gating on it skipped `hydrateOfflineReplay`, leaving
@@ -3687,7 +3767,7 @@ export class Store {
     this.hydrateOfflineReplay(subject, parsed, snapshot);
 
     // If the outbox holds a dirty bit for this subject (offline edit
-    // restored from localStorage), kick a drain now that the resource
+    // restored after a reload), kick a drain now that the resource
     // is finally in the store. Without this nudge the drain would
     // either: (a) never fire — `hydrateOfflineReplay` doesn't go
     // through `set()`, so the Loro subscriber that normally schedules
@@ -3942,10 +4022,6 @@ export class Store {
     // so a fetch by the address-bar URL returns the resource stored under
     // its canonical `@id`.
     return this.resources.get(this.resolveSubject(normalizedSubject))!;
-  }
-
-  public getAllSubjects(): string[] {
-    return Array.from(this.resources.keys());
   }
 
   /** Returns the WebSocket for the current Server URL */
@@ -4917,7 +4993,7 @@ export class Store {
   public evictResource(subjectRaw: string, shouldNotify = true): void {
     const resolved = this.resolveSubject(subjectRaw);
     // A subsequently loaded resource must not inherit the old cache stamp.
-    this.lastPersistedStamp.delete(resolved);
+    this.lastPersisted.delete(resolved);
 
     if (this.resources.delete(resolved)) {
       if (shouldNotify) {
@@ -4999,6 +5075,10 @@ export class Store {
     }
 
     this.eventManager.emit(StoreEvents.AgentChanged, agent);
+
+    // After the event: an app that keeps one database per agent detaches the
+    // previous agent's on it, and this must not bind that one.
+    void this.bindOutboxDatabase();
   }
 
   /**
@@ -5749,10 +5829,6 @@ export class Store {
     return Array.from(this.loroSyncSubscribers.keys());
   }
 
-  public getLoroEphemeralSubjects(): string[] {
-    return Array.from(this.loroEphemeralSubscribers.keys());
-  }
-
   /** @internal An `EPHEMERAL` frame of kind `DOC`: an edit in progress. */
   public __handleLoroSyncMessage(subject: string, update: Uint8Array): void {
     this.dispatchLoroMessage(this.loroSyncSubscribers, subject, update);
@@ -6303,8 +6379,8 @@ export class Store {
       // into the outbox and drains it. (Stashing rather than enqueuing here
       // means a never-saved upload is never POSTed; here we always `save()`,
       // but the genesis MUST be stashed or `save()` has nothing to POST —
-      // `signChanges` resets `commitBuilder.isGenesis`, so the genesis would
-      // otherwise be silently dropped.)
+      // `signChanges` builds the genesis flag into the returned commit only,
+      // so the genesis would otherwise be silently dropped.)
       if (useDid) {
         const genesis = await resource.signChanges(this.getAgent()!);
         resource.stashGenesis(genesis);
@@ -6607,27 +6683,84 @@ export class Store {
   /** Immutable read status and a stable mutation handle, replaced on notify. */
   private snapshots = new Map<string, ResourceSnapshot>();
 
-  /** Subject → content stamp of the last state written to the local DB, so
-   *  `addResource` can skip re-writing state that is already there. Entries are
-   *  dropped by `removeResource` and by a failed write. */
-  private lastPersistedStamp = new Map<string, number>();
+  /** Subject → the last state written to the local DB: which database, a
+   *  content stamp, and the write itself. While the write is in flight it also
+   *  holds the exact bytes, so a durable caller can match on content rather
+   *  than on the stamp. Entries are dropped by `removeResource` and by a
+   *  failed write. */
+  private lastPersisted = new Map<string, PersistedState>();
 
   /**
-   * Record that `jsonAd` + `snapshot` is what the local DB now holds for
-   * `subject`, so `addResource` skips re-writing that same state. Called by
-   * `Resource.persistToClientDb` after its durable write lands — without it
-   * the dedup cache only knew about writes `addResource` itself made, and
-   * rewrote the row on the next ingress.
+   * Write `jsonAd` + `snapshot` for `subject` to `db`, unless that state is
+   * already written or being written there, in which case this returns that
+   * write. `addResource` and `Resource.persistToClientDb` both go through
+   * here, so an online save that the drain already persisted does not write
+   * the same row (an index rebuild plus an fsync, ~9ms) a second time.
+   *
+   * Deliberately a content stamp rather than `lastCommit`: local edits and
+   * merges change state without advancing it, and the stamp covers the Loro
+   * snapshot so a CRDT-only change still writes. A stamp collision would skip
+   * one cache write, which the server copy repairs. `exact` callers cannot
+   * afford that (an offline edit has no server copy), so they only reuse a
+   * write that is still in flight with byte-identical content.
    *
    * @internal
    */
-  public recordPersistedState(
+  public persistState(
+    db: ClientDbWorker,
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
-  ): void {
-    // Keyed like `addResource` keys it: by the resource's own subject.
-    this.lastPersistedStamp.set(subject, hashPersistedState(jsonAd, snapshot));
+    {
+      exact = false,
+      outbox,
+    }: {
+      exact?: boolean;
+      /** Outbox rows to write in the same worker message and flush. A write
+       *  carrying them is never skipped as a duplicate. */
+      outbox?: ClientDbOutboxWrite;
+    } = {},
+  ): Promise<void> {
+    const stamp = hashPersistedState(jsonAd, snapshot);
+    const last = this.lastPersisted.get(subject);
+
+    if (!outbox && last && last.db === db && last.stamp === stamp) {
+      if (!exact) return last.done;
+
+      if (
+        last.inFlight &&
+        last.inFlight.jsonAd === jsonAd &&
+        bytesEqual(last.inFlight.snapshot, snapshot)
+      ) {
+        return last.done;
+      }
+    }
+
+    const entry: PersistedState = {
+      db,
+      stamp,
+      done: Promise.resolve(),
+      inFlight: { jsonAd, snapshot },
+    };
+    entry.done = db
+      .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)
+      .then(
+        () => {
+          entry.inFlight = undefined;
+        },
+        e => {
+          // Failed write: forget it so the next attempt is not skipped as a
+          // duplicate of a write that never landed.
+          if (this.lastPersisted.get(subject) === entry) {
+            this.lastPersisted.delete(subject);
+          }
+
+          throw e;
+        },
+      );
+    this.lastPersisted.set(subject, entry);
+
+    return entry.done;
   }
 
   private snapshotReadDepth = 0;
@@ -6774,6 +6907,46 @@ export interface FetchOpts {
    * local resource.
    */
   newResource?: boolean;
+}
+
+interface PersistedState {
+  db: ClientDbWorker;
+  stamp: number;
+  done: Promise<void>;
+  inFlight?: { jsonAd: string; snapshot?: Uint8Array };
+}
+
+function bytesEqual(a?: Uint8Array, b?: Uint8Array): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+
+  return true;
+}
+
+/** Whether a resource's current state belongs in the local database at all.
+ *
+ *  A Collection is a derived query result, not a record: a page is either
+ *  assembled from `queryLocalDb` over the index or fetched from the server, and
+ *  neither ever reads it back out of the local database. Writing it there costs
+ *  a full index rebuild and an fsync for something nothing reads — and because
+ *  collections are deliberately exempt from `addResource`'s `lastCommit` skip,
+ *  they are re-added (and so re-written) on every refresh. Building one table
+ *  from a template wrote a single collection page seven times.
+ *
+ *  The rest are placeholders or half-formed state: those are persisted by the
+ *  save path once they are real. */
+function isPersistableState(resource: Resource): boolean {
+  return (
+    !resource.hasClasses(collections.classes.collection) &&
+    !resource.loading &&
+    !resource.new &&
+    !resource.hasPendingCommits &&
+    !resource.get(core.properties.incomplete)
+  );
 }
 
 /**

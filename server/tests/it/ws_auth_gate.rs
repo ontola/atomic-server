@@ -266,13 +266,13 @@ async fn rejected_sync_push_gets_error_not_sync_ok() {
     assert_quiet(&mut rx).await;
 }
 
-/// The hash-first probe and the RBSR range frames are reads, so they stay
+/// The hash-first probe and the `RBSR_ITEMS` inventory are reads, so they stay
 /// open to anonymous sessions — but gated by `check_read` like every other
 /// read. They used to walk the drive as Sudo, which let anyone enumerate
 /// every subject and version vector of a private drive by naming it.
 #[tokio::test]
-async fn rbsr_and_probe_are_gated_by_check_read() {
-    let port = start_server("ws_gate_rbsr");
+async fn inventory_and_probe_are_gated_by_check_read() {
+    let port = start_server("ws_gate_inventory");
     wait_for_server(port).await;
     let server_url = format!("http://localhost:{port}");
     let ws_url = format!("ws://localhost:{port}/ws");
@@ -301,8 +301,18 @@ async fn rbsr_and_probe_are_gated_by_check_read() {
     ))
     .await
     .unwrap();
-    let err = next_error(&mut rx).await;
-    assert!(err.contains("RBSR_FP refused"), "{err}");
+    // RBSR was removed: an old client's fingerprint query gets an immediate
+    // answer without fingerprints (so it falls back to a full `SYNC`), and
+    // nothing about the drive is read to produce it.
+    let reply = next_text(&mut rx).await;
+    assert!(
+        reply.starts_with("RBSR_FP ") && reply.contains("\"unsupported\":true"),
+        "{reply}"
+    );
+    assert!(
+        !reply.contains("fps") && !reply.contains(&secret),
+        "{reply}"
+    );
 
     ws.send_binary(protocol::encode_sync_probe(&drive, "deadbeef"))
         .await
@@ -310,9 +320,7 @@ async fn rbsr_and_probe_are_gated_by_check_read() {
     let err = next_error(&mut rx).await;
     assert!(err.contains("SYNC refused"), "{err}");
 
-    // The owner gets the items. The Rust client has no RBSR_ITEMS parser, so
-    // the text reply surfaces as `Unrecognized` — which is enough to see
-    // that the answer came and names the private child.
+    // The owner gets the items: the answer names the private child.
     let ws_owner = WsClient::connect(&ws_url).await.unwrap();
     ws_owner.authenticate(&alice).await.unwrap();
     let mut rx_owner = ws_owner.subscribe();
@@ -322,22 +330,28 @@ async fn rbsr_and_probe_are_gated_by_check_read() {
         ))
         .await
         .unwrap();
-    let reply = tokio::time::timeout(Duration::from_secs(5), async {
+    let reply = next_text(&mut rx_owner).await;
+    assert!(
+        reply.starts_with("RBSR_ITEMS") && reply.contains(&secret),
+        "{reply}"
+    );
+}
+
+/// The next text frame (the Rust client parses none, so it surfaces as
+/// `Unrecognized`); panics on an `ERROR` or after 5s.
+async fn next_text(rx: &mut Receiver<WsMessage>) -> String {
+    tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            match rx_owner.recv().await {
+            match rx.recv().await {
                 Ok(WsMessage::Unrecognized(text)) => return text,
-                Ok(WsMessage::Error { message, .. }) => panic!("owner refused: {message}"),
+                Ok(WsMessage::Error { message, .. }) => panic!("refused: {message}"),
                 Ok(_) => continue,
                 Err(e) => panic!("connection closed: {e}"),
             }
         }
     })
     .await
-    .expect("the owner's RBSR_ITEMS is answered within 5s");
-    assert!(
-        reply.starts_with("RBSR_ITEMS") && reply.contains(&secret),
-        "{reply}"
-    );
+    .expect("a text frame within 5s")
 }
 
 /// An AUTH proof is bound to this server's origin: one signed for another

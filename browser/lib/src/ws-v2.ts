@@ -58,8 +58,8 @@ export const Tag = {
    *  authenticates on its timestamp. */
   CHALLENGE: 0x42,
   /** Server → client, the negative answer to a `SYNC` probe: `[0x38]
-   *  [drive_utf8]`. The drive hashes differ; reconcile (RBSR, then a `SYNC`
-   *  for the differing subjects). The positive answer is `SYNC_OK`. */
+   *  [drive_utf8]`. The drive hashes differ; send the full version-vector
+   *  `SYNC`. The positive answer is `SYNC_OK`. */
   SYNC_RESEND: 0x38,
 } as const;
 
@@ -146,6 +146,7 @@ export const ErrorCode = {
 export type ServerCapability =
   | 'auth-max-age'
   | 'keepalive'
+  /** Retired 2026-09: servers answered `RBSR_FP` range fingerprints. */
   | 'rbsr'
   | 'pull-from'
   | 'signed-destroy'

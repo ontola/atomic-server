@@ -22,6 +22,18 @@ import { RequestCancelledError } from './error.js';
  * chains ONE follow-up pass (with a fresh entry snapshot) instead of
  * merely sharing the in-flight promise, so `await drain()` always means
  * "every entry that was dirty when I called has been attempted".
+ *
+ * Storage: the entries live in the client database (`Tree::Outbox` in the
+ * agent's redb file, one row per subject), next to the snapshots they refer
+ * to. An offline save writes its snapshot and its entry in one worker
+ * message and one flush ({@link LocalOutbox.recordOfflineSave}), so a reload
+ * finds both or neither. The database attaches a moment after page load, so
+ * until {@link LocalOutbox.attachDatabase} has merged its rows the outbox is
+ * not {@link LocalOutbox.hydrated}. Without a client database (Tauri, where
+ * the local server persists everything; insecure origins; a database that
+ * failed to open) the queue falls back to one JSON blob per agent in
+ * localStorage, `atomic.outbox.<agent>`. That blob is also what older builds
+ * wrote, so attaching a database imports it and then removes the key.
  */
 
 import type { Commit } from './commit.js';
@@ -31,6 +43,24 @@ import {
   parseCommitJSON,
 } from './commit.js';
 import { ErrorCode } from './ws-v2.js';
+import type { ClientDbOutboxWrite } from './client-db.js';
+
+/** The client database, as far as the outbox uses it. */
+export interface OutboxDatabase {
+  outboxEntries(agent: string): Promise<string[]>;
+  outboxWrite(write: ClientDbOutboxWrite, durable: boolean): Promise<void>;
+}
+
+/** Whether a client database can hold the outbox (test doubles and older
+ *  workers may lack the outbox calls; those keep the localStorage queue). */
+export function isOutboxDatabase(db: unknown): db is OutboxDatabase {
+  return (
+    typeof db === 'object' &&
+    db !== null &&
+    typeof (db as OutboxDatabase).outboxEntries === 'function' &&
+    typeof (db as OutboxDatabase).outboxWrite === 'function'
+  );
+}
 
 export interface OutboxEntry {
   subject: string;
@@ -415,6 +445,32 @@ export class LocalOutbox {
   /** localStorage key for the CURRENTLY-bound agent's queue. Switched by
    *  {@link rebind} on agent change. Starts anonymous until `setAgent`. */
   private activeKey: string = outboxKeyFor(undefined);
+  /** The agent whose queue this is; `ANON_NAMESPACE` when signed out. Also
+   *  the agent half of the database rows' keys. */
+  private activeAgent: string = ANON_NAMESPACE;
+  /** The client database holding the active agent's queue, once attached.
+   *  Until then (and without one) the queue is kept in localStorage. */
+  private database: OutboxDatabase | undefined;
+  /** The database an {@link attachDatabase} call is loading from. */
+  private attaching: OutboxDatabase | undefined;
+  /** Bumped by {@link rebind}, so an attach that finishes after an identity
+   *  change does not load one agent's rows into another's queue. */
+  private bindGeneration = 0;
+  /** Subjects mutated while {@link attachDatabase} was reading the rows. For
+   *  those the in-memory state wins over what the database returned. */
+  private touchedWhileAttaching: Set<string> | undefined;
+  /** What the database holds per subject, as far as this tab knows: the
+   *  serialized entry last written. A write sends only what differs. */
+  private written = new Map<string, string>();
+  /** The last database write, for {@link flush} to wait on. */
+  private writeChain: Promise<void> = Promise.resolve();
+  /** Whether the entries are complete: false from {@link expectDatabase}
+   *  until the database's rows are merged or it is known not to come. */
+  private _hydrated = true;
+  private hydratedWaiters: Array<() => void> = [];
+  /** Set by {@link expectDatabase}: after a {@link rebind}, the new agent's
+   *  queue is incomplete until its database attaches too. */
+  private databaseExpected = false;
 
   constructor(onChange?: () => void) {
     if (onChange) this.onChange = onChange;
@@ -425,8 +481,8 @@ export class LocalOutbox {
 
     // Best-effort: flush pending writes before the tab closes.
     if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => this.flushPersist());
-      window.addEventListener('pagehide', () => this.flushPersist());
+      window.addEventListener('beforeunload', () => this.flushInBackground());
+      window.addEventListener('pagehide', () => this.flushInBackground());
     }
   }
 
@@ -438,12 +494,235 @@ export class LocalOutbox {
     const nextKey = outboxKeyFor(agentSubject);
     if (nextKey === this.activeKey) return;
 
-    // Persist the outgoing agent's queue under its key, then swap.
-    this.flushPersist();
+    // Persist the outgoing agent's queue where it lives, then swap. The
+    // database write is posted now, ahead of the flush that closes the
+    // outgoing agent's worker.
+    this.flushInBackground();
     this.entries.clear();
+    this.written = new Map();
+    this.database = undefined;
+    this.attaching = undefined;
+    this.touchedWhileAttaching = undefined;
+    this.bindGeneration++;
     this.activeKey = nextKey;
+    this.activeAgent = agentSubject ?? ANON_NAMESPACE;
     this.hydrate();
+
+    if (this.databaseExpected) this.setHydrated(false);
+
     this.onChange();
+  }
+
+  /**
+   * A client database is on its way (`Store.expectClientDb`). Until it is
+   * attached, or known not to come, the queue may be missing entries that
+   * only the database holds, so {@link hydrated} is false.
+   */
+  expectDatabase(): void {
+    this.databaseExpected = true;
+    if (!this.database) this.setHydrated(false);
+  }
+
+  /** No database will hold `agentSubject`'s queue this session: keep the
+   *  localStorage queue and report the entries as complete. */
+  databaseUnavailable(agentSubject: string | undefined): void {
+    if ((agentSubject ?? ANON_NAMESPACE) !== this.activeAgent) return;
+    if (this.database || this.attaching) return;
+
+    this.setHydrated(true);
+  }
+
+  /**
+   * Move `agentSubject`'s queue into `db`. Reads the rows the database
+   * holds and merges them with the entries in memory, which include anything
+   * localStorage held (hydrated at construction or {@link rebind}). Then it
+   * writes the merged queue durably and only after that removes the
+   * localStorage key, so a crash in between leaves both copies and the next
+   * load merges them again rather than losing one. Resolves with the entries
+   * the database added. A no-op for another agent or an already bound db.
+   */
+  async attachDatabase(
+    agentSubject: string | undefined,
+    db: OutboxDatabase,
+  ): Promise<OutboxEntry[]> {
+    const agent = agentSubject ?? ANON_NAMESPACE;
+
+    if (agent !== this.activeAgent) return [];
+    if (this.database === db || this.attaching === db) return [];
+
+    const generation = this.bindGeneration;
+    this.attaching = db;
+    this.touchedWhileAttaching = new Set();
+
+    let rows: string[];
+
+    try {
+      rows = await db.outboxEntries(agent);
+    } catch (e) {
+      console.warn('[Outbox] reading the queue from the database failed:', e);
+
+      if (generation === this.bindGeneration && this.attaching === db) {
+        this.attaching = undefined;
+        this.touchedWhileAttaching = undefined;
+        this.setHydrated(true);
+      }
+
+      return [];
+    }
+
+    if (generation !== this.bindGeneration || this.attaching !== db) return [];
+
+    const touched = this.touchedWhileAttaching;
+    const added: OutboxEntry[] = [];
+    const written = new Map<string, string>();
+
+    for (const raw of rows) {
+      let stored: OutboxEntry | undefined;
+
+      try {
+        stored = parseEntry(JSON.parse(raw));
+      } catch {
+        stored = undefined;
+      }
+
+      if (!stored) continue;
+      written.set(stored.subject, raw);
+      if (touched.has(stored.subject)) continue;
+
+      const live = this.entries.get(stored.subject);
+
+      if (live) {
+        live.enqueuedAt = Math.min(live.enqueuedAt, stored.enqueuedAt);
+        live.signedGenesis ??= stored.signedGenesis;
+        live.signedDestroy ??= stored.signedDestroy;
+        live.baseVersion ??= stored.baseVersion;
+      } else {
+        this.entries.set(stored.subject, stored);
+        added.push(stored);
+      }
+    }
+
+    this.written = written;
+    this.database = db;
+    this.attaching = undefined;
+    this.touchedWhileAttaching = undefined;
+
+    // Import: whatever only memory (and so localStorage) held goes into the
+    // database now, durably, before the localStorage copy is dropped.
+    const legacy = readLocalStorage(this.activeKey) !== null;
+
+    try {
+      await this.persistToDatabase(true);
+
+      if (legacy && generation === this.bindGeneration) {
+        removeLocalStorage(this.activeKey);
+      }
+    } catch (e) {
+      console.warn('[Outbox] importing the queue into the database failed:', e);
+    }
+
+    if (generation === this.bindGeneration) {
+      this.setHydrated(true);
+      this.onChange();
+    }
+
+    return added;
+  }
+
+  /** Whether `db` is the database the queue is stored in. */
+  isStoredIn(db: unknown): boolean {
+    return !!db && this.database === db;
+  }
+
+  /** Whether the entries are complete; see {@link expectDatabase}. */
+  get hydrated(): boolean {
+    return this._hydrated;
+  }
+
+  /** Resolves once {@link hydrated}. */
+  whenHydrated(): Promise<void> {
+    if (this._hydrated) return Promise.resolve();
+
+    return new Promise(resolve => this.hydratedWaiters.push(resolve));
+  }
+
+  /** {@link hasPending}, but also true while the entries are incomplete: for
+   *  decisions that would destroy an unsynced local edit if they guessed
+   *  wrong (replacing a doc with the server's copy). */
+  mayHavePending(subject: string): boolean {
+    return !this._hydrated || this.entries.has(subject);
+  }
+
+  private setHydrated(hydrated: boolean): void {
+    this._hydrated = hydrated;
+    if (!hydrated) return;
+
+    const waiters = this.hydratedWaiters;
+    this.hydratedWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
+  /** Record a mutation of `subject`'s entry: persist it and tell the store. */
+  private changed(subject: string): void {
+    this.touchedWhileAttaching?.add(subject);
+    this.schedulePersist();
+    this.onChange();
+  }
+
+  /**
+   * Queue an offline save of `subject` together with its snapshot. `persist`
+   * writes the snapshot and gets the outbox row to write with it, when the
+   * queue lives in the same database; it resolves `true` if it wrote that
+   * row. Only then does the entry change in memory, so `pendingDirtyCount`
+   * rising still means the edit is durable, and a reload finds the snapshot
+   * and its entry together.
+   *
+   * `baseVersion` is the last-synced save cursor (see
+   * {@link OutboxEntry.baseVersion}); `dirty` marks the subject for the drain.
+   */
+  async recordOfflineSave(
+    subject: string,
+    opts: { baseVersion?: string; dirty: boolean },
+    persist: (outbox: ClientDbOutboxWrite | undefined) => Promise<boolean>,
+  ): Promise<void> {
+    const existing = this.entries.get(subject);
+    const willExist =
+      !isCommitSubject(subject) &&
+      (!!existing || opts.dirty || opts.baseVersion !== undefined);
+    const staged: OutboxEntry | undefined = willExist
+      ? {
+          ...(existing ?? { subject, enqueuedAt: Date.now() }),
+          baseVersion: existing?.baseVersion ?? opts.baseVersion,
+        }
+      : undefined;
+    const db = this.database;
+    const value = staged ? serializeEntry(staged) : undefined;
+    const write =
+      db && value !== undefined
+        ? { agent: this.activeAgent, puts: [{ subject, value }], deletes: [] }
+        : undefined;
+
+    const wrote = await persist(write);
+
+    // Apply through the public mutators, so a wrapped `markDirty` (the AI
+    // review hold) still decides whether the subject is queued.
+    if (
+      staged &&
+      !this.entries.has(subject) &&
+      opts.baseVersion !== undefined
+    ) {
+      this.entries.set(subject, { subject, enqueuedAt: staged.enqueuedAt });
+    }
+
+    if (opts.baseVersion !== undefined) {
+      this.setBaseVersion(subject, opts.baseVersion);
+    }
+
+    if (opts.dirty) this.markDirty(subject);
+
+    if (wrote && value !== undefined && this.database === db) {
+      this.written.set(subject, value);
+    }
   }
 
   /** Mark a subject as having local Loro edits that need to drain.
@@ -462,8 +741,7 @@ export class LocalOutbox {
         existing.failures = 0;
       }
 
-      this.schedulePersist();
-      this.onChange();
+      this.changed(subject);
 
       return;
     }
@@ -472,8 +750,7 @@ export class LocalOutbox {
       subject,
       enqueuedAt: Date.now(),
     });
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Clear the dirty bit for a subject. Called by the drain after the
@@ -488,15 +765,13 @@ export class LocalOutbox {
       // Still holding a signed envelope — keep the entry but treat
       // it as "no incremental delta dirty"; the next drain will POST
       // the envelope and recheck.
-      this.schedulePersist();
-      this.onChange();
+      this.changed(subject);
 
       return;
     }
 
     this.entries.delete(subject);
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Stash a pre-signed genesis commit for `subject`. Marks the entry
@@ -509,8 +784,7 @@ export class LocalOutbox {
     };
     entry.signedGenesis = commit;
     this.entries.set(subject, entry);
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Drop the `signedGenesis` field after the genesis POST has acked.
@@ -526,8 +800,7 @@ export class LocalOutbox {
     // dirty" — any post-genesis Loro ops are queued by the
     // Loro subscriber's `markDirty`. Leave the entry; the drain
     // loop will detect "no Loro delta" and clear it.
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Stash a pre-signed destroy commit for `subject`. Called by
@@ -549,8 +822,7 @@ export class LocalOutbox {
     }
 
     this.entries.set(subject, entry);
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Drop the entry once the destroy has been acked (or found to be moot).
@@ -562,8 +834,7 @@ export class LocalOutbox {
     if (!entry || !entry.signedDestroy) return;
 
     this.entries.delete(subject);
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Forget every queued write for `subject` without POSTing anything.
@@ -573,8 +844,7 @@ export class LocalOutbox {
   discard(subject: string): void {
     if (!this.entries.delete(subject)) return;
 
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   /** Record the last-synced Loro version for an offline edit, so a reload
@@ -592,8 +862,7 @@ export class LocalOutbox {
     if (entry.baseVersion === undefined) {
       entry.baseVersion = baseVersion;
       this.entries.set(subject, entry);
-      this.schedulePersist();
-      this.onChange();
+      this.changed(subject);
     }
   }
 
@@ -603,8 +872,7 @@ export class LocalOutbox {
     if (!entry || entry.baseVersion === undefined) return;
 
     entry.baseVersion = undefined;
-    this.schedulePersist();
-    this.onChange();
+    this.changed(subject);
   }
 
   pending(): readonly OutboxEntry[] {
@@ -821,33 +1089,101 @@ export class LocalOutbox {
         }
       }
 
-      this.schedulePersist();
-      this.onChange();
+      this.changed(entry.subject);
     }
   }
 
   /**
-   * Coalesce multiple mutations into one localStorage write per
-   * microtask. The microtask flush keeps durability semantics in
-   * practice (any await yields to the microtask queue and persists)
-   * without the per-call CPU spike.
+   * Coalesce multiple mutations into one write per microtask. The
+   * microtask flush keeps durability semantics in practice (any await
+   * yields to the microtask queue and persists) without the per-call CPU
+   * spike.
    */
   private schedulePersist(): void {
     if (this.persistScheduled) return;
     this.persistScheduled = true;
     queueMicrotask(() => {
       this.persistScheduled = false;
-      this.flushPersist();
+      void this.persist(false).catch(() => undefined);
     });
   }
 
-  /**
-   * Synchronously write the current outbox state. Used by the
-   * microtask flush above and by `beforeunload` / `pagehide`.
-   */
-  private flushPersist(): void {
-    if (typeof localStorage === 'undefined') return;
+  /** Write the current state to wherever the queue lives. */
+  private persist(durable: boolean): Promise<void> {
     this.persistScheduled = false;
+
+    if (this.database) return this.persistToDatabase(durable);
+
+    this.persistToLocalStorage();
+
+    return Promise.resolve();
+  }
+
+  /**
+   * Send the rows that differ from what the database holds: changed entries
+   * as puts, dropped ones as deletes. Durable when asked, or when a row
+   * carries something a reload cannot rebuild from the snapshot: a signed
+   * genesis or destroy, or an offline cursor. A plain dirty bit rides the
+   * worker's periodic flush.
+   */
+  private persistToDatabase(durable: boolean): Promise<void> {
+    const db = this.database;
+    if (!db) return Promise.resolve();
+
+    const agent = this.activeAgent;
+    const puts: ClientDbOutboxWrite['puts'] = [];
+    const deletes: string[] = [];
+
+    for (const entry of this.entries.values()) {
+      const value = serializeEntry(entry);
+      if (this.written.get(entry.subject) === value) continue;
+
+      puts.push({ subject: entry.subject, value });
+      durable ||=
+        !!entry.signedGenesis ||
+        !!entry.signedDestroy ||
+        entry.baseVersion !== undefined;
+    }
+
+    for (const subject of this.written.keys()) {
+      if (!this.entries.has(subject)) deletes.push(subject);
+    }
+
+    if (puts.length === 0 && deletes.length === 0) {
+      if (!durable) return this.writeChain;
+
+      // Nothing new, but the caller wants what was written made durable.
+      const flushed = this.writeChain.then(() =>
+        db.outboxWrite({ agent, puts, deletes }, true),
+      );
+      this.writeChain = flushed.catch(() => undefined);
+
+      return flushed;
+    }
+
+    for (const { subject, value } of puts) this.written.set(subject, value);
+    for (const subject of deletes) this.written.delete(subject);
+
+    const write = db.outboxWrite({ agent, puts, deletes }, durable).catch(e => {
+      console.warn('[Outbox] persist failed:', e);
+
+      // Unknown what landed: forget it, so the next write repeats these
+      // rows (and the deletes) instead of assuming they are stored.
+      if (this.database === db) {
+        for (const { subject } of puts) this.written.delete(subject);
+        for (const subject of deletes) this.written.set(subject, '');
+      }
+
+      throw e;
+    });
+    this.writeChain = write.catch(() => undefined);
+
+    return write;
+  }
+
+  /** Synchronously write the whole queue to its localStorage key. */
+  private persistToLocalStorage(): void {
+    if (typeof localStorage === 'undefined') return;
 
     try {
       if (this.entries.size === 0) {
@@ -856,26 +1192,25 @@ export class LocalOutbox {
         return;
       }
 
-      const out: PersistedEntry[] = [...this.entries.values()].map(e => ({
-        subject: e.subject,
-        enqueuedAt: e.enqueuedAt,
-        signedGenesis: e.signedGenesis
-          ? commitToJsonADObject(e.signedGenesis)
-          : undefined,
-        signedDestroy: e.signedDestroy
-          ? commitToJsonADObject(e.signedDestroy)
-          : undefined,
-        baseVersion: e.baseVersion,
-      }));
+      const out = [...this.entries.values()].map(toPersisted);
       localStorage.setItem(this.activeKey, JSON.stringify(out));
     } catch (e) {
       console.warn('[Outbox] persist failed:', e);
     }
   }
 
-  /** Force a synchronous write of the current state. */
-  public flush(): void {
-    this.flushPersist();
+  /**
+   * Write the current state now. With a database, resolves once the rows
+   * are durable (rejects if they could not be written); in localStorage the
+   * write is synchronous.
+   */
+  public flush(): Promise<void> {
+    return this.persist(true);
+  }
+
+  /** {@link flush} without waiting; a failure is already logged. */
+  private flushInBackground(): void {
+    this.flush().catch(() => undefined);
   }
 
   /** Re-file the pre-scoping shared queue (`atomic.outbox`) into per-agent
@@ -958,58 +1293,106 @@ export class LocalOutbox {
       localStorage.removeItem(LEGACY_DIRTY_KEY);
       for (const s of subjects)
         localStorage.removeItem(LEGACY_OFFLINE_PREFIX + s);
-      this.flushPersist();
+      this.persistToLocalStorage();
     } catch (e) {
       console.warn('[Outbox] legacy migration failed:', e);
     }
   }
 
   private hydrateEntry(p: unknown): void {
-    if (typeof p !== 'object' || p === null) return;
-    const obj = p as Record<string, unknown>;
-    if (typeof obj.subject !== 'string') return;
-    // Queued by an older build that let commit pages mark themselves dirty.
-    if (isCommitSubject(obj.subject)) return;
+    const entry = parseEntry(p);
+    if (entry) this.entries.set(entry.subject, entry);
+  }
+}
 
-    let signedGenesis: Commit | undefined;
+/** The stored form of an entry: the fields a reload needs. Failure counts
+ *  and backoff are per session. */
+function toPersisted(e: OutboxEntry): PersistedEntry {
+  return {
+    subject: e.subject,
+    enqueuedAt: e.enqueuedAt,
+    signedGenesis: e.signedGenesis
+      ? commitToJsonADObject(e.signedGenesis)
+      : undefined,
+    signedDestroy: e.signedDestroy
+      ? commitToJsonADObject(e.signedDestroy)
+      : undefined,
+    baseVersion: e.baseVersion,
+  };
+}
 
-    if (obj.signedGenesis) {
-      try {
-        signedGenesis = parseCommitJSON(JSON.stringify(obj.signedGenesis));
-      } catch {
-        // skip — entry stays dirty without a pre-signed genesis,
-        // which means the drain will try to sign a fresh delta.
-      }
+/** One database row: the same shape as an element of the localStorage blob,
+ *  so both parse with {@link parseEntry}. */
+function serializeEntry(e: OutboxEntry): string {
+  return JSON.stringify(toPersisted(e));
+}
+
+/** An entry from its stored form; `undefined` for garbage. */
+function parseEntry(p: unknown): OutboxEntry | undefined {
+  if (typeof p !== 'object' || p === null) return undefined;
+  const obj = p as Record<string, unknown>;
+  if (typeof obj.subject !== 'string') return undefined;
+  // Queued by an older build that let commit pages mark themselves dirty.
+  if (isCommitSubject(obj.subject)) return undefined;
+
+  let signedGenesis: Commit | undefined;
+
+  if (obj.signedGenesis) {
+    try {
+      signedGenesis = parseCommitJSON(JSON.stringify(obj.signedGenesis));
+    } catch {
+      // skip — entry stays dirty without a pre-signed genesis,
+      // which means the drain will try to sign a fresh delta.
     }
+  }
 
-    let signedDestroy: Commit | undefined;
+  let signedDestroy: Commit | undefined;
 
-    if (obj.signedDestroy) {
-      try {
-        signedDestroy = parseCommitJSON(JSON.stringify(obj.signedDestroy));
-      } catch {
-        // skip — an unparseable destroy envelope can't be re-signed (the
-        // resource is already gone locally), so the delete is lost; the
-        // entry stays dirty-only and the drain clears it as a no-op.
-      }
+  if (obj.signedDestroy) {
+    try {
+      signedDestroy = parseCommitJSON(JSON.stringify(obj.signedDestroy));
+    } catch {
+      // skip — an unparseable destroy envelope can't be re-signed (the
+      // resource is already gone locally), so the delete is lost; the
+      // entry stays dirty-only and the drain clears it as a no-op.
     }
+  }
 
-    // Backcompat: old persisted entries had `commits: Commit[]`. We
-    // no longer store signed envelopes here (the Loro state is the
-    // source of truth), so the array is discarded — the next drain
-    // re-signs from Loro. Empty commits arrays from clean shutdowns
-    // are also discarded silently.
-    const enqueuedAt =
-      typeof obj.enqueuedAt === 'number' ? obj.enqueuedAt : Date.now();
+  // Backcompat: old persisted entries had `commits: Commit[]`. We
+  // no longer store signed envelopes here (the Loro state is the
+  // source of truth), so the array is discarded — the next drain
+  // re-signs from Loro. Empty commits arrays from clean shutdowns
+  // are also discarded silently.
+  const enqueuedAt =
+    typeof obj.enqueuedAt === 'number' ? obj.enqueuedAt : Date.now();
 
-    this.entries.set(obj.subject, {
-      subject: obj.subject,
-      enqueuedAt,
-      signedGenesis,
-      signedDestroy,
-      baseVersion:
-        typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
-    });
+  return {
+    subject: obj.subject,
+    enqueuedAt,
+    signedGenesis,
+    signedDestroy,
+    baseVersion:
+      typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
+  };
+}
+
+function readLocalStorage(key: string): string | null {
+  if (typeof localStorage === 'undefined') return null;
+
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function removeLocalStorage(key: string): void {
+  if (typeof localStorage === 'undefined') return;
+
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Private mode or blocked storage: nothing was stored there either.
   }
 }
 

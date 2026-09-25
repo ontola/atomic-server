@@ -1,6 +1,83 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { before, openWorkspaceDialog, waitForSynced } from './test-utils';
 test.beforeEach(before);
+
+/**
+ * Diagnostics for the local-database key (#1767): which `keyval-store` records
+ * exist, never their values. Session keys are reduced to a 4-byte SHA-256
+ * prefix, enough to see whether the key changed across a reload. Logged and
+ * attached so a CI failure shows which records were there.
+ */
+async function dumpDbKeyRecords(page: Page, label: string): Promise<void> {
+  const report = await page.evaluate(async () => {
+    const hex = (bytes: ArrayBuffer | Uint8Array, length: number) =>
+      Array.from(new Uint8Array(bytes).slice(0, length))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+    const sha256 = (bytes: Uint8Array) =>
+      crypto.subtle.digest('SHA-256', new Uint8Array(bytes));
+    const subject = window.store?.getAgent()?.subject;
+    const fingerprint = subject
+      ? hex(await sha256(new TextEncoder().encode(subject)), 8)
+      : undefined;
+    const records = await new Promise<[string, unknown][]>(
+      (resolve, reject) => {
+        const open = indexedDB.open('keyval-store');
+        open.onerror = () => reject(open.error);
+
+        open.onsuccess = () => {
+          const found: [string, unknown][] = [];
+          const cursor = open.result
+            .transaction('keyval')
+            .objectStore('keyval')
+            .openCursor();
+          cursor.onerror = () => reject(cursor.error);
+
+          cursor.onsuccess = () => {
+            const current = cursor.result;
+
+            if (!current) {
+              open.result.close();
+              resolve(found);
+
+              return;
+            }
+
+            found.push([String(current.key), current.value]);
+            current.continue();
+          };
+        };
+      },
+    );
+    const keys: string[] = [];
+
+    for (const [key, value] of records) {
+      keys.push(
+        key.startsWith('atomic.clientdb.session-key.') &&
+          value instanceof Uint8Array
+          ? `${key} (sha256 ${hex(await sha256(value), 4)})`
+          : key,
+      );
+    }
+
+    const hasWrappedDbKey =
+      !!fingerprint &&
+      records.some(
+        ([key]) =>
+          key === `atomic.clientdb.wrapped-key-v2.${fingerprint}` ||
+          key === `atomic.clientdb.wrapped-key.${fingerprint}`,
+      );
+
+    return { subject, fingerprint, hasWrappedDbKey, keys };
+  });
+  const text = JSON.stringify({ label, ...report }, null, 2);
+  // oxlint-disable-next-line no-console -- meant for the CI log
+  console.log(`[db-key diagnostics] ${text}`);
+  await test.info().attach(`db-key records: ${label}`, {
+    body: text,
+    contentType: 'application/json',
+  });
+}
 
 test('workspace owns its views and links to separate connection settings', async ({
   page,
@@ -254,6 +331,7 @@ test('workspace owns its views and links to separate connection settings', async
 test('workspace starts automation chat without requiring a connection', async ({
   page,
 }) => {
+  await dumpDbKeyRecords(page, 'after devDrive');
   const table = await page.evaluate(async () => {
     const resource = await window.store!.newResource({
       parent: window.store!.getDrive(),
@@ -308,6 +386,7 @@ test('workspace starts automation chat without requiring a connection', async ({
     new URL(`/app/show?subject=${encodeURIComponent(automation)}`, page.url())
       .href,
   );
+  await dumpDbKeyRecords(page, 'after reload to the automation');
   await expect(
     page.getByRole('tab', { name: 'Automation', exact: true }),
   ).toBeVisible();

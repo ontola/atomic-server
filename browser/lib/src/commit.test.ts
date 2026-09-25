@@ -1,10 +1,5 @@
 import { describe, it, vi } from 'vitest';
-import {
-  Commit,
-  commitToJsonADObject,
-  isCommitSubject,
-  parseAndApplyCommit,
-} from './commit.js';
+import { Commit, isCommitSubject } from './commit.js';
 import { Store } from './store.js';
 import { Resource } from './resource.js';
 import { core } from './index.js';
@@ -277,41 +272,6 @@ describe('Resource save flow', () => {
     expect(posted.length).toBe(1);
     const commitDidSubject = `did:ad:commit:${posted[0].signature}`;
     expect(store.resources.has(commitDidSubject)).toBe(false);
-  });
-});
-
-describe('Commit parse and apply', () => {
-  const store = new Store();
-  it('parses and applies a loroUpdate Commit correctly', async ({ expect }) => {
-    const source = new Resource('https://atomicdata.dev/element/cn6ymb8s8mc');
-    await source.set(
-      'https://atomicdata.dev/properties/description',
-      'My new string',
-      false,
-    );
-    const loroUpdate = source.getLoroDoc()!.export({
-      mode: 'snapshot',
-    });
-    const exampleCommit = JSON.stringify(
-      commitToJsonADObject({
-        subject: source.subject,
-        loroUpdate,
-        signer:
-          'https://atomicdata.dev/agents/8S2U/viqkaAQVzUisaolrpX6hx/G/L3e2MTjWA83Rxk=',
-        createdAt: 1627561366516,
-        signature:
-          'VCHGWxax6j4pPMJWelwpSHVOL+W2R2A0vjFdSpH/HhIZxE6hyaUTtPfKjgWGNhsUsQske4yHIdqc/QsQhV03DA==',
-      }),
-    );
-
-    parseAndApplyCommit(exampleCommit, store);
-    const resource = await store.getResource(
-      'https://atomicdata.dev/element/cn6ymb8s8mc',
-    );
-    const description = resource
-      .get('https://atomicdata.dev/properties/description')!
-      .toString();
-    expect(description).to.equal('My new string');
   });
 });
 

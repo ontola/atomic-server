@@ -79,7 +79,11 @@ export {
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
-export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+export type {
+  ClientDbOutboxWrite,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
 export {
   LocalOutbox,
   isTerminalCommitErrorMessage,

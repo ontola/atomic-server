@@ -15,8 +15,8 @@ import {
 } from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import { StoreEvents, type Store, type DriveSyncState } from './store.js';
-import { reconcile, type Item, type RemoteRange } from './rbsr.js';
+import { StoreEvents, type Store } from './store.js';
+import type { DriveItem } from './local-drive-copy.js';
 import {
   AtomicError,
   ErrorType,
@@ -236,16 +236,17 @@ export class WSClient {
   private _driveUnsub: (() => void) | undefined;
   private _savedDriveUnsub: (() => void) | undefined;
   /** Drive-sync state computed for a hash-first probe, kept until the server
-   *  either accepts it (`SYNC_OK`) or asks for a reconcile (`SYNC_RESEND`). */
+   *  either accepts it (`SYNC_OK`) or asks for the full state (`SYNC_RESEND`),
+   *  with the guard of the connection and identity that computed it. */
   private _pendingSyncState = new Map<
     string,
-    Awaited<ReturnType<Store['computeDriveSyncState']>>
+    {
+      state: Awaited<ReturnType<Store['computeDriveSyncState']>>;
+      current: () => boolean;
+    }
   >();
-  /** Pending RBSR range-query responses. The reconcile issues these one at a
-   *  time, so at most one of each is in flight; FIFO queues stay correct even
-   *  if that changes. */
-  private _rbsrFpQueue: Array<(fps: string[]) => void> = [];
-  private _rbsrItemsQueue: Array<(items: Item[]) => void> = [];
+  /** Pending `RBSR_ITEMS` inventory responses, answered in order. */
+  private _inventoryQueue: Array<(items: DriveItem[]) => void> = [];
   /** What the server said it speaks, from its `AUTH_OK` payload. */
   private _serverCaps: string[] = [];
   /** Liveness: when the last inbound frame arrived, whether a `KEEPALIVE`
@@ -1232,10 +1233,9 @@ export class WSClient {
         break;
 
       case Tag.SYNC_RESEND: {
-        // The hash-first probe missed: reconcile via RBSR (find only the
-        // differing subjects) and send version vectors for just those.
+        // The hash-first probe missed: send the full version vector.
         const drive = decodeSyncResend(payload);
-        if (drive) void this.sendReducedSyncState(drive);
+        if (drive) this.sendFullSyncState(drive);
         break;
       }
 
@@ -1506,8 +1506,8 @@ export class WSClient {
     });
   }
 
-  /** Handle the text frames that are still text: the RBSR answers and
-   *  `INDEX_STATUS`. Loro and presence updates arrive as binary
+  /** Handle the text frames that are still text: the `RBSR_ITEMS` inventory
+   *  and `INDEX_STATUS`. Loro and presence updates arrive as binary
    *  `EPHEMERAL` since 2026-09-04. */
   private handleText(text: string) {
     if (this.debug) {
@@ -1526,25 +1526,16 @@ export class WSClient {
       } catch {
         console.warn('Invalid INDEX_STATUS message:', json);
       }
-    } else if (text.startsWith('RBSR_FP ')) {
-      try {
-        const { fps } = JSON.parse(text.slice('RBSR_FP '.length)) as {
-          fps: string[];
-        };
-        this._rbsrFpQueue.shift()?.(fps);
-      } catch (e) {
-        console.warn('Invalid RBSR_FP message:', e);
-      }
     } else if (text.startsWith('RBSR_ITEMS ')) {
       try {
         const { items } = JSON.parse(text.slice('RBSR_ITEMS '.length)) as {
           items: Array<[string, Array<[string, number]>]>;
         };
-        const parsed: Item[] = items.map(([subject, pairs]) => ({
+        const parsed: DriveItem[] = items.map(([subject, pairs]) => ({
           subject,
           vv: Object.fromEntries(pairs),
         }));
-        this._rbsrItemsQueue.shift()?.(parsed);
+        this._inventoryQueue.shift()?.(parsed);
       } catch (e) {
         console.warn('Invalid RBSR_ITEMS message:', e);
       }
@@ -1817,7 +1808,7 @@ export class WSClient {
       // hash as a probe. In the common "nothing changed" case the server
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
       // On a mismatch the server replies `SYNC_RESEND` and
-      // `sendReducedSyncState` reconciles from the state stashed here.
+      // `sendFullSyncState` sends the state stashed here.
       const localState = await this.store.computeDriveSyncState(drive);
       const resources = this.wireSubjectMap(localState.resources);
       const renamed = Object.keys(localState.resources).some(
@@ -1833,7 +1824,7 @@ export class WSClient {
       close({ resourceCount: Object.keys(syncState.resources).length });
       if (!current()) return;
       this.store.startDriveSync();
-      this._pendingSyncState.set(drive, syncState);
+      this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
         encodeSync(
           this.wireSubject(drive),
@@ -1858,113 +1849,44 @@ export class WSClient {
     await this.startVVSync(drive);
   }
 
-  /** Respond to SYNC_RESEND. Instead of sending the whole drive's version
-   *  vector, run RBSR against the server (range fingerprint exchange) to find
-   *  only the differing subjects, and send version vectors for just those. On
-   *  any RBSR failure, fall back to the full VV so the drive always reconciles.
+  /** Respond to SYNC_RESEND: the probe's hash missed, so send the drive's
+   *  full version vector (computed for the probe) and let the server diff it.
    */
-  private async sendReducedSyncState(drive: string): Promise<void> {
-    const agent = this.store.getAgent()?.subject;
-    const current = this.connectionGuard();
-    if (!current() || (agent && this.authenticatedWith !== agent)) return;
-
+  private sendFullSyncState(drive: string): void {
     // A response to a probe invalidated by a drive switch must not restart it.
     // The probe was keyed by what we sent; a server without
     // `canonical-scheme` answers with the `did:ad:` spelling of it.
     const pendingKey = this._pendingSyncState.has(drive)
       ? drive
       : canonicalizeScheme(drive);
-    const pendingState = this._pendingSyncState.get(pendingKey);
+    const pending = this._pendingSyncState.get(pendingKey);
     this._pendingSyncState.delete(pendingKey);
 
-    if (!pendingState || !current()) return;
-    const syncState = {
-      ...pendingState,
-      resources: this.wireSubjectMap(pendingState.resources),
-    };
+    // Sent only on the connection, identity and drive that computed it.
+    if (!pending?.current()) return;
+    const pendingState = pending.state;
 
-    const requireCurrent = () => {
-      if (!current()) throw new Error('Sync identity or drive changed');
-    };
-
-    try {
-      const local = syncStateToItems(syncState);
-      const remote: RemoteRange = {
-        fingerprint: async (lo, hi) => {
-          requireCurrent();
-
-          return (await this.rbsrFingerprints(drive, [[lo, hi ?? null]]))[0];
-        },
-        items: (lo, hi) => {
-          requireCurrent();
-
-          return this.rbsrItems(drive, lo, hi);
-        },
-      };
-
-      const diff = await reconcile(local, remote);
-      if (!current()) return;
-      // Subjects the outbox still owns are not offered for reconcile (see
-      // `handleSyncDiff`): the drain delivers them signed.
-      const differing = [
-        ...diff.onlyLocal,
-        ...diff.onlyRemote,
-        ...diff.differ,
-      ].filter(
-        subject =>
-          !this.store.outbox.hasPending(this.store.normalizeSubject(subject)),
-      );
-
-      // Version vectors for the differing subjects the client actually holds
-      // (only-remote subjects it doesn't have — the server pushes those).
-      const reducedResources: Record<string, number[]> = {};
-
-      for (const subject of [...diff.onlyLocal, ...diff.differ]) {
-        if (syncState.resources[subject]) {
-          reducedResources[subject] = syncState.resources[subject];
-        }
-      }
-
-      this.sendBinary(
-        encodeSync(
-          this.wireSubject(drive),
-          syncState.driveHash,
-          JSON.stringify({
-            peers: syncState.peers,
-            resources: reducedResources,
-            subjects: differing,
-          }),
-        ),
-      );
-    } catch (e) {
-      // Account/drive changes cancel this reconciliation, including its fallback.
-      if (!current()) return;
-      // Safety net: any RBSR failure (query timeout, socket close, parse) falls
-      // back to the full reconcile, which always converges. Never leave the
-      // drive un-reconciled because the optimization stumbled.
-      console.warn('[WS] RBSR reconcile failed, sending full VV:', e);
-
-      if (this.readyState === WebSocket.OPEN) {
-        this.sendBinary(
-          encodeSync(
-            this.wireSubject(drive),
-            syncState.driveHash,
-            JSON.stringify({
-              peers: syncState.peers,
-              resources: syncState.resources,
-            }),
-          ),
-        );
-      }
-    }
+    this.sendBinary(
+      encodeSync(
+        this.wireSubject(drive),
+        pendingState.driveHash,
+        JSON.stringify({
+          peers: pendingState.peers,
+          resources: this.wireSubjectMap(pendingState.resources),
+        }),
+      ),
+    );
   }
 
-  /** Send an RBSR range-fingerprint query and await the server's fingerprints. */
-  private rbsrFingerprints(
+  /** Ask the server for the drive's inventory: every subject in `[lo, hi)`
+   *  this agent may read, with its version vector. The wire frame keeps its
+   *  `RBSR_ITEMS` name from the removed range reconcile. */
+  public driveInventory(
     drive: string,
-    ranges: Array<[string, string | null]>,
-  ): Promise<string[]> {
-    return new Promise<string[]>((resolve, reject) => {
+    lo: string,
+    hi?: string,
+  ): Promise<DriveItem[]> {
+    return new Promise<DriveItem[]>((resolve, reject) => {
       if (this.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket is not open'));
 
@@ -1972,46 +1894,18 @@ export class WSClient {
       }
 
       const timer = setTimeout(() => {
-        const i = this._rbsrFpQueue.indexOf(settle);
+        const i = this._inventoryQueue.indexOf(settle);
 
-        if (i >= 0) this._rbsrFpQueue.splice(i, 1);
-        reject(new Error('RBSR_FP timed out'));
-      }, 10000);
-
-      const settle = (fps: string[]) => {
-        clearTimeout(timer);
-        resolve(fps);
-      };
-
-      this._rbsrFpQueue.push(settle);
-      this.ws.send(
-        'RBSR_FP ' + JSON.stringify({ drive: this.wireSubject(drive), ranges }),
-      );
-    });
-  }
-
-  /** Send an RBSR range-items query and await the server's items. */
-  public rbsrItems(drive: string, lo: string, hi?: string): Promise<Item[]> {
-    return new Promise<Item[]>((resolve, reject) => {
-      if (this.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not open'));
-
-        return;
-      }
-
-      const timer = setTimeout(() => {
-        const i = this._rbsrItemsQueue.indexOf(settle);
-
-        if (i >= 0) this._rbsrItemsQueue.splice(i, 1);
+        if (i >= 0) this._inventoryQueue.splice(i, 1);
         reject(new Error('RBSR_ITEMS timed out'));
       }, 10000);
 
-      const settle = (items: Item[]) => {
+      const settle = (items: DriveItem[]) => {
         clearTimeout(timer);
         resolve(items);
       };
 
-      this._rbsrItemsQueue.push(settle);
+      this._inventoryQueue.push(settle);
       this.ws.send(
         'RBSR_ITEMS ' +
           JSON.stringify({
@@ -2251,30 +2145,6 @@ export class WSClient {
       });
     });
   }
-}
-
-/** Convert a computed drive-sync state (compact peer-indexed counters) into the
- *  sorted `(subject, version vector)` items the RBSR reconcile runs over —
- *  the exact set the probe hash was computed from, so the client reconciles the
- *  same items it hashed. */
-function syncStateToItems(state: DriveSyncState): Item[] {
-  const items: Item[] = Object.entries(state.resources).map(
-    ([subject, counters]) => {
-      const vv: Record<string, number> = {};
-
-      counters.forEach((c, i) => {
-        if (c !== 0) {
-          vv[state.peers[i]] = c;
-        }
-      });
-
-      return { subject, vv };
-    },
-  );
-
-  items.sort((a, b) => (a.subject < b.subject ? -1 : 1));
-
-  return items;
 }
 
 /** Retire asynchronous work with its socket, even when the underlying signer

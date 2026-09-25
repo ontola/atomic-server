@@ -172,21 +172,56 @@ export const test = base.extend<{
 
 export default test;
 
-/** Isolated UI fixtures do not depend on the public discovery service. */
+/** Isolated UI fixtures do not depend on the public discovery service.
+ *
+ * Matched by PATH, deliberately, and not by host. This used to name
+ * `atomicserver.eu`, which is a copy of a decision made in
+ * `defaultPeerSignalingUrl` (data-browser/src/helpers/browserPeerSync.ts):
+ * that function picks the SaaS portal for the origin the app is served from,
+ * and when #1699 made it answer `atomic.place` for every non-staging origin,
+ * this pattern stopped matching and every context dialled production.
+ *
+ * What made that expensive is that it is silent where it matters. On a box
+ * that can reach the host the socket simply connects, nothing is logged, and
+ * the suite passes while depending on the public service this fixture exists
+ * to remove; only where the host is unreachable does it surface, and then as
+ * a console error failing twelve specs that have nothing to do with peers.
+ * A host list here cannot notice either case, so there is no host list.
+ *
+ * A signaling server running beside the test is a different thing from the
+ * public one and stays connected, so a setup pointing at a local one is not
+ * broken by intercepting everything.
+ */
+function isLocalSignalingHost(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1' ||
+      hostname.endsWith('.localhost')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function installEmptyDiscoveryRoom(context: BrowserContext) {
-  await context.routeWebSocket(
-    /^wss:\/\/(?:staging\.)?atomicserver\.eu\/webrtc-signal$/,
-    socket => {
-      socket.onMessage(message => {
-        if (
-          typeof message === 'string' &&
-          JSON.parse(message).type === 'join'
-        ) {
-          socket.send(
-            JSON.stringify({ type: 'joined', peers: [], iceServers: [] }),
-          );
-        }
-      });
-    },
-  );
+  await context.routeWebSocket(/\/webrtc-signal(\?|$)/, socket => {
+    if (isLocalSignalingHost(socket.url())) {
+      socket.connectToServer();
+
+      return;
+    }
+
+    socket.onMessage(message => {
+      if (typeof message === 'string' && JSON.parse(message).type === 'join') {
+        socket.send(
+          JSON.stringify({ type: 'joined', peers: [], iceServers: [] }),
+        );
+      }
+    });
+  });
 }
