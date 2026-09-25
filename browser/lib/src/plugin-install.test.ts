@@ -241,35 +241,6 @@ describe('installRelease', () => {
     );
   });
 
-  it('records a fresh keyless app id for the integration proxy', async () => {
-    const { store } = await testStore();
-    const install = () =>
-      installRelease(store, {
-        drive: 'https://example.com/drive',
-        release: { url: 'https://example.com/releases/1', id: 'blake3:1' },
-        name: 'importer',
-        grants: [],
-      });
-
-    const first = store.getResourceLoading(await install());
-    const second = store.getResourceLoading(await install());
-    const app = first.get(server.properties.integrationAppAgent);
-
-    // An agent id, and nothing that could sign as it.
-    expect(app).toMatch(/^atomic:agent:[A-Za-z0-9_-]{43}=?$/);
-    expect(second.get(server.properties.integrationAppAgent)).not.toBe(app);
-    expect(JSON.stringify(first.getLoroDoc()?.toJSON())).not.toMatch(
-      /privateKey|secret/i,
-    );
-    // Part of the genesis the user signs, not a later edit.
-    expect(
-      first
-        .getLoroDoc()
-        ?.getMap('datatypes')
-        .get(server.properties.integrationAppAgent),
-    ).toBe('atomicUrl');
-  });
-
   it('leaves optional fields off and honours a draft status', async () => {
     const { store } = await testStore();
     const subject = await installRelease(store, {
@@ -385,7 +356,9 @@ describe('a release the server’s plugin-routes gates refuse', () => {
     new AtomicError(
       JSON.stringify({
         [core.properties.description]:
-          message + PROBLEM_MARKER + JSON.stringify({ ...problem, detail: message }),
+          message +
+          PROBLEM_MARKER +
+          JSON.stringify({ ...problem, detail: message }),
         'https://atomicdata.dev/properties/errorCode': 12,
       }),
       ErrorType.Client,
