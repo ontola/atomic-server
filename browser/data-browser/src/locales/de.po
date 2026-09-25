@@ -2314,6 +2314,7 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "New"
 msgstr ""
@@ -12272,3 +12273,11 @@ msgstr ""
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
 msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental plugins to try out."
+msgstr "Das ist eine neue Funktion. Du siehst experimentelle Plugins zum Ausprobieren."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Plugins will show up here soon for you to try out."
+msgstr "Das ist eine neue Funktion. Hier erscheinen bald Plugins, die du ausprobieren kannst."

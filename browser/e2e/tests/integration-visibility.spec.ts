@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createFromCatalog, before } from './test-utils';
+import { unlockPluginPreview } from './integration-settings-utils';
 
 test.beforeEach(before);
 
@@ -21,7 +22,7 @@ async function enableCatalogEntries(page: Page, shortnames: string[]) {
   });
 }
 
-test('experimental plugins default off and the preference survives reload', async ({
+test('experimental plugins default off, behind an unlock, and the preference survives reload', async ({
   page,
 }) => {
   const catalogRequests: string[] = [];
@@ -59,6 +60,14 @@ test('experimental plugins default off and the preference survives reload', asyn
   const experimentalToggle = page.getByRole('checkbox', {
     name: 'Show experimental plugins',
   });
+  // Plugins are handed out in user-testing sessions: an ordinary user sees
+  // that the feature is new, and no toggle.
+  await expect(
+    page.getByRole('note').filter({ hasText: 'This is a new feature.' }),
+  ).toBeVisible();
+  await expect(experimentalToggle).toHaveCount(0);
+
+  await unlockPluginPreview(page);
   await expect(experimentalToggle).toBeVisible();
   await expect(apiToggle).toHaveCount(0);
   await expect(experimentalToggle).not.toBeChecked();
@@ -110,6 +119,7 @@ test('experimental plugins default off and the preference survives reload', asyn
   await expect(
     page.getByRole('checkbox', { name: 'Show API plugins' }),
   ).toHaveCount(0);
+  // Turning it off does not take the switch away from whoever flipped it.
 
   // An enabled checkbox does not mean the private-drive save has landed, and a
   // reload before it does drops the choice. Wait for the section to settle.
@@ -152,9 +162,10 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('region', { name: 'Your integrations' })
       .getByRole('link', { name: 'New plugin', exact: true }),
   ).toBeVisible();
+  // Ordinary users are not offered the experimental toggle at all.
   await expect(
     page.getByRole('checkbox', { name: 'Show experimental plugins' }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 
 test('visibility toggles are hidden when the catalog enables nothing behind them', async ({
@@ -167,6 +178,17 @@ test('visibility toggles are hidden when the catalog enables nothing behind them
   await expect(
     page.getByRole('checkbox', { name: 'Show API plugins' }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole('checkbox', { name: 'Show experimental plugins' }),
+  ).toHaveCount(0);
+});
+
+test('a user who is not unlocked has no experimental toggle in Settings', async ({
+  page,
+}) => {
+  await page.goto(new URL('/app/settings', page.url()).href);
+  await page.getByPlaceholder('Search settings...').fill('plugins');
+  await expect(page.getByLabel('Plugin catalog URL')).toBeVisible();
   await expect(
     page.getByRole('checkbox', { name: 'Show experimental plugins' }),
   ).toHaveCount(0);

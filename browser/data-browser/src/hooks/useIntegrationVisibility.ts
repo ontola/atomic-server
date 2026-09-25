@@ -14,8 +14,10 @@ import {
   integrationVisibility,
   integrationVisibilitySchema,
   readPendingVisibility,
+  readPreviewUnlocked,
   readVisibilityCache,
   writePendingVisibility,
+  writePreviewUnlocked,
   writeVisibilityCache,
   type IntegrationVisibilityKey,
   type IntegrationVisibilityValues,
@@ -26,7 +28,12 @@ import {
  * locally right away and written to the private drive in the background. That
  * keeps the checkboxes usable while the server is still starting up.
  */
-export function useIntegrationVisibility() {
+export function useIntegrationVisibility({
+  unlockToggle = false,
+}: {
+  /** Unlock the experimental toggle for this agent on this device. */
+  unlockToggle?: boolean;
+} = {}) {
   const store = useStore();
   const [agent] = useCurrentAgent();
   const actor = agent?.subject;
@@ -58,11 +65,14 @@ export function useIntegrationVisibility() {
   const [queue, setQueue] = useState<IntegrationVisibilityValues>(() =>
     readPendingVisibility(actor),
   );
+  /** A facilitator unlocked the experimental toggle on this device. */
+  const [unlocked, setUnlocked] = useState(() => readPreviewUnlocked(actor));
   const flushing = useRef(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     const pending = readPendingVisibility(actor);
+    setUnlocked(readPreviewUnlocked(actor));
     setLocal(readVisibilityCache(actor));
     setUnconfirmed(pendingKeys(pending));
     setQueue(pending);
@@ -179,7 +189,19 @@ export function useIntegrationVisibility() {
   const value = (key: IntegrationVisibilityKey, remote: boolean) =>
     ready && !unconfirmed.includes(key) ? remote : (local[key] ?? remote);
 
+  useEffect(() => {
+    if (!unlockToggle) return;
+    writePreviewUnlocked(actor);
+    setUnlocked(true);
+  }, [unlockToggle, actor]);
+
   const setVisibility = (key: IntegrationVisibilityKey, next: boolean) => {
+    // Whoever flips the switch keeps it, so it can't vanish under their cursor.
+    if (key === 'show-experimental-plugins') {
+      writePreviewUnlocked(actor);
+      setUnlocked(true);
+    }
+
     setLocal(writeVisibilityCache(actor, { [key]: next }));
     writePendingVisibility(actor, {
       ...readPendingVisibility(actor),
@@ -192,12 +214,18 @@ export function useIntegrationVisibility() {
     setError(undefined);
   };
 
+  const showExperimentalPlugins = value(
+    'show-experimental-plugins',
+    stored.showExperimentalPlugins,
+  );
+
   return {
     showApiPlugins: value('show-api-plugins', stored.showApiPlugins),
-    showExperimentalPlugins: value(
-      'show-experimental-plugins',
-      stored.showExperimentalPlugins,
-    ),
+    showExperimentalPlugins,
+    /** Plugins are handed out in user-testing sessions, so ordinary users get
+     * no toggle. It stays for anyone who already opted in, and shows for
+     * anyone who unlocked it on this device. */
+    experimentalToggleVisible: showExperimentalPlugins || unlocked,
     ready,
     saving,
     pending: saving || Object.keys(queue).length > 0,
