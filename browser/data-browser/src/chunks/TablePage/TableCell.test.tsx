@@ -14,6 +14,7 @@ import {
 import { ThemeProvider } from 'styled-components';
 import {
   Datatype,
+  type JSONValue,
   LoroLoader,
   Store,
   StoreContext,
@@ -77,13 +78,20 @@ beforeAll(async () => {
 afterEach(cleanup);
 
 async function renderDateCell(): Promise<Resource> {
+  return renderCell(dayProperty, STORED);
+}
+
+async function renderCell(
+  property: Property,
+  stored: JSONValue,
+): Promise<Resource> {
   const store = new Store({ serverUrl: 'https://example.com' });
   // A `_new:` row stays local, so nothing here reaches for a server.
   const row = await store.newResource({
     subject: '_new:day-row',
     noParent: true,
   });
-  await row.set(DAY, STORED, false);
+  await row.set(property.subject, stored, false);
 
   render(
     <StoreContext value={store}>
@@ -101,7 +109,7 @@ async function renderDateCell(): Promise<Resource> {
               rowIndex={0}
               columnIndex={1}
               subject={row.subject}
-              property={dayProperty}
+              property={property}
             />
           )}
         </FancyTable>
@@ -112,13 +120,13 @@ async function renderDateCell(): Promise<Resource> {
   return row;
 }
 
-function dateCell(): HTMLElement {
+function editedCell(): HTMLElement {
   const cell = document.querySelector(
     '[aria-rowindex="2"] > [aria-colindex="2"]',
   );
 
   if (!cell) {
-    throw new Error('No date cell rendered');
+    throw new Error('No cell rendered');
   }
 
   return cell as HTMLElement;
@@ -126,12 +134,12 @@ function dateCell(): HTMLElement {
 
 /** Select the cell (not editing yet) and type one character on it. */
 async function typeOnSelectedCell(key: string) {
-  fireEvent.mouseDown(dateCell());
-  fireEvent.click(dateCell());
+  fireEvent.mouseDown(editedCell());
+  fireEvent.click(editedCell());
   expect(screen.queryByRole('textbox')).toBeNull();
 
   await act(async () => {
-    fireEvent.keyDown(dateCell(), { key });
+    fireEvent.keyDown(editedCell(), { key });
   });
   await settle();
 }
@@ -163,7 +171,7 @@ describe('typing on a selected date cell (#1822)', () => {
 
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(row.get(DAY)).toBe(STORED);
-    expect(dateCell().textContent).toMatch(/25.*2026|2026.*25/);
+    expect(editedCell().textContent).toMatch(/25.*2026|2026.*25/);
   });
 
   it('stores the date once the typed text is committed', async () => {
@@ -177,5 +185,135 @@ describe('typing on a selected date cell (#1822)', () => {
     });
 
     await waitFor(() => expect(row.get(DAY)).toBe('2026-10-02'));
+  });
+});
+
+const COUNT = 'https://example.com/properties/count';
+const RATIO = 'https://example.com/properties/ratio';
+const AT = 'https://example.com/properties/at';
+
+const countProperty: Property = {
+  subject: COUNT,
+  datatype: Datatype.INTEGER,
+  shortname: 'count',
+  description: '',
+};
+
+const ratioProperty: Property = {
+  subject: RATIO,
+  datatype: Datatype.FLOAT,
+  shortname: 'ratio',
+  description: '',
+};
+
+const atProperty: Property = {
+  subject: AT,
+  datatype: Datatype.TIMESTAMP,
+  shortname: 'at',
+  description: '',
+};
+
+// Local time, so the editor's `datetime-local` text is predictable.
+const STORED_AT = new Date(2026, 8, 25, 14, 30).getTime();
+
+async function pressOnEditor(key: string, target: Element) {
+  await act(async () => {
+    fireEvent.keyDown(target, { key });
+  });
+  await settle();
+}
+
+function timestampInput(): HTMLInputElement {
+  const input = editedCell().querySelector('input[type="datetime-local"]');
+
+  if (!input) {
+    throw new Error('No timestamp editor open');
+  }
+
+  return input as HTMLInputElement;
+}
+
+describe('typing on a selected timestamp cell (#1825)', () => {
+  it('opens the editor on the stored time and stores no digit', async () => {
+    const row = await renderCell(atProperty, STORED_AT);
+
+    await typeOnSelectedCell('5');
+
+    expect(row.get(AT)).toBe(STORED_AT);
+    expect(timestampInput().value).toBe('2026-09-25T14:30');
+  });
+
+  it('keeps the stored time when the edit is abandoned with Escape', async () => {
+    const row = await renderCell(atProperty, STORED_AT);
+
+    await typeOnSelectedCell('5');
+    await pressOnEditor('Escape', timestampInput());
+
+    expect(editedCell().querySelector('input')).toBeNull();
+    expect(row.get(AT)).toBe(STORED_AT);
+  });
+});
+
+describe('typing on a selected number cell (#1825)', () => {
+  it('ignores a letter on an integer cell and opens on the stored value', async () => {
+    const row = await renderCell(countProperty, 42);
+
+    await typeOnSelectedCell('a');
+
+    expect(row.get(COUNT)).toBe(42);
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('42');
+
+    await pressOnEditor('Escape', screen.getByRole('textbox'));
+    expect(row.get(COUNT)).toBe(42);
+  });
+
+  it('seeds an integer cell with a digit, and Enter stores it', async () => {
+    const row = await renderCell(countProperty, 42);
+
+    await typeOnSelectedCell('7');
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input.value).toBe('7');
+    expect(row.get(COUNT)).toBe(42);
+
+    await pressOnEditor('Enter', input);
+    await waitFor(() => expect(row.get(COUNT)).toBe(7));
+  });
+
+  it('keeps the stored integer when a seeded edit is abandoned with Escape', async () => {
+    const row = await renderCell(countProperty, 42);
+
+    await typeOnSelectedCell('7');
+    await pressOnEditor('Escape', screen.getByRole('textbox'));
+
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(row.get(COUNT)).toBe(42);
+  });
+
+  it('stores nothing for a partial number, only the finished one', async () => {
+    const row = await renderCell(ratioProperty, 1.5);
+
+    await typeOnSelectedCell('-');
+
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input.value).toBe('-');
+    expect(row.get(RATIO)).toBe(1.5);
+
+    fireEvent.change(input, { target: { value: '-2.' } });
+    await settle();
+    expect(row.get(RATIO)).toBe(1.5);
+
+    fireEvent.change(input, { target: { value: '-2.25' } });
+    await pressOnEditor('Tab', input);
+    await waitFor(() => expect(row.get(RATIO)).toBe(-2.25));
+  });
+
+  it('ignores a letter on a float cell', async () => {
+    const row = await renderCell(ratioProperty, 1.5);
+
+    await typeOnSelectedCell('x');
+
+    expect(row.get(RATIO)).toBe(1.5);
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('1.5');
   });
 });

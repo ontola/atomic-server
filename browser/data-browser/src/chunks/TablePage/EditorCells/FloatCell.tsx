@@ -11,6 +11,8 @@ import { styled } from 'styled-components';
 import { InputBase } from './InputBase';
 import { ProgressBar } from './ProgressBar';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
+import { useCommittedText } from './useCommittedText';
+import { formatNumberInput, parseFloatText } from './numberInput';
 import { formatNumber } from '../helpers/formatNumber';
 
 import type { JSX } from 'react';
@@ -20,23 +22,19 @@ const { numberFormats } = urls.instances;
 function FloatCellEdit({
   value,
   onChange,
+  seed,
 }: EditCellProps<JSONValue>): JSX.Element {
-  return (
-    <InputBase
-      value={(value as number | undefined) ?? ''}
-      type='number'
-      autoFocus
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-        const num = Number.parseFloat(e.target.value);
+  // Text, not `type='number'`: that one reads a lone `-` or `.` as empty, so
+  // a number could not start with one.
+  const input = useCommittedText({
+    value,
+    onChange,
+    seed,
+    format: formatNumberInput,
+    parse: parseFloatText,
+  });
 
-        if (Number.isNaN(num)) {
-          return onChange(undefined);
-        }
-
-        return onChange(num);
-      }}
-    />
-  );
+  return <InputBase type='text' inputMode='decimal' autoFocus {...input} />;
 }
 
 function FloatCellDisplay({

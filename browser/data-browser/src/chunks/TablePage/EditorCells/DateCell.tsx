@@ -5,7 +5,7 @@ import {
   useResource,
   useString,
 } from '@tomic/react';
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import type { JSX } from 'react';
 import { formatDate } from '@helpers/dates/formatDate';
 import {
   dateInputPlaceholder,
@@ -14,6 +14,7 @@ import {
 } from '@helpers/dates/dateInput';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
+import { UNPARSED, useCommittedText } from './useCommittedText';
 
 /**
  * A text input rather than `<input type="date">`. The native one needed a
@@ -27,59 +28,28 @@ function DateCellEdit({
   onChange,
   seed,
 }: EditCellProps<JSONValue>): JSX.Element {
-  const [initial] = useState(() => formatDateInput(value));
   // Typing on the selected cell opens it with that character, which is not a
   // date yet: it is only text until Enter, Tab or closing commits it.
-  const [text, setText] = useState(seed ?? initial);
-  const invalid = text.trim() !== '' && parseDateInput(text) === undefined;
-
-  // The unmount cleanup must see the last keystroke, not the first render.
-  const latest = useRef({ text, value, onChange });
-
-  useEffect(() => {
-    latest.current = { text, value, onChange };
+  const input = useCommittedText({
+    value,
+    onChange,
+    seed,
+    format: formatDateInput,
+    parse: parseDate,
   });
-
-  const committed = useRef(initial);
-
-  const commit = useCallback(() => {
-    const { text: current, value: stored, onChange: save } = latest.current;
-
-    if (current === committed.current) {
-      return;
-    }
-
-    const date = parseDateInput(current);
-
-    if (date !== undefined && date !== stored) {
-      committed.current = current;
-      save(date);
-    }
-  }, []);
-
-  useEffect(() => () => commit(), [commit]);
 
   return (
     <InputBase
       type='text'
       inputMode='numeric'
-      value={text}
       autoFocus
-      aria-invalid={invalid || undefined}
       placeholder={dateInputPlaceholder()}
-      onChange={e => {
-        setText(e.target.value);
-        latest.current = { ...latest.current, text: e.target.value };
-      }}
-      onKeyDown={e => {
-        // Before the table moves on, so a new row sees its date.
-        if (e.key === 'Enter' || e.key === 'Tab') {
-          commit();
-        }
-      }}
+      {...input}
     />
   );
 }
+
+const parseDate = (text: string) => parseDateInput(text) ?? UNPARSED;
 
 const toDisplayData = (value: JSONValue, format: string) => {
   if (isString(value)) {
