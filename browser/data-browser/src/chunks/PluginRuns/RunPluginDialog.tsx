@@ -1,9 +1,14 @@
 import { ImportCollision } from './ImportCollision';
 import { ImportConflict } from './ImportConflict';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { useStore, type Resource } from '@tomic/react';
+import {
+  useStore,
+  type ApplyReport,
+  type Resource,
+  type RunPlan,
+} from '@tomic/react';
 import { Dialog, useDialog } from '@components/Dialog';
 import { Button } from '@components/Button';
 import { Column, Row } from '@components/Row';
@@ -59,6 +64,12 @@ interface RunPluginDialogProps {
   triggerKind?: 'manual' | 'cron';
   /** Called once a reviewed background verdict has been dealt with. */
   onReviewed?: () => void;
+  /**
+   * Called once when the dialog has closed: with the apply report when the
+   * person applied, and with only the plan (if it got that far) when they
+   * closed it without applying.
+   */
+  onFinished?: (outcome: { report?: ApplyReport; plan?: RunPlan }) => void;
 }
 
 /**
@@ -76,11 +87,24 @@ export function RunPluginDialog({
   verdict,
   triggerKind = 'cron',
   onReviewed,
+  onFinished,
 }: RunPluginDialogProps): React.JSX.Element {
   const store = useStore();
-  const [dialogProps, showDialog, closeDialog] = useDialog({
-    bindShow: onShowChange,
-  });
+  // What the dialog ended with, read when it has closed.
+  const finished = useRef<{ report?: ApplyReport; plan?: RunPlan }>({});
+  const bindShow = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        const outcome = finished.current;
+        finished.current = {};
+        onFinished?.(outcome);
+      }
+
+      onShowChange(open);
+    },
+    [onShowChange, onFinished],
+  );
+  const [dialogProps, showDialog, closeDialog] = useDialog({ bindShow });
   const { subject } = resource;
   const [prepared, setPrepared] = useState<PreparedRun>();
   const [applying, setApplying] = useState(false);
@@ -106,7 +130,10 @@ export function RunPluginDialog({
           subject,
         });
 
-        if (!cancelled) setPrepared(result);
+        if (!cancelled) {
+          finished.current = { plan: result.plan };
+          setPrepared(result);
+        }
 
         return;
       }
@@ -126,7 +153,10 @@ export function RunPluginDialog({
         { plugin: subject, drive },
       );
 
-      if (!cancelled) setPrepared(result);
+      if (!cancelled) {
+        finished.current = { plan: result.plan };
+        setPrepared(result);
+      }
     })().catch((e: Error) => {
       if (cancelled) return;
       toast.error(`Could not run this plugin: ${e.message}`);
@@ -157,6 +187,7 @@ export function RunPluginDialog({
     }
 
     const { report } = result;
+    finished.current = { report, plan: prepared.plan };
     toast.success(
       report.failed > 0
         ? `Applied ${report.applied}, ${report.failed} failed`

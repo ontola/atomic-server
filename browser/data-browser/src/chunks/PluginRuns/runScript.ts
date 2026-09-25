@@ -407,6 +407,14 @@ export function usePluginManifest(source: string | undefined): PluginManifest {
   return manifest;
 }
 
+/** A plugin's manifest, read from its source in a sandboxed worker. */
+export function describePluginSource(source: string): Promise<PluginManifest> {
+  return describePlugin(source, {
+    createWorker: () => new PluginWorker() as never,
+    timeoutMs: 5000,
+  });
+}
+
 export interface PreparedRun {
   schemas?: Record<string, string>;
   /** Exactly what `run()` was given, so preview and run can be compared. */

@@ -35,18 +35,22 @@ window.addEventListener('message', event => {
   }
 });
 
-function send(op, payload) {
+function send(op, payload, { waitForPerson = false } = {}) {
   const id = ++nextId;
 
   return new Promise((resolve, reject) => {
     // A host that never answers would otherwise leave the plugin waiting
     // forever. Allow the host's 30s database-leader / websocket recovery to
-    // finish before abandoning a cold-start query after a page reload.
-    const timer = setTimeout(() => {
-      if (pending.delete(id)) {
-        reject(new Error(`The host did not answer ${op} in time.`));
-      }
-    }, 60000);
+    // finish before abandoning a cold-start query after a page reload. An op
+    // the person answers in host UI (a review) has no deadline: the host
+    // always answers it, with `cancelled` if nothing else.
+    const timer = waitForPerson
+      ? undefined
+      : setTimeout(() => {
+          if (pending.delete(id)) {
+            reject(new Error(`The host did not answer ${op} in time.`));
+          }
+        }, 60000);
     pending.set(id, { resolve, reject, timer });
     window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
   });
@@ -152,6 +156,33 @@ export const store = {
       window.removeEventListener('message', listener);
       void send('unsubscribe', { subject });
     };
+  },
+
+  /**
+   * This app's own importer: the plugin whose Set up created the table this
+   * app is a view of. The host finds it; an app cannot run anyone else's.
+   */
+  importer: {
+    /**
+     * Runs the importer on a file and lets the person review what it
+     * proposes, in the host's own review. Nothing is written unless they
+     * apply it.
+     *
+     * Pass `file: { name, mediaType, text }` for a file the app already has,
+     * or nothing to have the host show its own file picker (this frame is
+     * sandboxed and cannot hand over a picked `File`). Resolves to
+     * `{ status: 'applied', importer, created, updated, destroyed, failed, errors }`,
+     * or `{ status: 'cancelled' | 'nothing', importer }`, or
+     * `{ status: 'blocked', importer, errors }`. Rejects when this app has no
+     * importer (it is not shown as a view of an importer's table).
+     */
+    async run({ file, importer } = {}) {
+      return send(
+        'runImporter',
+        { ...(file ? { file } : {}), ...(importer ? { importer } : {}) },
+        { waitForPerson: true },
+      );
+    },
   },
 
   /**
