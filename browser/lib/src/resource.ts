@@ -22,7 +22,11 @@ import {
 } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
-import { isUnauthorized, RequestCancelledError } from './error.js';
+import {
+  isTransportError,
+  isUnauthorized,
+  RequestCancelledError,
+} from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
@@ -4051,6 +4055,8 @@ export interface Version {
 
 /** Returns true if the error is a network/fetch failure (server unreachable). */
 function isNetworkError(e: unknown): boolean {
+  if (e instanceof Error && isTransportError(e)) return true;
+
   if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
     return true;
   }

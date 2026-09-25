@@ -76,6 +76,11 @@ async function main() {
   const agent = await Agent.fromSecret(AGENT_SECRET!);
   store.setAgent(agent);
 
+  // Commits travel over the WebSocket only; queued ones drain once it opens.
+  if (!(await store.waitForServerConnected(30_000))) {
+    throw new Error(`Could not connect to ${SERVER_URL}`);
+  }
+
   // Public read must be granted at genesis: editing rights on a fetched
   // resource does not work headless yet (no Loro doc → no valid commit).
   const drive = await store.newResource({

@@ -101,9 +101,8 @@ async function tab(agent: Agent, db: FakeClientDb, connected: boolean) {
 
     return created;
   });
-  (
-    store as unknown as { client: { postCommit: typeof postCommitSpy } }
-  ).client.postCommit = postCommitSpy;
+  (store as unknown as { sendCommit: typeof postCommitSpy }).sendCommit =
+    postCommitSpy;
   vi.spyOn(store, 'getProperty').mockRejectedValue(
     new Error('property validation skipped'),
   );

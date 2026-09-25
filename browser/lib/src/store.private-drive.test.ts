@@ -81,9 +81,9 @@ describe('deterministic personal drive', () => {
 
       (
         store as unknown as {
-          client: { postCommit: (c: unknown) => Promise<unknown> };
+          sendCommit: (c: unknown) => Promise<unknown>;
         }
-      ).client.postCommit = async (commit: unknown) => {
+      ).sendCommit = async (commit: unknown) => {
         return { ...(commit as object), id: 'https://example.com/commits/x' };
       };
 

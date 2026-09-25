@@ -6388,41 +6388,35 @@ export class Store {
   }
 
   /**
-   * Prefer the WebSocket transport when the matching origin's WS is open and
-   * authenticated; fall back to HTTP `client.postCommit` otherwise. The WS
-   * round-trip lets the server tag the resulting `DbEvent`s with the
-   * originating connection id and suppress broadcasting them back — closes
-   * the "client gets its own commit as a subscription push" echo. HTTP
-   * commits still work; they just always reach every subscriber.
+   * Sends a commit over the server's WebSocket. There is no HTTP fallback:
+   * every write goes through the durable outbox, which retries after a
+   * transport failure and drains again when the socket reconnects. The WS
+   * round-trip also lets the server tag the resulting `DbEvent`s with the
+   * originating connection and skip echoing them back to this client.
    */
   private async sendCommit(commit: Commit, endpoint: string): Promise<Commit> {
-    const ws = this.getWebSocketForEndpoint(endpoint);
+    const ws =
+      this.getWebSocketForEndpoint(endpoint) ?? this.getDefaultWebSocket();
 
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        return await ws.postCommit(commit);
-      } catch (e) {
-        if (e instanceof RequestCancelledError) throw e;
-        // A server refusal is an answer, not a broken transport. Retrying the
-        // same rejected commit over HTTP only duplicates the failed write.
-        const message = e instanceof Error ? e.message : String(e);
-        const code = e instanceof AtomicError ? e.code : undefined;
+    const isOpen = () =>
+      !!ws && supportsWebSockets() && ws.readyState === WebSocket.OPEN;
 
-        if (
-          isUnrecoverableCommitError(message, code) ||
-          isTerminalCommitError(message, code)
-        ) {
-          throw e;
-        }
-
-        // Fall through to HTTP — a broken WS shouldn't block saves while
-        // the reconnect timer is still backing off. The WS error already
-        // surfaced in console; the HTTP path will produce its own.
-        console.warn('[Store.postCommit] WS path failed, using HTTP:', e);
-      }
+    if (!ws || !isOpen()) {
+      throw new AtomicError(
+        'Not connected to the server; the commit stays queued.',
+        ErrorType.Transport,
+      );
     }
 
-    return this.client.postCommit(commit, endpoint);
+    try {
+      return await ws.postCommit(commit);
+    } catch (e) {
+      // The socket dropped under the request: that is the transport failing,
+      // not the server refusing, so the caller treats it as offline.
+      if (e instanceof RequestCancelledError || isOpen()) throw e;
+      const message = e instanceof Error ? e.message : String(e);
+      throw new AtomicError(message, ErrorType.Transport);
+    }
   }
 
   private getWebSocketForEndpoint(endpoint: string): WSClient | undefined {

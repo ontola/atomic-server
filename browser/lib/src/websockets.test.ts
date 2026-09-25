@@ -29,8 +29,7 @@ import { serializeDeterministically } from './commit.js';
  * connection handshake, against a fake socket: what the client sends on
  * open, how it binds its AUTH proof to the server's CHALLENGE, and how a
  * `COMMIT_OK` (either form) or an `ERROR` settles exactly the pending
- * commit it names. Until 2026-09 this layer was only exercised through the
- * store's HTTP fallback, with `client.postCommit` mocked out.
+ * commit it names.
  */
 class FakeWebSocket {
   public static readonly OPEN = 1;

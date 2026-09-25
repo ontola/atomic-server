@@ -7,11 +7,11 @@ import type { Commit } from './commit.js';
 export interface TestStore {
   store: Store;
   agentDID: string;
-  /** Every commit handed to `client.postCommit`, in order. The signed
+  /** Every commit handed to `Store.sendCommit`, in order. The signed
    *  envelope the server would receive — assert `isGenesis`,
    *  `loroUpdate`, `subject`, count, etc. against these. */
   posted: Commit[];
-  /** `client.postCommit` spy (echoes the commit back with an `id`). */
+  /** `Store.sendCommit` spy (echoes the commit back with an `id`). */
   postCommitSpy: ReturnType<typeof vi.fn>;
 }
 
@@ -22,7 +22,7 @@ export interface TestStore {
  * `syncDirtyResources` plumbing in the tests themselves.
  *
  * - Connected, with a freshly-generated DID agent.
- * - The low-level `client.postCommit` is mocked (so `Store.postCommit`'s
+ * - The low-level `Store.sendCommit` is mocked (so `Store.postCommit`'s
  *   real materialization still runs) to echo each commit with a fake
  *   `id`; captured in `posted`.
  * - `getProperty` is stubbed to reject, so validated `set()` calls skip
@@ -47,9 +47,8 @@ export async function testStore(opts: StoreOpts = {}): Promise<TestStore> {
 
     return created;
   });
-  (
-    store as unknown as { client: { postCommit: typeof postCommitSpy } }
-  ).client.postCommit = postCommitSpy;
+  (store as unknown as { sendCommit: typeof postCommitSpy }).sendCommit =
+    postCommitSpy;
 
   // Skip datatype-validation fetches: `set()` catches a getProperty
   // rejection and proceeds without validating (the same path used when

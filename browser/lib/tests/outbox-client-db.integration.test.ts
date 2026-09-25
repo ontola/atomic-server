@@ -52,9 +52,9 @@ async function tab(agent: Agent, connected: boolean) {
 
   (
     store as unknown as {
-      client: { postCommit: (c: Commit) => Promise<Commit> };
+      sendCommit: (c: Commit) => Promise<Commit>;
     }
-  ).client.postCommit = async (commit: Commit) => {
+  ).sendCommit = async (commit: Commit) => {
     const created = {
       ...commit,
       id: `${SERVER}/commits/${commit.signature}`,

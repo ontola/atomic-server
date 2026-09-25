@@ -31,7 +31,7 @@ The pieces:
 | WebSocket | A browser, phone or CLI and an always-on device (an AtomicServer) | Whenever the client knows the server's address. The default for the web app. | Yes: subscriptions push each applied commit |
 | Iroh (QUIC, peer to peer) | Two devices running `atomic_lib`: phones, desktops, home servers | After scanning a pairing code. Works through NAT via a relay, direct when possible. | Yes, once both sides are in live mode |
 | WebRTC | Up to eight browser tabs, with no server holding the data | From the Sync page in the web app. A signaling service introduces the tabs; data flows tab to tab. | Yes, plus presence and cursors |
-| HTTP `POST /commit` | Any client and an AtomicServer | Fallback when no socket is open, and for scripts | No |
+| HTTP `POST /commit` | Any client and an AtomicServer | Scripts and other HTTP-only clients. The web app and `@tomic/lib` send commits over the WebSocket only, and queue them while it is closed. | No |
 
 A browser tab is the odd one out: it cannot accept incoming connections, so it is never a peer another device can dial.
 It reaches other devices through an always-on device, or through the WebRTC room.

@@ -969,7 +969,8 @@ export class WSClient {
    * The server stores the commit's `connection_id` as the event
    * source and suppresses broadcasts back to this connection — the
    * client never receives its own commit as a subscription push.
-   * HTTP `/commit` remains the fallback when the WS isn't usable.
+   * This is the only commit transport the Store uses; while the socket
+   * is closed, commits wait in the outbox.
    */
   public async postCommit(commit: Commit): Promise<Commit> {
     await this.authenticate();

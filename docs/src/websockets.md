@@ -512,8 +512,10 @@ The payload is the same signed JSON-AD body HTTP `POST /commit` accepts, so
 deterministic signing and commit parsing are unaffected by the transport.
 `created_commit_json_ad` is the created commit resource
 (`did:ad:commit:<sig>`) that `/commit` also returns. On failure the responder
-answers `ERROR` with the matching `request_id` and a classified code. HTTP
-`POST /commit` remains the fallback path.
+answers `ERROR` with the matching `request_id` and a classified code. The
+server still accepts HTTP `POST /commit` from other clients; `@tomic/lib`
+sends commits over the socket only and keeps them in its outbox while the
+socket is closed.
 
 **The echo carries the server's stamp.** The `UPDATE` a commit fans out is
 not the commit's own bytes: it is every op the stored doc gained during the

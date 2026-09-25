@@ -261,8 +261,8 @@ export const before = async (
  * `page.goto(...)` — `addInitScript` runs before any page script,
  * including the SPA bundle that opens the WebSocket.
  *
- * The Store now prefers WS for persisted commits (HTTP `/commit`
- * remains a fallback), so the previous `page.waitForResponse(/commit)`
+ * The Store sends persisted commits over the WS only, so the previous
+ * `page.waitForResponse(/commit)`
  * helper alone misses the happy path and tests time out.
  */
 export async function installCommitWatcher(page: Page) {
@@ -1926,7 +1926,7 @@ type CommitFilter = {
  * Resolve when a commit matching `filter` lands on the server. Watches
  * BOTH transports so the helper survives the WS-first commit path:
  *
- * - HTTP `POST /commit` responses (fallback path, anonymous flows, multi-server)
+ * - HTTP `POST /commit` responses (clients other than the Store)
  * - WS `COMMIT` frames captured by {@link installCommitWatcher} into
  *   `window.__atomicCommitLog`
  *

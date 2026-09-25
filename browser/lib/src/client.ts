@@ -10,16 +10,7 @@ import {
 } from './authentication.js';
 import { AtomicError, ErrorType } from './error.js';
 import { pageRequestSignal } from './page-request-signal.js';
-// Import directly from the modules to avoid a circular dep through `./index.js`
-// — under some bundlers the re-exported binding lands as `undefined` at runtime
-// (TypeError: serializeDeterministically is not a function), which surfaces in
-// the upload-roundtrip integration test.
 import type { Agent } from './agent.js';
-import {
-  type Commit,
-  serializeDeterministically,
-  parseCommitJSON,
-} from './commit.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
 import { extractDidSubject, isAtomicIdentifier } from './subject.js';
@@ -376,40 +367,6 @@ export class Client {
     createdResources.forEach(r => (r.loading = false));
 
     return { resource, createdResources };
-  }
-
-  /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
-  public async postCommit(
-    commit: Commit,
-    /** URL to post to, e.g. https://atomicdata.dev/commit */
-    endpoint: string,
-  ): Promise<Commit> {
-    // `true`: keep the genesis subject in the network body so the server uses
-    // the real (cert-minted) DID instead of re-deriving it from the signature.
-    const serialized = serializeDeterministically({ ...commit }, true);
-    const requestHeaders = new Headers();
-    requestHeaders.set('Content-Type', 'application/ad+json');
-    let response: Response;
-
-    try {
-      response = await this.fetch(endpoint, {
-        headers: requestHeaders,
-        method: 'POST',
-        body: serialized,
-      });
-    } catch (e) {
-      throw new AtomicError(`Posting Commit to ${endpoint} failed: ${e}`);
-    }
-
-    const body = await response.text();
-
-    if (response.status !== 200) {
-      console.error('[postCommit] Server error body:', body);
-      console.error('[postCommit] Commit sent:', serialized);
-      throw new AtomicError(body, ErrorType.Server);
-    }
-
-    return parseCommitJSON(body);
   }
 
   /**
