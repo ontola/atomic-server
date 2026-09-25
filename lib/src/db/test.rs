@@ -3799,3 +3799,80 @@ async fn replica_edits_keep_watched_queries_current() {
         .unwrap();
     assert_eq!(names(&store, &sorted).await, ["c", "z"]);
 }
+
+/// A replica row written from JSON-AD keeps the properties this store has no
+/// definition for, and empty arrays, when the caller hands over the snapshot.
+/// The parser skips a property it cannot type, and the row
+/// `getResourceWithSnapshot` serves must still say what the document says.
+#[tokio::test]
+#[timeout(60000)]
+async fn replica_row_keeps_unresolvable_props_from_snapshot() {
+    let store = Db::init_temp("replica_row_unresolvable").await.unwrap();
+    let subject =
+        "did:ad:rowUNKNOWNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    // A schema term of some drive this store has never seen.
+    let unknown =
+        "did:ad:propUNKNOWNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    // Emptied after having had a member.
+    let emptied =
+        "did:ad:propEMPTIEDaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut authored = crate::Resource::new(subject.into());
+    authored
+        .set_unsafe(urls::NAME.into(), Value::String("automation".into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::REQUIRES.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    authored
+        .set_unsafe(unknown.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    let doc = authored.build_state_doc().unwrap();
+    doc.push_to_loro_list(emptied, &serde_json::json!("https://example.com/member"))
+        .unwrap();
+    doc.commit();
+    doc.clear_loro_list(emptied).unwrap();
+    doc.commit();
+    let snapshot = doc.export_snapshot();
+    let json_ad = serde_json::json!({
+        "@id": subject,
+        urls::NAME: "automation",
+        urls::REQUIRES: [],
+        unknown: [],
+        emptied: [],
+    })
+    .to_string();
+
+    let mut parsed = crate::parse::parse_json_ad_resource(
+        &json_ad,
+        &store,
+        &crate::parse::ParseOpts {
+            skip_unknown_props: true,
+            save: crate::parse::SaveOpts::DontSave,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    // The premise: the parser drops what it cannot type.
+    assert!(parsed.get(unknown).is_err());
+
+    let keys: Vec<String> = [urls::NAME, urls::REQUIRES, unknown, emptied]
+        .iter()
+        .map(|k| k.to_string())
+        .collect();
+    assert_eq!(parsed.restore_props_from_snapshot(&keys, &snapshot), 2);
+    store
+        .persist_replicated_resource_with_snapshot(&parsed, snapshot)
+        .await
+        .unwrap();
+
+    let row = store.get_resource_shallow(&subject.into()).unwrap();
+    assert_eq!(row.get(urls::NAME).unwrap().to_string(), "automation");
+    for prop in [urls::REQUIRES, unknown, emptied] {
+        match row.get(prop) {
+            Ok(Value::ResourceArray(items)) => assert!(items.is_empty(), "{prop}"),
+            other => panic!("{prop} should be an empty array, got {other:?}"),
+        }
+    }
+}

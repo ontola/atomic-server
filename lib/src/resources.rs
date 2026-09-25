@@ -13,7 +13,7 @@ use crate::{
     Atom, Storelike, Subject,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 use ulid::Ulid;
 
@@ -125,6 +125,42 @@ impl Resource {
     pub fn genesis_cert_b64_from_loro_update(update: &[u8]) -> Option<String> {
         let propvals = Self::propvals_from_loro_update(update)?;
         propvals.get(urls::GENESIS).map(|v| v.to_string())
+    }
+
+    /// Take the value `snapshot` holds for each of `props` that this resource
+    /// has no value for. Returns how many were added.
+    ///
+    /// For propvals parsed with `skip_unknown_props`: a property whose
+    /// definition the store cannot resolve is dropped by the parser, while the
+    /// Loro snapshot next to it still holds the value. Without this the stored
+    /// row silently loses it, and a reader of that row sees less than the
+    /// document says. Only the named properties are taken, so a caller that
+    /// left one out on purpose keeps it out.
+    pub fn restore_props_from_snapshot(&mut self, props: &[String], snapshot: &[u8]) -> usize {
+        let present: HashSet<String> = self
+            .propvals
+            .keys()
+            .map(|key| crate::identifiers::canonicalize_scheme(key))
+            .collect();
+        let wanted: HashSet<String> = props
+            .iter()
+            .map(|prop| crate::identifiers::canonicalize_scheme(prop))
+            .filter(|prop| !present.contains(prop))
+            .collect();
+        if wanted.is_empty() {
+            return 0;
+        }
+        let Some(from_snapshot) = Self::propvals_from_loro_update(snapshot) else {
+            return 0;
+        };
+        let mut added = 0;
+        for (prop, value) in from_snapshot {
+            if wanted.contains(&crate::identifiers::canonicalize_scheme(&prop)) {
+                self.propvals.insert(prop, value);
+                added += 1;
+            }
+        }
+        added
     }
 
     /// The propvals a Loro update materializes to, or `None` when it does not
