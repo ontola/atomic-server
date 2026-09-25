@@ -854,6 +854,7 @@ export class Store {
     // post-init, post-init-error) to refresh sync status. Only the
     // first call introduces a new worker; the others just want
     // `emitSyncStatus`.
+    const attached = !!clientDb && clientDb !== this.clientDb;
     this.clientDb = clientDb;
 
     // Release fetches that started before the attach and would otherwise be
@@ -861,6 +862,10 @@ export class Store {
     if (clientDb) {
       for (const waiter of [...this.clientDbWaiters]) waiter();
     }
+
+    // Everything the server delivered while nothing was attached is in memory
+    // only; this is the first moment it can be written.
+    if (attached) this.flushPendingClientDbWrites();
 
     this.emitSyncStatus();
   }
@@ -2307,17 +2312,56 @@ export class Store {
     // resource. Skip for new/loading/incomplete/unsynced — those are
     // persisted by the save path once they are real, or are
     // placeholders.
+    if (this.clientDb) {
+      this.writeToClientDb(emitResource);
+    } else if (this.clientDbExpected && isPersistableState(emitResource)) {
+      // No local database attached YET. `initClientDb` detaches synchronously
+      // when the identity changes and re-attaches only once that agent's own
+      // database has been opened, which spans seconds on a cold load — so a
+      // sign-in has a window where every resource the server delivers is held
+      // in memory and written nowhere.
+      //
+      // Nothing re-adds a resource that was applied once, so that used to be
+      // permanent: a drive sync landing in the window left the resources in
+      // memory and out of the local index, `finishDriveSync` vouched for the
+      // drive anyway, and `Collection.finishLocalDbPage` then treated the empty
+      // index as authoritative and never asked the server. A second device
+      // could open a drive and show none of its contents for the whole
+      // session. Remember them and write them when the database arrives.
+      this.pendingClientDbWrites.add(emitResource.subject);
+    }
+
+    this.notify(emitResource);
+  }
+
+  /** Subjects whose state arrived while no local database was attached, to be
+   *  written once one is. Bounded by the attach window, which is one cold load
+   *  or one identity change. */
+  private pendingClientDbWrites = new Set<string>();
+
+  /** Write what arrived while the local database was detached. A different
+   *  worker is a different database file, so what {@link lastPersistedStamp}
+   *  says was already written does not apply to it. */
+  private flushPendingClientDbWrites(): void {
+    if (this.pendingClientDbWrites.size === 0) return;
+
+    const subjects = [...this.pendingClientDbWrites];
+    this.pendingClientDbWrites.clear();
+
+    for (const subject of subjects) {
+      this.lastPersistedStamp.delete(subject);
+      const resource = this._resources.get(
+        this.aliases.get(subject) ?? subject,
+      );
+
+      if (resource) this.writeToClientDb(resource);
+    }
+  }
+
+  /** Persist a resource's current state to the local database, if there is one
+   *  and this state is worth writing. */
+  private writeToClientDb(resource: Resource): void {
     if (
-      this.clientDb &&
-      // A Collection is a derived query result, not a record: a page is either
-      // assembled from `queryLocalDb` over the index or fetched from the
-      // server, and neither ever reads it back out of the local database.
-      // Writing it there costs a full index rebuild and an fsync for something
-      // nothing reads — and because collections are deliberately exempt from
-      // the `lastCommit` skip above, they are re-added (and so re-written) on
-      // every refresh. Building one table from a template wrote a single
-      // collection page seven times.
-      !emitResource.hasClasses(collections.classes.collection) &&
       // Skip persisting when the worker has a known init failure (e.g.
       // OPFS leader-election couldn't steal the lock — Firefox doesn't
       // support `navigator.locks.request({ steal: true })`). Without this
@@ -2325,66 +2369,68 @@ export class Store {
       // that fails with the same error, flooding the console with one
       // stack trace per resource. The worker itself has already warned
       // once when init failed — that single line is the actionable signal.
-      !this.clientDb.initError &&
-      !emitResource.loading &&
-      !emitResource.new &&
-      !emitResource.hasPendingCommits &&
-      !emitResource.get(core.properties.incomplete)
+      !this.clientDb ||
+      this.clientDb.initError ||
+      !isPersistableState(resource)
     ) {
-      try {
-        const jsonAd = emitResource.toClientDbJsonAd();
-
-        if (jsonAd) {
-          const doc = emitResource.getLoroDoc?.();
-          // A snapshot export commits pending ops, untagged; keep a
-          // mid-edit persist from stripping the edit's history token.
-          emitResource.sealPendingEdits();
-          const snapshot = doc?.export({ mode: 'snapshot' });
-
-          // One local-DB write costs ~9ms, three quarters of it rebuilding
-          // this resource's index entries. `addResource` runs on every merge
-          // and every notify, so the same unchanged state was being written
-          // repeatedly — a table built from a template did 64 writes for 15
-          // resources. Hash what we are about to write and skip the write when
-          // it matches the last one for this subject.
-          //
-          // Deliberately a content hash rather than `lastCommit`: local edits
-          // and merges change state without advancing it. The hash covers the
-          // Loro snapshot too, so a CRDT-only change still writes. A collision
-          // would skip one cache write, which the server copy repairs — this
-          // is a cache, not the record.
-          const stamp = hashPersistedState(jsonAd, snapshot);
-
-          if (this.lastPersistedStamp.get(emitResource.subject) !== stamp) {
-            this.lastPersistedStamp.set(emitResource.subject, stamp);
-            this.clientDb
-              .putResourceWithSnapshot(emitResource.subject, jsonAd, snapshot)
-              .catch(e => {
-                // Failed write: drop the stamp so the next attempt is not
-                // skipped as a duplicate of a write that never landed.
-                this.lastPersistedStamp.delete(emitResource.subject);
-
-                // A follower's in-flight write is deliberately cancelled on
-                // leader handoff. The stamp is cleared above for a later
-                // retry; this is not a storage fault to report as an error.
-                if (!(e instanceof RequestCancelledError)) {
-                  console.error(
-                    `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
-                    e,
-                  );
-                }
-              });
-          }
-        }
-      } catch (e) {
-        console.error(
-          `[ClientDb] put serialization threw for ${emitResource.subject.slice(0, 60)}:`,
-          e,
-        );
-      }
+      return;
     }
 
-    this.notify(emitResource);
+    // Captured, because the write is reported asynchronously and the worker
+    // can be swapped out from under it by an identity change.
+    const clientDb = this.clientDb;
+
+    try {
+      const jsonAd = resource.toClientDbJsonAd();
+
+      if (!jsonAd) return;
+
+      const doc = resource.getLoroDoc?.();
+      // A snapshot export commits pending ops, untagged; keep a mid-edit
+      // persist from stripping the edit's history token.
+      resource.sealPendingEdits();
+      const snapshot = doc?.export({ mode: 'snapshot' });
+
+      // One local-DB write costs ~9ms, three quarters of it rebuilding this
+      // resource's index entries. `addResource` runs on every merge and every
+      // notify, so the same unchanged state was being written repeatedly — a
+      // table built from a template did 64 writes for 15 resources. Hash what
+      // we are about to write and skip the write when it matches the last one
+      // for this subject.
+      //
+      // Deliberately a content hash rather than `lastCommit`: local edits and
+      // merges change state without advancing it. The hash covers the Loro
+      // snapshot too, so a CRDT-only change still writes. A collision would
+      // skip one cache write, which the server copy repairs — this is a cache,
+      // not the record.
+      const stamp = hashPersistedState(jsonAd, snapshot);
+
+      if (this.lastPersistedStamp.get(resource.subject) === stamp) return;
+
+      this.lastPersistedStamp.set(resource.subject, stamp);
+      clientDb
+        .putResourceWithSnapshot(resource.subject, jsonAd, snapshot)
+        .catch(e => {
+          // Failed write: drop the stamp so the next attempt is not skipped as
+          // a duplicate of a write that never landed.
+          this.lastPersistedStamp.delete(resource.subject);
+
+          // A follower's in-flight write is deliberately cancelled on leader
+          // handoff. The stamp is cleared above for a later retry; this is not
+          // a storage fault to report as an error.
+          if (!(e instanceof RequestCancelledError)) {
+            console.error(
+              `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
+              e,
+            );
+          }
+        });
+    } catch (e) {
+      console.error(
+        `[ClientDb] put serialization threw for ${resource.subject.slice(0, 60)}:`,
+        e,
+      );
+    }
   }
 
   /**
@@ -6786,6 +6832,28 @@ export interface FetchOpts {
  * Not a security hash. The failure mode of a collision is one skipped cache
  * write, repaired by the next real change or by re-fetching from the server.
  */
+/** Whether a resource's current state belongs in the local database at all.
+ *
+ *  A Collection is a derived query result, not a record: a page is either
+ *  assembled from `queryLocalDb` over the index or fetched from the server, and
+ *  neither ever reads it back out of the local database. Writing it there costs
+ *  a full index rebuild and an fsync for something nothing reads — and because
+ *  collections are deliberately exempt from `addResource`'s `lastCommit` skip,
+ *  they are re-added (and so re-written) on every refresh. Building one table
+ *  from a template wrote a single collection page seven times.
+ *
+ *  The rest are placeholders or half-formed state: those are persisted by the
+ *  save path once they are real. */
+function isPersistableState(resource: Resource): boolean {
+  return (
+    !resource.hasClasses(collections.classes.collection) &&
+    !resource.loading &&
+    !resource.new &&
+    !resource.hasPendingCommits &&
+    !resource.get(core.properties.incomplete)
+  );
+}
+
 function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
