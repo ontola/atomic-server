@@ -25,9 +25,20 @@ async function makeAgent(): Promise<Agent> {
   );
 }
 
+/** A term the way its host serves it: GitHub Pages labels the extensionless
+ *  JSON-AD files `application/octet-stream`; the own server's proxy answers
+ *  `application/ad+json`. */
 function termResponse(id = TERM): Response {
   return new Response(
     JSON.stringify({ '@id': id, [core.properties.name]: 'Draft' }),
+    {
+      headers: {
+        'content-type': id.startsWith(SERVER)
+          ? 'application/ad+json'
+          : 'application/octet-stream',
+        'access-control-allow-origin': '*',
+      },
+    },
   );
 }
 
@@ -180,5 +191,60 @@ describe('falling back to the own server for foreign vocabulary', () => {
     await store.fetchResourceFromServer(own);
 
     expect(calls).toEqual([own]);
+  });
+});
+
+/**
+ * The client goes by the body, not the Content-Type: GitHub Pages serves the
+ * shared ontology as `application/octet-stream`, and that has to parse. A
+ * body that is not JSON-AD is still refused, however it is labelled.
+ */
+describe('content types of an external vocabulary answer', () => {
+  const HTML = '<!DOCTYPE html><html><body>404: not here</body></html>';
+
+  async function fetchWith(body: BodyInit, contentType?: string) {
+    // `new Response(string)` sets text/plain itself; drop it for "missing".
+    const response = new Response(body);
+
+    if (contentType === undefined) {
+      response.headers.delete('content-type');
+    } else {
+      response.headers.set('content-type', contentType);
+    }
+
+    const client = new Client(async () => response);
+
+    return (await client.fetchResourceHTTP(TERM)).resource;
+  }
+
+  const doc = JSON.stringify({ '@id': TERM, [core.properties.name]: 'Draft' });
+
+  it.each([
+    ['application/octet-stream'],
+    ['text/plain; charset=utf-8'],
+    [undefined],
+  ])('accepts JSON-AD served as %s', async contentType => {
+    const resource = await fetchWith(doc, contentType);
+
+    expect(resource.error).toBeUndefined();
+    expect(resource.subject).toBe(TERM);
+    expect(resource.get(core.properties.name)).toBe('Draft');
+  });
+
+  it.each([
+    ['HTML as application/octet-stream', HTML, 'application/octet-stream'],
+    ['HTML as text/html', HTML, 'text/html; charset=utf-8'],
+    [
+      'binary as application/octet-stream',
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]),
+      'application/octet-stream',
+    ],
+  ])('refuses %s', async (_label, body, contentType) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const resource = await fetchWith(body, contentType);
+
+    expect(resource.error).toBeDefined();
+    expect(resource.get(core.properties.name)).toBeUndefined();
   });
 });
