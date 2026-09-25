@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fixed opening the app while signed in to atomic.place sending you to sign
+  in again, and signing in with your secret then signing you out of
+  atomic.place. A backup saved before the `did:ad:` → `atomic:` rename names
+  your agent in the old spelling, and the check that compares it with the
+  agent on this device compared the text, so one agent looked like two. The
+  gate then switched identities, and the secret sign-in ended the account
+  session as if the secret belonged to someone else.
 - A private workspace the app has to recreate is titled after whoever it
   belongs to, like the one onboarding and an accepted invitation already
   make. A returning account on a second device, and a sign-in whose cloud

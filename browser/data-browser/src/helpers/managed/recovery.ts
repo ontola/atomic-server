@@ -58,9 +58,12 @@ export type RecoverySecret = {
 
 /**
  * Backups saved before the `did:ad:` → `atomic:` rename carry the legacy
- * spelling of the same agent, so compare identities, not strings.
+ * spelling of the same agent, and so do secrets exported before it, so
+ * compare identities, not strings. Every check of "is this the account's
+ * agent" goes through here: a strict comparison makes one agent look like
+ * two, and the reconcile gate then switches identities and signs out.
  */
-function sameAgent(a: string, b: string): boolean {
+export function sameAgent(a: string, b: string): boolean {
   return canonicalIdentifier(a) === canonicalIdentifier(b);
 }
 

@@ -30,6 +30,7 @@ import {
   PrfUnsupportedError,
   readCachedBackups,
   revealSecretFromBackup,
+  sameAgent,
   saveRecoverySecret,
   storeCachedRecoverySecret,
   type RecoverySecret,
@@ -172,7 +173,7 @@ export function AccountRecoveryCard({
 
       if (
         fromServer &&
-        (!agentSubject || fromServer.agent_subject === agentSubject)
+        (!agentSubject || sameAgent(fromServer.agent_subject, agentSubject))
       ) {
         setBackup({ phase: 'ready', secret: fromServer, onServer: true });
 
@@ -181,7 +182,7 @@ export function AccountRecoveryCard({
 
       const cached = readCachedBackups();
       const mine = agentSubject
-        ? cached.find(entry => entry.agent_subject === agentSubject)
+        ? cached.find(entry => sameAgent(entry.agent_subject, agentSubject))
         : cached[cached.length - 1];
 
       setBackup(
