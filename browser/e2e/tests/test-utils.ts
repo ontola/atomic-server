@@ -421,6 +421,26 @@ export async function setTitle(page: Page, title: string) {
   // rename has been committed to the server"; what the server (or its
   // plugins) does next is not setTitle's concern.
   await commitPosted;
+
+  // The waiter above matches ANY commit for this subject, and `useValue`'s
+  // save is debounced, so under load the debounce can fire part-way through
+  // the typing and that first commit satisfies it. `setTitle` then returned
+  // with the rename half done, and a caller that reloaded straight after
+  // persisted the prefix: a title ending `1790210871258` was stored as
+  // `Private home canary 17902`, stable across 23 reads, so it was saved
+  // truncated rather than rendered late.
+  //
+  // Waiting for quiescence here closes that. The objection recorded above —
+  // that `pendingDirtyCount === 0` is trivially true before the debounce
+  // fires — is a statement about checking it BEFORE any commit; by this point
+  // one has posted. Any characters still unsaved are either in the outbox, in
+  // an in-flight `save()`, or in an armed debounce timer, and
+  // `pendingDirtyCount` counts all three (`_scheduledSaves` is incremented by
+  // `startScheduledSave`), so a partial rename cannot read as settled.
+  //
+  // Matching the commit BODY against the title instead cannot work: a rename
+  // travels as a base64 `loroUpdate`, never as a literal substring.
+  await waitForSynced(page);
 }
 
 /** Wait for either an HTTP `/commit` POST or an acknowledged WS COMMIT frame whose
