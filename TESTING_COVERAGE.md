@@ -256,6 +256,22 @@ A wasip2 class extender is refused at the integration proxy, by URL and by
 `atomic-proxy:`, even when its manifest lists the proxy origin (#1700, answer
 5): `host_core::tests::a_class_extender_is_refused_at_the_proxy_and_told_why`.
 
+Version 2 required on state-changing endpoints, with replay protection
+(#1700, piece 6 and answer 7): `app_endpoints_test::state_changing_routes_refuse_v1_and_cookies_and_accept_v2`
+sends every route on the list (including all 13 `/integration-action*`
+routes and the `DELETE`s) a v1 signature, a session cookie and a v2
+signature through the real router and middleware; `a_replayed_v2_request_is_refused`
+replays a captured v2 request byte for byte; `reads_on_v2_routes_still_accept_v1`
+covers `GET`. `replay_cache::tests` cover the window edges, a proof signed
+ahead of the server clock, and a full cache. `server/tests/it/iroh_pairing.rs`
+posts `/iroh-sync` with v2 between two real servers. The browser callers are
+covered with mocked signing (`plugin-server`, `plugin-install`,
+`plugin-connection`, `integration-actions`, `hostingClient`, `hostStore`,
+`managedServer`, `pairing`), and `authentication-v2.test.ts` verifies what
+`signedRequestInit` produces. Not covered: a real browser against a real
+server for these writes (the Playwright suite exercises some of them
+end-to-end), and a restart forgetting the cache.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for

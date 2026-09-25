@@ -1,7 +1,9 @@
 //! Contains routing logic, sends the client to the correct handler.
 //! We should try to minimize what happens in here, since most logic should be defined in Atomic Data - not in the server itself.
 
+use crate::require_v2::require_v2;
 use crate::{content_types, handlers};
+use actix_web::middleware::from_fn;
 use actix_web::{
     guard,
     http::{header, Method},
@@ -135,7 +137,7 @@ async fn iroh_sync_handler(
     // The client signs the full request URL; rebuild it exactly.
     let origin = crate::context::RequestContext::new(&req, &appstate).origin;
     let full_url = format!("{}{}", origin, req.uri());
-    let for_agent = crate::helpers::get_client_agent(req.headers(), &appstate, &full_url).await?;
+    let for_agent = crate::helpers::get_client_agent_of(&req, &appstate, &full_url).await?;
     crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     if matches!(for_agent, atomic_lib::agents::ForAgent::Public) {
         return Err(atomic_lib::errors::AtomicError::unauthorized(
@@ -203,102 +205,128 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     app.service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
         .service(
             web::resource("/plugin-view-token")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_ui::handle_mint_view_token)),
         )
         .service(
             web::resource("/plugin-release-pin")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_release::pin)),
         )
         .service(
             web::resource("/plugin-external-read")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::read)),
         )
         .service(web::resource("/plugin-list").to(handlers::plugin_ui::handle_plugin_list))
         .service(
             web::resource("/integration-action-history-compact")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::compact_history)),
         )
         .service(
             web::resource("/integration-action-consumers")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::consumers)),
         )
         .service(
             web::resource("/integration-action-consumer-abandon")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::abandon_consumer)),
         )
         .service(
             web::resource("/integration-action-history")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::history)),
         )
         .service(
             web::resource("/integration-action-cancel")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::cancel)),
         )
         .service(
             web::resource("/integration-action-grant")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::grant)),
         )
         .service(
             web::resource("/integration-action-grants")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::grants)),
         )
         .service(
             web::resource("/integration-action-recovery-inspect")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::inspect_recovery)),
         )
         .service(
             web::resource("/integration-action-recovery-confirm")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::confirm_recovery)),
         )
         .service(
             web::resource("/integration-actions")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::list)),
         )
         .service(
             web::resource("/integration-action-call")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::invoke)),
         )
         .service(
             web::resource("/integration-action-proposals")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::proposals)),
         )
         .service(
             web::resource("/integration-action-approve")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::approve)),
         )
         .service(
             web::resource("/plugin-sync-preview")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_sync::preview)),
         )
         .service(
-            web::resource("/plugin-sync-apply").route(web::post().to(handlers::plugin_sync::apply)),
+            web::resource("/plugin-sync-apply")
+                .wrap(from_fn(require_v2))
+                .route(web::post().to(handlers::plugin_sync::apply)),
         )
         .service(
             web::resource("/plugin-sync-schedule")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_sync::schedule)),
         )
         .service(
             web::resource("/plugin-sync-status")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_sync::status)),
         )
         .service(
             web::resource("/plugin-connection-state")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_connection::read)),
         )
         .service(
             web::resource("/plugin-connection-checkpoint")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_connection::checkpoint)),
         )
         .service(
             web::resource("/plugin-external-status")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::status)),
         )
         .service(
             web::resource("/plugin-external-confirm")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::confirm)),
         )
         .service(
             web::resource("/plugin-external-apply")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::apply)),
         )
         .service(
@@ -315,36 +343,44 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
         )
         .service(
             web::resource("/plugin-release")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_release::publish)),
         )
         .service(
             web::resource("/plugin-release-package")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_release::publish_package)),
         )
         .service(
             web::resource("/plugin-run")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_run::handle_plugin_run)),
         )
         .service(
             web::resource("/plugin-schedule")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_schedule::handle_set_schedule))
                 .route(web::get().to(handlers::plugin_schedule::handle_get_schedule))
                 .route(web::delete().to(handlers::plugin_schedule::handle_clear_pending)),
         )
         .service(
             web::resource("/plugin-resume")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_schedule::handle_resume)),
         )
         .service(
             web::resource("/plugin-auto-apply")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_schedule::handle_set_auto_apply)),
         )
         .service(
             web::resource("/app-write")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::app_write::handle_app_write)),
         )
         .service(
             web::resource("/plugin-trigger")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))
                 .route(web::get().to(handlers::plugin_trigger::handle_get_trigger)),
         );
@@ -370,6 +406,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(
         web::resource("/bind-drive")
+            .wrap(from_fn(require_v2))
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),
     )
@@ -381,20 +418,27 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(
         web::resource("/forget-peer")
+            .wrap(from_fn(require_v2))
             .guard(guard::Method(Method::POST))
             .to(handlers::forget_peer::handle_forget_peer),
     )
-    .service(web::resource("/iroh-sync").route(web::post().to(iroh_sync_handler)))
+    .service(
+        web::resource("/iroh-sync")
+            .wrap(from_fn(require_v2))
+            .route(web::post().to(iroh_sync_handler)),
+    )
     .service(web::resource("/export").to(handlers::export::handle_export))
     .configure(configure_wasm_plugin_routes)
     .service(
         web::resource("/app-agent")
+            .wrap(from_fn(require_v2))
             .route(web::post().to(handlers::app_agent::handle_set_app_agent))
             .route(web::get().to(handlers::app_agent::handle_get_app_agent))
             .route(web::delete().to(handlers::app_agent::handle_delete_app_agent)),
     )
     .service(
         web::resource("/plugin-secret")
+            .wrap(from_fn(require_v2))
             .route(web::post().to(handlers::plugin_secret::handle_set_secret))
             .route(web::get().to(handlers::plugin_secret::handle_list_secrets))
             .route(web::delete().to(handlers::plugin_secret::handle_delete_secret)),

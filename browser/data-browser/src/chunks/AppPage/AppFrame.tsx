@@ -2,7 +2,11 @@ import { isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
-import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
+import {
+  errorMessageFromResponse,
+  signedRequestInit,
+  useStore,
+} from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import { handleRequest, isHostRequest, type HostReply } from './hostStore';
@@ -455,12 +459,14 @@ async function mintViewToken(
   const url = `${store.getServerUrl()}/plugin-view-token`;
 
   try {
-    const headers = await signRequest(url, agent, {});
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ drive, plugin }),
-    });
+    const response = await fetch(
+      url,
+      await signedRequestInit(url, agent, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ drive, plugin }),
+      }),
+    );
 
     if (!response.ok) {
       return {

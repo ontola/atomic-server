@@ -256,6 +256,27 @@ pub async fn get_client_agent(
     get_client_agent_checked(headers, None, appstate, requested_subject).await
 }
 
+/// The agent this request is from: the one [crate::require_v2::require_v2]
+/// verified, on a route that requires a version 2 signature, and otherwise
+/// what [get_client_agent] reads from the headers or cookie.
+pub async fn get_client_agent_of(
+    req: &actix_web::HttpRequest,
+    appstate: &AppState,
+    requested_subject: &str,
+) -> AtomicServerResult<ForAgent> {
+    if let Some(verified) = verified_agent(req) {
+        return Ok(verified);
+    }
+    get_client_agent(req.headers(), appstate, requested_subject).await
+}
+
+fn verified_agent(req: &actix_web::HttpRequest) -> Option<ForAgent> {
+    use actix_web::HttpMessage;
+    req.extensions()
+        .get::<crate::require_v2::VerifiedAgent>()
+        .map(|verified| verified.0.clone())
+}
+
 /// [get_client_agent] for a handler that knows the body it acts on, so it
 /// also accepts a version 2 request signature (`x-atomic-signature-version:
 /// 2`, ontola/atomic-plugins#54), which covers the method and that body.
@@ -267,6 +288,9 @@ pub async fn get_client_agent_for_request(
     appstate: &AppState,
     requested_subject: &str,
 ) -> AtomicServerResult<ForAgent> {
+    if let Some(verified) = verified_agent(req) {
+        return Ok(verified);
+    }
     let request = SignedRequest {
         method: req.method().as_str(),
         body,

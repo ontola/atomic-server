@@ -1,5 +1,10 @@
 // @wc-ignore-file
-import { signRequest, errorMessageFromResponse, type Store } from '@tomic/lib';
+import {
+  signRequest,
+  signedRequestInit,
+  errorMessageFromResponse,
+  type Store,
+} from '@tomic/lib';
 
 export interface WebsitePackage {
   version: 1;
@@ -33,13 +38,26 @@ export async function hostingRequest<T>(
   const url = new URL(`/website-hosting${path}`, store.getServerUrl());
   url.searchParams.set('project', project);
   url.searchParams.set('drive', drive);
-  const headers = await signRequest(url.toString(), agent, {});
+  // Reads sign with version 1; a POST here requires version 2, over exactly
+  // the JSON sent.
+  const signed =
+    body === undefined
+      ? {
+          method: 'GET',
+          headers: {
+            ...(await signRequest(url.toString(), agent, {})),
+            'Content-Type': 'application/json',
+          },
+        }
+      : await signedRequestInit(url.toString(), agent, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
   const result = await fetch(url, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
+    ...signed,
     credentials: 'omit',
     redirect: 'error',
-    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!result.ok)
     throw new Error(

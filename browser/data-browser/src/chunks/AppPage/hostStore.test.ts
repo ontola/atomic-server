@@ -9,7 +9,19 @@ vi.mock('@tomic/react', async () => {
 
   // Signing needs a real key and a real agent; what these tests are about is
   // which requests leave and which are refused before they do.
-  return { ...actual, signRequest: async () => ({}) };
+  return {
+    ...actual,
+    signRequest: async () => ({}),
+    signedRequestInit: async (
+      _url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: { ...request.headers },
+      body: request.body,
+    }),
+  };
 });
 
 const APP = 'did:ad:app';

@@ -1,8 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { hostingRequest, sameWebsiteOutput } from './hostingClient';
-import { signRequest, type Store } from '@tomic/lib';
+import { signedRequestInit, type Store } from '@tomic/lib';
 vi.mock('@tomic/lib', () => ({
   signRequest: vi.fn(async () => ({ 'x-atomic-signature': 'proof' })),
+  signedRequestInit: vi.fn(
+    async (
+      _url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: { ...request.headers, 'x-atomic-signature': 'proof' },
+      body: request.body,
+    }),
+  ),
   errorMessageFromResponse: (body: string) => body,
 }));
 afterEach(() => {
@@ -28,10 +39,15 @@ describe('hosting control requests', () => {
     const [url, options] = fetch.mock.calls[0] as [URL, RequestInit];
     expect(url.origin).toBe('https://atomic.example');
     expect(url.searchParams.get('drive')).toBe('did:ad:drive');
-    expect(signRequest).toHaveBeenCalledWith(
+    // A POST here requires a version 2 signature over exactly the body sent.
+    expect(signedRequestInit).toHaveBeenCalledWith(
       url.toString(),
       store.getAgent(),
-      {},
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: options.body,
+      },
     );
     expect(options.credentials).toBe('omit');
     expect(options.redirect).toBe('error');

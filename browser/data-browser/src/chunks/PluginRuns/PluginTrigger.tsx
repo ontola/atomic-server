@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { signRequest, useStore } from '@tomic/react';
+import { signedRequestInit, signRequest, useStore } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Column, Row } from '@components/Row';
 import { Card } from '@components/Card';
@@ -59,24 +59,24 @@ export function PluginTrigger({
     setError(undefined);
 
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          ...(await signRequest(endpoint, store.getAgent()!, {})),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          drive,
-          plugin,
-          filters: trigger.query.filters.map(f => ({
-            property: f.property,
-            value: f.value,
-          })),
-          onEnter: trigger.onEnter,
-          onLeave: trigger.onLeave,
-          autoApply: enabled,
+      const response = await fetch(
+        endpoint,
+        await signedRequestInit(endpoint, store.getAgent()!, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drive,
+            plugin,
+            filters: trigger.query.filters.map(f => ({
+              property: f.property,
+              value: f.value,
+            })),
+            onEnter: trigger.onEnter,
+            onLeave: trigger.onLeave,
+            autoApply: enabled,
+          }),
         }),
-      });
+      );
       if (!response.ok) throw new Error(await response.text());
       setTrigger(await response.json());
     } catch (e) {

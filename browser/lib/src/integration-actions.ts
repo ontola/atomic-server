@@ -1,5 +1,5 @@
 /** One host API for the UI, Atomic assistant and MCP hosts. */
-import { signRequest } from './authentication.js';
+import { signedRequestInit } from './authentication.js';
 import type { Store } from './store.js';
 import type { DeclaredAction } from './plugin-manifest.js';
 import type {
@@ -39,14 +39,14 @@ async function post<T>(
   const agent = store.getAgent();
   if (!agent) throw new Error('Sign in to use an integration');
   const url = `${store.getServerUrl()}/${endpoint}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(url, agent, {})),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(
+    url,
+    await signedRequestInit(url, agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
   if (!response.ok) throw new Error(await response.text());
 
   return response.json();

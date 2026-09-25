@@ -23,6 +23,8 @@ mod metrics;
 pub mod node_key;
 pub mod plugins;
 pub mod rate_limit;
+mod replay_cache;
+mod require_v2;
 pub mod routes;
 pub mod serve;
 pub mod vector_search;

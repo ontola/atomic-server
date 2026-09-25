@@ -1,6 +1,6 @@
 import {
   errorMessageFromResponse,
-  signRequest,
+  signedRequestInit,
   type Store,
 } from '@tomic/react';
 
@@ -25,17 +25,18 @@ export async function handOverAppKey(
   if (!agent) throw new Error('Sign in to give an app its key');
 
   const url = `${store.getServerUrl()}/app-agent`;
-  const headers = await signRequest(url, agent, {});
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      drive: options.drive,
-      app: options.app,
-      secret: options.secret,
+  const response = await fetch(
+    url,
+    await signedRequestInit(url, agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        drive: options.drive,
+        app: options.app,
+        secret: options.secret,
+      }),
     }),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(

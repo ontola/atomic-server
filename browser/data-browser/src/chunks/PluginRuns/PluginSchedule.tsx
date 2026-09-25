@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { FaClock } from 'react-icons/fa6';
-import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
+import {
+  errorMessageFromResponse,
+  signedRequestInit,
+  signRequest,
+  useStore,
+} from '@tomic/react';
 import { setPluginSchedule } from './runScript';
 import { Button } from '@components/Button';
 import { Column, Row } from '@components/Row';
@@ -276,11 +281,25 @@ async function request(
   if (!agent) return { ok: false, error: 'Not signed in' };
 
   try {
-    const headers = await signRequest(url, agent, {});
-    const response = await fetch(url, {
-      ...init,
-      headers: { ...headers, 'Content-Type': 'application/json' },
-    });
+    const method = (init.method ?? 'GET').toUpperCase();
+    // Reads sign with version 1; every write is a v2-only route, signed over
+    // the method, URL and exactly this body.
+    const response = await fetch(
+      url,
+      method === 'GET'
+        ? {
+            ...init,
+            headers: {
+              ...(await signRequest(url, agent, {})),
+              'Content-Type': 'application/json',
+            },
+          }
+        : await signedRequestInit(url, agent, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: init.body as string | undefined,
+          }),
+    );
 
     if (!response.ok) {
       return {
