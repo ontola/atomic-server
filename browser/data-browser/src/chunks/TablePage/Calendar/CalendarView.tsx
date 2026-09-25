@@ -344,7 +344,9 @@ export function CalendarView({
         </Toolbar>
         <WeekdayRow>
           {WEEKDAY_LABELS.map(label => (
-            <Weekday key={label}>{label}</Weekday>
+            <Weekday key={label} data-testid='calendar-weekday'>
+              {label}
+            </Weekday>
           ))}
         </WeekdayRow>
         <Grid $weeks={gridDays.length / 7}>
@@ -410,15 +412,29 @@ const NavIcon = styled(IconButton)`
   width: 1.85rem;
 `;
 
+/**
+ * The one column template for both the weekday header row and the day grid,
+ * so the two cannot size their columns differently (#1792). `minmax(0, 1fr)`
+ * rather than `1fr`: a bare `1fr` track never shrinks below its content's
+ * min-width, so a long title widened its column in the grid but not in the
+ * header row, and at phone width pushed Sunday off the screen.
+ */
+const WEEK_COLUMNS = 'repeat(7, minmax(0, 1fr))';
+
 const WeekdayRow = styled.div`
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: ${WEEK_COLUMNS};
   gap: 1px;
+  /* Matches the Grid's 1px border, so both rows' tracks start at the same x. */
   padding-inline: 1px;
   flex-shrink: 0;
 `;
 
 const Weekday = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 0.25rem 0.3rem;
   font-size: 0.8em;
   color: ${p => p.theme.colors.textLight};
@@ -427,7 +443,7 @@ const Weekday = styled.span`
 
 const Grid = styled.div<{ $weeks: number }>`
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: ${WEEK_COLUMNS};
   grid-template-rows: repeat(${p => p.$weeks}, minmax(5rem, 1fr));
   gap: 1px;
   /* The gap + this background paints the hairline grid between the cells. */

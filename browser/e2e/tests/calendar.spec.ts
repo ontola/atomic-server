@@ -84,3 +84,83 @@ test.describe('calendar view', () => {
     await expect(dialog).toContainText('date');
   });
 });
+
+/** Left/right edges of each element a locator matches, in whole pixels. */
+async function columnEdges(locator: ReturnType<Page['locator']>) {
+  return locator.evaluateAll(els =>
+    els.map(el => {
+      const r = el.getBoundingClientRect();
+
+      return [Math.round(r.left), Math.round(r.right)];
+    }),
+  );
+}
+
+// #1792: the weekday header row and the day grid sized their columns
+// independently with `repeat(7, 1fr)`, whose minimum is the content's width,
+// so a long title widened its column in the grid only. The headers then sat
+// over the wrong days and the tester put two events on the wrong weekday.
+test.describe('calendar grid alignment', () => {
+  test.beforeEach(before);
+
+  test('weekday headers stay over their columns with a long title, at desktop and phone width', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await createIssueTracker(page, 'Long titles');
+    await page.getByRole('button', { name: 'Add view' }).click();
+    await page.getByTestId('menu-item-calendar').click();
+    await expect(page.getByTestId('calendar-view')).toBeVisible();
+
+    const todayCell = page.locator(
+      `[data-testid="calendar-day"][data-date="${localDayKey(new Date())}"]`,
+    );
+    const longTitle =
+      'Quarterly planning retrospective with the Boston and Amsterdam teams';
+    await todayCell.hover();
+    await todayCell.getByTestId('calendar-day-add').click();
+    const input = todayCell.getByPlaceholder('New item…');
+    await input.fill(longTitle);
+    await input.press('Enter');
+    await expect(
+      todayCell.getByTestId('calendar-event').filter({ hasText: longTitle }),
+    ).toBeVisible();
+
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 800 });
+
+      await expect(async () => {
+        const headers = await columnEdges(page.getByTestId('calendar-weekday'));
+        // The first week's seven cells are one per column.
+        const firstWeek = (
+          await columnEdges(page.getByTestId('calendar-day'))
+        ).slice(0, 7);
+
+        expect(headers).toHaveLength(7);
+
+        for (let i = 0; i < 7; i++) {
+          expect(
+            Math.abs(headers[i][0] - firstWeek[i][0]),
+            `column ${i} left edge at ${width}px`,
+          ).toBeLessThanOrEqual(2);
+          expect(
+            Math.abs(headers[i][1] - firstWeek[i][1]),
+            `column ${i} right edge at ${width}px`,
+          ).toBeLessThanOrEqual(2);
+        }
+
+        // All seven columns fit: Sunday ends inside the viewport, and the
+        // page does not scroll sideways.
+        expect(firstWeek[6][1], `Sunday at ${width}px`).toBeLessThanOrEqual(
+          width,
+        );
+        const overflow = await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+        );
+        expect(overflow, `horizontal overflow at ${width}px`).toBe(0);
+      }).toPass({ timeout: 10000 });
+    }
+  });
+});
