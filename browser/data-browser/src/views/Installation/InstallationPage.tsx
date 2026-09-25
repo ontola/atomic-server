@@ -363,6 +363,7 @@ export const InstallationPage: React.FC<
             canWrite={canWrite}
             platforms={proxyPlatforms}
             connected={connected}
+            pluginName={name || title || resource.subject}
           />
         )}
         {pluginAgent && (

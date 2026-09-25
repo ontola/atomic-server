@@ -12555,3 +12555,27 @@ msgstr ""
 #: src/chunks/AppPage/AppImporterRun.tsx
 msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
 msgstr ""
+
+#. 0: needs
+#: src/views/Drive/PluginList.tsx
+msgid "Needs a connection: {0}"
+msgstr ""
+
+#. 0: pluginName; 1: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} needs a {1} connection"
+msgstr ""
+
+#. 0: nodes; 1: since
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Asked by {0} since {1}. Runs that need it are paused until it is connected."
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Resume runs"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Resumed the runs that need {0}"
+msgstr ""

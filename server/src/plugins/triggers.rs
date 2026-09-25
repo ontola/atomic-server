@@ -41,6 +41,10 @@ const RATE_WINDOW_MS: i64 = 60_000;
 /// against.
 const DEDUP_WINDOW_MS: i64 = 30_000;
 
+/// What [`run`] returns for a run that ended needing a connection: nothing
+/// was proposed, and the event waits in the queue.
+const NEEDS_CONNECTION: &str = "paused: needs a connection";
+
 #[derive(Default)]
 struct Guard {
     /// `(plugin, subject, edge)` to when it last fired.
@@ -87,6 +91,13 @@ impl Guard {
         self.prune(now);
 
         Ok(())
+    }
+
+    /// Lets an admitted edge run again, for a run that paused before it did
+    /// anything.
+    fn forget(&mut self, plugin: &str, subject: &str, edge: Edge) {
+        self.recent
+            .remove(&(plugin.to_string(), subject.to_string(), edge.as_str()));
     }
 
     fn prune(&mut self, now: i64) {
@@ -222,6 +233,17 @@ async fn drain(appstate: &AppState, guard: &Arc<Mutex<Guard>>) {
         {
             continue;
         }
+        // Paused while this node's request for a connection is open (#1700
+        // flow b): the event stays queued and runs once it is cleared and a
+        // connection is delegated.
+        if event.verdict.is_none()
+            && !resuming_action
+            && super::connection_requests::paused(&appstate.store, &key.drive, &key.plugin)
+                .await
+                .is_some()
+        {
+            continue;
+        }
         if event.verdict.is_none() && !resuming_action {
             let mut protection = guard.lock().await;
             if protection
@@ -244,6 +266,13 @@ async fn drain(appstate: &AppState, guard: &Arc<Mutex<Guard>>) {
         }
         attempted += 1;
         match run(appstate, guard, &key, &trigger, &mut event).await {
+            // Kept queued, unacknowledged, for when the run resumes.
+            Ok(outcome) if outcome == NEEDS_CONNECTION => {
+                guard
+                    .lock()
+                    .await
+                    .forget(&key.plugin, &event.id, event.edge);
+            }
             Ok(_) if !event.waiting_for_review => {
                 if let Err(e) = appstate.store.acknowledge_plugin_event(&event) {
                     record_error(appstate, &key, &trigger, e.to_string());
@@ -341,6 +370,9 @@ async fn run(
             .await
             .map_err(|e| e.to_string())??,
     };
+    if super::connection_requests::needs_connection(&verdict).is_some() {
+        return Ok(NEEDS_CONNECTION.into());
+    }
     event.verdict = Some(verdict.clone());
     let action_wait = super::actions::waits(&verdict).is_some();
     event.waiting_for_review = action_wait || trigger.auto_apply.is_none();
@@ -895,6 +927,45 @@ mod tests {
         assert_eq!(provider.0, 1);
         assert!(f.appstate.store.queued_plugin_events().unwrap().is_empty());
         assert_eq!(children_named(&f, &f.drive, "After approval").await, 1);
+    }
+
+    #[actix_rt::test]
+    async fn a_triggered_run_that_needs_a_connection_waits_queued_until_it_resumes() {
+        use crate::plugins::connection_requests::tests as requests;
+        use std::sync::atomic::Ordering;
+        let mut f = fixture("plugin_trigger_needs_connection").await;
+        let (origin, hits) = requests::stub_proxy().await;
+        f.appstate.store.set_integration_proxy(Some(origin));
+        f.plugin = requests::install(&f).await;
+        let key = arm(&f, false).await;
+        let trigger = || f.appstate.store.get_plugin_trigger(&key).unwrap().unwrap();
+        let queued = || f.appstate.store.queued_plugin_events().unwrap().len();
+        let guard = Arc::new(Mutex::new(Guard::default()));
+
+        add_watched(&f, "arrived").await;
+        drain(&f.appstate, &guard).await;
+        // Nothing proposed, no error that would block the trigger, the event
+        // kept, and the request written.
+        assert_eq!(trigger().pending_verdict, None);
+        assert_eq!(trigger().last_error, None);
+        assert_eq!(queued(), 1);
+        let request = requests::requests(&f, &f.plugin).await;
+        assert_eq!(request.len(), 1);
+        let request = request[0].get_subject().to_string();
+
+        // Paused: the event waits, and the proxy is not called.
+        drain(&f.appstate, &guard).await;
+        requests::delegate(&f, &f.plugin).await;
+        drain(&f.appstate, &guard).await;
+        assert_eq!(queued(), 1);
+        assert_eq!(hits.load(Ordering::SeqCst), 0);
+
+        // Cleared, with a connection: the same event runs.
+        requests::clear(&f, &request).await.unwrap();
+        drain(&f.appstate, &guard).await;
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+        let proposal = trigger().pending_verdict.expect("the resumed run proposed");
+        assert!(proposal.contains("Imported 200"), "{proposal}");
     }
 
     #[actix_rt::test]

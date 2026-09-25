@@ -13,6 +13,9 @@ import type React from 'react';
 import { AtomicLink } from '@components/AtomicLink';
 import styled from 'styled-components';
 import { TableList } from '@components/TableList';
+import { FaTriangleExclamation } from 'react-icons/fa6';
+import { useConnectionRequests } from '@helpers/connectionRequests';
+import { platformName } from '@helpers/proxyConnections';
 
 interface PluginListProps {
   drive: Resource<Server.Drive>;
@@ -78,6 +81,13 @@ const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
   const [name] = useString(resource, core.properties.name);
   const [version] = useString(resource, server.properties.version);
   const [status] = useString(resource, server.properties.installationStatus);
+  const store = useStore();
+  // What the nodes that run it asked for (#1700 flow b); the Installation's
+  // page connects it.
+  const { open } = useConnectionRequests(store, subject, status !== 'revoked');
+  const needs = [...new Set(open.map(r => platformName(r.platform)))].join(
+    ', ',
+  );
 
   const title = `${namespace ?? ''}/${name ?? ''}`;
 
@@ -87,10 +97,27 @@ const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
         <AtomicLink subject={subject}>{title}</AtomicLink>
       </td>
       <td>{version}</td>
-      <td>{status}</td>
+      <td>
+        {status}
+        {needs && (
+          <NeedsConnection>
+            <FaTriangleExclamation aria-hidden />
+            <span>Needs a connection: {needs}</span>
+          </NeedsConnection>
+        )}
+      </td>
     </tr>
   );
 };
+
+const NeedsConnection = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-inline-start: 0.5rem;
+  font-size: 0.85rem;
+  color: ${p => p.theme.colors.warning};
+`;
 
 const NoPluginsInstalled = styled.p`
   color: ${p => p.theme.colors.textLight};

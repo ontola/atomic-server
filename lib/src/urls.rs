@@ -29,6 +29,7 @@ pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const RELEASE: &str = "https://atomicdata.dev/classes/Release";
 pub const INSTALLATION: &str = "https://atomicdata.dev/classes/Installation";
 pub const INSTALLATION_RUNTIME: &str = "https://atomicdata.dev/classes/InstallationRuntime";
+pub const CONNECTION_REQUEST: &str = "https://atomicdata.dev/classes/ConnectionRequest";
 pub const LISTING: &str = "https://atomicdata.dev/classes/Listing";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
@@ -261,6 +262,17 @@ pub const INTEGRATION_CONNECTIONS: &str =
 /// On an `InstallationRuntime`: the node's own app agent for the installation.
 pub const INTEGRATION_RUNTIME_AGENT: &str =
     "https://atomicdata.dev/properties/integrationRuntimeAgent";
+/// On a `ConnectionRequest`: the proxy platform a node's runs need.
+pub const CONNECTION_REQUEST_PLATFORM: &str =
+    "https://atomicdata.dev/properties/connectionRequestPlatform";
+/// On a `ConnectionRequest`: `not-connected`, `revoked` or `expired`.
+pub const CONNECTION_REQUEST_REASON: &str =
+    "https://atomicdata.dev/properties/connectionRequestReason";
+/// On a `ConnectionRequest`: when the node last found it needed the connection.
+pub const CONNECTION_REQUESTED_AT: &str = "https://atomicdata.dev/properties/connectionRequestedAt";
+/// On a `ConnectionRequest`: when a writer of the Installation cleared it.
+pub const CONNECTION_REQUEST_CLEARED_AT: &str =
+    "https://atomicdata.dev/properties/connectionRequestClearedAt";
 pub const DOMAINS: &str = "https://atomicdata.dev/properties/domains";
 pub const STANDARDS: &str = "https://atomicdata.dev/properties/standards";
 pub const EVIDENCE: &str = "https://atomicdata.dev/properties/evidence";

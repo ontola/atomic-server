@@ -207,6 +207,47 @@ pub async fn runtime_of(
     }))
 }
 
+/// Creates a resource on this node, signed by `agent`, with a self-verifying
+/// genesis certificate, and returns its subject.
+///
+/// Unlike `Resource::save_as_genesis_signed_by`, the genesis carries the
+/// certificate that names its signer (so a page can check who wrote it
+/// offline, with `getCreatedBy`) and `drive` (so the commit is fanned out and
+/// synced to the drive's clients). The rights check is skipped, as for any
+/// commit this node signs itself; class hooks still run.
+pub async fn create_signed_by(
+    store: &Db,
+    agent: &atomic_lib::agents::Agent,
+    drive: &str,
+    propvals: Vec<(&str, Value)>,
+) -> AtomicResult<String> {
+    let mut builder = atomic_lib::commit::CommitBuilder::new("did:ad:placeholder".into());
+    // Given rather than derived from the parent: an ancestor that was never
+    // stamped would make the derivation name it as the drive.
+    builder.set(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()));
+    for (property, value) in propvals {
+        builder.set(property.into(), value);
+    }
+    let commit = atomic_lib::Commit::create_did(builder, agent, store).await?;
+    let subject = commit.subject.to_string();
+    store
+        .apply_commit(
+            commit,
+            &atomic_lib::commit::CommitOpts {
+                validate_schema: true,
+                validate_signature: true,
+                validate_timestamp: false,
+                validate_rights: false,
+                validate_for_agent: Some(agent.subject.to_string()),
+                validate_loro_causality: false,
+                update_index: true,
+                source_id: None,
+            },
+        )
+        .await?;
+    Ok(subject)
+}
+
 /// Publishes this node's agent for an active Installation on a child the
 /// agent may write, once. Returns that child's subject, or `None` when this
 /// node has no agent for the Installation (not activated here, a wasip2
@@ -230,26 +271,31 @@ pub async fn publish_runtime(
         return Ok(None);
     };
 
-    let mut runtime = Resource::new("did:ad:placeholder".into());
-    runtime.set_unsafe(
-        urls::IS_A.into(),
-        Value::ResourceArray(vec![urls::INSTALLATION_RUNTIME.into()]),
-    )?;
-    runtime.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(installation.into()))?;
-    runtime.set_unsafe(
-        urls::INTEGRATION_RUNTIME_AGENT.into(),
-        Value::AtomicUrl(info.agent.as_str().into()),
-    )?;
-    runtime.set_unsafe(
-        urls::NAME.into(),
-        Value::String(atomic_lib::sync::peer::effective_device_name(store)),
-    )?;
-    runtime.set_unsafe(
-        urls::WRITE.into(),
-        Value::ResourceArray(vec![info.agent.as_str().into()]),
-    )?;
-    runtime.save_as_genesis_signed_by(&agent, store).await?;
-    let subject = runtime.get_subject().to_string();
+    let subject = create_signed_by(
+        store,
+        &agent,
+        drive,
+        vec![
+            (
+                urls::IS_A,
+                Value::ResourceArray(vec![urls::INSTALLATION_RUNTIME.into()]),
+            ),
+            (urls::PARENT, Value::AtomicUrl(installation.into())),
+            (
+                urls::INTEGRATION_RUNTIME_AGENT,
+                Value::AtomicUrl(info.agent.as_str().into()),
+            ),
+            (
+                urls::NAME,
+                Value::String(atomic_lib::sync::peer::effective_device_name(store)),
+            ),
+            (
+                urls::WRITE,
+                Value::ResourceArray(vec![info.agent.as_str().into()]),
+            ),
+        ],
+    )
+    .await?;
     tracing::info!(
         "published this node's agent {} for installation {installation} on {subject}",
         info.agent

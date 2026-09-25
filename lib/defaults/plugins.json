@@ -277,6 +277,46 @@
     "https://atomicdata.dev/properties/shortname": "integration-runtime-agent"
   },
   {
+    "@id": "https://atomicdata.dev/properties/connectionRequestPlatform",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "On a ConnectionRequest: the integration-proxy platform the Installation's plugin needs a connection for, as declared in its manifest's `proxy`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-request-platform"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/connectionRequestReason",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "On a ConnectionRequest: why the run needs a connection: `not-connected` (no connection is delegated for the platform), `revoked` or `expired`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-request-reason"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/connectionRequestedAt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "On a ConnectionRequest: when the node last found it needed the connection. A request is open while it has no connectionRequestClearedAt at or after this.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-requested-at"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/connectionRequestClearedAt",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "On a ConnectionRequest: when a writer of the Installation cleared it, in a commit signed by that writer, usually right after connecting the platform. The node resumes the runs it paused once the request is cleared and a connection is delegated.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-request-cleared-at"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/domains",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
     "https://atomicdata.dev/properties/description": "Domains a Listing applies to, as a JSON array of strings.",
@@ -384,6 +424,24 @@
       "https://atomicdata.dev/properties/integrationRuntimeAgent"
     ],
     "https://atomicdata.dev/properties/shortname": "installation-runtime",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/ConnectionRequest",
+    "https://atomicdata.dev/properties/description": "A node's request for an integration-proxy connection its unattended runs of an Installation need (flow b). The node's agent for the Installation writes it as a child of its own InstallationRuntime, which only that agent and the Installation's writers may write; runs that need the platform pause until a writer of the Installation clears it and a connection is delegated.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/connectionRequestClearedAt"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/connectionRequestPlatform",
+      "https://atomicdata.dev/properties/connectionRequestReason",
+      "https://atomicdata.dev/properties/connectionRequestedAt"
+    ],
+    "https://atomicdata.dev/properties/shortname": "connection-request",
     "https://atomicdata.dev/properties/subresources": []
   },
   {
