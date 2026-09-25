@@ -18,7 +18,7 @@ use crate::appstate::AppState;
 use crate::plugins::test_fixture::{fixture, genesis, Fixture};
 
 /// Signs as the store's default agent, the way every other server test does.
-fn signed(path: &str, appstate: &AppState) -> TestRequest {
+pub(super) fn signed(path: &str, appstate: &AppState) -> TestRequest {
     let origin = appstate.config.get_origin();
     let url = format!("{origin}{path}");
     let headers = atomic_lib::client::get_authentication_headers(
@@ -47,7 +47,7 @@ fn signed(path: &str, appstate: &AppState) -> TestRequest {
 }
 
 /// Signs as someone other than this node's own agent — a collaborator.
-fn signed_as(path: &str, appstate: &AppState, agent: &Agent) -> TestRequest {
+pub(super) fn signed_as(path: &str, appstate: &AppState, agent: &Agent) -> TestRequest {
     let origin = appstate.config.get_origin();
     let url = format!("{origin}{path}");
     let headers =
@@ -74,7 +74,7 @@ fn signed_as(path: &str, appstate: &AppState, agent: &Agent) -> TestRequest {
 
 /// Publishes an agent so the server can verify its signatures, and gives it
 /// `right` on `target` — which is exactly what the Share dialog does.
-async fn share(fixture: &Fixture, target: &str, agent: &Agent, right: &str) {
+pub(super) async fn share(fixture: &Fixture, target: &str, agent: &Agent, right: &str) {
     let mut profile = atomic_lib::Resource::new(agent.subject.to_string());
     profile
         .set_unsafe(
@@ -112,7 +112,7 @@ fn create_payload(fixture: &Fixture, app: &str, name: &str) -> String {
     )
 }
 
-fn body_of(response: ServiceResponse) -> String {
+pub(super) fn body_of(response: ServiceResponse) -> String {
     let bytes = response
         .into_body()
         .try_into_bytes()
@@ -122,7 +122,7 @@ fn body_of(response: ServiceResponse) -> String {
 }
 
 /// An app with a view, its own key, and something of its own to write into.
-async fn app_fixture(name: &str) -> (Fixture, String) {
+pub(super) async fn app_fixture(name: &str) -> (Fixture, String) {
     let mut fixture = fixture(name).await;
 
     let app = genesis(

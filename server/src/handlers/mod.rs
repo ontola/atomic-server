@@ -9,6 +9,10 @@ pub mod app_agent;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod app_endpoints_test;
 #[cfg(feature = "wasm-plugins")]
+pub mod app_row_grant;
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod app_row_grant_test;
+#[cfg(feature = "wasm-plugins")]
 pub mod app_write;
 pub mod blob;
 pub mod commit;

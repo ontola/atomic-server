@@ -103,6 +103,12 @@ pub async fn handle_app_write(
 
     let body = body.into_inner();
 
+    // Outside its own subtree, an app writes only rows of a table it is a
+    // view of, and only through the grant someone gave it there (#1740).
+    if let Some(subject) = under_row_grant(store, &mut host, &body).await? {
+        return Ok(HttpResponse::Ok().json(AppWriteResult { subject }));
+    }
+
     let subject = match body.op.as_str() {
         "create" => {
             host.create(CreateRequest {
@@ -137,6 +143,117 @@ pub async fn handle_app_write(
     .map_err(AtomicServerError::bad_request)?;
 
     Ok(HttpResponse::Ok().json(AppWriteResult { subject }))
+}
+
+/// Performs the write through the app's row grant, when the app's own rights
+/// do not reach the target but it is a row of a table the app is a view of.
+///
+/// `None` means this is not a grant write: the target is within the app's
+/// own rights, or not a row of a table showing the app, and the ordinary path
+/// decides (and refuses with the rights walk's own error). A table showing
+/// the app with no live grant is refused here, saying how to ask for one.
+async fn under_row_grant(
+    store: &atomic_lib::Db,
+    host: &mut StoreApplyHost,
+    body: &AppWriteBody,
+) -> AtomicServerResult<Option<String>> {
+    use crate::plugins::app_row_grant::{self, RowWrite};
+
+    let target = match body.op.as_str() {
+        "create" => body.parent.clone().unwrap_or_else(|| body.app.clone()),
+        "save" | "remove" | "destroy" => match &body.subject {
+            Some(subject) => subject.clone(),
+            None => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+
+    // Within the app's own rights: nothing to grant.
+    let Ok(target_resource) = store.get_resource(&target.as_str().into()).await else {
+        return Ok(None);
+    };
+    let app_agent = host
+        .signing_as
+        .as_ref()
+        .and_then(|key| store.get_app_agent_info(key).ok().flatten())
+        .map(|info| info.agent);
+    let Some(app_agent) = app_agent else {
+        return Ok(None);
+    };
+    if check_write(
+        store,
+        &target_resource,
+        &atomic_lib::agents::ForAgent::AgentSubject(app_agent.as_str().into()),
+    )
+    .await
+    .is_ok()
+    {
+        return Ok(None);
+    }
+
+    // The table: the parent of a new row, or of the row being edited.
+    let table = if body.op == "create" {
+        target.clone()
+    } else {
+        match target_resource.get(atomic_lib::urls::PARENT) {
+            Ok(parent) => parent.to_string(),
+            Err(_) => return Ok(None),
+        }
+    };
+
+    let Some(grant) = app_row_grant::live(store, &body.drive, &table, &body.app)
+        .await
+        .map_err(AtomicServerError::bad_request)?
+    else {
+        if app_row_grant::is_app_view_of(store, &table, &body.app).await {
+            return Err(AtomicServerError::bad_request(
+                "This app is a view of this table but may not edit its rows. Someone who can edit the table can allow it, or the app can ask with store.requestRowAccess()",
+            ));
+        }
+        return Ok(None);
+    };
+
+    let properties: Vec<&str> = match body.op.as_str() {
+        "remove" => body.properties.iter().map(String::as_str).collect(),
+        _ => body.prop_vals.keys().map(String::as_str).collect(),
+    };
+    let write = match body.op.as_str() {
+        "create" => RowWrite::Create {
+            parent: &target,
+            is_a: &body.is_a,
+            properties,
+        },
+        "destroy" => RowWrite::Destroy { subject: &target },
+        _ => RowWrite::Set {
+            subject: &target,
+            properties,
+        },
+    };
+    app_row_grant::check_scope(store, &grant, &write)
+        .await
+        .map_err(AtomicServerError::bad_request)?;
+
+    let subject = match body.op.as_str() {
+        "create" => {
+            host.create_under_row_grant(CreateRequest {
+                parent: target,
+                is_a: body.is_a.clone(),
+                prop_vals: body.prop_vals.clone(),
+            })
+            .await
+        }
+        "remove" => host
+            .remove_under_row_grant(&target, body.properties.clone())
+            .await
+            .map(|_| target),
+        _ => host
+            .set_under_row_grant(&target, body.prop_vals.clone())
+            .await
+            .map(|_| target),
+    }
+    .map_err(AtomicServerError::bad_request)?;
+
+    Ok(Some(subject))
 }
 
 fn required(subject: Option<String>) -> AtomicServerResult<String> {

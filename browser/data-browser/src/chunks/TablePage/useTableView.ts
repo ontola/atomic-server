@@ -99,9 +99,13 @@ export interface UseTableViewResult {
   /** Switch the active view, via the `?view=` search param. */
   setActiveView: (subject: string) => void;
   /** Create a new (empty) view of the given kind, link it, and switch to it. */
-  createView: (kind?: ViewKind | string, label?: string) => void;
+  /** Resolves to the new View's subject, or `undefined` if it failed. */
+  createView: (
+    kind?: ViewKind | string,
+    label?: string,
+  ) => Promise<string | undefined>;
   /** Change a view's renderer kind (table/kanban/calendar/timer). */
-  setViewKind: (subject: string, kind: ViewKind | string) => void;
+  setViewKind: (subject: string, kind: ViewKind | string) => Promise<void>;
   /** Copy a view (its config) into a new "<name> copy" view and switch to it. */
   duplicateView: (subject: string) => void;
   /** Remove a view from the table and destroy its resource. */
@@ -570,8 +574,8 @@ export function useTableView(
   );
 
   const createView = useCallback(
-    (kind: ViewKind | string = DEFAULT_VIEW_KIND, label?: string) => {
-      void (async () => {
+    (kind: ViewKind | string = DEFAULT_VIEW_KIND, label?: string) =>
+      (async () => {
         const from = liveViewParam.current;
 
         // A table with no saved views shows one implicit Table tab, and that
@@ -592,8 +596,9 @@ export function useTableView(
           kind,
         );
         goToCreatedView(created.subject, from);
-      })().catch(() => undefined);
-    },
+
+        return created.subject;
+      })().catch(() => undefined),
     [createViewResource, views.length, defaultViewSubject, goToCreatedView],
   );
 
@@ -942,8 +947,8 @@ export function useTableView(
   );
 
   const setViewKind = useCallback(
-    (subject: string, kind: ViewKind | string) => {
-      void (async () => {
+    (subject: string, kind: ViewKind | string) =>
+      (async () => {
         const v = store.getResourceLoading(subject);
         await v.set(dataBrowser.properties.viewKind, kind, false);
 
@@ -965,8 +970,7 @@ export function useTableView(
         }
 
         await v.save();
-      })().catch(() => undefined);
-    },
+      })().catch(() => undefined),
     [store, table, createDashboardResource],
   );
 

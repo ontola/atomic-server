@@ -44,7 +44,14 @@ export type ViewOperation =
    * in host UI (atomic-server#1739). Args: {@link ImporterRunArgs}; result:
    * {@link ImporterRunResult}.
    */
-  | 'runImporter';
+  | 'runImporter'
+  /**
+   * Whether this app may edit the rows of the table it is a view of (#1740):
+   * `{ status: 'granted' | 'none' | 'unavailable' }`.
+   */
+  | 'rowAccess'
+  /** Ask the person, in host UI, to let this app edit the table's rows. */
+  | 'requestRowAccess';
 
 export interface ViewRequest {
   type: 'atomic.view.request';
@@ -106,6 +113,8 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'openExternal',
       'openResource',
       'runImporter',
+      'rowAccess',
+      'requestRowAccess',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&
