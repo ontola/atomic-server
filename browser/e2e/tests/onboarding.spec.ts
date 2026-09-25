@@ -99,6 +99,11 @@ test.describe('onboarding', () => {
 
     // The signed-out SettingsAgent route opens the canonical sign-in form.
     await page2.goto(`${FRONTEND_URL}/app/agent`);
+    // Cold boot in a fresh context; 7018 to 7806ms at four workers, against
+    // the 10s the bare `fill` would have allowed.
+    await expect(page2.getByLabel('Agent secret')).toBeVisible({
+      timeout: 20_000,
+    });
     await page2.getByLabel('Agent secret').fill(secret!);
 
     // The agent route passes return_to=agent through the unified sign-in flow.

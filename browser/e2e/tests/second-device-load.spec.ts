@@ -64,11 +64,21 @@ test(
     // session and return without ever entering the secret.
     await expect(
       p2.getByRole('heading', { name: 'Unlock this drive' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 20_000 });
     await p2.getByLabel('Agent secret').fill(secret);
 
+    // 12000 was not enough, and the way it failed matters: "element(s) not
+    // found" is the same sentence this test produced when the child genuinely
+    // never arrived, which was a product bug (c95dd96). It is not that any
+    // more. Six four-worker rounds with this assertion opened up to 60s all
+    // passed, the child landing at 10851, 11166, 11798, 12743, 13099 and
+    // 13307ms, while the same mix failed 2 of 4 at 12000. The child arrives;
+    // the assertion was giving up first.
+    //
+    // So this waits for a cold boot plus a whole drive sync, and 30s is a bit
+    // over twice the slowest arrival seen rather than a round number.
     await expect(p2.getByText('SecondDeviceChild').first()).toBeVisible({
-      timeout: 12000,
+      timeout: 30_000,
     });
     await ctx2.close();
   },

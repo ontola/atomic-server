@@ -36,6 +36,11 @@ async function signIn(page: Page, secret: string) {
   await page.goto(
     `${FRONTEND_URL}/app/welcome?next=${encodeURIComponent(home)}`,
   );
+  // Cold boot again, and the widest of these: 6050 to 8586ms at four workers,
+  // so the bare `fill` was running at 86% of the 10s actionTimeout.
+  await expect(page.getByLabel('Agent secret')).toBeVisible({
+    timeout: 20_000,
+  });
   await page.getByLabel('Agent secret').fill(secret);
   // Wait for identity persistence independently of navigation so the direct
   // link test can exercise a restored session even when onboarding is broken.

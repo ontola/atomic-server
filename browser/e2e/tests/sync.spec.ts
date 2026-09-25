@@ -383,6 +383,12 @@ test.describe('sync', () => {
     // /app/agent redirects signed-out users to the canonical sign-in form.
     // The flow signs in as soon as the secret parses.
     const secretField = page2.getByLabel('Agent secret');
+    // This is the first thing asked of a brand new context, so it is really
+    // waiting for a cold boot: wasm, store init, the ClientDb worker and the
+    // redirect. `fill` alone would guard all of that with the 10s
+    // actionTimeout, and this test failed there 2 of 8 four-worker rounds.
+    // Wait for the field explicitly, and name it when it does not come.
+    await expect(secretField).toBeVisible({ timeout: 20_000 });
     await secretField.fill(secret);
     // No blur: the field disables itself the moment the secret parses (it
     // shows "Signing in…"), and `blur()` on a disabled input waits for an
