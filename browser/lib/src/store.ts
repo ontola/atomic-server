@@ -93,6 +93,7 @@ import {
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
+  isNotEnrolledMessage,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -914,11 +915,76 @@ export class Store {
     this.localOnlyDrives.add(drive);
   }
 
+  /**
+   * Whether the server in use refuses `drive` outright because it does not
+   * host it: a managed node answering "not enrolled" to our pushes, seen
+   * either on the last drive sync or on a parked outbox entry of that drive.
+   */
+  public isDriveRefusedByServer(drive: string | undefined): boolean {
+    if (!drive || this.isLocalOnlyDrive(drive)) return false;
+
+    if (
+      this._lastDriveSyncError?.drive === drive &&
+      isNotEnrolledMessage(this._lastDriveSyncError.message)
+    ) {
+      return true;
+    }
+
+    const normalized = this.normalizeSubject(drive);
+
+    return this.outbox
+      .pending()
+      .some(
+        entry =>
+          isNotEnrolledMessage(entry.lastAttemptError) &&
+          this.driveOf(this.normalizeSubject(entry.subject)) === normalized,
+      );
+  }
+
   /** Switch this client to browser-only sync after verifying its local copy.
-   * Does not delete data from the server or alter other devices' configuration. */
+   * Does not delete data from the server or alter other devices' configuration.
+   *
+   * A drive the server refuses ({@link isDriveRefusedByServer}) skips the
+   * verification: the server will not serve its copy, so this device's copy
+   * is the only one there is, and waiting on its inventory or on the refused
+   * writes would never end. Those writes are dropped from the outbox, since a
+   * local-only drive is never pushed; turning sync on again resyncs the whole
+   * drive rather than replaying them. */
   public async makeDriveLocal(drive: string): Promise<void> {
     const db = this.getClientDb();
     const agent = this.getAgent();
+
+    if (this.isDriveRefusedByServer(drive)) {
+      if (!db?.isReady || !agent)
+        throw new Error(
+          'Open this drive with local storage available before disconnecting.',
+        );
+
+      const normalized = this.normalizeSubject(drive);
+      this.registerLocalOnlyDrive(drive);
+      this.getDefaultWebSocket()?.unsubscribeFromDrive(drive);
+
+      for (const entry of this.outbox.pending()) {
+        const subject = this.normalizeSubject(entry.subject);
+
+        if (
+          subject === normalized ||
+          this.driveOf(subject) === normalized ||
+          this.isLocalOnlySubject(entry.subject)
+        ) {
+          this.outbox.discard(entry.subject);
+        }
+      }
+
+      if (this._lastDriveSyncError?.drive === drive) {
+        this._lastDriveSyncError = undefined;
+      }
+
+      this.emitSyncStatus();
+
+      return;
+    }
+
     const serverUrl = this.serverUrl;
     const ws = this.getDefaultWebSocket();
     if (!db?.isReady || !agent || !ws)

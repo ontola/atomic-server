@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- A workspace a Cloud Server node refuses ("not enrolled") no longer sits on
+  "Connecting…" with changes pending forever. The server card says the server
+  doesn't host it, and "Sync this workspace with this server" can be turned
+  off even though the server won't answer, keeping it on this device. A
+  suspended Cloud Server enrollment no longer counts as hosted, so the app
+  stops pointing a drive at a node that will refuse it.
 - A private workspace the app has to recreate is titled after whoever it
   belongs to, like the one onboarding and an accepted invitation already
   make. A returning account on a second device, and a sign-in whose cloud

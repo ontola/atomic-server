@@ -87,7 +87,7 @@ describe('evaluateServerReconciliation', () => {
     expect(persist).toHaveBeenCalledWith('https://node1.atomicserver.eu');
   });
 
-  it.each(['Pending', 'Disabled'])(
+  it.each(['Pending', 'Disabled', 'Suspended'])(
     'does not connect a %s placement',
     async status => {
       mockFetch({

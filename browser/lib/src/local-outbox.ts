@@ -215,6 +215,11 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
  * Retrying spins the server (see the 401-flood); the only resolutions are a
  * rights change or the user abandoning the edit — neither helped by hammering.
  */
+/** A managed node's refusal of a drive it does not host ("not enrolled"). */
+export function isNotEnrolledMessage(message: string | undefined): boolean {
+  return !!message?.includes('is not enrolled for sync on this node');
+}
+
 export function isUnrecoverableCommitErrorMessage(message: string): boolean {
   // A causality rejection is deterministic for the same Loro update. Keep the
   // local edit visible, but stop sending it once the bounded retry window ends.
@@ -225,7 +230,7 @@ export function isUnrecoverableCommitErrorMessage(message: string): boolean {
   // Managed nodes refuse writes until enrollment/quota changes. Keep the edit,
   // but park it after bounded retries rather than flooding the node forever.
   if (
-    message.includes('is not enrolled for sync on this node') ||
+    isNotEnrolledMessage(message) ||
     message.includes('has reached its storage quota on this node')
   ) {
     return true;

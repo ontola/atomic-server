@@ -3434,7 +3434,6 @@ msgstr ""
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
 #: src/helpers/managed/reconcile.ts
-#: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr ""
 
@@ -12271,4 +12270,12 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This server doesn’t host this workspace, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Not hosted here"
 msgstr ""
