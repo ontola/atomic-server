@@ -26,9 +26,8 @@ test('DID folder page survives a reload', async ({ page }) => {
 
     if (!d) throw new Error('no drive');
 
-    const tmp = await s.createSubject('fld');
     const f = await s.newResource({
-      subject: tmp,
+      deferGenesis: true,
       parent: d,
       isA: 'https://atomicdata.dev/classes/Folder',
     });
