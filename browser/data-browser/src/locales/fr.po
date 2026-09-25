@@ -2357,7 +2357,7 @@ msgstr "Retour"
 msgid "Go forward"
 msgstr "Avancer"
 
-#. 0: shortcuts.search
+#. 0: displayShortcut(shortcuts.search)
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
 msgstr "Rechercher ({0})"
@@ -3425,6 +3425,8 @@ msgstr "Curseur"
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr "Entrez une URL Atomique ou recherchez (appuyez sur \"/\")"
 
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
 msgid "Search"
 msgstr "Rechercher"
@@ -12271,4 +12273,21 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column…"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column to filter by"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "No column matches"
+msgstr ""
+
+#. 0: query
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Search the drive for “{0}”"
 msgstr ""
