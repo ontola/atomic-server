@@ -525,3 +525,115 @@ async fn read_only_means_look_not_touch() {
 
     assert_eq!(response.status(), 401, "{}", body_of(response));
 }
+
+/// What an app frame sends for `resource.remove(p).save()`: a `remove` op,
+/// then a `save` of whatever else changed. The property has to be gone
+/// afterwards, and stay gone through the next edit — which builds on the
+/// stored Loro doc, where a removal that only reached the propvals returns.
+#[actix_rt::test]
+async fn an_app_removes_a_property_and_it_stays_removed() {
+    let (fixture, app) = app_fixture("app_write_remove").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let post = |payload: String| {
+        signed("/app-write", &fixture.appstate)
+            .method(actix_web::http::Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .set_payload(payload)
+            .to_request()
+    };
+
+    // Shaped like an importing app's row (timesheets, notion): an import
+    // identity and a baseline, which the server checks on every write.
+    let values = serde_json::json!({ urls::NAME: "A note", urls::DESCRIPTION: "Goes away" });
+    let created = test::call_service(
+        &service,
+        post(
+            serde_json::json!({
+                "drive": fixture.drive,
+                "app": app,
+                "op": "create",
+                "propVals": {
+                    urls::NAME: "A note",
+                    urls::DESCRIPTION: "Goes away",
+                    urls::LOCAL_ID: "source:1",
+                    urls::IMPORT_BASELINE: { "values": values, "previous": {} },
+                },
+            })
+            .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(created.status(), 200, "{}", body_of(created));
+    let written: serde_json::Value = serde_json::from_str(&body_of(created)).expect("json");
+    let subject = written["subject"].as_str().expect("a subject").to_string();
+
+    let removed = test::call_service(
+        &service,
+        post(format!(
+            r#"{{"drive":{:?},"app":{:?},"op":"remove","subject":{:?},"properties":[{:?}]}}"#,
+            fixture.drive,
+            app,
+            subject,
+            urls::DESCRIPTION,
+        )),
+    )
+    .await;
+    assert_eq!(removed.status(), 200, "{}", body_of(removed));
+
+    let description = |resource: &atomic_lib::Resource| {
+        resource.get(urls::DESCRIPTION).ok().map(|v| v.to_string())
+    };
+
+    let after_remove = fixture
+        .appstate
+        .store
+        .get_resource(&subject.as_str().into())
+        .await
+        .unwrap();
+    assert_eq!(
+        description(&after_remove),
+        None,
+        "the remove did not take effect"
+    );
+
+    let saved = test::call_service(
+        &service,
+        post(
+            serde_json::json!({
+                "drive": fixture.drive,
+                "app": app,
+                "op": "save",
+                "subject": subject,
+                "propVals": {
+                    urls::NAME: "Renamed",
+                    urls::IMPORT_BASELINE: {
+                        "values": { urls::NAME: "Renamed", urls::DESCRIPTION: "Goes away" },
+                        "previous": values,
+                    },
+                },
+            })
+            .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(saved.status(), 200, "{}", body_of(saved));
+
+    let after_save = fixture
+        .appstate
+        .store
+        .get_resource(&subject.as_str().into())
+        .await
+        .unwrap();
+    assert_eq!(after_save.get(urls::NAME).unwrap().to_string(), "Renamed");
+    assert_eq!(
+        description(&after_save),
+        None,
+        "the removed property came back on the next save"
+    );
+}

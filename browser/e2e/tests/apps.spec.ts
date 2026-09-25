@@ -177,6 +177,70 @@ test.describe('apps', () => {
     });
   });
 
+  test('a value an app removes is gone, for the app and on the server', async ({
+    page,
+  }) => {
+    await newApp(page);
+
+    // `resource.remove(p).save()` from inside the frame, then a fresh read —
+    // what an importing app does when a source clears a field.
+    await setAppSource(
+      page,
+      `export async function view({ root, store }) {
+        const NAME = 'https://atomicdata.dev/properties/name';
+        const DESCRIPTION = 'https://atomicdata.dev/properties/description';
+        const out = document.createElement('output');
+        root.append(out);
+        try {
+          const made = await store.newResource({
+            propVals: { [NAME]: 'Row', [DESCRIPTION]: 'Goes away' },
+          });
+          const row = await store.getResource(made.subject);
+          row.remove(DESCRIPTION);
+          await row.save();
+          const after = await store.getResource(made.subject);
+          out.dataset.subject = made.subject;
+          out.textContent = 'description: ' + String(after.get(DESCRIPTION));
+        } catch (e) {
+          out.textContent = 'error: ' + e.message;
+        }
+      }`,
+    );
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const out = app.locator('output');
+    await expect(out).toHaveText(/^(description|error): /, { timeout: 60_000 });
+    await expect(out).toHaveText('description: undefined');
+
+    // And the server's copy, fetched over HTTP rather than the WebSocket the
+    // host's refresh uses, so a stale page copy cannot pass for it.
+    const subject = (await out.getAttribute('data-subject'))!;
+    const onServer = await page.evaluate(async (s: string) => {
+      const store = (
+        window as unknown as {
+          store: {
+            fetchResourceFromServer(
+              s: string,
+              o: { noWebSocket: boolean; forceOverride: boolean },
+            ): Promise<{ getPropVals(): Record<string, unknown> }>;
+          };
+        }
+      ).store;
+      const resource = await store.fetchResourceFromServer(s, {
+        noWebSocket: true,
+        forceOverride: true,
+      });
+
+      return resource.getPropVals();
+    }, subject);
+
+    expect(onServer['https://atomicdata.dev/properties/name']).toBe('Row');
+    expect(
+      onServer['https://atomicdata.dev/properties/description'],
+    ).toBeUndefined();
+  });
+
   test('an app that breaks says so, and offers to have it fixed', async ({
     page,
   }) => {
