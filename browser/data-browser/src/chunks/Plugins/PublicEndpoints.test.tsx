@@ -19,12 +19,7 @@ import activitypub from '../../../../../testdata/plugin-manifest/v3-activitypub.
 
 // The dialog's chrome needs a real <dialog> and the app's providers; what is
 // under test is its content and its Install button.
-const dialog = vi.hoisted(() => [
-  {},
-  () => undefined,
-  () => undefined,
-  true,
-]);
+const dialog = vi.hoisted(() => [{}, () => undefined, () => undefined, true]);
 
 vi.mock('@components/Dialog', async original => {
   const Pass = ({ children }: { children?: React.ReactNode }) => (
