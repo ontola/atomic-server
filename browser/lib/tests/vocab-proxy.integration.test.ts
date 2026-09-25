@@ -5,10 +5,13 @@
  * the vocabulary host fails.
  *
  * The external origin is a local stub with GitHub Pages' behaviour: GET
- * answers with `access-control-allow-origin: *` and a preflight gets 405.
+ * answers with `content-type: application/octet-stream` (Pages' type for an
+ * extensionless file) and `access-control-allow-origin: *`, and a preflight
+ * gets 405. Both the browser client and the server's own fetch go by the
+ * body, so JSON-AD parses under that type and HTML under it is refused.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -58,6 +61,18 @@ async function startStub(): Promise<Stub> {
       return;
     }
 
+    // A page that is not a vocabulary term, labelled the same way.
+    if (path.startsWith('/html/')) {
+      res
+        .writeHead(200, {
+          'content-type': 'application/octet-stream',
+          'access-control-allow-origin': '*',
+        })
+        .end('<!DOCTYPE html><html><body>Not a term</body></html>');
+
+      return;
+    }
+
     res
       .writeHead(200, {
         'content-type': 'application/octet-stream',
@@ -87,6 +102,44 @@ describe('fetching external vocabulary through the /path proxy', () => {
 
   afterAll(async () => {
     await Promise.all([server?.stop(), stub?.close()]);
+  });
+
+  it('parses a term served as application/octet-stream, fetched directly', async () => {
+    const term = `${stub.origin}/direct/classes/draft`;
+    const client = new Client();
+
+    const { resource } = await client.fetchResourceHTTP(term, {
+      signInfo: { agent, serverURL: server.serverUrl },
+      serverURL: server.serverUrl,
+    });
+
+    expect(resource.error).toBeUndefined();
+    expect(resource.subject).toBe(term);
+    expect(resource.get(core.properties.shortname)).toBe('draft');
+    expect(stub.hits('/direct/classes/draft')).toBe(1);
+  });
+
+  it('refuses HTML served as application/octet-stream, directly and through the proxy', async () => {
+    const term = `${stub.origin}/html/classes/draft`;
+    const client = new Client();
+    const signInfo = { agent, serverURL: server.serverUrl };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const direct = await client.fetchResourceHTTP(term, {
+      signInfo,
+      serverURL: server.serverUrl,
+    });
+    const proxied = await client.fetchResourceHTTP(term, {
+      from: server.serverUrl,
+      signInfo,
+      serverURL: server.serverUrl,
+    });
+
+    expect(direct.resource.error).toBeDefined();
+    expect(proxied.resource.error).toBeDefined();
+    expect(proxied.resource.get(core.properties.shortname)).toBeUndefined();
+    // The proxy did ask the origin: the server refused the body, not the URL.
+    expect(stub.hits('/html/classes/draft')).toBeGreaterThanOrEqual(2);
   });
 
   it('accepts a proxy request signed over the proxy URL and returns the external class', async () => {
