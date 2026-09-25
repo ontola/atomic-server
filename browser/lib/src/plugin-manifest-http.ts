@@ -725,7 +725,57 @@ export function checkHostFeatures(
   http: DeclaredHttp | undefined,
   node: PluginRoutesStatus,
 ): HostFeatureUnavailable | undefined {
-  const gate = httpGate(http);
+  return checkGate(httpGate(http), node);
+}
+
+/**
+ * The gate a catalog entry's derived `requires` names (`plugin-routes:<level>`,
+ * `operator-listener:<name>`, `operator-sidecar:<name>`), so a client can
+ * compare it with `hostFeatures` without fetching the manifest. It carries no
+ * surfaces: `requires` doesn't say which endpoints asked for the level.
+ */
+export function requiresGate(
+  requires: readonly string[] | null | undefined,
+): ReleaseGate {
+  let top = 0;
+  const listeners: string[] = [];
+  const sidecars: string[] = [];
+
+  for (const entry of requires ?? []) {
+    const [kind, value] = [
+      entry.slice(0, entry.indexOf(':')),
+      entry.slice(entry.indexOf(':') + 1),
+    ];
+    if (kind === 'plugin-routes') top = Math.max(top, rank(value));
+
+    // Only nodes at `read-write` configure listeners and sidecars.
+    if (kind === 'operator-listener') {
+      listeners.push(value);
+      top = Math.max(top, rank('read-write'));
+    }
+
+    if (kind === 'operator-sidecar') {
+      sidecars.push(value);
+      top = Math.max(top, rank('read-write'));
+    }
+  }
+
+  return {
+    needed: top === 0 ? 'none' : (LEVELS[top] as ReleaseGate['needed']),
+    listeners,
+    sidecars,
+    surfaces: [],
+  };
+}
+
+/**
+ * `checkHostFeatures` for a gate already computed, by `httpGate` from a
+ * manifest or by `requiresGate` from a catalog entry.
+ */
+export function checkGate(
+  gate: ReleaseGate,
+  node: PluginRoutesStatus,
+): HostFeatureUnavailable | undefined {
   if (gate.needed === 'none') return undefined;
   const level: PluginRoutesLevel = node.compiled ? node.level : 'off';
   const listeners = gate.listeners.filter(n => !node.listeners.includes(n));
@@ -803,6 +853,34 @@ export function parseHostFeatureUnavailable(
       ? (raw.level as PluginRoutesLevel)
       : 'off',
     surfaces: strings(raw.surfaces),
+    listeners: strings(raw.listeners),
+    sidecars: strings(raw.sidecars),
+  };
+}
+
+/**
+ * `hostFeatures.pluginRoutes` from a `/plugin-catalog` response body.
+ * `undefined` for a server from before the gates (#1711), which answered a
+ * bare array and can't open public endpoints at all.
+ */
+export function parsePluginRoutesStatus(
+  body: unknown,
+): PluginRoutesStatus | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return undefined;
+  const features = (body as Raw).hostFeatures as Raw | undefined;
+  const raw = features?.pluginRoutes as Raw | undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const strings = (v: unknown) =>
+    Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+
+  return {
+    compiled: raw.compiled === true,
+    level: LEVELS.includes(raw.level as PluginRoutesLevel)
+      ? (raw.level as PluginRoutesLevel)
+      : 'off',
+    routesOrigin:
+      typeof raw.routesOrigin === 'string' ? raw.routesOrigin : null,
     listeners: strings(raw.listeners),
     sidecars: strings(raw.sidecars),
   };

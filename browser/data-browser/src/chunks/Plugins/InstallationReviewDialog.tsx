@@ -5,10 +5,17 @@ import Markdown from '@components/datatypes/Markdown';
 import { Column, Row } from '@components/Row';
 import { ConfigReference } from '@views/Installation/ConfigReference';
 import { CapabilityList } from './CapabilityList';
+import { GateRefusal, PublicEndpoints } from './PublicEndpoints';
+import { usePluginRoutesStatus } from './usePluginRoutesStatus';
 import {
+  checkHostFeatures,
   grantsFor,
+  HostFeatureUnavailableError,
+  useStore,
+  type HostFeatureUnavailable,
   type InstallationReview,
   type JSONValue,
+  type PluginRoutesStatus,
   type ReleaseReference,
 } from '@tomic/react';
 import type { JSONSchema7 } from 'ai';
@@ -51,6 +58,12 @@ interface InstallationReviewDialogProps {
     confirm: string;
     busy: string;
   };
+  /**
+   * This node's plugin-routes gates, when the caller already has them (the
+   * Store reads them with the catalog). Fetched here otherwise, and only for
+   * a release that opens public endpoints.
+   */
+  pluginRoutes?: PluginRoutesStatus;
 }
 
 const INSTALL_VERB = {
@@ -66,8 +79,23 @@ const INSTALL_VERB = {
  */
 export const InstallationReviewDialog: React.FC<
   InstallationReviewDialogProps
-> = ({ pending, onClose, onInstall, secondary, verb = INSTALL_VERB }) => {
+> = ({
+  pending,
+  onClose,
+  onInstall,
+  secondary,
+  verb = INSTALL_VERB,
+  pluginRoutes: knownPluginRoutes,
+}) => {
+  const store = useStore();
   const configLabelId = useId();
+  const fetchedPluginRoutes = usePluginRoutesStatus(
+    !knownPluginRoutes && !!pending?.review.http,
+  );
+  const pluginRoutes = knownPluginRoutes ?? fetchedPluginRoutes;
+  // The server's own refusal, when installing was refused after all (the
+  // operator changed the gates, or the review couldn't read them).
+  const [refused, setRefused] = useState<HostFeatureUnavailable>();
   const [config, setConfig] = useState<JSONValue>();
   const [configValid, setConfigValid] = useState(true);
   const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
@@ -82,6 +110,7 @@ export const InstallationReviewDialog: React.FC<
     setConfig(pending.currentConfig ?? pending.review.defaultConfig);
     setConfigValid(true);
     setConfigSyntaxValid(true);
+    setRefused(undefined);
     show();
   }, [pending, show]);
 
@@ -93,6 +122,11 @@ export const InstallationReviewDialog: React.FC<
       ? `${review.namespace}/${review.name}`
       : (review.name ?? pending.title ?? 'plugin');
   const description = review.description ?? pending.description;
+  const refusal =
+    refused ??
+    (review.http && pluginRoutes
+      ? checkHostFeatures(review.http, pluginRoutes)
+      : undefined);
   const hasConfig =
     review.configSchema !== undefined ||
     review.defaultConfig !== undefined ||
@@ -105,6 +139,12 @@ export const InstallationReviewDialog: React.FC<
       await action();
       hide(true);
     } catch (err) {
+      if (err instanceof HostFeatureUnavailableError) {
+        setRefused(err.problem);
+
+        return;
+      }
+
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -137,7 +177,15 @@ export const InstallationReviewDialog: React.FC<
               <Markdown text={description} />
             </DescriptionWrapper>
           )}
+          {refusal && <GateRefusal problem={refusal} />}
           <CapabilityList capabilities={review.capabilities} />
+          {review.http && (
+            <PublicEndpoints
+              http={review.http}
+              pluginRoutes={pluginRoutes}
+              serverUrl={store.getServerUrl()}
+            />
+          )}
           {hasConfig && (
             <>
               <Label id={configLabelId}>Config</Label>
@@ -193,7 +241,7 @@ export const InstallationReviewDialog: React.FC<
           </Button>
         )}
         <Button
-          disabled={busy || !configValid || !configSyntaxValid}
+          disabled={busy || !configValid || !configSyntaxValid || !!refusal}
           onClick={() =>
             run(() => onInstall(pending, config, grantsFor(review)))
           }
