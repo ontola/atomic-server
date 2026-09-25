@@ -2299,3 +2299,15 @@ deployed app's base64 JSON format with an `atomic:agent:` subject through the
 same `Agent.fromSecret` parser used by the local welcome form. It verifies
 the identity and public key. Browser sign-in and data recovery are separate
 flows.
+
+## Hidden-tab liveness and presence after reconnect (#1800)
+
+`browser/lib/src/liveness.test.ts` replays the WS liveness timer at a hidden
+tab's once-a-minute cadence and checks that a socket whose probes are answered
+is never closed, while a dead one still closes one tick after its probe times
+out. It does not drive a real browser's throttling.
+`server/tests/it/drive_presence.rs`
+(`presence_sent_right_after_subscribe_is_delivered`) sends a presence update
+right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
+reaches the other subscriber without a retry, and that an update held for a
+refused subscribe is dropped.

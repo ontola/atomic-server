@@ -90,6 +90,16 @@ pub struct CommitMonitor {
     #[allow(clippy::mutable_key_type)]
     presence:
         HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<CachedPresence>>>,
+    /// Presence subscribes whose read check is still running, with the
+    /// latest update each such connection sent meanwhile. The check awaits a
+    /// store read, and the actor keeps handling messages while it does, so a
+    /// client's first update (sent right behind its `PRESENCE_SUBSCRIBE`, as
+    /// every reconnect does) routinely arrives before the connection is in
+    /// `presence`. It is held here and delivered once the check passes, or
+    /// dropped if it fails (#1800).
+    #[allow(clippy::mutable_key_type)]
+    pending_presence:
+        HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<CachedPresence>>>,
     store: Db,
     vector_search_state: VectorSearchState,
     /// Set by every commit handler that may have queued a vector-index
@@ -377,6 +387,12 @@ impl Handler<UnsubscribeAll> for CommitMonitor {
         }
         self.presence
             .retain(|_, subscribers| !subscribers.is_empty());
+
+        for pending in self.pending_presence.values_mut() {
+            pending.remove(&msg.addr);
+        }
+        self.pending_presence
+            .retain(|_, pending| !pending.is_empty());
     }
 }
 
@@ -1026,6 +1042,17 @@ impl Handler<SubscribePresence> for CommitMonitor {
     #[allow(clippy::mutable_key_type)]
     fn handle(&mut self, msg: SubscribePresence, _ctx: &mut Context<Self>) -> Self::Result {
         let store = self.store.clone();
+
+        // Note the subscribe before the read check yields, so an update that
+        // overtakes the check is held rather than refused.
+        self.pending_presence
+            .entry(msg.drive.clone())
+            .or_default()
+            .entry(msg.addr.clone())
+            .or_insert(None);
+        let pending_drive = msg.drive.clone();
+        let pending_addr = msg.addr.clone();
+
         Box::pin(
             async move {
                 if !msg.drive.is_local() {
@@ -1074,8 +1101,12 @@ impl Handler<SubscribePresence> for CommitMonitor {
                 Some((msg.drive, msg.addr))
             }
             .into_actor(self)
-            .map(|res, actor, _ctx| {
-                if let Some((drive, addr)) = res {
+            .map(move |res, actor, _ctx| {
+                // `None` when the connection closed or unsubscribed while the
+                // check ran: it must not be added back.
+                let held = actor.take_pending_presence(&pending_drive, &pending_addr);
+
+                if let (Some((drive, addr)), Some(held)) = (res, held) {
                     let subscribers = actor.presence.entry(drive.clone()).or_default();
 
                     // Bring the newcomer up to date: replay every other
@@ -1095,8 +1126,12 @@ impl Handler<SubscribePresence> for CommitMonitor {
                         });
                     }
 
-                    subscribers.entry(addr).or_insert(None);
+                    subscribers.entry(addr.clone()).or_insert(None);
                     tracing::debug!("Presence subscribed to {}", drive);
+
+                    if let Some(update) = held {
+                        actor.accept_presence(&drive, &addr, update);
+                    }
                 }
             }),
         )
@@ -1107,6 +1142,8 @@ impl Handler<UnsubscribePresence> for CommitMonitor {
     type Result = ();
 
     fn handle(&mut self, msg: UnsubscribePresence, _ctx: &mut Context<Self>) {
+        self.take_pending_presence(&msg.drive, &msg.addr);
+
         if let Some(subscribers) = self.presence.get_mut(&msg.drive) {
             subscribers.remove(&msg.addr);
 
@@ -1121,37 +1158,93 @@ impl Handler<PresenceUpdate> for CommitMonitor {
     type Result = ();
 
     fn handle(&mut self, msg: PresenceUpdate, _ctx: &mut Context<Self>) {
-        let Some(subscribers) = self.presence.get_mut(&msg.subject) else {
-            return;
-        };
-
-        let Some(sender) = msg.addr.as_ref() else {
+        let Some(sender) = msg.addr.clone() else {
             tracing::warn!("no addr in presence update for {}", msg.subject);
             return;
+        };
+        let update = CachedPresence {
+            agent: msg.agent,
+            update: msg.update,
         };
 
         // Only subscribers may broadcast — subscribing is where the drive
         // read-access check happens, so this is the auth gate.
-        let Some(cached) = subscribers.get_mut(sender) else {
-            tracing::warn!("presence update from non-subscriber for {}", msg.subject);
+        let subscribed = self
+            .presence
+            .get(&msg.subject)
+            .is_some_and(|subscribers| subscribers.contains_key(&sender));
+        if subscribed {
+            self.accept_presence(&msg.subject, &sender, update);
+            return;
+        }
+
+        // Subscribed, but the read check has not finished: hold the latest
+        // update until it does.
+        if let Some(held) = self
+            .pending_presence
+            .get_mut(&msg.subject)
+            .and_then(|pending| pending.get_mut(&sender))
+        {
+            *held = Some(update);
+            return;
+        }
+
+        tracing::warn!("presence update from non-subscriber for {}", msg.subject);
+    }
+}
+
+impl CommitMonitor {
+    /// Remove a connection's in-flight presence subscribe. The outer `Option`
+    /// is whether one was in flight; the inner one the update it sent
+    /// meanwhile, if any.
+    #[allow(clippy::mutable_key_type)]
+    fn take_pending_presence(
+        &mut self,
+        drive: &atomic_lib::Subject,
+        addr: &Addr<WebSocketConnection>,
+    ) -> Option<Option<CachedPresence>> {
+        let pending = self.pending_presence.get_mut(drive)?;
+        let held = pending.remove(addr);
+        if pending.is_empty() {
+            self.pending_presence.remove(drive);
+        }
+        held
+    }
+
+    /// Cache a subscriber's presence and fan it out to the drive's other
+    /// subscribers and to peers. The caller has checked `sender` subscribes.
+    fn accept_presence(
+        &mut self,
+        drive: &atomic_lib::Subject,
+        sender: &Addr<WebSocketConnection>,
+        update: CachedPresence,
+    ) {
+        let Some(subscribers) = self.presence.get_mut(drive) else {
             return;
         };
-        *cached = Some(CachedPresence {
-            agent: msg.agent.clone(),
-            update: msg.update.clone(),
-        });
+        let Some(cached) = subscribers.get_mut(sender) else {
+            return;
+        };
+        *cached = Some(update.clone());
 
-        // Relay to peers. Only local presence reaches here (the handler above
-        // requires a sender address), so there is no echo to guard against.
+        // Relay to peers. Only local presence reaches here (it always has a
+        // sender address), so there is no echo to guard against.
         if let Ok(agent) = self.store.get_default_agent() {
             atomic_lib::sync::peer::broadcast_ephemeral(
                 atomic_lib::sync::protocol::ephemeral_kind::PRESENCE,
-                msg.subject.as_str(),
+                drive.as_str(),
                 &agent.subject.to_string(),
-                &msg.update,
+                &update.update,
                 None,
             );
         }
+
+        let msg = PresenceUpdate {
+            subject: drive.clone(),
+            agent: update.agent,
+            update: update.update,
+            addr: Some(sender.clone()),
+        };
 
         for subscriber in subscribers.keys() {
             if subscriber == sender {
@@ -1201,6 +1294,7 @@ pub fn create_commit_monitor(
             drive_subscriptions: HashMap::new(),
             loro_subscriptions: HashMap::new(),
             presence: HashMap::new(),
+            pending_presence: HashMap::new(),
             store,
             vector_search_state,
             pending_commit: Arc::new(AtomicBool::new(false)),
