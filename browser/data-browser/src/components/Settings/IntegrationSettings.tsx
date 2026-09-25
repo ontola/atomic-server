@@ -10,6 +10,7 @@ import {
 } from '@components/forms/InputStyles';
 import { Button } from '@components/Button';
 import { SettingsSection } from './SettingsSection';
+import { ProxyTrafficNotice } from '@components/ProxyTrafficNotice';
 import {
   defaultIntegrationProxy,
   setIntegrationProxy,
@@ -93,6 +94,7 @@ function ProxyForm({ proxy }: { proxy: string }) {
             aria-describedby={error ? 'integration-proxy-error' : undefined}
           />
         </InputWrapper>
+        <ProxyTrafficNotice />
         {error && (
           <ErrMessage id='integration-proxy-error' role='alert'>
             {error}
