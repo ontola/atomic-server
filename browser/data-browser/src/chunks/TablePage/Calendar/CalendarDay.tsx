@@ -291,7 +291,7 @@ export function CalendarEvent({
       >
         <span aria-hidden>↷ </span>
         {name}
-        <MovedNote>Moved to {shortDayLabel(movedTo)}</MovedNote>
+        <MovedToNote day={movedTo} />
       </EventChip>
     );
   }
@@ -320,11 +320,19 @@ export function CalendarEvent({
       {recurring && <span aria-label='Recurring meeting'>↻ </span>}
       {allDay && <AllDayLabel>All day</AllDayLabel>}
       {name}
-      {movedFrom && (
-        <MovedNote>Moved from {shortDayLabel(movedFrom)}</MovedNote>
-      )}
+      {movedFrom && <MovedFromNote day={movedFrom} />}
     </EventChip>
   );
+}
+
+// Own components, so each note is extracted as one message with its date
+// placeholder; inside the guarded JSX above, the date fell out of it.
+function MovedFromNote({ day }: { day: string }): JSX.Element {
+  return <MovedNote>Moved from {shortDayLabel(day)}</MovedNote>;
+}
+
+function MovedToNote({ day }: { day: string }): JSX.Element {
+  return <MovedNote>Moved to {shortDayLabel(day)}</MovedNote>;
 }
 
 const Cell = styled.div<{ $inMonth: boolean; $today: boolean }>`
