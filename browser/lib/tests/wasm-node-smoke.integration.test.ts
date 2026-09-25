@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { LoroDoc } from 'loro-crdt';
+import { LoroDoc, LoroList } from 'loro-crdt';
 
 import init, { ClientDb } from '../../../wasm/pkg/atomic_wasm.js';
 import { NodeClientDb } from '../src/client-db.node.js';
@@ -75,6 +75,49 @@ describe('wasm/pkg in Node', () => {
     expect(
       json['https://atomicdata.dev/properties/loroUpdate'],
     ).toBeUndefined();
+
+    db.destroy();
+  });
+
+  it('keeps properties it cannot resolve, and empty arrays, in the row', async () => {
+    const db = new NodeClientDb({ wasmPath });
+    await db.init('http://localhost:9883');
+    const subject = 'http://localhost:9883/smoke-unresolvable';
+    const name = 'https://atomicdata.dev/properties/name';
+    const requires = 'https://atomicdata.dev/properties/requires';
+    // Schema terms of a drive this database holds no definition for.
+    const unknown = 'atomic:propUNKNOWNsmoke';
+    const emptied = 'atomic:propEMPTIEDsmoke';
+    const doc = new LoroDoc();
+    const props = doc.getMap('properties');
+    props.set(name, 'automation');
+    props.setContainer(requires, new LoroList());
+    props.setContainer(unknown, new LoroList());
+    props.setContainer(emptied, new LoroList()).push('https://example.com/a');
+    doc.commit();
+    (props.get(emptied) as LoroList).delete(0, 1);
+    doc.commit();
+    const snapshot = doc.export({ mode: 'snapshot' });
+
+    await db.putResourceWithSnapshot(
+      subject,
+      JSON.stringify({
+        '@id': subject,
+        [name]: 'automation',
+        [requires]: [],
+        [unknown]: [],
+        [emptied]: [],
+      }),
+      snapshot,
+    );
+    const json = JSON.parse(
+      (await db.getResourceWithSnapshot(subject)).jsonAd!,
+    );
+
+    expect(json[name]).toBe('automation');
+    expect(json[requires]).toEqual([]);
+    expect(json[unknown]).toEqual([]);
+    expect(json[emptied]).toEqual([]);
 
     db.destroy();
   });

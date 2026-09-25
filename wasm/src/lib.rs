@@ -285,7 +285,7 @@ impl ClientDb {
         // `store.add_resource()` (which validates required props) during
         // parsing. This is admitted replica state, not a new authored import:
         // preserve duplicate identities so they remain available for review.
-        let resource = atomic_lib::parse::parse_json_ad_resource(
+        let mut resource = atomic_lib::parse::parse_json_ad_resource(
             json_ad,
             self.db(),
             &ParseOpts {
@@ -296,6 +296,23 @@ impl ClientDb {
         )
         .await
         .map_err(to_js_err)?;
+        // A property this database has no definition for yet (a drive's own
+        // schema term not synced here, say) is skipped by the parser, but the
+        // tab's snapshot still holds its value. `getResourceWithSnapshot`
+        // serves this row, so take those values from the snapshot rather than
+        // store a row with less in it than the document.
+        if let Some(snapshot) = &snapshot {
+            let keys: Vec<String> =
+                serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_ad)
+                    .map(|map| {
+                        map.into_iter()
+                            .map(|(key, _)| key)
+                            .filter(|key| key != "@id")
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            resource.restore_props_from_snapshot(&keys, snapshot);
+        }
         match snapshot {
             Some(snapshot) => self
                 .db()
