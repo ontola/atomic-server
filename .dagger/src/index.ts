@@ -1253,6 +1253,14 @@ export class AtomicServer {
         '/lib/src/genesis_test_vectors.json',
         this.source.file('lib/src/genesis_test_vectors.json'),
       )
+      // browser/lib/src/loro-compat.test.ts reads the Rust-written Loro
+      // fixtures and compares the loro-crdt version with Cargo.lock's, both
+      // by repository-root path. Same /lib collision: mount only those.
+      .withDirectory(
+        '/lib/test_files/loro-compat',
+        this.source.directory('lib/test_files/loro-compat'),
+      )
+      .withFile('/Cargo.lock', this.source.file('Cargo.lock'))
       // Tests read shared fixtures directly from the repository-root paths.
       // Include the manifest and planner corpus as well as pairing fixtures.
       .withDirectory('/testdata', this.source.directory('testdata'))

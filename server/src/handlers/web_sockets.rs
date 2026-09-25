@@ -94,7 +94,7 @@ pub async fn web_socket_handler(
     // actix-web-actors defaults `max_size` to 65 536 bytes (64 KiB). Real
     // Loro snapshots — especially for documents with editing history or
     // canvases with many strokes — routinely exceed that, and JSON/base64
-    // wrapping (the RBSR text frames) adds another ~40% on top of the raw
+    // wrapping (the text frames) adds another ~40% on top of the raw
     // bytes. A frame over the limit causes actix to drop the TCP socket
     // without sending a Close control frame, which the browser sees as a
     // CloseEvent `code=1006, wasClean=false`: an unexplained reconnect
@@ -246,7 +246,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 self.handle_binary(&bin, ctx);
             }
             Ok(ws::Message::Text(text)) => {
-                // Remaining text messages: Loro sync, presence, RBSR
+                // Remaining text messages: Loro sync, presence, drive inventory
                 self.handle_text(&text, ctx);
             }
             Ok(ws::Message::Close(reason)) => {
@@ -596,7 +596,7 @@ impl WebSocketConnection {
     }
 
     /// Handle the remaining text messages (Loro and presence subscriptions,
-    /// RBSR, index status).
+    /// the drive inventory, index status).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
         if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
@@ -671,54 +671,27 @@ impl WebSocketConnection {
                     });
             }
         } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
-            // RBSR: answer range fingerprints so the client can find the
-            // differing subjects without transmitting the whole version vector.
-            // Stateless (rebuilds `drive_items` per request) — the incremental
-            // fingerprint tree that makes this cheaper is Phase 2c.
-            //
-            // Gated on `check_read` per subject for this session's agent, like
-            // the full `SYNC` exchange. Without that an anonymous socket
-            // could enumerate every subject and version vector of any drive.
-            if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
-                let store = self.store.clone();
-                let agent = self.agent.clone();
-                let wire =
-                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
-                ctx.spawn(
-                    async move {
-                        let items = atomic_lib::sync::engine::drive_items_for_wire(
-                            &store, &req.drive, &agent, wire,
-                        )
-                        .await;
-                        items
-                            .map(|items| {
-                                let fps: Vec<String> = req
-                                    .ranges
-                                    .iter()
-                                    .map(|(lo, hi)| {
-                                        hex::encode(atomic_lib::sync::rbsr::range_fingerprint(
-                                            &items,
-                                            lo,
-                                            hi.as_deref(),
-                                        ))
-                                    })
-                                    .collect();
-                                serde_json::json!({ "drive": req.drive, "fps": fps }).to_string()
-                            })
-                            .map_err(|reason| (req.drive.clone(), reason))
-                    }
-                    .into_actor(self)
-                    .map(|resp, _actor, ctx| match resp {
-                        Ok(resp) => ctx.text(format!("RBSR_FP {resp}")),
-                        Err((drive, reason)) => ctx.binary(ws_v2::encode_error(
-                            0,
-                            ws_v2::error_code::UNAUTHORIZED_READ,
-                            &format!("RBSR_FP refused for {drive}: {reason}"),
-                        )),
-                    }),
-                );
-            }
+            // Range fingerprints are no longer computed (RBSR was removed
+            // 2026-09: it rebuilt the whole drive inventory on every round
+            // trip, so it cost more than the full `SYNC` it tried to avoid).
+            // Clients from before that still send this after `SYNC_RESEND`.
+            // Answer at once without `fps`: their descent then fails on the
+            // first range and they send the full version-vector `SYNC`, as
+            // they do on any RBSR failure, instead of waiting out their 10s
+            // query timeout. Nothing is read, so nothing needs gating.
+            let drive = serde_json::from_str::<serde_json::Value>(json)
+                .ok()
+                .and_then(|v| v.get("drive").and_then(|d| d.as_str()).map(String::from))
+                .unwrap_or_default();
+            ctx.text(format!(
+                "RBSR_FP {}",
+                serde_json::json!({ "drive": drive, "unsupported": true })
+            ));
         } else if let Some(json) = text.strip_prefix("RBSR_ITEMS ") {
+            // The drive inventory: every subject in `[lo, hi)` this session's
+            // agent may read, with its version vector. Once one step of the
+            // RBSR descent, now used on its own (`makeDriveLocal` checks the
+            // browser holds everything the server has before going local).
             if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
@@ -760,13 +733,6 @@ impl WebSocketConnection {
             tracing::debug!("Unknown text message: {}", &text[..text.len().min(50)]);
         }
     }
-}
-
-#[derive(serde::Deserialize)]
-struct RbsrFpRequest {
-    drive: String,
-    /// `[lo, hi]` ranges; `hi == null` means unbounded above.
-    ranges: Vec<(String, Option<String>)>,
 }
 
 #[derive(serde::Deserialize)]

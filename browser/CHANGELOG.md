@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- `@tomic/lib` answers a stale drive-sync probe (`SYNC_RESEND`) with the full
+  version-vector `SYNC` instead of a range-based set reconciliation over
+  `RBSR_FP` / `RBSR_ITEMS`. The range descent cost the server more than the
+  full exchange. `rbsr.ts` is gone, and `WSClient.rbsrItems` is
+  now `WSClient.driveInventory`.
+
 - A private workspace the app has to recreate is titled after whoever it
   belongs to, like the one onboarding and an accepted invitation already
   make. A returning account on a second device, and a sign-in whose cloud

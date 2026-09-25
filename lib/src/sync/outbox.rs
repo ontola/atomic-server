@@ -181,9 +181,7 @@ impl Outbox {
 
     fn agent_prefix(&self) -> AtomicResult<Vec<u8>> {
         let agent = self.db.get_default_agent()?;
-        let mut key = agent.subject.pure_id().into_bytes();
-        key.push(0);
-        Ok(key)
+        Ok(agent_prefix(&agent.subject.pure_id()))
     }
 
     fn key(&self, subject: &str) -> AtomicResult<Vec<u8>> {
@@ -505,6 +503,68 @@ fn pure(subject: &str) -> String {
     crate::Subject::from_raw(subject, None).pure_id()
 }
 
+/// `{agent}\0`: the key prefix of every entry in `agent`'s outbox.
+fn agent_prefix(agent: &str) -> Vec<u8> {
+    let mut key = pure(agent).into_bytes();
+    key.push(0);
+    key
+}
+
+/// Rows another client keeps in [`Tree::Outbox`] under its own value format.
+///
+/// The browser tab runs its own drain (`browser/lib/src/local-outbox.ts`) and
+/// only needs the table as durable storage: one opaque JSON value per dirty
+/// subject, keyed `{agent}\0{subject}` like [`OutboxEntry`] rows so the
+/// canonical-scheme rewrite and the per-agent split apply to it too. These
+/// values do not parse as [`OutboxEntry`], so [`Outbox::entries`] skips them.
+pub mod raw {
+    use super::*;
+
+    /// Every stored value of `agent`'s outbox, in key order.
+    pub fn entries(db: &Db, agent: &str) -> AtomicResult<Vec<Vec<u8>>> {
+        let prefix = agent_prefix(agent);
+        db.kv
+            .scan_prefix(Tree::Outbox, &prefix)
+            .map(|row| row.map(|(_, value)| value))
+            .collect()
+    }
+
+    /// Store `puts` (`(subject, value)`) and remove `deletes` for `agent`, in
+    /// one batch.
+    pub fn write(
+        db: &Db,
+        agent: &str,
+        puts: &[(String, Vec<u8>)],
+        deletes: &[String],
+    ) -> AtomicResult<()> {
+        let prefix = agent_prefix(agent);
+        let key = |subject: &str| {
+            let mut key = prefix.clone();
+            key.extend_from_slice(pure(subject).as_bytes());
+            key
+        };
+        let mut ops: Vec<Operation> = deletes
+            .iter()
+            .map(|subject| Operation {
+                tree: Tree::Outbox,
+                method: Method::Delete,
+                key: key(subject),
+                val: None,
+            })
+            .collect();
+        ops.extend(puts.iter().map(|(subject, value)| Operation {
+            tree: Tree::Outbox,
+            method: Method::Insert,
+            key: key(subject),
+            val: Some(value.clone()),
+        }));
+        if ops.is_empty() {
+            return Ok(());
+        }
+        db.kv.apply_batch(&ops)
+    }
+}
+
 /// A request/response transport is a commit transport: send the frame,
 /// read until the matching `COMMIT_OK` or `ERROR`. Other frames the
 /// responder may send in between (an `UPDATE` echo) are skipped.
@@ -563,7 +623,7 @@ impl CommitTransport for crate::sync::transport::ChannelTransport {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
     use crate::sync::session::SyncSession;
@@ -834,5 +894,38 @@ mod tests {
         );
         assert!(tiers.0 < tiers.1 && tiers.1 < tiers.2, "{tiers:?}");
         assert_eq!(outbox.tier("did:ad:agent:x").await, (0, 0));
+    }
+
+    #[tokio::test]
+    async fn raw_rows_are_scoped_per_agent_and_keyed_by_canonical_subject() {
+        let device = Db::init_temp("outbox_raw").await.unwrap();
+        let alice = "did:ad:agent:alice";
+        let bob = "__anonymous__";
+        raw::write(
+            &device,
+            alice,
+            &[
+                ("did:ad:one".into(), b"{\"subject\":\"one\"}".to_vec()),
+                ("did:ad:two".into(), b"{\"subject\":\"two\"}".to_vec()),
+            ],
+            &[],
+        )
+        .unwrap();
+        raw::write(&device, bob, &[("did:ad:one".into(), b"bob".to_vec())], &[]).unwrap();
+        assert_eq!(raw::entries(&device, alice).unwrap().len(), 2);
+        assert_eq!(raw::entries(&device, bob).unwrap(), vec![b"bob".to_vec()]);
+
+        // Either spelling of a subject addresses the same row, so a delete
+        // after the canonical-scheme rewrite still finds it.
+        raw::write(&device, alice, &[], &["atomic:one".into()]).unwrap();
+        assert_eq!(
+            raw::entries(&device, alice).unwrap(),
+            vec![b"{\"subject\":\"two\"}".to_vec()]
+        );
+        // Browser rows are not Rust entries: the Rust outbox skips them.
+        assert!(Outbox::new(device.clone())
+            .entries()
+            .map(|e| e.is_empty())
+            .unwrap_or(true));
     }
 }
