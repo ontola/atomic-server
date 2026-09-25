@@ -1,6 +1,7 @@
 import {
   errorMessageFromResponse,
   signRequest,
+  signedRequestInit,
   type Store,
 } from '@tomic/react';
 
@@ -91,14 +92,17 @@ export async function fetchRowGrant(
 async function post<T>(store: Store, body: Record<string, unknown>) {
   const agent = signedIn(store);
   const url = `${store.getServerUrl()}/app-row-grant`;
-  const headers = await signRequest(url, agent, {});
 
+  // A write here requires a version 2 signature over exactly this body.
   return parse<T>(
-    await fetch(url, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
+    await fetch(
+      url,
+      await signedRequestInit(url, agent, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    ),
   );
 }
 

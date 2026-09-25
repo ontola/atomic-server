@@ -23,8 +23,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `/plugin-run`, `/plugin-schedule`, `/plugin-resume`, `/plugin-auto-apply`,
   `/plugin-trigger`, the `/plugin-release*`, `/plugin-sync-*`,
   `/plugin-connection-*` and `/plugin-external-*` routes, the 13
-  `/integration-action*` routes, `/bind-drive`, `/forget-peer`, `/iroh-sync`
-  and the `/website-hosting` writes refuse version 1 signatures, bearer
+  `/integration-action*` routes, `/bind-drive`, `/forget-peer`, `/iroh-sync`,
+  the `/website-hosting` writes, `/app-row-grant`, `/plugin-route-consent`
+  and `/plugin-route-tokens` refuse version 1 signatures, bearer
   tokens and session cookies with a `401`. A middleware reads the body before
   the handler, checks the signature over exactly those bytes, and hands them
   on. An in-memory replay cache per node remembers every accepted v2

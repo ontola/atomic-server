@@ -22,6 +22,16 @@ import {
 } from './error.js';
 vi.mock('./authentication.js', () => ({
   signRequest: async () => ({ authorization: 'signed' }),
+  // `/plugin-release-pin` is signed with version 2 (#1700).
+  signedRequestInit: async (
+    _url: string,
+    _agent: unknown,
+    request: { method: string; headers?: object; body?: string },
+  ) => ({
+    method: request.method,
+    headers: { ...request.headers, authorization: 'signed' },
+    body: request.body,
+  }),
 }));
 
 // Shared with server/src/plugins/manifest.rs and manifest_http.rs.

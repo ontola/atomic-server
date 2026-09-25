@@ -156,7 +156,8 @@ AtomicServer requires version 2 on the endpoints that change state (`POST`, `DEL
 - `/plugin-sync-preview`, `-apply`, `-schedule`, `-status`, `/plugin-connection-state`, `-checkpoint`, `/plugin-external-read`, `-status`, `-confirm`, `-apply`;
 - `/integration-actions` and the twelve `/integration-action-*` routes;
 - `/bind-drive`, `/forget-peer`, `/iroh-sync`;
-- `/website-hosting/assets/{hash}`, `/website-hosting/deployments`, `/website-hosting/activate`.
+- `/website-hosting/assets/{hash}`, `/website-hosting/deployments`, `/website-hosting/activate`;
+- `/app-row-grant` (an app's grant on a table's rows), and with plugin routes `/plugin-route-consent` (the consent page's answer) and `/plugin-route-tokens` (revoking a route token).
 
 A `GET` on the same paths still takes version 1. Each version 2 signature on these endpoints is accepted once: the server remembers every one it accepted until it can no longer be fresh (five minutes after its timestamp), and answers a second use with a `401`. Sign every request anew; two identical requests signed in the same millisecond carry the same signature, since Ed25519 is deterministic. The memory is per server process and bounded; when it is full the server answers `429` until older signatures age out. The request body is signed as sent, so send it without `Content-Encoding`. In `@tomic/lib`, `signedRequestInit(url, agent, { method, body, headers })` returns the `fetch` options for such a request.
 

@@ -132,18 +132,24 @@ fn post(uri: &str, body: &str, headers: &[(String, String)]) -> actix_test::Test
 }
 
 /// Signed as the store's default agent, who owns the drive and the
-/// Installation.
+/// Installation. A `POST` gets a version 2 signature over an empty body: the
+/// consent and token routes require it (#1700) and accept each proof once.
 fn signed(
     appstate: &crate::appstate::AppState,
     method: &str,
     path: &str,
 ) -> actix_test::TestRequest {
     let origin = appstate.config.get_origin();
-    let headers = atomic_lib::client::get_authentication_headers(
-        &format!("{origin}{path}"),
-        &appstate.store.get_default_agent().unwrap(),
-    )
-    .unwrap();
+    let url = format!("{origin}{path}");
+    let agent = appstate.store.get_default_agent().unwrap();
+    let headers = if method == "POST" {
+        // Ed25519 is deterministic: two POSTs signed in the same millisecond
+        // would be the same proof, and the second a replay.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        atomic_lib::client::get_authentication_headers_v2("POST", &url, b"", &agent).unwrap()
+    } else {
+        atomic_lib::client::get_authentication_headers(&url, &agent).unwrap()
+    };
     let mut request = match method {
         "POST" => actix_test::TestRequest::post(),
         _ => actix_test::TestRequest::get(),
@@ -623,6 +629,12 @@ async fn the_consent_flow_gives_a_token_for_exactly_what_was_approved() {
     )
     .await;
     assert_eq!(resp.status(), 401);
+    // A version 1 signature over the same answer is refused too (#1700).
+    let v1 = signed(&i.f.appstate, "GET", &approve).method(actix_web::http::Method::POST);
+    let resp = actix_test::call_service(&app, v1.to_request()).await;
+    assert_eq!(resp.status(), 401);
+    assert!(String::from_utf8_lossy(&actix_test::read_body(resp).await)
+        .contains(crate::require_v2::REQUIRES_V2));
     let resp =
         actix_test::call_service(&app, signed(&i.f.appstate, "POST", &approve).to_request()).await;
     assert_eq!(resp.status(), 200);

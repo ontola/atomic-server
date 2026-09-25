@@ -4,6 +4,7 @@ import {
   parseRouteStatus,
   parseRouteTokens,
   signRequest,
+  signedRequestInit,
   type InstallationRouteStatus,
   type RouteToken,
   type Store,
@@ -29,11 +30,13 @@ async function call(
 
   if (options.revoke) url += `&revoke=${encodeURIComponent(options.revoke)}`;
 
-  const headers = await signRequest(url, agent, {});
-  const response = await fetch(url, {
-    method: options.revoke ? 'POST' : 'GET',
-    headers,
-  });
+  // Revoking requires a version 2 signature (#1700); reads sign version 1.
+  const response = await fetch(
+    url,
+    options.revoke
+      ? await signedRequestInit(url, agent, { method: 'POST' })
+      : { method: 'GET', headers: await signRequest(url, agent, {}) },
+  );
   const body = await response.text();
 
   // A server built without plugin routes has no such endpoint.

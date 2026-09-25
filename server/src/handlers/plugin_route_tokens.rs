@@ -11,9 +11,10 @@
 //! - `POST /plugin-route-tokens?installation=<subject>&revoke=<id>`.
 //!
 //! All four need an agent with write rights on the Installation, signed
-//! with Atomic headers. The two `POST`s refuse cookie sessions and carry
-//! their arguments in the signed URL, so a signature cannot be reused for
-//! another request or another answer.
+//! with Atomic headers. The two `POST`s require a version 2 signature
+//! (`crate::require_v2`, #1700), which refuses cookie sessions and version 1,
+//! carry their arguments in the signed URL, and are accepted once, so a
+//! signature cannot be reused for another request or another answer.
 
 use actix_web::{http::header, web, HttpRequest, HttpResponse};
 use atomic_lib::{agents::ForAgent, hierarchy::check_write, urls, Resource, Storelike, Value};
@@ -56,7 +57,7 @@ async fn agent(
         .to_string();
     let signed_subject =
         atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
-    let agent = crate::helpers::get_client_agent(req.headers(), state, &signed_subject).await?;
+    let agent = crate::helpers::get_client_agent_of(req, state, &signed_subject).await?;
     if agent == ForAgent::Public {
         return Err(error(AppErrorType::Unauthorized, "Sign in to continue."));
     }

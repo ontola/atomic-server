@@ -13,7 +13,20 @@ vi.mock('@tomic/react', async () => {
   const actual =
     await vi.importActual<typeof import('@tomic/react')>('@tomic/react');
 
-  return { ...actual, signRequest: async () => ({}) };
+  return {
+    ...actual,
+    signRequest: async () => ({}),
+    // Writes to /app-row-grant require version 2 (#1700).
+    signedRequestInit: async (
+      _url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: { ...request.headers, 'x-atomic-signature-version': '2' },
+      body: request.body,
+    }),
+  };
 });
 
 const TABLE = 'did:ad:transactions';
@@ -34,16 +47,23 @@ const GRANT: RowGrant = {
 };
 
 let requests: Array<{ url: string; method: string; body?: unknown }>;
+let versions: Array<string | undefined>;
 let live: RowGrant | null;
 
 beforeEach(() => {
   requests = [];
+  versions = [];
   live = null;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const body = init.body ? JSON.parse(init.body as string) : undefined;
       requests.push({ url, method: init.method ?? 'GET', body });
+      versions.push(
+        (init.headers as Record<string, string> | undefined)?.[
+          'x-atomic-signature-version'
+        ],
+      );
 
       const answer =
         init.method === 'POST'
@@ -152,6 +172,7 @@ describe("an app's requestRowAccess (#1740)", () => {
     // Who granted it is the request's signer, recorded by the server; the
     // page never sends a `grantedBy` of its own.
     expect(requests[0].body).not.toHaveProperty('grantedBy');
+    expect(versions).toEqual(['2']);
     expect(grant.via).toBe('request');
     expect(changed).toHaveBeenCalledOnce();
   });

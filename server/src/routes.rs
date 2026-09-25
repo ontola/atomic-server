@@ -415,6 +415,7 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
         )
         .service(
             web::resource("/app-row-grant")
+                .wrap(from_fn(require_v2))
                 .route(web::get().to(handlers::app_row_grant::get_row_grant))
                 .route(web::post().to(handlers::app_row_grant::post_row_grant)),
         )
@@ -432,11 +433,13 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     // The host's consent page's API (D6) and an installation's route tokens.
     .service(
         web::resource("/plugin-route-consent")
+            .wrap(from_fn(require_v2))
             .route(web::get().to(handlers::plugin_route_tokens::consent))
             .route(web::post().to(handlers::plugin_route_tokens::decide)),
     )
     .service(
         web::resource("/plugin-route-tokens")
+            .wrap(from_fn(require_v2))
             .route(web::get().to(handlers::plugin_route_tokens::tokens))
             .route(web::post().to(handlers::plugin_route_tokens::revoke)),
     );

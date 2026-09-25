@@ -15,7 +15,7 @@ use atomic_lib::{agents::ForAgent, hierarchy::check_read, Storelike, Subject};
 use crate::{
     appstate::AppState,
     errors::{AtomicServerError, AtomicServerResult},
-    helpers::get_client_agent,
+    helpers::get_client_agent_of,
     plugins::app_row_grant::{self, RowGrant, VIA_MENU, VIA_VIEW_KIND_CHANGED, VIA_VIEW_REMOVED},
 };
 
@@ -59,7 +59,7 @@ async fn signer(
         .to_string();
     let signed_subject = Subject::from_raw(&path_and_query, None).resolve(&context.origin);
 
-    match get_client_agent(req.headers(), appstate, &signed_subject).await? {
+    match get_client_agent_of(req, appstate, &signed_subject).await? {
         ForAgent::AgentSubject(agent) => Ok(agent.to_string()),
         _ => Err(AtomicServerError {
             message: "Sign in to see or change what an app may edit".into(),

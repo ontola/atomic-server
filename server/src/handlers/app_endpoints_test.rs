@@ -46,32 +46,6 @@ pub(super) fn signed(path: &str, appstate: &AppState) -> TestRequest {
     request
 }
 
-/// Signs as someone other than this node's own agent — a collaborator.
-pub(super) fn signed_as(path: &str, appstate: &AppState, agent: &Agent) -> TestRequest {
-    let origin = appstate.config.get_origin();
-    let url = format!("{origin}{path}");
-    let headers =
-        atomic_lib::client::get_authentication_headers(&url, agent).expect("auth headers");
-
-    let mut request = TestRequest::with_uri(path);
-
-    for (key, value) in headers {
-        request = request.insert_header((key, value));
-    }
-
-    if let Ok(parsed) = url::Url::parse(&origin) {
-        if let Some(host) = parsed.host_str() {
-            let authority = match parsed.port() {
-                Some(port) => format!("{host}:{port}"),
-                None => host.to_string(),
-            };
-            request = request.insert_header(("Host", authority));
-        }
-    }
-
-    request
-}
-
 /// Publishes an agent so the server can verify its signatures, and gives it
 /// `right` on `target` — which is exactly what the Share dialog does.
 pub(super) async fn share(fixture: &Fixture, target: &str, agent: &Agent, right: &str) {
@@ -1145,6 +1119,27 @@ fn v2_required_routes(
         routes.push(post(&format!("/integration-action-{action}"), &target));
     }
     routes.push(post("/integration-actions", &target));
+    // Added on the plugins line after #1832: the app's row grant (#1740),
+    // and the route consent answer and token revoke (#1759).
+    routes.push(post(
+        "/app-row-grant",
+        &format!(
+            r#"{{"op":"revoke","drive":{:?},"table":{:?},"app":{:?}}}"#,
+            fixture.drive, fixture.drive, app
+        ),
+    ));
+    #[cfg(feature = "plugin-routes")]
+    {
+        let installation = urlencoding::encode(&fixture.plugin).to_string();
+        routes.push(post(
+            "/plugin-route-consent?request=unknown&decision=deny",
+            "",
+        ));
+        routes.push(post(
+            &format!("/plugin-route-tokens?installation={installation}&revoke=unknown"),
+            "",
+        ));
+    }
     routes
 }
 

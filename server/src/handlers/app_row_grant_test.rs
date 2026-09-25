@@ -5,7 +5,7 @@ use actix_web::{test, web::Data, App};
 use atomic_lib::{agents::Agent, db::app_agent::AppAgentKey, urls, Storelike, Value};
 use serde_json::{json, Value as Json};
 
-use super::app_endpoints_test::{app_fixture, body_of, share, signed, signed_as, signed_v2_as};
+use super::app_endpoints_test::{app_fixture, body_of, share, signed, signed_v2_as};
 use crate::plugins::app_row_grant::{TABLE_VIEWS, VIEW_CLASS, VIEW_KIND};
 use crate::plugins::test_fixture::{genesis, Fixture};
 
@@ -109,25 +109,21 @@ macro_rules! service {
 }
 
 /// Posts JSON, signed as the node's agent or as `$agent`; `(status, body)`.
-/// `/app-write` requires a version 2 signature (#1700), so it gets one.
+/// `/app-write` and `/app-row-grant` require a version 2 signature (#1700),
+/// so every post gets one.
 macro_rules! post {
     (@send $service:expr, $fixture:expr, $path:expr, $body:expr, $agent:expr) => {{
-        let path: &str = $path;
         let body = ($body).to_string();
-        let request = if path == "/app-write" {
-            signed_v2_as(
-                path,
-                &$fixture.appstate,
-                $agent,
-                actix_web::http::Method::POST,
-                &body,
-            )
-        } else {
-            signed_as(path, &$fixture.appstate, $agent)
-                .method(actix_web::http::Method::POST)
-                .insert_header(("Content-Type", "application/json"))
-                .set_payload(body)
-        };
+        // Each proof is accepted once, and Ed25519 is deterministic: the
+        // same post signed in the same millisecond would be a replay.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let request = signed_v2_as(
+            $path,
+            &$fixture.appstate,
+            $agent,
+            actix_web::http::Method::POST,
+            &body,
+        );
         let response = test::call_service(&$service, request.to_request()).await;
         let status = response.status().as_u16();
         (status, body_of(response))

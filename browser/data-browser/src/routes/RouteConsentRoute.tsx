@@ -4,6 +4,7 @@ import { styled } from 'styled-components';
 import {
   errorMessageFromResponse,
   signRequest,
+  signedRequestInit,
   useStore,
   type Agent,
 } from '@tomic/react';
@@ -57,8 +58,13 @@ async function call<T>(
   method: 'GET' | 'POST',
 ): Promise<Result<T>> {
   try {
-    const headers = await signRequest(url, agent, {});
-    const response = await fetch(url, { method, headers });
+    // An answer requires a version 2 signature (#1700); the read signs v1.
+    const response = await fetch(
+      url,
+      method === 'POST'
+        ? await signedRequestInit(url, agent, { method })
+        : { method, headers: await signRequest(url, agent, {}) },
+    );
     const body = await response.text();
 
     if (!response.ok) {
