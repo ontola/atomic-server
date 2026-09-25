@@ -60,7 +60,13 @@ export function CalendarDay({
   }, []);
 
   return (
-    <Cell $inMonth={inMonth} data-testid='calendar-day' data-date={dayKey}>
+    <Cell
+      $inMonth={inMonth}
+      $today={isToday}
+      data-testid='calendar-day'
+      data-date={dayKey}
+      data-outside-month={inMonth ? undefined : true}
+    >
       <CellHeader>
         <DayNumber $today={isToday} aria-current={isToday ? 'date' : undefined}>
           {dayNumber}
@@ -154,7 +160,8 @@ function CalendarEvent({
   );
 }
 
-const Cell = styled.div<{ $inMonth: boolean }>`
+const Cell = styled.div<{ $inMonth: boolean; $today: boolean }>`
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -163,8 +170,28 @@ const Cell = styled.div<{ $inMonth: boolean }>`
   /* A long title truncates inside its column instead of widening it (#1792). */
   min-width: 0;
   overflow: hidden;
-  background-color: ${p => (p.$inMonth ? p.theme.colors.bg : 'transparent')};
-  opacity: ${p => (p.$inMonth ? 1 : 0.5)};
+  /* Days outside the month keep the normal cell background and only dim
+   * their contents. A filled cell read as "selected" and was mistaken for
+   * today (#1805). */
+  background-color: ${p =>
+    p.$today ? p.theme.colors.mainSelectedBg : p.theme.colors.bg};
+
+  & > * {
+    opacity: ${p => (p.$inMonth ? 1 : 0.45)};
+  }
+
+  /* Today: a tinted cell with an accent outline, not just the number. */
+  ${p =>
+    p.$today &&
+    `
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 2px solid ${p.theme.colors.main};
+      pointer-events: none;
+    }
+  `}
 `;
 
 const CellHeader = styled.div`
