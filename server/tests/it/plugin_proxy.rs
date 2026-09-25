@@ -74,19 +74,30 @@ fn encode(s: &str) -> String {
         .collect()
 }
 
-/// A signed request as a browser would make it (v1: over the URL).
+/// A signed request as a browser would make it: a read signs v1 over the
+/// URL; a write signs v2 over the method, URL and exact body, which the
+/// state-changing plugin routes require (#1700).
 async fn signed(
     method: reqwest::Method,
     url: &str,
     agent: &Agent,
     body: Option<serde_json::Value>,
 ) -> serde_json::Value {
+    let bytes = body
+        .map(|body| serde_json::to_vec(&body).unwrap())
+        .unwrap_or_default();
+    let headers = if method == reqwest::Method::GET {
+        atomic_lib::client::get_authentication_headers(url, agent).unwrap()
+    } else {
+        atomic_lib::client::get_authentication_headers_v2(method.as_str(), url, &bytes, agent)
+            .unwrap()
+    };
     let mut req = reqwest::Client::new().request(method, url);
-    for (k, v) in atomic_lib::client::get_authentication_headers(url, agent).unwrap() {
+    for (k, v) in headers {
         req = req.header(k, v);
     }
-    if let Some(body) = body {
-        req = req.json(&body);
+    if !bytes.is_empty() {
+        req = req.header("content-type", "application/json").body(bytes);
     }
     let response = req.send().await.unwrap();
     let status = response.status();
