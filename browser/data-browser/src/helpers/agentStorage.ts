@@ -6,11 +6,7 @@ import {
 } from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
 import { adoptAgentOnDevice } from './adoptAgent';
-import {
-  clearSessionDbKeys,
-  ensureDbKeyOnSignIn,
-  type SignInCredentials,
-} from './localDbKey';
+import { clearSessionDbKeys, ensureDbKeyOnSignIn } from './localDbKey';
 
 const AGENT_IDB_KEY = 'atomic.agent';
 
@@ -249,10 +245,7 @@ async function storeSecret(secret: string): Promise<void> {
         } satisfies StoredAgent);
         await del(AGENT_FALLBACK_KEY);
 
-        await ensureLocalDbKey(resolvedSubject, {
-          privateKey: decoded.privateKey,
-          vaultProof,
-        });
+        await ensureLocalDbKey(resolvedSubject, decoded.privateKey);
 
         return;
       } catch {
@@ -276,10 +269,7 @@ async function storeSecret(secret: string): Promise<void> {
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);
 
-    await ensureLocalDbKey(newSubject, {
-      privateKey: decoded.privateKey,
-      vaultProof,
-    });
+    await ensureLocalDbKey(newSubject, decoded.privateKey);
   }
 }
 
@@ -290,10 +280,10 @@ async function storeSecret(secret: string): Promise<void> {
  */
 async function ensureLocalDbKey(
   subject: string,
-  credentials: SignInCredentials,
+  privateKey: string,
 ): Promise<void> {
   try {
-    await ensureDbKeyOnSignIn(subject, credentials);
+    await ensureDbKeyOnSignIn(subject, privateKey);
   } catch (e) {
     console.warn('Failed to prepare local database key:', e);
   }

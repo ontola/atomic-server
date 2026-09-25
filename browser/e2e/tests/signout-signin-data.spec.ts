@@ -12,7 +12,7 @@
  *  1. the resource itself — is the content still readable by the re-signed-in
  *     agent at all;
  *  2. the local ClientDb encryption key — sign-out deletes the session copy of
- *     the DbKey and keeps a wrapped copy that only the agent's secret can
+ *     the DbKey and keeps a wrapped copy that only the agent's private key can
  *     unwrap (see `helpers/localDbKey.ts`). If sign-in fails to unwrap it, the
  *     worker generates a fresh key, the old encrypted OPFS file can no longer
  *     be opened, and the cache silently empties even though the server still
@@ -66,9 +66,7 @@ const test = base.extend({
 });
 
 const SESSION_KEY_PREFIX = 'atomic.clientdb.session-key.';
-// New sign-ins write only the v2 (secret envelope) record; the v1 prefix
-// `atomic.clientdb.wrapped-key.` is legacy.
-const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key-v2.';
+const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key.';
 
 /**
  * Read raw `idb-keyval` records straight out of IndexedDB.
