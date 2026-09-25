@@ -1960,6 +1960,18 @@ export class Store {
     return this.aliases.get(normalized) ?? normalized;
   }
 
+  /**
+   * True when `subject` is a placeholder (`_new:…`) that has since been aliased
+   * to a real subject — i.e. the draft it stood for has been persisted.
+   *
+   * @deprecated The app no longer creates `_new:` placeholders. Create drafts
+   * with `store.newResource({ deferGenesis: true })`: they keep their subject
+   * when saved, so there is nothing to alias. Kept for backward compatibility.
+   */
+  public isAliased(subject: string): boolean {
+    return this.aliases.has(this.normalizeSubject(subject));
+  }
+
   /** Resolve a (possibly aliased) subject to its cached Resource. */
   private getResolved(subject: string): Resource | undefined {
     return this.resources.get(this.resolveSubject(subject));
@@ -3118,6 +3130,27 @@ export class Store {
     const parentUrl = parent ?? this.getServerUrl();
 
     return this.findAvailableSubject(path, parentUrl);
+  }
+
+  /**
+   * Creates a placeholder subject for a brand-new resource. When the current
+   * agent is DID-based, returns a temporary `_new:{random}` key that gets
+   * replaced with the real `did:ad:...` on first save. Otherwise builds a
+   * random HTTP subject under `parent` or the server root.
+   *
+   * @deprecated Use `store.newResource({ parent, isA, deferGenesis: true })`
+   * and read `resource.subject`: the resource gets its final subject up front
+   * and is never renamed. Kept for backward compatibility; nothing in the
+   * library or app calls it any more.
+   */
+  public createSubject(parent?: string): string {
+    const agentSubject = this.getAgent()?.subject;
+
+    if (!!agentSubject && isAgentSubject(agentSubject)) {
+      return `_new:${this.randomPart()}`;
+    }
+
+    return this.createHTTPSubject(parent ?? this.serverUrl);
   }
 
   /**

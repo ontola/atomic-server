@@ -4,11 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- BREAKING CHANGE (`@tomic/lib`): `store.createSubject()` and `store.isAliased()`
-  are gone. The app no longer creates temporary `_new:` subjects that are
-  renamed on first save: the new-resource form, new-resource dialogs and new
-  table rows all create their resource with `store.newResource()`, so it has
-  its final subject from the start. Use `store.newResource()` (with
+- `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
+  (they still work). The app no longer creates temporary `_new:` subjects
+  that are renamed on first save: the new-resource form, new-resource dialogs
+  and new table rows all create their resource with `store.newResource()`, so
+  it has its final subject from the start. Use `store.newResource()` (with
   `deferGenesis: true` for a draft that is filled in before its first save)
   and read `resource.subject`. `_new:` subjects written by older builds are
   still read and synced as before.
