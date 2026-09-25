@@ -13,3 +13,12 @@ export function longDayLabel(dayKey: string): string {
     month: 'long',
   });
 }
+
+/** "Wed 14 Oct", in the browser's locale. */
+export function shortDayLabel(dayKey: string): string {
+  return fromDayKey(dayKey).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}

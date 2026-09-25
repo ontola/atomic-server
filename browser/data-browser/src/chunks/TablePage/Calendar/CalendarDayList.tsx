@@ -1,4 +1,3 @@
-import type { CalendarOccurrence } from '@tomic/lib';
 import { useEffect, useRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
@@ -7,7 +6,8 @@ import {
   DialogTitle,
   useDialog,
 } from '@components/Dialog';
-import { CalendarEvent } from './CalendarDay';
+import { CalendarEvent, occurrenceKey } from './CalendarDay';
+import type { CalendarDayOccurrence } from './calendarOccurrences';
 import { longDayLabel } from './calendarDayLabel';
 
 interface CalendarDayListProps {
@@ -16,7 +16,7 @@ interface CalendarDayListProps {
   open: boolean;
   bindOpen: (open: boolean) => void;
   eventSubjects: string[];
-  occurrences: CalendarOccurrence[];
+  occurrences: CalendarDayOccurrence[];
   allDaySubjects: ReadonlySet<string>;
   /** Opens a row on top of this list; closing it comes back here. */
   onOpenItem: (subject: string) => void;
@@ -73,12 +73,14 @@ export function CalendarDayList({
               </li>
             ))}
             {occurrences.map(occurrence => (
-              <li key={occurrence.key}>
+              <li key={occurrenceKey(occurrence)}>
                 <CalendarEvent
                   wrap
                   subject={occurrence.subject}
                   allDay={occurrence.allDay}
                   recurring={occurrence.recurring}
+                  movedFrom={occurrence.movedFrom}
+                  movedTo={occurrence.movedTo}
                   onOpen={onOpenItem}
                 />
               </li>

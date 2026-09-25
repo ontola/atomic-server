@@ -116,9 +116,17 @@ test.describe('calendar day list', () => {
     // Not every title fits: the rest are counted, not silently clipped.
     const more = todayCell.getByTestId('calendar-day-more');
     await expect(more).toBeVisible();
-    const shown = await todayCell.getByTestId('calendar-event').count();
+    const shown = await todayCell
+      .locator('[data-testid="calendar-event"]:visible')
+      .count();
     expect(shown).toBeLessThan(titles.length);
     await expect(more).toContainText(`+${titles.length - shown}`);
+    // "+N more" itself sits inside the cell, not clipped below it.
+    const cellBox = (await todayCell.boundingBox())!;
+    const moreBox = (await more.boundingBox())!;
+    expect(moreBox.y + moreBox.height).toBeLessThanOrEqual(
+      cellBox.y + cellBox.height,
+    );
 
     await more.click();
     const list = page.getByTestId('calendar-day-list');
