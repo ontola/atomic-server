@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fixed a drive restored from Cloud Vault on a new device showing its raw
+  identifier as its title, or being replaced by an empty new workspace. The
+  app kept the answer it had before the restore ("not found") and trusted it
+  over the data the restore had just written, so sign-in could decide there
+  was nothing and create a new home over the restored one.
 - A private workspace the app has to recreate is titled after whoever it
   belongs to, like the one onboarding and an accepted invitation already
   make. A returning account on a second device, and a sign-in whose cloud

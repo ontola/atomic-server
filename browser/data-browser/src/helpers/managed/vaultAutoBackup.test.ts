@@ -429,6 +429,34 @@ describe('restoreFromVault', () => {
     },
   );
 
+  it('reloads the restored drive, so a lookup from before the restore stops answering', async () => {
+    const store = await signedInStore();
+    const reopenDrive = vi.fn(async () => undefined);
+
+    await restoreFromVault(store, DRIVE, fakeDeps({ reopenDrive }));
+
+    expect(reopenDrive).toHaveBeenCalledWith(store, DRIVE);
+  });
+
+  it('reloads nothing when the vault restored nothing', async () => {
+    const store = await signedInStore();
+    const reopenDrive = vi.fn(async () => undefined);
+    const deps = fakeDeps({
+      reopenDrive,
+      restoreDrive: vi.fn(async () => ({
+        packsRead: 1,
+        objectsSkipped: 0,
+        objectsUnreadable: 0,
+        resourcesRestored: 0,
+        tombstonesApplied: 0,
+      })),
+    });
+
+    await restoreFromVault(store, DRIVE, deps);
+
+    expect(reopenDrive).not.toHaveBeenCalled();
+  });
+
   /** The device now holds the key: later edits back up without re-enrolling. */
   it('remembers the key so the next backup skips enrollment', async () => {
     const store = await signedInStore();
