@@ -59,6 +59,12 @@ JSON tags for grants and config. `embedded-vocabulary-routing.test.ts` covers
 host routing for plugin classes, while `plugin.spec.ts` installs a release and
 verifies the active plugin in Chromium.
 
+JSON property values: `browser/lib/src/json-value.test.ts` checks that an
+object set on a JSON property reads back as an object before the save drains
+(validated and unvalidated `set()`), after a commit round trip, and from legacy
+docs: untagged objects and string-wrapped (double-encoded) objects. Not covered:
+the `InputJSON` editor itself in a component or E2E test.
+
 Editor sync formatting: unit tests cover both enabling and disabling bold before
 an incoming property update, so sync receipts cannot reset the next typed text's
 formatting. The production-bundle typing E2E exercises the keyboard shortcut.
