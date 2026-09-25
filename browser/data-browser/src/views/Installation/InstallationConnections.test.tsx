@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
 import {
   InstallationConnectionsView,
   type InstallationConnectionsViewProps,
 } from './InstallationConnections';
+import type { ConnectionRequest } from '@helpers/connectionRequests';
 
 vi.mock('@components/Row', () => ({
   Column: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -33,6 +40,7 @@ function view(props: Partial<InstallationConnectionsViewProps> = {}) {
   const all: InstallationConnectionsViewProps = {
     canWrite: true,
     platforms: ['demo'],
+    pluginName: 'Timesheets',
     connected: {},
     existing: {},
     proxyOrigin: 'https://proxy.test',
@@ -41,6 +49,7 @@ function view(props: Partial<InstallationConnectionsViewProps> = {}) {
     onConfirm: vi.fn(),
     onCancel: vi.fn(),
     onDisconnect: vi.fn(),
+    onClearRequests: vi.fn(),
     ...props,
   };
 
@@ -101,4 +110,72 @@ it('shows the connected state per platform, with Disconnect', () => {
   expect(screen.queryByRole('button', { name: 'Connect Demo' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
   expect(props.onDisconnect).toHaveBeenCalledWith('demo');
+});
+
+/** An open request from one node, as `readConnectionRequests` returns it. */
+const request = (platform = 'clockify'): ConnectionRequest => ({
+  subject: `did:ad:request-${platform}`,
+  platform,
+  reason: 'not-connected',
+  requestedAt: Date.UTC(2026, 8, 25, 9, 0),
+  runtime: {
+    subject: 'did:ad:runtime',
+    agent: 'atomic:agent:x',
+    label: 'Server',
+  },
+});
+
+it('shows an open request, with a button that connects that platform', () => {
+  const connection = {
+    connection_id: 'c0',
+    platform: 'clockify',
+    delegations: [],
+  };
+  const { props } = view({
+    requests: [request()],
+    existing: { clockify: [connection] },
+  });
+
+  const notice = screen.getByRole('status');
+  expect(notice.textContent).toContain(
+    'Timesheets needs a Clockify connection',
+  );
+  expect(notice.textContent).toContain('Server');
+  // The platform gets a row too, although the manifest here only says `demo`.
+  expect(screen.getAllByText('Clockify').length).toBeGreaterThan(0);
+  // Offered once, on the request, not again on the row.
+  expect(
+    screen.getAllByRole('button', { name: 'Connect Clockify' }),
+  ).toHaveLength(1);
+  fireEvent.click(
+    within(notice).getByRole('button', { name: 'Connect Clockify' }),
+  );
+  expect(props.onConnect).toHaveBeenCalledWith('clockify');
+  fireEvent.click(
+    within(notice).getByRole('button', { name: 'Use existing connection' }),
+  );
+  expect(props.onUseExisting).toHaveBeenCalledWith('clockify', connection);
+});
+
+it('offers to resume, not to connect, when the platform is already connected', () => {
+  const { props } = view({
+    requests: [request()],
+    connected: { clockify: 'c1' },
+  });
+
+  const notice = screen.getByRole('status');
+  expect(
+    within(notice).queryByRole('button', { name: 'Connect Clockify' }),
+  ).toBeNull();
+  fireEvent.click(within(notice).getByRole('button', { name: 'Resume runs' }));
+  expect(props.onClearRequests).toHaveBeenCalledWith('clockify');
+});
+
+it('shows the request, without any button, to someone who cannot write the Installation', () => {
+  view({ canWrite: false, requests: [request()] });
+
+  expect(screen.getByRole('status').textContent).toContain(
+    'Timesheets needs a Clockify connection',
+  );
+  expect(screen.queryByRole('button')).toBeNull();
 });

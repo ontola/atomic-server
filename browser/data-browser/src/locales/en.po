@@ -9455,6 +9455,7 @@ msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy kee
 
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/views/Installation/InstallationConnections.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Use existing connection"
 msgstr "Use existing connection"
 
@@ -9467,6 +9468,8 @@ msgid "Disconnecting…"
 msgstr "Disconnecting…"
 
 #. 0: name
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/Installation/InstallationConnections.tsx
 msgid "Connect {0}"
 msgstr "Connect {0}"
@@ -9493,3 +9496,27 @@ msgstr "{0} connected"
 #: src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
 msgstr "{0} disconnected"
+
+#. 0: needs
+#: src/views/Drive/PluginList.tsx
+msgid "Needs a connection: {0}"
+msgstr "Needs a connection: {0}"
+
+#. 0: pluginName; 1: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} needs a {1} connection"
+msgstr "{0} needs a {1} connection"
+
+#. 0: nodes; 1: since
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Asked by {0} since {1}. Runs that need it are paused until it is connected."
+msgstr "Asked by {0} since {1}. Runs that need it are paused until it is connected."
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Resume runs"
+msgstr "Resume runs"
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Resumed the runs that need {0}"
+msgstr "Resumed the runs that need {0}"

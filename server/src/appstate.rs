@@ -114,6 +114,8 @@ impl AppState {
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
         ))?;
+        #[cfg(feature = "wasm-plugins")]
+        store.add_class_extender(plugins::connection_requests::build_extender())?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
         ))?;

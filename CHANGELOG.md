@@ -7,6 +7,31 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Connection requests for unattended runs (#1700, piece 9; flow b of
+  ontola/atomic-plugins#54). When a server-side plugin's
+  `ctx.http("atomic-proxy:/<platform>/...")` finds no connection delegated to
+  its Installation for a platform its manifest declares:
+  - the run ends with a typed outcome, a verdict with
+    `needsConnection: {platform, reason}` and nothing to apply, even when the
+    plugin caught the error `ctx.http` threw;
+  - the node writes a `ConnectionRequest` (`connectionRequestPlatform`,
+    `connectionRequestReason`, `connectionRequestedAt`) as a child of its own
+    `InstallationRuntime`, signed by its agent for the Installation. An open
+    request is left as it is; a cleared one is reopened, not duplicated;
+  - the scheduler and the trigger listener pause that Installation's runs on
+    that node: a schedule is neither advanced nor run and shows "Paused: needs
+    a <platform> connection"; a triggered event stays queued;
+  - a writer of the Installation clears it by setting
+    `connectionRequestClearedAt`, and the runs resume once it is cleared and a
+    connection is delegated.
+  A class hook enforces the rights on every node: only the agent published on
+  the parent `InstallationRuntime` may create a request or change what it asks
+  for, and only a writer of the Installation may clear it.
+- Fix: a node's `InstallationRuntime` (and now its `ConnectionRequest`) is
+  created with a self-verifying genesis certificate and a `drive`. Before, the
+  node's local genesis had neither, so the commit never reached the drive's
+  clients and a page could not tell who wrote it; the page's runtime
+  registration therefore never saw a server-published runtime.
 - Plugins reach the integration proxy without naming its origin (#1700,
   answer 4). A manifest declares `proxy: ["clockify"]`, and the plugin calls
   `ctx.http` with `atomic-proxy:/clockify/...`, as its operations declare it.

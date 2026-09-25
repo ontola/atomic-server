@@ -41,6 +41,8 @@ pub mod bind_drive;
 pub mod bookmark;
 pub mod chatroom;
 #[cfg(feature = "wasm-plugins")]
+pub mod connection_requests;
+#[cfg(feature = "wasm-plugins")]
 pub mod connection_state;
 pub mod did;
 pub mod egress;

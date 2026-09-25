@@ -28,6 +28,7 @@ import {
   type ProxyConnection,
   type ProxyConnections,
 } from './proxyConnections';
+import { clearConnectionRequests } from './connectionRequests';
 
 export type InstallationConnectionMap = Record<string, string>;
 
@@ -148,8 +149,12 @@ async function writeConnections(
   await resource.save();
 }
 
-/** `integrationConnections[platform] = connectionId`, signed by the user. */
-export function recordInstallationConnection(
+/**
+ * `integrationConnections[platform] = connectionId`, signed by the user, then
+ * clears the nodes' open requests for that platform (#1700 flow b), also
+ * signed by the user, so the runs they paused resume.
+ */
+export async function recordInstallationConnection(
   store: Store,
   installation: string,
   platform: string,
@@ -157,10 +162,18 @@ export function recordInstallationConnection(
 ): Promise<void> {
   if (!isPlatformId(platform)) throw new Error('Invalid platform');
 
-  return writeConnections(store, installation, current => ({
+  await writeConnections(store, installation, current => ({
     ...current,
     [platform]: connectionId,
   }));
+
+  // Best effort: the connection is recorded either way, and a request left
+  // open still shows on the page with a button to clear it.
+  try {
+    await clearConnectionRequests(store, installation, platform);
+  } catch (e) {
+    console.warn(`Could not clear the ${platform} connection requests`, e);
+  }
 }
 
 /** Removes `platform` from `integrationConnections`, signed by the user. */

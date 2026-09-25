@@ -269,6 +269,30 @@ its v2 signature. They also check refusals, before any connection, for an
 undeclared platform, no delegated connection, no configured proxy, no
 matching operation and a dot segment.
 
+Connection requests (#1700, piece 9): `plugins::connection_requests` tests run
+a real JS Installation that declares `proxy: ["clockify"]` and swallows the
+`ctx.http` error, and check the verdict still carries `needsConnection` and
+nothing to apply, and that the node's agent wrote an open `ConnectionRequest`
+under its `InstallationRuntime`. A scheduled run against a loopback stub proxy
+pauses (no further runs, no proxy call) while the request is open, stays
+paused with a connection alone, and resumes and reaches the proxy once a
+writer of the Installation clears it. A cleared request without a connection
+keeps the schedule paused and is reopened, not duplicated. The class hook
+refuses a request created or changed by a foreign agent or by the
+Installation's writer, a clearing by the node's agent or a stranger, and a
+request that is not under an `InstallationRuntime`.
+`triggers::tests::a_triggered_run_that_needs_a_connection_waits_queued_until_it_resumes`
+checks a triggered event stays queued, unacknowledged and with no error, until
+the request is cleared and a connection exists. On the page,
+`helpers/connectionRequests.test.ts` checks only requests the runtime's agent
+wrote count, reopened requests are open, and that recording a connection
+clears only that platform's open requests; `InstallationConnections.test.tsx`
+checks the notice and its Connect / Use existing / Resume runs buttons, and
+that a non-writer sees the notice without buttons. Not covered: a request
+syncing to another node and that node's hook accepting it, a proxy answering
+that a delegation was revoked (only `not-connected` is detected), and an end
+to end browser test.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
