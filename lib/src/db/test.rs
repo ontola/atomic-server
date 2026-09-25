@@ -1193,10 +1193,6 @@ async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
         result.subjects
     );
     assert_eq!(result.subjects[0].pure_id(), canonical);
-    assert!(!store
-        .kv
-        .contains_key(Tree::QueryMembers, &legacy_key)
-        .unwrap());
 
     query.offset = 1;
     let second_page = store.query(&query).await.unwrap();
@@ -1301,8 +1297,6 @@ async fn basic_parent_query_deduplicates_legacy_and_canonical_subjects() {
         result.subjects
     );
     assert_eq!(result.subjects[0].as_str(), canonical);
-    assert!(!store.kv.contains_key(Tree::PropValSub, &prop_key).unwrap());
-    assert!(!store.kv.contains_key(Tree::ValPropSub, &value_key).unwrap());
 }
 
 /// Production path: create a Drive via `store.create_drive`, add children
@@ -3383,9 +3377,10 @@ async fn file_store_writes_survive_reopen_without_an_explicit_flush() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-/// A resource stored under `did:ad:X` is the same row as `atomic:X`: writes
-/// do not fork, parent queries match either spelling, and destroy replay
-/// sees a legacy commit id.
+/// A store filled before the rename holds `did:ad:X` rows. Opening it moves
+/// them to `atomic:X`; after that, either spelling a caller passes names the
+/// same row: writes do not fork, parent queries match either spelling, and
+/// destroy replay sees a legacy commit id.
 #[tokio::test]
 #[timeout(120000)]
 async fn canonical_scheme_store_boundary() {
@@ -3405,6 +3400,29 @@ async fn canonical_scheme_store_boundary() {
             &encode_propvals(&pv).unwrap(),
         )
         .unwrap();
+    // A commit a pre-rename store saved as `did:ad:commit:`.
+    let sig = "legacyDestroySig";
+    let legacy_commit = format!("did:ad:commit:{sig}");
+    let canon_commit = crate::identifiers::commit_subject(sig);
+    store
+        .kv
+        .insert(
+            Tree::Resources,
+            legacy_commit.as_bytes(),
+            &encode_propvals(&crate::resources::PropVals::new()).unwrap(),
+        )
+        .unwrap();
+
+    // Reopen as a pre-rename store: the rewrite runs on every open until its
+    // marker is set.
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+    store.migrate_canonical_scheme_if_needed().unwrap();
 
     // Query-style parent match: either spelling of the drive finds the child.
     let kids_canon = store.get_children(&canon_drive, None).await.unwrap();
@@ -3412,11 +3430,11 @@ async fn canonical_scheme_store_boundary() {
     assert_eq!(
         kids_canon.len(),
         1,
-        "canonical parent must see did:ad: child"
+        "canonical parent must see the migrated child"
     );
-    assert_eq!(kids_legacy.len(), 1, "legacy parent must see did:ad: child");
+    assert_eq!(kids_legacy.len(), 1, "legacy parent must see the child");
 
-    // First edit under the canonical subject must collapse the alias, not fork.
+    // An edit under the canonical subject updates the one row, no fork.
     let mut resource = store
         .get_resource(&canon_drive.as_str().into())
         .await
@@ -3436,7 +3454,7 @@ async fn canonical_scheme_store_boundary() {
     );
     assert!(
         store.has_resource_locally(legacy_drive),
-        "legacy spelling still resolves via alias lookup"
+        "legacy spelling is normalized on lookup"
     );
     assert!(
         store
@@ -3452,17 +3470,10 @@ async fn canonical_scheme_store_boundary() {
             .get(Tree::Resources, legacy_drive.as_bytes())
             .unwrap()
             .is_none(),
-        "did:ad: alias row must be deleted on write"
+        "no did:ad: row after open"
     );
 
-    // Destroy replay: a commit stored as did:ad:commit: must be seen as present.
-    let sig = "legacyDestroySig";
-    let legacy_commit = format!("did:ad:commit:{sig}");
-    let canon_commit = crate::identifiers::commit_subject(sig);
-    store
-        .kv
-        .insert(Tree::Resources, legacy_commit.as_bytes(), b"commit-row")
-        .unwrap();
+    // Destroy replay: the migrated commit is present under either spelling.
     assert!(store.has_resource_locally(&canon_commit));
     assert!(store.has_resource_locally(&legacy_commit));
 }
@@ -3506,7 +3517,7 @@ async fn canonical_scheme_open_rewrites_legacy_keys() {
         .get(Tree::Resources, legacy.as_bytes())
         .unwrap()
         .is_none());
-    let (_, rewritten) = store.get_propvals_aliased(&canon).unwrap();
+    let (_, rewritten) = store.get_propvals_canonical(&canon).unwrap();
     assert_eq!(
         rewritten.get(urls::PARENT).unwrap().to_string(),
         "atomic:migrateParent"
@@ -3875,4 +3886,71 @@ async fn replica_row_keeps_unresolvable_props_from_snapshot() {
             other => panic!("{prop} should be an empty array, got {other:?}"),
         }
     }
+}
+
+/// A critical commit's `Tree::Resources` row is self-contained: its blob
+/// keeps the signed `loroUpdate` (a CRDT resource's blob drops it in favour
+/// of `Tree::LoroSnapshots`), and the row is findable by the resource it is
+/// about through the `subject` index. See `envelopes::tests::
+/// stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit` for
+/// why the payload cannot be borrowed from the envelope.
+#[tokio::test]
+#[timeout(120000)]
+async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
+    let store = Db::init_temp("commit_row_self_contained").await.unwrap();
+    let (_alice, drive) = store.setup("Alice").await.unwrap();
+    let subject = store
+        .create_resource(urls::CLASS, &drive, "Doc", None)
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&subject, None);
+    let genesis_id = crate::envelopes::latest_envelope(&store, subject.as_str())
+        .unwrap()
+        .commit_id();
+
+    let commit_blob = store
+        .kv
+        .get(Tree::Resources, genesis_id.as_bytes())
+        .unwrap()
+        .expect("a genesis commit keeps its Tree::Resources row");
+    assert!(
+        matches!(
+            decode_propvals(&commit_blob).unwrap().get(urls::LORO_UPDATE),
+            Some(Value::LoroDoc(bytes)) if !bytes.is_empty()
+        ),
+        "the commit row keeps its signed loroUpdate"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, genesis_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "a commit has no CRDT snapshot of its own"
+    );
+
+    let resource_blob = store
+        .kv
+        .get(Tree::Resources, subject.pure_id().as_bytes())
+        .unwrap()
+        .unwrap();
+    assert!(
+        !decode_propvals(&resource_blob)
+            .unwrap()
+            .contains_key(urls::LORO_UPDATE),
+        "an ordinary row is a projection without loroUpdate"
+    );
+
+    let found = store
+        .query(&Query::new_prop_val(urls::SUBJECT, subject.as_str()))
+        .await
+        .unwrap();
+    assert!(
+        found
+            .subjects
+            .iter()
+            .any(|s| s.as_str() == genesis_id.as_str()),
+        "the commit row is indexed by the subject it is about: {:?}",
+        found.subjects
+    );
 }

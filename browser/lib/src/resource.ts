@@ -585,11 +585,10 @@ export class Resource<C extends OptionalClass = any> {
         // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
         // scheme — the resource carries its real `did:ad:` from birth.
         if (this.new) return;
-        // `_new:` placeholders (the interactive New-Resource form / any
-        // `store.createSubject()` caller, as opposed to `store.newResource()`
-        // which mints a real DID up front) can only be synced by first
-        // deriving their real subject via `signChanges` — that's what
-        // `_saveInner`'s explicit-save path does. `this.new` is supposed to
+        // `_new:` placeholders (created by older builds, before every caller
+        // moved to `store.newResource()`, which mints the real DID up front)
+        // can only be synced by first deriving their real subject via
+        // `signChanges` — that's what `_saveInner`'s explicit-save path does. `this.new` is supposed to
         // gate that window, but it can be reset by unrelated reconciliation
         // (e.g. `applyToStore` merging in a fetch response) before the
         // resource is actually complete. Without this, a `_new:` subject
@@ -3357,15 +3356,15 @@ export class Resource<C extends OptionalClass = any> {
             isAtomicIdentifier(this.subject) &&
             !isAgentSubject(this.subject)))
       ) {
-        // Genesis path for resources NOT created via `store.newResource` —
-        // the new-resource form / `NewInstanceButton`, which mint a
-        // transient `_new:` subject via `store.createSubject()` and then
-        // `set()` + `save()` with no explicit genesis step. The real
-        // `did:ad:<sig>`
-        // subject only exists after signing, so sign now: `signChanges`
-        // auto-detects genesis (no lastCommit stamp + DID-eligible), derives
-        // the DID, and renames this resource in place; we enqueue the
-        // signed genesis under the NEW subject. Without this a `_new:`
+        // Genesis path for drafts whose genesis was not signed at creation:
+        // `store.newResource({ deferGenesis: true })` (the new-resource form,
+        // table rows, forks), and legacy `_new:` placeholders from older
+        // builds, which are `set()` + `save()`d with no explicit genesis step.
+        // Sign now: `signChanges` auto-detects genesis (no lastCommit stamp +
+        // DID-eligible). For a legacy `_new:` subject the real `did:ad:<sig>`
+        // only exists after signing, so it derives the DID and renames this
+        // resource in place; we enqueue the signed genesis under the NEW
+        // subject. Without this a `_new:`
         // subject would be marked dirty and the drain would POST a commit
         // with `subject: "_new:…"`, which the server rejects ("Unable to
         // parse string as URL") and retries forever.

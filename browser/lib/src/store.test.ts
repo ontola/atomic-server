@@ -373,21 +373,20 @@ describe('Store', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
-  it('gives an unsaved form a permanent subject before minting its attachment', async ({
+  it('attaches a file to an unsaved form under the subject the form is saved as', async ({
     expect,
   }) => {
     const { store, posted } = await testStore();
     const drive = await store.createDrive('Home');
     store.setDrive(drive.subject);
-    const parent = new Resource('_new:attachment-form', true);
-    parent.setStore(store);
-    store.addResource(parent);
-    await parent.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/Folder'],
-      false,
-    );
-    await parent.set(core.properties.parent, drive.subject, false);
+    // The new-resource form's draft: its subject is final from creation, and
+    // its genesis is signed on save.
+    const parent = await store.newResource({
+      parent: drive.subject,
+      isA: 'https://atomicdata.dev/classes/Folder',
+      deferGenesis: true,
+    });
+    const formSubject = parent.subject;
     (store as unknown as { clientDb: unknown }).clientDb = {
       isReady: true,
       blake3Hash: async () => new Uint8Array(32),
@@ -401,6 +400,7 @@ describe('Store', () => {
     );
     const file = store.resources.get(subject)!;
     expect(parent.subject).toMatch(/^atomic:/);
+    expect(parent.subject).toBe(formSubject);
     expect(file.get(core.properties.parent)).toBe(parent.subject);
     expect(parent.new).toBe(true);
     expect(store.outbox.getEntry(file.subject)).toBeUndefined();

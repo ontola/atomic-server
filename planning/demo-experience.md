@@ -250,10 +250,42 @@ and loses the property that the demo ships entirely as static assets.
 | Demo template | `data-browser/src/chunks/Demo/demoWorkspace.ts` | JSON-AD starter data + persona agents + lorodoc seeds |
 | Director | `data-browser/src/chunks/Demo/DemoDirector.ts` | scenario runner: steps → applyIncoming / presence writes |
 | Entry | `data-browser/src/chunks/Demo/startDemo.ts`, `routes/DemoRoute.tsx` | `/app/demo` and the onboarding choice |
+| Demo bar | `data-browser/src/components/DemoExitButton.tsx` (`DemoActionsBar`), `components/Navigation.tsx` | top bar while the current drive is a demo drive, including on the template gallery |
+| Demo detection | `data-browser/src/chunks/Templates/demoSession.ts` (`demoForDrive`) | the one rule for "in a demo": current drive = interactive demo drive or template preview drive |
 
 The v1 TODO list (local-only drive flag, presence inject hook, client-side
 template apply, director, onboarding choice, live verification) shipped in
 full and was removed from this document on 2026-09-15.
+
+## Demo bar and the step to templates (Joep, September 2026)
+
+- The interactive demo is not a template: it is gone from the template
+  gallery (`chunks/Templates/catalog.ts`). It is reached from "Try the live
+  demo" on the welcome screen and `/app/demo`.
+- The next step out of the demo is choosing a template.
+- **One setup bar** (`components/SetupBar.tsx`) for every setup step: the
+  step's title on the left, actions on the right, secondary before primary.
+  Titles are hidden on phones; long labels shorten there.
+  - Demo: "Demo workspace", **Leave demo** (guest → start screen, account →
+    personal drive) and **Choose a template** (the gallery, demo kept open).
+  - Template preview: "Preview: <drive name>", **Back to templates** and
+    **Use this template**.
+  - Gallery (`routes/NewDriveRoute.tsx`): "Choose a template", with **Back to
+    the demo** / **Back to the preview**, or **Close** for a user with a drive.
+  - Naming step: "Name your drive", with one back: **Back to the preview** when
+    a preview is open, otherwise **Back to templates**.
+  `DriveTemplateSetup` takes `renderBar`; the new-drive dialog omits it and
+  keeps its inline title and back button.
+- It used to vanish: the check read the template-preview record first and
+  fell back to the demo manifest only when there was none, so a stale preview
+  record (a closed tab, "Use this template" abandoned) hid the demo's bar.
+  `demoForDrive` matches each record on its own.
+- The demo drive is cleaned up when the user creates their own drive from the
+  gallery (`routes/NewDriveRoute.tsx`). The cleanup never removes the current
+  agent: a guest's profile is a row in the demo's Team table, and deleting it
+  broke every later write ("Resource has no store").
+- A deleted demo or preview page reached through history says so and offers
+  the current drive or the gallery (`views/ErrorPage.tsx`).
 
 ## v2 content feedback (Joep, July 2026) — BUILT
 

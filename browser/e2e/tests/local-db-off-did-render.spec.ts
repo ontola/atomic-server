@@ -82,9 +82,8 @@ test('a DID drive renders (not bare subject) with Local DB off, server-only', as
   // paper over it.
   const folder = await page.evaluate(async d => {
     const s = window.store;
-    const tmp = await s.createSubject('ld');
     const f = await s.newResource({
-      subject: tmp,
+      deferGenesis: true,
       parent: d,
       isA: 'https://atomicdata.dev/classes/Folder',
     });

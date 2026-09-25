@@ -60,6 +60,7 @@ import {
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
+import { LoroLoader } from './loro-loader.js';
 import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
@@ -253,7 +254,6 @@ export interface CommitLogEntry {
   hasLoroUpdate: boolean;
   destroy: boolean;
   summary: string;
-  propertySummaries?: CommitLogPropertySummary[];
   error?: string;
 }
 
@@ -697,13 +697,16 @@ export class Store {
   private _syncedDrives = new Set<string>();
   private _commitLog: CommitLogEntry[] = [];
   /**
-   * Per-subject ACCUMULATED Loro snapshot bytes (genesis + every commit seen
-   * so far), used by `summarizeCommitProperties` to diff each new commit and
-   * show ONLY the properties it changed. A non-genesis commit's `loroUpdate`
-   * is a delta, so the diff must be against this running full state — diffing
-   * against the bare delta would make untouched properties look removed.
+   * Commit-log entry id → that commit's `loroUpdate`, kept only while the
+   * entry is in the (capped) log, so {@link getCommitPropertySummaries} can
+   * diff it when the Sync page asks.
    */
-  private _commitLogPriorSnapshots = new Map<string, Uint8Array>();
+  private _commitLogUpdates = new Map<string, Uint8Array>();
+  /** Entry id → property summaries already computed for it. */
+  private _commitLogSummaries = new Map<
+    string,
+    CommitLogPropertySummary[] | undefined
+  >();
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -1214,22 +1217,10 @@ export class Store {
    */
   private hydrateCommitLogFromOutbox(entry: OutboxEntry): void {
     if (entry.signedGenesis) {
-      const commit = entry.signedGenesis;
-      this.pushCommitLog({
-        timestamp: Date.now(),
-        direction: 'outgoing',
-        status: 'pending',
-        subject: commit.subject,
-        signer: commit.signer,
-        previousCommit: commit.previousCommit,
-        commitId: commit.signature
-          ? commitSubject(commit.signature)
-          : undefined,
-        hasLoroUpdate: !!commit.loroUpdate,
-        destroy: !!commit.destroy,
-        summary: this.summarizeCommit(commit),
-        propertySummaries: this.summarizeCommitProperties(commit),
-      });
+      this.pushCommitLog(
+        this.buildCommitLogEntry(entry.signedGenesis, 'outgoing', 'pending'),
+        entry.signedGenesis.loroUpdate,
+      );
     } else {
       this.pushCommitLog({
         timestamp: entry.enqueuedAt,
@@ -1459,8 +1450,9 @@ export class Store {
     if (!entry) return;
 
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
-    // (which renames it to `did:ad:<sig>`) before it can be POSTed.
-    // Reaching the drain with one is a bug in the save path: the server
+    // (which renames it to `did:ad:<sig>`) before it can be POSTed. The
+    // current UI no longer creates these, but an outbox written by an older
+    // build may still hold one. Reaching the drain with one means: the server
     // rejects `subject: "_new:…"` with a 500 ("Unable to parse string as
     // URL") and the failed POST reschedules the drain, storming the server
     // forever. Drop the stray dirty bit rather than retry an un-POSTable
@@ -2050,10 +2042,9 @@ export class Store {
    * True when `subject` is a placeholder (`_new:…`) that has since been aliased
    * to a real subject — i.e. the draft it stood for has been persisted.
    *
-   * Lets a view tell apart the two reasons a collection can grow: one of its
-   * own drafts materialising, versus a resource arriving from elsewhere (a
-   * peer, or another tab). Those need opposite handling, and without a way to
-   * distinguish them a view has to guess.
+   * @deprecated The app no longer creates `_new:` placeholders. Create drafts
+   * with `store.newResource({ deferGenesis: true })`: they keep their subject
+   * when saved, so there is nothing to alias. Kept for backward compatibility.
    */
   public isAliased(subject: string): boolean {
     return this.aliases.has(this.normalizeSubject(subject));
@@ -2835,8 +2826,8 @@ export class Store {
     // The user's saved-drives switcher list lives on the personal DRIVE itself
     // (the per-user home index), not on the Agent. Seed it with this drive so
     // it shows up in the switcher. This must be a second commit: the drive's
-    // real `did:ad:` subject is only derived at save (before save it's a
-    // `_new:` placeholder), so we can't reference it in the creation commit.
+    // genesis commit is signed before this value exists, so it can't be part
+    // of the creation commit.
     drive.push(server.properties.drives, [drive.subject], true);
     await drive.save();
 
@@ -3222,13 +3213,13 @@ export class Store {
   /**
    * Creates a placeholder subject for a brand-new resource. When the current
    * agent is DID-based, returns a temporary `_new:{random}` key that gets
-   * replaced with the real `did:ad:...` on first commit (matching
-   * `newResource()`'s shouldUseDid path). Otherwise builds a random HTTP
-   * subject under `parent` or the server root.
+   * replaced with the real `did:ad:...` on first save. Otherwise builds a
+   * random HTTP subject under `parent` or the server root.
    *
-   * Without this branch, callers like `useNewForm` would mint an HTTP
-   * subject such as `http://localhost:9883/01k…` that a DID-agent has no
-   * edit rights on — saves fail with "Agent does not have edit rights".
+   * @deprecated Use `store.newResource({ parent, isA, deferGenesis: true })`
+   * and read `resource.subject`: the resource gets its final subject up front
+   * and is never renamed. Kept for backward compatibility; nothing in the
+   * library or app calls it any more.
    */
   public createSubject(parent?: string): string {
     const agentSubject = this.getAgent()?.subject;
@@ -6082,7 +6073,10 @@ export class Store {
     this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
   }
 
-  private pushCommitLog(entry: Omit<CommitLogEntry, 'id'>): void {
+  private pushCommitLog(
+    entry: Omit<CommitLogEntry, 'id'>,
+    loroUpdate?: Uint8Array,
+  ): void {
     // Dedup by commitId so a `pending` entry transitions in place to `sent` /
     // `failed` once the push resolves, rather than producing two rows for the
     // same commit. Incoming commits without an outgoing pending counterpart
@@ -6092,29 +6086,25 @@ export class Store {
       : -1;
 
     if (existingIdx >= 0) {
-      // Status transition for an already-logged commit. Two things
-      // matter: (1) reuse the original \`propertySummaries\` —
-      // \`summarizeCommitProperties\` is destructive on the second
-      // call (it stored the snapshot as the prior baseline; the
-      // second pass diffs the snapshot against itself → empty); (2)
-      // move the merged entry to the top so users see fresh status
-      // changes on the right side of the activity log.
+      // Status transition for an already-logged commit: keep its id (and so
+      // its update bytes) and move it to the top so users see fresh status
+      // changes first.
       const prior = this._commitLog[existingIdx];
-      const merged: CommitLogEntry = {
-        ...prior,
-        ...entry,
-        propertySummaries: prior.propertySummaries,
-      };
+      const merged: CommitLogEntry = { ...prior, ...entry };
       this._commitLog = [
         merged,
         ...this._commitLog.slice(0, existingIdx),
         ...this._commitLog.slice(existingIdx + 1),
       ];
     } else {
-      this._commitLog = [{ ...entry, id: ulid() }, ...this._commitLog].slice(
-        0,
-        50,
-      );
+      const id = ulid();
+      if (loroUpdate) this._commitLogUpdates.set(id, loroUpdate);
+      this._commitLog = [{ ...entry, id }, ...this._commitLog];
+
+      for (const dropped of this._commitLog.splice(50)) {
+        this._commitLogUpdates.delete(dropped.id);
+        this._commitLogSummaries.delete(dropped.id);
+      }
     }
 
     this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
@@ -6143,7 +6133,6 @@ export class Store {
       hasLoroUpdate: !!commit.loroUpdate,
       destroy: !!commit.destroy,
       summary: this.summarizeCommit(commit),
-      propertySummaries: this.summarizeCommitProperties(commit),
       ...(extras.error !== undefined ? { error: extras.error } : {}),
     };
   }
@@ -6154,7 +6143,10 @@ export class Store {
    * `commitId` so the entry transitions in place to `sent` or `failed`.
    */
   public logPendingCommit(commit: Commit): void {
-    this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'pending'));
+    this.pushCommitLog(
+      this.buildCommitLogEntry(commit, 'outgoing', 'pending'),
+      commit.loroUpdate,
+    );
   }
 
   /** @internal Settle a commit that will never be POSTed (local-only
@@ -6214,7 +6206,10 @@ export class Store {
   }
 
   public logLocalOnlyCommitSettled(commit: Commit): void {
-    this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'sent'));
+    this.pushCommitLog(
+      this.buildCommitLogEntry(commit, 'outgoing', 'sent'),
+      commit.loroUpdate,
+    );
   }
 
   private summarizeCommit(commit: Commit): string {
@@ -6236,26 +6231,49 @@ export class Store {
   }
 
   /**
-   * Diff this commit's loro snapshot against the previous one we logged for
-   * the same subject. Only properties that differ — added, modified, removed
-   * — are emitted. Genesis commits (no prior) treat every property as
-   * `changed`. Returning an empty list is itself useful debug info: it means
-   * the commit's snapshot has identical contents to the previous one, which
-   * usually points to a duplicate-send or a UI that signed without a real
-   * change.
-   *
-   * `pushCommitLog` is responsible for not stomping a real summary on a
-   * status transition; this method always recomputes against the stored
-   * baseline.
+   * The properties a logged commit changed, computed when asked (the Sync
+   * page) rather than on every save. The commit's `loroUpdate` is a delta, so
+   * it is applied on top of the resource's own state at the version the delta
+   * starts from (a fork of the live Loro doc), and the two are compared. A
+   * genesis starts from an empty doc, so every property shows as `changed`.
+   * Returns `undefined` when there is nothing to diff: no update bytes, the
+   * resource is no longer loaded, or its history no longer reaches back that
+   * far.
    */
-  private summarizeCommitProperties(
-    commit: Commit,
+  public getCommitPropertySummaries(
+    entry: CommitLogEntry,
   ): CommitLogPropertySummary[] | undefined {
-    if (!commit.loroUpdate) {
-      return undefined;
+    if (this._commitLogSummaries.has(entry.id)) {
+      return this._commitLogSummaries.get(entry.id);
     }
 
+    const update = this._commitLogUpdates.get(entry.id);
+    if (!update) return undefined;
+    const summaries = this.diffCommitProperties(entry.subject, update);
+    this._commitLogSummaries.set(entry.id, summaries);
+
+    return summaries;
+  }
+
+  private diffCommitProperties(
+    subject: string,
+    update: Uint8Array,
+  ): CommitLogPropertySummary[] | undefined {
     try {
+      const start = LoroLoader.Loro.decodeImportBlobMeta(
+        update,
+        false,
+      ).partialStartVersionVector;
+      let prior: Uint8Array | undefined;
+
+      if (start.length() > 0) {
+        const doc = this.resources.get(subject)?.getLoroDoc();
+        if (!doc) return undefined;
+        prior = doc
+          .forkAt(doc.vvToFrontiers(start))
+          .export({ mode: 'snapshot' });
+      }
+
       const entriesOf = (resource: Resource): Map<string, JSONValue> => {
         const map = new Map<string, JSONValue>();
 
@@ -6273,34 +6291,15 @@ export class Store {
         return map;
       };
 
-      // A non-genesis commit's `loroUpdate` is a DELTA, not full state. To show
-      // what THIS commit changed we must diff against the accumulated state of
-      // all prior commits — `_commitLogPriorSnapshots` holds that running
-      // snapshot. Importing a bare delta into a fresh doc would drop the base
-      // and make every untouched genesis property look "removed".
-      const acc = new Resource(commit.subject);
-      const priorBytes = this._commitLogPriorSnapshots.get(commit.subject);
-
-      if (priorBytes) {
-        try {
-          acc.importLoroUpdate(priorBytes);
-        } catch (e) {
-          console.warn('[summarizeCommitProperties] prior decode failed:', e);
-        }
-      }
-
+      const acc = new Resource(subject);
+      if (prior) acc.importLoroUpdate(prior);
       const priorEntries = entriesOf(acc);
-
-      // Apply this commit on top of the accumulated state.
-      acc.importLoroUpdate(commit.loroUpdate);
+      acc.importLoroUpdate(update);
       const currentEntries = entriesOf(acc);
-
       const summaries: CommitLogPropertySummary[] = [];
 
       for (const [prop, value] of currentEntries) {
-        const before = priorEntries.get(prop);
-
-        if (!commitLogValuesEqual(before, value)) {
+        if (!commitLogValuesEqual(priorEntries.get(prop), value)) {
           summaries.push({ property: prop, value, changeType: 'changed' });
         }
       }
@@ -6315,17 +6314,9 @@ export class Store {
         }
       }
 
-      // Persist the ACCUMULATED snapshot (not this commit's delta) so the next
-      // commit diffs against full state.
-      const snapshot = acc.getLoroDoc?.()?.export({ mode: 'snapshot' });
-
-      if (snapshot) {
-        this._commitLogPriorSnapshots.set(commit.subject, snapshot);
-      }
-
       return summaries.length > 0 ? summaries.slice(0, 20) : undefined;
     } catch (e) {
-      console.warn('[summarizeCommitProperties] failed:', e);
+      console.warn('[getCommitPropertySummaries] failed:', e);
 
       return undefined;
     }
@@ -6437,41 +6428,6 @@ export class Store {
       return subjects;
     }
 
-    // A child's certificate binds its parent permanently. Settle the form's
-    // certificate DID first, but leave its genesis unsigned until Save so the
-    // required attachment property is included in the first server commit.
-    if (
-      parent.startsWith('_new:') &&
-      !!agent.subject &&
-      isAgentSubject(agent.subject)
-    ) {
-      const parentResource = this.resources.get(parent);
-      if (!parentResource) throw new Error('Upload parent is not in the store');
-      const parentParent = parentResource.get(core.properties.parent) as
-        | string
-        | undefined;
-      const driveProperty = 'https://atomicdata.dev/properties/drive';
-      const driveSubject =
-        (parentResource.get(driveProperty) as string | undefined) ??
-        (this.resources.get(parentParent ?? '')?.get(driveProperty) as
-          | string
-          | undefined) ??
-        parentParent ??
-        this.getDrive() ??
-        '';
-      const minted = await this.mintCertDid(parentParent ?? '', driveSubject);
-      await parentResource.set(
-        'https://atomicdata.dev/properties/genesis',
-        minted.certB64,
-        false,
-      );
-      await parentResource.set(driveProperty, driveSubject, false);
-      this.resources.delete(parent);
-      parentResource.setSubject(minted.did);
-      this.addResource(parentResource, { alias: parent });
-      parent = minted.did;
-    }
-
     const createdSubjects: string[] = [];
     const agentForDid = this.getAgent()!.subject;
     const useDid = !!agentForDid && isAgentSubject(agentForDid);
@@ -6572,6 +6528,7 @@ export class Store {
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
           commitId: commitIdOf(created),
         }),
+        commit.loroUpdate,
       );
 
       return created;
@@ -6585,6 +6542,7 @@ export class Store {
         this.buildCommitLogEntry(commit, 'outgoing', 'failed', {
           error: errMsg,
         }),
+        commit.loroUpdate,
       );
       throw e;
     }

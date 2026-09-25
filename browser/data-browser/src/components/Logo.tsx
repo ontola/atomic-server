@@ -1,19 +1,56 @@
 // @wc-ignore-file
 import { useId, type CSSProperties, type JSX } from 'react';
+import { styled } from 'styled-components';
 import { useSettings } from '../helpers/AppSettings';
+import { openExternal } from '../helpers/openExternal';
+
+export const ATOMIC_PLACE_WEBSITE = 'https://atomic.place';
 
 interface LogoProps {
   style?: CSSProperties;
   className?: string;
   alt?: string;
+  /** The wordmark links to the website; pass `false` where it must not. */
+  link?: boolean;
 }
 
-/** Atomic Place wordmark: normal o and gradient full stop. */
+/**
+ * Atomic Place wordmark: normal o and gradient full stop. It links to
+ * atomic.place, opened outside the app (a new tab, or the system browser in
+ * the desktop and Android apps), so following it never loses the page the
+ * user is on, such as a half-finished onboarding step.
+ */
 export function Logo({
   style,
   className,
   alt = 'Atomic Place',
+  link = true,
 }: LogoProps): JSX.Element {
+  if (!link) return <Wordmark style={style} className={className} alt={alt} />;
+
+  return (
+    <WebsiteLink
+      href={ATOMIC_PLACE_WEBSITE}
+      target='_blank'
+      rel='noreferrer'
+      aria-label={`${alt || 'Atomic Place'} website`}
+      style={style}
+      className={className}
+      onClick={event => {
+        event.preventDefault();
+        void openExternal(ATOMIC_PLACE_WEBSITE);
+      }}
+    >
+      <Wordmark style={{ width: '100%', height: 'auto' }} alt='' />
+    </WebsiteLink>
+  );
+}
+
+function Wordmark({
+  style,
+  className,
+  alt,
+}: Omit<LogoProps, 'link'>): JSX.Element {
   const { darkMode } = useSettings();
   const orbGradient = `logo-orb-${useId()}`;
 
@@ -63,3 +100,10 @@ export function Logo({
     </svg>
   );
 }
+
+// A styled class rather than inline style, so a caller's own `display` (the
+// welcome screen's block-level logo) still wins.
+const WebsiteLink = styled.a`
+  display: inline-block;
+  line-height: 0;
+`;

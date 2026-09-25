@@ -61,12 +61,6 @@ import {
   decodeChallenge,
   decodeCommit,
   decodeCommitOk,
-  decodeHelloCaps,
-  encodeAuthOk,
-  encodeChallenge,
-  encodeCommitOk,
-  encodeCommitOkSlim,
-  encodeError,
   encodeHello,
   decodeGet,
   decodeGetMany,
@@ -76,7 +70,6 @@ import {
   decodeSyncDiff,
   decodeSyncOk,
   decodeSyncResend,
-  encodeSyncResend,
   decodeEphemeral,
   encodeEphemeral,
   EphemeralKind,
@@ -96,6 +89,15 @@ import {
   encodeUnsub,
   Flags,
 } from './ws-v2.js';
+import {
+  decodeHelloCaps,
+  encodeAuthOk,
+  encodeChallenge,
+  encodeCommitOk,
+  encodeCommitOkSlim,
+  encodeError,
+  encodeSyncResend,
+} from './test-ws-v2-server.js';
 
 const vectors: Record<string, Uint8Array> = Object.fromEntries(
   (
