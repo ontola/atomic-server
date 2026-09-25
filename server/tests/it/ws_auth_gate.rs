@@ -203,6 +203,13 @@ async fn subscription_without_read_right_is_refused_out_loud() {
 
     ws.subscribe_loro_sync(&secret).await.unwrap();
     let err = next_error(&mut rx).await;
+    assert!(err.contains("EPHEMERAL_SUB refused"), "{err}");
+
+    // The legacy text frame (clients up to v0.41.0-beta.7) is refused the same way.
+    ws.send_raw(&format!(r#"LORO_SYNC_SUBSCRIBE {{"subject":"{secret}"}}"#))
+        .await
+        .unwrap();
+    let err = next_error(&mut rx).await;
     assert!(err.contains("LORO_SYNC_SUBSCRIBE refused"), "{err}");
 
     ws.send_raw(&format!(r#"PRESENCE_SUBSCRIBE {{"subject":"{drive}"}}"#))

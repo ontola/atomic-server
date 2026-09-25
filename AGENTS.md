@@ -262,8 +262,8 @@ Binary frames `[tag][payload]` (`lib/src/sync/protocol.rs`, mirrored in
 | `COMMIT (0x13)`              | C→S       | Persist a signed commit                   |
 | `SYNC (0x30)` family         | Both      | Drive reconcile                           |
 | `EPHEMERAL (0x40)`           | Both      | Edits in progress, cursors, presence      |
-| `LORO_SYNC_SUBSCRIBE {json}` | C→S       | Text: register for a resource's ephemera  |
-| `PRESENCE_SUBSCRIBE {json}`  | C→S       | Text: register for a drive's presence     |
+| `EPHEMERAL_SUB (0x43)`       | C→S       | Register for ephemera / presence / index  |
+| `LORO_SYNC_SUBSCRIBE {json}` | C→S       | Legacy text form, servers without the cap |
 
 **Pattern:** Subscribe to broadcast BEFORE sending a message that expects a response.
 

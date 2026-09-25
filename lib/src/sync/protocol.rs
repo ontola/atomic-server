@@ -76,6 +76,83 @@ pub mod tag {
     /// probe itself was the text `SYNC_VV`; both transports now speak the
     /// binary form.
     pub const SYNC_RESEND: u8 = 0x38;
+    /// Client → responder, WebSocket only: `[0x43] [channel: u8]
+    /// [subject_utf8]`. Subscribe this connection to one of the live channels
+    /// in [`ephemeral_channel`]. Refusals come back as `ERROR`
+    /// (`AUTH_REQUIRED` or `UNAUTHORIZED_READ`, request_id 0); success is
+    /// silent. Advertised by the `ephemeral-sub` capability. Replaces the
+    /// text frames `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE` and
+    /// `SUBSCRIBE_INDEX_STATUS`.
+    pub const EPHEMERAL_SUB: u8 = 0x43;
+    /// Cancel an [`EPHEMERAL_SUB`]: same payload. Never gated, never answered.
+    pub const EPHEMERAL_UNSUB: u8 = 0x44;
+    /// Responder → client: `[0x45] [indexing: u8 (0|1)] [drive_utf8]`, the
+    /// vector-search indexing state of a drive the client subscribed to on
+    /// [`ephemeral_channel::INDEX_STATUS`]. Sent once right after the
+    /// subscription and again on every change. Replaces the text
+    /// `INDEX_STATUS {json}` frame.
+    pub const INDEX_STATUS: u8 = 0x45;
+}
+
+/// The live channels an `EPHEMERAL_SUB` (0x43) can subscribe to. Not the
+/// same numbers as [`ephemeral_kind`]: one subscription covers both the
+/// cursors (`LORO`) and the in-progress edits (`DOC`) of a resource, and
+/// index status is server state, not something peers relay.
+pub mod ephemeral_channel {
+    /// A resource's live collaboration: `EPHEMERAL` of kinds `DOC` and
+    /// `LORO`. Read access to the resource is required; the server lets
+    /// the connection send `DOC` only if it may also write.
+    pub const LIVE_DOC: u8 = 0;
+    /// A drive's presence: `EPHEMERAL` of kind `PRESENCE`. Read access to
+    /// the drive is required.
+    pub const PRESENCE: u8 = 1;
+    /// A drive's vector-search indexing state: `INDEX_STATUS` (0x45) frames.
+    pub const INDEX_STATUS: u8 = 2;
+}
+
+/// Encode EPHEMERAL_SUB: `[0x43] [channel] [subject_utf8]`.
+pub fn encode_ephemeral_sub(channel: u8, subject: &str) -> Vec<u8> {
+    encode_channel_frame(tag::EPHEMERAL_SUB, channel, subject)
+}
+
+/// Encode EPHEMERAL_UNSUB: `[0x44] [channel] [subject_utf8]`.
+pub fn encode_ephemeral_unsub(channel: u8, subject: &str) -> Vec<u8> {
+    encode_channel_frame(tag::EPHEMERAL_UNSUB, channel, subject)
+}
+
+fn encode_channel_frame(tag: u8, channel: u8, subject: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(2 + subject.len());
+    buf.push(tag);
+    buf.push(channel);
+    buf.extend_from_slice(subject.as_bytes());
+    buf
+}
+
+/// Decode the payload of an EPHEMERAL_SUB or EPHEMERAL_UNSUB frame (slice
+/// *after* the tag byte) into `(channel, subject)`. `None` when truncated,
+/// the subject is empty, or it is not UTF-8.
+pub fn decode_ephemeral_sub(data: &[u8]) -> Option<(u8, String)> {
+    let (&channel, subject) = data.split_first()?;
+    if subject.is_empty() {
+        return None;
+    }
+    Some((channel, std::str::from_utf8(subject).ok()?.to_string()))
+}
+
+/// Encode INDEX_STATUS: `[0x45] [indexing: u8] [drive_utf8]`.
+pub fn encode_index_status(drive: &str, indexing: bool) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(2 + drive.len());
+    buf.push(tag::INDEX_STATUS);
+    buf.push(u8::from(indexing));
+    buf.extend_from_slice(drive.as_bytes());
+    buf
+}
+
+/// Decode the payload of an INDEX_STATUS frame (after the tag byte) into
+/// `(drive, indexing)`.
+pub fn decode_index_status(data: &[u8]) -> Option<(String, bool)> {
+    let (&indexing, drive) = data.split_first()?;
+    Some((std::str::from_utf8(drive).ok()?.to_string(), indexing != 0))
 }
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both
@@ -111,6 +188,11 @@ pub mod tag {
 ///   frames `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE`.
 /// - `get-many`: answers `GET_MANY` (0x15) with one `GET_MANY_RESULT` (0x16),
 ///   so a client can fetch a whole list of subjects in one round trip.
+/// - `ephemeral-sub`: understands `EPHEMERAL_SUB` / `EPHEMERAL_UNSUB`
+///   (0x43 / 0x44) for Loro, presence and index-status subscriptions, and
+///   answers index status with `INDEX_STATUS` (0x45). A client that does
+///   not see it sends the text `LORO_SYNC_SUBSCRIBE` / `PRESENCE_SUBSCRIBE` /
+///   `SUBSCRIBE_INDEX_STATUS` frames instead.
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
@@ -125,7 +207,11 @@ pub const CAPABILITIES: &[&str] = &[
     "ephemeral",
     "get-many",
     "canonical-scheme",
+    "ephemeral-sub",
 ];
+
+/// The capability a responder lists when it understands `EPHEMERAL_SUB`.
+pub const CAP_EPHEMERAL_SUB: &str = "ephemeral-sub";
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
 /// (WebSocket clients since 2026-09; peers always sent one). The only one a
@@ -1928,6 +2014,39 @@ mod tests {
 #[cfg(test)]
 mod ephemeral_frame_tests {
     use super::*;
+
+    #[test]
+    fn an_ephemeral_sub_frame_round_trips() {
+        let frame = encode_ephemeral_sub(ephemeral_channel::PRESENCE, "did:ad:drive");
+        assert_eq!(frame[0], tag::EPHEMERAL_SUB);
+        assert_eq!(
+            decode_ephemeral_sub(&frame[1..]),
+            Some((ephemeral_channel::PRESENCE, "did:ad:drive".to_string()))
+        );
+        let frame = encode_ephemeral_unsub(ephemeral_channel::LIVE_DOC, "did:ad:r");
+        assert_eq!(frame[0], tag::EPHEMERAL_UNSUB);
+        assert_eq!(
+            decode_ephemeral_sub(&frame[1..]),
+            Some((ephemeral_channel::LIVE_DOC, "did:ad:r".to_string()))
+        );
+        assert_eq!(decode_ephemeral_sub(&[]), None);
+        assert_eq!(decode_ephemeral_sub(&[1]), None);
+    }
+
+    #[test]
+    fn an_index_status_frame_round_trips() {
+        let frame = encode_index_status("did:ad:drive", true);
+        assert_eq!(frame[0], tag::INDEX_STATUS);
+        assert_eq!(
+            decode_index_status(&frame[1..]),
+            Some(("did:ad:drive".to_string(), true))
+        );
+        let frame = encode_index_status("did:ad:drive", false);
+        assert_eq!(
+            decode_index_status(&frame[1..]),
+            Some(("did:ad:drive".to_string(), false))
+        );
+    }
 
     #[test]
     fn an_ephemeral_frame_round_trips() {
