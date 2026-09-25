@@ -370,6 +370,13 @@ Local validation (2026-09-11): all 840 data-browser unit tests and all five
 new-resource Chromium E2Es pass, including nested website import. E2Es used
 the existing local backend and WASM assets, not a fresh Rust build.
 
+New Table's "Use existing class" picker (`SearchBoxWindow.test.tsx`, vitest):
+an external class the store already fetched is found by a partial shortname,
+name or description, marked with its origin and not listed twice next to the
+server's results, and a pasted URL is still selected directly. The server search
+is mocked. There is no E2E. A class the store has not fetched (after a reload,
+say) is only reachable by its URL.
+
 ## Pre-commit lint gate
 
 `node --test scripts/pre-commit.test.mjs` exercises real Git commits with Oxlint
