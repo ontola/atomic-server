@@ -1,10 +1,9 @@
 //! One-time rewrite of `did:ad:` storage keys and reference values to `atomic:`.
 //!
-//! Writes key by [`crate::Subject::pure_id`], which is canonical, and reads
-//! only normalize the spelling they are given: they look up one key, never
-//! both. So this pass is what makes a store filled before the rename
-//! readable at all. It runs on every open until its marker is set. See #1584
-//! / PR #1585.
+//! Reads already alias both spellings. Writes key by [`crate::Subject::pure_id`],
+//! which is canonical. Without this pass a store that was filled before the
+//! rename keeps `did:ad:` rows, so the first edit of an old resource forks it
+//! and parent/drive queries split the children. See #1584 / PR #1585.
 //!
 //! Every subject-keyed tree is covered, not only the three a resource is
 //! read from: retained envelopes, tombstones and the outbox are scanned by

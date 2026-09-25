@@ -1193,6 +1193,10 @@ async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
         result.subjects
     );
     assert_eq!(result.subjects[0].pure_id(), canonical);
+    assert!(!store
+        .kv
+        .contains_key(Tree::QueryMembers, &legacy_key)
+        .unwrap());
 
     query.offset = 1;
     let second_page = store.query(&query).await.unwrap();
@@ -1297,6 +1301,8 @@ async fn basic_parent_query_deduplicates_legacy_and_canonical_subjects() {
         result.subjects
     );
     assert_eq!(result.subjects[0].as_str(), canonical);
+    assert!(!store.kv.contains_key(Tree::PropValSub, &prop_key).unwrap());
+    assert!(!store.kv.contains_key(Tree::ValPropSub, &value_key).unwrap());
 }
 
 /// Production path: create a Drive via `store.create_drive`, add children
@@ -3377,10 +3383,9 @@ async fn file_store_writes_survive_reopen_without_an_explicit_flush() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-/// A store filled before the rename holds `did:ad:X` rows. Opening it moves
-/// them to `atomic:X`; after that, either spelling a caller passes names the
-/// same row: writes do not fork, parent queries match either spelling, and
-/// destroy replay sees a legacy commit id.
+/// A resource stored under `did:ad:X` is the same row as `atomic:X`: writes
+/// do not fork, parent queries match either spelling, and destroy replay
+/// sees a legacy commit id.
 #[tokio::test]
 #[timeout(120000)]
 async fn canonical_scheme_store_boundary() {
@@ -3400,29 +3405,6 @@ async fn canonical_scheme_store_boundary() {
             &encode_propvals(&pv).unwrap(),
         )
         .unwrap();
-    // A commit a pre-rename store saved as `did:ad:commit:`.
-    let sig = "legacyDestroySig";
-    let legacy_commit = format!("did:ad:commit:{sig}");
-    let canon_commit = crate::identifiers::commit_subject(sig);
-    store
-        .kv
-        .insert(
-            Tree::Resources,
-            legacy_commit.as_bytes(),
-            &encode_propvals(&crate::resources::PropVals::new()).unwrap(),
-        )
-        .unwrap();
-
-    // Reopen as a pre-rename store: the rewrite runs on every open until its
-    // marker is set.
-    store
-        .kv
-        .remove(
-            Tree::PluginMeta,
-            super::canonical_scheme::SCHEME_REWRITE_KEY,
-        )
-        .unwrap();
-    store.migrate_canonical_scheme_if_needed().unwrap();
 
     // Query-style parent match: either spelling of the drive finds the child.
     let kids_canon = store.get_children(&canon_drive, None).await.unwrap();
@@ -3430,11 +3412,11 @@ async fn canonical_scheme_store_boundary() {
     assert_eq!(
         kids_canon.len(),
         1,
-        "canonical parent must see the migrated child"
+        "canonical parent must see did:ad: child"
     );
-    assert_eq!(kids_legacy.len(), 1, "legacy parent must see the child");
+    assert_eq!(kids_legacy.len(), 1, "legacy parent must see did:ad: child");
 
-    // An edit under the canonical subject updates the one row, no fork.
+    // First edit under the canonical subject must collapse the alias, not fork.
     let mut resource = store
         .get_resource(&canon_drive.as_str().into())
         .await
@@ -3454,7 +3436,7 @@ async fn canonical_scheme_store_boundary() {
     );
     assert!(
         store.has_resource_locally(legacy_drive),
-        "legacy spelling is normalized on lookup"
+        "legacy spelling still resolves via alias lookup"
     );
     assert!(
         store
@@ -3470,10 +3452,17 @@ async fn canonical_scheme_store_boundary() {
             .get(Tree::Resources, legacy_drive.as_bytes())
             .unwrap()
             .is_none(),
-        "no did:ad: row after open"
+        "did:ad: alias row must be deleted on write"
     );
 
-    // Destroy replay: the migrated commit is present under either spelling.
+    // Destroy replay: a commit stored as did:ad:commit: must be seen as present.
+    let sig = "legacyDestroySig";
+    let legacy_commit = format!("did:ad:commit:{sig}");
+    let canon_commit = crate::identifiers::commit_subject(sig);
+    store
+        .kv
+        .insert(Tree::Resources, legacy_commit.as_bytes(), b"commit-row")
+        .unwrap();
     assert!(store.has_resource_locally(&canon_commit));
     assert!(store.has_resource_locally(&legacy_commit));
 }
@@ -3517,7 +3506,7 @@ async fn canonical_scheme_open_rewrites_legacy_keys() {
         .get(Tree::Resources, legacy.as_bytes())
         .unwrap()
         .is_none());
-    let (_, rewritten) = store.get_propvals_canonical(&canon).unwrap();
+    let (_, rewritten) = store.get_propvals_aliased(&canon).unwrap();
     assert_eq!(
         rewritten.get(urls::PARENT).unwrap().to_string(),
         "atomic:migrateParent"

@@ -543,6 +543,17 @@ pub fn update_indexed_member(
             key,
             val: None,
         });
+        // Remove a key written by a pre-upgrade peer as well. The old row's
+        // sort key is available when this function is called for a removal.
+        let legacy = crate::identifiers::to_legacy_scheme(&canonical);
+        if legacy != canonical {
+            transaction.push(Operation {
+                tree: Tree::QueryMembers,
+                method: trees::Method::Delete,
+                key: create_query_index_key(collection, Some(sort_key), Some(&legacy))?,
+                val: None,
+            });
+        }
         return Ok(());
     } else {
         transaction.push(Operation {

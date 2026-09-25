@@ -115,6 +115,19 @@ pub fn to_legacy_scheme(raw: &str) -> String {
     }
 }
 
+/// Keys to try when looking up a stored resource. Canonical form first, then
+/// the `did:ad:` alias so a pre-rename store still resolves.
+pub fn storage_lookup_keys(subject: &str) -> Vec<String> {
+    let canonical = canonicalize_scheme(subject);
+    let mut keys = vec![canonical.clone()];
+    if let Some(alias) = scheme_alias(&canonical) {
+        if alias != canonical {
+            keys.push(alias);
+        }
+    }
+    keys
+}
+
 /// The other accepted spelling of an Atomic identifier, if `raw` is one.
 pub fn scheme_alias(raw: &str) -> Option<String> {
     let rest = identifier_rest(raw)?;

@@ -13,14 +13,19 @@ use crate::{appstate::AppState, errors::AtomicServerResult};
 /// (policies are installed programmatically by an embedder, not via CLI
 /// flags), so an actix-integration test can't exercise the rejection paths.
 async fn resolve_blob_write_admission(store: &Db, hash_hex: &str) -> Result<(), String> {
-    // Stored values are canonical (`atomic:blob:`): writes canonicalize
-    // them and opening a store rewrites older `did:ad:blob:` values.
-    let mut q = Query::new();
-    q.property = Some(urls::BLOB.to_string());
-    q.value = Some(Value::AtomicUrl(
-        atomic_lib::identifiers::blob_subject(hash_hex).into(),
-    ));
-    let resources = store.query(&q).await.map_err(|e| e.to_string())?.resources;
+    // Query both spellings: new File resources store `atomic:blob:`, older
+    // ones still have `did:ad:blob:`. The property-value index is a string
+    // match, so one query would miss the other form.
+    let mut resources = Vec::new();
+    for subject in atomic_lib::identifiers::storage_lookup_keys(
+        &atomic_lib::identifiers::blob_subject(hash_hex),
+    ) {
+        let mut q = Query::new();
+        q.property = Some(urls::BLOB.to_string());
+        q.value = Some(Value::AtomicUrl(subject.into()));
+        let result = store.query(&q).await.map_err(|e| e.to_string())?;
+        resources.extend(result.resources);
+    }
 
     if resources.is_empty() {
         return Err(format!(
