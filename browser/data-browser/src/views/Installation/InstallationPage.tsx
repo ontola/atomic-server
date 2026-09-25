@@ -52,6 +52,7 @@ import {
 import { ConfigReference } from './ConfigReference';
 import { AssignRights } from './AssignRights';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
+import { useConfigDraft } from './useConfigDraft';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
 import {
@@ -106,10 +107,14 @@ export const InstallationPage: React.FC<
   const [pluginAgent] = useString(resource, server.properties.pluginAgent);
   const [configValid, setConfigValid] = useState(true);
   const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
-  const [configEdited, setConfigEdited] = useState(false);
   // The config as saved, which the route grant's rights follow. The editor
   // writes into the resource as you type, so this is kept apart.
-  const [savedConfig, setSavedConfig] = useState<unknown>(config);
+  const {
+    edited: configEdited,
+    savedConfig,
+    markEdited: markConfigEdited,
+    commit: commitConfigDraft,
+  } = useConfigDraft<unknown>(config);
   const [routeWriteMove, setRouteWriteMove] =
     useState<RouteWriteConfigChange>();
   const saveState = useSaveState(resource);
@@ -140,10 +145,6 @@ export const InstallationPage: React.FC<
       : []),
   ];
 
-  useEffect(() => {
-    if (!configEdited) setSavedConfig(config);
-  }, [config, configEdited]);
-
   // A target the edited config leaves unresolved refuses the save: the route
   // grant would let other servers send items the plugin can't store.
   const unresolved = routeGrant
@@ -151,13 +152,13 @@ export const InstallationPage: React.FC<
     : undefined;
 
   const commitConfig = async (approveRouteWrites: boolean) => {
-    await saveInstallationConfig(store, resource.subject, {
-      config: config as JSONValue | undefined,
-      previousConfig: savedConfig,
-      approveRouteWrites,
-    });
-    setConfigEdited(false);
-    setSavedConfig(config);
+    await commitConfigDraft(config, previousConfig =>
+      saveInstallationConfig(store, resource.subject, {
+        config: config as JSONValue | undefined,
+        previousConfig,
+        approveRouteWrites,
+      }),
+    );
   };
 
   const saveConfig = async () => {
@@ -414,7 +415,7 @@ export const InstallationPage: React.FC<
             onChange={v => {
               try {
                 setConfig(JSON.parse(v));
-                setConfigEdited(true);
+                markConfigEdited();
                 setConfigSyntaxValid(true);
               } catch {
                 setConfigSyntaxValid(false);
