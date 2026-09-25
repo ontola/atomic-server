@@ -285,6 +285,7 @@ msgstr "Choose a default model"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -4931,9 +4932,11 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr "Creating…"
 
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr "Create drive"
@@ -7390,6 +7393,8 @@ msgid "Drive name"
 msgstr "Drive name"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
 msgstr "Back to templates"
 
@@ -7430,9 +7435,8 @@ msgstr "Atomic"
 msgid "Or, tell Atomic what you need"
 msgstr "Or, tell Atomic what you need"
 
-#: src/components/DemoExitButton.tsx
-msgid "Template preview"
-msgstr "Template preview"
+#~ msgid "Template preview"
+#~ msgstr "Template preview"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "<0/> Include example content"
@@ -7462,9 +7466,8 @@ msgstr "Loading AI settings…"
 msgid "Could not open the preview. Please refresh."
 msgstr "Could not open the preview. Please refresh."
 
-#: src/components/DemoExitButton.tsx
-msgid "Back to template selection"
-msgstr "Back to template selection"
+#~ msgid "Back to template selection"
+#~ msgstr "Back to template selection"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "/app/new-drive?blank=1"
@@ -7474,17 +7477,14 @@ msgstr "/app/new-drive?blank=1"
 msgid "<0/> Keep demo content and my edits"
 msgstr "<0/> Keep demo content and my edits"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Welcome"
-msgstr "Welcome"
+#~ msgid "Welcome"
+#~ msgstr "Welcome"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Board"
-msgstr "Board"
+#~ msgid "Board"
+#~ msgstr "Board"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Team chat"
-msgstr "Team chat"
+#~ msgid "Team chat"
+#~ msgstr "Team chat"
 
 #. 0: ' '
 #: src/chunks/Templates/DriveTemplateSetup.tsx
@@ -12372,3 +12372,75 @@ msgstr "Moved from {0}"
 #: src/components/PropVal.tsx
 msgid "Open {0} in a new tab"
 msgstr "Open {0} in a new tab"
+
+#: src/views/ErrorPage.tsx
+msgid "This page no longer exists"
+msgstr "This page no longer exists"
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted, for example when you left a demo or a preview."
+msgstr "It was deleted, for example when you left a demo or a preview."
+
+#: src/views/ErrorPage.tsx
+msgid "Open your drive"
+msgstr "Open your drive"
+
+#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
+#: src/views/ErrorPage.tsx
+msgid "Choose a template"
+msgstr "Choose a template"
+
+#: src/components/DemoExitButton.tsx
+msgid "Leave demo"
+msgstr "Leave demo"
+
+#: src/components/DemoExitButton.tsx
+msgid "Demo workspace"
+msgstr "Demo workspace"
+
+#. 0: resource.title
+#: src/components/DemoExitButton.tsx
+msgid "Preview: {0}"
+msgstr "Preview: {0}"
+
+#: src/components/SetupBar.tsx
+msgid "Setup"
+msgstr "Setup"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the demo"
+msgstr "Back to the demo"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the preview"
+msgstr "Back to the preview"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Name your drive"
+msgstr "Name your drive"
+
+#: src/routes/SyncRoute.tsx
+msgid "This server doesn’t host this workspace, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
+msgstr "This server doesn’t host this workspace, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
+
+#: src/routes/SyncRoute.tsx
+msgid "Not hosted here"
+msgstr "Not hosted here"
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column…"
+msgstr "Find a column…"
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column to filter by"
+msgstr "Find a column to filter by"
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "No column matches"
+msgstr "No column matches"
+
+#. 0: query
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Search the drive for “{0}”"
+msgstr "Search the drive for “{0}”"
