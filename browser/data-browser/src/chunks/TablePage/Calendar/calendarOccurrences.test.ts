@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   calendarOccurrenceBuckets,
   calendarPropertyMatches,
@@ -155,4 +155,113 @@ it('drops a series whose exception is invalid, and no other series', () => {
     'series',
     'series-exception',
   ]);
+});
+
+describe('moved occurrences (#1804)', () => {
+  const AMS = 'Europe/Amsterdam';
+  const standup = {
+    calendarId: 'c',
+    subject: 'standup',
+    event: {
+      id: 'standup',
+      start: { dateTime: '2026-10-12T09:30:00+02:00', timeZone: AMS },
+      end: { dateTime: '2026-10-12T09:45:00+02:00', timeZone: AMS },
+      recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=6'],
+    },
+  };
+  const override = (
+    subject: string,
+    start: string,
+    end: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    calendarId: 'c',
+    subject,
+    event: {
+      id: `standup_${subject}`,
+      recurringEventId: 'standup',
+      originalStartTime: {
+        dateTime: '2026-10-14T09:30:00+02:00',
+        timeZone: AMS,
+      },
+      start: { dateTime: start, timeZone: AMS },
+      end: { dateTime: end, timeZone: AMS },
+      ...extra,
+    },
+  });
+  const week = [
+    '2026-10-12',
+    '2026-10-13',
+    '2026-10-14',
+    '2026-10-15',
+    '2026-10-16',
+  ];
+
+  it('marks the moved instance and leaves a placeholder on its original day', () => {
+    const moved = override(
+      'moved',
+      '2026-10-15T10:00:00+02:00',
+      '2026-10-15T10:15:00+02:00',
+    );
+    const { buckets } = calendarOccurrenceBuckets([standup, moved], week);
+
+    const [onNewDay] = buckets.get('2026-10-15') ?? [];
+    expect(onNewDay).toMatchObject({
+      subject: 'moved',
+      movedFrom: '2026-10-14',
+    });
+    expect(onNewDay.movedTo).toBeUndefined();
+
+    const onOriginalDay = buckets.get('2026-10-14') ?? [];
+    expect(onOriginalDay).toHaveLength(1);
+    expect(onOriginalDay[0]).toMatchObject({
+      subject: 'moved',
+      movedTo: '2026-10-15',
+    });
+    // Both carry the original instance's identity from the expansion.
+    expect(onOriginalDay[0].key).toBe(onNewDay.key);
+
+    // The rest of the series is untouched.
+    for (const day of ['2026-10-12', '2026-10-16']) {
+      const [occurrence] = buckets.get(day) ?? [];
+      expect(occurrence.subject).toBe('standup');
+      expect(occurrence.movedFrom).toBeUndefined();
+      expect(occurrence.movedTo).toBeUndefined();
+    }
+  });
+
+  it('keeps the placeholder when the new day is outside the grid', () => {
+    const moved = override(
+      'moved',
+      '2026-11-02T10:00:00+01:00',
+      '2026-11-02T10:15:00+01:00',
+    );
+    const { buckets } = calendarOccurrenceBuckets([standup, moved], week);
+
+    expect(buckets.get('2026-10-14')).toEqual([
+      expect.objectContaining({ subject: 'moved', movedTo: '2026-11-02' }),
+    ]);
+  });
+
+  it('does not mark a time change on the same day, or a cancellation', () => {
+    const later = override(
+      'later',
+      '2026-10-14T11:00:00+02:00',
+      '2026-10-14T11:15:00+02:00',
+    );
+    const sameDay = calendarOccurrenceBuckets([standup, later], week).buckets;
+    expect(sameDay.get('2026-10-14')).toEqual([
+      expect.objectContaining({ subject: 'later' }),
+    ]);
+    expect(sameDay.get('2026-10-14')?.[0].movedFrom).toBeUndefined();
+    expect(sameDay.get('2026-10-14')?.[0].movedTo).toBeUndefined();
+
+    const cancelled = override('cancelled', '', '', {
+      status: 'cancelled',
+      start: undefined,
+      end: undefined,
+    });
+    const gone = calendarOccurrenceBuckets([standup, cancelled], week).buckets;
+    expect(gone.get('2026-10-14')).toBeUndefined();
+  });
 });

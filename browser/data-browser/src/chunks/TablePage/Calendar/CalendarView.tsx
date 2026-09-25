@@ -1,11 +1,8 @@
-import {
-  calendarRecurrenceShortname,
-  type CalendarRecord,
-  type CalendarOccurrence,
-} from '@tomic/lib';
+import { calendarRecurrenceShortname, type CalendarRecord } from '@tomic/lib';
 import {
   calendarOccurrenceBuckets,
   calendarPropertyMatches,
+  type CalendarDayOccurrence,
   type InvalidCalendarRecord,
 } from './calendarOccurrences';
 import { WarningBlock } from '@components/WarningBlock';
@@ -84,7 +81,7 @@ function expandRecurrences(
   records: CalendarRecord[],
   days: string[],
 ): {
-  buckets: Map<string, CalendarOccurrence[]>;
+  buckets: Map<string, CalendarDayOccurrence[]>;
   invalid: InvalidCalendarRecord[];
   error: string;
 } {
