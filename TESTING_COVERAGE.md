@@ -1872,6 +1872,13 @@ The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
 these fixtures; unsupported full-series rules are rejected before import.
 
+Calendar view UI: `browser/e2e/tests/calendar.spec.ts` covers adding an item
+on a day, grid alignment at desktop and phone width, and a crowded day (#1798):
+"+N more" counts what doesn't fit, and the day list (from "+N more", the day
+number by keyboard, or a click on the day's empty space) shows every event and
+opens each row on top of it. How many chips fit is measured, so it needs a
+real browser; jsdom can't cover it.
+
 All-day ranges: `browser/lib/src/calendar-date.test.ts` covers civil-date
 validation, exclusive single/multi-day ends, leap days, DST dates and year
 boundaries; run under UTC, America/Los_Angeles and Pacific/Kiritimati.

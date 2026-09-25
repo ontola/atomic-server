@@ -159,9 +159,20 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       if (disableLightDismiss) {
         e.preventDefault();
         e.stopPropagation();
-      } else if (isTopLevel && !hasOpenInnerPopup) {
-        // Only handle cancel if we're the top level dialog
-        // The useHotkeys below will call cancelDialog
+      } else {
+        // Left alone, the browser closes the dialog itself, and then
+        // `onClosed` never runs: `inert` stays on <body>, focus is not
+        // restored, and `bindShow` keeps saying "open", so the dialog can't be
+        // shown again. That happened when Escape came right after a stacked
+        // dialog closed, before this one knew it was top level again and the
+        // hotkey below was enabled. The browser only sends `cancel` to the
+        // topmost modal, so close through React here. Calling it after the
+        // hotkey already did is harmless.
+        e.preventDefault();
+
+        if (!hasOpenInnerPopup) {
+          cancelDialog();
+        }
       }
     };
 
@@ -171,7 +182,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     return () => {
       dialog.removeEventListener('cancel', handleCancel, true);
     };
-  }, [disableLightDismiss, isTopLevel, hasOpenInnerPopup]);
+  }, [disableLightDismiss, hasOpenInnerPopup, cancelDialog]);
 
   // Close the dialog when the escape key is pressed
   useHotkeys(

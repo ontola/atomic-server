@@ -12276,3 +12276,25 @@ msgstr ""
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
 msgstr ""
+
+#. 0: label
+#. 0: label
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Show all events on {0}"
+msgstr ""
+
+#. 0: total; 1: label
+#. 0: total; 1: label
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Show all {0} events on {1}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "more"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDayList.tsx
+msgid "Nothing on this day."
+msgstr ""

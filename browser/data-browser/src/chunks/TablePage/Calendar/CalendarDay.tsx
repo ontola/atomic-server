@@ -1,11 +1,18 @@
 import type { CalendarOccurrence } from '@tomic/lib';
 import { useResource, useTitle } from '@tomic/react';
 import { styled } from 'styled-components';
-import { useCallback, useRef, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type JSX,
+} from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { InputStyled } from '@components/forms/InputStyles';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
+import { longDayLabel } from './calendarDayLabel';
 
 interface CalendarDayProps {
   /** Local YYYY-MM-DD key of this day. */
@@ -23,6 +30,8 @@ interface CalendarDayProps {
   onAddItem: (dayKey: string, name: string) => void | Promise<void>;
   /** Open a row in the expanded (modal) view. */
   onOpenItem: (subject: string) => void;
+  /** Open the list of every event on this day. */
+  onOpenDay: (dayKey: string) => void;
 }
 
 /** One day cell of the month grid: day number, its rows, and a hover `+`. */
@@ -37,10 +46,16 @@ export function CalendarDay({
   readOnly,
   onAddItem,
   onOpenItem,
+  onOpenDay,
 }: CalendarDayProps): JSX.Element {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const total = eventSubjects.length + occurrences.length;
+  const visibleCount = useFittingCount(listRef, total, adding);
+  const hiddenCount = total - visibleCount;
+  const label = longDayLabel(dayKey);
 
   const submit = useCallback(() => {
     const trimmed = draft.trim();
@@ -60,15 +75,30 @@ export function CalendarDay({
   }, []);
 
   return (
+    // Clicking the day's empty space is a mouse shortcut to the day list; the
+    // day number is the same action as a real, focusable button.
     <Cell
       $inMonth={inMonth}
       $today={isToday}
       data-testid='calendar-day'
       data-date={dayKey}
       data-outside-month={inMonth ? undefined : true}
+      onClick={e => {
+        if (!(e.target as HTMLElement).closest('button, input')) {
+          onOpenDay(dayKey);
+        }
+      }}
     >
       <CellHeader>
-        <DayNumber $today={isToday} aria-current={isToday ? 'date' : undefined}>
+        <DayNumber
+          type='button'
+          $today={isToday}
+          aria-current={isToday ? 'date' : undefined}
+          aria-label={`Show all events on ${label}`}
+          title={`Show all events on ${label}`}
+          data-testid='calendar-day-open'
+          onClick={() => onOpenDay(dayKey)}
+        >
           {dayNumber}
         </DayNumber>
         {!readOnly && (
@@ -82,8 +112,8 @@ export function CalendarDay({
           </AddIcon>
         )}
       </CellHeader>
-      <EventList>
-        {eventSubjects.map(subject => (
+      <EventList ref={listRef}>
+        {eventSubjects.slice(0, visibleCount).map(subject => (
           <CalendarEvent
             key={subject}
             subject={subject}
@@ -91,15 +121,29 @@ export function CalendarDay({
             onOpen={onOpenItem}
           />
         ))}
-        {occurrences.map(occurrence => (
-          <CalendarEvent
-            key={occurrence.key}
-            subject={occurrence.subject}
-            allDay={occurrence.allDay}
-            recurring={occurrence.recurring}
-            onOpen={onOpenItem}
-          />
-        ))}
+        {occurrences
+          .slice(0, Math.max(0, visibleCount - eventSubjects.length))
+          .map(occurrence => (
+            <CalendarEvent
+              key={occurrence.key}
+              subject={occurrence.subject}
+              allDay={occurrence.allDay}
+              recurring={occurrence.recurring}
+              onOpen={onOpenItem}
+            />
+          ))}
+        {hiddenCount > 0 && (
+          <MoreButton
+            type='button'
+            data-testid='calendar-day-more'
+            aria-label={`Show all ${total} events on ${label}`}
+            title={`Show all ${total} events on ${label}`}
+            onClick={() => onOpenDay(dayKey)}
+          >
+            +{hiddenCount}
+            <MoreWord> more</MoreWord>
+          </MoreButton>
+        )}
         {adding && (
           <AddInput
             ref={inputRef}
@@ -123,16 +167,66 @@ export function CalendarDay({
   );
 }
 
+/**
+ * How many event chips fit in the list without clipping. When some don't, one
+ * slot goes to the "+N more" button instead. Chips share one height, so the
+ * first rendered child (a chip, or the "+N more" button) measures them all.
+ */
+function useFittingCount(
+  listRef: React.RefObject<HTMLDivElement | null>,
+  total: number,
+  adding: boolean,
+): number {
+  const [fitting, setFitting] = useState(total);
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+
+    if (!list) {
+      return;
+    }
+
+    const measure = () => {
+      const first = list.firstElementChild as HTMLElement | null;
+      const rowHeight = first?.offsetHeight ?? 0;
+
+      if (!rowHeight) {
+        setFitting(total);
+
+        return;
+      }
+
+      const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
+      const slots =
+        Math.floor((list.clientHeight + gap) / (rowHeight + gap)) -
+        (adding ? 1 : 0);
+
+      setFitting(total <= slots ? total : Math.max(0, slots - 1));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+
+    return () => observer.disconnect();
+  }, [listRef, total, adding]);
+
+  return Math.min(fitting, total);
+}
+
 /** A row rendered as a small chip on its day; click opens, RMB = resource menu. */
-function CalendarEvent({
+export function CalendarEvent({
   subject,
   onOpen,
   allDay,
   recurring = false,
+  wrap = false,
 }: {
   subject: string;
   allDay: boolean;
   recurring?: boolean;
+  /** Show the whole title (the day list) instead of truncating it. */
+  wrap?: boolean;
   onOpen: (subject: string) => void;
 }): JSX.Element {
   const resource = useResource(subject);
@@ -150,6 +244,7 @@ function CalendarEvent({
       }
       data-all-day={allDay || undefined}
       data-recurring={recurring || undefined}
+      $wrap={wrap}
       onClick={() => onOpen(subject)}
       onContextMenu={e => openResourceMenu(subject, e)}
     >
@@ -204,8 +299,11 @@ const CellHeader = styled.div`
   flex-shrink: 0;
 `;
 
-const DayNumber = styled.span<{ $today: boolean }>`
+const DayNumber = styled.button<{ $today: boolean }>`
   display: inline-flex;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
   align-items: center;
   justify-content: center;
   min-width: 1.5rem;
@@ -216,6 +314,16 @@ const DayNumber = styled.span<{ $today: boolean }>`
   font-weight: ${p => (p.$today ? 'bold' : 'normal')};
   background-color: ${p => (p.$today ? p.theme.colors.main : 'transparent')};
   color: ${p => (p.$today ? 'white' : p.theme.colors.textLight)};
+
+  &:hover {
+    background-color: ${p =>
+      p.$today ? p.theme.colors.main : p.theme.colors.bg1};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
+    outline-offset: 1px;
+  }
 `;
 
 const AddIcon = styled(IconButton)`
@@ -234,11 +342,21 @@ const EventList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* useFittingCount keeps what's shown inside; the rest is behind "+N more". */
+  overflow: hidden;
+  container-type: inline-size;
 `;
 
-const EventChip = styled.button`
+/** Dropped at phone width, where a column only has room for "+3". */
+const MoreWord = styled.span`
+  @container (max-width: 4.5rem) {
+    display: none;
+  }
+`;
+
+const EventChip = styled.button<{ $wrap: boolean }>`
   border: none;
   text-align: start;
   padding: 0.15rem 0.4rem;
@@ -248,13 +366,43 @@ const EventChip = styled.button`
   font-size: 0.8em;
   cursor: pointer;
   min-width: 0;
-  white-space: nowrap;
+  white-space: ${p => (p.$wrap ? 'normal' : 'nowrap')};
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 0;
 
   &:hover {
     background-color: ${p => p.theme.colors.bg2};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
+  }
+`;
+
+const MoreButton = styled.button`
+  border: none;
+  background: none;
+  text-align: start;
+  padding: 0.15rem 0.4rem;
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8em;
+  font-weight: bold;
+  cursor: pointer;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
   }
 `;
 
