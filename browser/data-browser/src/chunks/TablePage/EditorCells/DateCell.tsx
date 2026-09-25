@@ -25,9 +25,12 @@ import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 function DateCellEdit({
   value,
   onChange,
+  seed,
 }: EditCellProps<JSONValue>): JSX.Element {
   const [initial] = useState(() => formatDateInput(value));
-  const [text, setText] = useState(initial);
+  // Typing on the selected cell opens it with that character, which is not a
+  // date yet: it is only text until Enter, Tab or closing commits it.
+  const [text, setText] = useState(seed ?? initial);
   const invalid = text.trim() !== '' && parseDateInput(text) === undefined;
 
   // The unmount cleanup must see the last keystroke, not the first render.

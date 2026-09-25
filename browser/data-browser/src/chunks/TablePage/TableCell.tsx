@@ -49,6 +49,13 @@ interface TableCellProps {
 
 const SAVE_DEBOUNCE_TIME = 200;
 
+/**
+ * Datatypes whose editor reads typed text and stores a value only when it is
+ * committed. Typing on such a selected cell seeds the editor with the
+ * character instead of writing it as a value (#1822).
+ */
+const textSeededDatatypes = new Set<string>([Datatype.DATE]);
+
 function useIsEditing(row: number, column: number) {
   const { cursorMode, selectedColumn, selectedRow } = useTableEditorContext();
 
@@ -174,6 +181,9 @@ export function TableCell({
   // from this synchronous state closes that window; under load (where the write
   // is slower) it was losing the character most of the time.
   const [pendingValue, setPendingValue] = useState<JSONValue | undefined>();
+  // The same character for an editor that takes it as text (see
+  // `textSeededDatatypes`): only the editor stores anything, on commit.
+  const [seed, setSeed] = useState<string | undefined>();
 
   const handleEnterEditModeWithCharacter = useCallback(
     (key: string) => {
@@ -193,7 +203,23 @@ export function TableCell({
         return;
       }
 
+      // A date is typed as text (`2/10/2026`), so its first character is not
+      // a date yet. Hand it to the editor to start from, and store nothing
+      // until the editor commits a whole date.
+      if (textSeededDatatypes.has(dataType)) {
+        setSeed(key);
+
+        return;
+      }
+
       const next = appendStringToType(undefined, key, dataType);
+
+      // The character is not a value of this type. Writing `undefined` would
+      // clear the cell, so just open the editor on what is stored.
+      if (next === undefined) {
+        return;
+      }
+
       setPendingValue(next);
       onChange(next);
     },
@@ -213,12 +239,16 @@ export function TableCell({
     [onChange],
   );
 
-  // Leaving edit mode drops the seed regardless.
+  // Leaving edit mode drops both seeds regardless.
   useEffect(() => {
     if (!isEditing && pendingValue !== undefined) {
       setPendingValue(undefined);
     }
-  }, [isEditing, pendingValue]);
+
+    if (!isEditing && seed !== undefined) {
+      setSeed(undefined);
+    }
+  }, [isEditing, pendingValue, seed]);
 
   const handleEditNextRow = useCallback(() => {
     // Advance to the next row. The trailing empty row to move into already
@@ -253,6 +283,7 @@ export function TableCell({
           property={property.subject}
           resource={resource}
           languageTag={languageTag}
+          seed={seed}
         />
       ) : (
         <Editor.Display
