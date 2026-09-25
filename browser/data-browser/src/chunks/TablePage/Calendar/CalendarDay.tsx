@@ -160,6 +160,9 @@ const Cell = styled.div<{ $inMonth: boolean }>`
   gap: 0.25rem;
   padding: 0.3rem;
   min-height: 0;
+  /* A long title truncates inside its column instead of widening it (#1792). */
+  min-width: 0;
+  overflow: hidden;
   background-color: ${p => (p.$inMonth ? p.theme.colors.bg : 'transparent')};
   opacity: ${p => (p.$inMonth ? 1 : 0.5)};
 `;
@@ -168,6 +171,9 @@ const CellHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* At phone width a column is narrower than the day number plus the add
+   * button; wrap the button under the number rather than clip it. */
+  flex-wrap: wrap;
   flex-shrink: 0;
 `;
 
@@ -214,6 +220,7 @@ const EventChip = styled.button`
   color: ${p => p.theme.colors.text};
   font-size: 0.8em;
   cursor: pointer;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -226,6 +233,8 @@ const EventChip = styled.button`
 
 const AddInput = styled(InputStyled)`
   flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
   height: auto;
   min-height: 1.6rem;
   padding: 0.15rem 0.4rem;
