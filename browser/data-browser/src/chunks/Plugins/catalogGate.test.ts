@@ -91,7 +91,11 @@ describe('gateCatalog', () => {
   it('marks, never hides, one whose requires the server could not read', () => {
     const unknown = { name: 'uncached', requires: 'unknown' as const };
 
-    for (const gates of [undefined, node(false, 'off'), node(true, 'read-write')]) {
+    for (const gates of [
+      undefined,
+      node(false, 'off'),
+      node(true, 'read-write'),
+    ]) {
       const result = gateCatalog([plain, unknown], gates);
 
       expect(result.hidden).toBe(0);

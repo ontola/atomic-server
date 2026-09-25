@@ -302,6 +302,7 @@ export async function installRelease(
       [server.properties.config]: Datatype.JSON,
     },
   });
+
   try {
     await installation.save();
   } catch (e) {

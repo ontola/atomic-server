@@ -768,11 +768,13 @@ export function requiresGate(
       entry.slice(entry.indexOf(':') + 1),
     ];
     if (kind === 'plugin-routes') top = Math.max(top, rank(value));
+
     // Only nodes at `read-write` configure listeners and sidecars.
     if (kind === 'operator-listener') {
       listeners.push(value);
       top = Math.max(top, rank('read-write'));
     }
+
     if (kind === 'operator-sidecar') {
       sidecars.push(value);
       top = Math.max(top, rank('read-write'));
