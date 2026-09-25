@@ -214,7 +214,11 @@ export async function handleRequest(
       return await routeTokens(store, app);
 
     case 'revokeRouteToken':
-      return await routeTokens(store, app, required(request.tokenId, 'tokenId'));
+      return await routeTokens(
+        store,
+        app,
+        required(request.tokenId, 'tokenId'),
+      );
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.

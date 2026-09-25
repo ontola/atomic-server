@@ -62,7 +62,10 @@ async function call<T>(
     const body = await response.text();
 
     if (!response.ok) {
-      return { ok: false, error: errorMessageFromResponse(body, response.status) };
+      return {
+        ok: false,
+        error: errorMessageFromResponse(body, response.status),
+      };
     }
 
     return { ok: true, value: JSON.parse(body) as T };
@@ -166,8 +169,8 @@ function RouteConsentPage() {
           </Column>
         </Card>
         <Muted>
-          You can revoke the token later from the plugin. After you answer,
-          you go back to {ask.redirectOrigin}.
+          You can revoke the token later from the plugin. After you answer, you
+          go back to {ask.redirectOrigin}.
         </Muted>
         <Row gap='0.5rem'>
           <Button
