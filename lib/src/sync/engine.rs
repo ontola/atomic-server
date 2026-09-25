@@ -464,6 +464,8 @@ pub async fn handle_frame_full_for_caps(
                     store,
                     agent,
                     wire,
+                    // Dialed into us: the same gate `SYNC_PUSH` applies below.
+                    false,
                 )
                 .await
             }
@@ -1180,6 +1182,7 @@ pub async fn handle_sync_vv(
         store,
         agent,
         WireScheme::CANONICAL,
+        false,
     )
     .await
 }
@@ -1196,6 +1199,11 @@ pub async fn handle_sync_vv(
 /// whose VV *matches* but whose blob the server lacks (an HTTP-POST-metadata
 /// backstop, below). That backstop does not run for subjects left out of the
 /// set.
+///
+/// `pull` only names subjects the peer's `SYNC_PUSH` would be admitted for:
+/// when `agent` may not write the drive ([`may_accept_drive_write`] with
+/// `trust_owned`, the same check [`import_sync_push`] applies), `pull` stays
+/// empty, so a read-only session is never asked to push what would be refused.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_sync_vv_filtered(
     drive: &str,
@@ -1206,6 +1214,7 @@ pub async fn handle_sync_vv_filtered(
     store: &Db,
     agent: &crate::agents::ForAgent,
     wire: WireScheme,
+    trust_owned: bool,
 ) -> Vec<Vec<u8>> {
     let canonical_subjects = subjects.map(|set| {
         set.iter()
@@ -1389,6 +1398,27 @@ pub async fn handle_sync_vv_filtered(
             } else {
                 pull.push(subject.clone());
                 pull_from.entry(subject.clone()).or_default();
+            }
+        }
+    }
+
+    // Only ask for what `import_sync_push` would accept from this agent.
+    // Without this, a read-only reader is told to push (a subject outside the
+    // drive tree it happens to hold, or a file whose blob we lack) and its
+    // push is then refused as a whole. A drive we have never stored is left
+    // alone: `import_sync_push` bootstraps it.
+    if !pull.is_empty() {
+        let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+        if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
+            if !may_accept_drive_write(store, &drive_resource, agent, trust_owned).await {
+                tracing::debug!(
+                    "SYNC: drive {} — agent {:?} may not write, not asking for {} subjects",
+                    drive,
+                    agent,
+                    pull.len()
+                );
+                pull.clear();
+                pull_from.clear();
             }
         }
     }
@@ -2297,6 +2327,7 @@ mod bootstrap_and_sub_tests {
             &db,
             &ForAgent::from(alice.clone()),
             WireScheme::LEGACY,
+            false,
         )
         .await;
         let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
@@ -2330,6 +2361,7 @@ mod bootstrap_and_sub_tests {
                 &db,
                 &agent,
                 WireScheme::LEGACY,
+                false,
             )
             .await;
             let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
@@ -2473,6 +2505,110 @@ mod bootstrap_and_sub_tests {
             .expect("reconcile answers with a SYNC_DIFF")
     }
 
+    /// A reader who may not write the drive is never asked to push: its
+    /// `SYNC_PUSH` would be refused as a whole (`import_sync_push`). Covers
+    /// both ways the full reconcile asks for a subject: one the client holds
+    /// that the drive tree lacks, and one whose VV matches but whose blob the
+    /// server does not have. The owner, on the same state, is still asked.
+    #[tokio::test]
+    async fn full_sync_asks_only_drive_writers_to_push() {
+        let db = Db::init_temp("pull_write_gate").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let bob = db.create_agent(Some("Bob")).await.unwrap();
+        let drive_subject = crate::Subject::from_raw(&drive, None);
+        let mut drive_res = db.get_resource(&drive_subject).await.unwrap();
+        drive_res
+            .set_unsafe(
+                crate::urls::READ.into(),
+                crate::Value::ResourceArray(vec![bob.subject.to_string().into()]),
+            )
+            .unwrap();
+        db.add_resource_opts(&drive_res, false, true, true)
+            .await
+            .unwrap();
+
+        // A file whose blob this server never received.
+        let file = secret_child(&db, &drive).await;
+        let file_subject = crate::Subject::from_raw(&file, None);
+        let mut file_res = db.get_resource(&file_subject).await.unwrap();
+        file_res
+            .set_unsafe(
+                crate::urls::BLOB.into(),
+                crate::Value::String(format!("did:ad:blob:{}", "ab".repeat(32))),
+            )
+            .unwrap();
+        db.add_resource_opts(&file_res, false, true, true)
+            .await
+            .unwrap();
+
+        let bob_agent = ForAgent::AgentSubject(bob.subject.clone());
+        let mut items = drive_items_for(&db, &drive, &bob_agent).await.unwrap();
+        assert!(
+            items.iter().any(|(s, _)| s == &file_subject.pure_id()),
+            "Bob can read the file"
+        );
+        // Something the client holds that is not in the drive tree.
+        items.push((
+            "atomic:outside-the-drive".to_string(),
+            std::collections::BTreeMap::from([("client-peer".to_string(), 3)]),
+        ));
+        let mut peers: Vec<String> = items
+            .iter()
+            .flat_map(|(_, vv)| vv.keys().cloned())
+            .collect();
+        peers.sort();
+        peers.dedup();
+        let resources: std::collections::HashMap<String, Vec<i32>> = items
+            .iter()
+            .map(|(s, vv)| {
+                let counters = peers
+                    .iter()
+                    .map(|p| vv.get(p).copied().unwrap_or(0))
+                    .collect();
+                (s.clone(), counters)
+            })
+            .collect();
+
+        let reconcile = |agent: ForAgent| {
+            let (drive, peers, resources, db) = (&drive, &peers, &resources, &db);
+            async move {
+                decode_diff(
+                    handle_sync_vv_filtered(
+                        drive,
+                        "",
+                        peers,
+                        resources,
+                        None,
+                        db,
+                        &agent,
+                        WireScheme::CANONICAL,
+                        false,
+                    )
+                    .await,
+                )
+            }
+        };
+
+        let reader = reconcile(bob_agent.clone()).await;
+        assert!(
+            reader.pull.is_empty() && reader.pull_from.is_empty(),
+            "a read-only session must not be asked to push: {:?}",
+            reader.pull
+        );
+
+        let owner = reconcile(ForAgent::AgentSubject(alice.subject.clone())).await;
+        assert!(
+            owner.pull.contains(&file_subject.pure_id()),
+            "the owner is asked for the missing blob's file: {:?}",
+            owner.pull
+        );
+        assert!(
+            owner.pull.contains(&"atomic:outside-the-drive".to_string()),
+            "the owner is asked for what the server lacks: {:?}",
+            owner.pull
+        );
+    }
+
     /// The destroyed resource is gone, so the only thing left to check the
     /// envelope against is the drive: a session that may not read the
     /// drive gets the subject-only `remove[]` entry and no envelope.
@@ -2501,6 +2637,7 @@ mod bootstrap_and_sub_tests {
                 &db,
                 &ForAgent::Public,
                 WireScheme::CANONICAL,
+                false,
             )
             .await,
         );
@@ -2520,6 +2657,7 @@ mod bootstrap_and_sub_tests {
                 &db,
                 &ForAgent::AgentSubject(alice.subject.clone()),
                 WireScheme::CANONICAL,
+                false,
             )
             .await,
         );
