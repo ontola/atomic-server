@@ -557,15 +557,19 @@ function ReleaseSource({
 }) {
   if (!release || release === releaseId) return null;
 
-  const link = /^https?:\/\//.test(release) ? (
-    <a href={release} target='_blank' rel='noreferrer'>
-      {release}
-    </a>
-  ) : (
-    release
-  );
+  // The link is written inside the message, not passed in as a value: wuchale
+  // renders a value that is an element as an unkeyed child.
+  if (/^https?:\/\//.test(release)) {
+    const link = { href: release, target: '_blank', rel: 'noreferrer' };
 
-  return <Identity>from {link}</Identity>;
+    return (
+      <Identity>
+        from <a {...link}>{release}</a>
+      </Identity>
+    );
+  }
+
+  return <Identity>from {release}</Identity>;
 }
 
 // Wuchale drops a message with nested elements inside a condition, so the

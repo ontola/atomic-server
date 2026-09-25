@@ -10108,8 +10108,12 @@ msgid "Pinned to <0/>"
 msgstr "Pinned to <0/>"
 
 #. 0: pending.release.url
-#. 0: link
+#. 0: release
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "from {0}"
 msgstr "from {0}"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "from <0/>"
+msgstr "from <0/>"
