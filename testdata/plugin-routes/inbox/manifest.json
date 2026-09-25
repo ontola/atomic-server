@@ -14,6 +14,12 @@
       "method": "POST",
       "url": "https://*/inbox",
       "effect": "write"
+    },
+    {
+      "id": "deliver-local",
+      "method": "POST",
+      "url": "http://*/inbox",
+      "effect": "write"
     }
   ],
   "http": {
@@ -70,6 +76,16 @@
         "auth": "none",
         "body": "json",
         "enqueues": ["deliver"]
+      },
+      {
+        "id": "deliver",
+        "path": "/deliver",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "writes": ["inbox-items"],
+        "enqueues": ["deliver", "deliver-local"]
       },
       {
         "id": "storage",
