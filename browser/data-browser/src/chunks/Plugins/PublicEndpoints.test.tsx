@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  AtomicError,
   checkHostFeatures,
+  ErrorType,
+  PROBLEM_MARKER,
   hostFeatureMessage,
   HostFeatureUnavailableError,
   readInstallationReview,
@@ -190,6 +193,37 @@ describe('InstallationReviewDialog', () => {
       hostFeatureMessage(problem).replaceAll('`', ''),
     );
     expect(onInstall).toHaveBeenCalledOnce();
+    expect(installButton().hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows a refused Installation commit inline too', async () => {
+    const problem = checkHostFeatures(http, node('read-only'))!;
+    // What the WS `ERROR` frame (or the `/commit` Error resource) carries:
+    // the sentence, then the typed problem.
+    const message =
+      hostFeatureMessage(problem) +
+      PROBLEM_MARKER +
+      JSON.stringify({ ...problem, detail: hostFeatureMessage(problem) });
+    const onInstall = vi.fn(async () => {
+      throw new AtomicError(message, ErrorType.Server);
+    });
+    render(
+      withTheme(
+        <InstallationReviewDialog
+          pending={pending}
+          onClose={() => undefined}
+          onInstall={onInstall}
+          pluginRoutes={node('read-write')}
+        />,
+      ),
+    );
+
+    fireEvent.click(installButton());
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe(
+      hostFeatureMessage(problem).replaceAll('`', ''),
+    );
     expect(installButton().hasAttribute('disabled')).toBe(true);
   });
 });

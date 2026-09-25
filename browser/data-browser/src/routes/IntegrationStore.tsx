@@ -25,6 +25,7 @@ import {
   checkHostFeatures,
   parsePluginRoutesStatus,
   type DeclaredHttp,
+  type CatalogRequires,
   type HostFeatureUnavailable,
   type JSONValue,
   type PluginRoutesStatus,
@@ -34,6 +35,7 @@ import { gateCatalog, NO_PLUGIN_ROUTES } from '../chunks/Plugins/catalogGate';
 import {
   NeedsPublicEndpointsChip,
   RefusalText,
+  RequirementsUnknownChip,
 } from '../chunks/Plugins/PublicEndpoints';
 import { plural } from '@helpers/plural';
 import { ResourceInline } from '../views/ResourceInline/ResourceInline';
@@ -72,9 +74,10 @@ interface Listing {
   world: string | null;
   /**
    * Derived from the release manifest (`plugin-routes:read-only`, …); null
-   * when the release isn't cached on this node. Absent on older servers.
+   * when the release needs no gate; `unknown` when the server couldn't read
+   * the release. Absent (or null for uncached) on older servers.
    */
-  requires?: string[] | null;
+  requires?: CatalogRequires;
 }
 
 /**
@@ -450,17 +453,18 @@ function IntegrationStore(): React.JSX.Element {
             )}
           </Column>
           <Grid>
-            {visible?.map(({ entry, refusal }) => (
+            {visible?.map(({ entry, refusal, unknown }) => (
               <Card
                 key={entry.subject}
                 data-release={entry.releaseId}
-                data-gate={refusal ? 'marked' : undefined}
+                data-gate={refusal ? 'marked' : unknown ? 'unknown' : undefined}
               >
                 <Column gap='1rem'>
                   <Row justify='space-between' center>
                     <Avatar aria-hidden>{entry.emoji || <FaPlug />}</Avatar>
                     <Row center gap='0.5rem'>
                       {refusal && <NeedsPublicEndpointsChip />}
+                      {unknown && <RequirementsUnknownChip />}
                       <Badge>Unverified</Badge>
                     </Row>
                   </Row>

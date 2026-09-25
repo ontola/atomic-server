@@ -406,7 +406,7 @@ pub async fn publish_release(
 /// Records a `Listing` for release `id`, readable by everyone: a public
 /// publish is a marketplace entry, whatever the drive's own rights say.
 /// Idempotent: an existing Listing is left as it is.
-async fn record_listing(
+pub(crate) async fn record_listing(
     db: &Db,
     id: &str,
     release_url: &str,
@@ -594,26 +594,108 @@ pub fn gate_refusal(
 }
 
 /// Refuses, with the message of design 0.4, a release that needs gates this
-/// node does not open. Checked at install, upgrade and release pin, so an
-/// upgrade that raises the needed level is refused and the old release keeps
-/// running.
+/// node does not open. Checked at install, upgrade and resume, so an upgrade
+/// that raises the needed level is refused and the old release keeps running.
+///
+/// The error is a commit error, so it carries the typed problem the way
+/// commit errors can: appended to the message after
+/// [`atomic_lib::sync::protocol::PROBLEM_MARKER`]. Both wire paths then
+/// classify it as `HOST_FEATURE_UNAVAILABLE` (the `/commit` response as
+/// `409`), and `@tomic/lib` raises `HostFeatureUnavailableError` from it, as
+/// it does for the `409` of `/plugin-release-pin`.
 pub fn check_host_features(
     manifest: &serde_json::Value,
     node: &crate::plugin_routes::PluginRoutesConfig,
 ) -> AtomicResult<()> {
     match gate_refusal(manifest, node)? {
-        Some(refusal) => Err(AtomicError::from(refusal.message())),
+        Some(refusal) => Err(AtomicError::from(host_feature_commit_error(&refusal))),
         None => Ok(()),
     }
 }
 
-/// The `requires` a catalog entry carries, derived from its manifest. `None`
-/// for a legacy `plugin.json` or a manifest this node can't parse.
-pub fn derived_requires(manifest: &serde_json::Value) -> Option<Vec<String>> {
-    Manifest::parse(manifest.clone())
-        .ok()
-        .flatten()
-        .map(|m| m.requires())
+/// The commit error message for a gate refusal: the sentence of design 0.4,
+/// then the typed problem (with `detail`, as `/plugin-release-pin` sends it).
+pub fn host_feature_commit_error(refusal: &super::manifest_http::HostFeatureUnavailable) -> String {
+    let message = refusal.message();
+    let mut problem = refusal.to_json();
+    problem["detail"] = message.clone().into();
+    atomic_lib::sync::protocol::with_problem(&message, &problem)
+}
+
+/// What a catalog entry says a release needs, as JSON: the derived list; null
+/// for a manifest without versioned declarations (a legacy `plugin.json`),
+/// which needs no gate; or [`REQUIRES_UNKNOWN`] for a manifest this node can't
+/// parse.
+pub fn catalog_requires(manifest: &serde_json::Value) -> serde_json::Value {
+    match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => serde_json::json!(parsed.requires()),
+        Ok(None) => serde_json::Value::Null,
+        Err(_) => REQUIRES_UNKNOWN.into(),
+    }
+}
+
+/// The `requires` of a catalog entry whose release this node couldn't read
+/// or verify. A client treats it conservatively: it marks the entry, never
+/// hides it, and the review reads the manifest before anything is installed.
+pub const REQUIRES_UNKNOWN: &str = "unknown";
+
+/// How long `/plugin-catalog` waits for another server's `Release` resource
+/// (and its package `File`) before answering `requires: "unknown"`.
+pub const REMOTE_RELEASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// How many remote `Release` resources one `/plugin-catalog` request fetches,
+/// concurrently. Entries past the budget answer `requires: "unknown"`, so a
+/// catalog of remote listings costs at most one timeout, not one per entry.
+pub const REMOTE_RELEASE_BUDGET: usize = 4;
+
+/// A listed release that is not in this node's cache, read from the `Release`
+/// resource its Listing points at and verified against the listed id, without
+/// caching it or fetching its package bytes. The id covers the manifest, so a
+/// record that hashes to `release_id` carries the manifest `requires` is
+/// derived from. `None` when the resource can't be read in time, doesn't
+/// describe a release, or hashes to another id.
+///
+/// A local `Release` is read directly: it belongs to a public Listing, and
+/// only what the catalog shows of it leaves this node. A remote one is fetched
+/// through the SSRF-guarded client, within [`REMOTE_RELEASE_TIMEOUT`], and
+/// only when `fetch_remote` (the request's [`REMOTE_RELEASE_BUDGET`]).
+pub async fn uncached_release(
+    db: &Db,
+    reference: &str,
+    release_id: &str,
+    fetch_remote: bool,
+) -> Option<PluginRelease> {
+    let subject = Subject::from_raw(reference, db.get_base_domain().as_deref());
+    let release = if subject.is_local() {
+        let resource = db.get_resource(&subject).await.ok()?;
+        let package = match string_value(&resource, urls::PACKAGE) {
+            Some(file) => {
+                let file = db.get_resource(&file.as_str().into()).await.ok()?;
+                Some(string_value(&file, urls::INTERNAL_ID)?)
+            }
+            None => None,
+        };
+        PluginRelease::from_resource(&resource, package).ok()?
+    } else if fetch_remote {
+        let fetch = async {
+            let resource = fetch_remote_resource(reference, db).await.ok()?;
+            let package = match string_value(&resource, urls::PACKAGE) {
+                Some(file_url) => {
+                    let file = fetch_remote_resource(&file_url, db).await.ok()?;
+                    Some(string_value(&file, urls::INTERNAL_ID)?)
+                }
+                None => None,
+            };
+            PluginRelease::from_resource(&resource, package).ok()
+        };
+        tokio::time::timeout(REMOTE_RELEASE_TIMEOUT, fetch)
+            .await
+            .ok()
+            .flatten()?
+    } else {
+        return None;
+    };
+    (release.id().ok()? == release_id).then_some(release)
 }
 
 #[cfg(test)]

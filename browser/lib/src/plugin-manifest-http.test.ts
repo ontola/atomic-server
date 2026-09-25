@@ -6,6 +6,7 @@ import {
   checkHostFeatures,
   derivedRequires,
   hostFeatureMessage,
+  hostFeatureUnavailableError,
   httpGate,
   parsePluginRoutesStatus,
   requiresGate,
@@ -13,6 +14,12 @@ import {
   type PluginRoutesStatus,
 } from './plugin-manifest-http.js';
 import { pinPluginRelease } from './plugin-connection.js';
+import {
+  AtomicError,
+  ErrorType,
+  PROBLEM_MARKER,
+  splitProblem,
+} from './error.js';
 vi.mock('./authentication.js', () => ({
   signRequest: async () => ({ authorization: 'signed' }),
 }));
@@ -117,6 +124,72 @@ describe('pinning a release the node cannot open', () => {
   });
 });
 
+describe('a refused Installation commit', () => {
+  const entry = fixture('http-refusals.json').find(
+    (c: { name: string }) =>
+      c.name === 'read-only route on a feature build at off',
+  );
+  const trailer =
+    PROBLEM_MARKER +
+    JSON.stringify({
+      ...entry.refusal,
+      detail: entry.message,
+    });
+
+  it('carries the typed problem on the WS ERROR frame', () => {
+    // `websockets.ts` builds this from the frame's code and message.
+    const error = new AtomicError(
+      entry.message + trailer,
+      ErrorType.Server,
+      11,
+    );
+
+    expect(error.message).toBe(entry.message);
+    const typed = hostFeatureUnavailableError(error);
+    expect(typed).toBeInstanceOf(HostFeatureUnavailableError);
+    expect(typed!.problem).toEqual(entry.refusal);
+    expect(typed!.message).toBe(entry.message);
+  });
+
+  it('carries it on the /commit Error resource', () => {
+    // `client.ts` builds this from the response body.
+    const body = JSON.stringify({
+      'https://atomicdata.dev/properties/description': entry.message + trailer,
+      'https://atomicdata.dev/properties/errorCode': 11,
+    });
+    const error = new AtomicError(body, ErrorType.Client);
+
+    expect(error.message).toBe(entry.message);
+    expect(error.code).toBe(11);
+    expect(hostFeatureUnavailableError(error)!.problem).toEqual(entry.refusal);
+  });
+
+  it('is left alone when it is another error', () => {
+    expect(
+      hostFeatureUnavailableError(new AtomicError('nope')),
+    ).toBeUndefined();
+    expect(hostFeatureUnavailableError(new Error('nope'))).toBeUndefined();
+    const other = new AtomicError(
+      `nope${PROBLEM_MARKER}{"type":"something-else"}`,
+    );
+    expect(other.message).toBe('nope');
+    expect(hostFeatureUnavailableError(other)).toBeUndefined();
+    // The 409 path's error passes through as it is.
+    const pinned = new HostFeatureUnavailableError(entry.refusal);
+    expect(hostFeatureUnavailableError(pinned)).toBe(pinned);
+  });
+
+  it('splits the problem off whatever wraps the message', () => {
+    const problem = { type: 'x', surfaces: ['route `GET /a/{b}`', '}{'] };
+    const wrapped = `Hook failed: Refused.${PROBLEM_MARKER}${JSON.stringify(problem)}. Retry`;
+
+    expect(splitProblem(wrapped)).toEqual(['Hook failed: Refused.', problem]);
+    expect(splitProblem('plain')).toEqual(['plain', undefined]);
+    const broken = `x${PROBLEM_MARKER}not json`;
+    expect(splitProblem(broken)).toEqual([broken, undefined]);
+  });
+});
+
 describe('a catalog entry gated by its derived requires', () => {
   const cases: {
     name: string;
@@ -152,6 +225,9 @@ describe('a catalog entry gated by its derived requires', () => {
   it('needs nothing without requires', () => {
     expect(requiresGate(null).needed).toBe('none');
     expect(requiresGate(['wasm-sandbox']).needed).toBe('none');
+    // An uncached release the server couldn't read names no gate; the
+    // catalog marks it instead.
+    expect(requiresGate('unknown').needed).toBe('none');
   });
 });
 

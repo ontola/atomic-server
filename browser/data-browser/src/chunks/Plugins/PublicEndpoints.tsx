@@ -305,6 +305,21 @@ export function NeedsPublicEndpointsChip() {
   return <Pill data-status='needs-attention'>Needs public endpoints</Pill>;
 }
 
+/**
+ * The chip a catalog entry carries when the server couldn't say what its
+ * release needs. The review checks the manifest before anything installs.
+ */
+export function RequirementsUnknownChip() {
+  return (
+    <Pill
+      data-status='unknown'
+      title='This server couldn’t read what this release needs. The review checks it before installing.'
+    >
+      Requirements unknown
+    </Pill>
+  );
+}
+
 const List = styled.ul`
   display: flex;
   flex-direction: column;
