@@ -146,7 +146,21 @@ In `@tomic/lib`: `signRequest(url, agent, headers, { method, body })`.
 In `atomic_lib`: `client::get_authentication_headers_v2(method, url, body, agent)`.
 Shared test vectors: `lib/src/authentication_v2_vectors.json`.
 
-A server that sees `x-atomic-signature-version: 2` checks only the version 2 message and never falls back to version 1. AtomicServer accepts version 2 on `/app-agent` and `/plugin-view-token`, and refuses it with a `401` on endpoints that do not yet check the body. Cookies and WebSocket `AUTH` are always version 1. The integration proxy accepts only version 2 (see ontola/atomic-plugins#54).
+A server that sees `x-atomic-signature-version: 2` checks only the version 2 message and never falls back to version 1. Cookies and WebSocket `AUTH` are always version 1. The integration proxy accepts only version 2 (see ontola/atomic-plugins#54).
+
+AtomicServer requires version 2 on the endpoints that change state (`POST`, `DELETE`), and refuses a version 1 signature, a bearer token and a session cookie there with a `401`:
+
+- `/app-agent`, `/app-write`, `/plugin-view-token`, `/plugin-secret`;
+- `/plugin-run`, `/plugin-schedule`, `/plugin-resume`, `/plugin-auto-apply`, `/plugin-trigger`;
+- `/plugin-release`, `/plugin-release-package`, `/plugin-release-pin`;
+- `/plugin-sync-preview`, `-apply`, `-schedule`, `-status`, `/plugin-connection-state`, `-checkpoint`, `/plugin-external-read`, `-status`, `-confirm`, `-apply`;
+- `/integration-actions` and the twelve `/integration-action-*` routes;
+- `/bind-drive`, `/forget-peer`, `/iroh-sync`;
+- `/website-hosting/assets/{hash}`, `/website-hosting/deployments`, `/website-hosting/activate`.
+
+A `GET` on the same paths still takes version 1. Each version 2 signature on these endpoints is accepted once: the server remembers every one it accepted until it can no longer be fresh (five minutes after its timestamp), and answers a second use with a `401`. Sign every request anew; two identical requests signed in the same millisecond carry the same signature, since Ed25519 is deterministic. The memory is per server process and bounded; when it is full the server answers `429` until older signatures age out. The request body is signed as sent, so send it without `Content-Encoding`. In `@tomic/lib`, `signedRequestInit(url, agent, { method, body, headers })` returns the `fetch` options for such a request.
+
+`/commit` (commits carry their own signature), `PUT /blob/{hash}` (content-addressed), `/upload` and `POST` on other resources still take version 1, and refuse version 2 with a `401`.
 
 ## Verifying an Authentication
 

@@ -7,6 +7,22 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- State-changing endpoints require a version 2 request signature, and accept
+  each one once (#1700, piece 6 and answer 7). `POST`/`DELETE` on
+  `/app-agent`, `/app-write`, `/plugin-view-token`, `/plugin-secret`,
+  `/plugin-run`, `/plugin-schedule`, `/plugin-resume`, `/plugin-auto-apply`,
+  `/plugin-trigger`, the `/plugin-release*`, `/plugin-sync-*`,
+  `/plugin-connection-*` and `/plugin-external-*` routes, the 13
+  `/integration-action*` routes, `/bind-drive`, `/forget-peer`, `/iroh-sync`
+  and the `/website-hosting` writes refuse version 1 signatures, bearer
+  tokens and session cookies with a `401`. A middleware reads the body before
+  the handler, checks the signature over exactly those bytes, and hands them
+  on. An in-memory replay cache per node remembers every accepted v2
+  signature (by the SHA-256 of its bytes) until it can no longer be fresh,
+  and refuses a second use; it holds at most 100,000 and answers `429` when
+  full rather than forget a live one. `GET` on the same paths still takes
+  version 1. `/commit`, `PUT /blob`, `/upload` and `POST` on other resources
+  are unchanged. See docs/src/authentication.md.
 - wasip2 class extenders do not reach the integration proxy (#1700, answer
   5). They were already refused, because the host has no installation agent
   to sign as for them; the refusal now comes first, whether the extender uses

@@ -9,7 +9,7 @@
  * `planning/plugin-runtime-convergence.md`, "One install path and a
  * marketplace".
  */
-import { signRequest } from './authentication.js';
+import { signedRequestInit } from './authentication.js';
 import { generateKeyPair } from './CryptoProvider.js';
 import { Datatype } from './datatypes.js';
 import { core } from './ontologies/core.js';
@@ -396,14 +396,14 @@ export async function publishZipRelease(
   url.searchParams.set('drive', drive);
   if (options.world) url.searchParams.set('world', options.world);
   if (options.public) url.searchParams.set('public', 'true');
-  const response = await transport(url.toString(), {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(url.toString(), agent, {})),
-      'Content-Type': 'application/zip',
-    },
-    body: await file.arrayBuffer(),
-  });
+  const response = await transport(
+    url.toString(),
+    await signedRequestInit(url.toString(), agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/zip' },
+      body: new Uint8Array(await file.arrayBuffer()),
+    }),
+  );
   if (!response.ok) throw new Error(await response.text());
 
   return response.json() as Promise<{

@@ -411,6 +411,8 @@ describe('publishZipRelease', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Content-Type']).toBe('application/zip');
     expect(headers['x-atomic-signature']).toBeTruthy();
+    // The route requires version 2, over exactly these bytes.
+    expect(headers['x-atomic-signature-version']).toBe('2');
     expect(new Uint8Array(init.body as ArrayBuffer)).toEqual(bytes);
   });
 

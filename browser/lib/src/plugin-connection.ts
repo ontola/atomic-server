@@ -1,4 +1,4 @@
-import { signRequest } from './authentication.js';
+import { signedRequestInit } from './authentication.js';
 import type { Store } from './store.js';
 import type { PluginManifest } from './plugin-manifest.js';
 
@@ -36,14 +36,14 @@ async function post<T>(
   const agent = store.getAgent();
   if (!agent) throw new Error('sign in before changing a plugin connection');
   const url = `${store.getServerUrl()}${path}`;
-  const response = await transport(url, {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(url, agent, {})),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  const response = await transport(
+    url,
+    await signedRequestInit(url, agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
   if (!response.ok) throw new Error(await response.text());
 
   return response.json() as Promise<T>;

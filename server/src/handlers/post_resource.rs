@@ -3,7 +3,7 @@ use crate::{
     content_types::get_accept,
     content_types::ContentType,
     errors::AtomicServerResult,
-    helpers::{get_client_agent, try_extension},
+    helpers::{get_client_agent_of, try_extension},
 };
 use actix_web::{web, HttpResponse};
 use atomic_lib::{Resource, Storelike};
@@ -51,7 +51,7 @@ pub async fn handle_post_resource(
     let store = &appstate.store;
     timer.add("parse_headers");
 
-    let for_agent = get_client_agent(headers, &appstate, &full_subject).await?;
+    let for_agent = get_client_agent_of(&req, &appstate, &full_subject).await?;
     crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     timer.add("get_agent");
 

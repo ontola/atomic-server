@@ -19,7 +19,7 @@ use atomic_lib::{
     Storelike,
 };
 
-use crate::{appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent};
+use crate::{appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent_of};
 
 #[derive(serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -142,7 +142,7 @@ async fn authorize(
     let signed_subject =
         atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
 
-    let agent = get_client_agent(req.headers(), appstate, &signed_subject).await?;
+    let agent = get_client_agent_of(req, appstate, &signed_subject).await?;
     check_write(store, &resource, &agent).await?;
 
     Ok(())

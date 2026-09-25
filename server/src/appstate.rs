@@ -43,6 +43,9 @@ pub struct AppState {
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
     pub write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
+    /// The version 2 request signatures this node accepted and that are still
+    /// fresh, so none is accepted twice; see `crate::replay_cache`.
+    pub replay_cache: Arc<crate::replay_cache::ReplayCache>,
 }
 
 impl AppState {
@@ -282,6 +285,7 @@ impl AppState {
             managed: server_info.managed,
             managed_dashboard_url: server_info.managed_dashboard_url,
             view_tokens: Arc::new(Default::default()),
+            replay_cache: Arc::new(Default::default()),
         })
     }
 
