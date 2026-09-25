@@ -9,6 +9,7 @@ import {
 } from '@tomic/react';
 import { useCallback, useState, type JSX } from 'react';
 import { formatDate } from '@helpers/dates/formatDate';
+import { calendarDateToLocalDate } from '@helpers/dates/calendarDate';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
 import { useOnValueChange } from '@helpers/useOnValueChange';
@@ -51,12 +52,11 @@ function DateCellEdit({
   );
 }
 
-const toDisplayData = (value: JSONValue, format: string) => {
+export const toDisplayData = (value: JSONValue, format: string) => {
   if (isString(value)) {
-    const valueWithTime = `${value}T00:00:00`;
-    const date = new Date(valueWithTime);
+    const date = calendarDateToLocalDate(value);
 
-    return formatDate(format, date, false);
+    return date ? formatDate(format, date, false) : value;
   }
 };
 
