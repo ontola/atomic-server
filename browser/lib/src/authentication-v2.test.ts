@@ -4,6 +4,7 @@ import { Agent } from './agent.js';
 import {
   requestSignatureMessageV2,
   sha256Hex,
+  signedRequestInit,
   signRequest,
 } from './authentication.js';
 import { decodeB64 } from './base64.js';
@@ -218,6 +219,55 @@ describe('version 2 request signatures', () => {
     );
     expect(headers['x-atomic-agent']).toBe(v.agent);
     expect(headers['x-atomic-signature']).toBe(v.signature);
+  });
+
+  it('builds fetch options that send exactly what was signed', async ({
+    expect,
+  }) => {
+    const agent = await Agent.generateNonExtractable();
+    const publicKey = await agent.getPublicKey();
+    const url = 'https://server.example/plugin-secret?drive=d';
+    const body = JSON.stringify({ drive: 'd', plugin: 'p', name: 'n' });
+    const init = await signedRequestInit(url, agent, {
+      method: 'POST',
+      body,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(body);
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(init.headers['x-atomic-signature-version']).toBe('2');
+    const timestamp = Number(init.headers['x-atomic-timestamp']);
+    expect(
+      await verifies(
+        publicKey,
+        requestSignatureMessageV2('POST', url, timestamp, sha256Hex(body)),
+        init.headers['x-atomic-signature'],
+      ),
+    ).toBe(true);
+  });
+
+  it('signs a request without a body over the empty body', async ({
+    expect,
+  }) => {
+    const agent = await Agent.generateNonExtractable();
+    const url = 'https://server.example/plugin-secret?drive=d&name=n';
+    const init = await signedRequestInit(url, agent, { method: 'DELETE' });
+
+    expect('body' in init).toBe(false);
+    expect(
+      await verifies(
+        await agent.getPublicKey(),
+        requestSignatureMessageV2(
+          'DELETE',
+          url,
+          Number(init.headers['x-atomic-timestamp']),
+          sha256Hex(undefined),
+        ),
+        init.headers['x-atomic-signature'],
+      ),
+    ).toBe(true);
   });
 
   it('leaves version 1 unchanged', async ({ expect }) => {

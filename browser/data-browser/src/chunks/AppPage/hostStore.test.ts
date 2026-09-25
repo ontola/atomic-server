@@ -24,6 +24,15 @@ vi.mock('@tomic/react', async () => {
   return {
     ...actual,
     signRequest: async () => ({}),
+    signedRequestInit: async (
+      _url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: { ...request.headers },
+      body: request.body,
+    }),
     // Reading an importer's stored config is tested in @tomic/lib
     // (plugin-destination.test.ts); here only what `data` passes on.
     destinationTablesFor: async (

@@ -25,7 +25,7 @@ use serde_json::Value as Json;
 use crate::{
     appstate::AppState,
     errors::{AtomicServerError, AtomicServerResult},
-    helpers::get_client_agent,
+    helpers::get_client_agent_of,
     plugins::apply::{ApplyHost, CreateRequest},
     plugins::store_host::StoreApplyHost,
 };
@@ -83,7 +83,7 @@ pub async fn handle_app_write(
         .to_string();
     let signed_subject = Subject::from_raw(&path_and_query, None).resolve(&context.origin);
 
-    let agent = get_client_agent(req.headers(), &appstate, &signed_subject).await?;
+    let agent = get_client_agent_of(&req, &appstate, &signed_subject).await?;
     check_write(store, &app_resource, &agent).await?;
 
     let mut host = StoreApplyHost::for_installation(store, &body.drive, &body.app, agent)

@@ -1,7 +1,19 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { executeServerPlugin } from './plugin-server.js';
 vi.mock('./authentication.js', () => ({
-  signRequest: async () => ({ 'x-test-signature': 'signed' }),
+  signedRequestInit: async (
+    _url: string,
+    _agent: unknown,
+    request: { method: string; body?: string; headers?: object },
+  ) => ({
+    method: request.method,
+    headers: {
+      ...request.headers,
+      'x-test-signature': 'signed',
+      'x-atomic-signature-version': '2',
+    },
+    body: request.body,
+  }),
 }));
 afterEach(() => vi.unstubAllGlobals());
 const store = {
@@ -17,6 +29,9 @@ const request = {
 it('uses the signed shared runtime endpoint and preserves plugin output', async () => {
   const fetch = vi.fn(async (_url, init) => {
     expect(init.headers['x-test-signature']).toBe('signed');
+    // `/plugin-run` requires a version 2 signature over this body.
+    expect(init.headers['x-atomic-signature-version']).toBe('2');
+    expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({
       ...request,
       input: JSON.stringify(request.input),

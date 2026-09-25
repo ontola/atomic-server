@@ -25,7 +25,7 @@ import {
   pluginConfigFor,
   pluginConfigProblems,
   pluginSchema,
-  signRequest,
+  signedRequestInit,
   type ApplyReport,
   type JSONObject,
   type PluginManifest,
@@ -405,13 +405,14 @@ async function writeAsApp(
   if (!agent) throw new Error('Sign in to use this app');
 
   const url = `${store.getServerUrl()}/app-write`;
-  const headers = await signRequest(url, agent, {});
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ drive, app, ...request }),
-  });
+  const response = await fetch(
+    url,
+    await signedRequestInit(url, agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drive, app, ...request }),
+    }),
+  );
 
   if (!response.ok) {
     throw new Error(

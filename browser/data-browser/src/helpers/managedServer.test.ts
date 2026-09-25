@@ -12,6 +12,21 @@ import {
 // URL to verify the signature.
 vi.mock('@tomic/react', () => ({
   signRequest: vi.fn(async (url: string) => ({ 'x-atomic-signed-url': url })),
+  signedRequestInit: vi.fn(
+    async (
+      url: string,
+      _agent: unknown,
+      request: { method: string; headers?: object; body?: string },
+    ) => ({
+      method: request.method,
+      headers: {
+        ...request.headers,
+        'x-atomic-signed-url': url,
+        'x-atomic-signature-version': '2',
+      },
+      body: request.body,
+    }),
+  ),
 }));
 
 describe('accountCreationTarget', () => {
@@ -159,6 +174,8 @@ describe('forgetServerPeer', () => {
     // Signed over the full URL including the query string, or the server's
     // rebuild will not match.
     expect(init.headers['x-atomic-signed-url']).toBe(url);
+    // `/forget-peer` changes state, so it takes only version 2.
+    expect(init.headers['x-atomic-signature-version']).toBe('2');
   });
 
   it('reports failure rather than success when the server refuses', async () => {
