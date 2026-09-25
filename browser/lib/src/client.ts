@@ -259,6 +259,12 @@ export class Client {
           shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)
         ) {
           warnDidAuthCompatibility(url);
+        } else if (!isOwnServerUrl(url, signInfo.serverURL)) {
+          // A foreign origin (shared vocabulary on GitHub Pages, another
+          // host's classes) gets a plain GET. The `x-atomic-*` headers are
+          // not CORS-safelisted, so signing forces a preflight, which static
+          // hosts refuse (Pages answers 405). Such an origin cannot check our
+          // Agent anyway: public data is all it can serve us.
         } else if (!subject.startsWith('https://atomicdata.dev')) {
           // Cookies only work in browsers for same-origin requests right now
           // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
@@ -468,6 +474,46 @@ export class Client {
 
     return fetch(...params);
   }
+}
+
+/**
+ * Whether `url` is served by the user's own server, so that a request to it
+ * may carry the Agent's signature: the store's server URL, a drive on one of
+ * its subdomains (`https://{drive}.{server host}`), or the page's own origin.
+ * Anything else is a foreign origin, which gets unsigned requests.
+ */
+export function isOwnServerUrl(url: string, serverURL?: string): boolean {
+  let target: URL;
+
+  try {
+    target = new URL(url);
+  } catch {
+    // A relative URL resolves against the page, which is ours.
+    return true;
+  }
+
+  if (hasBrowserAPI() && target.origin === window.location.origin) {
+    return true;
+  }
+
+  if (!serverURL) return false;
+
+  let server: URL;
+
+  try {
+    server = new URL(serverURL);
+  } catch {
+    return false;
+  }
+
+  if (target.origin === server.origin) return true;
+
+  // Subdomain drives: same scheme and port, host one or more labels deeper.
+  return (
+    target.protocol === server.protocol &&
+    target.port === server.port &&
+    target.hostname.endsWith(`.${server.hostname}`)
+  );
 }
 
 /** Origin used to turn an identifier into `GET {origin}/resource?subject=`. */
