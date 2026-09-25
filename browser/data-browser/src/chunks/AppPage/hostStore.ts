@@ -1,6 +1,7 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
-import type { ProxyRelay } from '@helpers/proxyConnections';
+import type { ProxyHost } from '@helpers/proxyConnections';
+import { fetchRowGrant } from './rowGrant';
 import {
   CollectionBuilder,
   core,
@@ -21,6 +22,10 @@ import {
  * data" needs no permission dialog; "may this app write your calendar" does,
  * and that is a grant (B4) rather than something to wave through here in the
  * meantime.
+ *
+ * One such grant exists (#1740): an app shown as a table's view may edit that
+ * table's rows once someone who can edit the table allowed it. Those writes
+ * go to the server like any other; the server holds the grant and decides.
  */
 
 export interface HostRequest {
@@ -33,14 +38,11 @@ export interface HostRequest {
   parent?: string;
   isA?: string[];
   propVals?: Record<string, unknown>;
-  // `proxy` / `proxyConnections`
+  // `proxyCapability` / `proxyConnections`
   platform?: string;
   connectionId?: string;
-  path?: string;
-  method?: string;
-  query?: Record<string, string>;
-  body?: string;
-  ifMatch?: string;
+  /** The frame's own Ed25519 public key, base64url. */
+  publicKey?: string;
 }
 
 export interface HostReply {
@@ -82,10 +84,10 @@ export async function handleRequest(
   /** The table this app is a view of, when it is being used as one. */
   table?: string,
   /**
-   * This app's integration-proxy connections, held by this page. Absent where
-   * the host cannot relay (no signed-in agent, or a host without the op).
+   * This app's integration-proxy access, as the signed-in user grants it.
+   * Absent where the host cannot (no signed-in agent, or a host without it).
    */
-  relay?: ProxyRelay,
+  proxy?: ProxyHost,
 ): Promise<unknown> {
   switch (request.op) {
     case 'app':
@@ -150,7 +152,7 @@ export async function handleRequest(
       // place a view may always write, so it is the only sensible default.
       const parent = request.parent ?? app;
 
-      await refuseOutsideApp(store, parent, app);
+      await refuseOutsideApp(store, parent, app, table, 'create');
 
       const { subject } = await writeAsApp(store, drive, app, {
         op: 'create',
@@ -167,7 +169,7 @@ export async function handleRequest(
     case 'save': {
       const subject = required(request.subject, 'subject');
 
-      await refuseOutsideApp(store, subject, app);
+      await refuseOutsideApp(store, subject, app, table, 'save');
       await writeAsApp(store, drive, app, {
         op: 'save',
         subject,
@@ -180,31 +182,43 @@ export async function handleRequest(
     case 'destroy': {
       const subject = required(request.subject, 'subject');
 
-      await refuseOutsideApp(store, subject, app);
+      await refuseOutsideApp(store, subject, app, table, 'destroy');
       await writeAsApp(store, drive, app, { op: 'destroy', subject });
 
       return { subject };
     }
 
-    // The frame names a connection; this page holds it and makes the call.
-    // Only status, a few headers and the body go back — never the code.
-    case 'proxy': {
-      if (!relay)
+    // Whether this app may edit the rows of the table it is a view of
+    // (#1740). Not a secret: the app needs it to decide whether to show an
+    // editable field or an ask.
+    case 'rowAccess':
+      return rowAccess(store, drive, app, table);
+
+    // Needs the person: a confirmation, drawn by the caller. A host that
+    // cannot show one refuses rather than granting unseen.
+    case 'requestRowAccess':
+      throw new Error('This host cannot ask to let an app edit rows here.');
+
+    // The frame names a connection and brings its own public key; the user
+    // signs a capability bound to that key, for that connection only, after
+    // the page has checked the connection is delegated to this app. The frame
+    // then calls the proxy itself. Nothing here is a credential on its own:
+    // every request must also be signed with the frame's key.
+    case 'proxyCapability': {
+      if (!proxy)
         throw new Error('This host cannot reach the integration proxy.');
 
-      return await relay.request({
+      return await proxy.capability({
         platform: required(request.platform, 'platform'),
         connectionId: required(request.connectionId, 'connectionId'),
-        path: required(request.path, 'path'),
-        method: request.method,
-        query: request.query,
-        body: request.body,
-        ifMatch: request.ifMatch,
+        publicKey: required(request.publicKey, 'publicKey'),
       });
     }
 
     case 'proxyConnections':
-      return relay?.connections(required(request.platform, 'platform')) ?? [];
+      return proxy
+        ? await proxy.connections(required(request.platform, 'platform'))
+        : [];
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.
@@ -272,12 +286,66 @@ async function refuseOutsideApp(
   store: Store,
   subject: string,
   app: string,
+  table: string | undefined,
+  op: 'create' | 'save' | 'destroy',
 ): Promise<void> {
   if (await isWithinApp(store, subject, app)) return;
+
+  // A row of the table this app is a view of: the server decides, from the
+  // grant someone gave it there. For `create` the subject is the parent.
+  if (table) {
+    const parent =
+      op === 'create'
+        ? subject
+        : ((await store.getResource(subject)).get(core.properties.parent) as
+            | string
+            | undefined);
+
+    if (parent === table) {
+      if (op === 'destroy') throw new Error(ROW_DESTROY_REFUSED);
+
+      return;
+    }
+  }
 
   throw new Error(
     'This app may only write its own data. Writing here needs rights its key does not have.',
   );
+}
+
+export const ROW_DESTROY_REFUSED =
+  'Letting an app edit rows does not let it delete them.';
+
+/** What `store.rowAccess()` answers. */
+export type RowAccess =
+  | {
+      status: 'granted';
+      grantedBy: string;
+      grantedAt: number;
+      via: string;
+    }
+  | { status: 'none' }
+  /** Not shown as a table's view, so there are no rows to be given. */
+  | { status: 'unavailable' };
+
+export async function rowAccess(
+  store: Store,
+  drive: string,
+  app: string,
+  table: string | undefined,
+): Promise<RowAccess> {
+  if (!table) return { status: 'unavailable' };
+
+  const { grant } = await fetchRowGrant(store, { drive, table, app });
+
+  return grant
+    ? {
+        status: 'granted',
+        grantedBy: grant.grantedBy,
+        grantedAt: grant.grantedAt,
+        via: grant.via,
+      }
+    : { status: 'none' };
 }
 
 function required(value: string | undefined, name: string): string {

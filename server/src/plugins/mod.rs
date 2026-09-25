@@ -36,6 +36,8 @@ They are used for performing custom queries, or calculating dynamic attributes.
 #[cfg(feature = "wasm-plugins")]
 pub mod actions;
 #[cfg(feature = "wasm-plugins")]
+pub mod app_row_grant;
+#[cfg(feature = "wasm-plugins")]
 pub mod apply;
 pub mod bind_drive;
 pub mod bookmark;
@@ -53,6 +55,8 @@ pub mod host_core;
 pub mod importer;
 #[cfg(feature = "wasm-plugins")]
 pub mod installation;
+#[cfg(feature = "wasm-plugins")]
+pub mod installation_identity;
 pub mod invite;
 #[cfg(feature = "wasm-plugins")]
 pub mod journal;

@@ -16,12 +16,22 @@ export type ViewOperation =
   | 'search'
   | 'subscribe'
   | 'unsubscribe'
-  /** Relay one integration-proxy call; the host holds the connection. */
-  | 'proxy'
-  /** Connection references (never credentials) this app may relay through. */
+  /**
+   * A capability for one integration-proxy connection, bound to the frame's
+   * own public key and signed by the user (ontola/atomic-plugins#54).
+   */
+  | 'proxyCapability'
+  /** Connection references (never credentials) delegated to this app. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
-  | 'proxyConnect';
+  | 'proxyConnect'
+  /**
+   * Whether this app may edit the rows of the table it is a view of (#1740):
+   * `{ status: 'granted' | 'none' | 'unavailable' }`.
+   */
+  | 'rowAccess'
+  /** Ask the person, in host UI, to let this app edit the table's rows. */
+  | 'requestRowAccess';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -74,9 +84,11 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'search',
       'subscribe',
       'unsubscribe',
-      'proxy',
+      'proxyCapability',
       'proxyConnections',
       'proxyConnect',
+      'rowAccess',
+      'requestRowAccess',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

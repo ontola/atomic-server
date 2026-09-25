@@ -212,6 +212,63 @@ The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
 
+Host signing of `ctx.http` to the integration proxy (ontola/atomic-plugins#54,
+decisions 8 and 12): `plugins::host_core` tests send a real request to a
+one-shot loopback server standing in for the configured proxy and verify its
+v2 signature (method, full URL with query, body hash) as the installation's
+app agent on this node, that plugin-supplied `x-atomic-*` headers are replaced,
+that an installation with no app agent on this node is refused before
+connecting, and that other loopback origins stay refused even when a manifest
+declares them. `plugins::egress` tests pin the exception to exactly the
+configured origin (another port, the other scheme, another loopback address,
+`localhost` for `127.0.0.1`, and credentials in the URL are all refused).
+`app_endpoints_test::an_active_installation_reports_its_agent_on_this_node`
+checks `GET /app-agent` reports the identity activation mints for a JS
+Installation. Not covered: a real integration proxy (atomic-plugins#122)
+accepting these requests, delegations and `POST /runtimes`, and a second node.
+
+Installation identities for the proxy (#1700, answers 1–3):
+`plugins::installation_identity` tests commit real Installations and check that
+a keyless `integrationAppAgent` is stored, refused when it is not an agent id,
+and can be added but never changed; that activation publishes the node's agent
+once on an `InstallationRuntime` child, written by that agent and writable by
+it; that `integrationConnections` must map platforms to id strings; and that a
+server-side JS run gets `ctx.app` and `ctx.connections` from the Installation,
+over whatever the caller sent. `browser/lib/src/plugin-install.test.ts` checks
+`installRelease` records a fresh `atomic:agent:` in the genesis with no key
+material. `data-browser/src/helpers/installationRuntimes.test.ts` checks the
+page's side against a fake proxy that mirrors atomic-plugins#122's routes and
+verifies every v2 signature: `POST /runtimes {app, agent, label}` for each
+runtime child whose genesis the named agent signed, nothing posted again in
+the same page or when the proxy already lists it, a re-post when the label
+changes, `DELETE /runtimes/{agent}` on revoke, and a retry after a proxy error.
+`chunks/AppPage/appAgent.test.ts` checks that `appAgentOf` prefers the
+Installation's `integrationAppAgent` and falls back to `GET /app-agent`.
+`helpers/installationConnections.test.ts` checks connecting a platform on an
+Installation against a fake proxy: `/connect`, the signed redeem and the
+delegation to the app id end in `integrationConnections[platform]` written on
+the Installation (and a frame's own connect writes nothing); reusing an
+existing connection delegates and records it; disconnecting calls
+`DELETE /connections/{id}/agents/{app}` and removes the key (the property once
+empty), keeping it when the proxy refuses; and a plain Installation (no
+`proxy` in the manifest, no recorded connection) makes zero fetches to the
+proxy. `views/Installation/InstallationConnections.test.tsx` checks the
+controls are hidden from non-writers and the connected state per platform.
+Not covered: a real proxy accepting the page's calls, the `/connect` return
+end to end in a browser, a second node publishing its own runtime child, and
+syncing those children between nodes.
+
+`atomic-proxy:` URLs (#1700, answer 4): the shared fixtures in
+`testdata/plugin-manifest/` (Rust `shared_manifest_conformance` and the
+`plugin-manifest.test.ts` mirror) cover `proxy` platforms and proxy-relative
+operations, including undeclared platforms, bad names, duplicates, dot
+segments and queries. `manifest::proxy_relative_tests` covers the URL parser.
+`host_core` tests send a proxy-relative request to a one-shot loopback proxy
+and check the resolved `/proxy/{connection}/{platform}/...` request line and
+its v2 signature. They also check refusals, before any connection, for an
+undeclared platform, no delegated connection, no configured proxy, no
+matching operation and a dot segment.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
@@ -2260,3 +2317,20 @@ deployed app's base64 JSON format with an `atomic:agent:` subject through the
 same `Agent.fromSecret` parser used by the local welcome form. It verifies
 the identity and public key. Browser sign-in and data recovery are separate
 flows.
+
+## App row grants for a table's view (#1740, 2026-09-25)
+
+`server/src/handlers/app_row_grant_test.rs` runs `/app-row-grant` and
+`/app-write` against a real store: adding the view with a grant lets the app
+save and remove a row property and create a row (signed by the app);
+`view-kind` alone grants nothing; a request confirmed as `via: request` works;
+the record has `grantedBy` (the signer), `grantedAt` and `via`; a grant needs a
+gesture, a View of that table showing the app, and a granter who can edit the
+table; it reaches neither another table, the table itself, its views, rights,
+non-column properties nor `destroy`; revoking from the menu, destroying the
+View, or switching its kind away and back all refuse further writes.
+`hostStore.test.ts` covers the frame ops (`rowAccess`, a bare host refusing
+`requestRowAccess`, row writes going to the server, deletes refused),
+`rowGrant.test.ts` the in-app request, and `appViewGrant.test.ts` the "+ Add
+view" / "View type" confirmation choices. Gap: no Playwright test clicks the
+confirmation; the money app's host E2E (atomic-plugins#148) is the natural one.

@@ -1110,6 +1110,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       <TablePresenceContext value={presenceValue}>
         {!embedded && (
           <TableViewTabs
+            table={resource.subject}
             rowClass={tableClass.subject}
             views={views}
             activeView={activeView}
@@ -1163,6 +1164,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
               app={appView}
               drive={store.getDrive()!}
               table={resource.subject}
+              view={activeView}
             />
           </AppViewWrapper>
         ) : viewKind === 'dashboard' ? (

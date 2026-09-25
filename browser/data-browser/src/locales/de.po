@@ -123,6 +123,7 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
@@ -136,6 +137,7 @@ msgstr ""
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -300,6 +302,7 @@ msgstr ""
 msgid "Ollama"
 msgstr ""
 
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -5823,6 +5826,7 @@ msgid "Cloud Vault is not available here: {0}."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Disconnect"
 msgstr ""
 
@@ -5832,6 +5836,7 @@ msgstr ""
 
 #: src/helpers/browserPeerSync.ts
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Not connected"
 msgstr ""
 
@@ -8216,6 +8221,8 @@ msgstr ""
 
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/views/Installation/InstallationConnections.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connections"
 msgstr ""
 
@@ -9416,11 +9423,100 @@ msgstr ""
 msgid "Sign in to connect an account."
 msgstr ""
 
+#~ msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+#~ msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect an account"
+msgstr ""
+
 #. 0: ' '; 1: ' '; 2: getIntegrationProxy()
 #: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
 msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
-msgid "Connect an account"
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use existing connection"
+msgstr ""
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Sign in to finish connecting this account."
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr ""
+
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect {0}"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected ·"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr ""
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Allow editing"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Not now"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Let this app edit rows"
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. You can take this back from the tab's menu."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This app"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Stop {0} editing rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "It keeps showing the rows, read-only."
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Let {0} edit rows"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Let {0} edit rows?"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Read-only"
 msgstr ""

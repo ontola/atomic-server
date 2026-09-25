@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { core } from '@tomic/react';
 import type { Store } from '@tomic/react';
-import { handleRequest, isHostRequest, isWithinApp } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  isWithinApp,
+  ROW_DESTROY_REFUSED,
+} from './hostStore';
 
 vi.mock('@tomic/react', async () => {
   const actual =
@@ -195,39 +200,42 @@ describe('isHostRequest', () => {
   });
 });
 
-describe('relaying the integration proxy', () => {
-  const relay = {
-    request: vi.fn(async () => ({ status: 200, headers: {}, body: [] })),
-    connections: vi.fn(() => [{ connectionId: 'c1', platform: 'pets' }]),
+describe('integration-proxy capabilities', () => {
+  const minted = {
+    capability: 'payload.sig',
+    aud: 'https://proxy.example',
+    exp: 1,
+    connectionId: 'c1',
+    platform: 'pets',
+  };
+  const proxy = {
+    capability: vi.fn(async () => minted),
+    connections: vi.fn(async () => [{ connectionId: 'c1', platform: 'pets' }]),
   };
 
-  it('passes a call to the relay by reference, never touching the server', async () => {
+  it('mints a capability for the frame key, never touching the server', async () => {
     const result = await handleRequest(
       fakeStore(),
       APP,
       DRIVE,
-      req('proxy', {
+      req('proxyCapability', {
         platform: 'pets',
         connectionId: 'c1',
-        path: '/pets',
-        query: { page: '2' },
+        publicKey: 'frame-key',
       }),
       undefined,
-      relay,
+      proxy,
     );
-    expect(result).toEqual({ status: 200, headers: {}, body: [] });
-    expect(relay.request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        platform: 'pets',
-        connectionId: 'c1',
-        path: '/pets',
-        query: { page: '2' },
-      }),
-    );
+    expect(result).toEqual(minted);
+    expect(proxy.capability).toHaveBeenCalledWith({
+      platform: 'pets',
+      connectionId: 'c1',
+      publicKey: 'frame-key',
+    });
     expect(sent).toEqual([]);
   });
 
-  it('lists connection references, and none without a relay', async () => {
+  it('lists connection references, and none without a proxy', async () => {
     expect(
       await handleRequest(
         fakeStore(),
@@ -235,7 +243,7 @@ describe('relaying the integration proxy', () => {
         DRIVE,
         req('proxyConnections', { platform: 'pets' }),
         undefined,
-        relay,
+        proxy,
       ),
     ).toEqual([{ connectionId: 'c1', platform: 'pets' }]);
     expect(
@@ -248,13 +256,17 @@ describe('relaying the integration proxy', () => {
     ).toEqual([]);
   });
 
-  it('refuses a proxy call without a relay or without a connection', async () => {
+  it('refuses without a proxy, a connection or a frame key', async () => {
     await expect(
       handleRequest(
         fakeStore(),
         APP,
         DRIVE,
-        req('proxy', { platform: 'pets', connectionId: 'c1', path: '/pets' }),
+        req('proxyCapability', {
+          platform: 'pets',
+          connectionId: 'c1',
+          publicKey: 'k',
+        }),
       ),
     ).rejects.toThrow('cannot reach the integration proxy');
     await expect(
@@ -262,10 +274,145 @@ describe('relaying the integration proxy', () => {
         fakeStore(),
         APP,
         DRIVE,
-        req('proxy', { platform: 'pets', path: '/pets' }),
+        req('proxyCapability', { platform: 'pets', publicKey: 'k' }),
         undefined,
-        relay,
+        proxy,
       ),
     ).rejects.toThrow('connectionId is required');
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyCapability', { platform: 'pets', connectionId: 'c1' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow('publicKey is required');
+  });
+
+  it('no longer relays proxy calls through the page', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxy', { platform: 'pets', connectionId: 'c1', path: '/pets' }),
+        undefined,
+        proxy,
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('the rows of the table an app is a view of (#1740)', () => {
+  const TABLE = 'did:ad:transactions';
+
+  it("sends a row's save to the server, which holds the grant", async () => {
+    const store = fakeStore({ 'did:ad:row': TABLE });
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:row', propVals: { p: 'v' } }),
+      TABLE,
+    );
+
+    expect(sent).toEqual([
+      {
+        drive: DRIVE,
+        app: APP,
+        op: 'save',
+        subject: 'did:ad:row',
+        propVals: { p: 'v' },
+      },
+    ]);
+  });
+
+  it('sends a new row to the server as well', async () => {
+    await handleRequest(
+      fakeStore(),
+      APP,
+      DRIVE,
+      req('create', { parent: TABLE, isA: ['did:ad:class'] }),
+      TABLE,
+    );
+
+    expect(sent).toMatchObject([{ op: 'create', parent: TABLE }]);
+  });
+
+  it('still refuses rows of other tables before anything leaves', async () => {
+    const store = fakeStore({ 'did:ad:elsewhere': 'did:ad:other-table' });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('save', { subject: 'did:ad:elsewhere', propVals: {} }),
+        TABLE,
+      ),
+    ).rejects.toThrow('may only write its own data');
+    expect(sent).toEqual([]);
+  });
+
+  it('never deletes a row: editing is not deleting', async () => {
+    const store = fakeStore({ 'did:ad:row': TABLE });
+
+    await expect(
+      handleRequest(
+        store,
+        APP,
+        DRIVE,
+        req('destroy', { subject: 'did:ad:row' }),
+        TABLE,
+      ),
+    ).rejects.toThrow(ROW_DESTROY_REFUSED);
+    expect(sent).toEqual([]);
+  });
+
+  it('tells the app whether it may edit the rows', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        sent.push({ url });
+
+        return {
+          ok: true,
+          json: async () => ({
+            grant: {
+              grantedBy: 'did:ad:agent:me',
+              grantedAt: 1790000000000,
+              via: 'add-view',
+            },
+            history: [],
+          }),
+          text: async () => '',
+        } as unknown as Response;
+      }),
+    );
+
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('rowAccess'), TABLE),
+    ).toEqual({
+      status: 'granted',
+      grantedBy: 'did:ad:agent:me',
+      grantedAt: 1790000000000,
+      via: 'add-view',
+    });
+    expect(String(sent[0].url)).toContain('/app-row-grant?');
+  });
+
+  it('has no rows to give when it is not a table view', async () => {
+    expect(
+      await handleRequest(fakeStore(), APP, DRIVE, req('rowAccess')),
+    ).toEqual({ status: 'unavailable' });
+  });
+
+  it('cannot be granted by a host with no one to ask', async () => {
+    await expect(
+      handleRequest(fakeStore(), APP, DRIVE, req('requestRowAccess'), TABLE),
+    ).rejects.toThrow('cannot ask');
   });
 });

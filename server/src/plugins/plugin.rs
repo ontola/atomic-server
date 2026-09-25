@@ -579,6 +579,10 @@ fn on_installation_before_commit(
         }
 
         #[cfg(feature = "wasm-plugins")]
+        crate::plugins::installation_identity::check_commit(store, resource, is_new, changed_props)
+            .await?;
+
+        #[cfg(feature = "wasm-plugins")]
         {
             use installation_hook::*;
             let status = status(resource);
@@ -629,6 +633,43 @@ fn on_installation_before_commit(
     })
 }
 
+/// Once an active Installation is stored, this node publishes the agent it
+/// minted for it on a child the agent may write, so the page can register it
+/// with the integration proxy (#1700, answer 2). Idempotent, so it runs on
+/// every commit to an active Installation, which also covers Installations
+/// activated before this existed. Best effort: a failure is logged and never
+/// undoes the commit that already landed.
+#[allow(unused_variables)]
+fn on_installation_after_commit(context: CommitExtenderContext) -> BoxFuture<AtomicResult<()>> {
+    Box::pin(async move {
+        #[cfg(feature = "wasm-plugins")]
+        {
+            let CommitExtenderContext {
+                store,
+                commit,
+                resource,
+                ..
+            } = context;
+            if commit.destroy == Some(true) || installation_hook::status(resource) != STATUS_ACTIVE
+            {
+                return Ok(());
+            }
+            let subject = resource.get_subject().to_string();
+            let published = match get_parent_drive(resource, store).await {
+                Ok(drive) => {
+                    crate::plugins::installation_identity::publish_runtime(store, &drive, &subject)
+                        .await
+                }
+                Err(e) => Err(e),
+            };
+            if let Err(e) = published {
+                tracing::warn!("could not publish this node's agent for {subject}: {e}");
+            }
+        }
+        Ok(())
+    })
+}
+
 pub fn build_installation_extender(
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
@@ -642,6 +683,9 @@ pub fn build_installation_extender(
         .before_commit(ClassExtender::wrap_commit_handler(move |context| {
             on_installation_before_commit(context, plugins_dir.clone(), plugin_cache_dir.clone())
         }))
+        .after_commit(ClassExtender::wrap_commit_handler(
+            on_installation_after_commit,
+        ))
         .build()
 }
 

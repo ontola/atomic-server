@@ -26,12 +26,82 @@ pub struct AuthValues {
     pub requested_subject: String,
     #[serde(rename = "https://atomicdata.dev/properties/auth/agent")]
     pub agent_subject: String,
+    /// Set for a version 2 request signature (`x-atomic-signature-version: 2`):
+    /// the method and body the signature must cover. `None` is version 1.
+    ///
+    /// Never deserialized: a cookie or a WebSocket `AUTH` frame is a
+    /// reusable proof by design, and can only ever be version 1.
+    #[serde(skip)]
+    pub request: Option<RequestBinding>,
+}
+
+/// The value of `x-atomic-signature-version` that selects [request_signature_message_v2].
+pub const SIGNATURE_VERSION_2: &str = "2";
+
+/// The header that selects the signature version. Absent means version 1.
+pub const SIGNATURE_VERSION_HEADER: &str = "x-atomic-signature-version";
+
+/// What a version 2 request signature covers besides the URL and timestamp.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestBinding {
+    /// The HTTP method, upper case.
+    pub method: String,
+    /// Lower-case hex SHA-256 of the raw request body (of zero bytes when
+    /// there is none).
+    pub body_sha256_hex: String,
+}
+
+impl RequestBinding {
+    /// Binds a request's method and the body bytes the handler will act on.
+    pub fn new(method: &str, body: &[u8]) -> Self {
+        RequestBinding {
+            method: method.to_ascii_uppercase(),
+            body_sha256_hex: sha256_hex(body),
+        }
+    }
+}
+
+/// Lower-case hex SHA-256.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest;
+    hex::encode(sha2::Sha256::digest(bytes))
+}
+
+/// The message a version 2 request signature signs.
+///
+/// ```text
+/// atomic-request-v2
+/// {METHOD}
+/// {full URL, including query}
+/// {timestamp, Unix ms}
+/// {sha-256 hex of the body}
+/// ```
+///
+/// Version 1 (`"{url} {timestamp}"`) covers neither method nor body, and is
+/// accepted for five minutes, so a captured `POST` could be replayed with a
+/// different body. Version 2 closes that; see ontola/atomic-plugins#54.
+pub fn request_signature_message_v2(
+    method: &str,
+    url: &str,
+    timestamp: i64,
+    body_sha256_hex: &str,
+) -> String {
+    format!(
+        "atomic-request-v2\n{}\n{}\n{}\n{}",
+        method.to_ascii_uppercase(),
+        url,
+        timestamp,
+        body_sha256_hex
+    )
 }
 
 /// Checks if the signature is valid for this timestamp.
 /// Does not check if the agent has rights to access the subject.
 #[tracing::instrument(skip_all)]
 pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicResult<()> {
+    if let Some(request) = &auth_header.request {
+        return check_auth_signature_v2(subject, auth_header, request);
+    }
     let agent_pubkey = decode_base64(&auth_header.public_key)?;
     let message = format!("{} {}", subject, auth_header.timestamp);
     let pubkey_bytes: [u8; 32] = agent_pubkey
@@ -80,6 +150,43 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
     }
 
     Ok(())
+}
+
+/// Version 2: only the v2 message is tried. Unlike version 1 there is no
+/// query-less retry, and a failure here is never retried as version 1: a
+/// client that asked for v2 and whose proof does not verify is refused, or
+/// a downgrade would undo what v2 is for.
+fn check_auth_signature_v2(
+    url: &str,
+    auth_header: &AuthValues,
+    request: &RequestBinding,
+) -> AtomicResult<()> {
+    let message = request_signature_message_v2(
+        &request.method,
+        url,
+        auth_header.timestamp,
+        &request.body_sha256_hex,
+    );
+    let pubkey_bytes: [u8; 32] = decode_base64(&auth_header.public_key)?
+        .try_into()
+        .map_err(|_| "Ed25519 public key must be 32 bytes")?;
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pubkey_bytes)
+        .map_err(|e| format!("Invalid public key: {}", e))?;
+    let sig_bytes: [u8; 64] = decode_base64(&auth_header.signature)?
+        .try_into()
+        .map_err(|_| "Ed25519 signature must be 64 bytes")?;
+    let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+    // Strict: no small-order keys, no malleable signatures. v1 keeps plain
+    // `verify` for compatibility with what it has always accepted.
+    verifying_key
+        .verify_strict(message.as_bytes(), &sig)
+        .map_err(|_| {
+            format!(
+                "Incorrect version 2 request signature. The server checked this message (method, full URL, timestamp, SHA-256 of the body it received): {:?}",
+                message
+            )
+            .into()
+        })
 }
 
 const ACCEPTABLE_TIME_DIFFERENCE: i64 = 10000;
@@ -316,6 +423,7 @@ mod test {
             timestamp,
             signature,
             requested_subject: REQUESTED.to_string(),
+            request: None,
         }
     }
 
@@ -417,5 +525,262 @@ mod test {
         let a = "gJRZVTGPngaG3mSPA_e6LEewKixYpZtuUYQhNg-t7Y4";
         let b = "AAAAVTGPngaG3mSPA_e6LEewKixYpZtuUYQhNg-t7Y4";
         assert!(!public_keys_match(a, b));
+    }
+
+    // ---- Version 2 request signatures ----
+
+    /// The shared cross-language vectors. The copy next to the TypeScript
+    /// test must be byte-identical; see `browser_copy_is_identical`.
+    const V2_VECTORS_JSON: &str = include_str!("authentication_v2_vectors.json");
+
+    #[derive(serde::Deserialize, serde::Serialize)]
+    struct V2Vector {
+        name: String,
+        private_key: String,
+        public_key: String,
+        agent: String,
+        method: String,
+        url: String,
+        timestamp: i64,
+        body: String,
+        body_sha256_hex: String,
+        message: String,
+        signature: String,
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize)]
+    struct V2Vectors {
+        note: String,
+        vectors: Vec<V2Vector>,
+    }
+
+    fn v2_cases() -> Vec<(&'static str, &'static str, &'static str, i64, &'static str)> {
+        vec![
+            (
+                "post_delegation",
+                "POST",
+                "https://proxy.example/connections/c_123/agents",
+                1_790_000_000_000,
+                r#"{"agent":"atomic:agent:AAAA","label":"Timesheets"}"#,
+            ),
+            (
+                "get_with_query_empty_body",
+                "GET",
+                "https://proxy.example/proxy/c_123/google-calendar/calendars/primary/events?maxResults=10&pageToken=a%2Fb",
+                1_790_000_000_001,
+                "",
+            ),
+            (
+                "delete_lowercase_method_in",
+                "delete",
+                "http://localhost:8787/connections/c_123",
+                1_790_000_000_002,
+                "",
+            ),
+            (
+                "patch_utf8_body",
+                "PATCH",
+                "https://example.com/app-agent?drive=atomic%3Adrive%3Ax",
+                1_790_000_000_003,
+                "{\"title\":\"Caf\u{e9} \u{2615} \u{1f600}\"}",
+            ),
+        ]
+    }
+
+    fn make_v2_vector(name: &str, method: &str, url: &str, timestamp: i64, body: &str) -> V2Vector {
+        let pair = generate_public_key(PRIVATE_KEY);
+        let body_sha256_hex = sha256_hex(body.as_bytes());
+        let message = request_signature_message_v2(method, url, timestamp, &body_sha256_hex);
+        let signature = sign_message(message.as_bytes(), &pair.private).unwrap();
+        V2Vector {
+            name: name.to_string(),
+            private_key: PRIVATE_KEY.to_string(),
+            agent: format!("{}{}", crate::ATOMIC_AGENT_PREFIX, pair.public),
+            public_key: pair.public,
+            method: method.to_string(),
+            url: url.to_string(),
+            timestamp,
+            body: body.to_string(),
+            body_sha256_hex,
+            message,
+            signature,
+        }
+    }
+
+    /// Prints the vectors file. Regenerate with
+    /// `cargo test -p atomic_lib print_v2_vectors -- --ignored --nocapture`
+    /// and paste into both copies of `authentication_v2_vectors.json`.
+    #[test]
+    #[ignore]
+    fn print_v2_vectors() {
+        let vectors = V2Vectors {
+            note: "Golden version 2 request signatures (ontola/atomic-plugins#54) for lib/src/authentication.rs and browser/lib/src/authentication.ts. Regenerate with `cargo test -p atomic_lib print_v2_vectors -- --ignored --nocapture`; keep both copies identical.".to_string(),
+            vectors: v2_cases()
+                .into_iter()
+                .map(|(n, m, u, t, b)| make_v2_vector(n, m, u, t, b))
+                .collect(),
+        };
+        println!("{}", serde_json::to_string_pretty(&vectors).unwrap());
+    }
+
+    fn v2_vectors() -> V2Vectors {
+        serde_json::from_str(V2_VECTORS_JSON).expect("vectors parse")
+    }
+
+    fn v2_auth_values(v: &V2Vector, body: &[u8]) -> AuthValues {
+        AuthValues {
+            public_key: v.public_key.clone(),
+            timestamp: v.timestamp,
+            signature: v.signature.clone(),
+            requested_subject: v.url.clone(),
+            agent_subject: v.agent.clone(),
+            request: Some(RequestBinding::new(&v.method, body)),
+        }
+    }
+
+    /// Ed25519 is deterministic in dalek, so regenerating each vector must
+    /// give the recorded bytes: message, body hash and signature.
+    #[test]
+    fn v2_vectors_are_what_this_code_produces() {
+        let file = v2_vectors();
+        assert_eq!(file.vectors.len(), v2_cases().len());
+        for (v, (n, m, u, t, b)) in file.vectors.iter().zip(v2_cases()) {
+            let fresh = make_v2_vector(n, m, u, t, b);
+            assert_eq!(v.name, fresh.name);
+            assert_eq!(v.body_sha256_hex, fresh.body_sha256_hex, "{}", v.name);
+            assert_eq!(v.message, fresh.message, "{}", v.name);
+            assert_eq!(v.signature, fresh.signature, "{}", v.name);
+            assert_eq!(v.agent, fresh.agent, "{}", v.name);
+        }
+    }
+
+    #[test]
+    fn v2_vectors_verify() {
+        for v in v2_vectors().vectors {
+            check_auth_signature(&v.url, &v2_auth_values(&v, v.body.as_bytes()))
+                .unwrap_or_else(|e| panic!("{}: {}", v.name, e));
+        }
+    }
+
+    #[test]
+    fn v2_message_shape() {
+        assert_eq!(
+            request_signature_message_v2("post", "https://x.example/a?b=c", 5, &sha256_hex(b"")),
+            "atomic-request-v2\nPOST\nhttps://x.example/a?b=c\n5\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    /// Everything the signature covers is bound: changing any one part fails.
+    #[test]
+    fn v2_rejects_a_different_method_body_url_or_timestamp() {
+        let file = v2_vectors();
+        let v = file
+            .vectors
+            .iter()
+            .find(|v| v.name == "post_delegation")
+            .unwrap();
+
+        let mut other_body = v2_auth_values(v, br#"{"agent":"atomic:agent:EVIL"}"#);
+        assert!(check_auth_signature(&v.url, &other_body).is_err(), "body");
+        other_body.request = Some(RequestBinding::new("PUT", v.body.as_bytes()));
+        assert!(check_auth_signature(&v.url, &other_body).is_err(), "method");
+
+        let same = v2_auth_values(v, v.body.as_bytes());
+        assert!(
+            check_auth_signature("https://proxy.example/connections/c_999/agents", &same).is_err(),
+            "url"
+        );
+        assert!(
+            check_auth_signature("https://other.example/connections/c_123/agents", &same).is_err(),
+            "origin"
+        );
+        let mut later = v2_auth_values(v, v.body.as_bytes());
+        later.timestamp += 1;
+        assert!(check_auth_signature(&v.url, &later).is_err(), "timestamp");
+    }
+
+    /// A v2 request never falls back to v1, even when a valid v1 proof for
+    /// the same URL and timestamp is presented.
+    #[test]
+    fn v2_never_falls_back_to_v1() {
+        let mut v1 = signed_at(1_790_000_000_000);
+        assert!(check_auth_signature(REQUESTED, &v1).is_ok(), "valid as v1");
+        v1.request = Some(RequestBinding::new("GET", b""));
+        assert!(
+            check_auth_signature(REQUESTED, &v1).is_err(),
+            "the same proof sent as v2 must fail"
+        );
+    }
+
+    /// And no query-less retry either: that leniency is v1's alone.
+    #[test]
+    fn v2_does_not_drop_the_query() {
+        let file = v2_vectors();
+        let v = file
+            .vectors
+            .iter()
+            .find(|v| v.name == "get_with_query_empty_body")
+            .unwrap();
+        let auth = v2_auth_values(v, b"");
+        assert!(check_auth_signature(&v.url, &auth).is_ok());
+        let extra = format!("{}&extra=1", v.url);
+        assert!(check_auth_signature(&extra, &auth).is_err());
+    }
+
+    /// v2 goes through the same agent binding and freshness checks as v1.
+    #[tokio::test]
+    async fn a_fresh_v2_proof_authenticates_and_a_mismatched_agent_does_not() {
+        let store = crate::Store::init().await.unwrap();
+        let pair = generate_public_key(PRIVATE_KEY);
+        let ts = crate::utils::now();
+        let binding = RequestBinding::new("POST", b"{}");
+        let message = request_signature_message_v2("POST", REQUESTED, ts, &binding.body_sha256_hex);
+        let auth = || AuthValues {
+            agent_subject: format!("{}{}", crate::ATOMIC_AGENT_PREFIX, pair.public),
+            public_key: pair.public.clone(),
+            timestamp: ts,
+            signature: sign_message(message.as_bytes(), &pair.private).unwrap(),
+            requested_subject: REQUESTED.to_string(),
+            request: Some(binding.clone()),
+        };
+        let agent = get_agent_from_auth_values_and_check(Some(auth()), &store)
+            .await
+            .unwrap();
+        assert!(matches!(agent, ForAgent::AgentSubject(_)));
+
+        let mut other = auth();
+        other.agent_subject = format!(
+            "{}{}",
+            crate::ATOMIC_AGENT_PREFIX,
+            generate_public_key("AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE").public
+        );
+        get_agent_from_auth_values_and_check(Some(other), &store)
+            .await
+            .expect_err("the agent must be the signing key");
+    }
+
+    /// A cookie or a WebSocket AUTH frame is JSON; it can never select v2.
+    #[test]
+    fn deserialized_auth_values_are_always_v1() {
+        let v = signed_at(1);
+        let json = serde_json::json!({
+            "https://atomicdata.dev/properties/auth/publicKey": v.public_key,
+            "https://atomicdata.dev/properties/auth/timestamp": v.timestamp,
+            "https://atomicdata.dev/properties/auth/signature": v.signature,
+            "https://atomicdata.dev/properties/auth/requestedSubject": v.requested_subject,
+            "https://atomicdata.dev/properties/auth/agent": v.agent_subject,
+            "request": {"method": "GET", "body_sha256_hex": ""},
+        });
+        let parsed: AuthValues = serde_json::from_value(json).unwrap();
+        assert!(parsed.request.is_none());
+    }
+
+    #[test]
+    fn browser_copy_of_v2_vectors_is_identical() {
+        let browser = include_str!("../../browser/lib/src/authentication_v2_vectors.json");
+        assert_eq!(
+            V2_VECTORS_JSON, browser,
+            "lib/src/authentication_v2_vectors.json and browser/lib/src/authentication_v2_vectors.json drifted"
+        );
     }
 }
