@@ -77,7 +77,7 @@ impl AppState {
         crate::blob_storage::configure(&mut store).await?;
         // Before anything reads or writes a secret, so nothing is stored in
         // the clear during startup and then silently left that way.
-        store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?);
+        store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?)?;
 
         // `config.toml` holds this server's agent secret and was created
         // world-readable by every version before this one. Narrowed on every

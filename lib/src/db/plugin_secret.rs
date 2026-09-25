@@ -186,7 +186,8 @@ mod store_tests {
     #[tokio::test]
     async fn connection_references_follow_rotation_and_revocation_without_leaking() {
         let db = db("connection_reference").await;
-        db.set_node_key([7u8; crate::vault::keys::KEK_LEN]);
+        db.set_node_key([7u8; crate::vault::keys::KEK_LEN])
+            .expect("node key");
         let shared = PluginSecretKey::new("did:ad:drive", "connection:test", "example");
         db.set_plugin_secret(&shared, &secret()).unwrap();
         let mut alias = PluginSecret::new(String::new(), vec!["https://api.example.com".into()], 1);
@@ -228,7 +229,7 @@ mod store_tests {
     #[tokio::test]
     async fn a_stored_secret_is_not_in_the_clear() {
         let db = db("at_rest").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
         db.set_plugin_secret(&key(), &secret()).expect("stored");
 
         assert!(
@@ -240,7 +241,7 @@ mod store_tests {
     #[tokio::test]
     async fn the_node_can_still_spend_it_unattended() {
         let db = db("at_rest_spend").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
         db.set_plugin_secret(&key(), &secret()).expect("stored");
 
         // No user and no credential — which is the whole reason the node
@@ -254,13 +255,21 @@ mod store_tests {
     }
 
     #[tokio::test]
-    async fn a_secret_written_before_there_was_a_key_still_opens() {
+    async fn a_secret_written_before_there_was_a_key_is_wrapped_on_upgrade() {
         let db = db("at_rest_legacy").await;
+        // What a release before the node key left on disk: the value in the
+        // clear.
         db.set_plugin_secret(&key(), &secret()).expect("stored");
+        assert!(String::from_utf8_lossy(&on_disk(&db, &key())).contains("tok-abc"));
 
-        // The key arrives later, as it does on an installation that predates
-        // it. Refusing here would lock people out of their own credentials.
-        db.set_node_key(NODE_KEY);
+        // The upgraded server sets its key on start, which wraps the old
+        // secret before anything reads it.
+        db.set_node_key(NODE_KEY).expect("node key");
+
+        assert!(
+            !String::from_utf8_lossy(&on_disk(&db, &key())).contains("tok-abc"),
+            "the old secret is still in the clear after the upgrade",
+        );
 
         let seen = db
             .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
@@ -271,14 +280,56 @@ mod store_tests {
     }
 
     #[tokio::test]
+    async fn wrapping_old_secrets_is_idempotent() {
+        let db = db("at_rest_rewrap_twice").await;
+        db.set_plugin_secret(&key(), &secret()).expect("stored");
+        db.set_node_key(NODE_KEY).expect("node key");
+        let after_first = on_disk(&db, &key());
+
+        // Every start runs it again. Nothing is left to wrap, and the
+        // envelope is not wrapped a second time.
+        assert_eq!(db.rewrap_plaintext_secrets().expect("rewrap"), 0);
+        assert_eq!(on_disk(&db, &key()), after_first);
+
+        let seen = db
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
+            .expect("read")
+            .expect("allowed");
+
+        assert_eq!(seen, "tok-abc");
+    }
+
+    #[tokio::test]
+    async fn plaintext_is_refused_once_the_node_has_a_key() {
+        let db = db("at_rest_planted").await;
+        db.set_node_key(NODE_KEY).expect("node key");
+
+        // Plaintext written behind the node's back, after the upgrade wrapped
+        // everything, is not a legacy secret and must not open.
+        db.kv
+            .insert(
+                crate::db::trees::Tree::PluginSecret,
+                &key().encode().unwrap(),
+                &secret().encode().unwrap(),
+            )
+            .expect("planted");
+
+        assert!(db
+            .use_plugin_secret(&key(), "https://api.example.com", 1, |v| v.to_string())
+            .is_err());
+    }
+
+    #[tokio::test]
     async fn a_store_restored_on_another_node_is_inert() {
         let origin = db("at_rest_stolen").await;
-        origin.set_node_key(NODE_KEY);
+        origin.set_node_key(NODE_KEY).expect("node key");
         origin.set_plugin_secret(&key(), &secret()).expect("stored");
         let stolen = on_disk(&origin, &key());
 
         let elsewhere = db("at_rest_elsewhere").await;
-        elsewhere.set_node_key([9u8; crate::vault::keys::KEK_LEN]);
+        elsewhere
+            .set_node_key([9u8; crate::vault::keys::KEK_LEN])
+            .expect("node key");
         elsewhere
             .kv
             .insert(

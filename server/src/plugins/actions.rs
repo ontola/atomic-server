@@ -2101,7 +2101,9 @@ mod tests {
             .await
             .unwrap()
             .is_none());
-        host.db.set_node_key([7; atomic_lib::vault::keys::KEK_LEN]);
+        host.db
+            .set_node_key([7; atomic_lib::vault::keys::KEK_LEN])
+            .expect("node key");
         let app = atomic_lib::agents::Agent::new(Some("fixture app")).unwrap();
         host.db
             .set_app_agent(

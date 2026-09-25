@@ -122,7 +122,7 @@ mod store_tests {
     #[tokio::test]
     async fn an_app_can_sign_as_itself() {
         let db = db("sign").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
 
         let agent = Agent::new(Some("test app")).expect("agent");
         db.set_app_agent(
@@ -146,7 +146,7 @@ mod store_tests {
     #[tokio::test]
     async fn the_key_is_not_in_the_clear_on_disk() {
         let db = db("at_rest").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
 
         let agent = Agent::new(Some("test app")).expect("agent");
         let secret = agent.build_secret().expect("secret");
@@ -169,9 +169,54 @@ mod store_tests {
     }
 
     #[tokio::test]
+    async fn a_key_stored_before_the_node_key_is_wrapped_on_upgrade() {
+        let db = db("at_rest_legacy").await;
+
+        // Stored in the clear, as a release before the node key did.
+        let agent = Agent::new(Some("test app")).expect("agent");
+        let secret = agent.build_secret().expect("secret");
+        db.set_app_agent(
+            &key(),
+            &AppAgent::new(agent.subject.to_string(), secret.clone(), 0),
+        )
+        .expect("stored");
+        let revoked = AppAgentKey::new("did:ad:drive", "did:ad:gone");
+        db.set_app_agent(
+            &revoked,
+            &AppAgent::new("did:ad:gone".into(), "x".into(), 0),
+        )
+        .expect("stored");
+        db.delete_app_agent(&revoked).expect("revoked");
+        let raw = |k: &AppAgentKey| {
+            db.kv
+                .get(crate::db::trees::Tree::AppAgent, &k.encode().unwrap())
+                .expect("read")
+                .expect("present")
+                .to_vec()
+        };
+        let tombstone = raw(&revoked);
+
+        db.set_node_key(NODE_KEY).expect("node key");
+
+        assert!(
+            !String::from_utf8_lossy(&raw(&key())).contains(&secret),
+            "the old signing key is still in the clear after the upgrade",
+        );
+        assert_eq!(raw(&revoked), tombstone, "a tombstone was rewritten");
+        assert_eq!(db.rewrap_plaintext_secrets().expect("rewrap"), 0);
+
+        let signed_as = db
+            .with_app_agent(&key(), |a| a.subject.to_string())
+            .expect("read")
+            .expect("present");
+
+        assert_eq!(signed_as, agent.subject.to_string());
+    }
+
+    #[tokio::test]
     async fn asking_which_did_does_not_open_the_key() {
         let db = db("info").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
 
         let agent = Agent::new(Some("test app")).expect("agent");
         let secret = agent.build_secret().expect("secret");
@@ -194,7 +239,7 @@ mod store_tests {
     #[tokio::test]
     async fn revoking_leaves_nothing_to_sign_with() {
         let db = db("revoke").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
 
         let agent = Agent::new(Some("test app")).expect("agent");
         db.set_app_agent(
@@ -261,7 +306,7 @@ mod store_tests {
             let db = Db::init_redb_file(&path, None, &path.join("uploads"))
                 .await
                 .unwrap();
-            db.set_node_key(NODE_KEY);
+            db.set_node_key(NODE_KEY).expect("node key");
             let agent = Agent::new(None).unwrap();
             db.set_app_agent(
                 &key(),
@@ -278,7 +323,7 @@ mod store_tests {
     #[tokio::test]
     async fn reconnect_restores_only_the_explicitly_provisioned_identity() {
         let db = db("reconnect").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
         db.delete_app_agent(&key()).unwrap();
         let agent = Agent::new(None).unwrap();
         db.set_app_agent(
@@ -296,7 +341,7 @@ mod store_tests {
     #[tokio::test]
     async fn apps_do_not_share_a_key() {
         let db = db("distinct").await;
-        db.set_node_key(NODE_KEY);
+        db.set_node_key(NODE_KEY).expect("node key");
 
         let one = Agent::new(Some("one")).expect("agent");
         let two = Agent::new(Some("two")).expect("agent");

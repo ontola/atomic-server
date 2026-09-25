@@ -2445,25 +2445,99 @@ impl Db {
         Ok(())
     }
 
-    /// Stores a secret, replacing any of the same name.
-    ///
-    /// There is deliberately no `get_plugin_secret` returning a value. The only
-    /// reader is [`Db::use_plugin_secret`], which hands the value to a closure
-    /// and never out of it, so no endpoint can serve one by accident.
-    /// Sets the key stored secrets are wrapped with. Once per process.
+    /// Sets the key stored secrets are wrapped with, and wraps any secret
+    /// still stored in the clear. Once per process.
     ///
     /// Silently ignored if already set: a second call would mean two parts of
     /// the process disagree about which key opens the store, and the loser
     /// would write secrets the winner cannot read.
-    pub fn set_node_key(&self, key: [u8; crate::vault::keys::KEK_LEN]) {
-        let _ = self.node_key.set(key);
+    ///
+    /// Stores written before nodes had a key hold their plugin secrets and app
+    /// signing keys as plaintext. Those are rewrapped here, before anything
+    /// reads them, because once a key is set [`Db::unwrap_secret`] no longer
+    /// accepts plaintext. The rewrap skips what is already wrapped, so running
+    /// it on every start costs one scan of two small trees and changes nothing.
+    pub fn set_node_key(&self, key: [u8; crate::vault::keys::KEK_LEN]) -> AtomicResult<()> {
+        if self.node_key.set(key).is_err() {
+            return Ok(());
+        }
+
+        let rewrapped = self.rewrap_plaintext_secrets()?;
+
+        if rewrapped > 0 {
+            tracing::info!("wrapped {rewrapped} secret(s) stored before this node had a key");
+        }
+
+        Ok(())
+    }
+
+    /// Wraps every plugin secret and app signing key that is still plaintext
+    /// with the node key. Returns how many it wrapped. Idempotent: an
+    /// envelope is left as it is, so a second run wraps nothing.
+    pub fn rewrap_plaintext_secrets(&self) -> AtomicResult<usize> {
+        if self.node_key.get().is_none() {
+            return Ok(0);
+        }
+
+        let is_plaintext =
+            |value: &str| crate::vault::secret_envelope::SecretEnvelope::from_json(value).is_err();
+        let mut rewrapped = 0;
+
+        // Collected first so no backend is written while it is being iterated.
+        let secrets: Vec<_> = self
+            .kv
+            .iter_tree(Tree::PluginSecret)
+            .collect::<AtomicResult<_>>()?;
+
+        for (key, bytes) in secrets {
+            let Ok(mut secret) = PluginSecret::from_bytes(&bytes) else {
+                tracing::warn!("skipping an undecodable plugin secret while wrapping");
+                continue;
+            };
+
+            if !is_plaintext(&secret.value) {
+                continue;
+            }
+
+            secret.value = self.wrap_secret(&secret.value)?;
+            self.kv
+                .insert(Tree::PluginSecret, &key, &secret.encode()?)?;
+            rewrapped += 1;
+        }
+
+        let agents: Vec<_> = self
+            .kv
+            .iter_tree(Tree::AppAgent)
+            .collect::<AtomicResult<_>>()?;
+
+        for (key, bytes) in agents {
+            let Ok(mut agent) = AppAgent::from_bytes(&bytes) else {
+                tracing::warn!("skipping an undecodable app agent while wrapping");
+                continue;
+            };
+
+            // A tombstone holds no key, and is never opened.
+            if agent.revoked || !is_plaintext(&agent.secret) {
+                continue;
+            }
+
+            agent.secret = self.wrap_secret(&agent.secret)?;
+            self.kv.insert(Tree::AppAgent, &key, &agent.encode()?)?;
+            rewrapped += 1;
+        }
+
+        if rewrapped > 0 {
+            self.flush()?;
+        }
+
+        Ok(rewrapped)
     }
 
     /// Wraps a secret for storage, or passes it through when no key is set.
     ///
-    /// Passing through is what lets a store predating the node key still be
-    /// read and written. It is not a fallback anyone should rely on, which is
-    /// why `has_node_key` exists for callers that must know.
+    /// A store without a node key is one nobody has asked to protect: tests
+    /// and embedded stores. The server sets the key before it touches a
+    /// secret, and `has_node_key` exists for callers that must know.
     fn wrap_secret(&self, value: &str) -> AtomicResult<String> {
         let Some(key) = self.node_key.get() else {
             return Ok(value.to_string());
@@ -2476,18 +2550,23 @@ impl Db {
         .to_json()
     }
 
-    /// Opens a stored secret, tolerating one written before there was a key.
+    /// Opens a stored secret.
+    ///
+    /// With a node key, only an envelope opens: [`Db::set_node_key`] has
+    /// already wrapped whatever was stored in the clear, so plaintext here was
+    /// planted behind the node's back and is refused. Without a key the store
+    /// is unprotected and the value is returned as stored.
     fn unwrap_secret(&self, stored: &str) -> AtomicResult<String> {
-        let Ok(envelope) = crate::vault::secret_envelope::SecretEnvelope::from_json(stored) else {
-            // Written before this node had a key. Readable, and rewritten
-            // wrapped the next time it is set.
-            return Ok(stored.to_string());
-        };
+        let envelope = crate::vault::secret_envelope::SecretEnvelope::from_json(stored);
 
         let Some(key) = self.node_key.get() else {
-            return Err("this secret is wrapped, but this node has no key to open it".into());
+            return match envelope {
+                Ok(_) => Err("this secret is wrapped, but this node has no key to open it".into()),
+                Err(_) => Ok(stored.to_string()),
+            };
         };
 
+        let envelope = envelope.map_err(|_| "a stored secret is not wrapped with the node key")?;
         let opened = envelope.unwrap_secret(&crate::vault::secret_envelope::Unlock::Kek(*key))?;
 
         String::from_utf8(opened).map_err(|_| "a stored secret was not text".into())
@@ -2498,6 +2577,11 @@ impl Db {
         self.node_key.get().is_some()
     }
 
+    /// Stores a secret, replacing any of the same name.
+    ///
+    /// There is deliberately no `get_plugin_secret` returning a value. The only
+    /// reader is [`Db::use_plugin_secret`], which hands the value to a closure
+    /// and never out of it, so no endpoint can serve one by accident.
     pub fn set_plugin_secret(
         &self,
         key: &PluginSecretKey,
@@ -2672,8 +2756,7 @@ impl Db {
             let (key, value) = entry?;
             let stored = PluginSecret::from_bytes(&value)?;
 
-            // Anything this node can already open is fine, wrapped or not:
-            // a secret from before there was a key reads as plaintext.
+            // Anything this node can already open is fine.
             if self.unwrap_secret(&stored.value).is_err() {
                 blocked.push(PluginSecretKey::name_from_key(&key)?);
             }

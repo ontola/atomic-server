@@ -7,6 +7,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Plugin secrets and app signing keys stored in the clear by a release before
+  the node key are wrapped with the node key when the server starts
+  (`Db::set_node_key` runs `Db::rewrap_plaintext_secrets`, which skips anything
+  already wrapped). With that done, a node that has a key no longer opens a
+  plaintext secret: one found after startup is refused instead of being read.
+
 - Removed range-based set reconciliation (RBSR, `lib/src/sync/rbsr.rs`). The
   server rebuilt a drive's whole inventory for every `RBSR_FP` round trip, so
   the descent cost more than the one full version-vector `SYNC` it replaced.
