@@ -1,52 +1,79 @@
 import {
-  Datatype,
   isString,
   JSONValue,
   urls,
   useResource,
   useString,
-  validateDatatype,
 } from '@tomic/react';
-import { useCallback, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { formatDate } from '@helpers/dates/formatDate';
+import {
+  dateInputPlaceholder,
+  formatDateInput,
+  parseDateInput,
+} from '@helpers/dates/dateInput';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
-import { useOnValueChange } from '@helpers/useOnValueChange';
 
+/**
+ * A text input rather than `<input type="date">`. The native one needed a
+ * zero-padded day ("01": after "1" it waits for a second digit) and emitted a
+ * change per segment, so typing the year stored 0002-10-01, 0020-10-01 and so
+ * on. This one reads `2/10/2026` (the locale's order) or `2026-10-2`, and
+ * stores the date once: on Enter or Tab, or when the cell closes any other way.
+ */
 function DateCellEdit({
   value,
   onChange,
 }: EditCellProps<JSONValue>): JSX.Element {
-  const [innerValue, setInnerValue] = useState<string | undefined>(
-    value as string,
-  );
+  const [initial] = useState(() => formatDateInput(value));
+  const [text, setText] = useState(initial);
+  const invalid = text.trim() !== '' && parseDateInput(text) === undefined;
 
-  // We hanlde changes ourselfs and keep a seperate state so the input can be invalid while the user is still filling in the date.
-  // Only once the date is valid is the value send to the server.
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setInnerValue(e.target.value);
+  // The unmount cleanup must see the last keystroke, not the first render.
+  const latest = useRef({ text, value, onChange });
 
-      try {
-        validateDatatype(e.target.value, Datatype.DATE);
-        onChange(e.target.value);
-      } catch (_) {
-        // Do nothing.
-      }
-    },
-    [onChange],
-  );
+  useEffect(() => {
+    latest.current = { text, value, onChange };
+  });
 
-  useOnValueChange(() => {
-    setInnerValue(value as string);
-  }, [value]);
+  const committed = useRef(initial);
+
+  const commit = useCallback(() => {
+    const { text: current, value: stored, onChange: save } = latest.current;
+
+    if (current === committed.current) {
+      return;
+    }
+
+    const date = parseDateInput(current);
+
+    if (date !== undefined && date !== stored) {
+      committed.current = current;
+      save(date);
+    }
+  }, []);
+
+  useEffect(() => () => commit(), [commit]);
 
   return (
     <InputBase
-      type='date'
-      value={innerValue ?? ''}
+      type='text'
+      inputMode='numeric'
+      value={text}
       autoFocus
-      onChange={handleChange}
+      aria-invalid={invalid || undefined}
+      placeholder={dateInputPlaceholder()}
+      onChange={e => {
+        setText(e.target.value);
+        latest.current = { ...latest.current, text: e.target.value };
+      }}
+      onKeyDown={e => {
+        // Before the table moves on, so a new row sees its date.
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          commit();
+        }
+      }}
     />
   );
 }

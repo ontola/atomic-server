@@ -217,6 +217,16 @@ status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
 tracker tables.
 
+Table cell readability (#1808): `helpers/dates/dateInput.test.ts` covers
+reading typed dates (unpadded, year-first, locale order in en-GB/en-US/de/nl,
+eight bare digits) and rejecting impossible or two-digit-year dates.
+`EditorCells/DateCell.test.tsx` (jsdom) checks the date cell stores once, on
+Enter or when it closes, never per keystroke. `EditorCells/TruncatedText.test.tsx`
+checks the tooltip and the selected-cell panel for cut-off text; jsdom has no
+layout, so widths are stubbed and the panel's `:focus` rule is checked by
+selector, not by rendering. `tables.spec.ts` "create and fill" and
+`table-templates.spec.ts` "Plant care" still type dates as `ddmmyyyy`.
+
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
 partial model drafts, forbidden arguments and size limits. It also validates resource JSON
 setup declarations: detached round-trips, supported constraints, malformed schemas,

@@ -34,4 +34,10 @@ const StyledDiv = styled.div`
   &:last-child > div {
     border-bottom: none;
   }
+
+  /* A selected cell showing its full text (TruncatedText) unfolds over the
+   * rows below; rows are positioned, so later ones would paint on top. */
+  &:has(> [role='gridcell']:focus [data-full-text]) {
+    z-index: 2;
+  }
 `;
