@@ -169,6 +169,28 @@ pub async fn run_due(appstate: &AppState) -> usize {
         if schedule.running || (schedule.pending_verdict.is_some() && action_waits.is_none()) {
             continue;
         }
+        // Paused while this node's request for a connection is open (#1700
+        // flow b). Neither advanced nor claimed, so it runs on the first tick
+        // after the request is cleared and a connection is delegated.
+        if let Some(need) =
+            super::connection_requests::paused(&appstate.store, &key.drive, &key.plugin).await
+        {
+            let message = super::connection_requests::paused_message(&need);
+            if schedule.last_error.as_deref() != Some(message.as_str()) {
+                schedule.record_error(message);
+                let _ = appstate.store.set_plugin_schedule(&key, &schedule);
+            }
+            continue;
+        }
+        if schedule
+            .last_error
+            .as_deref()
+            .is_some_and(super::connection_requests::is_paused_message)
+        {
+            // Resumed: the pause is not an error a waiting run must be
+            // reconciled for.
+            schedule.last_error = None;
+        }
         let resuming = action_waits.is_some();
         if let Some(waits) = action_waits {
             if schedule.last_error.is_some() {
@@ -209,6 +231,14 @@ pub async fn run_due(appstate: &AppState) -> usize {
         }
 
         match run_one(appstate, &key).await {
+            // Not a proposal: nothing to review. Paused from the next tick on,
+            // and due again the moment it resumes.
+            Ok(verdict) if super::connection_requests::needs_connection(&verdict).is_some() => {
+                if let Some(need) = super::connection_requests::needs_connection(&verdict) {
+                    schedule.record_error(super::connection_requests::paused_message(&need));
+                }
+                schedule.next_run_at = now;
+            }
             Ok(verdict) if super::actions::waits(&verdict).is_some() => {
                 schedule.record_verdict(verdict);
                 schedule.next_run_at = now;

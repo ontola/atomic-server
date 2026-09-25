@@ -885,18 +885,27 @@ impl HostCore {
         let installation = self.signing_as.as_ref().ok_or(
             "this installation has no app agent on this node, so it has no delegated connections",
         )?;
-        let connection = super::installation_identity::delegated_connection(
+        let Some(connection) = super::installation_identity::delegated_connection(
             &self.db,
             &installation.app,
             &relative.platform,
         )
         .await?
-        .ok_or_else(|| {
-            format!(
-                "no {} connection is delegated to this installation; connect one and delegate it first",
-                relative.platform
-            )
-        })?;
+        else {
+            // Flow b: ask for it on the Installation, and end the run with the
+            // typed outcome the runtime recognises in this error.
+            let need =
+                super::connection_requests::NeedsConnection::not_connected(&relative.platform);
+            if let Err(e) = super::connection_requests::record(&self.db, installation, &need).await
+            {
+                tracing::warn!(
+                    "could not ask for a {} connection on {}: {e}",
+                    relative.platform,
+                    installation.app
+                );
+            }
+            return Err(need.to_error());
+        };
         request.url = format!(
             "{}/proxy/{connection}/{}{}{}",
             proxy.origin(),

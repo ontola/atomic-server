@@ -20,6 +20,7 @@ export const server = {
     installation: 'https://atomicdata.dev/classes/Installation',
     listing: 'https://atomicdata.dev/classes/Listing',
     installationRuntime: 'https://atomicdata.dev/classes/InstallationRuntime',
+    connectionRequest: 'https://atomicdata.dev/classes/ConnectionRequest',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -85,6 +86,14 @@ export const server = {
       'https://atomicdata.dev/properties/integrationConnections',
     integrationRuntimeAgent:
       'https://atomicdata.dev/properties/integrationRuntimeAgent',
+    connectionRequestPlatform:
+      'https://atomicdata.dev/properties/connectionRequestPlatform',
+    connectionRequestReason:
+      'https://atomicdata.dev/properties/connectionRequestReason',
+    connectionRequestedAt:
+      'https://atomicdata.dev/properties/connectionRequestedAt',
+    connectionRequestClearedAt:
+      'https://atomicdata.dev/properties/connectionRequestClearedAt',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -188,6 +197,12 @@ export const server = {
       'https://atomicdata.dev/properties/integrationRuntimeAgent',
       'https://atomicdata.dev/properties/name',
     ],
+    ['https://atomicdata.dev/classes/ConnectionRequest']: [
+      'https://atomicdata.dev/properties/connectionRequestPlatform',
+      'https://atomicdata.dev/properties/connectionRequestReason',
+      'https://atomicdata.dev/properties/connectionRequestedAt',
+      'https://atomicdata.dev/properties/connectionRequestClearedAt',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -205,6 +220,7 @@ export namespace Server {
   export type Installation = typeof server.classes.installation;
   export type Listing = typeof server.classes.listing;
   export type InstallationRuntime = typeof server.classes.installationRuntime;
+  export type ConnectionRequest = typeof server.classes.connectionRequest;
 }
 
 declare module '../index.js' {
@@ -333,6 +349,14 @@ declare module '../index.js' {
       requires: BaseProps | typeof server.properties.integrationRuntimeAgent;
       recommends: 'https://atomicdata.dev/properties/name';
     };
+    [server.classes.connectionRequest]: {
+      requires:
+        | BaseProps
+        | typeof server.properties.connectionRequestPlatform
+        | typeof server.properties.connectionRequestReason
+        | typeof server.properties.connectionRequestedAt;
+      recommends: typeof server.properties.connectionRequestClearedAt;
+    };
   }
 
   interface PropTypeMapping {
@@ -393,6 +417,10 @@ declare module '../index.js' {
     [server.properties.integrationAppAgent]: string;
     [server.properties.integrationConnections]: JSONValue;
     [server.properties.integrationRuntimeAgent]: string;
+    [server.properties.connectionRequestPlatform]: string;
+    [server.properties.connectionRequestReason]: string;
+    [server.properties.connectionRequestedAt]: number;
+    [server.properties.connectionRequestClearedAt]: number;
   }
 
   interface PropSubjectToNameMapping {
@@ -453,5 +481,10 @@ declare module '../index.js' {
     [server.properties.integrationAppAgent]: 'integrationAppAgent';
     [server.properties.integrationConnections]: 'integrationConnections';
     [server.properties.integrationRuntimeAgent]: 'integrationRuntimeAgent';
+    [server.properties.connectionRequestPlatform]: 'connectionRequestPlatform';
+    [server.properties.connectionRequestReason]: 'connectionRequestReason';
+    [server.properties.connectionRequestedAt]: 'connectionRequestedAt';
+    [server.properties
+      .connectionRequestClearedAt]: 'connectionRequestClearedAt';
   }
 }

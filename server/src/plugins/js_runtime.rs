@@ -67,6 +67,10 @@ struct RuntimeState<H: PluginHost> {
     allow_automatic: bool,
     consumer_run: Option<String>,
     waits: Vec<serde_json::Value>,
+    /// Set when `ctx.http` found no connection for a declared proxy platform
+    /// (#1700 flow b). The run then ends with that outcome, even if the plugin
+    /// caught the error.
+    needs_connection: Option<super::connection_requests::NeedsConnection>,
 }
 
 impl<H: PluginHost> WasiView for RuntimeState<H> {
@@ -97,7 +101,13 @@ impl<H: PluginHost> bindings::atomic::plugin_runtime::host::Host for RuntimeStat
         Ok(output)
     }
     async fn fetch(&mut self, request: String) -> Result<String, String> {
-        self.host.fetch(request).await
+        let result = self.host.fetch(request).await;
+        if let Err(error) = &result {
+            if let Some(need) = super::connection_requests::NeedsConnection::from_error(error) {
+                self.needs_connection.get_or_insert(need);
+            }
+        }
+        result
     }
 
     async fn get_resource(&mut self, subject: String) -> Result<String, String> {
@@ -191,6 +201,7 @@ impl JsRuntime {
                         }),
                 consumer_run: trusted_trigger.then(|| consumer_run(input)).flatten(),
                 waits: Vec::new(),
+                needs_connection: None,
             },
         );
 
@@ -204,6 +215,9 @@ impl JsRuntime {
 
         match instance.call_run(&mut store, source, input).await {
             Ok(result) => {
+                if let Some(need) = &store.data().needs_connection {
+                    return Ok(Ok(need.verdict()));
+                }
                 if !store.data().waits.is_empty() {
                     return Ok(Ok(serde_json::json!({"integrationWaits":store.data().waits,"intents":[],"problems":[{"severity":"error","message":"Waiting for integration approval. Review the action on its connection."}]}).to_string()));
                 }
