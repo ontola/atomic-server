@@ -6,6 +6,7 @@ import {
 import {
   calendarOccurrenceBuckets,
   calendarPropertyMatches,
+  type InvalidCalendarRecord,
 } from './calendarOccurrences';
 import { WarningBlock } from '@components/WarningBlock';
 import {
@@ -25,7 +26,7 @@ import { styled } from 'styled-components';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 import { LoaderBlock } from '@components/Loader';
 import { IconButton } from '@components/IconButton/IconButton';
-import { Button } from '@components/Button';
+import { Button, ButtonClean } from '@components/Button';
 import { ExpandedRowDialog } from '../ExpandedRowDialog';
 import { useCalendarDateProp } from './useCalendarDateProp';
 import { CalendarDay } from './CalendarDay';
@@ -75,6 +76,27 @@ function valueToDayKey(
 const WEEKDAY_LABELS = Array.from({ length: 7 }, (_, i) =>
   new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' }),
 );
+
+/** Invalid rows are isolated per series and come back in `invalid`; only
+ * view-wide limits (too many records) fail the whole set. */
+function expandRecurrences(
+  records: CalendarRecord[],
+  days: string[],
+): {
+  buckets: Map<string, CalendarOccurrence[]>;
+  invalid: InvalidCalendarRecord[];
+  error: string;
+} {
+  try {
+    return { ...calendarOccurrenceBuckets(records, days), error: '' };
+  } catch (error) {
+    return {
+      buckets: new Map(),
+      invalid: [],
+      error: `Could not display recurring meetings: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
 
 export function CalendarView({
   tableSubject,
@@ -205,17 +227,14 @@ export function CalendarView({
     }
   }
 
-  let recurrenceError = '';
-  let occurrenceBuckets = new Map<string, CalendarOccurrence[]>();
-
-  try {
-    occurrenceBuckets = calendarOccurrenceBuckets(
-      recurrenceRecords,
-      gridDays.map(day => day.dayKey),
-    );
-  } catch (error) {
-    recurrenceError = `Could not display recurring meetings: ${error instanceof Error ? error.message : String(error)}`;
-  }
+  const {
+    buckets: occurrenceBuckets,
+    invalid: invalidRecurrences,
+    error: recurrenceError,
+  } = expandRecurrences(
+    recurrenceRecords,
+    gridDays.map(day => day.dayKey),
+  );
 
   // Bucket each row onto its day. Reactive: `useResources` re-snapshots when a
   // row's date changes, so the grid recomputes.
@@ -264,10 +283,12 @@ export function CalendarView({
   const [expandedSubject, setExpandedSubject] = useState<string>();
   const [showExpanded, setShowExpanded] = useState(false);
 
-  const handleOpenItem = useCallback((subject: string) => {
+  // No useCallback: the React Compiler memoizes this, and a manual [] made it
+  // bail out of optimizing the whole component.
+  const handleOpenItem = (subject: string) => {
     setExpandedSubject(subject);
     setShowExpanded(true);
-  }, []);
+  };
 
   // Create a new item already placed on a day: a row of the table's class with
   // its date property preset. `createdAt` is required for it to appear in the
@@ -319,6 +340,16 @@ export function CalendarView({
   return (
     <>
       {recurrenceError && <WarningBlock>{recurrenceError}</WarningBlock>}
+      {invalidRecurrences.length > 0 && (
+        <InvalidRecurrenceWarning
+          invalid={invalidRecurrences.map(({ subject, message }) => ({
+            subject,
+            message,
+            title: rows.get(subject)?.title || subject,
+          }))}
+          onOpenItem={handleOpenItem}
+        />
+      )}
       <CalendarWrapper data-testid='calendar-view'>
         <Toolbar>
           <MonthLabel>{monthLabel}</MonthLabel>
@@ -382,6 +413,45 @@ const CalendarWrapper = styled.div`
    * still leaves the page chrome visible. Mirrors the kanban Board's model. */
   height: min(80vh, calc(100dvh - 13rem));
   min-height: 24rem;
+`;
+
+/** Names each row whose recurrence could not be expanded; the rest of the
+ * calendar still renders. Clicking a name opens the row to fix it. */
+function InvalidRecurrenceWarning({
+  invalid,
+  onOpenItem,
+}: {
+  invalid: (InvalidCalendarRecord & { title: string })[];
+  onOpenItem: (subject: string) => void;
+}): JSX.Element {
+  return (
+    <WarningBlock>
+      <WarningBlock.Title>
+        Some recurring meetings could not be displayed
+      </WarningBlock.Title>
+      <InvalidList data-testid='calendar-invalid-recurrences'>
+        {invalid.map(({ subject, message, title }) => (
+          <li key={subject}>
+            <InvalidLink type='button' onClick={() => onOpenItem(subject)}>
+              {title}
+            </InvalidLink>
+            : {message}
+          </li>
+        ))}
+      </InvalidList>
+    </WarningBlock>
+  );
+}
+
+const InvalidList = styled.ul`
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.25rem;
+`;
+
+const InvalidLink = styled(ButtonClean)`
+  color: ${p => p.theme.colors.main};
+  text-decoration: underline;
+  user-select: text;
 `;
 
 const Toolbar = styled.div`
