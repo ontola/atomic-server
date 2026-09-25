@@ -17,7 +17,7 @@
           "command": "clippy",
           "targetDir": "target/rust-analyzer",
           // The check command runs build scripts: without this, atomic-server's
-          // build.rs shells out to `cargo bin wasm-pack build`, whose NESTED
+          // build.rs shells out to wasm-pack (via the `tools/cargo-bin` shim), whose NESTED
           // cargo builds into the shared `target/` (ignoring the targetDir
           // above) and grabs its lock — blocking terminal `cargo build/test`
           // with "Blocking waiting for file lock on artifact directory".

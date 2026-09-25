@@ -2,8 +2,13 @@
 name = "cargo-bin"
 version = "0.1.0"
 edition = "2024"
-# A local shim that pins cargo-run-bin so `cargo bin wasm-pack` works without a
-# global install. `cargo-bin` is ALSO an unrelated crate already on crates.io
+# A local shim that pins cargo-run-bin so `cargo run -q -p cargo-bin -- wasm-pack`
+# works without a global install. There is deliberately no `cargo bin` alias in
+# `.cargo/config.toml`: cargo concatenates array config values from every
+# parent directory, so in a worktree nested inside the main checkout
+# (`.claude/worktrees/*`) the alias doubled into `run -p cargo-bin -- run ...`
+# and failed with "No package found for binary run". The first run in a fresh
+# checkout compiles wasm-pack into that checkout's `.bin/`. `cargo-bin` is ALSO an unrelated crate already on crates.io
 # (0.3.0, not ours), so publishing this would be both wrong and impossible.
 # See the note on `publish` in ../../wasm/Cargo.toml.
 publish = false

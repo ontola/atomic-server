@@ -2,9 +2,21 @@ import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+
+// Bundles the Website chunk's sandboxed runtime into `search-view.html` and
+// `website-runtime.min.js`. Both outputs are gitignored build artifacts:
+// `vite.config.ts` calls this on every vite / vitest start, so dev, build,
+// tests and `server/build.rs` (via `pnpm run build`) all regenerate them.
+// Committing them let the copies drift from their sources, and every build
+// then rewrote tracked files.
 const root = new URL('../src/chunks/Website/runtime/', import.meta.url);
 const bundle = async name => (await build({ entryPoints: [fileURLToPath(new URL(name + '.ts', root))], bundle: true, write: false, format: 'iife', platform: 'browser', target: 'es2022', minify: true })).outputFiles[0].text;
-const search = await bundle('searchView');
-const hash = createHash('sha256').update(search).digest('base64');
-await writeFile(new URL('search-view.html', root), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Search content</title><style>body{font:16px/1.6 system-ui;color:#213b34;margin:0;padding:1rem;background:#f4f3eb}label{display:block;font-weight:650}input{display:block;width:100%;box-sizing:border-box;padding:.8rem;border:1px solid #668478;border-radius:8px;font:inherit;margin:.6rem 0}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.card{padding:1.5rem;border:1px solid #a9b8ad;border-radius:12px;background:white;margin:0}dt{font-size:.75rem;text-transform:uppercase;color:#637d6d}dd{margin:0 0 1rem;white-space:pre-wrap}</style></head><body><p>Loading search…</p><script>${search}</script></body></html>`);
-await writeFile(new URL('website-runtime.min.js', root), '/* eslint-disable */\n// @wc-ignore-file\n' + await bundle('websiteRuntime'));
+
+export async function buildWebsiteRuntime() {
+  const search = await bundle('searchView');
+  const hash = createHash('sha256').update(search).digest('base64');
+  await writeFile(new URL('search-view.html', root), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Search content</title><style>body{font:16px/1.6 system-ui;color:#213b34;margin:0;padding:1rem;background:#f4f3eb}label{display:block;font-weight:650}input{display:block;width:100%;box-sizing:border-box;padding:.8rem;border:1px solid #668478;border-radius:8px;font:inherit;margin:.6rem 0}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.card{padding:1.5rem;border:1px solid #a9b8ad;border-radius:12px;background:white;margin:0}dt{font-size:.75rem;text-transform:uppercase;color:#637d6d}dd{margin:0 0 1rem;white-space:pre-wrap}</style></head><body><p>Loading search…</p><script>${search}</script></body></html>`);
+  await writeFile(new URL('website-runtime.min.js', root), '/* eslint-disable */\n// @wc-ignore-file\n' + await bundle('websiteRuntime'));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) await buildWebsiteRuntime();

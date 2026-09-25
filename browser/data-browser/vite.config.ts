@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -174,6 +175,20 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       wasm(),
+      {
+        // `src/chunks/Website/runtime/{search-view.html,website-runtime.min.js}`
+        // are gitignored bundles of the runtime's `.ts` sources. `config` runs
+        // for dev, build and vitest alike, so every consumer finds them fresh.
+        name: 'website-runtime',
+        async config() {
+          await buildWebsiteRuntime();
+        },
+        async handleHotUpdate({ file }) {
+          if (/Website\/runtime\/[^/]+\.ts$/.test(file)) {
+            await buildWebsiteRuntime();
+          }
+        },
+      },
       {
         // index.html preloads the wasm pair to warm the worker's fetch, so those
         // hrefs have to carry the same `?v=` the app requests — a preload for a
@@ -451,6 +466,9 @@ export default defineConfig(({ mode }) => {
       // imported module: CollaborativeEditor.tsx"). Crawling the chunk roots at
       // boot pre-optimizes everything, so first-open is warm and e2e is stable.
       entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
+    },
+    test: {
+      setupFiles: ['./src/test-setup.ts'],
     },
     build: {
       target: 'baseline-widely-available',
