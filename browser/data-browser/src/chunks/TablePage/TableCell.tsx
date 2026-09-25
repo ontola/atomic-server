@@ -27,6 +27,7 @@ import {
   dataTypeCellMap,
 } from './dataTypeMaps';
 import { StringCell } from './EditorCells/StringCell';
+import { floatSeed, integerSeed } from './EditorCells/numberInput';
 import { TablePageContext } from './tablePageContext';
 import { useColumnLabel } from './helpers/useColumnLabel';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
@@ -48,6 +49,26 @@ interface TableCellProps {
 }
 
 const SAVE_DEBOUNCE_TIME = 200;
+
+/**
+ * Datatypes whose editor reads typed text and stores a value only when it is
+ * committed, with the characters it may start from. Typing on such a selected
+ * cell seeds the editor with an accepted character instead of writing it as a
+ * value (#1822, #1825). Any other character opens the editor on what is stored
+ * and is dropped: a letter is not the start of a number.
+ */
+const textSeededDatatypes = new Map<string, RegExp>([
+  [Datatype.DATE, /^.$/u],
+  [Datatype.INTEGER, integerSeed],
+  [Datatype.FLOAT, floatSeed],
+]);
+
+/**
+ * Datatypes whose editor cannot start from a typed character at all, so the
+ * character is dropped and the editor opens on the stored value. A timestamp
+ * editor is a native date-and-time picker: a lone digit is not a time (#1825).
+ */
+const unseededDatatypes = new Set<string>([Datatype.TIMESTAMP]);
 
 function useIsEditing(row: number, column: number) {
   const { cursorMode, selectedColumn, selectedRow } = useTableEditorContext();
@@ -174,6 +195,9 @@ export function TableCell({
   // from this synchronous state closes that window; under load (where the write
   // is slower) it was losing the character most of the time.
   const [pendingValue, setPendingValue] = useState<JSONValue | undefined>();
+  // The same character for an editor that takes it as text (see
+  // `textSeededDatatypes`): only the editor stores anything, on commit.
+  const [seed, setSeed] = useState<string | undefined>();
 
   const handleEnterEditModeWithCharacter = useCallback(
     (key: string) => {
@@ -193,7 +217,31 @@ export function TableCell({
         return;
       }
 
+      // A date is typed as text (`2/10/2026`), a number as `-2.5`, so the
+      // first character is not a value yet. Hand it to the editor to start
+      // from, and store nothing until the editor commits a whole value.
+      const seedAccepts = textSeededDatatypes.get(dataType);
+
+      if (seedAccepts) {
+        if (seedAccepts.test(key)) {
+          setSeed(key);
+        }
+
+        return;
+      }
+
+      if (unseededDatatypes.has(dataType)) {
+        return;
+      }
+
       const next = appendStringToType(undefined, key, dataType);
+
+      // The character is not a value of this type. Writing `undefined` would
+      // clear the cell, so just open the editor on what is stored.
+      if (next === undefined) {
+        return;
+      }
+
       setPendingValue(next);
       onChange(next);
     },
@@ -213,12 +261,16 @@ export function TableCell({
     [onChange],
   );
 
-  // Leaving edit mode drops the seed regardless.
+  // Leaving edit mode drops both seeds regardless.
   useEffect(() => {
     if (!isEditing && pendingValue !== undefined) {
       setPendingValue(undefined);
     }
-  }, [isEditing, pendingValue]);
+
+    if (!isEditing && seed !== undefined) {
+      setSeed(undefined);
+    }
+  }, [isEditing, pendingValue, seed]);
 
   const handleEditNextRow = useCallback(() => {
     // Advance to the next row. The trailing empty row to move into already
@@ -253,6 +305,7 @@ export function TableCell({
           property={property.subject}
           resource={resource}
           languageTag={languageTag}
+          seed={seed}
         />
       ) : (
         <Editor.Display

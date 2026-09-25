@@ -2,6 +2,7 @@ import { JSONValue } from '@tomic/react';
 
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
+import { TruncatedText } from './TruncatedText';
 
 import { useState, type JSX } from 'react';
 
@@ -34,7 +35,7 @@ function StringCellEdit({
 function StringCellDisplay({
   value,
 }: DisplayCellProps<JSONValue>): JSX.Element {
-  return <>{value}</>;
+  return <TruncatedText value={value} />;
 }
 
 export const StringCell: CellContainer<JSONValue> = {

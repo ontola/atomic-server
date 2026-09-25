@@ -1,56 +1,56 @@
 import {
-  Datatype,
   isString,
   JSONValue,
   urls,
   useResource,
   useString,
-  validateDatatype,
 } from '@tomic/react';
-import { useCallback, useState, type JSX } from 'react';
+import type { JSX } from 'react';
 import { formatDate } from '@helpers/dates/formatDate';
 import { calendarDateToLocalDate } from '@helpers/dates/calendarDate';
+import {
+  dateInputPlaceholder,
+  formatDateInput,
+  parseDateInput,
+} from '@helpers/dates/dateInput';
 import { InputBase } from './InputBase';
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { UNPARSED, useCommittedText } from './useCommittedText';
 
+/**
+ * A text input rather than `<input type="date">`. The native one needed a
+ * zero-padded day ("01": after "1" it waits for a second digit) and emitted a
+ * change per segment, so typing the year stored 0002-10-01, 0020-10-01 and so
+ * on. This one reads `2/10/2026` (the locale's order) or `2026-10-2`, and
+ * stores the date once: on Enter or Tab, or when the cell closes any other way.
+ */
 function DateCellEdit({
   value,
   onChange,
+  seed,
 }: EditCellProps<JSONValue>): JSX.Element {
-  const [innerValue, setInnerValue] = useState<string | undefined>(
-    value as string,
-  );
-
-  // We hanlde changes ourselfs and keep a seperate state so the input can be invalid while the user is still filling in the date.
-  // Only once the date is valid is the value send to the server.
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setInnerValue(e.target.value);
-
-      try {
-        validateDatatype(e.target.value, Datatype.DATE);
-        onChange(e.target.value);
-      } catch (_) {
-        // Do nothing.
-      }
-    },
-    [onChange],
-  );
-
-  useOnValueChange(() => {
-    setInnerValue(value as string);
-  }, [value]);
+  // Typing on the selected cell opens it with that character, which is not a
+  // date yet: it is only text until Enter, Tab or closing commits it.
+  const input = useCommittedText({
+    value,
+    onChange,
+    seed,
+    format: formatDateInput,
+    parse: parseDate,
+  });
 
   return (
     <InputBase
-      type='date'
-      value={innerValue ?? ''}
+      type='text'
+      inputMode='numeric'
       autoFocus
-      onChange={handleChange}
+      placeholder={dateInputPlaceholder()}
+      {...input}
     />
   );
 }
+
+const parseDate = (text: string) => parseDateInput(text) ?? UNPARSED;
 
 export const toDisplayData = (value: JSONValue, format: string) => {
   if (isString(value)) {
