@@ -16,9 +16,12 @@ export type ViewOperation =
   | 'search'
   | 'subscribe'
   | 'unsubscribe'
-  /** Relay one integration-proxy call; the host holds the connection. */
-  | 'proxy'
-  /** Connection references (never credentials) this app may relay through. */
+  /**
+   * A capability for one integration-proxy connection, bound to the frame's
+   * own public key and signed by the user (ontola/atomic-plugins#54).
+   */
+  | 'proxyCapability'
+  /** Connection references (never credentials) delegated to this app. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
   | 'proxyConnect';
@@ -74,7 +77,7 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'search',
       'subscribe',
       'unsubscribe',
-      'proxy',
+      'proxyCapability',
       'proxyConnections',
       'proxyConnect',
     ].includes(request.op) &&

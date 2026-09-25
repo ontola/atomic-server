@@ -1,6 +1,6 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
-import type { ProxyRelay } from '@helpers/proxyConnections';
+import type { ProxyHost } from '@helpers/proxyConnections';
 import {
   CollectionBuilder,
   core,
@@ -33,14 +33,11 @@ export interface HostRequest {
   parent?: string;
   isA?: string[];
   propVals?: Record<string, unknown>;
-  // `proxy` / `proxyConnections`
+  // `proxyCapability` / `proxyConnections`
   platform?: string;
   connectionId?: string;
-  path?: string;
-  method?: string;
-  query?: Record<string, string>;
-  body?: string;
-  ifMatch?: string;
+  /** The frame's own Ed25519 public key, base64url. */
+  publicKey?: string;
 }
 
 export interface HostReply {
@@ -82,10 +79,10 @@ export async function handleRequest(
   /** The table this app is a view of, when it is being used as one. */
   table?: string,
   /**
-   * This app's integration-proxy connections, held by this page. Absent where
-   * the host cannot relay (no signed-in agent, or a host without the op).
+   * This app's integration-proxy access, as the signed-in user grants it.
+   * Absent where the host cannot (no signed-in agent, or a host without it).
    */
-  relay?: ProxyRelay,
+  proxy?: ProxyHost,
 ): Promise<unknown> {
   switch (request.op) {
     case 'app':
@@ -186,25 +183,26 @@ export async function handleRequest(
       return { subject };
     }
 
-    // The frame names a connection; this page holds it and makes the call.
-    // Only status, a few headers and the body go back — never the code.
-    case 'proxy': {
-      if (!relay)
+    // The frame names a connection and brings its own public key; the user
+    // signs a capability bound to that key, for that connection only, after
+    // the page has checked the connection is delegated to this app. The frame
+    // then calls the proxy itself. Nothing here is a credential on its own:
+    // every request must also be signed with the frame's key.
+    case 'proxyCapability': {
+      if (!proxy)
         throw new Error('This host cannot reach the integration proxy.');
 
-      return await relay.request({
+      return await proxy.capability({
         platform: required(request.platform, 'platform'),
         connectionId: required(request.connectionId, 'connectionId'),
-        path: required(request.path, 'path'),
-        method: request.method,
-        query: request.query,
-        body: request.body,
-        ifMatch: request.ifMatch,
+        publicKey: required(request.publicKey, 'publicKey'),
       });
     }
 
     case 'proxyConnections':
-      return relay?.connections(required(request.platform, 'platform')) ?? [];
+      return proxy
+        ? await proxy.connections(required(request.platform, 'platform'))
+        : [];
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.
