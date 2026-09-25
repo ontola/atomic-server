@@ -32,6 +32,10 @@ jobs:
   ci:
     name: CI
     runs-on: ${{ fromJSON(inputs.runner) }}
+    # A full run takes 45 to 75 minutes. Without a limit, a wedged Dagger
+    # engine held both Mancave runners for GitHub's 6-hour default
+    # (2026-09-25, runs 4587 and 4591). 150 leaves room for a cold cache.
+    timeout-minutes: 150
     env:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
