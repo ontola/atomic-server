@@ -1054,7 +1054,10 @@ async fn a_route_enqueues_a_signed_delivery_that_the_stub_receives() {
     assert_eq!(status["mount"], "drive-prefix");
     assert!(status["refusal"].is_null(), "{status}");
     assert_eq!(status["deliveries"]["queued"], 1);
-    assert_eq!(status["deliveries"]["dailyCap"], 10_000);
+    assert_eq!(
+        status["deliveries"]["dailyCap"],
+        crate::plugin_routes::DEFAULT_DELIVERIES_PER_DAY
+    );
 
     // The worker sends it, signed with the installation's key.
     assert_eq!(tick_app(&i).await, 1);
