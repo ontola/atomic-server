@@ -814,4 +814,98 @@ mod tests {
         ));
         let _ = ForAgent::Public;
     }
+
+    /// A critical commit's `Tree::Resources` row is the durable record, and
+    /// has to verify on its own. Under `latest` retention the first ordinary
+    /// edit deletes the genesis envelope, so if the row leaned on the
+    /// envelope for its `loroUpdate` there would be nothing left for the
+    /// signature to cover.
+    #[tokio::test]
+    async fn stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit() {
+        let db = Db::init_temp("envelopes_genesis_row_payload")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        let genesis_id = latest_envelope(&db, subject.as_str()).unwrap().commit_id();
+
+        signed_edit(&db, &subject, "edited").await;
+        assert!(
+            envelopes(&db, subject.as_str())
+                .iter()
+                .all(|e| e.commit_id() != genesis_id),
+            "latest retention has dropped the genesis envelope"
+        );
+
+        let row = db.get_resource(&genesis_id.as_str().into()).await.unwrap();
+        assert!(
+            matches!(row.get(urls::LORO_UPDATE), Ok(Value::LoroDoc(bytes)) if !bytes.is_empty()),
+            "the stored genesis commit keeps its signed loroUpdate"
+        );
+        let commit = crate::commit::Commit::from_resource(row.clone()).unwrap();
+        commit
+            .validate_signature(&db)
+            .await
+            .expect("the stored genesis commit verifies without its envelope");
+
+        // Without the payload the same row no longer verifies, so the check
+        // above is really about the payload being there.
+        let mut stripped = row;
+        stripped.remove_propval(urls::LORO_UPDATE).unwrap();
+        let stripped = crate::commit::Commit::from_resource(stripped).unwrap();
+        assert!(stripped.validate_signature(&db).await.is_err());
+    }
+
+    /// After a destroy and a re-create of the same subject, `latest` has
+    /// replaced the destroy envelope with the new genesis. The destroy's
+    /// commit row is then the only local evidence that this destroy was
+    /// already applied, and `Db::apply_commit` must refuse to replay it.
+    #[tokio::test]
+    async fn destroy_replay_after_recreate_is_refused_by_the_commit_row() {
+        let db = Db::init_temp("envelopes_destroy_replay").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        let genesis_json = latest_envelope(&db, subject.as_str()).unwrap().json;
+
+        let resource = db.get_resource(&subject).await.unwrap();
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.destroy(true);
+        let destroy = builder.sign(&alice, &db, &resource).await.unwrap();
+        let destroy_id = crate::identifiers::commit_subject(destroy.signature.as_deref().unwrap());
+        let destroy_json = destroy
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+        ingest_commit_json(&db, &destroy_json, &CommitIngestOpts::peer())
+            .await
+            .unwrap();
+        assert!(!db.has_resource_locally(&subject.pure_id()));
+
+        // A peer re-sends the genesis: the subject exists again.
+        ingest_commit_json(&db, &genesis_json, &CommitIngestOpts::peer())
+            .await
+            .unwrap();
+        assert!(db.has_resource_locally(&subject.pure_id()));
+        assert!(
+            envelopes(&db, subject.as_str())
+                .iter()
+                .all(|e| !e.is_destroy()),
+            "latest retention has dropped the destroy envelope"
+        );
+        assert!(
+            db.has_resource_locally(&destroy_id),
+            "the destroy commit row survives as the durable record"
+        );
+
+        let err = ingest_commit_json(&db, &destroy_json, &CommitIngestOpts::peer())
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("already applied here"),
+            "expected the replay guard, got: {err}"
+        );
+        assert!(db.has_resource_locally(&subject.pure_id()));
+    }
 }

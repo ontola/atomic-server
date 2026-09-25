@@ -3876,3 +3876,70 @@ async fn replica_row_keeps_unresolvable_props_from_snapshot() {
         }
     }
 }
+
+/// A critical commit's `Tree::Resources` row is self-contained: its blob
+/// keeps the signed `loroUpdate` (a CRDT resource's blob drops it in favour
+/// of `Tree::LoroSnapshots`), and the row is findable by the resource it is
+/// about through the `subject` index. See `envelopes::tests::
+/// stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit` for
+/// why the payload cannot be borrowed from the envelope.
+#[tokio::test]
+#[timeout(120000)]
+async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
+    let store = Db::init_temp("commit_row_self_contained").await.unwrap();
+    let (_alice, drive) = store.setup("Alice").await.unwrap();
+    let subject = store
+        .create_resource(urls::CLASS, &drive, "Doc", None)
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&subject, None);
+    let genesis_id = crate::envelopes::latest_envelope(&store, subject.as_str())
+        .unwrap()
+        .commit_id();
+
+    let commit_blob = store
+        .kv
+        .get(Tree::Resources, genesis_id.as_bytes())
+        .unwrap()
+        .expect("a genesis commit keeps its Tree::Resources row");
+    assert!(
+        matches!(
+            decode_propvals(&commit_blob).unwrap().get(urls::LORO_UPDATE),
+            Some(Value::LoroDoc(bytes)) if !bytes.is_empty()
+        ),
+        "the commit row keeps its signed loroUpdate"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, genesis_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "a commit has no CRDT snapshot of its own"
+    );
+
+    let resource_blob = store
+        .kv
+        .get(Tree::Resources, subject.pure_id().as_bytes())
+        .unwrap()
+        .unwrap();
+    assert!(
+        !decode_propvals(&resource_blob)
+            .unwrap()
+            .contains_key(urls::LORO_UPDATE),
+        "an ordinary row is a projection without loroUpdate"
+    );
+
+    let found = store
+        .query(&Query::new_prop_val(urls::SUBJECT, subject.as_str()))
+        .await
+        .unwrap();
+    assert!(
+        found
+            .subjects
+            .iter()
+            .any(|s| s.as_str() == genesis_id.as_str()),
+        "the commit row is indexed by the subject it is about: {:?}",
+        found.subjects
+    );
+}
