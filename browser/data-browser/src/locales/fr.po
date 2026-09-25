@@ -285,6 +285,7 @@ msgstr "Choisir un modèle par défaut"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Retour"
 
@@ -4919,9 +4920,11 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr ""
 
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr ""
@@ -7379,6 +7382,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
 msgstr ""
 
@@ -7461,17 +7465,14 @@ msgstr ""
 msgid "<0/> Keep demo content and my edits"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Welcome"
-msgstr ""
+#~ msgid "Welcome"
+#~ msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Board"
-msgstr ""
+#~ msgid "Board"
+#~ msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Team chat"
-msgstr ""
+#~ msgid "Team chat"
+#~ msgstr ""
 
 #. 0: ' '
 #: src/chunks/Templates/DriveTemplateSetup.tsx
@@ -12285,6 +12286,7 @@ msgid "Open your drive"
 msgstr ""
 
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr ""
@@ -12304,4 +12306,16 @@ msgstr ""
 
 #: src/components/SetupBar.tsx
 msgid "Setup"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the demo"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the preview"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Name your drive"
 msgstr ""

@@ -285,6 +285,7 @@ msgstr "Choose a default model"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -4930,9 +4931,11 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr "Creating…"
 
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr "Create drive"
@@ -7390,6 +7393,7 @@ msgstr "Drive name"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
 msgstr "Back to templates"
 
@@ -7472,17 +7476,14 @@ msgstr "/app/new-drive?blank=1"
 msgid "<0/> Keep demo content and my edits"
 msgstr "<0/> Keep demo content and my edits"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Welcome"
-msgstr "Welcome"
+#~ msgid "Welcome"
+#~ msgstr "Welcome"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Board"
-msgstr "Board"
+#~ msgid "Board"
+#~ msgstr "Board"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Team chat"
-msgstr "Team chat"
+#~ msgid "Team chat"
+#~ msgstr "Team chat"
 
 #. 0: ' '
 #: src/chunks/Templates/DriveTemplateSetup.tsx
@@ -12331,6 +12332,7 @@ msgid "Open your drive"
 msgstr "Open your drive"
 
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/views/ErrorPage.tsx
 msgid "Choose a template"
 msgstr "Choose a template"
@@ -12351,3 +12353,15 @@ msgstr "Preview: {0}"
 #: src/components/SetupBar.tsx
 msgid "Setup"
 msgstr "Setup"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the demo"
+msgstr "Back to the demo"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the preview"
+msgstr "Back to the preview"
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Name your drive"
+msgstr "Name your drive"

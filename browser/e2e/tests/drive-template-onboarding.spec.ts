@@ -43,7 +43,7 @@ for (const keepEdits of [false, true]) {
     });
     expect(tabScroll).toBeGreaterThan(0);
     const previewBar = await page
-      .getByRole('region', { name: 'Template preview' })
+      .getByRole('region', { name: 'Setup' })
       .boundingBox();
     const navigation = await page
       .getByLabel('navigation', { exact: true })
@@ -95,8 +95,11 @@ for (const keepEdits of [false, true]) {
     await page
       .getByRole('button', { name: 'Use this template', exact: true })
       .click();
+    // The naming step's title is hidden on a phone; its Create button is not.
     await expect(
-      page.getByRole('heading', { name: 'Give your space a name' }),
+      page
+        .getByRole('region', { name: 'Setup' })
+        .getByRole('button', { name: 'Create drive', exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel('Drive name')).toHaveValue('Student');
     expect(
