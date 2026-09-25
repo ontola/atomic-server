@@ -207,6 +207,98 @@ pub async fn runtime_of(
     }))
 }
 
+/// Resources whose `property` names `agent`, in either spelling of an agent
+/// id (`atomic:agent:` or `did:ad:agent:`) and either stored datatype.
+async fn naming_agent(db: &Db, property: &str, agent: &str) -> Vec<Resource> {
+    let Some(key) = atomic_lib::identifiers::agent_public_key(agent) else {
+        return Vec::new();
+    };
+    let mut spellings = vec![
+        agent.to_string(),
+        format!("{}{key}", atomic_lib::identifiers::ATOMIC_AGENT_PREFIX),
+        format!("did:ad:agent:{key}"),
+    ];
+    spellings.dedup();
+    let mut found: Vec<Resource> = Vec::new();
+    for spelling in spellings {
+        for value in [
+            Value::AtomicUrl(spelling.as_str().into()),
+            Value::String(spelling.clone()),
+        ] {
+            let Ok(result) = db
+                .query(&Query {
+                    property: Some(property.into()),
+                    value: Some(value),
+                    include_nested: true,
+                    for_agent: ForAgent::Sudo,
+                    ..Default::default()
+                })
+                .await
+            else {
+                continue;
+            };
+            for resource in result.resources {
+                if !found
+                    .iter()
+                    .any(|r| r.get_subject() == resource.get_subject())
+                {
+                    found.push(resource);
+                }
+            }
+        }
+    }
+    found
+}
+
+/// The Installation `agent` is an identity of, if it is one: the keyless app
+/// id an Installation records (`integrationAppAgent`), or the agent a node
+/// minted for it and published on an `InstallationRuntime` child. Read from
+/// synced data only, so every node answers the same.
+///
+/// These identities are what #1644's fail-closed check sees for
+/// installations (#1700, answer 8). Unlike a `createApp` agent they are not a
+/// key this node must hold: an Installation runs as the agent this node
+/// minted for it, whichever identities its resources name.
+pub async fn installation_of_identity(db: &Db, agent: &str) -> Option<String> {
+    for resource in naming_agent(db, urls::INTEGRATION_APP_AGENT, agent).await {
+        if resource.has_class(urls::INSTALLATION) {
+            return Some(resource.get_subject().to_string());
+        }
+    }
+    for resource in naming_agent(db, urls::INTEGRATION_RUNTIME_AGENT, agent).await {
+        if resource.has_class(urls::INSTALLATION_RUNTIME) {
+            if let Some(parent) = resource.get(urls::PARENT).ok().and_then(string_of) {
+                return Some(parent);
+            }
+        }
+    }
+    None
+}
+
+/// Whether this Installation carries an installation identity: an app id, or
+/// an agent some node published for it after activating it. Such an
+/// Installation runs as a node's own agent, never as the server's.
+pub async fn carries_identity(db: &Db, installation: &Resource) -> bool {
+    if app_agent_of(installation).is_some() {
+        return true;
+    }
+    let subject = installation.get_subject().to_string();
+    db.query(&Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(subject.as_str().into())),
+        include_nested: true,
+        for_agent: ForAgent::Sudo,
+        ..Default::default()
+    })
+    .await
+    .is_ok_and(|found| {
+        found
+            .resources
+            .iter()
+            .any(|r| r.has_class(urls::INSTALLATION_RUNTIME))
+    })
+}
+
 /// Publishes this node's agent for an active Installation on a child the
 /// agent may write, once. Returns that child's subject, or `None` when this
 /// node has no agent for the Installation (not activated here, a wasip2

@@ -252,6 +252,15 @@ its v2 signature. They also check refusals, before any connection, for an
 undeclared platform, no delegated connection, no configured proxy, no
 matching operation and a dot segment.
 
+Fail-closed app identity (#1644) with installation identities (#1700,
+answer 8): `plugins::installation::tests` resolve an Installation this node
+activated whose entry point names its app id and another node's published
+agent (runs as this node's agent), the same Installation as synced data on a
+node that never activated it (refused, and so is its entry point), and a
+`createApp` agent with no key here under an activated Installation (still
+refused). `scheduler` tests (from #1644) cover the run path. Not covered: two
+real nodes syncing an Installation.
+
 A wasip2 class extender is refused at the integration proxy, by URL and by
 `atomic-proxy:`, even when its manifest lists the proxy origin (#1700, answer
 5): `host_core::tests::a_class_extender_is_refused_at_the_proxy_and_told_why`.

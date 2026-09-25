@@ -7,6 +7,16 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- A plugin run no longer falls back to the server's agent for an app or
+  installation whose key is not on this node (#1644), and that check sees
+  installation identities (#1700, answer 8): an Installation's keyless
+  `integrationAppAgent` and the agents nodes publish on its
+  `InstallationRuntime` children. An Installation that carries one and was
+  not activated on this node is refused ("activate it on this node"), as is
+  a resource naming an identity of such an Installation; an installed plugin
+  on a node that activated it runs as that node's agent, whatever identities
+  its resources name. A `createApp` agent whose key is elsewhere is still
+  refused.
 - State-changing endpoints require a version 2 request signature, and accept
   each one once (#1700, piece 6 and answer 7). `POST`/`DELETE` on
   `/app-agent`, `/app-write`, `/plugin-view-token`, `/plugin-secret`,
