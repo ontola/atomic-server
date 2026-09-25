@@ -2362,6 +2362,7 @@ mod peer_sync_tests {
             &db,
             &ForAgent::Sudo,
             crate::sync::engine::WireScheme::CANONICAL,
+            false,
         )
         .await;
 
