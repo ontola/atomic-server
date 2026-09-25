@@ -23,6 +23,8 @@ import {
 } from '@helpers/proxyConnections';
 import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
 import { appAgentOf } from './appAgent';
+import { grantRowAccess, rowAccessQuestion } from './rowGrant';
+import { RowGrantText } from './RowGrantText';
 import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
@@ -49,11 +51,18 @@ function AppFrameSession({
   app,
   drive,
   table,
+  view,
   onOutcome,
   silent,
 }: {
   app: string;
   drive: string;
+  /**
+   * The View (tab) showing this app on `table`. An app that asks to edit the
+   * table's rows gets a grant tied to this view, so removing the tab takes
+   * it back.
+   */
+  view?: string;
   /**
    * The table this app is a view of, when it is being used as one.
    *
@@ -82,6 +91,10 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  // An app asking to edit the table's rows (#1740). Drawn by this page, and
+  // only a click here grants it.
+  const [rowAsk, setRowAsk] = useState<RowAsk>();
+  const rowAskRef = useRef<RowAsk | undefined>(undefined);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -226,6 +239,38 @@ function AppFrameSession({
         return;
       }
 
+      if (data.op === 'requestRowAccess') {
+        const previous = rowAskRef.current;
+        previous?.reply({
+          id: previous.id,
+          result: { status: 'denied', reason: /* @wc-ignore */ 'Asked again' },
+        });
+        rowAskRef.current = undefined;
+        setRowAsk(undefined);
+
+        rowAccessQuestion(store, { app, drive, table, view }, () =>
+          appLabel(store, app),
+        )
+          .then(outcome => {
+            if (outcome.ask === false) {
+              session.post({ id: data.id, result: outcome.result });
+
+              return;
+            }
+
+            const ask: RowAsk = {
+              id: data.id,
+              appName: outcome.appName,
+              reply: session.post,
+            };
+            rowAskRef.current = ask;
+            setRowAsk(ask);
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
@@ -253,7 +298,7 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src]);
+  }, [store, app, drive, table, view, src]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
@@ -352,6 +397,38 @@ function AppFrameSession({
     finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
   };
 
+  const finishRowAsk = (reply: HostReply) => {
+    rowAsk?.reply(reply);
+    rowAskRef.current = undefined;
+    setRowAsk(undefined);
+  };
+
+  const allowRows = () => {
+    if (!rowAsk || !table || !view) return;
+
+    grantRowAccess(store, { drive, table, app, view, via: 'request' })
+      .then(() =>
+        finishRowAsk({ id: rowAsk.id, result: { status: 'granted' } }),
+      )
+      .catch((e: Error) =>
+        finishRowAsk({
+          id: rowAsk.id,
+          result: { status: 'denied', reason: e.message },
+        }),
+      );
+  };
+
+  const declineRows = () => {
+    if (!rowAsk) return;
+    finishRowAsk({
+      id: rowAsk.id,
+      result: {
+        status: 'denied',
+        reason: /* @wc-ignore */ 'The person said no',
+      },
+    });
+  };
+
   const fixIt = () => {
     if (!appError) return;
 
@@ -408,6 +485,19 @@ function AppFrameSession({
             </Button>
             <Button subtle onClick={cancelConnect}>
               Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {rowAsk && (
+        <ProxyConsentBar aria-label='Let this app edit rows'>
+          <ProxyConsentText>
+            <RowGrantText appName={rowAsk.appName} />
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={allowRows}>Allow editing</Button>
+            <Button subtle onClick={declineRows}>
+              Not now
             </Button>
           </Row>
         </ProxyConsentBar>
@@ -535,6 +625,12 @@ async function appLabel(
   } catch {
     return app;
   }
+}
+
+interface RowAsk {
+  id: number | string;
+  appName: string;
+  reply: (reply: HostReply) => void;
 }
 
 interface ConnectAsk {

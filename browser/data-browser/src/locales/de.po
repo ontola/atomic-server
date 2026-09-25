@@ -123,6 +123,7 @@ msgstr ""
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
@@ -9474,4 +9475,48 @@ msgstr ""
 #. 0: platformName(platform)
 #: src/views/Installation/InstallationConnections.tsx
 msgid "{0} disconnected"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Allow editing"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Not now"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Let this app edit rows"
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. You can take this back from the tab's menu."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This app"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Stop {0} editing rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "It keeps showing the rows, read-only."
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Let {0} edit rows"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Let {0} edit rows?"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Read-only"
 msgstr ""

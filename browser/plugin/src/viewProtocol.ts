@@ -24,7 +24,14 @@ export type ViewOperation =
   /** Connection references (never credentials) delegated to this app. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
-  | 'proxyConnect';
+  | 'proxyConnect'
+  /**
+   * Whether this app may edit the rows of the table it is a view of (#1740):
+   * `{ status: 'granted' | 'none' | 'unavailable' }`.
+   */
+  | 'rowAccess'
+  /** Ask the person, in host UI, to let this app edit the table's rows. */
+  | 'requestRowAccess';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -80,6 +87,8 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'proxyCapability',
       'proxyConnections',
       'proxyConnect',
+      'rowAccess',
+      'requestRowAccess',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

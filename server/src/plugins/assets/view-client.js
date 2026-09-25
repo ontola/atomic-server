@@ -111,6 +111,31 @@ export const store = {
     return send('data', {});
   },
 
+  /**
+   * Whether this app may edit the rows of the table it is a view of.
+   *
+   * Showing an app as a table's view lets it read the rows, not change them.
+   * Someone who can edit the table allows that, when they add the app as a
+   * view or when the app asks with `requestRowAccess()`. Resolves to
+   * `{ status: 'granted', grantedBy, grantedAt, via }`, `{ status: 'none' }`,
+   * or `{ status: 'unavailable' }` when the app is not shown as a table's view.
+   * With a grant, `resource.save()` on a row of that table may set the
+   * table's columns (the row class's properties), and `newResource` may add a
+   * row of that class. Deleting rows is never included.
+   */
+  async rowAccess() {
+    return send('rowAccess', {});
+  },
+
+  /**
+   * Asks the person, in the host's own UI, to let this app edit the table's
+   * rows. Resolves to `{ status: 'granted' }` or `{ status: 'denied', reason }`
+   * (they said no, or cannot edit the table themselves).
+   */
+  async requestRowAccess() {
+    return send('requestRowAccess', {});
+  },
+
   async getResource(subject) {
     const result = await send('get', { subject });
 
