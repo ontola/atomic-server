@@ -1270,7 +1270,8 @@ export class Store {
   /**
    * Outbox sort order: agents → current drive → everything else,
    * with shallow-parent before deep within the last tier. Agents
-   * must exist on the server before their commits validate; the
+   * must exist on the server before their commits validate (except an
+   * agent whose parent is queued too: see `hasQueuedParent`); the
    * drive must exist before its children's `parent` references
    * resolve.
    */
@@ -1295,7 +1296,7 @@ export class Store {
    */
   private outboxTier(subject: string): [number, number] {
     let priority = 2;
-    if (isAgentSubject(subject)) priority = 0;
+    if (isAgentSubject(subject) && !this.hasQueuedParent(subject)) priority = 0;
     else if (subject === this.drive) priority = 1;
 
     let depth = 0;
@@ -1311,6 +1312,24 @@ export class Store {
     }
 
     return [priority, depth];
+  }
+
+  /**
+   * Whether `subject`'s parent is itself still waiting in the outbox. An
+   * agent created under a parent — an app's agent in the drive's App
+   * identities folder — is admitted through that parent's append right; sent
+   * ahead of it, the server finds no parent and answers that only the agent
+   * itself may create its Agent resource. Such an agent drains in the depth
+   * order below, after its parent, instead of first.
+   */
+  private hasQueuedParent(subject: string): boolean {
+    const parent = this.resources.get(subject)?.get(core.properties.parent);
+
+    return (
+      typeof parent === 'string' &&
+      parent !== subject &&
+      this.outbox.hasPending(parent)
+    );
   }
 
   private outboxTierOf = (entry: OutboxEntry): string => {

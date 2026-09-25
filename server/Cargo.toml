@@ -40,6 +40,8 @@ async-trait = "0.1.89"
 actix = "0.13.5"
 actix-cors = "0.7.1"
 actix-files = "0.6.10"
+# `ws::Item`, the continuation-frame payload actix-web-actors does not re-export.
+actix-http = { version = "3.12.1", default-features = false, features = ["ws"] }
 actix-multipart = "0.7.2"
 actix-web-actors = "4.3.1"
 base64 = "0.22"

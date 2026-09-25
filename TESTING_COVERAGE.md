@@ -1,3 +1,6 @@
+Date-only values (#1795, 2026-09-25): `browser/data-browser/src/helpers/dates/calendarDate.test.tsx` renders a `date` value through `ValueComp` (row dialog, resource page), the table cell, a min/max aggregate, day and month group headings and the history diff, in Europe/Amsterdam and America/New_York. Each must show the same civil day with no time. The tests set `process.env.TZ` themselves, so they fail on the bug in any CI zone.
+Row dialog fields (#1796, 2026-09-25): `browser/data-browser/src/components/PropVal.test.tsx` checks that the row dialog labels a value with its property's name (or a readable shortname when it has none), with the shortname in the tooltip. The label must not be a link, the property opens in a new tab, and the edited checkbox gets its accessible name from the label. Resource pages keep the linked shortname. `browser/e2e/tests/row-dialog.spec.ts` covers the same in a real Grocery list and runs axe (`label`, `link-name`) on the open dialog. It also covers the `ValueFormEdit` key warning through the browser-diagnostics fixture: that warning only shows with the wuchale transform, which vitest does not run.
+
 Server descriptor budget (2026-09-22): `server/src/serve.rs` tests the HTTP
 connection budget at small, staging-sized, and effectively unlimited process
 descriptor limits. Startup reads the process soft `RLIMIT_NOFILE`, limits Actix
@@ -58,6 +61,12 @@ updates validate built-in fields without public Property fetches and preserve
 JSON tags for grants and config. `embedded-vocabulary-routing.test.ts` covers
 host routing for plugin classes, while `plugin.spec.ts` installs a release and
 verifies the active plugin in Chromium.
+
+JSON property values: `browser/lib/src/json-value.test.ts` checks that an
+object set on a JSON property reads back as an object before the save drains
+(validated and unvalidated `set()`), after a commit round trip, and from legacy
+docs: untagged objects and string-wrapped (double-encoded) objects. Not covered:
+the `InputJSON` editor itself in a component or E2E test.
 
 Editor sync formatting: unit tests cover both enabling and disabling bold before
 an incoming property update, so sync receipts cannot reset the next typed text's
@@ -212,10 +221,28 @@ The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
 
+Finding another table (#1807): `TablePage/ColumnFilterDropdown.test.tsx`
+(jsdom) checks the table's column-filter menu names its input "Find a column…"
+and, when nothing matches, offers "Search the drive for …", which opens the
+search overlay with the query on Enter. `components/overlayState.test.ts`
+checks the pre-filled search query is dropped on close and on a plain open.
+The labelled header search button is not covered beyond `test-utils.ts`
+still finding it by its `Search (` title.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
 tracker tables.
+
+Table cell readability (#1808): `helpers/dates/dateInput.test.ts` covers
+reading typed dates (unpadded, year-first, locale order in en-GB/en-US/de/nl,
+eight bare digits) and rejecting impossible or two-digit-year dates.
+`EditorCells/DateCell.test.tsx` (jsdom) checks the date cell stores once, on
+Enter or when it closes, never per keystroke. `EditorCells/TruncatedText.test.tsx`
+checks the tooltip and the selected-cell panel for cut-off text; jsdom has no
+layout, so widths are stubbed and the panel's `:focus` rule is checked by
+selector, not by rendering. `tables.spec.ts` "create and fill" and
+`table-templates.spec.ts` "Plant care" still type dates as `ddmmyyyy`.
 
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
 partial model drafts, forbidden arguments and size limits. It also validates resource JSON
@@ -980,6 +1007,15 @@ native clients.
   WASM database in Node, plus per-agent isolation. `client-db-durable-put.test.ts`
   checks the worker writes the row with the snapshot under one flush. Not
   covered: the OPFS worker and leader handoff in a real browser (Playwright).
+- `issue-access-agent.test.ts` ("an issued agent queued while offline"): an
+  app agent queued together with the folder it lives in (the drive-app install
+  after a socket drop, ontola/atomic-plugins#171) drains after that folder, not
+  in the agents-first tier, against a stub server that refuses a child whose
+  parent it has not seen. The real server's rule is `check_append` /
+  `check_agent_self_creation` in `lib/src/hierarchy.rs`.
+- `server/tests/it/ws_fragmented.rs`: a `COMMIT` sent as a first frame plus
+  continuation frames is joined and applied. Chromium sends any message over
+  ~128 KB this way; the handler used to drop the socket (`1006`).
 
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded
@@ -1851,7 +1887,10 @@ were removed with the Calendar lens; there is no Calendar import coverage here.
   date-only recurring spans. No real provider calls.
 - `browser/data-browser/src/chunks/TablePage/Calendar/calendarOccurrences.test.ts`:
   imported/native property names, civil-day placement across offset boundaries,
-  recurring all-day spans clipped to the visible grid.
+  recurring all-day spans clipped to the visible grid, and moved instances
+  (#1804): "moved from" on the new day, a placeholder on the original day with
+  the same original-instance key (also when the new day is off the grid), and
+  no mark for a same-day time change or a cancellation.
 
 The bundled Google Calendar (Devonian) lens and its end-to-end coverage
 (`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
@@ -1863,6 +1902,13 @@ recurring-series import.
 The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
 these fixtures; unsupported full-series rules are rejected before import.
+
+Calendar view UI: `browser/e2e/tests/calendar.spec.ts` covers adding an item
+on a day, grid alignment at desktop and phone width, and a crowded day (#1798):
+"+N more" counts what doesn't fit, and the day list (from "+N more", the day
+number by keyboard, or a click on the day's empty space) shows every event and
+opens each row on top of it. How many chips fit is measured, so it needs a
+real browser; jsdom can't cover it.
 
 All-day ranges: `browser/lib/src/calendar-date.test.ts` covers civil-date
 validation, exclusive single/multi-day ends, leap days, DST dates and year
@@ -2291,3 +2337,15 @@ deployed app's base64 JSON format with an `atomic:agent:` subject through the
 same `Agent.fromSecret` parser used by the local welcome form. It verifies
 the identity and public key. Browser sign-in and data recovery are separate
 flows.
+
+## Hidden-tab liveness and presence after reconnect (#1800)
+
+`browser/lib/src/liveness.test.ts` replays the WS liveness timer at a hidden
+tab's once-a-minute cadence and checks that a socket whose probes are answered
+is never closed, while a dead one still closes one tick after its probe times
+out. It does not drive a real browser's throttling.
+`server/tests/it/drive_presence.rs`
+(`presence_sent_right_after_subscribe_is_delivered`) sends a presence update
+right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
+reaches the other subscriber without a retry, and that an update held for a
+refused subscribe is dropped.

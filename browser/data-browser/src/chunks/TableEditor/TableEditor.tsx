@@ -162,6 +162,7 @@ function FancyTableInner<T>({
     tableRef,
     setCursorMode,
     exitEditMode,
+    emitInteractionsFired,
     cursorMode,
     disabledKeyboardInteractions,
     readOnly,
@@ -229,10 +230,18 @@ function FancyTableInner<T>({
       ) {
         e.preventDefault();
         e.stopPropagation();
+        // First, so an editor that stores on close knows this close is a
+        // cancel and keeps the stored value.
+        emitInteractionsFired([KeyboardInteraction.ExitEditMode]);
         exitEditMode();
       }
     },
-    [cursorMode, disabledKeyboardInteractions, exitEditMode],
+    [
+      cursorMode,
+      disabledKeyboardInteractions,
+      exitEditMode,
+      emitInteractionsFired,
+    ],
   );
 
   // The opt-out above is only ever set *while* such a surface is open. Once it

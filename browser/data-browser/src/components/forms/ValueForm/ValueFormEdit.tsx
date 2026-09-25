@@ -12,12 +12,15 @@ interface ValueFormEditProps {
   resource: Resource;
   property: Property;
   onClose: () => void;
+  /** Lets a label outside the form name the input. */
+  inputId?: string;
 }
 
 export function ValueFormEdit({
   resource,
   property,
   onClose,
+  inputId,
 }: ValueFormEditProps): React.JSX.Element {
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [isFormValid, setIsFormValid] = useState(false);
@@ -49,6 +52,7 @@ export function ValueFormEdit({
     <FormValidationContextProvider onValidationChange={setIsFormValid}>
       <Column gap='0.5rem'>
         <InputSwitcher
+          id={inputId}
           data-test={`input-${property.subject}`}
           resource={resource}
           property={property}
@@ -61,7 +65,7 @@ export function ValueFormEdit({
           </Button>
           <Button onClick={save} disabled={!isFormValid}>
             <FaFloppyDisk />
-            Save
+            <span>Save</span>
           </Button>
         </Row>
       </Column>

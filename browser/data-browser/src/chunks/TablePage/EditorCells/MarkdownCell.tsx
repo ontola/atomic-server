@@ -1,6 +1,7 @@
 import { JSONValue, useProperty } from '@tomic/react';
 
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
+import { TruncatedText } from './TruncatedText';
 
 import { useMemo, type JSX } from 'react';
 import styled from 'styled-components';
@@ -79,7 +80,7 @@ function MarkdownCellEdit({
 function MarkdownCellDisplay({
   value,
 }: DisplayCellProps<JSONValue>): JSX.Element {
-  return <>{value}</>;
+  return <TruncatedText value={value} />;
 }
 
 export const MarkdownCell: CellContainer<JSONValue> = {

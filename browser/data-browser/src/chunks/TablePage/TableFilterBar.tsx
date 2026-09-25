@@ -2,13 +2,14 @@ import { Property } from '@tomic/react';
 import { useContext, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaPlus } from 'react-icons/fa6';
-import { DropdownMenu, DropdownItem } from '@components/Dropdown';
+import type { DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { TablePageContext } from './tablePageContext';
 import { TableFilterChip } from './TableFilterChip';
 import { derivedFilterKey, filterKey } from './tableFiltering';
 import type { DerivedColumnSpec } from './derivedColumns';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
+import { ColumnFilterDropdown } from './ColumnFilterDropdown';
 
 interface TableFilterBarProps {
   columns: Property[];
@@ -95,7 +96,7 @@ export function TableFilterBar({
         );
       })}
       {addItems.length > 0 && (
-        <DropdownMenu Trigger={AddFilterTrigger} items={addItems} />
+        <ColumnFilterDropdown Trigger={AddFilterTrigger} items={addItems} />
       )}
     </Bar>
   );
