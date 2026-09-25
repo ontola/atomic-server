@@ -91,7 +91,7 @@ pub async fn web_socket_handler(
             index_status_broadcast: appstate.index_status_broadcast.clone(),
             write_rate_limiter: appstate.write_rate_limiter.clone(),
             peer_ip: crate::helpers::peer_ip(&req),
-            index_status_subscribed: std::collections::HashSet::new(),
+            index_status_subscribed: std::collections::HashMap::new(),
         },
         &req,
         stream,
@@ -140,7 +140,9 @@ pub struct WebSocketConnection {
     connection_id: String,
     vector_search_state: VectorSearchState,
     index_status_broadcast: Arc<IndexStatusBroadcast>,
-    index_status_subscribed: std::collections::HashSet<String>,
+    /// Drives this connection watches the indexing state of, and whether
+    /// it asked with the legacy text frame (and so gets text answers).
+    index_status_subscribed: std::collections::HashMap<String, bool>,
     /// Shared with the HTTP handlers: a `COMMIT` frame spends the same
     /// per-agent (or, before `AUTH`, per-peer) write token as `POST /commit`.
     write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
@@ -155,7 +157,7 @@ pub struct IndexStatusPush {
     pub indexing: bool,
 }
 
-/// Fan-out for `INDEX_STATUS` websocket messages (per subscribed drive).
+/// Fan-out for `INDEX_STATUS` (0x45, or the legacy text frame) per subscribed drive.
 pub struct IndexStatusBroadcast {
     inner: Arc<Mutex<std::collections::HashMap<String, Vec<Addr<WebSocketConnection>>>>>,
 }
@@ -255,7 +257,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 self.handle_binary(&bin, ctx);
             }
             Ok(ws::Message::Text(text)) => {
-                // Remaining text messages: Loro sync, presence, drive inventory
+                // Remaining text messages: the drive inventory, and the
+                // legacy subscription frames of clients without
+                // `ephemeral-sub`.
                 self.handle_text(&text, ctx);
             }
             Ok(ws::Message::Continuation(item)) => {
@@ -674,88 +678,165 @@ impl WebSocketConnection {
                 }
             }
 
+            ws_v2::tag::EPHEMERAL_SUB | ws_v2::tag::EPHEMERAL_UNSUB => {
+                let Some((channel, subject)) =
+                    atomic_lib::sync::protocol::decode_ephemeral_sub(&bin[1..])
+                else {
+                    tracing::debug!(connection = %self.connection_id, "malformed EPHEMERAL_SUB");
+                    return;
+                };
+                if bin[0] == ws_v2::tag::EPHEMERAL_SUB {
+                    self.subscribe_channel(channel, subject, "EPHEMERAL_SUB", false, ctx);
+                } else {
+                    self.unsubscribe_channel(channel, subject, ctx);
+                }
+            }
+
             _ => {
                 tracing::debug!("Unhandled binary tag: 0x{:02x}", bin[0]);
             }
         }
     }
 
-    /// Handle the remaining text messages (Loro and presence subscriptions,
-    /// the drive inventory, index status).
-    fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
-        if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
-                if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
-                    let addr = ctx.address();
-                    self.index_status_broadcast
-                        .subscribe(drive.to_string(), addr.clone());
-                    self.index_status_subscribed.insert(drive.to_string());
-                    let indexing = self.vector_search_state.is_drive_indexing(drive);
-                    let payload = serde_json::json!({ "drive": drive, "indexing": indexing });
-                    if let Ok(s) = serde_json::to_string(&payload) {
-                        ctx.text(format!("INDEX_STATUS {s}"));
-                    }
+    /// Register this connection on one of the live channels
+    /// (`ephemeral_channel`). Shared by the binary `EPHEMERAL_SUB` and the
+    /// legacy text frames; `frame` names the one that asked, for refusals,
+    /// and `legacy_text` makes index status answer in text.
+    fn subscribe_channel(
+        &mut self,
+        channel: u8,
+        subject: String,
+        frame: &'static str,
+        legacy_text: bool,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        use atomic_lib::sync::protocol::ephemeral_channel;
+        match channel {
+            ephemeral_channel::LIVE_DOC => {
+                if !self.require_auth(frame, ctx) {
+                    return;
                 }
-            }
-        } else if let Some(json) = text.strip_prefix("UNSUBSCRIBE_INDEX_STATUS ") {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
-                if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
-                    self.index_status_broadcast
-                        .unsubscribe_drive(drive, &ctx.address());
-                    self.index_status_subscribed.remove(drive);
-                }
-            }
-        } else if let Some(json) = text.strip_prefix("LORO_SYNC_SUBSCRIBE ") {
-            if !self.require_auth("LORO_SYNC_SUBSCRIBE", ctx) {
-                return;
-            }
-            if let Ok(msg) =
-                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
-            {
                 self.commit_monitor_addr
                     .do_send(crate::actor_messages::SubscribeLoroSync {
                         addr: ctx.address(),
-                        subject: msg.subject,
+                        subject: subject.into(),
                         agent: self.agent.to_string(),
+                        frame,
                     });
             }
-        } else if let Some(json) = text.strip_prefix("LORO_SYNC_UNSUBSCRIBE ") {
-            if let Ok(msg) =
-                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
-            {
-                self.commit_monitor_addr
-                    .do_send(crate::actor_messages::UnsubscribeLoroSync {
-                        addr: ctx.address(),
-                        subject: msg.subject,
-                    });
-            }
-        } else if let Some(json) = text.strip_prefix("PRESENCE_SUBSCRIBE ") {
-            // Drive-scoped ephemeral presence (issue #1229). Reuses the
-            // Loro subscription JSON shape: `{"subject": "<drive>"}`.
-            if !self.require_auth("PRESENCE_SUBSCRIBE", ctx) {
-                return;
-            }
-            if let Ok(msg) =
-                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
-            {
+            ephemeral_channel::PRESENCE => {
+                // Drive-scoped ephemeral presence (issue #1229).
+                if !self.require_auth(frame, ctx) {
+                    return;
+                }
                 self.commit_monitor_addr
                     .do_send(crate::actor_messages::SubscribePresence {
                         addr: ctx.address(),
-                        drive: msg.subject,
+                        drive: subject.into(),
                         agent: self.agent.to_string(),
+                        frame,
                     });
             }
-        } else if let Some(json) = text.strip_prefix("PRESENCE_UNSUBSCRIBE ") {
-            if let Ok(msg) =
-                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
-            {
+            ephemeral_channel::INDEX_STATUS => {
+                self.index_status_broadcast
+                    .subscribe(subject.clone(), ctx.address());
+                let indexing = self.vector_search_state.is_drive_indexing(&subject);
+                self.index_status_subscribed
+                    .insert(subject.clone(), legacy_text);
+                self.send_index_status(&subject, indexing, ctx);
+            }
+            other => tracing::debug!("Unknown EPHEMERAL_SUB channel {other}"),
+        }
+    }
+
+    fn unsubscribe_channel(
+        &mut self,
+        channel: u8,
+        subject: String,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        use atomic_lib::sync::protocol::ephemeral_channel;
+        match channel {
+            ephemeral_channel::LIVE_DOC => {
+                self.commit_monitor_addr
+                    .do_send(crate::actor_messages::UnsubscribeLoroSync {
+                        addr: ctx.address(),
+                        subject: subject.into(),
+                    });
+            }
+            ephemeral_channel::PRESENCE => {
                 self.commit_monitor_addr
                     .do_send(crate::actor_messages::UnsubscribePresence {
                         addr: ctx.address(),
-                        drive: msg.subject,
+                        drive: subject.into(),
                     });
             }
-        } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
+            ephemeral_channel::INDEX_STATUS => {
+                self.index_status_broadcast
+                    .unsubscribe_drive(&subject, &ctx.address());
+                self.index_status_subscribed.remove(&subject);
+            }
+            other => tracing::debug!("Unknown EPHEMERAL_UNSUB channel {other}"),
+        }
+    }
+
+    /// One drive's indexing state, in the form the connection subscribed
+    /// with: binary `INDEX_STATUS` (0x45), or the legacy text frame.
+    fn send_index_status(&self, drive: &str, indexing: bool, ctx: &mut ws::WebsocketContext<Self>) {
+        match self.index_status_subscribed.get(drive) {
+            Some(true) => {
+                let payload = serde_json::json!({ "drive": drive, "indexing": indexing });
+                ctx.text(format!("INDEX_STATUS {payload}"));
+            }
+            Some(false) => ctx.binary(atomic_lib::sync::protocol::encode_index_status(
+                drive, indexing,
+            )),
+            None => {}
+        }
+    }
+
+    /// Handle the remaining text messages: the drive inventory, the RBSR
+    /// shim, and the legacy subscription frames.
+    fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
+        // LEGACY SHIM: `LORO_SYNC_*`, `PRESENCE_*` and `*_INDEX_STATUS` as
+        // text, `{"subject"}` / `{"drive"}` JSON. Superseded by the binary
+        // `EPHEMERAL_SUB` / `EPHEMERAL_UNSUB` (capability `ephemeral-sub`),
+        // which every client in this tree sends to a server that lists it.
+        // Kept for released clients that only speak text: browser bundles
+        // and `@tomic/lib` up to v0.41.0-beta.7, and Flutter/CLI builds of
+        // `atomic_lib::client::ws` from before this change. Remove it (and
+        // `send_index_status`'s text branch) once no supported client is
+        // older than the first release that ships `ephemeral-sub`.
+        const LEGACY_SUBSCRIPTIONS: [(&str, &str, u8, bool); 6] = {
+            use atomic_lib::sync::protocol::ephemeral_channel::*;
+            [
+                ("LORO_SYNC_SUBSCRIBE ", "subject", LIVE_DOC, true),
+                ("LORO_SYNC_UNSUBSCRIBE ", "subject", LIVE_DOC, false),
+                ("PRESENCE_SUBSCRIBE ", "subject", PRESENCE, true),
+                ("PRESENCE_UNSUBSCRIBE ", "subject", PRESENCE, false),
+                ("SUBSCRIBE_INDEX_STATUS ", "drive", INDEX_STATUS, true),
+                ("UNSUBSCRIBE_INDEX_STATUS ", "drive", INDEX_STATUS, false),
+            ]
+        };
+        for (prefix, field, channel, subscribe) in LEGACY_SUBSCRIPTIONS {
+            let Some(json) = text.strip_prefix(prefix) else {
+                continue;
+            };
+            let subject = serde_json::from_str::<serde_json::Value>(json)
+                .ok()
+                .and_then(|v| v.get(field)?.as_str().map(String::from));
+            if let Some(subject) = subject {
+                if subscribe {
+                    let frame = prefix.trim_end();
+                    self.subscribe_channel(channel, subject, frame, true, ctx);
+                } else {
+                    self.unsubscribe_channel(channel, subject, ctx);
+                }
+            }
+            return;
+        }
+
+        if let Some(json) = text.strip_prefix("RBSR_FP ") {
             // Range fingerprints are no longer computed (RBSR was removed
             // 2026-09: it rebuilt the whole drive inventory on every round
             // trip, so it cost more than the full `SYNC` it tried to avoid).
@@ -917,12 +998,6 @@ impl Handler<IndexStatusPush> for WebSocketConnection {
     type Result = ();
 
     fn handle(&mut self, msg: IndexStatusPush, ctx: &mut ws::WebsocketContext<Self>) {
-        let payload = serde_json::json!({
-            "drive": msg.drive,
-            "indexing": msg.indexing,
-        });
-        if let Ok(s) = serde_json::to_string(&payload) {
-            ctx.text(format!("INDEX_STATUS {}", s));
-        }
+        self.send_index_status(&msg.drive, msg.indexing, ctx);
     }
 }

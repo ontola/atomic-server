@@ -897,7 +897,7 @@ impl Handler<SubscribeLoroSync> for CommitMonitor {
                                 );
                                 crate::actor_messages::refuse_subscription(
                                     &msg.addr,
-                                    "LORO_SYNC_SUBSCRIBE",
+                                    msg.frame,
                                     &msg.subject.to_string(),
                                     &unauthorized_err.to_string(),
                                 );
@@ -1091,7 +1091,7 @@ impl Handler<SubscribePresence> for CommitMonitor {
                     );
                     crate::actor_messages::refuse_subscription(
                         &msg.addr,
-                        "PRESENCE_SUBSCRIBE",
+                        msg.frame,
                         &msg.drive.to_string(),
                         &unauthorized_err.to_string(),
                     );
