@@ -243,8 +243,20 @@ export class Client {
         url = `${new URL(subject).origin}/resource?subject=${encodeURIComponent(wrappedDid)}`;
       }
 
-      // Sign the request with the actual URL being fetched (not the raw DID
-      // subject) since the server verifies against the full HTTP URL.
+      // Through the own server's `/path` proxy, the request goes to that
+      // server, not to the subject's origin. Build the URL first: the
+      // server checks the signature against the URL it receives.
+      if (from !== undefined) {
+        url = proxyPathUrl(from, subject);
+      }
+
+      // Checks on the requested URL for a proxied fetch, on the subject
+      // otherwise (a DID is still fetched with signature headers).
+      const authTarget = from !== undefined ? url : subject;
+
+      // Sign exactly the URL being fetched (not the raw DID subject, nor
+      // the external subject behind a proxy): the server verifies the
+      // signature against the full HTTP URL of the request.
       if (signInfo) {
         const legacy = legacyAgentForRequest(url, signInfo.agent);
 
@@ -259,10 +271,19 @@ export class Client {
           shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)
         ) {
           warnDidAuthCompatibility(url);
-        } else if (!subject.startsWith('https://atomicdata.dev')) {
+        } else if (!isOwnServerUrl(url, signInfo.serverURL)) {
+          // A foreign origin (shared vocabulary on GitHub Pages, another
+          // host's classes) gets a plain GET. The `x-atomic-*` headers are
+          // not CORS-safelisted, so signing forces a preflight, which static
+          // hosts refuse (Pages answers 405). Such an origin cannot check our
+          // Agent anyway: public data is all it can serve us.
+        } else if (!authTarget.startsWith('https://atomicdata.dev')) {
           // Cookies only work in browsers for same-origin requests right now
           // https://github.com/atomicdata-dev/atomic-data-browser/issues/253
-          if (hasBrowserAPI() && subject.startsWith(window.location.origin)) {
+          if (
+            hasBrowserAPI() &&
+            authTarget.startsWith(window.location.origin)
+          ) {
             if (!checkAuthenticationCookie()) {
               // Await: the request that follows depends on this cookie.
               // Without the await, the first call after `setAgent`
@@ -280,12 +301,6 @@ export class Client {
             );
           }
         }
-      }
-
-      if (from !== undefined) {
-        const newURL = new URL(`${from}/path`);
-        newURL.searchParams.set('path', subject);
-        url = newURL.href;
       }
 
       // A throwing `fetch` (server down, DNS, CORS) is a different kind of
@@ -357,7 +372,7 @@ export class Client {
         }
       } else if (response.status === 401) {
         throw new AtomicError(body, ErrorType.Unauthorized);
-      } else if (response.status === 500) {
+      } else if (response.status >= 500) {
         throw new AtomicError(body, ErrorType.Server);
       } else if (response.status === 404) {
         throw new AtomicError(body, ErrorType.NotFound);
@@ -468,6 +483,58 @@ export class Client {
 
     return fetch(...params);
   }
+}
+
+/**
+ * The URL of `subject` behind `server`'s `/path` proxy. The server fetches
+ * (and keeps) an external subject on first use, so this reaches vocabulary
+ * whose own host is down or refuses the browser.
+ */
+export function proxyPathUrl(server: string, subject: string): string {
+  const url = new URL(`${server.replace(/\/$/, '')}/path`);
+  url.searchParams.set('path', subject);
+
+  return url.href;
+}
+
+/**
+ * Whether `url` is served by the user's own server, so that a request to it
+ * may carry the Agent's signature: the store's server URL, a drive on one of
+ * its subdomains (`https://{drive}.{server host}`), or the page's own origin.
+ * Anything else is a foreign origin, which gets unsigned requests.
+ */
+export function isOwnServerUrl(url: string, serverURL?: string): boolean {
+  let target: URL;
+
+  try {
+    target = new URL(url);
+  } catch {
+    // A relative URL resolves against the page, which is ours.
+    return true;
+  }
+
+  if (hasBrowserAPI() && target.origin === window.location.origin) {
+    return true;
+  }
+
+  if (!serverURL) return false;
+
+  let server: URL;
+
+  try {
+    server = new URL(serverURL);
+  } catch {
+    return false;
+  }
+
+  if (target.origin === server.origin) return true;
+
+  // Subdomain drives: same scheme and port, host one or more labels deeper.
+  return (
+    target.protocol === server.protocol &&
+    target.port === server.port &&
+    target.hostname.endsWith(`.${server.hostname}`)
+  );
 }
 
 /** Origin used to turn an identifier into `GET {origin}/resource?subject=`. */
