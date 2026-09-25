@@ -770,7 +770,10 @@ export class Resource<C extends OptionalClass = any> {
 
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
-        const normalized = normalizeLoroValue(datatypesJson?.[key], value);
+        const normalized = normalizeLoroValue(
+          datatypesJson?.[key] ?? this.untaggedDatatypeTag(key, value),
+          value,
+        );
         nextCache[key] = origin
           ? localizeInternalSubjects(normalized, origin)
           : normalized;
@@ -789,6 +792,33 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.#cache = nextCache;
+  }
+
+  /**
+   * The tag an untagged JSON-looking string would carry, from its Property's
+   * datatype when that Property is already cached (never fetches). Covers
+   * values set without a known datatype until the drain-time
+   * `writeDatatypeTags` runs, and docs written before the `datatypes` map
+   * existed. Only a string starting with `{` or `[` can need a tag to be read
+   * right, so everything else skips the lookup.
+   */
+  private untaggedDatatypeTag(
+    prop: string,
+    value: unknown,
+  ): string | undefined {
+    if (
+      typeof value !== 'string' ||
+      (!value.startsWith('{') && !value.startsWith('['))
+    ) {
+      return undefined;
+    }
+
+    const datatype = this._store?.resources
+      .get(prop)
+      ?.get(core.properties.datatype)
+      ?.toString();
+
+    return datatype === undefined ? undefined : datatypeTag(datatype, value);
   }
 
   /**
@@ -3643,6 +3673,12 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
 
+    // The datatype this set() learned (passed in, or fetched to validate).
+    // Used below to tag the value at write time: an object is stored in Loro
+    // as a JSON string, and without its `json` tag every read before the
+    // drain-time `writeDatatypeTags` returns that string instead (#1794).
+    let tagDatatype: string | undefined = knownDatatype;
+
     if (knownDatatype) {
       validateDatatype(value, knownDatatype);
     } else if (validate) {
@@ -3664,6 +3700,8 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       if (fullProp) {
+        tagDatatype = fullProp.datatype;
+
         try {
           validateDatatype(value, fullProp.datatype);
         } catch (e) {
@@ -3686,9 +3724,9 @@ export class Resource<C extends OptionalClass = any> {
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
 
-    if (knownDatatype) {
+    if (tagDatatype) {
       const tags = this.getLoroDoc()?.getMap('datatypes');
-      const tag = datatypeTag(knownDatatype, value);
+      const tag = datatypeTag(tagDatatype, value);
       if (tag && tags?.get(prop) !== tag) tags?.set(prop, tag);
       else if (!tag && tags?.get(prop) !== undefined) tags?.delete(prop);
     }
@@ -3967,6 +4005,44 @@ function localizeInternalSubjects(value: JSONValue, origin: string): JSONValue {
   return value;
 }
 
+/**
+ * A `json`-tagged Loro string. Objects and arrays are stored JSON-stringified,
+ * so a string starting with `{` / `[` is parsed. A string that is itself a
+ * JSON string literal wrapping an object or array (`"{\"a\":1}"`) is what
+ * encoding twice leaves behind (#1794); it is read as the object it encodes,
+ * without rewriting what is stored. Anything else is returned as stored.
+ */
+function parseJsonPropval(value: string): JSONValue {
+  const tryParse = (text: string): JSONValue | undefined => {
+    try {
+      return JSON.parse(text) as JSONValue;
+    } catch {
+      return undefined;
+    }
+  };
+
+  if (value.startsWith('{') || value.startsWith('[')) {
+    return tryParse(value) ?? value;
+  }
+
+  if (value.startsWith('"')) {
+    const inner = tryParse(value);
+
+    if (
+      typeof inner === 'string' &&
+      (inner.startsWith('{') || inner.startsWith('['))
+    ) {
+      const unwrapped = tryParse(inner);
+
+      if (unwrapped !== null && typeof unwrapped === 'object') {
+        return unwrapped;
+      }
+    }
+  }
+
+  return value;
+}
+
 function normalizeLoroValue(
   loroDatatypeTag: string | undefined,
   value: unknown,
@@ -3983,9 +4059,12 @@ function normalizeLoroValue(
   // array/JSON content, so only THOSE strings get JSON.parsed — a plain
   // string/markdown propval (a chat title, a resource description) that
   // merely starts with `{` or `[` is never misread as JSON.
+  if (loroDatatypeTag === 'json' && typeof value === 'string') {
+    return parseJsonPropval(value);
+  }
+
   if (
     (loroDatatypeTag === 'resourceArray' ||
-      loroDatatypeTag === 'json' ||
       loroDatatypeTag === 'localizedText') &&
     typeof value === 'string' &&
     (value.startsWith('[') || value.startsWith('{'))
