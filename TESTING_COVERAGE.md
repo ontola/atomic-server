@@ -221,6 +221,14 @@ The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
 
+Finding another table (#1807): `TablePage/ColumnFilterDropdown.test.tsx`
+(jsdom) checks the table's column-filter menu names its input "Find a column…"
+and, when nothing matches, offers "Search the drive for …", which opens the
+search overlay with the query on Enter. `components/overlayState.test.ts`
+checks the pre-filled search query is dropped on close and on a plain open.
+The labelled header search button is not covered beyond `test-utils.ts`
+still finding it by its `Search (` title.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
