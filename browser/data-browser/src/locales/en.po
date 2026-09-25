@@ -116,6 +116,7 @@ msgstr "AI Agents"
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
@@ -2224,6 +2225,7 @@ msgstr "Rearange {0}"
 msgid "<0/> Note"
 msgstr "<0/> Note"
 
+#: src/chunks/Plugins/RouteWriteApproval.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/SettingsAgent.tsx
@@ -8872,9 +8874,7 @@ msgid "v"
 msgstr "v"
 
 #. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#. 0: release && release !== releaseId && ( <> <br /> from{' '} {/^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )} </> )
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
-#: src/views/Installation/InstallationPage.tsx
 msgid "Pinned to <0/> {0}"
 msgstr "Pinned to <0/> {0}"
 
@@ -8936,6 +8936,7 @@ msgstr "Resume"
 msgid "Update"
 msgstr "Update"
 
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke"
@@ -9498,3 +9499,352 @@ msgstr "You can revoke the token later from the plugin. After you answer, you go
 #: src/routes/RouteConsentRoute.tsx
 msgid "Allow access?"
 msgstr "Allow access?"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers sign in with their Atomic agent."
+msgstr "Callers sign in with their Atomic agent."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Other servers sign their requests (HTTP Signatures)."
+msgstr "Other servers sign their requests (HTTP Signatures)."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers present an access token this plugin issued."
+msgstr "Callers present an access token this plugin issued."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers present an access token bound to their key (DPoP)."
+msgstr "Callers present an access token bound to their key (DPoP)."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Anyone can call it, without signing in."
+msgstr "Anyone can call it, without signing in."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers as itself, with the rights this installation grants it."
+msgstr "The plugin answers as itself, with the rights this installation grants it."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers as the caller, with the caller’s rights."
+msgstr "The plugin answers as the caller, with the caller’s rights."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers with public data only."
+msgstr "The plugin answers with public data only."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served at <0/>. This address becomes the plugin’s public identity."
+msgstr "Served at <0/>. This address becomes the plugin’s public identity."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served on this drive’s own host name, next to its resources. That address becomes the plugin’s public identity."
+msgstr "Served on this drive’s own host name, next to its resources. That address becomes the plugin’s public identity."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served at its own address under the server’s routes origin, which this server has not set (<0/>). That address becomes the plugin’s public identity."
+msgstr "Served at its own address under the server’s routes origin, which this server has not set (<0/>). That address becomes the plugin’s public identity."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server must run with <0/> or higher."
+msgstr "The server must run with <0/> or higher."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server must run with <0/>."
+msgstr "The server must run with <0/>."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Answers for <0/> names only."
+msgstr "Answers for <0/> names only."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Stores what callers send in <0/>."
+msgstr "Stores what callers send in <0/>."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Can send requests to other servers:"
+msgstr "Can send requests to other servers:"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Public endpoints"
+msgstr "Public endpoints"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Anyone on the internet can call these endpoints; this plugin decides what they may see."
+msgstr "Anyone on the internet can call these endpoints; this plugin decides what they may see."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Only this plugin answers this address on its host."
+msgstr "Only this plugin answers this address on its host."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Shared with other plugins on its host; this plugin answers only its own entries."
+msgstr "Shared with other plugins on its host; this plugin answers only its own entries."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Stores incoming data: <0/>"
+msgstr "Stores incoming data: <0/>"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers add resources to <0/> unattended."
+msgstr "Callers add resources to <0/> unattended."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server keeps the private key; the plugin can only ask it to sign."
+msgstr "The server keeps the private key; the plugin can only ask it to sign."
+
+#. 0: key.alg
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Signing key: <0/> ({0})"
+msgstr "Signing key: <0/> ({0})"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin issues access tokens to other apps; the server stores them."
+msgstr "The plugin issues access tokens to other apps; the server stores them."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Access tokens: <0/>"
+msgstr "Access tokens: <0/>"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "A raw port the server operator opens for this plugin."
+msgstr "A raw port the server operator opens for this plugin."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Network port: <0/>"
+msgstr "Network port: <0/>"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The operator binds it with <0/>."
+msgstr "The operator binds it with <0/>."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "A service the server operator runs next to the server."
+msgstr "A service the server operator runs next to the server."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Local service: <0/>"
+msgstr "Local service: <0/>"
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The operator names it in <0/>."
+msgstr "The operator names it in <0/>."
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Needs public endpoints"
+msgstr "Needs public endpoints"
+
+#: src/routes/IntegrationStore.tsx
+msgid "# plugin needs server features this server doesn’t have."
+msgid_plural "# plugins need server features this server doesn’t have."
+msgstr[0] "# plugin needs server features this server doesn’t have."
+msgstr[1] "# plugins need server features this server doesn’t have."
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "the resource in the config key <0/>, which is not set"
+msgstr "the resource in the config key <0/>, which is not set"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
+msgstr "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Let <0/> add items to <1/> when other servers send them"
+msgstr "Let <0/> add items to <1/> when other servers send them"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Incoming items"
+msgstr "Incoming items"
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
+msgstr "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Route writes"
+msgstr "Route writes"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/> <1/>"
+msgstr "Pinned to <0/> <1/>"
+
+#. 0: link
+#: src/views/Installation/InstallationPage.tsx
+msgid "<0/> from {0}"
+msgstr "<0/> from {0}"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Serving"
+msgstr "Serving"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Paused"
+msgstr "Paused"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retired"
+msgstr "Retired"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Turned off"
+msgstr "Turned off"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Not active"
+msgstr "Not active"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors"
+msgstr "Errors"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Public endpoints are turned off on this server"
+msgstr "Public endpoints are turned off on this server"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
+msgstr "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
+
+#. 0: status; 1: when(at); 2: message
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Last error ({0}, {1}): {2}"
+msgstr "Last error ({0}, {1}): {2}"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No address yet: <0/> is not set."
+msgstr "No address yet: <0/> is not set."
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries waiting: <0/>"
+msgstr "Deliveries waiting: <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Requests (24 h): <0/>"
+msgstr "Requests (24 h): <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors (24 h): <0/>"
+msgstr "Errors (24 h): <0/>"
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letter (gave up after attempt {0})"
+msgstr "Dead letter (gave up after attempt {0})"
+
+#. 0: failure.attempts; 1: when(failure.nextAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0}), next at {1}"
+msgstr "Retrying (attempt {0}), next at {1}"
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0})"
+msgstr "Retrying (attempt {0})"
+
+#. 0: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No answer; it may have arrived. {0}"
+msgstr "No answer; it may have arrived. {0}"
+
+#. 0: failure.status; 1: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Answered {0}. {1}"
+msgstr "Answered {0}. {1}"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "<0/> to <1/>"
+msgstr "<0/> to <1/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/>"
+msgstr "Sent today: <0/>"
+
+#. 0: cap
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/> of {0}"
+msgstr "Sent today: <0/> of {0}"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Queued: <0/>"
+msgstr "Queued: <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sending: <0/>"
+msgstr "Sending: <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Delivered (24 h): <0/>"
+msgstr "Delivered (24 h): <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letters: <0/>"
+msgstr "Dead letters: <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries"
+msgstr "Deliveries"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Waiting for tomorrow’s cap: <0/>"
+msgstr "Waiting for tomorrow’s cap: <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Held while the endpoints are off: <0/>"
+msgstr "Held while the endpoints are off: <0/>"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No failed deliveries."
+msgstr "No failed deliveries."
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Recent failures"
+msgstr "Recent failures"
+
+#. 0: when(token.issuedAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued {0}"
+msgstr "Issued {0}"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No scopes"
+msgstr "No scopes"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Scopes: <0/>"
+msgstr "Scopes: <0/>"
+
+#. 0: when(expiresAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Expires {0}"
+msgstr "Expires {0}"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Revoke token"
+msgstr "Revoke token"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued tokens"
+msgstr "Issued tokens"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Refresh"
+msgstr "Refresh"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No tokens issued."
+msgstr "No tokens issued."
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Endpoints"
+msgstr "Endpoints"
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Token revoked"
+msgstr "Token revoked"

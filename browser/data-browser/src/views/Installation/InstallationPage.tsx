@@ -9,16 +9,20 @@ import { JSONEditor } from '@components/JSONEditor';
 import { Column, Row } from '@components/Row';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
+  capabilityGrantNames,
   core,
   publishZipRelease,
   readInstallationReview,
+  routeGrantOf,
   server,
   updateInstallationRelease,
+  withdrawRouteWriteRights,
   useCanWrite,
   useSaveState,
   useStore,
   useString,
   useValue,
+  type DeclaredWriteTarget,
   type InstallationStatus,
   type JSONValue,
   type Server,
@@ -47,6 +51,7 @@ import { AssignRights } from './AssignRights';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
+import { EndpointHealth } from '@chunks/Plugins/EndpointHealth';
 import {
   InstallationReviewDialog,
   type PendingInstallation,
@@ -118,16 +123,24 @@ export const InstallationPage: React.FC<
   const hasFullDriveAccess = declared.some(
     c => c.title === 'full-drive-access',
   );
-  const grantNames = Array.isArray(grants)
-    ? grants.map(String)
-    : grants && typeof grants === 'object'
-      ? Object.keys(grants)
-      : [];
+  const routeGrant = routeGrantOf(grants);
+  const grantNames = [
+    ...capabilityGrantNames(grants),
+    ...(routeGrant
+      ? [`route-writes: ${routeGrant.map(t => t.id).join(', ')}`]
+      : []),
+  ];
 
   const changeStatus = async (next: InstallationStatus) => {
     setChanging(true);
 
     try {
+      // Revoking retires the agent, so its rights on the route grant's
+      // parents go first, while the server still names it.
+      if (next === 'revoked') {
+        await withdrawRouteWriteRights(store, resource.subject);
+      }
+
       await setStatus(next);
       await resource.save();
       await refreshCustomViews();
@@ -161,6 +174,7 @@ export const InstallationPage: React.FC<
         review: readInstallationReview({ ...published, id }),
         release: { url: subject, id },
         currentConfig: config as JSONValue | undefined,
+        approvedRouteWrites: routeGrantOf(grants),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -174,6 +188,7 @@ export const InstallationPage: React.FC<
     p: PendingInstallation,
     nextConfig: JSONValue | undefined,
     nextGrants: string[],
+    routeWrites: DeclaredWriteTarget[] | undefined,
   ) => {
     // The server compares these with the package, so a zip for a different
     // plugin is refused there. Saying so here is the clearer error.
@@ -186,6 +201,7 @@ export const InstallationPage: React.FC<
     await updateInstallationRelease(store, resource.subject, {
       release: p.release,
       grants: nextGrants,
+      routeWrites,
       config: nextConfig,
       version: p.review.version,
     });
@@ -281,19 +297,7 @@ export const InstallationPage: React.FC<
           <h3>Release</h3>
           <Identity>
             Pinned to <code>{releaseId}</code>
-            {release && release !== releaseId && (
-              <>
-                <br />
-                from{' '}
-                {/^https?:\/\//.test(release) ? (
-                  <a href={release} target='_blank' rel='noreferrer'>
-                    {release}
-                  </a>
-                ) : (
-                  release
-                )}
-              </>
-            )}
+            <ReleaseSource release={release} releaseId={releaseId} />
           </Identity>
         </Column>
         <Column as='section' aria-label='Grants'>
@@ -308,6 +312,7 @@ export const InstallationPage: React.FC<
             </Row>
           )}
         </Column>
+        {canWrite && <EndpointHealth installation={resource.subject} />}
         {pluginAgent && (
           <Column as='section' aria-label='Plugin agent'>
             <h3>Plugin agent</h3>
@@ -394,6 +399,7 @@ export const InstallationPage: React.FC<
         bindShow={open => !open && setConfirm(undefined)}
         onConfirm={async () => {
           const parent = resource.props.parent;
+          await withdrawRouteWriteRights(store, resource.subject);
           await resource.destroy();
           await refreshCustomViews();
           navigate(constructOpenURL(parent));
@@ -407,6 +413,35 @@ export const InstallationPage: React.FC<
     </ContainerNarrow>
   );
 };
+
+/**
+ * Where the pinned release came from. Its own component: wuchale drops a
+ * message with nested elements inside a `{condition && (...)}`.
+ */
+function ReleaseSource({
+  release,
+  releaseId,
+}: {
+  release?: string;
+  releaseId?: string;
+}) {
+  if (!release || release === releaseId) return null;
+
+  const link = /^https?:\/\//.test(release) ? (
+    <a href={release} target='_blank' rel='noreferrer'>
+      {release}
+    </a>
+  ) : (
+    release
+  );
+
+  return (
+    <>
+      <br />
+      from {link}
+    </>
+  );
+}
 
 const PluginName = styled.span`
   font-weight: bold;
