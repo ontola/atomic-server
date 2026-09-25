@@ -230,6 +230,11 @@ pub trait PluginHost: Send + 'static {
     async fn resource_grants(&mut self) -> ResourceGrants {
         ResourceGrants::default()
     }
+    /// Host-held crypto (`ctx.keys.*`, `ctx.tokens.*`), which only plugin
+    /// routes get. `name` picks the call; request and answer are JSON.
+    async fn host_call(&mut self, name: String, _request: String) -> Result<String, String> {
+        Err(format!("`{name}` is only available to plugin routes"))
+    }
 }
 
 /// The resource grants of a JS plugin: the approved `grants` of the

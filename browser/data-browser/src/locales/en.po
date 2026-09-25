@@ -2319,10 +2319,12 @@ msgstr "Allow all reads done by this plugin"
 msgid "Allow all writes done by this plugin"
 msgstr "Allow all writes done by this plugin"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
 msgstr "Deny"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr "Allow"
@@ -9442,3 +9444,57 @@ msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The conne
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Connect an account"
 msgstr "Connect an account"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr "This link is incomplete. Start again from the app that sent you here."
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Sign in to answer this request."
+msgstr "Sign in to answer this request."
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Loading the request…"
+msgstr "Loading the request…"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allowing…"
+msgstr "Allowing…"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Denying…"
+msgstr "Denying…"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to give"
+msgstr "asks to give"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "a token for its"
+msgstr "a token for its"
+
+#: src/routes/RouteConsentRoute.tsx
+#: src/routes/RouteConsentRoute.tsx
+msgid "endpoints."
+msgstr "endpoints."
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to issue a token for its"
+msgstr "asks to issue a token for its"
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "No specific permissions."
+msgstr "No specific permissions."
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "With these permissions"
+msgstr "With these permissions"
+
+#. 0: ask.redirectOrigin
+#: src/routes/RouteConsentRoute.tsx
+msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+msgstr "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allow access?"
+msgstr "Allow access?"

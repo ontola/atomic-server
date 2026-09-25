@@ -41,6 +41,8 @@ export interface HostRequest {
   query?: Record<string, string>;
   body?: string;
   ifMatch?: string;
+  // `revokeRouteToken`
+  tokenId?: string;
 }
 
 export interface HostReply {
@@ -206,6 +208,18 @@ export async function handleRequest(
     case 'proxyConnections':
       return relay?.connections(required(request.platform, 'platform')) ?? [];
 
+    // The bearer tokens this app's routes issued (plugin routes, #1718):
+    // listed and revoked, never read. The server holds only their hashes.
+    case 'routeTokens':
+      return await routeTokens(store, app);
+
+    case 'revokeRouteToken':
+      return await routeTokens(
+        store,
+        app,
+        required(request.tokenId, 'tokenId'),
+      );
+
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.
     case 'subscribe':
@@ -258,6 +272,38 @@ async function writeAsApp(
   }
 
   return (await response.json()) as { subject: string };
+}
+
+/**
+ * Lists the app's route tokens, or revokes one, as the signed-in person. The
+ * server wants write rights on the app's Installation, and the arguments in
+ * the signed URL, so a signature answers this one request only.
+ */
+async function routeTokens(
+  store: Store,
+  app: string,
+  revoke?: string,
+): Promise<unknown> {
+  const agent = store.getAgent();
+
+  if (!agent) throw new Error('Sign in to manage this app');
+
+  let url = `${store.getServerUrl()}/plugin-route-tokens?installation=${encodeURIComponent(app)}`;
+
+  if (revoke) url += `&revoke=${encodeURIComponent(revoke)}`;
+
+  const headers = await signRequest(url, agent, {});
+  const response = await fetch(url, {
+    method: revoke ? 'POST' : 'GET',
+    headers,
+  });
+  const body = await response.text();
+
+  if (!response.ok) {
+    throw new Error(errorMessageFromResponse(body, response.status));
+  }
+
+  return JSON.parse(body);
 }
 
 /**
