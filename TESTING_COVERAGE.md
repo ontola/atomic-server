@@ -1844,7 +1844,10 @@ were removed with the Calendar lens; there is no Calendar import coverage here.
   date-only recurring spans. No real provider calls.
 - `browser/data-browser/src/chunks/TablePage/Calendar/calendarOccurrences.test.ts`:
   imported/native property names, civil-day placement across offset boundaries,
-  recurring all-day spans clipped to the visible grid.
+  recurring all-day spans clipped to the visible grid, and moved instances
+  (#1804): "moved from" on the new day, a placeholder on the original day with
+  the same original-instance key (also when the new day is off the grid), and
+  no mark for a same-day time change or a cancellation.
 
 The bundled Google Calendar (Devonian) lens and its end-to-end coverage
 (`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
