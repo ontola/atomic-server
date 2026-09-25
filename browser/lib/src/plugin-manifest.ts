@@ -384,6 +384,7 @@ export function validateManifest(raw: unknown): PluginManifest {
       typeof operation.url === 'string'
         ? parseProxyRelative(operation.url)
         : undefined;
+
     if (relative) {
       if (relative.query !== undefined) throw new Error(PROXY_URL_RULE);
       if (!proxy.includes(relative.platform))
@@ -393,6 +394,7 @@ export function validateManifest(raw: unknown): PluginManifest {
     } else {
       endpoint(operation.url);
     }
+
     if (
       typeof operation.method !== 'string' ||
       !['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(
@@ -739,11 +741,13 @@ export function parseProxyRelative(raw: string): ProxyRelativeUrl | undefined {
   const platform = pathPart.slice(1, slash);
   const path = pathPart.slice(slash + 1);
   if (!PROXY_PLATFORM.test(platform) || !path) throw new Error(PROXY_URL_RULE);
+
   const dot = (segment: string) => {
     const decoded = segment.toLowerCase().replaceAll('%2e', '.');
 
     return decoded === '.' || decoded === '..';
   };
+
   if (path.split('/').some(dot) || path.toLowerCase().includes('%2f'))
     throw new Error(PROXY_URL_RULE);
 
