@@ -124,12 +124,25 @@ async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
         resp.text().await.map_err(|e| e.to_string())?,
         "Hello, world"
     );
-    let resp = http
-        .get(format!("{server}/_routes/{}/nothing-here", slug(&prefixed)))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    assert_eq!(resp.status(), 404);
+    // An unmatched path, under a live slug or an unknown one, is a problem
+    // document, not the app's HTML, also for a browser.
+    for path in [
+        format!("/_routes/{}/nothing-here", slug(&prefixed)),
+        "/_routes/x/y".to_string(),
+    ] {
+        let resp = http
+            .get(format!("{server}{path}"))
+            .header("accept", "text/html")
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        assert_eq!(resp.status(), 404, "{path}");
+        assert_eq!(
+            resp.headers()["content-type"],
+            "application/problem+json",
+            "{path}"
+        );
+    }
 
     // installation-origin: its own host on the routes origin.
     let own = install(

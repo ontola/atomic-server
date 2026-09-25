@@ -1744,6 +1744,11 @@ mod tests {
             if first == ".well-known" {
                 continue;
             }
+            // The `404` for `/_routes/` paths no active route matches;
+            // `reserved` gives an installation only its own slug there.
+            if first == atomic_lib::subject::PLUGIN_ROUTES_SEGMENT {
+                continue;
+            }
             assert!(server_route(&first).is_some(), "`/{first}` is not reserved");
         }
     }
