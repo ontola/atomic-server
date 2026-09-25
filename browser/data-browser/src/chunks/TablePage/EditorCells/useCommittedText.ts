@@ -67,7 +67,23 @@ export function useCommittedText({
     }
   }, []);
 
-  useEffect(() => () => commit(), [commit]);
+  // Closing the cell stores the text. StrictMode runs this cleanup once on a
+  // mount that is not a close and sets the effect up again straight away, so
+  // wait a microtask and store only if the editor stayed unmounted.
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
+      queueMicrotask(() => {
+        if (!mounted.current) {
+          commit();
+        }
+      });
+    };
+  }, [commit]);
 
   // The table takes Escape before the input sees it, and closing the cell
   // would commit. It tells the editor first, so Escape can drop the text.

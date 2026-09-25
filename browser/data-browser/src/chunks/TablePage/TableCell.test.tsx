@@ -2,6 +2,7 @@
 // @wc-ignore-file
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { StrictMode } from 'react';
 import { beforeAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   act,
@@ -93,28 +94,32 @@ async function renderCell(
   });
   await row.set(property.subject, stored, false);
 
+  // StrictMode as the app runs it: an editor that stores on unmount must not
+  // store when React only re-runs its effects.
   render(
-    <StoreContext value={store}>
-      <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
-        <FancyTable
-          columns={['title', 'day']}
-          itemCount={1}
-          columnToKey={String}
-          labelledBy='table-title'
-          HeadingComponent={() => <></>}
-          NewColumnButtonComponent={() => null}
-        >
-          {() => (
-            <TableCell
-              rowIndex={0}
-              columnIndex={1}
-              subject={row.subject}
-              property={property}
-            />
-          )}
-        </FancyTable>
-      </ThemeProvider>
-    </StoreContext>,
+    <StrictMode>
+      <StoreContext value={store}>
+        <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
+          <FancyTable
+            columns={['title', 'day']}
+            itemCount={1}
+            columnToKey={String}
+            labelledBy='table-title'
+            HeadingComponent={() => <></>}
+            NewColumnButtonComponent={() => null}
+          >
+            {() => (
+              <TableCell
+                rowIndex={0}
+                columnIndex={1}
+                subject={row.subject}
+                property={property}
+              />
+            )}
+          </FancyTable>
+        </ThemeProvider>
+      </StoreContext>
+    </StrictMode>,
   );
 
   return row;

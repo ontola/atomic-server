@@ -45,42 +45,48 @@ it('accepts an unpadded day and stores it once, on Enter', () => {
   expect(onChange).toHaveBeenCalledWith('2026-10-02');
 });
 
-it('stores the date when the cell closes another way (click away, Escape)', () => {
+// Escape is the one close that stores nothing; TableCell.test.tsx covers it.
+it('stores the date when the cell closes another way (click away)', async () => {
   const { input, onChange, unmount } = renderEditor('2026-09-25');
 
   fireEvent.change(input, { target: { value: '2026-10-2' } });
   expect(onChange).not.toHaveBeenCalled();
 
   unmount();
+  // The close stores after a microtask, once StrictMode could have remounted.
+  await Promise.resolve();
   expect(onChange).toHaveBeenCalledTimes(1);
   expect(onChange).toHaveBeenCalledWith('2026-10-02');
 });
 
-it('does not store Enter and then store again when the cell closes', () => {
+it('does not store Enter and then store again when the cell closes', async () => {
   const { input, onChange, unmount } = renderEditor();
 
   fireEvent.change(input, { target: { value: '2026-10-2' } });
   fireEvent.keyDown(input, { key: 'Enter' });
   unmount();
+  await Promise.resolve();
 
   expect(onChange).toHaveBeenCalledTimes(1);
 });
 
-it('keeps the stored date when the text is not a date', () => {
+it('keeps the stored date when the text is not a date', async () => {
   const { input, onChange, unmount } = renderEditor('2026-09-25');
 
   fireEvent.change(input, { target: { value: '2026-10-' } });
   expect(input.getAttribute('aria-invalid')).toBe('true');
 
   unmount();
+  await Promise.resolve();
   expect(onChange).not.toHaveBeenCalled();
 });
 
-it('stores nothing when the date was left as it was', () => {
+it('stores nothing when the date was left as it was', async () => {
   const { input, onChange, unmount } = renderEditor('2026-09-25');
 
   // It opens with the stored date, written the way the locale writes it.
   expect((input as HTMLInputElement).value).toMatch(/25.*2026/);
   unmount();
+  await Promise.resolve();
   expect(onChange).not.toHaveBeenCalled();
 });
