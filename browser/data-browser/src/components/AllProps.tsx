@@ -19,10 +19,19 @@ type Props = {
    */
   columns?: boolean;
   basic?: boolean;
+  /** Label each value with its property's name, not its shortname. See PropVal. */
+  labelByName?: boolean;
 };
 
 /** Lists all PropVals for some resource. Optionally ignores a bunch of subjects */
-function AllProps({ resource, except = [], editable, columns, basic }: Props) {
+function AllProps({
+  resource,
+  except = [],
+  editable,
+  columns,
+  basic,
+  labelByName,
+}: Props) {
   const props = useSortedProps(resource, except, !!editable);
 
   if (!props || props.length === 0) {
@@ -40,6 +49,7 @@ function AllProps({ resource, except = [], editable, columns, basic }: Props) {
             propertyURL={prop}
             resource={resource}
             editable={!!editable}
+            labelByName={labelByName}
           />
         ),
       )}

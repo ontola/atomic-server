@@ -1341,9 +1341,8 @@ msgstr "Keyboard shortcuts"
 msgid "Plugin Description"
 msgstr "Plugin Description"
 
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
-msgid "<0/> Save"
-msgstr "<0/> Save"
+#~ msgid "<0/> Save"
+#~ msgstr "<0/> Save"
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1445,6 +1444,7 @@ msgstr "Textual Description <0/>"
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -12318,3 +12318,10 @@ msgstr "Nothing open."
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
 msgstr "Nothing closed."
+
+#. 0: label
+#. 0: label
+#: src/components/PropVal.tsx
+#: src/components/PropVal.tsx
+msgid "Open {0} in a new tab"
+msgstr "Open {0} in a new tab"
