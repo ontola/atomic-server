@@ -343,8 +343,8 @@ pub struct Opts {
     )]
     pub plugin_route_bytes_per_day: u64,
 
-    /// Deliveries one plugin installation may send per UTC day (design D5,
-    /// *proposed* there: 10,000). Every outbound request counts, retries
+    /// Deliveries one plugin installation may send per UTC day (design D5;
+    /// default 1,000). Every outbound request counts, retries
     /// included. Past it, queued deliveries wait for the next day; they are
     /// not dropped. `0` turns the cap off. Only used at `--plugin-routes
     /// read-write`.
