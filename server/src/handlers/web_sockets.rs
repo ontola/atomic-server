@@ -15,6 +15,7 @@ use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, Message, Running,
     StreamHandler, WrapFuture,
 };
+use actix_http::ws::Item;
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, WsResponseBuilder};
 use atomic_lib::{
@@ -43,6 +44,10 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 /// Used as the `source_id` carried on `CommitOpts`/`CommitResponse` so
 /// the commit monitor can suppress same-source broadcasts (no echo of
 /// a client's own commit back to the connection that sent it).
+/// Largest frame, and largest message reassembled from continuation frames,
+/// a connection accepts.
+const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
+
 static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn new_connection_id() -> String {
@@ -77,6 +82,7 @@ pub async fn web_socket_handler(
             request_origin,
             auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
             client_capabilities: Vec::new(),
+            fragments: None,
             commit_monitor_addr: appstate.commit_monitor.clone(),
             agent: for_agent,
             store: appstate.store.clone(),
@@ -103,7 +109,7 @@ pub async fn web_socket_handler(
     // benchmarks top out in the low MBs even for multi-megabyte texts) and
     // still far below the ~4 GiB WebSocket frame ceiling, so we don't risk
     // silently truncating legitimate payloads.
-    .frame_size(16 * 1024 * 1024)
+    .frame_size(MAX_MESSAGE_SIZE)
     .start()?;
 
     Ok(result)
@@ -122,6 +128,9 @@ pub struct WebSocketConnection {
     /// Capability names the client listed in a `HELLO` (0x37), if it sent
     /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
     client_capabilities: Vec<String>,
+    /// A message arriving in continuation frames, until its last frame:
+    /// whether it is text, and the bytes so far. See `handle_fragment`.
+    fragments: Option<(bool, Vec<u8>)>,
     commit_monitor_addr: Addr<CommitMonitor>,
     agent: ForAgent,
     store: Db,
@@ -249,16 +258,92 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 // Remaining text messages: Loro sync, presence, drive inventory
                 self.handle_text(&text, ctx);
             }
+            Ok(ws::Message::Continuation(item)) => {
+                self.hb = Instant::now();
+                self.handle_fragment(item, ctx);
+            }
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
                 ctx.stop();
             }
-            _ => ctx.stop(),
+            Ok(ws::Message::Nop) => {}
+            Err(e) => {
+                tracing::warn!("ws {}: protocol error, closing: {e}", self.connection_id);
+                ctx.close(Some(ws::CloseCode::Protocol.into()));
+                ctx.stop();
+            }
         }
     }
 }
 
 impl WebSocketConnection {
+    /// Joins a message the client split over several frames and handles it
+    /// once its last frame arrives.
+    ///
+    /// Chromium sends a message it reads from its data pipe as a first frame
+    /// with FIN unset and continuation frames after it, so any large `COMMIT`
+    /// (a drive app's entry point carries its whole module) arrives this way.
+    /// actix-web-actors does not join them. This handler used to stop the
+    /// actor on them, which drops the socket without a Close frame: the
+    /// browser reports `1006` and goes offline mid-write.
+    fn handle_fragment(&mut self, item: Item, ctx: &mut ws::WebsocketContext<Self>) {
+        let (bytes, last) = match item {
+            Item::FirstText(b) => {
+                self.fragments = Some((true, Vec::new()));
+                (b, false)
+            }
+            Item::FirstBinary(b) => {
+                self.fragments = Some((false, Vec::new()));
+                (b, false)
+            }
+            Item::Continue(b) => (b, false),
+            Item::Last(b) => (b, true),
+        };
+
+        let Some((_, buffer)) = self.fragments.as_mut() else {
+            tracing::warn!(
+                "ws {}: continuation frame without a first frame, closing",
+                self.connection_id
+            );
+            ctx.close(Some(ws::CloseCode::Protocol.into()));
+            ctx.stop();
+            return;
+        };
+        if buffer.len() + bytes.len() > MAX_MESSAGE_SIZE {
+            tracing::warn!(
+                "ws {}: fragmented message over {MAX_MESSAGE_SIZE} bytes, closing",
+                self.connection_id
+            );
+            self.fragments = None;
+            ctx.close(Some(ws::CloseCode::Size.into()));
+            ctx.stop();
+            return;
+        }
+        buffer.extend_from_slice(&bytes);
+
+        if !last {
+            return;
+        }
+        let Some((is_text, message)) = self.fragments.take() else {
+            return;
+        };
+        if !is_text {
+            self.handle_binary(&message, ctx);
+            return;
+        }
+        match std::str::from_utf8(&message) {
+            Ok(text) => self.handle_text(text, ctx),
+            Err(_) => {
+                tracing::warn!(
+                    "ws {}: fragmented text is not UTF-8, closing",
+                    self.connection_id
+                );
+                ctx.close(Some(ws::CloseCode::Invalid.into()));
+                ctx.stop();
+            }
+        }
+    }
+
     /// Whether this session has a proven identity: auth headers on the
     /// upgrade request, or an `AUTH` frame that succeeded. A session that
     /// has neither is `Public`.

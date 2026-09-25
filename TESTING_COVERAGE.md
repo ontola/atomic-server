@@ -998,6 +998,15 @@ native clients.
   WASM database in Node, plus per-agent isolation. `client-db-durable-put.test.ts`
   checks the worker writes the row with the snapshot under one flush. Not
   covered: the OPFS worker and leader handoff in a real browser (Playwright).
+- `issue-access-agent.test.ts` ("an issued agent queued while offline"): an
+  app agent queued together with the folder it lives in (the drive-app install
+  after a socket drop, ontola/atomic-plugins#171) drains after that folder, not
+  in the agents-first tier, against a stub server that refuses a child whose
+  parent it has not seen. The real server's rule is `check_append` /
+  `check_agent_self_creation` in `lib/src/hierarchy.rs`.
+- `server/tests/it/ws_fragmented.rs`: a `COMMIT` sent as a first frame plus
+  continuation frames is joined and applied. Chromium sends any message over
+  ~128 KB this way; the handler used to drop the socket (`1006`).
 
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded
