@@ -5,14 +5,15 @@
 #
 #   scripts/demo-session/demo-session.sh [branch] [options]
 #
-#   branch            atomic-server branch to test (default: the branch this
-#                     script's checkout is on). Uses that branch's existing
-#                     worktree if there is one, else makes one under
-#                     $DEMO_HOME/worktrees/.
+#   branch            atomic-server branch or commit to test (default: the
+#                     branch this script's checkout is on). Uses that branch's
+#                     existing worktree if there is one, else makes one under
+#                     $DEMO_HOME/worktrees/ (detached, for a commit).
 #   --port N          atomic-server port (default 9893)
 #   --vite-port N     Vite dev server port (default 6757)
 #   --seed NAME       seed to run on first open (default: calendar; "none" to skip)
 #   --no-build        start from what is already built
+#   --build-only      build, then exit without starting anything
 #
 # Every run gets a fresh data dir under $DEMO_HOME/sessions/<stamp>-<branch>/,
 # next to server.log, vite.log and ux.jsonl (the interaction log). Ctrl-C
@@ -30,6 +31,7 @@ PORT=9893
 VITE_PORT=6757
 SEED=calendar
 BUILD=1
+BUILD_ONLY=0
 BRANCH=""
 
 log() { printf '\033[36m[demo]\033[0m %s\n' "$*"; }
@@ -41,7 +43,8 @@ while [ $# -gt 0 ]; do
     --vite-port) VITE_PORT="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;
     --no-build) BUILD=0; shift ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    --build-only) BUILD_ONLY=1; shift ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     -*) die "Unknown option $1" ;;
     *) BRANCH="$1"; shift ;;
   esac
@@ -50,7 +53,7 @@ done
 BRANCH="${BRANCH:-$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)}"
 SLUG="$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')"
 
-for port in "$PORT" "$VITE_PORT"; do
+[ "$BUILD_ONLY" = 1 ] || for port in "$PORT" "$VITE_PORT"; do
   if lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     die "Port $port is in use (pid $(lsof -nP -tiTCP:"$port" -sTCP:LISTEN | head -1)). Pick another with --port/--vite-port."
   fi
@@ -64,6 +67,19 @@ worktree_for() {
 }
 
 WORKTREE="$(worktree_for "$BRANCH")"
+
+if [ -z "$WORKTREE" ] && [[ "$BRANCH" =~ ^[0-9a-f]{7,40}$ ]]; then
+  # A commit (e.g. atomic-plugins' .atomic-server-ref): a detached worktree,
+  # so a moving branch head can't change what is tested.
+  git -C "$REPO_ROOT" fetch -q origin
+  SHA="$(git -C "$REPO_ROOT" rev-parse --verify "$BRANCH^{commit}")"
+  SLUG="${SHA:0:12}"
+  WORKTREE="$DEMO_HOME/worktrees/$SLUG"
+  if [ ! -d "$WORKTREE" ]; then
+    log "Creating a detached worktree for $SHA at $WORKTREE"
+    git -C "$REPO_ROOT" worktree add --detach "$WORKTREE" "$SHA"
+  fi
+fi
 
 if [ -z "$WORKTREE" ]; then
   WORKTREE="$DEMO_HOME/worktrees/$SLUG"
@@ -144,6 +160,7 @@ build() {
 }
 
 [ "$BUILD" = 1 ] && build
+[ "$BUILD_ONLY" = 1 ] && { log "Built $BRANCH."; exit 0; }
 
 # --- Session dir ----------------------------------------------------------------
 
