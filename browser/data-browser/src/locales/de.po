@@ -1341,9 +1341,8 @@ msgstr ""
 msgid "Plugin Description"
 msgstr ""
 
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
-msgid "<0/> Save"
-msgstr ""
+#~ msgid "<0/> Save"
+#~ msgstr ""
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1445,6 +1444,7 @@ msgstr ""
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -2357,7 +2357,7 @@ msgstr ""
 msgid "Go forward"
 msgstr ""
 
-#. 0: shortcuts.search
+#. 0: displayShortcut(shortcuts.search)
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
 msgstr ""
@@ -3425,6 +3425,8 @@ msgstr ""
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr ""
 
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
 msgid "Search"
 msgstr ""
@@ -12309,7 +12311,6 @@ msgstr ""
 msgid "{0} · Moved to {1} (opens the moved meeting)"
 msgstr ""
 
-
 #. 0: name; 1: longDayLabel(movedFrom)
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "{0} · Moved from {1}"
@@ -12318,4 +12319,11 @@ msgstr ""
 #. 0: shortDayLabel(day)
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "Moved from {0}"
+msgstr ""
+
+#. 0: label
+#. 0: label
+#: src/components/PropVal.tsx
+#: src/components/PropVal.tsx
+msgid "Open {0} in a new tab"
 msgstr ""
