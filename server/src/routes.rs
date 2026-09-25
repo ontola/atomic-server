@@ -89,17 +89,23 @@ pub fn is_static_asset_segment(first: &str) -> bool {
         .any(|path| path.split('/').next() == Some(first))
 }
 
-/// `404` for a `/.well-known/` path that nothing serves, as a problem
-/// document instead of the single page app.
-async fn well_known_not_found(req: HttpRequest) -> HttpResponse {
+/// `404` for a path that nothing serves, as a problem document instead of
+/// the single page app.
+pub fn not_found_problem(path: &str) -> HttpResponse {
     HttpResponse::NotFound()
         .content_type("application/problem+json")
         .json(serde_json::json!({
             "type": "about:blank",
             "status": 404,
             "title": "Not Found",
-            "detail": format!("Nothing is served at {}.", req.path()),
+            "detail": format!("Nothing is served at {path}."),
         }))
+}
+
+/// `404` for a `/.well-known/` name, or a `/_routes/` path, that nothing
+/// serves.
+async fn path_not_found(req: HttpRequest) -> HttpResponse {
+    not_found_problem(req.path())
 }
 
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
@@ -405,6 +411,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     // plugins. Only matches while `--plugin-routes` is not `off`.
     #[cfg(feature = "plugin-routes")]
     handlers::plugin_routes::configure(app);
+    // Any `/_routes/...` the dispatcher did not answer: `--plugin-routes
+    // off`, a build without the feature, or no active route there. Never the
+    // app's HTML, for any method or `Accept`.
+    app.service(web::resource("/_routes").to(path_not_found))
+        .service(web::resource("/_routes/{tail:.*}").to(path_not_found));
     handlers::website::control_routes(app);
     app.service(
         web::resource("/upload")
@@ -480,8 +491,8 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     // dispatcher answers claimed names first). Machine clients probe these
     // without an `Accept` header, which would otherwise get the app's HTML
     // with a 200 below.
-    .service(web::resource("/.well-known").to(well_known_not_found))
-    .service(web::resource("/.well-known/{tail:.*}").to(well_known_not_found))
+    .service(web::resource("/.well-known").to(path_not_found))
+    .service(web::resource("/.well-known/{tail:.*}").to(path_not_found))
     // Catch all (non-download) HTML requests and send them to the single page app
     .service(
         web::resource(ANY)

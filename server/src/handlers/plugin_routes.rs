@@ -7,9 +7,8 @@
 //!
 //! Compiled only with the `plugin-routes` feature, and the guards only match
 //! while `--plugin-routes` is at least `read-only`: at `off`, `/_routes/...`
-//! falls through to the ordinary handlers (and finds no resource, since none
-//! can be created there), a routes host gets nothing special, and a drive's
-//! host serves the drive.
+//! falls through to a `404` (see [`crate::routes::config_routes`]), a routes
+//! host gets nothing special, and a drive's host serves the drive.
 //!
 //! A matched route runs the installation's handler: see
 //! [`crate::plugins::route_exec`].
@@ -145,6 +144,7 @@ async fn serve(
                 "A WebFinger request needs a `resource` query parameter.",
             ),
         ),
+        Dispatch::Answer(Answer::NotFound) => crate::routes::not_found_problem(req.path()),
         Dispatch::Answer(answer) => respond(answer),
     };
     // The server's CORS layer does not speak for plugin routes: a route is
@@ -488,7 +488,12 @@ mod tests {
         assert_eq!(test::call_service(&app, get()).await.status(), 200);
 
         set_status(&f.appstate.store, &installation, "revoked").await;
-        assert_eq!(test::call_service(&app, get()).await.status(), 410);
+        let resp = test::call_service(&app, get()).await;
+        assert_eq!(resp.status(), 410);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/problem+json"
+        );
 
         // A fresh registry (a restart) remembers the retirement.
         let restarted = RouteRegistry::new(f.appstate.config.plugin_routes.clone());
@@ -497,6 +502,85 @@ mod tests {
             restarted.state(&installation),
             Some(State::Retired { .. })
         ));
+    }
+
+    fn assert_problem_404(resp: &actix_web::dev::ServiceResponse, what: &str) {
+        assert_eq!(resp.status(), 404, "{what}");
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/problem+json",
+            "{what}"
+        );
+    }
+
+    /// At `read-only`, an active route still answers, and every `/_routes/`
+    /// path no active route matches is a problem `404`, not the app's HTML.
+    #[actix_rt::test]
+    async fn unmatched_drive_prefix_paths_are_problem_404s() {
+        let f = fixture_with_args("routes_unmatched", &ROUTES).await;
+        let installation = install_release(&f, &hello_route_release()).await.unwrap();
+        let app = app!(f.appstate);
+        let live = format!("/_routes/{}", slug(&installation));
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("{live}/hello/alice"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 200);
+        for path in [
+            format!("{live}/nothing-here"),
+            live.clone(),
+            "/_routes/x/y".to_string(),
+            "/_routes".to_string(),
+        ] {
+            for accept in [None, Some("text/html")] {
+                let mut req = test::TestRequest::get().uri(&path);
+                if let Some(accept) = accept {
+                    req = req.insert_header((header::ACCEPT, accept));
+                }
+                let resp = test::call_service(&app, req.to_request()).await;
+                assert_problem_404(&resp, &format!("{path} {accept:?}"));
+            }
+        }
+    }
+
+    /// A restart at `off`: an installed plugin's path is a problem `404`.
+    #[actix_rt::test]
+    async fn at_off_an_installed_plugins_path_is_not_found() {
+        let f = fixture_with_args("routes_off", &ROUTES).await;
+        let installation = install_release(&f, &hello_route_release()).await.unwrap();
+        let off = crate::plugin_routes::resolve(
+            crate::plugin_routes::PluginRoutesOptions {
+                level: crate::plugin_routes::PluginRoutesLevel::Off,
+                ..Default::default()
+            },
+            true,
+            crate::plugin_routes::OriginContext {
+                api_origin: "http://localhost:9883",
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut appstate = f.appstate.clone();
+        appstate.route_registry = std::sync::Arc::new(RouteRegistry::new(off));
+        appstate
+            .route_registry
+            .rebuild(&appstate.store)
+            .await
+            .unwrap();
+        assert!(!appstate.route_registry.enabled());
+        let app = app!(appstate);
+        let url = format!("/_routes/{}/hello/alice", slug(&installation));
+        for accept in [None, Some("text/html")] {
+            let mut req = test::TestRequest::get().uri(&url);
+            if let Some(accept) = accept {
+                req = req.insert_header((header::ACCEPT, accept));
+            }
+            let resp = test::call_service(&app, req.to_request()).await;
+            assert_problem_404(&resp, &format!("{accept:?}"));
+        }
     }
 
     #[actix_rt::test]

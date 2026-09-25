@@ -768,8 +768,8 @@ mod tests {
     }
 
     /// At `--plugin-routes off`, in either build, nothing answers on the
-    /// plugin mounts: `/_routes/...` is an ordinary (absent) path and a
-    /// would-be routes host gets the ordinary server.
+    /// plugin mounts: `/_routes/...` is a `404` and a would-be routes host
+    /// gets the ordinary server.
     #[actix_rt::test]
     async fn nothing_is_mounted_while_the_level_is_off_or_the_feature_is_absent() {
         use actix_web::{test, web, App};
@@ -803,10 +803,17 @@ mod tests {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("")
                 .to_string();
-            assert!(
-                ![501, 503, 410].contains(&status) && content_type != "application/problem+json",
-                "{host}{path}: {status} {content_type}"
-            );
+            if path.starts_with("/_routes") {
+                // Not a plugin's answer, and not the app: a plain `404`.
+                assert_eq!(status, 404, "{host}{path}");
+                assert_eq!(content_type, "application/problem+json", "{host}{path}");
+            } else {
+                assert!(
+                    ![501, 503, 410].contains(&status)
+                        && content_type != "application/problem+json",
+                    "{host}{path}: {status} {content_type}"
+                );
+            }
         }
     }
 
