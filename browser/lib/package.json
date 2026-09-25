@@ -22,7 +22,6 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
     "@microsoft/api-extractor": "^7.58.7",
-    "@tomic/cli": "workspace:*",
     "loro-crdt": "^1.12.1",
     "oxfmt": "^0.51.0",
     "tslib": "^2.8.1",
@@ -72,7 +71,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "generate-ontologies": "ad-generate ontologies",
+    "generate-ontologies": "pnpm --filter @tomic/cli run build && node ../cli/bin/src/index.js ontologies",
     "lint-package": "pnpm publint && pnpm attw",
     "lint": "oxlint -c ../.oxlintrc.json ./src && pnpm format-check",
     "lint-fix": "oxlint -c ../.oxlintrc.json --fix ./src && pnpm format",

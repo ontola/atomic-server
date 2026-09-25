@@ -26,7 +26,7 @@
     "lint-package": "pnpm run -r lint-package",
     "format-check": "pnpm run -r format-check",
     "format": "pnpm run -r format",
-    "build": "pnpm --filter \"@tomic/lib\" run build && pnpm --filter=!./lib run -r build ",
+    "build": "pnpm run -r build",
     "test": "pnpm run -r test",
     "test-e2e": "pnpm run --filter @tomic/e2e test-e2e",
     "test-e2e:light": "pnpm run --filter @tomic/e2e test-e2e:light",

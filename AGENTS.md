@@ -22,6 +22,15 @@ cd browser && pnpm install && pnpm run -r build
 cd ../server && cargo build
 ```
 
+That is the whole setup; no workarounds needed. The build includes the WASM
+(`build:wasm`), and the first run compiles wasm-pack into this worktree's own
+`.bin/` (about a minute). Don't borrow the main checkout's wasm-pack or
+`public/wasm/`, and don't build `@tomic/lib` separately first: `pnpm run -r
+build` orders the packages itself. The Website runtime bundles
+(`search-view.html`, `website-runtime.min.js`) are gitignored and regenerated
+by vite, so builds leave `git status` clean. Node 22 (CI) through 26 work,
+vitest included.
+
 Skipping this turns a setup problem into a confusing commit-time failure:
 `scripts/pre-commit.mjs`'s Rust step (any staged `.rs`/`Cargo.*` file) runs
 `cargo clippy` against a snapshot containing only staged, git-tracked files —

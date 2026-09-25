@@ -47,3 +47,8 @@ scratchpad
 node_modules/
 # Raw footage and cuts from browser/e2e/scripts/record-*.mjs
 /browser/e2e/recordings/
+
+# Bundled by browser/data-browser/scripts/build-website-runtime.mjs, which
+# vite.config.ts runs on every vite / vitest start.
+/browser/data-browser/src/chunks/Website/runtime/search-view.html
+/browser/data-browser/src/chunks/Website/runtime/website-runtime.min.js

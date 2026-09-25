@@ -107,8 +107,9 @@ sites; release review and inline-edit mode retain the static cards. This is not
 a safe host for arbitrary imported HTML: that requires a separate content origin.
 
 `runtime/searchView.ts`, `snapshotHost.ts` and `websiteRuntime.ts` are bundled by
-`node scripts/build-website-runtime.mjs`. Build/dev/start run that generator; the
-checked-in minified runtime and hash-authorized view HTML are the exported assets.
+`scripts/build-website-runtime.mjs`, which `vite.config.ts` runs on every vite /
+vitest start; the gitignored minified runtime and hash-authorized view HTML are
+the exported assets.
 No dependency installation or JS compilation runs per content edit. The sample
 uses a built-in bundled view, not dynamically loaded third-party plugin releases.
 That next capability still needs a pinned release/static-render/asset contract.
