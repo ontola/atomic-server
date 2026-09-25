@@ -20,7 +20,9 @@ describe('readUpload', () => {
     });
     expect('text' in upload).toBe(false);
     expect(
-      Uint8Array.from(Buffer.from((upload as { base64: string }).base64, 'base64')),
+      Uint8Array.from(
+        Buffer.from((upload as { base64: string }).base64, 'base64'),
+      ),
     ).toEqual(everyByte);
   });
 
@@ -64,7 +66,11 @@ describe('readUpload', () => {
 describe('acceptFor', () => {
   const accepts: DeclaredAccept[] = [
     { extensions: ['.sta'], as: 'text' },
-    { extensions: ['.willow'], mediaTypes: ['application/x-willow'], as: 'base64' },
+    {
+      extensions: ['.willow'],
+      mediaTypes: ['application/x-willow'],
+      as: 'base64',
+    },
   ];
 
   it('picks the entry that names the file', () => {
