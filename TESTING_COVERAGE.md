@@ -551,6 +551,9 @@ that a non-writer sees the notice without buttons. Not covered: a request
 syncing to another node and that node's hook accepting it, a proxy answering
 that a delegation was revoked (only `not-connected` is detected), and an end
 to end browser test.
+A wasip2 class extender is refused at the integration proxy, by URL and by
+`atomic-proxy:`, even when its manifest lists the proxy origin (#1700, answer
+5): `host_core::tests::a_class_extender_is_refused_at_the_proxy_and_told_why`.
 
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
