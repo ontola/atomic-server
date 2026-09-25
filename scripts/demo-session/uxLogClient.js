@@ -2,7 +2,8 @@
 // Records what a test user does and what goes wrong, and posts it to the Vite
 // dev server, which appends it to a JSONL file the session observer tails.
 //
-// Logged: clicks (text, role, test id, short selector), committed input values
+// Logged: clicks (text, role, test id, short selector, and for table cells
+// the row and column), committed input values
 // (80 characters at most; password fields and anything labelled secret, key,
 // token or password are never logged), Enter/Escape, route changes, dialogs
 // and toasts appearing, console.error/warn, uncaught errors, failed or slow
@@ -100,12 +101,33 @@ function isSecretField(el) {
   );
 }
 
+// A table-editor cell has no text of its own worth logging (often empty, or
+// an input); name it by its row's first column and its column header.
+function tableCell(el) {
+  const cell = el.closest?.('[role="gridcell"],[role="rowheader"]');
+  if (!cell) return undefined;
+  const row = cell.closest('[role="row"]');
+  const grid = cell.closest('[role="grid"]');
+  const colIndex = cell.getAttribute('aria-colindex');
+  const header =
+    colIndex &&
+    grid?.querySelector(`[role="columnheader"][aria-colindex="${colIndex}"]`);
+
+  return {
+    row:
+      clip(row?.querySelector('[aria-colindex="2"]')?.innerText) || undefined,
+    column: clip(header?.innerText) || undefined,
+    rowIndex: row?.getAttribute('aria-rowindex') ?? undefined,
+  };
+}
+
 function describe(target) {
   const el = target.closest?.(INTERACTIVE) ?? target;
   const within = el.closest?.('[data-testid]');
   const dialog = el.closest?.('[role="dialog"],dialog');
 
   return {
+    cell: tableCell(el),
     text: isSecretField(el) ? '[redacted]' : clip(el.innerText || el.value),
     label: labelFor(el) || undefined,
     role: el.getAttribute?.('role') || el.tagName?.toLowerCase(),
@@ -144,6 +166,7 @@ document.addEventListener(
     const secret = isSecretField(el);
     log('input', {
       label: labelFor(el),
+      cell: tableCell(el),
       value: secret
         ? '[redacted]'
         : el.type === 'checkbox'

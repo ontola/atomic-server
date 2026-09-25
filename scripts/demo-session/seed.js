@@ -24,13 +24,17 @@ const AMS = 'Europe/Amsterdam';
 const NYC = 'America/New_York';
 
 /** Rows of the "Team calendar" table. `recurrence` rows carry a
- * Google-Calendar-shaped event, the format the calendar view expands. */
+ * Google-Calendar-shaped event, the format the calendar view expands.
+ *
+ * Keep `notes` to what a real user would write. Explanations of an edge case
+ * go in code comments: a note like "01:30 Wednesday in Amsterdam" answered a
+ * session task outright. */
 const TEAM_EVENTS = [
   // --- Recurring (the view expands these) ---
   {
     name: 'Team standup',
     day: '2026-09-07',
-    notes: 'Mon/Wed/Fri 09:30–09:45 Amsterdam until 18 Dec. Skipped 9 Oct.',
+    // Mon/Wed/Fri 09:30–09:45 Amsterdam until 18 Dec; 9 Oct skipped.
     event: {
       id: 'standup',
       summary: 'Team standup',
@@ -43,10 +47,10 @@ const TEAM_EVENTS = [
     },
   },
   {
-    // One instance of the standup moved from Wed 14 Oct to Thu 15 Oct.
+    // One instance of the standup moved from Wed 14 Oct to Thu 15 Oct;
+    // nothing in the data tells the user so.
     name: 'Team standup',
     day: '2026-10-15',
-    notes: 'Moved from Wednesday 14 Oct.',
     event: {
       id: 'standup_20261014T073000Z',
       summary: 'Team standup',
@@ -59,7 +63,7 @@ const TEAM_EVENTS = [
   {
     name: 'Sprint review',
     day: '2026-09-10',
-    notes: 'Every other Thursday 15:00, six times.',
+    // Every other Thursday 15:00, six times.
     event: {
       id: 'sprint-review',
       summary: 'Sprint review',
@@ -71,7 +75,7 @@ const TEAM_EVENTS = [
   {
     name: '1:1 with manager',
     day: '2026-09-01',
-    notes: 'First Tuesday of the month, 11:00.',
+    // First Tuesday of the month, 11:00.
     event: {
       id: 'one-on-one',
       summary: '1:1 with manager',
@@ -83,8 +87,7 @@ const TEAM_EVENTS = [
   {
     name: 'Late sync with Boston',
     day: '2026-09-15',
-    notes:
-      'Tuesdays 19:30 New York, which is 01:30 Wednesday in Amsterdam. Ten times.',
+    // Tuesdays 19:30 New York = 01:30 Wednesday in Amsterdam; ten times.
     event: {
       id: 'boston-sync',
       summary: 'Late sync with Boston',
@@ -98,7 +101,6 @@ const TEAM_EVENTS = [
     day: '2026-01-25',
     allDay: true,
     endDay: '2026-01-26',
-    notes: 'All day, the 25th of every month.',
     event: {
       id: 'payday',
       summary: 'Payday',
@@ -112,7 +114,7 @@ const TEAM_EVENTS = [
     day: '2026-07-06',
     allDay: true,
     endDay: '2026-07-08',
-    notes: 'Two days from the first Monday of every third month.',
+    // Two days from the first Monday of every third month.
     event: {
       id: 'quarterly-planning',
       summary: 'Quarterly planning',
@@ -144,30 +146,32 @@ const TEAM_EVENTS = [
     day: '2026-10-06',
     allDay: true,
     endDay: '2026-10-09',
-    notes: 'Tuesday to Thursday. End day is exclusive.',
+    notes: 'Bring laptops',
+    // Tuesday to Thursday; End day is exclusive.
   },
   {
     name: 'Clocks go back',
     day: '2026-10-25',
     allDay: true,
     endDay: '2026-10-26',
-    notes: 'Europe leaves summer time; New York follows on 1 November.',
+    // Europe leaves summer time; New York follows on 1 November.
   },
   {
     name: 'Autumn holiday',
     day: '2026-10-29',
     allDay: true,
     endDay: '2026-11-03',
-    notes: 'Thursday 29 Oct to Monday 2 Nov, across the month boundary.',
+    // Thursday 29 Oct to Monday 2 Nov, across the month boundary.
   },
   {
     name: 'Office closed',
     day: '2026-11-11',
     allDay: true,
-    notes: 'All day, but without an end day.',
+    // All day, but without an end day.
   },
   { name: 'Conference talk', day: '2027-01-15' },
-  { name: 'Plan the retro', notes: 'Not scheduled yet.' },
+  // No date: only reachable from the table view.
+  { name: 'Plan the retro' },
 ];
 
 const CONTENT_PLAN = [

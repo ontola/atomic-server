@@ -96,6 +96,21 @@ paths as the UI. It can also be run by hand from the console:
 - **Content plan**: a table with a `Publish date` column and no calendar view
   yet, for testing how a user adds one.
 
+## Running a session
+
+- **Keep the browser pane visible.** In the Claude desktop app the app is
+  opened in the built-in browser pane beside the chat, not in Chrome. Closing
+  windows hides the pane, and the agent can't unhide it. Tell the tester where
+  its toggle is before the first task.
+- **Phone width:** ask the tester to drag the divider until the pane is about
+  400 px wide. The agent's viewport emulation is reset when its turn ends, so
+  the tester can't use it.
+- **Seeds:** put only what a real user would write in names and notes. Keep
+  explanations of edge cases in code comments, where the tester can't read
+  them.
+- **Clicks in a table** are logged with `cell: {row, column, rowIndex}`
+  (row = the first column's text, column = the header).
+
 ## Ports and parallel sessions
 
 `--port` and `--vite-port` pick other ports. Two sessions on the same branch
