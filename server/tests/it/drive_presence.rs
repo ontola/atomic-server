@@ -77,11 +77,9 @@ async fn presence_relays_caches_and_gates() -> AtomicResult<()> {
     // ----- Relay: Alice broadcasts, Bob receives, Alice gets no echo -----
     // Bytes are opaque to the server; production sends
     // `EphemeralStore.encodeAll()`, a distinctive blob suffices here.
-    // The broadcaster admits an update only from a connection whose
-    // subscribe has finished its read check, and that check is a store
-    // read the actor runs concurrently; on a loaded host the first update
-    // can land before it. Production re-announces on a heartbeat, so do
-    // the same here rather than sleeping longer.
+    // An update that overtakes the subscribe's read check is held until
+    // the check passes (pinned by `presence_sent_right_after_subscribe_is_
+    // delivered`); the retry only guards against a slow host here.
     let alice_state: Vec<u8> = b"alice-presence-state".to_vec();
     let mut received = None;
     for _ in 0..10 {
@@ -150,6 +148,76 @@ async fn presence_relays_caches_and_gates() -> AtomicResult<()> {
     assert!(
         recv_presence(&mut rx_b2, &private_drive, 1).await.is_none(),
         "Agent without read access must not receive presence for a private drive"
+    );
+
+    Ok(())
+}
+
+/// #1800: every (re)connect sends `PRESENCE_SUBSCRIBE` and then announces
+/// itself straight away. The subscribe's read check awaits a store read and
+/// the broadcaster keeps handling messages meanwhile, so that first update
+/// used to arrive before the connection counted as a subscriber: the server
+/// logged "presence update from non-subscriber" and dropped it, and peers did
+/// not see the reconnected tab until its next heartbeat. The update must be
+/// held until the check passes, and delivered once, with no retry.
+#[tokio::test]
+async fn presence_sent_right_after_subscribe_is_delivered() -> AtomicResult<()> {
+    let port = start_server("drive_presence_immediate");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{}", port);
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    let client = Client::new(&server_url).await?;
+    let agent_a = client.new_agent("Alice").await?;
+    let drive = client.new_public_drive(&agent_a, "Presence Drive").await?;
+
+    let client_b = Client::new(&server_url).await?;
+    let agent_b = client_b.new_agent("Bob").await?;
+
+    // Bob is already watching the drive, settled.
+    let ws_b = WsClient::connect(&ws_url).await?;
+    ws_b.authenticate(&agent_b).await?;
+    let mut rx_b = ws_b.subscribe();
+    ws_b.subscribe_presence(&drive).await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Alice (re)connects and announces herself without waiting, as the
+    // browser client does after every reconnect.
+    for round in 0..5u8 {
+        let ws_a = WsClient::connect(&ws_url).await?;
+        ws_a.authenticate(&agent_a).await?;
+        let state = format!("alice-presence-{round}").into_bytes();
+        ws_a.subscribe_presence(&drive).await?;
+        ws_a.send_presence_update(&drive, &state).await?;
+
+        let received = recv_presence(&mut rx_b, &drive, 5).await;
+        assert_eq!(
+            received.as_deref(),
+            Some(state.as_slice()),
+            "round {round}: an update sent right behind PRESENCE_SUBSCRIBE must reach Bob"
+        );
+    }
+
+    // A connection that is refused must not have its held update relayed.
+    let private_drive = client.new_drive(&agent_a, "Private Drive").await?;
+    let ws_owner = WsClient::connect(&ws_url).await?;
+    ws_owner.authenticate(&agent_a).await?;
+    let mut rx_owner = ws_owner.subscribe();
+    ws_owner.subscribe_presence(&private_drive).await?;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let ws_intruder = WsClient::connect(&ws_url).await?;
+    ws_intruder.authenticate(&agent_b).await?;
+    ws_intruder.subscribe_presence(&private_drive).await?;
+    ws_intruder
+        .send_presence_update(&private_drive, b"intruder")
+        .await?;
+
+    assert!(
+        recv_presence(&mut rx_owner, &private_drive, 1)
+            .await
+            .is_none(),
+        "An update held for a subscribe that fails its read check must be dropped"
     );
 
     Ok(())
