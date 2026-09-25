@@ -12,10 +12,22 @@ on:
         required: false
         default: develop
         type: string
-  workflow_run:
-    workflows: ["Main pipeline: build, lint, test"]
-    branches: ["develop"]
-    types: [completed]
+  # ON HOLD (25 September 2026, Joep's call). Staging used to deploy itself
+  # whenever a develop pipeline concluded success. Four consecutive runs then
+  # failed on the same step, the pre-swap `./atomic-server export` being
+  # OOM-killed on the host (exit 137), and each failure rolled back to an older
+  # binary that had never been health-checked. So the automatic path was
+  # reliably producing a failed deploy rather than a deployment.
+  #
+  # `workflow_dispatch` above is untouched: staging can still be deployed by
+  # hand, which is the same shape atomic-saas staging was given on
+  # 24 September. Restore the trigger below once the export no longer runs the
+  # host out of memory.
+  #
+  # workflow_run:
+  #   workflows: ["Main pipeline: build, lint, test"]
+  #   branches: ["develop"]
+  #   types: [completed]
 
 jobs:
   deploy-staging:
