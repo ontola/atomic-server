@@ -22,7 +22,7 @@ import {
   setCookieAuthentication,
   signRequest,
 } from './authentication.js';
-import { Client, type FileOrFileLike } from './client.js';
+import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
 import {
   CommitBuilder,
   commitIdOf,
@@ -418,6 +418,21 @@ const GET_MANY_CHUNK = 200;
 const LOCAL_HYDRATION_CHUNK = GET_MANY_CHUNK;
 
 /**
+ * Whether a failed direct fetch of a foreign subject is worth retrying
+ * through the own server's `/path` proxy: the origin could not be reached
+ * (network, DNS, CORS) or failed itself (5xx). A 404 or 401 is an answer
+ * about the resource, which the proxy would only repeat.
+ */
+function isProxyWorthyError(error?: Error): boolean {
+  if (!error) return false;
+
+  return (
+    isTransportError(error) ||
+    (error instanceof AtomicError && error.type === ErrorType.Server)
+  );
+}
+
+/**
  * Subjects of the vocabulary every host carries in its own store.
  *
  * They are `atomicdata.dev` URLs that name a shape, not a deployment: a fixed,
@@ -535,6 +550,12 @@ export class Store {
    *  so subsequent calls (e.g. a forced refresh after a known change)
    *  can re-fetch. Keyed by normalized subject. */
   private _inFlightFetches: Map<string, Promise<Resource>> = new Map();
+
+  /** Foreign origins whose direct fetch failed while the own server's
+   *  `/path` proxy answered. Later fetches from them go straight to the
+   *  proxy for the rest of the session: one failed request per origin, not
+   *  one per term. */
+  private _proxiedOrigins: Set<string> = new Set();
 
   /** Subjects with a gap-recovery fetch in flight. A delta that cannot apply
    *  triggers one full-state fetch; this stops a burst of unappliable deltas
@@ -3957,14 +3978,52 @@ export class Store {
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
 
-      const { resource, createdResources, cancelled } =
-        await this.client.fetchResourceHTTP(fetchSubject, {
-          from: opts.fromProxy ? this.getServerUrl() : undefined,
+      const fetchVia = (fromProxy: boolean) =>
+        this.client.fetchResourceHTTP(fetchSubject, {
+          from: fromProxy ? this.getServerUrl() : undefined,
           method: opts.method,
           body: opts.body,
           signInfo,
           serverURL: this.getServerUrl(),
         });
+
+      // Only plain documents, the shape of a vocabulary term. A query or
+      // collection URL is an endpoint on that server, whose errors mean
+      // something to the caller (an old server refusing `drive`, say).
+      const foreignOrigin =
+        !opts.fromProxy && opts.method !== 'POST' && !fetchSubject.includes('?')
+          ? this.foreignHttpOrigin(fetchSubject)
+          : undefined;
+      const proxyFirst =
+        foreignOrigin !== undefined && this._proxiedOrigins.has(foreignOrigin);
+
+      let result = await fetchVia(!!opts.fromProxy || proxyFirst);
+
+      // A foreign origin that could not answer (down, blocked by CORS, 5xx):
+      // ask the own server, which fetches external vocabulary on first use
+      // and keeps it. When the proxy was tried first (it served this origin
+      // before) and failed, try the origin itself instead. Either way one
+      // extra attempt, never a loop. The result then takes the same path
+      // below as a direct answer, so it is stored and cached the same way.
+      if (
+        foreignOrigin !== undefined &&
+        !result.cancelled &&
+        isProxyWorthyError(result.resource.error)
+      ) {
+        const retried = await fetchVia(!proxyFirst);
+
+        if (!retried.cancelled && !retried.resource.error) {
+          if (proxyFirst) {
+            this._proxiedOrigins.delete(foreignOrigin);
+          } else {
+            this._proxiedOrigins.add(foreignOrigin);
+          }
+
+          result = retried;
+        }
+      }
+
+      const { resource, createdResources, cancelled } = result;
 
       if (cancelled) {
         const cached = this.resources.get(normalizedSubject);
@@ -4022,6 +4081,22 @@ export class Store {
     // so a fetch by the address-bar URL returns the resource stored under
     // its canonical `@id`.
     return this.resources.get(this.resolveSubject(normalizedSubject))!;
+  }
+
+  /** The origin of an http(s) `subject` that the own server does not serve,
+   *  or undefined for the own server, DIDs and anything unparseable. */
+  private foreignHttpOrigin(subject: string): string | undefined {
+    if (!this.getServerUrl() || !/^https?:\/\//.test(subject)) {
+      return undefined;
+    }
+
+    if (isOwnServerUrl(subject, this.getServerUrl())) return undefined;
+
+    try {
+      return new URL(subject).origin;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Returns the WebSocket for the current Server URL */
