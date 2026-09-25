@@ -172,10 +172,12 @@ async function resolveHostedDriveOrigin(
 
   const withOrigin = enrollments.filter(
     // A placement is not a hosted copy. Keep the source until the node
-    // reports data, including after an interrupted setup.
+    // reports data, including after an interrupted setup. Only statuses the
+    // node serves count: a Suspended (or unknown) enrollment is off the node's
+    // allowlist, and pointing the drive at it gets every write refused.
     e =>
-      e.status !== 'Disabled' &&
-      e.status !== /* @wc-ignore */ 'Pending' &&
+      (e.status === /* @wc-ignore */ 'Active' ||
+        e.status === /* @wc-ignore */ 'Error') &&
       e.resource_count !== 0 &&
       e.http_origin,
   );

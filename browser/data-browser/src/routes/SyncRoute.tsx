@@ -295,12 +295,17 @@ function ServerCard({
     isSelectedServer && !!status.drive && store.isLocalOnlyDrive(status.drive);
   const isActive =
     isSelectedServer && !!status.drive && store.isLiveSyncedDrive(status.drive);
+  // A managed node that does not host this drive refuses every push. Syncing
+  // can never finish, so say why instead of "Connecting…", and let the person
+  // turn sync off even though the server will not answer.
+  const refusedByServer =
+    isSelectedServer && store.isDriveRefusedByServer(status.drive);
   const showWorkspaceSyncToggle =
     isSelectedServer &&
     !isRunningInTauri() &&
     !isOriginWithoutNode(server) &&
-    isCloudSyncAvailable(managedInfo) &&
-    cloudEnrolled === false;
+    (refusedByServer ||
+      (isCloudSyncAvailable(managedInfo) && cloudEnrolled === false));
   const isCloud = isActive && cloudHosted;
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
@@ -392,9 +397,11 @@ function ServerCard({
       status={
         localOnlyDrive
           ? { tone: 'unknown', label: 'Workspace sync off' }
-          : isActive
-            ? { tone: serverStatus, label: statusLabel(serverStatus) }
-            : { tone: 'unknown', label: 'Not connected' }
+          : refusedByServer
+            ? { tone: 'offline', label: 'Not hosted here' }
+            : isActive
+              ? { tone: serverStatus, label: statusLabel(serverStatus) }
+              : { tone: 'unknown', label: 'Not connected' }
       }
       controls={
         isSelectedServer ? (
@@ -464,6 +471,16 @@ function ServerCard({
           subscription and price in billing.
         </ConnMeta>
       )}
+      {refusedByServer && (
+        <ConnError role='alert'>
+          <FaCircleExclamation aria-hidden />
+          <span>
+            This server doesn’t host this workspace, so it refuses its changes.
+            Set up Cloud Server to sync it here, or turn off sync to keep it on
+            this device only.
+          </span>
+        </ConnError>
+      )}
       {showWorkspaceSyncToggle && (
         <WorkspaceSyncRow>
           <WorkspaceSyncControl>
@@ -472,7 +489,7 @@ function ServerCard({
               checked={!localOnlyDrive}
               disabled={
                 syncChange !== null ||
-                !status.serverConnected ||
+                (!status.serverConnected && !refusedByServer) ||
                 !hasWorkingLocalStore
               }
               onChange={next => void toggleWorkspaceSync(next)}
