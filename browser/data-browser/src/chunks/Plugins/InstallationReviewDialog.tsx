@@ -287,12 +287,9 @@ export const InstallationReviewDialog: React.FC<
             <summary>Release</summary>
             <Identity>
               Pinned to <code>{pending.release.id}</code>
-              {pending.release.url !== pending.release.id && (
-                <>
-                  <br />
-                  from {pending.release.url}
-                </>
-              )}
+            </Identity>
+            <Identity hidden={pending.release.url === pending.release.id}>
+              from {pending.release.url}
             </Identity>
           </details>
         </Column>

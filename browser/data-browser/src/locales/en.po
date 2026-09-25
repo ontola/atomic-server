@@ -8892,10 +8892,8 @@ msgstr "Use included AI"
 msgid "v"
 msgstr "v"
 
-#. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#: src/chunks/Plugins/InstallationReviewDialog.tsx
-msgid "Pinned to <0/> {0}"
-msgstr "Pinned to <0/> {0}"
+#~ msgid "Pinned to <0/> {0}"
+#~ msgstr "Pinned to <0/> {0}"
 
 #: src/chunks/Plugins/CapabilityList.tsx
 msgid "No permissions required"
@@ -9825,14 +9823,11 @@ msgstr "The plugin gets write rights on these resources, and may only change or 
 msgid "Route writes"
 msgstr "Route writes"
 
-#: src/views/Installation/InstallationPage.tsx
-msgid "Pinned to <0/> <1/>"
-msgstr "Pinned to <0/> <1/>"
+#~ msgid "Pinned to <0/> <1/>"
+#~ msgstr "Pinned to <0/> <1/>"
 
-#. 0: link
-#: src/views/Installation/InstallationPage.tsx
-msgid "<0/> from {0}"
-msgstr "<0/> from {0}"
+#~ msgid "<0/> from {0}"
+#~ msgstr "<0/> from {0}"
 
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Serving"
@@ -10106,3 +10101,15 @@ msgstr "Let {0} edit rows?"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Read-only"
 msgstr "Read-only"
+
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/>"
+msgstr "Pinned to <0/>"
+
+#. 0: pending.release.url
+#. 0: link
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "from {0}"
+msgstr "from {0}"

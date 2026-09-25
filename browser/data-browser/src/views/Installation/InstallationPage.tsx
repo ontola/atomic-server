@@ -396,8 +396,8 @@ export const InstallationPage: React.FC<
           <h3>Release</h3>
           <Identity>
             Pinned to <code>{releaseId}</code>
-            <ReleaseSource release={release} releaseId={releaseId} />
           </Identity>
+          <ReleaseSource release={release} releaseId={releaseId} />
         </Column>
         <Column as='section' aria-label='Grants'>
           <h3>Grants</h3>
@@ -544,7 +544,9 @@ export const InstallationPage: React.FC<
 
 /**
  * Where the pinned release came from. Its own component: wuchale drops a
- * message with nested elements inside a `{condition && (...)}`.
+ * message with nested elements inside a `{condition && (...)}`. And its own
+ * paragraph: inside the "Pinned to" message it became an unkeyed child of
+ * wuchale's message component, which React warns about.
  */
 function ReleaseSource({
   release,
@@ -563,12 +565,7 @@ function ReleaseSource({
     release
   );
 
-  return (
-    <>
-      <br />
-      from {link}
-    </>
-  );
+  return <Identity>from {link}</Identity>;
 }
 
 // Wuchale drops a message with nested elements inside a condition, so the

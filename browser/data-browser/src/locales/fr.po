@@ -8881,10 +8881,8 @@ msgstr ""
 msgid "v"
 msgstr ""
 
-#. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#: src/chunks/Plugins/InstallationReviewDialog.tsx
-msgid "Pinned to <0/> {0}"
-msgstr ""
+#~ msgid "Pinned to <0/> {0}"
+#~ msgstr ""
 
 #: src/chunks/Plugins/CapabilityList.tsx
 msgid "No permissions required"
@@ -9807,14 +9805,11 @@ msgstr ""
 msgid "Route writes"
 msgstr ""
 
-#: src/views/Installation/InstallationPage.tsx
-msgid "Pinned to <0/> <1/>"
-msgstr ""
+#~ msgid "Pinned to <0/> <1/>"
+#~ msgstr ""
 
-#. 0: link
-#: src/views/Installation/InstallationPage.tsx
-msgid "<0/> from {0}"
-msgstr ""
+#~ msgid "<0/> from {0}"
+#~ msgstr ""
 
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Serving"
@@ -10043,6 +10038,7 @@ msgstr ""
 
 #: src/chunks/Plugins/RouteWriteMoveDialog.tsx
 msgid "Save config"
+msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/TablePage/RowGrantDialog.tsx
@@ -10086,4 +10082,16 @@ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Read-only"
+msgstr ""
+
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/>"
+msgstr ""
+
+#. 0: pending.release.url
+#. 0: link
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "from {0}"
 msgstr ""
