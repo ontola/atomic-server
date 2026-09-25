@@ -90,8 +90,12 @@ pub struct Opts {
     /// The integration proxy's origin, e.g. https://localthought.io or, for a proxy on this
     /// machine, http://localhost:8080 — exactly the proxy's own BASE_URL. A server-side plugin's
     /// `ctx.http` requests to this origin are signed with this node's app agent for its
-    /// installation (Atomic v2 request signatures), and a loopback origin is let through the
-    /// public-address check for exactly this scheme, host and port. Omit to configure none.
+    /// installation (Atomic v2 request signatures). Exactly this scheme, host and port may be
+    /// on loopback or a private network (e.g. http://host.docker.internal:8787 or
+    /// http://proxy.lan:8787), which every other plugin destination is refused; the name is
+    /// resolved once per request and the checked addresses are the ones connected to.
+    /// Link-local and cloud-metadata addresses (169.254.0.0/16, fe80::/10) are refused even
+    /// here. Omit to configure none.
     #[clap(long, env = "ATOMIC_INTEGRATION_PROXY_URL")]
     pub integration_proxy_url: Option<String>,
 
