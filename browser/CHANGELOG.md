@@ -4,6 +4,20 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Turning workspace sync off says what is actually in the way. All three of its
+  preconditions used to answer with "Open this drive with local storage
+  available before disconnecting", so someone signed out, or on a server this
+  client holds no live connection to, was told to do something they had already
+  done. Each one now names itself, and a socket that exists but is not open says
+  so rather than leaving the attempt to fail on "WebSocket is not open". The
+  local database is also waited for instead of refused: it attaches a few
+  hundred milliseconds after a page load and again after every sign-in, and a
+  click inside that window was rejected outright.
+- A local-only workspace is recognised whatever spelling its subject is written
+  in. The set of disconnected workspaces is read through the canonical form but
+  was written raw, so a trailing slash or a legacy `did:ad:` identifier could
+  store a key nothing found again, and a resource inside such a workspace could
+  still try to reach the server.
 - A private workspace the app has to recreate is titled after whoever it
   belongs to, like the one onboarding and an accepted invitation already
   make. A returning account on a second device, and a sign-in whose cloud

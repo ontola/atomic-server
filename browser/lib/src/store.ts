@@ -763,7 +763,14 @@ export class Store {
         const rawLocalOnly = localStorage.getItem('atomic.localOnlyDrives');
 
         if (rawLocalOnly) {
-          this.localOnlyDrives = new Set(JSON.parse(rawLocalOnly));
+          // Normalized on the way back in: an earlier build stored whatever
+          // spelling the caller passed, and every reader looks with the
+          // canonical form.
+          this.localOnlyDrives = new Set(
+            (JSON.parse(rawLocalOnly) as string[]).map(subject =>
+              this.normalizeSubject(subject),
+            ),
+          );
         }
       } catch {
         // ignore corrupt value
@@ -902,28 +909,68 @@ export class Store {
   private localOnlyDrives = new Set<string>();
 
   /** Mark a drive as local-only. Must be called BEFORE the drive's first
-   *  `save()` — registration is what routes saves away from the outbox. */
+   *  `save()` — registration is what routes saves away from the outbox.
+   *
+   *  Normalized on the way in, because every reader normalizes before it
+   *  looks (`isLocalOnlyDrive`, `isLocalOnlySubject`): a caller's trailing
+   *  slash or `did:ad:` spelling would otherwise store a key nothing finds. */
   public registerLocalOnlyDrive(drive: string): void {
+    const normalized = this.normalizeSubject(drive);
+
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(
         'atomic.localOnlyDrives',
-        JSON.stringify([...new Set([...this.localOnlyDrives, drive])]),
+        JSON.stringify([...new Set([...this.localOnlyDrives, normalized])]),
       );
     }
 
-    this.localOnlyDrives.add(drive);
+    this.localOnlyDrives.add(normalized);
   }
 
   /** Switch this client to browser-only sync after verifying its local copy.
-   * Does not delete data from the server or alter other devices' configuration. */
+   * Does not delete data from the server or alter other devices' configuration.
+   *
+   * The three preconditions each get their own message. They used to share
+   * "Open this drive with local storage available before disconnecting", which
+   * is only true for one of them: someone signed out, or on a server this
+   * client holds no socket for, was told to do something they had already done
+   * and given nothing to act on.
+   */
   public async makeDriveLocal(drive: string): Promise<void> {
-    const db = this.getClientDb();
+    const normalized = this.normalizeSubject(drive);
     const agent = this.getAgent();
-    const serverUrl = this.serverUrl;
-    const ws = this.getDefaultWebSocket();
-    if (!db?.isReady || !agent || !ws)
+
+    if (!agent) throw new Error('Sign in before disconnecting this workspace.');
+
+    // The local database attaches a few hundred ms after boot and again after
+    // every agent change, so a click inside that window found no database at
+    // all. Wait for the attach rather than refusing. `waitForInit` and not
+    // `isReady`, because the latter also demands the bootstrap seed and
+    // nothing below reads a bootstrap resource.
+    await this.waitForClientDb();
+    const db = this.getClientDb();
+
+    if (!db || !(await db.waitForInit()))
       throw new Error(
         'Open this drive with local storage available before disconnecting.',
+      );
+
+    const serverUrl = this.serverUrl;
+    // Sockets are registered under whatever string opened them, which is not
+    // always `serverUrl`, so fall back to the drive's origin exactly as
+    // `promoteLocalDrive` does. An open one, at that: the inventory below is a
+    // live request, and a socket that merely exists left `rbsrItems` to fail
+    // with "WebSocket is not open", which is not something a user can act on.
+    const open = (candidate: WSClient | undefined) =>
+      candidate?.readyState === WebSocket.OPEN ? candidate : undefined;
+    const ws =
+      open(this.getDefaultWebSocket()) ??
+      open(this.getWebSocketForSubject(normalized));
+
+    if (!ws)
+      throw new AtomicError(
+        'Connect to a server before disconnecting this workspace.',
+        ErrorType.Server,
       );
 
     const current = () => {
@@ -942,6 +989,11 @@ export class Store {
     };
 
     current();
+    // The caller's spelling goes to the socket and to the verification, not the
+    // normalized one: `rbsrItems` echoes the subjects it was asked about,
+    // `verifyLocalDriveCopy` matches the drive against them, and the drive-wide
+    // SUB this later drops was sent under `getDrive()`'s own spelling, which is
+    // not normalized either. `registerLocalOnlyDrive` normalizes for itself.
     const inventory = await ws.rbsrItems(drive, '');
     await verifyLocalDriveCopy(db, drive, inventory);
     // A second inventory catches changes made while attachment verification ran.
@@ -955,7 +1007,8 @@ export class Store {
   /** Forget a local-only drive (e.g. after deleting a demo workspace),
    *  keeping the persisted registration set bounded. */
   public unregisterLocalOnlyDrive(drive: string): void {
-    if (!this.localOnlyDrives.delete(drive)) return;
+    // Normalized to match what `registerLocalOnlyDrive` stored.
+    if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(
@@ -1054,7 +1107,13 @@ export class Store {
     );
     const drive = resource?.get('https://atomicdata.dev/properties/drive');
 
-    if (typeof drive === 'string' && this.localOnlyDrives.has(drive)) {
+    // Normalized, because the set holds normalized keys and a propval is
+    // whatever the server wrote: a `did:ad:` spelling of an `atomic:` drive
+    // would otherwise miss here and let a local-only resource try a POST.
+    if (
+      typeof drive === 'string' &&
+      this.localOnlyDrives.has(this.normalizeSubject(drive))
+    ) {
       return true;
     }
 
