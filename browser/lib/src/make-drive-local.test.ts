@@ -89,6 +89,22 @@ describe('local-only drive registration', () => {
     expect(store.isLocalOnlyDrive(DRIVE)).toBe(false);
   });
 
+  it('matches a drive registered with the legacy scheme', async ({
+    expect,
+  }) => {
+    // `vaultAutoBackup` registers and reads back `did:ad:drive:…` verbatim,
+    // which is the case a raw `has` on the set got wrong.
+    const { store } = await testStore();
+    store.registerLocalOnlyDrive('did:ad:drive:test');
+
+    expect(store.isLocalOnlyDrive('did:ad:drive:test')).toBe(true);
+    expect(store.isLocalOnlyDrive('atomic:drive:test')).toBe(true);
+
+    store.unregisterLocalOnlyDrive('did:ad:drive:test');
+
+    expect(store.isLocalOnlyDrive('did:ad:drive:test')).toBe(false);
+  });
+
   it('matches a resource whose drive propval uses the legacy scheme', async ({
     expect,
   }) => {

@@ -1019,7 +1019,9 @@ export class Store {
   }
 
   public isLocalOnlyDrive(drive: string): boolean {
-    return this.localOnlyDrives.has(drive);
+    // Normalized, like the write side: the set holds canonical keys, and a
+    // caller may hold the `did:ad:` spelling or a trailing slash.
+    return this.localOnlyDrives.has(this.normalizeSubject(drive));
   }
 
   /**
@@ -1117,7 +1119,10 @@ export class Store {
       return true;
     }
 
-    return this.localOnlyDrives.has(this.driveOf(normalized));
+    // `driveOf` returns a raw `parent` propval, so normalize that too.
+    return this.localOnlyDrives.has(
+      this.normalizeSubject(this.driveOf(normalized)),
+    );
   }
 
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
