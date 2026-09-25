@@ -1372,8 +1372,9 @@ export class Store {
     if (!entry) return;
 
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
-    // (which renames it to `did:ad:<sig>`) before it can be POSTed.
-    // Reaching the drain with one is a bug in the save path: the server
+    // (which renames it to `did:ad:<sig>`) before it can be POSTed. The
+    // current UI no longer creates these, but an outbox written by an older
+    // build may still hold one. Reaching the drain with one means: the server
     // rejects `subject: "_new:…"` with a 500 ("Unable to parse string as
     // URL") and the failed POST reschedules the drain, storming the server
     // forever. Drop the stray dirty bit rather than retry an un-POSTable
@@ -1957,19 +1958,6 @@ export class Store {
     const normalized = this.normalizeSubject(subject);
 
     return this.aliases.get(normalized) ?? normalized;
-  }
-
-  /**
-   * True when `subject` is a placeholder (`_new:…`) that has since been aliased
-   * to a real subject — i.e. the draft it stood for has been persisted.
-   *
-   * Lets a view tell apart the two reasons a collection can grow: one of its
-   * own drafts materialising, versus a resource arriving from elsewhere (a
-   * peer, or another tab). Those need opposite handling, and without a way to
-   * distinguish them a view has to guess.
-   */
-  public isAliased(subject: string): boolean {
-    return this.aliases.has(this.normalizeSubject(subject));
   }
 
   /** Resolve a (possibly aliased) subject to its cached Resource. */
@@ -2748,8 +2736,8 @@ export class Store {
     // The user's saved-drives switcher list lives on the personal DRIVE itself
     // (the per-user home index), not on the Agent. Seed it with this drive so
     // it shows up in the switcher. This must be a second commit: the drive's
-    // real `did:ad:` subject is only derived at save (before save it's a
-    // `_new:` placeholder), so we can't reference it in the creation commit.
+    // genesis commit is signed before this value exists, so it can't be part
+    // of the creation commit.
     drive.push(server.properties.drives, [drive.subject], true);
     await drive.save();
 
@@ -3130,27 +3118,6 @@ export class Store {
     const parentUrl = parent ?? this.getServerUrl();
 
     return this.findAvailableSubject(path, parentUrl);
-  }
-
-  /**
-   * Creates a placeholder subject for a brand-new resource. When the current
-   * agent is DID-based, returns a temporary `_new:{random}` key that gets
-   * replaced with the real `did:ad:...` on first commit (matching
-   * `newResource()`'s shouldUseDid path). Otherwise builds a random HTTP
-   * subject under `parent` or the server root.
-   *
-   * Without this branch, callers like `useNewForm` would mint an HTTP
-   * subject such as `http://localhost:9883/01k…` that a DID-agent has no
-   * edit rights on — saves fail with "Agent does not have edit rights".
-   */
-  public createSubject(parent?: string): string {
-    const agentSubject = this.getAgent()?.subject;
-
-    if (!!agentSubject && isAgentSubject(agentSubject)) {
-      return `_new:${this.randomPart()}`;
-    }
-
-    return this.createHTTPSubject(parent ?? this.serverUrl);
   }
 
   /**
@@ -6294,41 +6261,6 @@ export class Store {
       }
 
       return subjects;
-    }
-
-    // A child's certificate binds its parent permanently. Settle the form's
-    // certificate DID first, but leave its genesis unsigned until Save so the
-    // required attachment property is included in the first server commit.
-    if (
-      parent.startsWith('_new:') &&
-      !!agent.subject &&
-      isAgentSubject(agent.subject)
-    ) {
-      const parentResource = this.resources.get(parent);
-      if (!parentResource) throw new Error('Upload parent is not in the store');
-      const parentParent = parentResource.get(core.properties.parent) as
-        | string
-        | undefined;
-      const driveProperty = 'https://atomicdata.dev/properties/drive';
-      const driveSubject =
-        (parentResource.get(driveProperty) as string | undefined) ??
-        (this.resources.get(parentParent ?? '')?.get(driveProperty) as
-          | string
-          | undefined) ??
-        parentParent ??
-        this.getDrive() ??
-        '';
-      const minted = await this.mintCertDid(parentParent ?? '', driveSubject);
-      await parentResource.set(
-        'https://atomicdata.dev/properties/genesis',
-        minted.certB64,
-        false,
-      );
-      await parentResource.set(driveProperty, driveSubject, false);
-      this.resources.delete(parent);
-      parentResource.setSubject(minted.did);
-      this.addResource(parentResource, { alias: parent });
-      parent = minted.did;
     }
 
     const createdSubjects: string[] = [];

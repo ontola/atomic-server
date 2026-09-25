@@ -1676,8 +1676,8 @@ function ddmmyyyyToIso(value: string): string {
 /**
  * Waits until every row typed into a grid is a real member of its table.
  *
- * A new row is held purely locally under a `_new:` subject until its
- * materialize timer fires — no commit, no collection membership. Anything
+ * A new row is a draft held purely locally (its genesis is unsigned) until
+ * its materialize timer fires — no commit, no collection membership. Anything
  * computed OVER that collection therefore cannot see it yet: a total renders
  * an em-dash, a filter does not match it, a chart omits it. Asserting on such
  * a value before this point is asserting about a table that does not contain
@@ -1690,13 +1690,22 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
   await page.waitForFunction(
     () => {
       const resources = Array.from(window.store.resources?.values?.() ?? []);
+      // What creating a draft row writes; anything more is a row someone
+      // typed into.
+      const seeded = new Set([
+        'https://atomicdata.dev/properties/isA',
+        'https://atomicdata.dev/properties/parent',
+        'https://atomicdata.dev/properties/drive',
+        'https://atomicdata.dev/properties/genesis',
+      ]);
       const stillVirtual = resources.some(
-        // A placeholder holds only its seeded `isA` + `parent`; anything more
-        // is a row someone typed into.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (r: any) =>
-          String(r.subject).startsWith('_new:') &&
-          (r.getEntries?.()?.length ?? 0) > 2,
+          r.new &&
+          /^(did:ad|atomic):/.test(String(r.subject)) &&
+          (r.getEntries?.() ?? []).some(
+            ([property]: [string]) => !seeded.has(property),
+          ),
       );
 
       return (

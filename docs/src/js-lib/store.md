@@ -139,22 +139,17 @@ const resource = await store.newResource({
 await resource.save();
 ```
 
-## Generating random subjects
+## Choosing a subject
 
-In some cases you might need a subject before you have created the resource with that subject.
-To generate a random subject, use the `store.createSubject()` method.
-This method generates a new subject with the current serverURL as hostname and a random lowercased [ULID](https://github.com/ulid/spec) string as the path.
-
-The method also allows you to pass a parent subject to generate a subject under that parent.
+`store.newResource()` gives a resource its final subject when it is created, before it is saved.
+For a DID agent that is a `did:ad:` derived from a signed genesis certificate; otherwise it is a random subject under the parent.
+There is no separate step to reserve a subject first: create the resource and read `resource.subject`.
 
 ```typescript
-const subject = store.createSubject();
-// Result: https://myserver.com/01hw30e1w6t9y0y5aqg0aghhf4
-
-
-// With parent subject
-const subject = store.createSubject(parent.subject);
+const resource = await store.newResource({ parent: parent.subject, isA: core.classes.folder });
+resource.subject; // final, also after resource.save()
 ```
+
 > [!WARNING]
 > Keep in mind that subjects never change once they are set, even if the parent changes.
 > This means you can't reliably infer the parent from the subject.

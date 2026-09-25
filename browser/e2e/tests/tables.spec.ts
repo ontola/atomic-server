@@ -364,7 +364,7 @@ test.describe('tables', async () => {
     // Wait for the two things the reload below actually depends on, rather
     // than for the aggregate counter to happen to reach zero.
     //
-    // A row keeps a `_new:` subject until its materialize timer fires: it
+    // A row stays an unsaved draft until its materialize timer fires: it
     // exists in this tab and nowhere else, so the count above being right
     // says nothing about whether it would survive. And a materialized row
     // still has to reach the server. Assert both directly.
@@ -379,7 +379,7 @@ test.describe('tables', async () => {
         if (rows.length !== expected) return false;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (rows.some((r: any) => String(r.subject).startsWith('_new:'))) {
+        if (rows.some((r: any) => r.new)) {
           return false;
         }
 

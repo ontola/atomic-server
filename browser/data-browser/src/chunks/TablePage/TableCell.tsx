@@ -34,6 +34,7 @@ import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { RemoteCellPresence, TablePresenceContext } from './TablePresence';
 import { useSettings } from '../../helpers/AppSettings';
+import { hasUserContent, isUnsavedDraft } from './draftRow';
 
 interface TableCellProps {
   columnIndex: number;
@@ -112,10 +113,8 @@ export function TableCell({
     { commit: false, commitDebounce: 0 },
   );
 
-  // Remote sessions whose active cell this is. Match on the RESOLVED
-  // subject (`resource.subject`, not the `subject` prop): peers announce
-  // real `did:ad:` subjects, and a materialized session row's `_new:`
-  // prop subject aliases to one.
+  // Remote sessions whose active cell this is. Match on the resource's own
+  // (normalized) subject: that is what peers announce.
   const remoteAgents = useContext(TablePresenceContext)
     .rows.get(resource.subject)
     ?.filter(p => p.column === property.subject)
@@ -146,15 +145,15 @@ export function TableCell({
 
       await setValue(v);
 
-      // A `_new:` row is virtual: it stays purely local (the Loro dirty
-      // subscriber skips `_new:` subjects, so it never auto-drains) and is
+      // A draft row stays purely local (the Loro dirty subscriber skips
+      // resources that are still `new`, so it never auto-drains) and is
       // materialized when the user moves off it (`useMaterializeWhenDeselected`).
       // NOT persisting per-keystroke is what keeps rapid row entry stable — no
       // save → re-fetch → remount churn reaches the cell mid-typing. Existing
       // rows still persist as you type. Instead of a save spawning the next
       // empty row (the old mechanism), the virtual row spawns it directly on
       // first content via `onFirstContent`.
-      if (resource.subject.startsWith('_new:')) {
+      if (isUnsavedDraft(resource)) {
         onFirstContent?.();
       } else {
         save();
@@ -175,7 +174,7 @@ export function TableCell({
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       // While editing, keep the native menu (copy/paste in the input). A
-      // virtual `_new:` row isn't a real resource, so the menu no-ops there.
+      // draft row isn't saved yet, so the menu no-ops there.
       if (isEditing) {
         return;
       }
@@ -277,13 +276,13 @@ export function TableCell({
     // exists — a virtual row spawns its successor via `onFirstContent` the
     // moment it gains content — so this is pure navigation, no spawning here.
     //
-    // Only advance if this row has real content (a fresh row has just `isA` +
-    // `parent`) — avoids hopping off an empty row on a stray Enter. Read the
+    // Only advance if this row has real content (a fresh row has only what
+    // creating it wrote) — avoids hopping off an empty row on a stray Enter. Read the
     // count FRESH from the resource, not a render-time snapshot: the keystroke
     // just typed updates the resource synchronously, but the cell's rerender
     // lags under load, so a stale closure would skip the advance — piling the
     // next value onto the same cell.
-    if (resource.getEntries().length > 2) {
+    if (hasUserContent(resource)) {
       setActiveCell(rowIndex + 1, columnIndex);
     }
   }, [setActiveCell, rowIndex, columnIndex, resource]);

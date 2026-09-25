@@ -17,7 +17,7 @@ export interface TestStore {
 
 /**
  * A Store wired for unit tests against the PUBLIC API
- * (`newResource` → `set` → `save`). No `_new:` subjects,
+ * (`newResource` → `set` → `save`). No placeholder subjects,
  * `markNextCommitAsGenesis`, `CommitBuilder`, or
  * `syncDirtyResources` plumbing in the tests themselves.
  *
