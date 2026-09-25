@@ -583,7 +583,7 @@ impl Db {
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
         let existing = self
-            .get_propvals_aliased(&subject_str)
+            .get_propvals_canonical(&subject_str)
             .ok()
             .map(|(_, pv)| pv);
         if !overwrite_existing && existing.is_some() {
@@ -601,11 +601,8 @@ impl Db {
 
         if update_index {
             // Every atom is removed and filed again, not only the changed
-            // ones: this rewrite doubles as the repair for index keys left
-            // under another identifier spelling (see
-            // `basic_parent_query_deduplicates_legacy_and_canonical_subjects`).
-            // Identical re-puts from a tab are already skipped before they
-            // reach here (`Store.persistState`).
+            // ones. Identical re-puts from a tab are already skipped before
+            // they reach here (`Store.persistState`).
             //
             // Evict against the state that is going away, not the one
             // replacing it. Whether an entry belongs in a watched query's
@@ -1375,37 +1372,16 @@ impl Db {
     /// already stored locally? Used by managed-node replication to skip drives it
     /// already hosts before resolving/pulling them from a peer.
     pub fn has_resource_locally(&self, subject: &str) -> bool {
-        crate::identifiers::storage_lookup_keys(subject)
-            .into_iter()
-            .any(|key| {
-                self.kv
-                    .contains_key(Tree::Resources, key.as_bytes())
-                    .unwrap_or(false)
-            })
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        self.kv
+            .contains_key(Tree::Resources, key.as_bytes())
+            .unwrap_or(false)
     }
 
     /// Rewrite `did:ad:` resource / snapshot / mapping keys to `atomic:` on
     /// open. Idempotent; see [`canonical_scheme::migrate_if_needed`].
     fn migrate_canonical_scheme_if_needed(&self) -> AtomicResult<()> {
         canonical_scheme::migrate_if_needed(self)
-    }
-
-    /// Delete the other accepted spelling of `canonical` so a write under
-    /// `atomic:X` does not leave a `did:ad:X` row beside it.
-    fn queue_delete_identifier_aliases(&self, canonical: &str, transaction: &mut Transaction) {
-        for key in crate::identifiers::storage_lookup_keys(canonical)
-            .into_iter()
-            .filter(|k| k != canonical)
-        {
-            transaction.push(Operation::remove_resource(&key));
-            transaction.push(Operation::remove_loro_snapshot(&key));
-            transaction.push(Operation {
-                tree: Tree::DidMapping,
-                method: Method::Delete,
-                key: key.into_bytes(),
-                val: None,
-            });
-        }
     }
 
     /// The stored Loro snapshot of `subject`, under whichever spelling the
@@ -1415,21 +1391,17 @@ impl Db {
     }
 
     pub(crate) fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
-        for key in crate::identifiers::storage_lookup_keys(subject) {
-            if let Ok(Some(bytes)) = self.kv.get(Tree::LoroSnapshots, key.as_bytes()) {
-                return Some(bytes);
-            }
-        }
-        None
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        self.kv
+            .get(Tree::LoroSnapshots, key.as_bytes())
+            .ok()
+            .flatten()
     }
 
     fn get_did_mapping_hint(&self, subject: &str) -> Option<String> {
-        for key in crate::identifiers::storage_lookup_keys(subject) {
-            if let Ok(Some(bin)) = self.kv.get(Tree::DidMapping, key.as_bytes()) {
-                return std::str::from_utf8(&bin).ok().map(str::to_string);
-            }
-        }
-        None
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        let bin = self.kv.get(Tree::DidMapping, key.as_bytes()).ok()??;
+        std::str::from_utf8(&bin).ok().map(str::to_string)
     }
 
     /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
@@ -2237,7 +2209,6 @@ impl Db {
             key: subject_str.as_bytes().to_vec(),
             val: Some(resource_bin),
         });
-        self.queue_delete_identifier_aliases(&subject_str, transaction);
         Ok(())
     }
 
@@ -2351,24 +2322,14 @@ impl Db {
         }
     }
 
-    /// The key under which `subject` is actually stored. Tries the canonical
-    /// `atomic:` form first, then the legacy `did:ad:` alias.
-    fn stored_resource_key(&self, subject: &str) -> Option<String> {
-        crate::identifiers::storage_lookup_keys(subject)
-            .into_iter()
-            .find(|key| self.get_propvals(key).is_ok())
-    }
-
-    fn get_propvals_aliased(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
-        let mut last_err = None;
-        for key in crate::identifiers::storage_lookup_keys(subject) {
-            match self.get_propvals(&key) {
-                Ok(propvals) => return Ok((key, propvals)),
-                Err(e) => last_err = Some(e),
-            }
-        }
-        Err(last_err
-            .unwrap_or_else(|| AtomicError::not_found(format!("Resource {} not found", subject))))
+    /// The stored row of `subject`, and the key it is stored under: the
+    /// `atomic:` spelling. Opening a store rewrites every `did:ad:` key
+    /// (`canonical_scheme::migrate_if_needed`) and every write keys by
+    /// [`Subject::pure_id`], so a legacy spelling only needs normalizing.
+    fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        let propvals = self.get_propvals(&key)?;
+        Ok((key, propvals))
     }
 
     /// A resource built only from its last-committed materialized propvals,
@@ -2382,7 +2343,7 @@ impl Db {
     /// drive hint) matches `get_resource`, so ids/subjects stay consistent.
     pub fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
-        let (subject_str, propvals) = self.get_propvals_aliased(&normalized.pure_id())?;
+        let (subject_str, propvals) = self.get_propvals_canonical(&normalized.pure_id())?;
 
         let mut res_subject = normalized.clone();
         if let Subject::Did {
@@ -3821,17 +3782,9 @@ impl Db {
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
         for mut index_atom in atom.to_indexable_atoms() {
-            let canonical = index_atom.subject.pure_id();
-            let legacy = crate::identifiers::to_legacy_scheme(&canonical);
-            index_atom.subject = canonical.into();
+            index_atom.subject = index_atom.subject.pure_id().into();
             transaction.push(Operation::remove_atom_from_reference_index(&index_atom));
             transaction.push(Operation::remove_atom_from_prop_val_sub_index(&index_atom));
-            if legacy != index_atom.subject.as_str() {
-                let mut legacy_atom = index_atom.clone();
-                legacy_atom.subject = legacy.into();
-                transaction.push(Operation::remove_atom_from_reference_index(&legacy_atom));
-                transaction.push(Operation::remove_atom_from_prop_val_sub_index(&legacy_atom));
-            }
 
             check_if_atom_matches_watched_query_filters(
                 self,
@@ -3866,12 +3819,10 @@ impl Db {
         // `to_string()` (which may carry `?drive=` params) would miss the
         // row entirely for DID subjects with a drive hint.
         let subject_str = subject.pure_id();
-        if let Ok((found_key, found)) = self.get_propvals_aliased(&subject_str) {
+        if let Ok((found_key, found)) = self.get_propvals_canonical(&subject_str) {
             let resource = Resource::from_propvals(found, subject.clone());
-            for key in crate::identifiers::storage_lookup_keys(&found_key) {
-                transaction.push(Operation::remove_resource(&key));
-                transaction.push(Operation::remove_loro_snapshot(&key));
-            }
+            transaction.push(Operation::remove_resource(&found_key));
+            transaction.push(Operation::remove_loro_snapshot(&found_key));
             // Read the drive now, while the resource still exists: a listener
             // reacting to the removal cannot look it up any more.
             let drive = resource.get_drive().or(inherited_drive);
@@ -4349,10 +4300,6 @@ impl Storelike for Db {
                     key: new.get_subject().pure_id().as_bytes().to_vec(),
                     val: Some(snapshot),
                 });
-                self.queue_delete_identifier_aliases(
-                    &new.get_subject().pure_id(),
-                    &mut transaction,
-                );
             }
         }
 
@@ -4545,7 +4492,7 @@ impl Storelike for Db {
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
-        if let Ok((subject_str, propvals)) = self.get_propvals_aliased(&subject_str) {
+        if let Ok((subject_str, propvals)) = self.get_propvals_canonical(&subject_str) {
             let mut res_subject = normalized.clone();
 
             // If it's a DID and we don't have a hint in the requested subject,
@@ -4734,7 +4681,7 @@ impl Storelike for Db {
 
     fn has_stored_resource(&self, subject: &Subject) -> bool {
         let normalized = self.normalize_subject(subject);
-        self.stored_resource_key(&normalized.pure_id()).is_some()
+        self.get_propvals(&normalized.pure_id()).is_ok()
     }
 
     fn get_defaults_fingerprint(&self) -> AtomicResult<Option<String>> {
