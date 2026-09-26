@@ -682,7 +682,10 @@ export class AtomicServer {
     // by the rust/wasm lanes. A Locked mount here used to serialize pub get /
     // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
     // the step that merely ran `flutter pub get`).
-    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
+    // The volume is still mounted Shared, so its Cargo locks live inside it
+    // (see the symlinks below). A fresh name keeps older branches, which
+    // mount it with private locks, out of this cache.
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo-shared-locks-v1');
     const flutterRustTarget = this.targetCache('flutter-plugin-rust-target');
     const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
     const flutterRustup = dag.cacheVolume('flutter-rustup');
@@ -748,6 +751,22 @@ export class AtomicServer {
         .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
           sharing: CacheSharingMode.Shared,
         })
+        // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
+        // in CARGO_HOME, outside the shared volume, so two runs on one engine
+        // unpacked the same crate at once and failed with
+        // "failed to unpack package ... .cargo-ok: File exists".
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache',
+          '/root/.cargo/.package-cache',
+        ])
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache-mutate',
+          '/root/.cargo/.package-cache-mutate',
+        ])
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
