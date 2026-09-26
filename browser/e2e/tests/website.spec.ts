@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createFromCatalog, before } from './test-utils';
+import { createFromCatalog, before, waitForSynced } from './test-utils';
 import {
   enableAIForTesting,
   sendChatMessage,
@@ -10,6 +10,14 @@ import {
 test('website document preview, frozen release and reload', async ({
   page,
 }) => {
+  // Measured over sixteen four-worker rounds, this test runs 43797 to 57261 ms,
+  // and the second of those is 95% of the 60s default. It creates a document and
+  // a website, freezes a release, downloads the zip, edits the document again and
+  // reloads, and the wait added below is part of that cost. A wall failure names
+  // the wall rather than the step that was late, so the test would start blaming
+  // whichever preview assertion happened to be in flight. `test.slow()` is what
+  // the other test in this file already carries for the same reason.
+  test.slow();
   await before({ page });
   await page
     .getByRole('button', { name: 'New Document', exact: true })
@@ -48,6 +56,15 @@ test('website document preview, frozen release and reload', async ({
     .fill('A private change after the release.');
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.keyboard.press('Escape');
+  // The edit has to reach the server before we navigate away from it. A goto
+  // cancels whatever the page still had in flight, so an unflushed commit dies
+  // with it, the website page then builds its draft from the document as it was,
+  // and the preview shows the pre-edit text with nothing left to trigger a
+  // rebuild. That is what the failing screenshot showed: a healthy page, the
+  // preview rendering "This is the first published garden note.", and no
+  // "Updating preview…" toolbar. The sibling spec does the same fill, More and
+  // Escape and then waits here too.
+  await waitForSynced(page);
   await page.goto(websiteURL);
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(prepare).toBeEnabled({ timeout: 30000 });
