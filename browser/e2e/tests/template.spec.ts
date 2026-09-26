@@ -36,13 +36,20 @@ const test = baseTest.extend<{
       // `apply sveltekit template`, and it reproduces alone on the first try,
       // so it is not load.
       //
-      // Closing rather than navigating, because `about:blank` is not quiet
-      // either: the `pagehide` it fires makes the loader drop its load
-      // silently (`pageRequestSignal()`), but it also cancels whatever the
-      // page had in flight, and SvelteKit's router logs the resulting
-      // `RequestCancelledError` from the layout's `load`. Measured: the
-      // two loro lines go away and that one takes their place. A closed page
-      // has nothing in flight to cancel and nothing left to log.
+      // Closing rather than navigating, because `about:blank` is noisier: the
+      // `pagehide` it fires makes the loader drop its load silently
+      // (`pageRequestSignal()`), but it also cancels whatever the page had in
+      // flight, and the generated site logs the resulting
+      // `RequestCancelledError` from its `load`. Measured: the two loro lines
+      // go away and that one takes their place.
+      //
+      // Closing is quieter, NOT quiet. An earlier version of this comment said
+      // a closed page has nothing left to log; develop run 4660 disproved that
+      // by failing on exactly that `RequestCancelledError`. Ending the page's
+      // use of the server cancels its in-flight reads however it is done, so
+      // the generated site has to be the one that stays quiet about a
+      // cancellation: the sveltekit template's `hooks.client.ts` ignores
+      // `RequestCancelledError`, which is what makes this teardown safe.
       //
       // Only when nothing has failed yet, so a test that failed in its BODY
       // keeps its page and the diagnostics fixture can still collect failure
