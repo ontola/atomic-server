@@ -15,6 +15,12 @@ import * as Sentry from '@sentry/react';
 interface RuntimeSentryConfig {
   dsn?: string;
   environment?: string;
+  /**
+   * Same-origin path the host relays envelopes from to Sentry. Browsers with
+   * tracking protection or an ad blocker refuse requests to sentry.io, which
+   * made every report and feedback submission fail for those users.
+   */
+  tunnel?: string;
 }
 
 declare global {
@@ -47,6 +53,7 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     environment,
+    tunnel: runtime?.tunnel || undefined,
     release: `atomic-data-browser@${__APP_VERSION__}+${__GIT_COMMIT__}`,
     sendDefaultPii: false,
     // No performance tracing or session replay. Explicit feedback is sent

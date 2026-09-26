@@ -30,6 +30,11 @@ import {
 } from '@chunks/TablePage/tablePageContext';
 import { TableNewRow, TableRow } from '@chunks/TablePage/TableRow';
 import {
+  hasUserContent,
+  isSavedDraft,
+  isUnsavedDraft,
+} from '@chunks/TablePage/draftRow';
+import {
   useTableColumns,
   type TableColumn,
 } from '@chunks/TablePage/useTableColumns';
@@ -53,6 +58,7 @@ import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
 import { DashboardView } from './Dashboard/DashboardView';
+import { IssuesView } from './Issues/IssuesView';
 import { TimerToolbar } from './Timer/TimerToolbar';
 import { useTimerColumns } from './Timer/useTimerColumns';
 import { useDerivedColumns } from './useDerivedColumns';
@@ -89,6 +95,9 @@ interface TableResourceProps {
 }
 
 const columnToKey = (column: TableColumn) => column.key;
+
+/** Draft rows minted ahead, so adding a row never waits on a signature. */
+const DRAFT_POOL_SIZE = 2;
 
 /**
  * Which rows a query asks for, as one comparable string — so the collection in
@@ -532,7 +541,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
       }
     }
 
-    // Kanban groups by it, calendar places days by it, timer starts from it.
+    // Kanban groups by it, calendar places days by it, timer starts from
+    // it, the issue list splits open from closed by it.
     if (viewKind !== 'table' && viewGroupBy) {
       locked.add(viewGroupBy);
     }
@@ -565,50 +575,105 @@ export const TableResource: React.FC<TableResourceProps> = ({
     addItemsToHistoryStack,
   );
 
-  // Each new row's `_new:` subject is minted ONCE, here in the parent, and
-  // used as both its react-window key and the subject handed to `TableNewRow`.
-  // This is what keeps row identity stable: react-window recycles/remounts row
-  // components freely, so if `TableNewRow` minted its own subject via
-  // `useState(createSubject)` a remount would orphan the typed data on the old
-  // subject and show a fresh empty one. Binding subject↔key in the parent means
-  // a remount reuses the same subject and the same (virtual) resource.
-  const generateRowSubject = useCallback(
-    () => store.createSubject(resource.subject),
-    [store, resource.subject],
-  );
+  // Each new row is a draft minted with `store.newResource({ deferGenesis:
+  // true })`: it has its final subject from the start, and saving it signs the
+  // genesis under that same subject. The subject is minted ONCE, here in the
+  // parent, and used as both its react-window key and the subject handed to
+  // `TableNewRow`. This is what keeps row identity stable: react-window
+  // recycles/remounts row components freely, so if `TableNewRow` minted its
+  // own draft a remount would orphan the typed data on the old one and show a
+  // fresh empty row. Binding subject↔key in the parent means a remount reuses
+  // the same draft.
+  //
+  // Minting is async (it signs a genesis certificate), but adding a row must
+  // not wait: Enter and Shift+Enter move the cursor into the new row in the
+  // same handler. So a few drafts are minted ahead and handed out
+  // synchronously, and the pool refills in the background. A draft nobody
+  // uses is never saved, so it never reaches the server.
+  const classtype = resource.props.classtype;
+  const draftPool = useRef<string[]>([]);
+  const refillingDrafts = useRef(false);
 
-  // Fractional order key per session row, minted with the subject. Seeded
-  // into the draft (see TableNewRow) so a row's on-screen position persists
-  // when it materializes — including rows spliced mid-session via
-  // Shift+Enter, whose eventual `createdAt` (sign time) wouldn't match their
-  // visual position.
+  const mintDraft = useCallback(async () => {
+    const draft = await store.newResource({
+      parent: resource.subject,
+      isA: classtype,
+      deferGenesis: true,
+    });
+
+    return draft.subject;
+  }, [store, resource.subject, classtype]);
+
+  const refillDrafts = useCallback(() => {
+    if (refillingDrafts.current) return;
+
+    refillingDrafts.current = true;
+
+    const fill = async () => {
+      while (draftPool.current.length < DRAFT_POOL_SIZE) {
+        draftPool.current.push(await mintDraft());
+      }
+    };
+
+    const done = () => {
+      refillingDrafts.current = false;
+    };
+
+    fill().then(done, e => {
+      done();
+      store.notifyError(e);
+    });
+  }, [mintDraft, store]);
+
+  // Fractional order key per session row, set when the row is handed out.
+  // Seeded into the draft (see TableNewRow) so a row's on-screen position
+  // persists when it materializes — including rows spliced mid-session via
+  // Shift+Enter, whose `createdAt` wouldn't match their visual position.
   const [sessionSortOrders] = useState(() => new Map<string, number>());
 
-  const mintSessionRow = useCallback(
-    (sortOrder: number) => {
-      const subject = generateRowSubject();
-      sessionSortOrders.set(subject, sortOrder);
+  /** Hands a draft row to `use`, synchronously whenever one is ready. */
+  const withSessionRow = useCallback(
+    (sortOrder: number, use: (subject: string) => void) => {
+      const take = (subject: string) => {
+        sessionSortOrders.set(subject, sortOrder);
+        use(subject);
+        refillDrafts();
+      };
 
-      return subject;
+      const pooled = draftPool.current.shift();
+
+      if (pooled) {
+        take(pooled);
+
+        return;
+      }
+
+      mintDraft().then(take, e => store.notifyError(e));
     },
-    [generateRowSubject, sessionSortOrders],
+    [mintDraft, refillDrafts, sessionSortOrders, store],
   );
 
-  const [newRowSubjects, setNewRowSubjects] = useState<string[]>(() => [
-    mintSessionRow(Date.now()),
-  ]);
+  const [newRowSubjects, setNewRowSubjects] = useState<string[]>([]);
+
+  // Start with one empty trailing row (and fill the pool behind it). Drafts
+  // minted for another parent or class are not handed out.
+  useEffect(() => {
+    draftPool.current = [];
+    withSessionRow(Date.now(), subject =>
+      setNewRowSubjects(prev => (prev.length > 0 ? prev : [subject])),
+    );
+  }, [withSessionRow]);
 
   // `memberCount` is the number of rows the collection already had when it
   // FIRST finished loading — captured once, at `ready`. Those render as real
   // `TableRow` collection members (by index). Everything after them is a
   // this-session row from `newRowSubjects`, rendered as a `TableNewRow` keyed
-  // by its stable `_new:` subject.
+  // by its draft subject.
   //
   // Freezing the count (rather than tracking `collection.totalMembers` live) is
   // the whole point: a session row NEVER flips from `TableNewRow` to `TableRow`
-  // when it materializes. It keeps its `_new:` key — which the store aliases to
-  // the real `did:ad:` subject, so the cell resolves the persisted resource —
-  // and react-window therefore never remounts it. That remount was the churn
+  // when it materializes. It keeps its key — saving a draft does not change
+  // its subject — and react-window therefore never remounts it. That remount was the churn
   // that desynced the table editor's active-cell / cursor state and dropped
   // keystrokes mid-edit. Capturing at the initial load (not inferring from
   // later growth) is also what makes a RELOAD correct: every persisted row is
@@ -661,11 +726,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   }
 
   // A session row that has already been persisted is counted by the collection
-  // AND still rendered from `newRowSubjects` (it keeps its `_new:` key, see
-  // above). Every count derived from the collection has to leave those out, or
+  // AND still rendered from `newRowSubjects` (it keeps its key, see above). Every count derived from the collection has to leave those out, or
   // the row is drawn twice: once as a member, once as itself.
   const materialisedSessionRows = newRowSubjects.filter(subject =>
-    store.isAliased(subject),
+    isSavedDraft(store.getResourceLoading(subject)),
   ).length;
 
   // Freeze the count only once the collection actually answers what was asked.
@@ -714,7 +778,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // from `newRowSubjects` — and let anything beyond that raise the baseline.
   //
   // Only ever raises it. Shrink stays with `decrementMemberCount` and the clamp
-  // below, and session rows keep their `_new:` key through the index shift
+  // below, and session rows keep their key through the index shift
   // (`itemKey` offsets by `memberCount`), so nothing remounts.
   if (baselineMemberCountRef.current !== null) {
     const accountedFor =
@@ -761,13 +825,13 @@ export const TableResource: React.FC<TableResourceProps> = ({
     for (const subject of newRowSubjectsRef.current) {
       const row = store.getResourceLoading(subject);
 
-      if (row.subject.startsWith('_new:') && row.getEntries().length > 2) {
+      if (isUnsavedDraft(row) && hasUserContent(row)) {
         void row.save().catch(() => undefined);
       }
     }
 
-    setNewRowSubjects([mintSessionRow(Date.now())]);
-  }, [queryKey, store, mintSessionRow]);
+    withSessionRow(Date.now(), subject => setNewRowSubjects([subject]));
+  }, [queryKey, store, withSessionRow]);
 
   const decrementMemberCount = useCallback(() => {
     if (baselineMemberCountRef.current && baselineMemberCountRef.current > 0) {
@@ -814,14 +878,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
           return false;
         }
 
-        const anchorKey = sessionSortOrders.get(newRowSubjects[sessionIdx]);
+        const anchor = newRowSubjects[sessionIdx];
+        const anchorKey = sessionSortOrders.get(anchor);
         const nextKey = sessionSortOrders.get(newRowSubjects[sessionIdx + 1]);
-        const spliced = mintSessionRow(computeSortOrder(anchorKey, nextKey));
-        setNewRowSubjects(prev => [
-          ...prev.slice(0, sessionIdx + 1),
-          spliced,
-          ...prev.slice(sessionIdx + 1),
-        ]);
+        withSessionRow(computeSortOrder(anchorKey, nextKey), spliced =>
+          setNewRowSubjects(prev => {
+            const at = prev.indexOf(anchor) + 1;
+
+            // The anchor row went away before the draft was ready.
+            if (at === 0) return prev;
+
+            return [...prev.slice(0, at), spliced, ...prev.slice(at)];
+          }),
+        );
 
         return true;
       }
@@ -876,7 +945,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       memberCount,
       newRowSubjects,
       sessionSortOrders,
-      mintSessionRow,
+      withSessionRow,
       collection,
       store,
       resource.subject,
@@ -887,8 +956,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   const addNewRow = useCallback(() => {
-    setNewRowSubjects(prev => [...prev, mintSessionRow(Date.now())]);
-  }, [mintSessionRow]);
+    withSessionRow(Date.now(), subject =>
+      setNewRowSubjects(prev => [...prev, subject]),
+    );
+  }, [withSessionRow]);
 
   const itemKey = useCallback(
     (index: number) => {
@@ -983,8 +1054,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
       // Resolve the row by the SAME index→row mapping the grid renders with:
       // members come from the collection, session rows from `newRowSubjects`.
       // Using `collection.getMemberWithIndex` for everything would mis-resolve
-      // session rows (they keep their `_new:` identity and are not addressed by
-      // collection index here).
+      // session rows (they are drafts, not addressed by collection index
+      // here).
       const isMember = index < memberCount;
       const subject = isMember
         ? await collection.getMemberWithIndex(index)
@@ -1001,9 +1072,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
       const rowResource = store.getResourceLoading(subject);
 
-      // A purely-virtual row that was never materialized has no server resource
-      // to destroy — removing it from `newRowSubjects` above is enough.
-      if (rowResource.subject.startsWith('_new:')) {
+      // A draft that was never saved has no server resource to destroy —
+      // removing it from `newRowSubjects` above is enough.
+      if (isUnsavedDraft(rowResource)) {
         return;
       }
 
@@ -1172,6 +1243,17 @@ export const TableResource: React.FC<TableResourceProps> = ({
             tableClass={tableClass}
             allColumns={allColumns}
             columns={uniqueColumnProperties}
+            collection={collection}
+            ready={ready}
+            viewGroupBy={viewGroupBy}
+            setViewGroupBy={setViewGroupBy}
+            readOnly={!canWrite}
+          />
+        ) : viewKind === 'issues' ? (
+          <IssuesView
+            tableSubject={resource.subject}
+            tableClass={tableClass}
+            allColumns={allColumns}
             collection={collection}
             ready={ready}
             viewGroupBy={viewGroupBy}

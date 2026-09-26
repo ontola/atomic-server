@@ -53,6 +53,7 @@ import {
   openShortcutsOverlay,
   setOverlay,
   subscribeOverlay,
+  pendingSearchOverlayQuery,
   type OverlayType,
 } from './overlayState';
 import { useDocumentText } from '../hooks/useDocumentText';
@@ -370,7 +371,7 @@ function SearchOverlay(): JSX.Element {
 
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(pendingSearchOverlayQuery);
   const [selectedIndex, setSelected] = useState(0);
 
   const { searchQuery, tagSubjects } = useMemo(

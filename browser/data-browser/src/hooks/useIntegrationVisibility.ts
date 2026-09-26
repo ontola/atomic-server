@@ -13,7 +13,9 @@ import { usePrivateDrive } from './usePrivateDrive';
 import {
   integrationVisibility,
   integrationVisibilitySchema,
+  readPendingVisibility,
   readVisibilityCache,
+  writePendingVisibility,
   writeVisibilityCache,
   type IntegrationVisibilityKey,
   type IntegrationVisibilityValues,
@@ -47,18 +49,23 @@ export function useIntegrationVisibility() {
   const [local, setLocal] = useState<IntegrationVisibilityValues>(() =>
     readVisibilityCache(actor),
   );
-  /** Toggles that are queued, in flight, or failed: the local value wins. */
+  /** Toggles that are queued, in flight, or failed: the local value wins.
+   * Restored from storage, so a reload right after a toggle resumes its
+   * write rather than reverting to the drive's older value. */
   const [unconfirmed, setUnconfirmed] = useState<IntegrationVisibilityKey[]>(
-    [],
+    () => pendingKeys(readPendingVisibility(actor)),
   );
-  const [queue, setQueue] = useState<IntegrationVisibilityValues>({});
+  const [queue, setQueue] = useState<IntegrationVisibilityValues>(() =>
+    readPendingVisibility(actor),
+  );
   const flushing = useRef(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
+    const pending = readPendingVisibility(actor);
     setLocal(readVisibilityCache(actor));
-    setUnconfirmed([]);
-    setQueue({});
+    setUnconfirmed(pendingKeys(pending));
+    setQueue(pending);
     setError(undefined);
   }, [actor]);
 
@@ -134,10 +141,13 @@ export function useIntegrationVisibility() {
           properties: result.properties,
         });
 
-      if (!result.error)
+      if (!result.error) {
+        const remaining = dropSaved(readPendingVisibility(actor), entries);
+        writePendingVisibility(actor, remaining);
         setUnconfirmed(current =>
-          current.filter(key => !entries.some(([saved]) => saved === key)),
+          stillUnconfirmed(current, entries, remaining),
         );
+      }
 
       // A failed write leaves the choice applied locally; only saving failed.
       setError(result.error);
@@ -171,6 +181,10 @@ export function useIntegrationVisibility() {
 
   const setVisibility = (key: IntegrationVisibilityKey, next: boolean) => {
     setLocal(writeVisibilityCache(actor, { [key]: next }));
+    writePendingVisibility(actor, {
+      ...readPendingVisibility(actor),
+      [key]: next,
+    });
     setUnconfirmed(current =>
       current.includes(key) ? current : [...current, key],
     );
@@ -192,8 +206,14 @@ export function useIntegrationVisibility() {
   };
 }
 
+function pendingKeys(
+  pending: IntegrationVisibilityValues,
+): IntegrationVisibilityKey[] {
+  return Object.keys(pending) as IntegrationVisibilityKey[];
+}
+
 /** Keeps entries that were changed again while the write was in flight. */
-function dropSaved(
+export function dropSaved(
   queued: IntegrationVisibilityValues,
   saved: [IntegrationVisibilityKey, boolean][],
 ): IntegrationVisibilityValues {
@@ -204,6 +224,18 @@ function dropSaved(
   }
 
   return next;
+}
+
+/** A saved key is confirmed unless it was toggled again mid-flight, which
+ * leaves it in the remaining pending values. */
+export function stillUnconfirmed(
+  current: IntegrationVisibilityKey[],
+  saved: [IntegrationVisibilityKey, boolean][],
+  remaining: IntegrationVisibilityValues,
+): IntegrationVisibilityKey[] {
+  return current.filter(
+    key => key in remaining || !saved.some(([savedKey]) => savedKey === key),
+  );
 }
 
 async function saveVisibility(

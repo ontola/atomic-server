@@ -3539,7 +3539,7 @@ mod initiator_trust_tests {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod accept_gate_tests {
     //! The accept side of the Iroh transport (`handle_stream`) and the sync
     //! engine's `SYNC_PUSH` answer, exercised the way a hostile or merely
@@ -4064,7 +4064,7 @@ mod live_peer_registry_tests {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod peer_sync_volume_tests {
     use super::*;
 

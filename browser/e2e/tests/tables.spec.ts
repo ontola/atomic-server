@@ -364,7 +364,7 @@ test.describe('tables', async () => {
     // Wait for the two things the reload below actually depends on, rather
     // than for the aggregate counter to happen to reach zero.
     //
-    // A row keeps a `_new:` subject until its materialize timer fires: it
+    // A row stays an unsaved draft until its materialize timer fires: it
     // exists in this tab and nowhere else, so the count above being right
     // says nothing about whether it would survive. And a materialized row
     // still has to reach the server. Assert both directly.
@@ -379,7 +379,7 @@ test.describe('tables', async () => {
         if (rows.length !== expected) return false;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (rows.some((r: any) => String(r.subject).startsWith('_new:'))) {
+        if (rows.some((r: any) => r.new)) {
           return false;
         }
 
@@ -418,8 +418,25 @@ test.describe('tables', async () => {
     // when write count drops, this budget can too.
     await expect.poll(namedRowCount, { timeout: 30000 }).toBe(values.length);
 
-    // Same 30s budget as the count poll above, for the same reason: the
-    // spot-checked rows render from hydrations queued behind the re-drain.
+    // The two spot-checks below render from hydrations queued behind the
+    // re-drain, but they do NOT cost the same, and sizing them together is
+    // what let this test fail on develop run 4635. Measured over 14
+    // four-worker rounds, each against a store wiped before the round:
+    //
+    //   count poll      4     5     5     5     6     8    13    89 ms
+    //   row1           37  1147  1164  2055  2721  3125  8083  9139 ms
+    //   row40          16   101   168   270  6699  8535 12965 17866
+    //               20623 23438 26383 28420 32417 47442 ms
+    //
+    // The count poll is effectively free and row1 peaks at 30% of its 30s,
+    // so both keep it. row40 is the tail of the drain and went over 30s in
+    // 2 of those 14 rounds, peaking at 47.4s, which is 158% of the budget it
+    // was given. That is the failure 4635 saw: the count poll and row1 both
+    // passed there and only row40 timed out, with rows 31-40 still reading
+    // "loading" in the snapshot. So row40 alone goes to 90s, a little under
+    // twice the widest sample. The enclosing wall is test.slow()'s 180s and
+    // the rest of the test costs ~28s at its worst, so 90s still leaves the
+    // assertion room to fire and name itself rather than the wall.
     const grid = page.getByRole('grid');
     await grid.evaluate(g => g.scrollIntoView({ block: 'start' }));
     await page.mouse.move(600, 300);
@@ -433,7 +450,7 @@ test.describe('tables', async () => {
     await expect(
       page.getByRole('gridcell', { name: last, exact: true }),
       `Last row "${last}" should be visible after refresh`,
-    ).toBeVisible({ timeout: 30000 });
+    ).toBeVisible({ timeout: 90000 });
   });
 
   test(
@@ -463,9 +480,9 @@ test.describe('tables', async () => {
         'Before sort, first row should be the first-entered ("gamma")',
       ).toBeVisible();
 
-      // Click the "name" column header to sort by name (ascending).
+      // Click the "Name" column header to sort by name (ascending).
       await page
-        .getByRole('button', { name: 'name', exact: true })
+        .getByRole('button', { name: 'Name', exact: true })
         .first()
         .click();
 

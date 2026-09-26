@@ -29,18 +29,12 @@ export default defineConfig({
   adapters: {
     main: jsx({
       loader: 'react',
-      // The integration screens (Connect GitHub, Google Calendar, Notion and
-      // the rest) are React components that ship inside the pinned `devonian`
-      // package and are aliased in as `@localthought/atomic-integrations`.
-      // They render in this app, so their text belongs in the catalog. The
-      // adapter's default `src/**` never reaches them, and a catalog rebuilt
-      // without this line leaves those screens with blank labels.
+      // Tests never reach the vite plugin, so the CLI (`pnpm
+      // clean-translations`) must skip them too; otherwise the two extract
+      // different catalogs and every dev-server start rewrites them.
       files: {
-        include: [
-          'src/**/*.{js,ts,jsx,tsx}',
-          'node_modules/devonian/platform-lenses/atomic-integrations/**/*.{ts,tsx}',
-        ],
-        ignore: '**/*.d.ts',
+        include: ['src/**/*.{js,ts,jsx,tsx}'],
+        ignore: ['**/*.d.ts', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
       },
       heuristic: ({ msgStr, details }) => {
         const [msg] = msgStr;

@@ -15,6 +15,7 @@ use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, Message, Running,
     StreamHandler, WrapFuture,
 };
+use actix_http::ws::Item;
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, WsResponseBuilder};
 use atomic_lib::{
@@ -43,6 +44,10 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 /// Used as the `source_id` carried on `CommitOpts`/`CommitResponse` so
 /// the commit monitor can suppress same-source broadcasts (no echo of
 /// a client's own commit back to the connection that sent it).
+/// Largest frame, and largest message reassembled from continuation frames,
+/// a connection accepts.
+const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
+
 static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn new_connection_id() -> String {
@@ -77,6 +82,7 @@ pub async fn web_socket_handler(
             request_origin,
             auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
             client_capabilities: Vec::new(),
+            fragments: None,
             commit_monitor_addr: appstate.commit_monitor.clone(),
             agent: for_agent,
             store: appstate.store.clone(),
@@ -94,7 +100,7 @@ pub async fn web_socket_handler(
     // actix-web-actors defaults `max_size` to 65 536 bytes (64 KiB). Real
     // Loro snapshots — especially for documents with editing history or
     // canvases with many strokes — routinely exceed that, and JSON/base64
-    // wrapping (the RBSR text frames) adds another ~40% on top of the raw
+    // wrapping (the text frames) adds another ~40% on top of the raw
     // bytes. A frame over the limit causes actix to drop the TCP socket
     // without sending a Close control frame, which the browser sees as a
     // CloseEvent `code=1006, wasClean=false`: an unexplained reconnect
@@ -103,7 +109,7 @@ pub async fn web_socket_handler(
     // benchmarks top out in the low MBs even for multi-megabyte texts) and
     // still far below the ~4 GiB WebSocket frame ceiling, so we don't risk
     // silently truncating legitimate payloads.
-    .frame_size(16 * 1024 * 1024)
+    .frame_size(MAX_MESSAGE_SIZE)
     .start()?;
 
     Ok(result)
@@ -122,6 +128,9 @@ pub struct WebSocketConnection {
     /// Capability names the client listed in a `HELLO` (0x37), if it sent
     /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
     client_capabilities: Vec<String>,
+    /// A message arriving in continuation frames, until its last frame:
+    /// whether it is text, and the bytes so far. See `handle_fragment`.
+    fragments: Option<(bool, Vec<u8>)>,
     commit_monitor_addr: Addr<CommitMonitor>,
     agent: ForAgent,
     store: Db,
@@ -246,19 +255,95 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 self.handle_binary(&bin, ctx);
             }
             Ok(ws::Message::Text(text)) => {
-                // Remaining text messages: Loro sync, presence, RBSR
+                // Remaining text messages: Loro sync, presence, drive inventory
                 self.handle_text(&text, ctx);
+            }
+            Ok(ws::Message::Continuation(item)) => {
+                self.hb = Instant::now();
+                self.handle_fragment(item, ctx);
             }
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
                 ctx.stop();
             }
-            _ => ctx.stop(),
+            Ok(ws::Message::Nop) => {}
+            Err(e) => {
+                tracing::warn!("ws {}: protocol error, closing: {e}", self.connection_id);
+                ctx.close(Some(ws::CloseCode::Protocol.into()));
+                ctx.stop();
+            }
         }
     }
 }
 
 impl WebSocketConnection {
+    /// Joins a message the client split over several frames and handles it
+    /// once its last frame arrives.
+    ///
+    /// Chromium sends a message it reads from its data pipe as a first frame
+    /// with FIN unset and continuation frames after it, so any large `COMMIT`
+    /// (a drive app's entry point carries its whole module) arrives this way.
+    /// actix-web-actors does not join them. This handler used to stop the
+    /// actor on them, which drops the socket without a Close frame: the
+    /// browser reports `1006` and goes offline mid-write.
+    fn handle_fragment(&mut self, item: Item, ctx: &mut ws::WebsocketContext<Self>) {
+        let (bytes, last) = match item {
+            Item::FirstText(b) => {
+                self.fragments = Some((true, Vec::new()));
+                (b, false)
+            }
+            Item::FirstBinary(b) => {
+                self.fragments = Some((false, Vec::new()));
+                (b, false)
+            }
+            Item::Continue(b) => (b, false),
+            Item::Last(b) => (b, true),
+        };
+
+        let Some((_, buffer)) = self.fragments.as_mut() else {
+            tracing::warn!(
+                "ws {}: continuation frame without a first frame, closing",
+                self.connection_id
+            );
+            ctx.close(Some(ws::CloseCode::Protocol.into()));
+            ctx.stop();
+            return;
+        };
+        if buffer.len() + bytes.len() > MAX_MESSAGE_SIZE {
+            tracing::warn!(
+                "ws {}: fragmented message over {MAX_MESSAGE_SIZE} bytes, closing",
+                self.connection_id
+            );
+            self.fragments = None;
+            ctx.close(Some(ws::CloseCode::Size.into()));
+            ctx.stop();
+            return;
+        }
+        buffer.extend_from_slice(&bytes);
+
+        if !last {
+            return;
+        }
+        let Some((is_text, message)) = self.fragments.take() else {
+            return;
+        };
+        if !is_text {
+            self.handle_binary(&message, ctx);
+            return;
+        }
+        match std::str::from_utf8(&message) {
+            Ok(text) => self.handle_text(text, ctx),
+            Err(_) => {
+                tracing::warn!(
+                    "ws {}: fragmented text is not UTF-8, closing",
+                    self.connection_id
+                );
+                ctx.close(Some(ws::CloseCode::Invalid.into()));
+                ctx.stop();
+            }
+        }
+    }
+
     /// Whether this session has a proven identity: auth headers on the
     /// upgrade request, or an `AUTH` frame that succeeded. A session that
     /// has neither is `Public`.
@@ -596,7 +681,7 @@ impl WebSocketConnection {
     }
 
     /// Handle the remaining text messages (Loro and presence subscriptions,
-    /// RBSR, index status).
+    /// the drive inventory, index status).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
         if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
@@ -671,54 +756,27 @@ impl WebSocketConnection {
                     });
             }
         } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
-            // RBSR: answer range fingerprints so the client can find the
-            // differing subjects without transmitting the whole version vector.
-            // Stateless (rebuilds `drive_items` per request) — the incremental
-            // fingerprint tree that makes this cheaper is Phase 2c.
-            //
-            // Gated on `check_read` per subject for this session's agent, like
-            // the full `SYNC` exchange. Without that an anonymous socket
-            // could enumerate every subject and version vector of any drive.
-            if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
-                let store = self.store.clone();
-                let agent = self.agent.clone();
-                let wire =
-                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
-                ctx.spawn(
-                    async move {
-                        let items = atomic_lib::sync::engine::drive_items_for_wire(
-                            &store, &req.drive, &agent, wire,
-                        )
-                        .await;
-                        items
-                            .map(|items| {
-                                let fps: Vec<String> = req
-                                    .ranges
-                                    .iter()
-                                    .map(|(lo, hi)| {
-                                        hex::encode(atomic_lib::sync::rbsr::range_fingerprint(
-                                            &items,
-                                            lo,
-                                            hi.as_deref(),
-                                        ))
-                                    })
-                                    .collect();
-                                serde_json::json!({ "drive": req.drive, "fps": fps }).to_string()
-                            })
-                            .map_err(|reason| (req.drive.clone(), reason))
-                    }
-                    .into_actor(self)
-                    .map(|resp, _actor, ctx| match resp {
-                        Ok(resp) => ctx.text(format!("RBSR_FP {resp}")),
-                        Err((drive, reason)) => ctx.binary(ws_v2::encode_error(
-                            0,
-                            ws_v2::error_code::UNAUTHORIZED_READ,
-                            &format!("RBSR_FP refused for {drive}: {reason}"),
-                        )),
-                    }),
-                );
-            }
+            // Range fingerprints are no longer computed (RBSR was removed
+            // 2026-09: it rebuilt the whole drive inventory on every round
+            // trip, so it cost more than the full `SYNC` it tried to avoid).
+            // Clients from before that still send this after `SYNC_RESEND`.
+            // Answer at once without `fps`: their descent then fails on the
+            // first range and they send the full version-vector `SYNC`, as
+            // they do on any RBSR failure, instead of waiting out their 10s
+            // query timeout. Nothing is read, so nothing needs gating.
+            let drive = serde_json::from_str::<serde_json::Value>(json)
+                .ok()
+                .and_then(|v| v.get("drive").and_then(|d| d.as_str()).map(String::from))
+                .unwrap_or_default();
+            ctx.text(format!(
+                "RBSR_FP {}",
+                serde_json::json!({ "drive": drive, "unsupported": true })
+            ));
         } else if let Some(json) = text.strip_prefix("RBSR_ITEMS ") {
+            // The drive inventory: every subject in `[lo, hi)` this session's
+            // agent may read, with its version vector. Once one step of the
+            // RBSR descent, now used on its own (`makeDriveLocal` checks the
+            // browser holds everything the server has before going local).
             if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
@@ -760,13 +818,6 @@ impl WebSocketConnection {
             tracing::debug!("Unknown text message: {}", &text[..text.len().min(50)]);
         }
     }
-}
-
-#[derive(serde::Deserialize)]
-struct RbsrFpRequest {
-    drive: String,
-    /// `[lo, hi]` ranges; `hi == null` means unbounded above.
-    ranges: Vec<(String, Option<String>)>,
 }
 
 #[derive(serde::Deserialize)]

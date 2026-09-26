@@ -10,6 +10,7 @@ import { Dialog, useDialog } from '@components/Dialog';
 import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
 import { addIf } from '@helpers/addIf';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
+import { useColumnLabel } from '../helpers/useColumnLabel';
 import { InputJSON } from '@components/forms/InputJSON';
 
 function JSONCellEdit({
@@ -29,6 +30,7 @@ function JSONCellEdit({
     },
   });
   const prop = useProperty(property);
+  const label = useColumnLabel(prop);
 
   const { exitEditMode } = useTableEditorContext();
 
@@ -59,7 +61,7 @@ function JSONCellEdit({
         {isOpen && (
           <>
             <Dialog.Title>
-              <h1>Edit {prop.shortname}</h1>
+              <h1>Edit {label}</h1>
             </Dialog.Title>
             <StyledDialogContent
               onKeyDown={e => {

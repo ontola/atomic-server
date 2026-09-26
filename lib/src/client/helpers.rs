@@ -292,6 +292,38 @@ pub fn get_authentication_headers(url: &str, agent: &Agent) -> AtomicResult<Vec<
     Ok(headers)
 }
 
+/// Version 2 authentication headers: the signature also covers `method` and
+/// the SHA-256 of `body`, and `x-atomic-signature-version: 2` says so. See
+/// [crate::authentication::request_signature_message_v2]. `url` must be the
+/// full URL the request goes to, query included, as the server sees it.
+pub fn get_authentication_headers_v2(
+    method: &str,
+    url: &str,
+    body: &[u8],
+    agent: &Agent,
+) -> AtomicResult<Vec<(String, String)>> {
+    use crate::authentication::{
+        request_signature_message_v2, sha256_hex, SIGNATURE_VERSION_2, SIGNATURE_VERSION_HEADER,
+    };
+    let now = crate::utils::now();
+    let message = request_signature_message_v2(method, url, now, &sha256_hex(body));
+    let signature = sign_message(
+        &message,
+        agent
+            .private_key
+            .as_ref()
+            .ok_or("No private key in agent")?,
+        &agent.public_key,
+    )?;
+    Ok(vec![
+        ("x-atomic-public-key".into(), agent.public_key.to_string()),
+        ("x-atomic-signature".into(), signature),
+        ("x-atomic-timestamp".into(), now.to_string()),
+        ("x-atomic-agent".into(), agent.subject.to_string()),
+        (SIGNATURE_VERSION_HEADER.into(), SIGNATURE_VERSION_2.into()),
+    ])
+}
+
 /// Fetches a URL, returns its body.
 /// Uses the store's Agent agent (if set) to sign the request.
 /// For a URL the system itself determined (a resource's own subject, a
@@ -582,6 +614,35 @@ async fn post_commit_custom_endpoint(
 mod test {
     use super::*;
 
+    /// What the Rust client signs, the server-side check accepts, and only
+    /// for that method and body.
+    #[test]
+    fn v2_headers_verify() {
+        let agent = Agent::new(None).unwrap();
+        let url = "https://proxy.example/connect/redeem?x=1";
+        let body = br#"{"code":"c","code_verifier":"v"}"#;
+        let headers = get_authentication_headers_v2("post", url, body, &agent).unwrap();
+        let get = |name: &str| {
+            headers
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+                .unwrap()
+        };
+        assert_eq!(get("x-atomic-signature-version"), "2");
+        let auth = |method: &str, body: &[u8]| crate::authentication::AuthValues {
+            public_key: get("x-atomic-public-key"),
+            timestamp: get("x-atomic-timestamp").parse().unwrap(),
+            signature: get("x-atomic-signature"),
+            requested_subject: url.to_string(),
+            agent_subject: get("x-atomic-agent"),
+            request: Some(crate::authentication::RequestBinding::new(method, body)),
+        };
+        crate::authentication::check_auth_signature(url, &auth("POST", body)).unwrap();
+        assert!(crate::authentication::check_auth_signature(url, &auth("POST", b"{}")).is_err());
+        assert!(crate::authentication::check_auth_signature(url, &auth("PUT", body)).is_err());
+    }
+
     #[test]
     fn authentication_origin_rejects_lookalikes() {
         let server = "https://example.com";
@@ -834,5 +895,89 @@ mod bounded_body_tests {
         let url = one_shot_server(response);
         let body = fetch(&url, 1024).await.unwrap();
         assert_eq!(body.len(), 1024);
+    }
+}
+
+/// External vocabulary on GitHub Pages is served as
+/// `application/octet-stream` (the files have no `.json` extension), so the
+/// fetch goes by the body, not the Content-Type: a JSON-AD body is accepted
+/// whatever the type says, and anything that is not JSON-AD is refused
+/// however it is labelled.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod content_type_tests {
+    use std::io::{Read, Write};
+
+    /// Serves `body` with `content_type` once on a loopback port. Returns
+    /// the URL, which is also the subject the body should carry.
+    fn serve_once(content_type: &'static str, body: impl FnOnce(&str) -> Vec<u8>) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://127.0.0.1:{}/ontology/classes/draft-v1",
+            listener.local_addr().unwrap().port()
+        );
+        let body = body(&url);
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&body);
+            let _ = stream.flush();
+        });
+        url
+    }
+
+    fn class_doc(subject: &str) -> Vec<u8> {
+        serde_json::json!({
+            "@id": subject,
+            crate::urls::IS_A: [crate::urls::CLASS],
+            crate::urls::SHORTNAME: "draft",
+            crate::urls::DESCRIPTION: "A class served the way GitHub Pages serves it.",
+        })
+        .to_string()
+        .into_bytes()
+    }
+
+    #[tokio::test]
+    async fn json_ad_served_as_octet_stream_is_accepted() {
+        let store = crate::Store::init().await.unwrap();
+        let url = serve_once("application/octet-stream", class_doc);
+
+        let resource = super::fetch_resource(&url, &store, None)
+            .await
+            .unwrap()
+            .to_single();
+
+        assert_eq!(resource.get_subject().as_str(), url);
+        assert_eq!(
+            resource.get(crate::urls::SHORTNAME).unwrap().to_string(),
+            "draft"
+        );
+    }
+
+    #[tokio::test]
+    async fn html_served_as_octet_stream_is_refused() {
+        let store = crate::Store::init().await.unwrap();
+        let url = serve_once("application/octet-stream", |_| {
+            b"<!DOCTYPE html><html><body>404: not a vocabulary</body></html>".to_vec()
+        });
+
+        assert!(super::fetch_resource(&url, &store, None).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn binary_served_as_octet_stream_is_refused() {
+        let store = crate::Store::init().await.unwrap();
+        let url = serve_once("application/octet-stream", |_| {
+            vec![
+                0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d,
+            ]
+        });
+
+        assert!(super::fetch_resource(&url, &store, None).await.is_err());
     }
 }

@@ -14,7 +14,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
-const SOURCE: &str = include_str!("../../../integrations/github-issues/plugin.js");
+const SOURCE: &str = include_str!("../../../testdata/plugin-sync/plugin.js");
 #[derive(Default)]
 struct Provider {
     issues: BTreeMap<u64, Value>,

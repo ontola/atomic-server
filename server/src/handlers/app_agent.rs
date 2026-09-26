@@ -20,7 +20,7 @@ use atomic_lib::{
 use crate::{
     appstate::AppState,
     errors::{AtomicServerError, AtomicServerResult},
-    helpers::get_client_agent,
+    helpers::get_client_agent_for_request,
 };
 
 #[derive(serde::Deserialize)]
@@ -41,16 +41,20 @@ pub struct AppAgentQuery {
 
 /// Deliberately not `Debug`: the body holds a private key, and a handler that
 /// logs its arguments on error is how secrets reach a log file.
-#[tracing::instrument(skip(appstate, body, req))]
+#[tracing::instrument(skip(appstate, raw, req))]
 pub async fn handle_set_app_agent(
     appstate: web::Data<AppState>,
-    body: web::Json<SetAppAgentBody>,
+    raw: web::Bytes,
     req: actix_web::HttpRequest,
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
+    // Raw bytes rather than `web::Json`: a version 2 request signature covers
+    // the SHA-256 of exactly these bytes, which carry a private key.
+    let body: SetAppAgentBody = serde_json::from_slice(&raw)
+        .map_err(|e| AtomicServerError::bad_request(format!("Invalid JSON body: {e}")))?;
     // Write rights on the app: giving it an identity is changing what it can
     // do, which is at least as consequential as editing it.
-    let agent = authorize(&appstate, &req, &context, &body.app).await?;
+    let agent = authorize(&appstate, &req, &raw, &context, &body.app).await?;
 
     let ForAgent::AgentSubject(_) = &agent else {
         return Err(AtomicServerError::bad_request(
@@ -84,7 +88,7 @@ pub async fn handle_get_app_agent(
     req: actix_web::HttpRequest,
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    authorize(&appstate, &req, &context, &query.app).await?;
+    authorize(&appstate, &req, &[], &context, &query.app).await?;
 
     Ok(HttpResponse::Ok().json(
         appstate
@@ -102,7 +106,7 @@ pub async fn handle_delete_app_agent(
     req: actix_web::HttpRequest,
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    authorize(&appstate, &req, &context, &query.app).await?;
+    authorize(&appstate, &req, &[], &context, &query.app).await?;
 
     appstate
         .store
@@ -114,6 +118,7 @@ pub async fn handle_delete_app_agent(
 async fn authorize(
     appstate: &AppState,
     req: &actix_web::HttpRequest,
+    body: &[u8],
     context: &crate::context::RequestContext,
     app: &str,
 ) -> AtomicServerResult<ForAgent> {
@@ -129,7 +134,7 @@ async fn authorize(
     let signed_subject =
         atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
 
-    let agent = get_client_agent(req.headers(), appstate, &signed_subject).await?;
+    let agent = get_client_agent_for_request(req, body, appstate, &signed_subject).await?;
     check_write(store, &resource, &agent).await?;
 
     Ok(agent)

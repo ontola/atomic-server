@@ -34,7 +34,7 @@
         "base-uri": "'self'",
         "form-action": "'self'"
       },
-      "dangerousDisableAssetCspModification": false
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "bundle": {

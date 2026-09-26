@@ -14,6 +14,57 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   datatype that is present but unrecognised still throws, since that is a real
   gap rather than a slow fetch.
 
+- `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
+  (they still work). The app no longer creates temporary `_new:` subjects
+  that are renamed on first save: the new-resource form, new-resource dialogs
+  and new table rows all create their resource with `store.newResource()`, so
+  it has its final subject from the start. Use `store.newResource()` (with
+  `deferGenesis: true` for a draft that is filled in before its first save)
+  and read `resource.subject`. `_new:` subjects written by older builds are
+  still read and synced as before.
+
+- `@tomic/lib` answers a stale drive-sync probe (`SYNC_RESEND`) with the full
+  version-vector `SYNC` instead of a range-based set reconciliation over
+  `RBSR_FP` / `RBSR_ITEMS`. The range descent cost the server more than the
+  full exchange. `rbsr.ts` is gone, and `WSClient.rbsrItems` is
+  now `WSClient.driveInventory`.
+
+- A workspace a Cloud Server node refuses ("not enrolled") no longer sits on
+  "Connecting…" with changes pending forever. The server card says the server
+  doesn't host it, and "Sync this workspace with this server" can be turned
+  off even though the server won't answer, keeping it on this device. A
+  suspended Cloud Server enrollment no longer counts as hosted, so the app
+  stops pointing a drive at a node that will refuse it.
+- Fixed opening the app while signed in to atomic.place sending you to sign
+  in again, and signing in with your secret then signing you out of
+  atomic.place. A backup saved before the `did:ad:` → `atomic:` rename names
+  your agent in the old spelling, and the check that compares it with the
+  agent on this device compared the text, so one agent looked like two. The
+  gate then switched identities, and the secret sign-in ended the account
+  session as if the secret belonged to someone else.
+- Fixed a drive restored from Cloud Vault on a new device showing its raw
+  identifier as its title, or being replaced by an empty new workspace. The
+  app kept the answer it had before the restore ("not found") and trusted it
+  over the data the restore had just written, so sign-in could decide there
+  was nothing and create a new home over the restored one.
+- A private workspace the app has to recreate is titled after whoever it
+  belongs to, like the one onboarding and an accepted invitation already
+  make. A returning account on a second device, and a sign-in whose cloud
+  restore did not finish in time, used to land in a workspace called "My
+  drive" moments after proving who they are, which reads like the wrong
+  account. An account with no name set still gets the default.
+- Fixed a private workspace being titled `[i18n-404:1664]`. That title is
+  written when the workspace is made, so it stayed. The app composed it from
+  the translation catalog while still starting up, and the catalog is not
+  always loaded by then; the default is a plain string again, and the name
+  beside it is deliberately kept out of the catalog for the same reason.
+- The Share dialog is one screen: invite people, see who has access and change
+  their role (Can write, Can read, Remove access), see who gets in through a
+  parent folder, and set public access to Off, Read or Write. On hosted Atomic
+  you can type email addresses and an optional message and the invite link is
+  emailed to them; on a self-hosted server the invite link, with its role, is
+  what you copy and send yourself. The title shows the resource's name.
+
 - Fix: a presence announcement carrying something Loro cannot store no longer
   breaks the tab. A view's presence payload is typed as whatever that view
   likes, so a callback or a class with methods can travel in it, and Loro
@@ -65,6 +116,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   Status), not only through `tags`, so Doing no longer reads "0 resources".
 - Move the Connections and Automations buttons above table views into the table's context menu, next to Export to CSV. They open the same dialog as before.
 
+- App frames call the integration proxy directly, with a capability instead of a relay (ontola/atomic-plugins#54; replaces #1657's `proxy` relay and LocalThought's rotating connection codes, which the new proxy no longer issues). A frame makes its own non-extractable Ed25519 key in memory; the page checks that the connection is delegated to the app and signs a capability bound to that key (`integration-proxy-capability-v2`, 10 minutes); each request is signed by the frame key with a version 2 request signature. `store.proxy.request(...)` keeps its shape; it mints a new capability shortly before expiry and once more on a `capability_expired` refusal. View op `proxy` is gone, `proxyCapability` is new. Connecting no longer logs in at the proxy: the page redeems the handoff signed with the user key, which makes the user the connection's owner, then delegates it to the app (also signed). The connect bar offers an existing connection for the same platform, which only adds a delegation. Only apps with their own agent (made with `createApp`) can be given a connection for now; others are told so. Where WebCrypto has no Ed25519 the frame fails with a message saying so. Existing connections are not migrated: connect again.
+- `@tomic/lib`: `signRequest(url, agent, headers, { method, body })` makes a version 2 request signature (ontola/atomic-plugins#54), which also covers the method and the SHA-256 of the body and sends `x-atomic-signature-version: 2`. Without `method` it signs version 1 as before, and a string fourth argument is still the legacy subject. New exports `requestSignatureMessageV2`, `sha256Hex` and `SIGNATURE_VERSION_HEADER`. `Agent.generateNonExtractable()` makes an agent whose Ed25519 key is a non-extractable WebCrypto key, with subject `atomic:agent:<public key>`; where WebCrypto has no Ed25519 it throws instead of falling back to an extractable key.
+- Plugins moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). The Integrations page lists what that catalog publishes (`catalog.json`, fetched at runtime; the URL is configurable under Settings > Integration) instead of plugins compiled into the app and server. The bundled GitHub issues, Notion, Pets, MT940/camt.053, Clockify and Google Calendar (Devonian) integrations, the `devonian` dependency and the `/app/devonian-demo` page are removed. The Todoist lens and the Moneybird administration picker are removed too. LocalThought connect and sync, and the "Show API plugins" toggle, are removed from the app: plugins will run in their own iframe and make proxy calls through the host.
+- Tracker tables get an Issues view: open and closed issues split by the status column (or a boolean column), filtering by title or `#number`, New issue, and Close/Reopen per row. The Issue Tracker template opens it as a tab.
+- Columns whose property has no name are labelled from its shortname, capitalised and with dashes shown as spaces, in the table heading, filter bar, property toggle and summary bar. A name someone typed is still shown exactly as written.
+- An import that stops early (for example at the 5,000-record cap) keeps what it fetched and shows "Synced with issues" instead of failing outright.
+- A plugin run that proposes no changes shows only Close, instead of a disabled "Apply 0 changes" button.
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value

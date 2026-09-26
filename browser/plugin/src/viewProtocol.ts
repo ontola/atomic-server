@@ -15,7 +15,16 @@ export type ViewOperation =
   | 'pickFile'
   | 'search'
   | 'subscribe'
-  | 'unsubscribe';
+  | 'unsubscribe'
+  /**
+   * A capability for one integration-proxy connection, bound to the frame's
+   * own public key and signed by the user (ontola/atomic-plugins#54).
+   */
+  | 'proxyCapability'
+  /** Connection references (never credentials) delegated to this app. */
+  | 'proxyConnections'
+  /** Ask the person, in host UI, to connect a proxy platform for this app. */
+  | 'proxyConnect';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -68,6 +77,9 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'search',
       'subscribe',
       'unsubscribe',
+      'proxyCapability',
+      'proxyConnections',
+      'proxyConnect',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

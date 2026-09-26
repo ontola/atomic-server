@@ -11,6 +11,7 @@ import {
   commits,
   server,
   classes,
+  Datatype,
   type JSONValue,
   type Resource,
   type Store,
@@ -170,9 +171,11 @@ export async function createDemoMessage(
     isA: [dataBrowser.classes.message, ...(opts.extraClasses ?? [])],
     propVals: {
       [core.properties.description]: opts.text,
-      [DEMO_SPEAKER]: opts.author,
     },
   });
+  // The speaker property is local to the demo and not published on
+  // atomicdata.dev, so validating it would fetch a 404 for every message.
+  await message.set(DEMO_SPEAKER, opts.author, true, Datatype.STRING);
   await message.save();
 
   return message;

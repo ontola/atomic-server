@@ -52,13 +52,17 @@ pub struct MintedToken {
 /// Takes read rights, not write: opening a view is reading its code. The check
 /// is against the requesting agent, so a token can never widen what the person
 /// who asked for it could already see.
-#[tracing::instrument(skip(appstate, body, req))]
+#[tracing::instrument(skip(appstate, raw, req))]
 pub async fn handle_mint_view_token(
     appstate: web::Data<AppState>,
-    body: web::Json<MintTokenBody>,
+    raw: web::Bytes,
     req: actix_web::HttpRequest,
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
+    // Raw bytes rather than `web::Json`, so a version 2 request signature can
+    // cover exactly the body acted on.
+    let body: MintTokenBody = serde_json::from_slice(&raw)
+        .map_err(|e| AtomicServerError::bad_request(format!("Invalid JSON body: {e}")))?;
     if !is_subject(&body.plugin) {
         return Err(AtomicServerError::bad_request(
             "Only a plugin stored in the drive needs a token",
@@ -77,7 +81,9 @@ pub async fn handle_mint_view_token(
     let signed_subject =
         atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
 
-    let agent = get_client_agent(req.headers(), &appstate, &signed_subject).await?;
+    let agent =
+        crate::helpers::get_client_agent_for_request(&req, &raw, &appstate, &signed_subject)
+            .await?;
     check_read(store, &resource, &agent).await?;
 
     let now = atomic_lib::utils::now();

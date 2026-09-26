@@ -43,7 +43,7 @@ That is what lets a signed edit made on a train be checked on a laptop that has 
 
 Third, a `localId` is not a Subject. It is a property (`https://atomicdata.dev/properties/localId`) whose value is a string chosen by whoever produces the data, unique among the children of one parent.
 When you [publish JSON-AD for others to import](create-json-ad.md), resources carry a `localId` instead of an `@id`: the importer mints a `did:ad:` Subject on first import, finds the same Resource again by `parent` + `localId` on the next one, and rewrites references between `localId`s into real links.
-Plugins use the same mechanism to find the resources they created, with a namespaced convention such as `atomic:pets:table`.
+Plugins use the same mechanism to find the resources they created, with a namespaced convention such as `atomic:example:table`.
 
 ## Routing hints
 

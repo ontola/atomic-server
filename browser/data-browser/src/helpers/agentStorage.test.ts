@@ -3,20 +3,32 @@ import { Agent } from '@tomic/react';
 
 /** In-memory stand-in for IndexedDB, so we can inspect exactly what got stored. */
 const store = new Map<string, unknown>();
+/** Extra latency on every write, for tests that race a slow sign-in. */
+let writeDelayMs = 0;
 
 vi.mock('idb-keyval', () => ({
   get: async (key: string) => store.get(key),
-  set: async (key: string, value: unknown) => void store.set(key, value),
+  set: async (key: string, value: unknown) => {
+    if (writeDelayMs) await new Promise(r => setTimeout(r, writeDelayMs));
+    store.set(key, value);
+  },
   del: async (key: string) => void store.delete(key),
   keys: async () => [...store.keys()],
 }));
 
-const { getAgentFromIDB, saveAgentToIDB } = await import('./agentStorage');
+const {
+  archiveStoredAgent,
+  getAgentFromIDB,
+  readPreviousIdentities,
+  saveAgentToIDB,
+} = await import('./agentStorage');
+const { waitForSessionDbKey } = await import('./localDbKey');
 
 const AGENT_IDB_KEY = 'atomic.agent';
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
 const SESSION_KEY_PREFIX = 'atomic.clientdb.session-key.';
 const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key.';
+const WRAPPED_KEY_V2_PREFIX = 'atomic.clientdb.wrapped-key-v2.';
 
 async function makeSecret(): Promise<string> {
   const keys = await Agent.generateKeyPair();
@@ -43,6 +55,22 @@ function withoutSubtleCrypto(run: () => Promise<void>): Promise<void> {
 describe('agent key storage', () => {
   beforeEach(() => store.clear());
   afterEach(() => store.clear());
+
+  it('announces a sign-in before its first await, so the database opener waits for it', async () => {
+    const secret = await makeSecret();
+    const order: string[] = [];
+    // A sign-in slower than the opener's own patience, as one that loads the
+    // wasm bundle on a cold page is.
+    writeDelayMs = 300;
+    // What callers do: set the agent (which starts the opener), then save.
+    const saving = saveAgentToIDB(secret).then(() => order.push('saved'));
+    const opening = waitForSessionDbKey('atomic:agent:test', 100).then(() =>
+      order.push('opened'),
+    );
+    await Promise.all([saving, opening]).finally(() => (writeDelayMs = 0));
+
+    expect(order).toEqual(['saved', 'opened']);
+  });
 
   it('never stores a readable private key where Web Crypto is available', async () => {
     await saveAgentToIDB(await makeSecret());
@@ -89,6 +117,7 @@ describe('agent key storage', () => {
     store.set(AGENT_FALLBACK_KEY, { privateKey: 'x', subject: 'y' });
     store.set(`${SESSION_KEY_PREFIX}fingerprint`, 'session-copy');
     store.set(`${WRAPPED_KEY_PREFIX}fingerprint`, 'wrapped-copy');
+    store.set(`${WRAPPED_KEY_V2_PREFIX}fingerprint`, 'wrapped-copy-v2');
 
     await saveAgentToIDB(undefined);
 
@@ -100,6 +129,7 @@ describe('agent key storage', () => {
     // ...while the wrapped copy survives, so the owning agent's cache becomes
     // readable again on their next sign-in rather than being wiped.
     expect(store.has(`${WRAPPED_KEY_PREFIX}fingerprint`)).toBe(true);
+    expect(store.has(`${WRAPPED_KEY_V2_PREFIX}fingerprint`)).toBe(true);
   });
 });
 
@@ -115,4 +145,32 @@ it('persists folder identities through non-extractable key restoration and keypa
   };
   await saveAgentToIDB(stored.keyPair, stored.subject);
   expect((await getAgentFromIDB())?.aiChatsFolders).toEqual(expected);
+});
+
+describe('keeping a replaced identity', () => {
+  beforeEach(() => store.clear());
+
+  it('keeps the stored key aside, once, even after another agent is saved', async () => {
+    await saveAgentToIDB(await makeSecret(), { adoptOnDevice: false });
+    const { subject, keyPair } = store.get(AGENT_IDB_KEY) as {
+      subject: string;
+      keyPair: CryptoKeyPair;
+    };
+
+    await archiveStoredAgent(subject, ['did:ad:kept']);
+    await archiveStoredAgent(subject, ['did:ad:kept', 'did:ad:other']);
+    await saveAgentToIDB(await makeSecret(), { adoptOnDevice: false });
+
+    const [previous, ...rest] = await readPreviousIdentities();
+    expect(rest).toEqual([]);
+    expect(previous.subject).toBe(subject);
+    expect((previous.record as { keyPair: CryptoKeyPair }).keyPair).toBe(
+      keyPair,
+    );
+    expect(previous.localOnlyDrives).toEqual(['did:ad:kept', 'did:ad:other']);
+  });
+
+  it('refuses when the device holds no key for the identity', async () => {
+    await expect(archiveStoredAgent('did:ad:agent:missing')).rejects.toThrow();
+  });
 });

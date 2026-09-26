@@ -14,10 +14,10 @@ pub async fn init_store() -> Db {
     store
 }
 
-/// Creates a populated Store with an agent, backed by in-memory BTreeMap.
+/// Creates a populated Store with an agent, backed by in-memory redb.
 #[cfg(all(feature = "db", not(feature = "db-sled")))]
 pub async fn init_store() -> Db {
-    let store = Db::init_memory(Some("https://localhost".into()))
+    let store = Db::init_redb(Some("https://localhost".into()))
         .await
         .unwrap();
     store.populate().await.unwrap();

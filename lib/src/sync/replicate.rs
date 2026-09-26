@@ -333,7 +333,7 @@ mod tests {
     }
 
     async fn source() -> (Db, String) {
-        let db = Db::init_memory(Some("https://localhost".into()))
+        let db = Db::init_redb(Some("https://localhost".into()))
             .await
             .unwrap();
         let (_, drive) = db.setup("Replication test").await.unwrap();

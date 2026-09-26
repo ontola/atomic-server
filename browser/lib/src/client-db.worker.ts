@@ -52,7 +52,12 @@ export type WorkerRequest =
       subject: string;
       jsonAd: string;
       snapshot?: Uint8Array;
+      /** Outbox rows written with the resource and made durable by the same
+       *  flush, so a crash keeps both or neither. */
+      outbox?: OutboxWrite;
     }
+  | { id: number; type: 'outboxEntries'; agent: string }
+  | ({ id: number; type: 'outboxWrite'; durable: boolean } & OutboxWrite)
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
   | { id: number; type: 'applyPeerCommit'; commitJsonAd: string }
   | { id: number; type: 'removeResource'; subject: string }
@@ -130,6 +135,22 @@ export type WorkerRequest =
       segment: number;
     };
 
+/** Outbox rows for one agent; mirrors `ClientDbOutboxWrite` in client-db.ts
+ *  (duplicated, not imported: see the note on shared modules there). */
+interface OutboxWrite {
+  agent: string;
+  puts: Array<{ subject: string; value: string }>;
+  deletes: string[];
+}
+
+function writeOutbox(write: OutboxWrite): void {
+  db!.outboxWrite(
+    write.agent,
+    JSON.stringify(write.puts),
+    JSON.stringify(write.deletes),
+  );
+}
+
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
   | { id: number; type: 'ok'; data?: unknown }
@@ -190,35 +211,20 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       }> = [];
 
       for (const subject of msg.subjects) {
-        const jsonAd = await db!.getResource(subject);
-        const snapshot = jsonAd ? await db!.getLoroSnapshot(subject) : null;
-        rows.push({ jsonAd: jsonAd ?? null, snapshot: snapshot ?? null });
+        rows.push(await db!.getResourceWithSnapshot(subject));
       }
 
       return rows;
     }
 
     case 'getResourceWithSnapshot': {
-      // Combined getter for the cold-load fast path: every
-      // `fetchResourceWithLocalFallback` used to do two sequential
-      // worker round-trips (one for the JSON-AD, one for the Loro
-      // snapshot). On a page that mounts 30 useResource hooks that's
-      // 60× postMessage cost serially. Returning both in a single
-      // response halves the worker traffic — and the caller already
-      // ignores the snapshot when JSON-AD is null, so the combined
-      // shape doesn't change semantics.
-      //
-      // Both calls MUST be awaited before being placed in the response
-      // object. wasm-bindgen renders `getResource` / `getLoroSnapshot`
-      // as Promise-returning JS functions; embedding a Promise in the
-      // response makes `postMessage` throw "could not be cloned" and
-      // every cold-load OPFS lookup fails — fell back to a much-slower
-      // WS GET path, which is what surfaced as widespread e2e timeouts.
+      // One wasm call reads the stored row and its snapshot, without
+      // decoding the CRDT history on the way (the tab imports the
+      // snapshot into its own doc). One round trip instead of two for
+      // every `fetchResourceWithLocalFallback`.
       await ensureInit();
-      const jsonAd = await db!.getResource(msg.subject);
-      const snapshot = jsonAd ? await db!.getLoroSnapshot(msg.subject) : null;
 
-      return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+      return db!.getResourceWithSnapshot(msg.subject);
     }
 
     case 'putResource': {
@@ -246,12 +252,22 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     }
 
     case 'putResourceWithSnapshot': {
-      // Atomic write: JSON-AD index entry + (optional) Loro snapshot
-      // in one postMessage. Snapshot omitted for resources without
-      // a Loro doc (e.g. Commit resources).
+      // One transaction: row, index entries and the Loro snapshot as the
+      // tab holds it. Snapshot omitted for resources without a Loro doc
+      // (e.g. Commit resources).
       await ensureInit();
-      await db!.putResource(msg.jsonAd);
-      if (msg.snapshot) db!.putLoroSnapshot(msg.subject, msg.snapshot);
+
+      if (msg.snapshot) {
+        await db!.putResourceWithSnapshot(msg.jsonAd, msg.snapshot);
+      } else {
+        await db!.putResource(msg.jsonAd);
+      }
+
+      // The outbox entry that says this snapshot still has to reach the
+      // server. Both writes commit without fsync, so the one flush below
+      // persists them together: redb rolls back every commit after the last
+      // durable one, so a crash before it keeps neither, never just one.
+      if (msg.outbox) writeOutbox(msg.outbox);
 
       // Per-write redb commits use `Durability::None` — see the periodic
       // `flush()` tick below. Everywhere else that's fine (the periodic
@@ -267,6 +283,29 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       dirty = true;
       db!.flush();
       dirty = false;
+
+      return;
+    }
+
+    case 'outboxEntries': {
+      await ensureInit();
+
+      return db!.outboxEntries(msg.agent) as string[];
+    }
+
+    case 'outboxWrite': {
+      await ensureInit();
+      writeOutbox(msg);
+
+      // Envelopes (a signed genesis or destroy) and offline cursors are
+      // written durably; a plain dirty bit waits for the periodic tick.
+      if (msg.durable) {
+        dirty = true;
+        db!.flush();
+        dirty = false;
+      } else {
+        dirty = true;
+      }
 
       return;
     }

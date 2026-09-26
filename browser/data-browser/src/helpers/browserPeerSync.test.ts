@@ -54,7 +54,7 @@ it('discovers through SaaS without consulting a data server or account', () => {
   vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
   vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
   vi.stubGlobal('window', { location: { hostname: 'localhost' } });
-  expect(defaultPeerSignalingUrl()).toBe('wss://atomicserver.eu/webrtc-signal');
+  expect(defaultPeerSignalingUrl()).toBe('wss://atomic.place/webrtc-signal');
   vi.stubGlobal('window', {
     location: { hostname: 'app.staging.atomicserver.eu' },
   });

@@ -6,6 +6,7 @@ import {
   safePortalUrl,
   setManagedDeviceToken,
 } from './api';
+import { isRunningInTauri } from '../tauri';
 
 /**
  * Linking this install to a hosted provider.
@@ -185,6 +186,10 @@ export function canHoldProviderCookie(portalUrl: string | null): boolean {
   if (!portalUrl) return false;
 
   if (typeof window === 'undefined') return false;
+
+  // A native WebView may use an http://localhost dev URL, but its account
+  // session still comes from device linking rather than the browser cookie.
+  if (isRunningInTauri()) return false;
 
   if (!/^https?:$/.test(window.location.protocol)) return false;
 

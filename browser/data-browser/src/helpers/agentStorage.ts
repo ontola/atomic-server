@@ -1,12 +1,18 @@
 import {
   Agent,
+  decodeSecret,
   SubtleCryptoProvider,
   JSCryptoProvider,
   legacySubjectFromSecret,
 } from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
 import { adoptAgentOnDevice } from './adoptAgent';
-import { clearSessionDbKeys, ensureDbKeyOnSignIn } from './localDbKey';
+import {
+  clearSessionDbKeys,
+  ensureDbKeyOnSignIn,
+  trackDbKeySignIn,
+  type SignInCredentials,
+} from './localDbKey';
 
 const AGENT_IDB_KEY = 'atomic.agent';
 
@@ -177,7 +183,15 @@ export async function saveAgentToIDB(
   }
 
   if (typeof keyPairOrSecret === 'string') {
-    await storeSecret(keyPairOrSecret);
+    const stored = storeSecret(keyPairOrSecret);
+    // Announced before anything is awaited: callers often set the agent first,
+    // and the database opener that event starts must know a sign-in is about
+    // to deliver this agent's key (see `waitForSessionDbKey`).
+    const signingIn = subjectOfSecret(keyPairOrSecret);
+
+    if (signingIn) trackDbKeySignIn(signingIn, stored);
+
+    await stored;
 
     // The device now holds this agent; its node should sign as this agent too.
     // Best-effort and last, so a node that isn't up yet can't block sign-in.
@@ -210,6 +224,18 @@ export async function saveAgentToIDB(
       previous?.subject === subject ? previous.aiChatsFolders : undefined,
     vaultProof: previous?.subject === subject ? previous.vaultProof : undefined,
   } satisfies StoredAgent);
+}
+
+/**
+ * The agent subject a secret signs in as (the same one `storeSecret` stores),
+ * or undefined when the secret cannot be read.
+ */
+function subjectOfSecret(secret: string): string | undefined {
+  try {
+    return decodeSecret(secret).subject;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Persist the agent's key, preferring a non-extractable keypair. */
@@ -245,7 +271,10 @@ async function storeSecret(secret: string): Promise<void> {
         } satisfies StoredAgent);
         await del(AGENT_FALLBACK_KEY);
 
-        await ensureLocalDbKey(resolvedSubject, decoded.privateKey);
+        await ensureLocalDbKey(resolvedSubject, {
+          privateKey: decoded.privateKey,
+          vaultProof,
+        });
 
         return;
       } catch {
@@ -269,7 +298,10 @@ async function storeSecret(secret: string): Promise<void> {
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);
 
-    await ensureLocalDbKey(newSubject, decoded.privateKey);
+    await ensureLocalDbKey(newSubject, {
+      privateKey: decoded.privateKey,
+      vaultProof,
+    });
   }
 }
 
@@ -280,11 +312,93 @@ async function storeSecret(secret: string): Promise<void> {
  */
 async function ensureLocalDbKey(
   subject: string,
-  privateKey: string,
+  credentials: SignInCredentials,
 ): Promise<void> {
   try {
-    await ensureDbKeyOnSignIn(subject, privateKey);
+    await ensureDbKeyOnSignIn(subject, credentials);
   } catch (e) {
     console.warn('Failed to prepare local database key:', e);
   }
+}
+
+const PREVIOUS_IDENTITIES_KEY = 'atomic.previousIdentities';
+
+/**
+ * An identity this device used to be, kept when the account's identity
+ * replaced it. In IndexedDB rather than localStorage: a non-extractable
+ * keypair survives structured clone but has no string form, and in a secure
+ * context that keypair is all there is — the secret itself is gone.
+ */
+export interface PreviousIdentity {
+  subject: string;
+  savedAt: number;
+  /** The stored record as it was, keypair (or readable key) included. */
+  record: StoredAgent | StoredAgentFallback;
+  /** Only where the key was readable (insecure context). */
+  secret?: string;
+  /**
+   * Local-only drives. They live in this identity's own encrypted database,
+   * so they are reachable only by signing in as it again.
+   */
+  localOnlyDrives: string[];
+}
+
+export async function readPreviousIdentities(): Promise<PreviousIdentity[]> {
+  const list = (await get(PREVIOUS_IDENTITIES_KEY)) as
+    | PreviousIdentity[]
+    | undefined;
+
+  return Array.isArray(list) ? list : [];
+}
+
+/**
+ * Copy the stored agent `subject` aside before another identity overwrites
+ * it, so switching never locks anything away. Idempotent: archiving the same
+ * identity again only adds drives it did not list yet.
+ *
+ * Throws when the device holds no key for `subject`: switching would then
+ * lose the identity for good, which the caller must not do silently.
+ */
+export async function archiveStoredAgent(
+  subject: string,
+  localOnlyDrives: string[] = [],
+): Promise<void> {
+  const list = await readPreviousIdentities();
+  const existing = list.find(entry => entry.subject === subject);
+
+  if (existing) {
+    existing.localOnlyDrives = [
+      ...new Set([...existing.localOnlyDrives, ...localOnlyDrives]),
+    ];
+    await set(PREVIOUS_IDENTITIES_KEY, list);
+
+    return;
+  }
+
+  const stored = (await get(AGENT_IDB_KEY)) as StoredAgent | undefined;
+  const fallback = (await get(AGENT_FALLBACK_KEY)) as
+    | StoredAgentFallback
+    | undefined;
+  const record =
+    stored?.subject === subject
+      ? stored
+      : fallback?.subject === subject
+        ? fallback
+        : undefined;
+
+  if (!record) {
+    throw new Error(`no stored key for ${subject}`);
+  }
+
+  list.push({
+    subject,
+    savedAt: Date.now(),
+    record,
+    secret:
+      'privateKey' in record
+        ? Agent.buildSecret(record.privateKey, subject, record.initialDrive)
+        : undefined,
+    localOnlyDrives: [...new Set(localOnlyDrives)],
+  });
+  await set(PREVIOUS_IDENTITIES_KEY, list);
 }

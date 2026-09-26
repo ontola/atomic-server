@@ -79,7 +79,11 @@ export {
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
-export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+export type {
+  ClientDbOutboxWrite,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
 export {
   LocalOutbox,
   isTerminalCommitErrorMessage,
@@ -193,6 +197,21 @@ export {
   type CreatedApp,
 } from './plugin-app.js';
 export {
+  catalogAppProperties,
+  catalogAppSchema,
+  catalogAppState,
+  compareVersions,
+  fetchCatalogAppModule,
+  installCatalogApp,
+  parseCatalogApp,
+  readInstalledCatalogApps,
+  resolveModuleUrl,
+  subresourceIntegrity,
+  updateCatalogApp,
+  type CatalogApp,
+  type InstalledCatalogApp,
+} from './catalog-app.js';
+export {
   parseManifest,
   validateManifest,
   type CapabilityName,
@@ -206,6 +225,10 @@ export {
   type DeclaredSecret,
   type DeclaredConfig,
   type DeclaredConfigField,
+  type DeclaredAccept,
+  type DeclaredDestination,
+  DEFAULT_ACCEPT_MAX_BYTES,
+  ACCEPT_MAX_BYTES_CEILING,
   type ManifestRuntime,
   type ManifestWorld,
   type PluginManifest,

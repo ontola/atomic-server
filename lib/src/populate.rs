@@ -407,7 +407,7 @@ async fn seed_defaults(store: &impl Storelike, fingerprint: &str) -> AtomicResul
     Ok(())
 }
 
-#[cfg(all(test, feature = "db-redb", not(target_arch = "wasm32")))]
+#[cfg(all(test, feature = "db", not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use crate::Db;

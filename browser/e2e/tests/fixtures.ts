@@ -55,6 +55,7 @@ export const test = base.extend<{
         // service availability. verify-peer-mesh.mjs separately exercises real
         // signaling, authenticated WebRTC, persistence and reconciliation.
         await installEmptyDiscoveryRoom(context);
+        await installAbsentLocalOllama(context);
       };
 
       // Depend on context so assertions run BEFORE Playwright closes it. The
@@ -172,21 +173,98 @@ export const test = base.extend<{
 
 export default test;
 
-/** Isolated UI fixtures do not depend on the public discovery service. */
-export async function installEmptyDiscoveryRoom(context: BrowserContext) {
-  await context.routeWebSocket(
-    /^wss:\/\/(?:staging\.)?atomicserver\.eu\/webrtc-signal$/,
-    socket => {
-      socket.onMessage(message => {
-        if (
-          typeof message === 'string' &&
-          JSON.parse(message).type === 'join'
-        ) {
-          socket.send(
-            JSON.stringify({ type: 'joined', peers: [], iceServers: [] }),
-          );
-        }
-      });
-    },
+/** Isolated UI fixtures do not depend on the public discovery service.
+ *
+ * Matched by PATH, deliberately, and not by host. This used to name
+ * `atomicserver.eu`, which is a copy of a decision made in
+ * `defaultPeerSignalingUrl` (data-browser/src/helpers/browserPeerSync.ts):
+ * that function picks the SaaS portal for the origin the app is served from,
+ * and when #1699 made it answer `atomic.place` for every non-staging origin,
+ * this pattern stopped matching and every context dialled production.
+ *
+ * What made that expensive is that it is silent where it matters. On a box
+ * that can reach the host the socket simply connects, nothing is logged, and
+ * the suite passes while depending on the public service this fixture exists
+ * to remove; only where the host is unreachable does it surface, and then as
+ * a console error failing twelve specs that have nothing to do with peers.
+ * A host list here cannot notice either case, so there is no host list.
+ *
+ * A signaling server running beside the test is a different thing from the
+ * public one and stays connected, so a setup pointing at a local one is not
+ * broken by intercepting everything.
+ */
+function isLocalSignalingHost(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1' ||
+      hostname.endsWith('.localhost')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Local AI discovery answers "no Ollama here", on every runner alike.
+ *
+ * The same shape as the discovery room above, for the same reason. Opening the
+ * AI sidebar with no provider configured mounts `LocalOllamaDiscovery`, which
+ * fetches `localhost:11434/api/tags` to offer "Use local Ollama" when it is
+ * there. The component handles the failure correctly and reports "could not be
+ * reached", but a refused connection is logged by the browser before any
+ * application code runs, and `.catch()` cannot unlog it. The diagnostics
+ * fixture counts that line, so the test fails on an error the product was
+ * right to ignore.
+ *
+ * What makes it worth a fixture rather than a per-spec route is that the
+ * outcome depends on the machine. A runner with Ollama installed connects and
+ * logs nothing; a runner without it logs the refusal. So the suite passes or
+ * fails on whether an optional developer tool happens to be running beside it,
+ * which is how develop run 4647 went red on right-panel-lifecycle: it opens the
+ * AI sidebar at tablet width and has nothing to do with AI. Measured as an A/B
+ * over six four-worker rounds each, same eight specs, store wiped before every
+ * round: without this route the spec failed in 2 of 6 and the diagnostics of
+ * exactly those two rounds carried `http://localhost:11434/api/tags`; with it,
+ * 0 of 6 and the URL appears in none of them.
+ *
+ * Fulfilled rather than aborted, and with 200 rather than an error status,
+ * because both of those are logged too and would only move the line. A 200
+ * whose body has no `models` array is the one answer that reaches the
+ * component's "unavailable" branch silently, which is what a machine without
+ * Ollama should look like.
+ *
+ * Specs that drive local AI on purpose (ai-settings, ollama-feedback) register
+ * their own `page.route` for this URL, and a page route is matched ahead of a
+ * context route, so they keep their own answers.
+ */
+export async function installAbsentLocalOllama(context: BrowserContext) {
+  await context.route('http://localhost:11434/**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    }),
   );
+}
+
+export async function installEmptyDiscoveryRoom(context: BrowserContext) {
+  await context.routeWebSocket(/\/webrtc-signal(\?|$)/, socket => {
+    if (isLocalSignalingHost(socket.url())) {
+      socket.connectToServer();
+
+      return;
+    }
+
+    socket.onMessage(message => {
+      if (typeof message === 'string' && JSON.parse(message).type === 'join') {
+        socket.send(
+          JSON.stringify({ type: 'joined', peers: [], iceServers: [] }),
+        );
+      }
+    });
+  });
 }

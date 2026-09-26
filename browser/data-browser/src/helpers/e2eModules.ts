@@ -15,7 +15,6 @@
  */
 import type * as TomicLib from '@tomic/lib';
 import type * as CreateTableFromSpec from '@integration-host/table/createTableFromSpec';
-import type * as GithubInstaller from '../chunks/PluginRuns/githubInstaller';
 import type * as RunScript from '@integration-host/runScript';
 import type * as HostingClient from '../chunks/Website/hostingClient';
 import type * as OptimizeWebsiteImage from '../chunks/Website/optimizeWebsiteImage';
@@ -27,7 +26,6 @@ import type * as WsV2 from '../../../lib/src/ws-v2';
 
 export interface E2EModules {
   createTableFromSpec: typeof CreateTableFromSpec;
-  githubInstaller: typeof GithubInstaller;
   hostingClient: typeof HostingClient;
   optimizeWebsiteImage: typeof OptimizeWebsiteImage;
   runScript: typeof RunScript;
@@ -40,7 +38,6 @@ export interface E2EModules {
 export async function attachE2EModules(): Promise<void> {
   const [
     createTableFromSpec,
-    githubInstaller,
     hostingClient,
     optimizeWebsiteImage,
     runScript,
@@ -50,7 +47,6 @@ export async function attachE2EModules(): Promise<void> {
     wsV2,
   ] = await Promise.all([
     import('@integration-host/table/createTableFromSpec'),
-    import('../chunks/PluginRuns/githubInstaller'),
     import('../chunks/Website/hostingClient'),
     import('../chunks/Website/optimizeWebsiteImage'),
     import('@integration-host/runScript'),
@@ -62,7 +58,6 @@ export async function attachE2EModules(): Promise<void> {
 
   window.atomicE2E = {
     createTableFromSpec,
-    githubInstaller,
     hostingClient,
     optimizeWebsiteImage,
     runScript,

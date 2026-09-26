@@ -80,12 +80,16 @@ test('joins an unhosted drive through its signed browser invitation', async ({
     await owner
       .getByRole('button', { name: 'Save and continue', exact: true })
       .click();
-    await owner.getByLabel('Allow edits', { exact: true }).check();
-    await owner.getByRole('button', { name: 'Create', exact: true }).click();
-    const code = owner.locator('[data-code-content]');
-    await expect(code).toHaveAttribute('data-code-content', /token=/);
+    await owner
+      .getByLabel('Role for people who join with the link')
+      .selectOption('write');
+    await owner
+      .getByRole('button', { name: 'Copy invite link', exact: true })
+      .click();
+    const code = owner.locator('[data-invite-link]');
+    await expect(code).toHaveAttribute('data-invite-link', /token=/);
     const invitation = new URL(
-      (await code.getAttribute('data-code-content'))!,
+      (await code.getAttribute('data-invite-link'))!,
     ).searchParams.get('token')!;
     const inviteRequests: string[] = [];
     guest.on('request', request => {

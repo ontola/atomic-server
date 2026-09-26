@@ -279,22 +279,24 @@ export const InstallationPage: React.FC<
         </Column>
         <Column as='section' aria-label='Release'>
           <h3>Release</h3>
+          {/* Two paragraphs, not a <br /> inside one message: a JSX element
+              passed into a translated message lands in its fragment array
+              without a key. */}
           <Identity>
             Pinned to <code>{releaseId}</code>
-            {release && release !== releaseId && (
-              <>
-                <br />
-                from{' '}
-                {/^https?:\/\//.test(release) ? (
-                  <a href={release} target='_blank' rel='noreferrer'>
-                    {release}
-                  </a>
-                ) : (
-                  release
-                )}
-              </>
-            )}
           </Identity>
+          {release && release !== releaseId && (
+            <Identity>
+              from{' '}
+              {/^https?:\/\//.test(release) ? (
+                <a href={release} target='_blank' rel='noreferrer'>
+                  {release}
+                </a>
+              ) : (
+                release
+              )}
+            </Identity>
+          )}
         </Column>
         <Column as='section' aria-label='Grants'>
           <h3>Grants</h3>

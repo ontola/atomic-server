@@ -36,6 +36,11 @@ async function signIn(page: Page, secret: string) {
   await page.goto(
     `${FRONTEND_URL}/app/welcome?next=${encodeURIComponent(home)}`,
   );
+  // Cold boot again, and the widest of these: 6050 to 8586ms at four workers,
+  // so the bare `fill` was running at 86% of the 10s actionTimeout.
+  await expect(page.getByLabel('Agent secret')).toBeVisible({
+    timeout: 20_000,
+  });
   await page.getByLabel('Agent secret').fill(secret);
   // Wait for identity persistence independently of navigation so the direct
   // link test can exercise a restored session even when onboarding is broken.
@@ -54,17 +59,35 @@ async function expectWritableHome(page: Page, home: string) {
   expect(await page.evaluate(() => window.store.getDrive())).toBe(home);
   // The error screen also has main[about]. Require a readable Drive before
   // clicking New, which could otherwise initialize the home as a side effect.
+  //
+  // This carries the same 30 s as the URL wait above, and for the same reason.
+  // Callers whose home already exists reach this in a few ms, but the
+  // missing-home caller has to initialize the drive on the server and read it
+  // back first, and that is the case this helper exists for. Measured over five
+  // four-worker rounds on this container, the poll splits into two populations
+  // with nothing between them:
+  //
+  //     home already present      4 to  105 ms
+  //     home being initialized  5202 to 8829 ms
+  //
+  // 8829 ms is 88% of the 10 s `expect.timeout` default, which is what develop
+  // run 4671 failed on, three attempts out of three. The `toHaveURL` above
+  // splits the same way (11.2 to 12.8 s for the same caller) and already had an
+  // explicit 30 s, so this is the wait that was left behind rather than a new
+  // allowance.
   await expect
-    .poll(() =>
-      page.evaluate(subject => {
-        const resource = window.store.resources.get(subject);
+    .poll(
+      () =>
+        page.evaluate(subject => {
+          const resource = window.store.resources.get(subject);
 
-        return (
-          !!resource &&
-          !resource.error &&
-          resource.hasClasses('https://atomicdata.dev/classes/Drive')
-        );
-      }, home),
+          return (
+            !!resource &&
+            !resource.error &&
+            resource.hasClasses('https://atomicdata.dev/classes/Drive')
+          );
+        }, home),
+      { timeout: 30_000 },
     )
     .toBe(true);
 

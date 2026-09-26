@@ -24,6 +24,37 @@ export const PROPERTIES = {
   loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
 
+/**
+ * Click "Page edit" on a website resource, waiting as long as the draft build
+ * behind it can take.
+ *
+ * That button is `disabled={!draft || busy || refreshing || !!problem}`
+ * (`WebsitePage.tsx`), and `refreshing` stays true until the page's effect has
+ * read the website config and run `buildWebsiteArtifact`. So the click is not a
+ * click, it is a wait on that build, and it was sitting on Playwright's 10 s
+ * ACTION default rather than on any assertion budget.
+ *
+ * Measured on this container (4 cores, so a four-worker round is oversubscribed),
+ * over the website specs at four workers:
+ *
+ *     website-inline-content.spec.ts   3708 to 9170 ms   (n=8)
+ *     website-inline-fixture.ts        1235 to 7629 ms   (n=11)
+ *
+ * 9170 ms is 91% of the old budget, and a further round blew past it outright:
+ * `locator.click: Timeout 10000ms exceeded`, the element `disabled` for all
+ * fifteen retries. A CI shard runs ~71 tests against one server with three other
+ * shards alongside, so 91% locally is not a budget at all.
+ *
+ * 30 s is ~3x the worst sample, matching the wait in `waitForSynced` below.
+ * `website.spec.ts`'s own "Page edit" click needs none of this and is left alone:
+ * it happens after a release round-trip, by which time the draft is long settled,
+ * and it measures 109 to 203 ms (2%) over the same eight rounds.
+ */
+export const clickPageEdit = (page: Page) =>
+  page
+    .getByRole('button', { name: 'Page edit', exact: true })
+    .click({ timeout: 30_000 });
+
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
 
@@ -421,6 +452,26 @@ export async function setTitle(page: Page, title: string) {
   // rename has been committed to the server"; what the server (or its
   // plugins) does next is not setTitle's concern.
   await commitPosted;
+
+  // The waiter above matches ANY commit for this subject, and `useValue`'s
+  // save is debounced, so under load the debounce can fire part-way through
+  // the typing and that first commit satisfies it. `setTitle` then returned
+  // with the rename half done, and a caller that reloaded straight after
+  // persisted the prefix: a title ending `1790210871258` was stored as
+  // `Private home canary 17902`, stable across 23 reads, so it was saved
+  // truncated rather than rendered late.
+  //
+  // Waiting for quiescence here closes that. The objection recorded above —
+  // that `pendingDirtyCount === 0` is trivially true before the debounce
+  // fires — is a statement about checking it BEFORE any commit; by this point
+  // one has posted. Any characters still unsaved are either in the outbox, in
+  // an in-flight `save()`, or in an armed debounce timer, and
+  // `pendingDirtyCount` counts all three (`_scheduledSaves` is incremented by
+  // `startScheduledSave`), so a partial rename cannot read as settled.
+  //
+  // Matching the commit BODY against the title instead cannot work: a rename
+  // travels as a base64 `loroUpdate`, never as a literal substring.
+  await waitForSynced(page);
 }
 
 /** Wait for either an HTTP `/commit` POST or an acknowledged WS COMMIT frame whose
@@ -508,9 +559,18 @@ export async function signIn(page: Page, secret?: string) {
     .locator('a[href$="/app/agent"]')
     .filter({ hasNotText: 'Login / New User' });
   const login = page.getByRole('link', { name: 'Login / New User' });
+  // The first thing this helper waits for is a cold app boot in whatever
+  // context it was handed: wasm, store init and the route all have to land
+  // before any of these four appear. It was on the 10s default while the two
+  // waits below it already had 20s, which is the tell that nobody chose it.
+  // Measured at four workers on 24 September 2026: 751ms to 6118ms, so on this
+  // box it was already at 61% of its budget. On a Mancave running four runners
+  // at once, where a shard took 44 to 50 minutes against the usual 19 to 25,
+  // that doubles and goes past 10s. `meetings.spec.ts:237` failed exactly there
+  // on run 4537, waiting for the `Sign in` button.
   await expect(
     input.or(signInButton).or(settings).or(login).first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
   // Not "is the settings link visible": the signed-in layout renders from
   // stored state and can be up before the agent is in the store, so that
   // check returned for sessions that had no agent at all. Ask the store.
@@ -521,7 +581,9 @@ export async function signIn(page: Page, secret?: string) {
     // unmount while onboarding takes over the initial route.
     if (!(await signInButton.isVisible()))
       await page.goto(`${FRONTEND_URL}/app/welcome`);
-    await signInButton.click();
+    // Same story: an action's own 10s default, guarding a button that only
+    // renders once onboarding has settled. 52ms to 5947ms at four workers.
+    await signInButton.click({ timeout: 20_000 });
   }
 
   await enterSecret(page, secret ?? (await getDevDriveSecret(page)));
@@ -1090,7 +1152,25 @@ export async function createFromCatalog(page: Page, title: string) {
       .getByRole('region', { name: 'Start blank' })
       .getByRole('button', { name: title, exact: true })
       .click();
-    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+    // 90s, not the 45s this used to be. Develop run 4547 failed `apps:180`
+    // here on all three attempts with the page still on `/app/new` and the
+    // console silent, which is the branch below saying the creation had not
+    // finished rather than that it threw — the distinction `62871ba` added
+    // this diagnostic for, answering the question it was left open on.
+    //
+    // Measured since, click to leaving `/app/new`, at four workers over 108
+    // samples across two mixes: 9.6s min, 16.6s median, 25.2s max, and 29.7s
+    // in the 22 September run of the same measurement. So 45s was already
+    // two thirds spent on this box, and Mancave now runs four CI runners at
+    // once: 4547's shards took 31 to 38 minutes against 19.1 on 4512.
+    //
+    // App is what this budget is really for. The other catalog titles are far
+    // cheaper — Plugin 9.9s and Website 4.8s worst — so they pay nothing for
+    // the headroom. An App builds its drive's plugin schema first, nineteen
+    // properties and classes as separate signed commits, which is the same
+    // cost `newPlugin` documents and is a product finding of its own rather
+    // than something a test can shorten.
+    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 90_000 });
   } catch (waitFailed) {
     console.error(
       complaints.length > 0
@@ -1384,7 +1464,35 @@ export async function waitForSynced(page: Page, timeoutMs = 30_000) {
               }),
             ) ?? [];
 
-        return { status, entries };
+        // `pendingDirtyCount` is a sum:
+        //
+        //     outbox.size - blockedCount + inFlightSaves + _scheduledSaves
+        //
+        // so a timeout with an empty outbox says only that one of the other
+        // two terms is stuck, and the sum cannot say which. Develop run 4596
+        // (25 September) timed out here with `entries: []`, `blockedCount: 0`
+        // and `pendingDirtyCount: 1`, and there was nothing in the message to
+        // tell a save that never settled from a debounce slot that was never
+        // balanced. Split it, so the next one names its own cause.
+        const savingSubjects = [...(store?.resources.values() ?? [])]
+          .filter(resource => resource.isSaving)
+          .map(resource => resource.subject);
+        const outboxSize = store?.outbox?.size ?? 0;
+        const blocked = status?.blockedCount ?? 0;
+        const breakdown = {
+          outboxSize,
+          blocked,
+          savingSubjects,
+          // The store does not expose the debounce counter, so take it as what
+          // the other terms cannot account for.
+          scheduledSaves:
+            (status?.pendingDirtyCount ?? 0) -
+            outboxSize +
+            blocked -
+            savingSubjects.length,
+        };
+
+        return { status, breakdown, entries };
       })
       .catch(() => undefined);
     throw new Error(
@@ -1599,8 +1707,8 @@ function ddmmyyyyToIso(value: string): string {
 /**
  * Waits until every row typed into a grid is a real member of its table.
  *
- * A new row is held purely locally under a `_new:` subject until its
- * materialize timer fires — no commit, no collection membership. Anything
+ * A new row is a draft held purely locally (its genesis is unsigned) until
+ * its materialize timer fires — no commit, no collection membership. Anything
  * computed OVER that collection therefore cannot see it yet: a total renders
  * an em-dash, a filter does not match it, a chart omits it. Asserting on such
  * a value before this point is asserting about a table that does not contain
@@ -1613,13 +1721,22 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
   await page.waitForFunction(
     () => {
       const resources = Array.from(window.store.resources?.values?.() ?? []);
+      // What creating a draft row writes; anything more is a row someone
+      // typed into.
+      const seeded = new Set([
+        'https://atomicdata.dev/properties/isA',
+        'https://atomicdata.dev/properties/parent',
+        'https://atomicdata.dev/properties/drive',
+        'https://atomicdata.dev/properties/genesis',
+      ]);
       const stillVirtual = resources.some(
-        // A placeholder holds only its seeded `isA` + `parent`; anything more
-        // is a row someone typed into.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (r: any) =>
-          String(r.subject).startsWith('_new:') &&
-          (r.getEntries?.()?.length ?? 0) > 2,
+          r.new &&
+          /^(did:ad|atomic):/.test(String(r.subject)) &&
+          (r.getEntries?.() ?? []).some(
+            ([property]: [string]) => !seeded.has(property),
+          ),
       );
 
       return (

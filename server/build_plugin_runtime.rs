@@ -76,6 +76,10 @@ pub fn build() {
             .args(["build", "-p", CRATE, "--release", "--target", TARGET])
             .arg("--target-dir")
             .arg(&runtime_target)
+            // A configured build.build-dir can be shared even when target-dir
+            // differs. Give this nested Cargo its own intermediate directory
+            // so it cannot wait on the outer Cargo's artifact lock.
+            .env("CARGO_BUILD_BUILD_DIR", runtime_target.join("build-cache"))
             // Host compiler flags and target selection do not apply to WASI.
             .env_remove("CARGO_ENCODED_RUSTFLAGS")
             .env_remove("RUSTFLAGS")

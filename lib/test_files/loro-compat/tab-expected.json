@@ -1,0 +1,112 @@
+{
+  "v1": {
+    "deep": {
+      "doc": {
+        "nodeName": "doc",
+        "children": [
+          {
+            "nodeName": "paragraph",
+            "children": [
+              "Hello rich world"
+            ]
+          }
+        ]
+      },
+      "datatypes": {
+        "https://atomicdata.dev/properties/description": "markdown",
+        "https://atomicdata.dev/properties/isA": "resourceArray",
+        "https://atomicdata.dev/properties/parent": "atomicUrl"
+      },
+      "properties": {
+        "https://example.com/count": 42,
+        "https://atomicdata.dev/properties/description": "# Heading\n\nSome *markdown*",
+        "https://atomicdata.dev/properties/name": "Written by the tab",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Document"
+        ],
+        "https://example.com/ratio": 0.25,
+        "https://atomicdata.dev/properties/parent": "https://example.com/drive",
+        "https://example.com/label": {
+          "nl": "Hallo",
+          "en": "Hello"
+        },
+        "https://example.com/done": true
+      }
+    },
+    "vv": {
+      "1": 38
+    },
+    "delta": [
+      {
+        "insert": "Hello "
+      },
+      {
+        "insert": "rich",
+        "attributes": {
+          "bold": true
+        }
+      },
+      {
+        "insert": " world"
+      }
+    ]
+  },
+  "v2": {
+    "deep": {
+      "doc": {
+        "nodeName": "doc",
+        "children": [
+          {
+            "nodeName": "paragraph",
+            "children": [
+              "Hello rich world!"
+            ]
+          }
+        ]
+      },
+      "datatypes": {
+        "https://atomicdata.dev/properties/description": "markdown",
+        "https://atomicdata.dev/properties/isA": "resourceArray",
+        "https://atomicdata.dev/properties/parent": "atomicUrl"
+      },
+      "properties": {
+        "https://example.com/label": {
+          "nl": "Hallo",
+          "en": "Hello"
+        },
+        "https://example.com/ratio": 0.25,
+        "https://atomicdata.dev/properties/parent": "https://example.com/drive",
+        "https://atomicdata.dev/properties/description": "# Heading\n\nSome *markdown*",
+        "https://atomicdata.dev/properties/name": "Renamed by another tab",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Document",
+          "https://atomicdata.dev/classes/Article"
+        ],
+        "https://example.com/count": 42
+      }
+    },
+    "vv": {
+      "1": 38,
+      "2": 4
+    },
+    "delta": [
+      {
+        "insert": "Hello "
+      },
+      {
+        "insert": "rich",
+        "attributes": {
+          "bold": true
+        }
+      },
+      {
+        "insert": " world!"
+      }
+    ]
+  },
+  "changedByUpdate": [
+    "https://atomicdata.dev/properties/isA",
+    "https://atomicdata.dev/properties/name",
+    "https://example.com/done"
+  ]
+}

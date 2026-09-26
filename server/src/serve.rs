@@ -411,7 +411,7 @@ where
     // Start Iroh peer-to-peer transport
     let _iroh_router = {
         let store = appstate.store.clone();
-        match crate::iroh_transport::start(store.clone()).await {
+        match atomic_lib::sync::peer::start(store.clone()).await {
             Ok((node_id, router)) => {
                 tracing::info!(
                     "Iroh transport ready as \"{}\". Connect with: {}",

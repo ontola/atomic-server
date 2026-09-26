@@ -112,7 +112,7 @@ pub struct PluginManifest {
     /// Origins this plugin may reach through the host's `fetch`.
     ///
     /// Separate from the `network` permission, which only governs the guest's
-    /// own sockets. Shown at install: "this plugin can talk to api.notion.com"
+    /// own sockets. Shown at install: "this plugin can talk to api.example.com"
     /// is a sentence someone can judge; "this plugin has network access" is not.
     pub network: Option<NetworkPermission>,
 }
@@ -120,7 +120,7 @@ pub struct PluginManifest {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkPermission {
-    /// Exact origins, e.g. `https://api.notion.com`. No wildcards.
+    /// Exact origins, e.g. `https://api.example.com`. No wildcards.
     #[serde(default)]
     pub origins: Vec<String>,
 }

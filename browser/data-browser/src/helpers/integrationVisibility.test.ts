@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   integrationVisibility,
   integrationVisibilitySchema,
+  readPendingVisibility,
   readVisibilityCache,
+  writePendingVisibility,
   writeVisibilityCache,
 } from './integrationVisibility';
 
@@ -57,6 +59,36 @@ describe('Atomic integration visibility preferences', () => {
       ['show-api-plugins', 'https://atomicdata.dev/datatypes/boolean'],
       ['show-experimental-plugins', 'https://atomicdata.dev/datatypes/boolean'],
     ]);
+  });
+});
+
+describe('Atomic integration visibility pending writes', () => {
+  it('keeps unsaved toggles apart from the cache, per agent', () => {
+    const storage = fakeStorage();
+    writePendingVisibility(
+      'did:ad:alice',
+      { 'show-experimental-plugins': true },
+      storage,
+    );
+    expect(readPendingVisibility('did:ad:alice', storage)).toEqual({
+      'show-experimental-plugins': true,
+    });
+    expect(readVisibilityCache('did:ad:alice', storage)).toEqual({});
+    expect(readPendingVisibility('did:ad:bob', storage)).toEqual({});
+  });
+
+  it('clears once nothing is pending', () => {
+    const storage = fakeStorage();
+    writePendingVisibility(
+      'did:ad:alice',
+      { 'show-api-plugins': true },
+      storage,
+    );
+    writePendingVisibility('did:ad:alice', {}, storage);
+    expect(readPendingVisibility('did:ad:alice', storage)).toEqual({});
+    expect(storage.getItem('integration-visibility-pending:did:ad:alice')).toBe(
+      null,
+    );
   });
 });
 

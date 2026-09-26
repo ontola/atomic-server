@@ -22,6 +22,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
   - [Cross compilation](#cross-compilation)
 - [Git policy](#git-policy)
   - [Open a PR](#open-a-pr)
+  - [Merging into `develop`](#merging-into-develop)
   - [Branching](#branching)
   - [Hotfixes](#hotfixes)
 - [Testing](#testing)
@@ -123,6 +124,12 @@ tags as production.
 - Make sure your branch is up to date with `develop`.
 - Open a PR against `develop`.
 - Make sure all relevant tests / lint pass.
+
+### Merging into `develop`
+
+Only the **trekmeester** agent merges pull requests into `develop`. Everyone
+else, human or AI agent, opens PRs and addresses review, but does not merge
+into `develop` themselves.
 
 ### Pre-commit checks
 

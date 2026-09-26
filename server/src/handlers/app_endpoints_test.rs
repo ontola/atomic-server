@@ -525,3 +525,242 @@ async fn read_only_means_look_not_touch() {
 
     assert_eq!(response.status(), 401, "{}", body_of(response));
 }
+
+/// A version 2 request signature (ontola/atomic-plugins#54): covers method
+/// and body as well as the URL. `sign_body` is what the signer thinks it
+/// sent; `send_body` is what actually goes over the wire.
+fn signed_v2(
+    path: &str,
+    appstate: &AppState,
+    method: actix_web::http::Method,
+    sign_body: &str,
+    send_body: &str,
+) -> TestRequest {
+    let origin = appstate.config.get_origin();
+    let url = format!("{origin}{path}");
+    let headers = atomic_lib::client::get_authentication_headers_v2(
+        method.as_str(),
+        &url,
+        sign_body.as_bytes(),
+        &appstate.store.get_default_agent().unwrap(),
+    )
+    .expect("auth headers");
+
+    let mut request = TestRequest::with_uri(path)
+        .method(method)
+        .insert_header(("Content-Type", "application/json"))
+        .set_payload(send_body.to_string());
+
+    for (key, value) in headers {
+        request = request.insert_header((key, value));
+    }
+
+    if let Ok(parsed) = url::Url::parse(&origin) {
+        if let Some(host) = parsed.host_str() {
+            let authority = match parsed.port() {
+                Some(port) => format!("{host}:{port}"),
+                None => host.to_string(),
+            };
+            request = request.insert_header(("Host", authority));
+        }
+    }
+
+    request
+}
+
+/// `/plugin-view-token` and `/app-agent` accept a version 2 signature, and
+/// check the body with it: the same headers on a different body are refused.
+/// Version 1 keeps working on both (not required yet).
+#[actix_rt::test]
+async fn v2_signatures_bind_the_body() {
+    use actix_web::http::Method;
+
+    let (fixture, app) = app_fixture("app_v2_signatures").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let body = format!(
+        r#"{{"drive":{:?},"plugin":{:?}}}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let ok = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            Method::POST,
+            &body,
+            &body,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(ok.status(), 200, "{}", body_of(ok));
+
+    let other = format!(
+        r#"{{"drive":{:?},"plugin":{:?} }}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let swapped = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            Method::POST,
+            &body,
+            &other,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(swapped.status(), 401, "a different body than was signed");
+    assert!(body_of(swapped).contains("version 2"));
+
+    // The method is covered too.
+    let wrong_method = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            Method::PUT,
+            &body,
+            &body,
+        )
+        .method(Method::POST)
+        .to_request(),
+    )
+    .await;
+    assert_eq!(wrong_method.status(), 401);
+
+    // `/app-agent`: the key a captured v1 proof could have swapped. A GET
+    // (empty body) works as v2, and a POST whose secret differs from the one
+    // signed is refused before anything is stored.
+    let query = format!(
+        "/app-agent?drive={}&app={}",
+        urlencoding::encode(&fixture.drive),
+        urlencoding::encode(&app),
+    );
+    let read = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::GET, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(read.status(), 200, "{}", body_of(read));
+
+    let before = fixture
+        .appstate
+        .store
+        .get_app_agent_info(&AppAgentKey::new(&fixture.drive, &app))
+        .unwrap()
+        .unwrap()
+        .agent;
+    let signed_secret = Agent::new(None).unwrap().build_secret().unwrap();
+    let attacker_secret = Agent::new(None).unwrap().build_secret().unwrap();
+    let set = |secret: &str| {
+        format!(
+            r#"{{"drive":{:?},"app":{:?},"secret":{:?}}}"#,
+            fixture.drive, app, secret
+        )
+    };
+    let refused = test::call_service(
+        &service,
+        signed_v2(
+            "/app-agent",
+            &fixture.appstate,
+            Method::POST,
+            &set(&signed_secret),
+            &set(&attacker_secret),
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(refused.status(), 401);
+    let after = fixture
+        .appstate
+        .store
+        .get_app_agent_info(&AppAgentKey::new(&fixture.drive, &app))
+        .unwrap()
+        .unwrap()
+        .agent;
+    assert_eq!(before, after, "nothing was stored");
+
+    // Version 1 still works where v2 is accepted.
+    let v1 = test::call_service(
+        &service,
+        signed("/plugin-view-token", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .set_payload(body.clone())
+            .to_request(),
+    )
+    .await;
+    assert_eq!(v1.status(), 200);
+}
+
+/// An endpoint that does not bind method and body yet refuses a v2
+/// signature outright instead of checking it as v1, and an unknown version
+/// is refused everywhere.
+#[actix_rt::test]
+async fn v2_is_never_downgraded_to_v1() {
+    use actix_web::http::Method;
+
+    let (fixture, app) = app_fixture("app_v2_downgrade").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let payload = create_payload(&fixture, &app, "v2");
+    let unbound = test::call_service(
+        &service,
+        signed_v2(
+            "/app-write",
+            &fixture.appstate,
+            Method::POST,
+            &payload,
+            &payload,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(unbound.status(), 401);
+    assert!(
+        body_of(unbound).contains("does not check version 2"),
+        "the caller is told to sign with version 1"
+    );
+
+    let body = format!(
+        r#"{{"drive":{:?},"plugin":{:?}}}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let unknown = test::call_service(
+        &service,
+        signed("/plugin-view-token", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .insert_header(("x-atomic-signature-version", "3"))
+            .set_payload(body.clone())
+            .to_request(),
+    )
+    .await;
+    assert_eq!(unknown.status(), 401);
+
+    // A v1 proof labelled as v2 is checked as v2, and fails.
+    let relabelled = test::call_service(
+        &service,
+        signed("/plugin-view-token", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .insert_header(("x-atomic-signature-version", "2"))
+            .set_payload(body)
+            .to_request(),
+    )
+    .await;
+    assert_eq!(relabelled.status(), 401);
+}

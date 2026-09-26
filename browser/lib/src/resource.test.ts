@@ -403,6 +403,93 @@ describe('resource.ts', () => {
   });
 
   /**
+   * A property removed elsewhere (another client, or the server writing for
+   * an app through `/app-write`) must stay removed when the full state
+   * replaces this copy. The replace path used to rebuild the doc from the
+   * snapshot and then "heal" it from the cache — which still held the
+   * pre-removal values — so the removed value came back as a local op.
+   */
+  it('a replacing snapshot drops properties the source removed', async ({
+    expect,
+  }) => {
+    const name = core.properties.name;
+    const description = core.properties.description;
+    const subject = 'https://example.com/replace-removes';
+
+    const server = new Resource(subject);
+    await server.set(name, 'Row', false);
+    await server.set(description, 'Goes away', false);
+    const before = server.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const page = new Resource(subject);
+    page.importLoroUpdate(before, true);
+    expect(page.get(description)).toBe('Goes away');
+
+    // The removal happens elsewhere, on top of the same state.
+    server.getLoroDoc()!.getMap('properties').delete(description);
+    server.getLoroDoc()!.commit();
+    const after = server.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    page.importLoroUpdate(after, true);
+
+    expect(page.get(name)).toBe('Row');
+    expect(page.get(description)).toBeUndefined();
+    expect(
+      page.getLoroDoc()!.getMap('properties').get(description),
+    ).toBeUndefined();
+  });
+
+  /**
+   * A property a snapshot never had is not one its source removed. A second
+   * device restores the agent's profile from Cloud Vault, while the node only
+   * holds the stub it made for the agent: the name must survive the node's
+   * snapshot, and JSON-AD read together with a stored snapshot must still fill
+   * in what that snapshot lacks. What the snapshot did delete stays deleted.
+   */
+  it('a replacing snapshot keeps what its source never had', async ({
+    expect,
+  }) => {
+    const name = core.properties.name;
+    const publicKey = core.properties.publicKey;
+    const subject = 'did:ad:agent:replace-keeps';
+
+    const stub = new Resource(subject);
+    await stub.set(publicKey, 'key', false);
+    const stubBytes = stub.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const profile = new Resource(subject);
+    await profile.set(publicKey, 'key', false);
+    await profile.set(name, 'Returning', false);
+    const profileBytes = profile.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const restored = new Resource(subject);
+    restored.importLoroUpdate(profileBytes, true);
+    restored.importLoroUpdate(stubBytes, true);
+    expect(restored.get(name)).toBe('Returning');
+    expect(restored.get(publicKey)).toBe('key');
+
+    const hydrated = new Resource(subject);
+    hydrated.applyHydratedValues([
+      [publicKey, 'key'],
+      [name, 'Returning'],
+    ]);
+    hydrated.importLoroUpdate(stubBytes, true);
+    expect(hydrated.get(name)).toBe('Returning');
+
+    profile.getLoroDoc()!.getMap('properties').delete(name);
+    profile.getLoroDoc()!.commit();
+    const removedBytes = profile.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const stale = new Resource(subject);
+    stale.applyHydratedValues([
+      [publicKey, 'key'],
+      [name, 'Returning'],
+    ]);
+    stale.importLoroUpdate(removedBytes, true);
+    expect(stale.get(name)).toBeUndefined();
+  });
+
+  /**
    * Regression: drawing onto a canvas whose strokes were seeded in bulk via
    * `set()` (template/demo content) threw "pushContainer is not a function"
    * and the new stroke was dropped. `set()` must store an array of objects as

@@ -83,58 +83,69 @@ const SEARCH_TRIGRAMS: &str = "search_trigrams_v1";
 const ENVELOPES: &str = "envelopes_v1";
 const OUTBOX: &str = "outbox_v1";
 
-impl std::fmt::Display for Tree {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Tree {
+    /// Every tree, in the order backends create them.
+    pub const ALL: [Tree; 20] = [
+        Tree::Resources,
+        Tree::WatchedQueries,
+        Tree::PropValSub,
+        Tree::ValPropSub,
+        Tree::QueryMembers,
+        Tree::PluginMeta,
+        Tree::PluginSecret,
+        Tree::PluginSchedule,
+        Tree::PluginTrigger,
+        Tree::AppAgent,
+        Tree::DriveMapping,
+        Tree::DidMapping,
+        Tree::LoroSnapshots,
+        Tree::Blobs,
+        Tree::SearchPostings,
+        Tree::SearchDocs,
+        Tree::SearchDocTokens,
+        Tree::SearchTrigrams,
+        Tree::Envelopes,
+        Tree::Outbox,
+    ];
+
+    /// The on-disk name of this tree. Every backend (sled tree, redb table)
+    /// uses this one name, so bumping a version suffix here is all it takes
+    /// to strand old-layout entries.
+    pub const fn name(self) -> &'static str {
         match self {
-            Tree::Resources => f.write_str(RESOURCES),
-            Tree::WatchedQueries => f.write_str(QUERIES_WATCHED),
-            Tree::PropValSub => f.write_str(PROPVALSUB),
-            Tree::ValPropSub => f.write_str(VALPROPSUB),
-            Tree::QueryMembers => f.write_str(QUERY_MEMBERS),
-            Tree::PluginMeta => f.write_str(PLUGIN_META),
-            Tree::PluginSecret => f.write_str(PLUGIN_SECRET),
-            Tree::PluginSchedule => f.write_str(PLUGIN_SCHEDULE),
-            Tree::PluginTrigger => f.write_str(PLUGIN_TRIGGER),
-            Tree::AppAgent => f.write_str(APP_AGENT),
-            Tree::DriveMapping => f.write_str(DRIVE_MAPPING),
-            Tree::DidMapping => f.write_str(DID_MAPPING),
-            Tree::LoroSnapshots => f.write_str(LORO_SNAPSHOTS),
-            Tree::Blobs => f.write_str(BLOBS),
-            Tree::SearchPostings => f.write_str(SEARCH_POSTINGS),
-            Tree::SearchDocs => f.write_str(SEARCH_DOCS),
-            Tree::SearchDocTokens => f.write_str(SEARCH_DOC_TOKENS),
-            Tree::SearchTrigrams => f.write_str(SEARCH_TRIGRAMS),
-            Tree::Envelopes => f.write_str(ENVELOPES),
-            Tree::Outbox => f.write_str(OUTBOX),
+            Tree::Resources => RESOURCES,
+            Tree::WatchedQueries => QUERIES_WATCHED,
+            Tree::PropValSub => PROPVALSUB,
+            Tree::ValPropSub => VALPROPSUB,
+            Tree::QueryMembers => QUERY_MEMBERS,
+            Tree::PluginMeta => PLUGIN_META,
+            Tree::PluginSecret => PLUGIN_SECRET,
+            Tree::PluginSchedule => PLUGIN_SCHEDULE,
+            Tree::PluginTrigger => PLUGIN_TRIGGER,
+            Tree::AppAgent => APP_AGENT,
+            Tree::DriveMapping => DRIVE_MAPPING,
+            Tree::DidMapping => DID_MAPPING,
+            Tree::LoroSnapshots => LORO_SNAPSHOTS,
+            Tree::Blobs => BLOBS,
+            Tree::SearchPostings => SEARCH_POSTINGS,
+            Tree::SearchDocs => SEARCH_DOCS,
+            Tree::SearchDocTokens => SEARCH_DOC_TOKENS,
+            Tree::SearchTrigrams => SEARCH_TRIGRAMS,
+            Tree::Envelopes => ENVELOPES,
+            Tree::Outbox => OUTBOX,
         }
     }
 }
 
-// convert Tree into AsRef<[u8]> by using the string above
+impl std::fmt::Display for Tree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 impl AsRef<[u8]> for Tree {
     fn as_ref(&self) -> &[u8] {
-        match self {
-            Tree::Resources => RESOURCES.as_bytes(),
-            Tree::WatchedQueries => QUERIES_WATCHED.as_bytes(),
-            Tree::PropValSub => PROPVALSUB.as_bytes(),
-            Tree::ValPropSub => VALPROPSUB.as_bytes(),
-            Tree::QueryMembers => QUERY_MEMBERS.as_bytes(),
-            Tree::PluginMeta => PLUGIN_META.as_bytes(),
-            Tree::PluginSecret => PLUGIN_SECRET.as_bytes(),
-            Tree::PluginSchedule => PLUGIN_SCHEDULE.as_bytes(),
-            Tree::PluginTrigger => PLUGIN_TRIGGER.as_bytes(),
-            Tree::AppAgent => APP_AGENT.as_bytes(),
-            Tree::DriveMapping => DRIVE_MAPPING.as_bytes(),
-            Tree::DidMapping => DID_MAPPING.as_bytes(),
-            Tree::LoroSnapshots => LORO_SNAPSHOTS.as_bytes(),
-            Tree::Blobs => BLOBS.as_bytes(),
-            Tree::SearchPostings => SEARCH_POSTINGS.as_bytes(),
-            Tree::SearchDocs => SEARCH_DOCS.as_bytes(),
-            Tree::SearchDocTokens => SEARCH_DOC_TOKENS.as_bytes(),
-            Tree::SearchTrigrams => SEARCH_TRIGRAMS.as_bytes(),
-            Tree::Envelopes => ENVELOPES.as_bytes(),
-            Tree::Outbox => OUTBOX.as_bytes(),
-        }
+        self.name().as_bytes()
     }
 }
 

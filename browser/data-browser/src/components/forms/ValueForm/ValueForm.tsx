@@ -30,6 +30,8 @@ interface ValueFormProps {
   /** Whether the form should start in edit mode when mounted. */
   defaultEditState?: boolean;
   onStateChange?: (editMode: boolean) => void;
+  /** The id the input gets while editing, for a `<label htmlFor>` outside. */
+  inputId?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export function ValueForm({
   datatype,
   defaultEditState = false,
   onStateChange,
+  inputId,
 }: ValueFormProps) {
   const { changes, oldResources } = useAIChanges();
   const hasAiChanges = changes.includes(resource.subject);
@@ -125,6 +128,7 @@ export function ValueForm({
     <ValueFormEdit
       resource={resource}
       property={property}
+      inputId={inputId}
       onClose={() => handleEditModeChange(false)}
     />
   );

@@ -80,13 +80,4 @@ export const TEMPLATE_CATALOG: TemplateDefinition[] = [
     entryPoints: ['workspace'],
     parts: [table('project-tasks'), table('reading-list'), table('bookmarks')],
   },
-  {
-    id: 'interactive-demo',
-    version,
-    title: 'Meet the demo team',
-    icon: '👋',
-    description: 'Explore a live workspace with scripted teammates.',
-    entryPoints: ['workspace'],
-    parts: [{ key: 'demo', kind: 'interactive-demo' }],
-  },
 ];

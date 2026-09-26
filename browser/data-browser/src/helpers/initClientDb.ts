@@ -8,6 +8,7 @@ import {
   getOrCreateSessionDbKey,
   getSessionDbKey,
   hasWrappedDbKey,
+  waitForSessionDbKey,
 } from './localDbKey';
 import { wasmJsUrl } from './wasmUrls';
 
@@ -109,7 +110,7 @@ async function dbNameForAgent(agentSubject: string): Promise<string> {
  * The encryption key for an agent's database, preferring the active-session
  * record. A wrapped record without a session record means a sign-in is
  * unwrapping it right now (`ensureDbKeyOnSignIn` runs alongside the
- * AgentChanged event) — wait for that instead of generating a fresh key that
+ * AgentChanged event, announced by `trackDbKeySignIn`) — wait for that instead of generating a fresh key that
  * couldn't open the existing encrypted file.
  *
  * Returns null when there is a wrapped record but no session key, which means
@@ -126,12 +127,9 @@ async function resolveDbKey(agentSubject: string): Promise<Uint8Array | null> {
   if (existing) return existing;
 
   if (await hasWrappedDbKey(agentSubject)) {
-    for (let attempt = 0; attempt < 30; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const key = await getSessionDbKey(agentSubject);
+    const key = await waitForSessionDbKey(agentSubject);
 
-      if (key) return key;
-    }
+    if (key) return key;
 
     // The sign-in never delivered the key (e.g. an agent restored from a
     // non-extractable keypair, where no secret enters JS).
@@ -243,6 +241,59 @@ async function startForIdentity(
     if (!hasProps) return undefined;
 
     return JSON.stringify(obj);
+  };
+
+  /**
+   * The resource's Loro history, when it has one. The seed must store that
+   * rather than let the database rebuild a document from the propvals: a
+   * rebuilt document carries the same values under a fresh peer id, so its
+   * version vector looks ahead of the server's and the next drive reconcile
+   * asks this tab to push it back (which a read-only member cannot).
+   */
+  const snapshotFor = (subject: string): Uint8Array | undefined => {
+    const resource = store.resources.get(subject);
+    if (!resource?.hasLoroDoc()) return undefined;
+
+    const doc = resource.getLoroDoc();
+
+    if (!doc || doc.oplogVersion().toJSON().size === 0) return undefined;
+
+    return doc.export({ mode: 'snapshot' });
+  };
+
+  /** Write `subjects` in order. Those without a Loro history go in one
+   *  batch; each one with a history is written with its snapshot. Returns
+   *  how many were written. */
+  const seed = async (subjects: string[]): Promise<number> => {
+    const plain: string[] = [];
+    const withHistory: {
+      subject: string;
+      jsonAd: string;
+      snapshot: Uint8Array;
+    }[] = [];
+
+    for (const subject of subjects) {
+      const jsonAd = serializeResource(subject);
+      if (jsonAd === undefined) continue;
+
+      const snapshot = snapshotFor(subject);
+
+      if (snapshot) {
+        withHistory.push({ subject, jsonAd, snapshot });
+      } else {
+        plain.push(jsonAd);
+      }
+    }
+
+    await clientDb.putResources(plain).catch(() => {});
+
+    for (const { subject, jsonAd, snapshot } of withHistory) {
+      await clientDb
+        .putResourceWithSnapshot(subject, jsonAd, snapshot)
+        .catch(() => {});
+    }
+
+    return plain.length + withHistory.length;
   };
 
   /** Compute a cheap fingerprint of the in-memory bootstrap state.
@@ -400,19 +451,13 @@ async function startForIdentity(
     // one worker call. The worker still processes them in order, so the
     // datatype-priming property is preserved.
     const endSeed = perfSpan('clientdb.seed');
-    const propertyJsonAds = properties
-      .map(serializeResource)
-      .filter((s): s is string => s !== undefined);
-    await clientDb.putResources(propertyJsonAds).catch(() => {});
+    const seededProperties = await seed(properties);
 
     // Then seed everything else in one batch too.
-    const otherJsonAds = others
-      .map(serializeResource)
-      .filter((s): s is string => s !== undefined);
-    await clientDb.putResources(otherJsonAds).catch(() => {});
+    const seededOthers = await seed(others);
     endSeed({
-      properties: propertyJsonAds.length,
-      others: otherJsonAds.length,
+      properties: seededProperties,
+      others: seededOthers,
     });
 
     // Persist the fingerprint AFTER the seed lands so a crashed seed
@@ -428,12 +473,12 @@ async function startForIdentity(
     }
 
     console.info(
-      `[ClientDb] seeded ${propertyJsonAds.length} properties + ${otherJsonAds.length} resources, skipped ${skippedAlreadyPresent} already in WASM DB (fingerprint ${currentFingerprint}${bootstrapChanged && storedFingerprint ? `, was ${storedFingerprint}` : ''})`,
+      `[ClientDb] seeded ${seededProperties} properties + ${seededOthers} resources, skipped ${skippedAlreadyPresent} already in WASM DB (fingerprint ${currentFingerprint}${bootstrapChanged && storedFingerprint ? `, was ${storedFingerprint}` : ''})`,
     );
     endPostInit({
       seeded: true,
-      properties: propertyJsonAds.length,
-      others: otherJsonAds.length,
+      properties: seededProperties,
+      others: seededOthers,
       skippedAlreadyPresent,
     });
   });

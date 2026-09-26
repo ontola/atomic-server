@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { useResource, useTitle, type Property } from '@tomic/react';
+import { type Property } from '@tomic/react';
 import {
   Dialog,
   DialogActions,
@@ -17,6 +17,7 @@ import {
   isGroupableProperty,
   type GroupGranularity,
 } from './tableAggregates';
+import { useColumnLabel } from './helpers/useColumnLabel';
 
 interface BreakdownDialogProps {
   open: boolean;
@@ -131,12 +132,9 @@ export function BreakdownDialog({
 
 /** Labels a column by its human title, the way the column menus do. */
 function PropertyOption({ property }: { property: Property }): JSX.Element {
-  const resource = useResource(property.subject);
-  const [title] = useTitle(resource);
+  const label = useColumnLabel(property);
 
-  return (
-    <option value={property.subject}>{title || property.shortname}</option>
-  );
+  return <option value={property.subject}>{label}</option>;
 }
 
 const Row = styled.div`

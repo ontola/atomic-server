@@ -272,5 +272,5 @@ and sandbox/scheduler integration remain unverified; this is a manual host runne
 
 Current implementation and remaining scope are tracked in `plugin-runtime-v1.md`,
 `connector-scale.md`, `import-identity.md`, `github-issues-pilot.md`,
-`notion-sync.md`, `clockify.md`, `mt940.md` and `schema-catalog.md`. The marketplace
+`clockify.md`, `mt940.md` and `schema-catalog.md`. The marketplace
 governance and broad JSON Schema compatibility remain design work.

@@ -61,9 +61,17 @@ than inventing new ones.
 
 Every PR that changes the UI needs screenshots of the actual screen. Run the
 app, open each changed view (Playwright or a browser), and capture it; include
-mobile width when layout is affected. Then either upload them to GitHub (in the
-PR description or a PR comment) or show them in chat to the developer you are
-working with. A text description of a UI change is not enough for review.
+mobile width when layout is affected. A text description of a UI change is not
+enough for review.
+
+Never commit screenshots to the repository, not even temporarily or in a
+`planning/` folder. Share them in one of these ways instead:
+
+- Attach them to a GitHub PR comment or the PR description (GitHub hosts the
+  image, the repo stays clean).
+- Upload them to external storage, such as an S3 bucket, and link them from the
+  PR.
+- Show them in chat to the developer you are working with.
 
 ## Translation catalogs (`src/locales/*.po`)
 
@@ -92,9 +100,12 @@ second writer on tracked files. Four ways that has cost real time:
   browser/data-browser/src/locales/.wuchale` and restart vite. Do not make
   the `.po` files read-only to stop the rewrite; the compiled output goes
   stale instead.
-- **`pnpm clean-translations` is not the same writer.** It extracts from test
-  files too, which the vite plugin does not, so its output is a *different*
-  fixed point. Settling by running the app is what matches the dev server.
+- **Settle with `pnpm clean-translations`.** `wuchale.config.js` ignores test
+  files, which the vite plugin never sees, so the CLI and the dev server now
+  extract the same catalog. After adding or removing UI text, run it in
+  `browser/data-browser` and commit the `.po` files. A component whose strings
+  never made it into the catalogs renders them blank in a production build,
+  and only e2e notices. Check the diff doesn't drop real translations.
 
 Strings a model reads — tool descriptions, prompts, instructions — must be
 `@wc-ignore`d. A translated tool name is not a tool name. See

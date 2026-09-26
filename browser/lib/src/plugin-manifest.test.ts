@@ -166,15 +166,15 @@ it('validates action schemas and operation references without extending capabili
   const raw = JSON.parse(
     readFileSync(
       new URL(
-        '../../../integrations/github-issues/manifest.fixture.json',
+        '../../../testdata/plugin-for-testing/manifest.json',
         import.meta.url,
       ),
       'utf8',
     ),
   );
   expect(validateManifest(raw).actions?.map(a => a.name)).toEqual([
-    'get_issue',
-    'create_issue',
+    'get_record',
+    'create_record',
   ]);
   expect(() =>
     validateManifest({

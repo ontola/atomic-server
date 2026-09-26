@@ -2,6 +2,8 @@ import type { Agent } from './agent.js';
 import type { HeadersObject } from './client.js';
 import { getTimestampNow } from './commit.js';
 import { decodeB64, encodeB64 } from './base64.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from './value.js';
 
 /** The old identity is only used at the origin named by the imported secret. */
 export function legacyAgentForRequest(
@@ -53,20 +55,136 @@ function localTryingExternal(subject: string, agent: Agent) {
   );
 }
 
+/** The header that selects the request signature version. Absent is 1. */
+export const SIGNATURE_VERSION_HEADER = 'x-atomic-signature-version';
+
+/** A request body as `fetch` would send it, for hashing. */
+export type SignableBody = string | Uint8Array | ArrayBuffer | undefined | null;
+
+/** Lower-case hex SHA-256 of a request body; a string is hashed as UTF-8. */
+export function sha256Hex(body: SignableBody): string {
+  const bytes =
+    body === undefined || body === null
+      ? new Uint8Array()
+      : typeof body === 'string'
+        ? new TextEncoder().encode(body)
+        : body instanceof Uint8Array
+          ? body
+          : new Uint8Array(body);
+
+  return bytesToHex(sha256(bytes));
+}
+
+/**
+ * The message a version 2 request signature signs (ontola/atomic-plugins#54):
+ *
+ * ```text
+ * atomic-request-v2
+ * {METHOD}
+ * {full URL, including query}
+ * {timestamp, Unix ms}
+ * {sha-256 hex of the body}
+ * ```
+ *
+ * Mirrors `request_signature_message_v2` in `lib/src/authentication.rs`;
+ * `authentication_v2_vectors.json` pins the two together.
+ */
+export function requestSignatureMessageV2(
+  method: string,
+  url: string,
+  timestamp: number,
+  bodySha256Hex: string,
+): string {
+  return [
+    'atomic-request-v2',
+    method.toUpperCase(),
+    url,
+    timestamp.toString(),
+    bodySha256Hex,
+  ].join('\n');
+}
+
+/** Options that make {@link signRequest} produce a version 2 signature. */
+export interface SignRequestOptions {
+  /**
+   * The HTTP method. Giving one selects version 2: the signature then also
+   * covers the method and the SHA-256 of `body`, and
+   * `x-atomic-signature-version: 2` is sent. Without it, version 1 as before.
+   */
+  method?: string;
+  /** The exact body that will be sent. Omit for none. */
+  body?: SignableBody;
+  /**
+   * `x-atomic-agent` to send instead of `agent.subject`, e.g. the
+   * `atomic:agent:<pubkey>` form for a server that accepts no other.
+   */
+  agentSubject?: string;
+  /** Original HTTP agent for a request to its own legacy server (v1 only). */
+  legacySubject?: string;
+  /** Signing time, Unix ms. Defaults to now. For tests. */
+  timestamp?: number;
+}
+
 /**
  * Creates authentication headers and signs the request. Does not add headers if
  * the Agents subject is missing.
+ *
+ * Version 1 (the default) signs `"{url} {timestamp}"`, which is what cookies,
+ * WebSocket `AUTH` and plain reads use. Passing `{ method, body }` signs
+ * version 2 instead, which also covers the method and body so a captured
+ * request cannot be replayed with a different body. For version 2, `subject`
+ * must be the full URL the request goes to, query included; it is signed as
+ * `new URL(subject).href`. Works with a non-extractable WebCrypto key: it only
+ * ever asks the agent to sign.
  */
 export async function signRequest(
   /** The resource meant to be fetched */
   subject: string,
   agent: Agent,
   headers: HeadersObject,
-  /** Original HTTP agent for a request to its own legacy server. */
-  legacySubject?: string,
+  /**
+   * Original HTTP agent for a request to its own legacy server, or
+   * {@link SignRequestOptions}.
+   */
+  legacySubjectOrOptions?: string | SignRequestOptions,
 ): Promise<HeadersObject> {
-  const timestamp = getTimestampNow();
+  const options: SignRequestOptions =
+    typeof legacySubjectOrOptions === 'string'
+      ? { legacySubject: legacySubjectOrOptions }
+      : (legacySubjectOrOptions ?? {});
+  const timestamp = options.timestamp ?? getTimestampNow();
   const newHeaders = { ...headers };
+  const legacySubject = options.legacySubject;
+
+  if (options.method !== undefined) {
+    if (legacySubject) {
+      throw new Error(
+        'A version 2 request signature cannot use a legacy agent subject',
+      );
+    }
+
+    const agentSubject = options.agentSubject ?? agent?.subject;
+
+    if (!agentSubject) {
+      throw new Error('Agent has no subject, cannot sign the request');
+    }
+
+    const url = new URL(subject).href;
+    const message = requestSignatureMessageV2(
+      options.method,
+      url,
+      timestamp,
+      sha256Hex(options.body),
+    );
+
+    newHeaders['x-atomic-public-key'] = await agent.getPublicKey();
+    newHeaders['x-atomic-signature'] = await agent.sign(message);
+    newHeaders['x-atomic-timestamp'] = timestamp.toString();
+    newHeaders['x-atomic-agent'] = agentSubject;
+    newHeaders[SIGNATURE_VERSION_HEADER] = '2';
+
+    return newHeaders;
+  }
 
   if (agent?.subject && !localTryingExternal(subject, agent)) {
     newHeaders['x-atomic-public-key'] = await agent.getPublicKey();
@@ -76,8 +194,8 @@ export async function signRequest(
     );
     newHeaders['x-atomic-timestamp'] = timestamp.toString();
 
-    if (agent.subject) {
-      newHeaders['x-atomic-agent'] = agent.subject;
+    if (options.agentSubject ?? agent.subject) {
+      newHeaders['x-atomic-agent'] = options.agentSubject ?? agent.subject;
     }
 
     if (legacySubject) {

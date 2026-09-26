@@ -5,6 +5,7 @@ import {
   FaCalendarDays,
   FaStopwatch,
   FaChartPie,
+  FaRegCircleDot,
 } from 'react-icons/fa6';
 
 /**
@@ -25,6 +26,7 @@ export const VIEW_KINDS = [
   'calendar',
   'timer',
   'dashboard',
+  'issues',
 ] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
@@ -62,6 +64,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   calendar: 'Calendar',
   timer: 'Timer',
   dashboard: 'Dashboard',
+  issues: 'Issues',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -70,4 +73,5 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   calendar: FaCalendarDays,
   timer: FaStopwatch,
   dashboard: FaChartPie,
+  issues: FaRegCircleDot,
 };

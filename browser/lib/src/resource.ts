@@ -35,8 +35,8 @@ import {
   type QuickAccessPropType,
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
+import type { ClientDbOutboxWrite } from './client-db.js';
 import {
-  copyResource,
   forkResource,
   isFork,
   mergeFork,
@@ -186,7 +186,6 @@ export class Resource<C extends OptionalClass = any> {
   private _recovering = false;
   private _dirty = false;
 
-  #commitBuilder: CommitBuilder;
   private _subject: string;
   /** Memoized read cache derived from Loro. Rebuilt lazily when #cacheDirty. */
   #cache: Record<string, JSONValue> = Object.create(null);
@@ -255,7 +254,6 @@ export class Resource<C extends OptionalClass = any> {
 
     this.new = !!newResource;
     this._subject = subject;
-    this.#commitBuilder = new CommitBuilder(subject);
   }
 
   public get __internalObject(): Resource<C> {
@@ -491,7 +489,13 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (!isDerivedByServer(key) && this._loroMap.get(key) === undefined) {
+          if (
+            !isDerivedByServer(key) &&
+            this._loroMap.get(key) === undefined &&
+            // A key with a last editor was deleted in this doc: the snapshot
+            // removed it, it did not miss it.
+            this._loroMap.getLastEditor(key) === undefined
+          ) {
             this.loroSetProperty(key, value);
           }
         }
@@ -587,11 +591,10 @@ export class Resource<C extends OptionalClass = any> {
         // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
         // scheme — the resource carries its real `did:ad:` from birth.
         if (this.new) return;
-        // `_new:` placeholders (the interactive New-Resource form / any
-        // `store.createSubject()` caller, as opposed to `store.newResource()`
-        // which mints a real DID up front) can only be synced by first
-        // deriving their real subject via `signChanges` — that's what
-        // `_saveInner`'s explicit-save path does. `this.new` is supposed to
+        // `_new:` placeholders (created by older builds, before every caller
+        // moved to `store.newResource()`, which mints the real DID up front)
+        // can only be synced by first deriving their real subject via
+        // `signChanges` — that's what `_saveInner`'s explicit-save path does. `this.new` is supposed to
         // gate that window, but it can be reset by unrelated reconciliation
         // (e.g. `applyToStore` merging in a fetch response) before the
         // resource is actually complete. Without this, a `_new:` subject
@@ -772,7 +775,10 @@ export class Resource<C extends OptionalClass = any> {
 
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
-        const normalized = normalizeLoroValue(datatypesJson?.[key], value);
+        const normalized = normalizeLoroValue(
+          datatypesJson?.[key] ?? this.untaggedDatatypeTag(key, value),
+          value,
+        );
         nextCache[key] = origin
           ? localizeInternalSubjects(normalized, origin)
           : normalized;
@@ -791,6 +797,33 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.#cache = nextCache;
+  }
+
+  /**
+   * The tag an untagged JSON-looking string would carry, from its Property's
+   * datatype when that Property is already cached (never fetches). Covers
+   * values set without a known datatype until the drain-time
+   * `writeDatatypeTags` runs, and docs written before the `datatypes` map
+   * existed. Only a string starting with `{` or `[` can need a tag to be read
+   * right, so everything else skips the lookup.
+   */
+  private untaggedDatatypeTag(
+    prop: string,
+    value: unknown,
+  ): string | undefined {
+    if (
+      typeof value !== 'string' ||
+      (!value.startsWith('{') && !value.startsWith('['))
+    ) {
+      return undefined;
+    }
+
+    const datatype = this._store?.resources
+      .get(prop)
+      ?.get(core.properties.datatype)
+      ?.toString();
+
+    return datatype === undefined ? undefined : datatypeTag(datatype, value);
   }
 
   /**
@@ -1462,38 +1495,6 @@ export class Resource<C extends OptionalClass = any> {
       : undefined;
   }
 
-  /** Checks if the content of two Resource instances is equal */
-  public equals(resourceB: Resource): boolean {
-    if (this === resourceB.__internalObject) {
-      return true;
-    }
-
-    if (this.subject !== resourceB.subject) {
-      return false;
-    }
-
-    if (this.new !== resourceB.new) {
-      return false;
-    }
-
-    if (this.error !== resourceB.error) {
-      return false;
-    }
-
-    if (this.loading !== resourceB.loading) {
-      return false;
-    }
-
-    if (
-      JSON.stringify(this.getEntries()) !==
-      JSON.stringify(resourceB.getEntries())
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
   /** Checks if the agent has write rights by traversing the graph. Recursive function. */
   public async canWrite(
     agent?: string,
@@ -1575,7 +1576,6 @@ export class Resource<C extends OptionalClass = any> {
     res.new = this.new;
     res.error = structuredClone(this.error);
     res.commitError = this.commitError;
-    res.#commitBuilder = this.#commitBuilder.clone();
     res._dirty = this._dirty;
     res.appliedCommitSignatures = this.appliedCommitSignatures;
 
@@ -1893,20 +1893,39 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
-  /** Returns true if the resource has unsaved local changes. */
+  /**
+   * True when the user changed this resource in this session (`set`,
+   * `push`, `remove`, undo/redo, or `markDirty` after a direct Loro edit)
+   * and that change has not been acknowledged by the server yet. This is
+   * the one flag behind the `'dirty'` save state.
+   *
+   * It is deliberately NOT derived from the Loro save cursor or the pending
+   * genesis (see `unsaved-state.test.ts`):
+   *  - reconciliation writes (e.g. `merge` dropping the `incomplete`
+   *    marker) put ops past the cursor without being user edits, and so do
+   *    AI edits held for review until they are accepted;
+   *  - a new resource has no cursor yet, so its edits are not "past" it;
+   *  - a pending genesis from `store.newResource` is a placeholder the user
+   *    has not saved, and must not read as an unsaved edit;
+   *  - a write made before Loro loads exists only in the read cache;
+   *  - the outbox entry survives reloads, this flag does not, and the store
+   *    relies on that difference (see `hydrateResourceFromJson`).
+   * Whether `save()` has work to do is the wider question answered in
+   * `saveOnce`: this flag, a pending genesis, or an outbox entry.
+   */
   public hasUnsavedChanges(): boolean {
-    return this.#commitBuilder.hasUnsavedChanges() || this._dirty;
+    return this._dirty;
   }
 
   /** Clear the dirty flag after a successful drain has signed + POSTed
    *  the accumulated Loro delta. The store-level drain
    *  (`drainOutboxSubject`) calls this once the resource is caught up
    *  (no ops past the save cursor) — without it, `_dirty` stays `true`
-   *  forever after the very first edit and the editable-title `*`
-   *  indicator never clears (rename-regression e2e). Distinct from the
-   *  Loro save cursor (`markLoroSavedAt`): the cursor tracks WHICH ops
-   *  are signed; this flag is the coarse "are there any unsynced
-   *  edits" signal that `hasUnsavedChanges` / `UnsavedIndicator` read.
+   *  forever after the very first edit and the save state never
+   *  returns to idle. Distinct from the Loro save cursor
+   *  (`markLoroSavedAt`): the cursor tracks WHICH ops are signed; this
+   *  flag is the coarse "are there any unsynced user edits" signal that
+   *  `hasUnsavedChanges` / `getSaveState` read.
    *  @internal store-level drain only. */
   public markSynced(): void {
     this._dirty = false;
@@ -1919,23 +1938,6 @@ export class Resource<C extends OptionalClass = any> {
     this._dirty = true;
     this.armStagedCommitToken();
     this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
-  }
-
-  public getCommitsCollectionSubject(): string {
-    // For DID subjects (or other non-HTTP URIs) we can't derive the server
-    // origin from the subject itself — use the store's server URL instead.
-    const base =
-      this.subject.startsWith('_') || isAtomicIdentifier(this.subject)
-        ? this.store.getServerUrl()
-        : this.subject;
-    const url = new URL('/query', base);
-    url.searchParams.append('property', commits.properties.subject);
-    url.searchParams.append('value', this.subject);
-    url.searchParams.append('sort_by', commits.properties.createdAt);
-    url.searchParams.append('include_nested', 'true');
-    url.searchParams.append('page_size', '9999');
-
-    return url.toString();
   }
 
   /** Returns a Collection with all children of this resource
@@ -2226,7 +2228,7 @@ export class Resource<C extends OptionalClass = any> {
 
     // Bucket by the Loro Change message. Two token families exist:
     // `e-<token>` written by the logical-edit mutation methods
-    // (pushListItem / replaceListItems / removeListItem / undo / redo —
+    // (pushListItem / replaceListItems / undo / redo —
     // see `commitLoroEdit`), and `c-<ulid>` written by the drain for
     // ops that were still pending at export time (property `set()`s).
     // All ops of one edit/commit share a message and form one version.
@@ -2443,7 +2445,7 @@ export class Resource<C extends OptionalClass = any> {
    *
    * The one serializer for that row: `Store.addResource` and
    * {@link persistToClientDb} both write through it, so the store's
-   * "already persisted" stamp (`Store.recordPersistedState`) is computed over
+   * "already persisted" stamp (`Store.persistState`) is computed over
    * exactly the bytes either path writes.
    *
    * Returns `null` when the resource has no non-binary propvals at all.
@@ -2519,10 +2521,10 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Removes the resource both locally and from the server.
    *
-   * The delete is durable the moment this is called: the signed destroy
-   * commit goes into the store's `LocalOutbox` (localStorage-backed, survives a
-   * reload) and the resource is removed from the store and tombstoned in
-   * OPFS right away. The outbox drain POSTs the envelope with the same
+   * The delete is durable before this resolves: the signed destroy commit
+   * goes into the store's `LocalOutbox` (stored in the client database, or
+   * localStorage without one; survives a reload) and the resource is removed
+   * from the store and tombstoned in OPFS right away. The outbox drain POSTs the envelope with the same
    * backoff and reconnect replay as any other write.
    *
    * Resolution semantics mirror {@link save}:
@@ -2583,7 +2585,10 @@ export class Resource<C extends OptionalClass = any> {
     this.store.removeResource(this.subject);
 
     if (!this.store.serverConnected) {
-      // Queued; the reconnect drain POSTs it.
+      // Queued; the reconnect drain POSTs it. Resolve once the queued
+      // envelope is on disk, like an offline save.
+      await this.store.outbox.flush();
+
       return;
     }
 
@@ -2741,39 +2746,6 @@ export class Resource<C extends OptionalClass = any> {
     // Single commit at end → single UndoManager checkpoint for the whole
     // replacement.
     this.commitLoroEdit();
-    this.eventManager.emit(
-      ResourceEvents.LocalChange,
-      propUrl,
-      this.#cache[propUrl],
-    );
-  }
-
-  /** Remove an item from a Loro list property by index. Used for canvas stroke deletion. */
-  public removeListItem(propUrl: string, index: number): void {
-    const map = this.getLoroMap();
-    if (!map) return;
-
-    const existing = map.get(propUrl);
-
-    if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
-      // A plain-array value (seeded via `.set()`, not yet a container) has no
-      // `delete`. Promote it to a container minus the item so erasing a
-      // baked-in stroke actually persists.
-      if (Array.isArray(existing)) {
-        const next = existing.slice();
-        next.splice(index, 1);
-        this.replaceListItems(propUrl, next as JSONArray);
-      }
-
-      return;
-    }
-
-    const list = existing as LoroList;
-    list.delete(index, 1);
-    this.commitLoroEdit();
-    this.rebuildCacheFromLoro();
-    this.#cacheDirty = false;
-    this._dirty = true;
     this.eventManager.emit(
       ResourceEvents.LocalChange,
       propUrl,
@@ -3098,14 +3070,13 @@ export class Resource<C extends OptionalClass = any> {
       isFirstCommit ? agent.subject : undefined,
     );
 
-    if (!this.#commitBuilder.hasUnsavedChanges() && !loroDelta) {
+    if (!loroDelta) {
       this._dirty = false;
       throw new Error(`No changes to sign for ${this.subject}`);
     }
 
-    if (loroDelta) {
-      this.#commitBuilder.setLoroUpdate(loroDelta);
-    }
+    const builder = new CommitBuilder(this.subject);
+    builder.setLoroUpdate(loroDelta);
 
     // Auto-detect genesis: no lastCommit stamp means this is a new resource.
     // The server requires is_genesis=true for DID resources that do not
@@ -3124,12 +3095,9 @@ export class Resource<C extends OptionalClass = any> {
     const isAgent = isAgentSubject(this.subject);
 
     if (isDIDEligible && !isAgent && isFirstCommit) {
-      this.#commitBuilder.setIsGenesis(true);
+      builder.setIsGenesis(true);
     }
 
-    // Clone the builder so new changes after this call go into a fresh one.
-    const builder = this.#commitBuilder.clone();
-    this.#commitBuilder = new CommitBuilder(this.subject);
     this._dirty = false;
 
     // Advance the save cursor: everything in the doc up to here is now
@@ -3146,8 +3114,6 @@ export class Resource<C extends OptionalClass = any> {
     if (commit.subject !== this.subject) {
       const oldSubject = this.subject;
       this._subject = commit.subject;
-      // Update the fresh #commitBuilder to use the real subject.
-      this.#commitBuilder = new CommitBuilder(commit.subject);
 
       if (this._store) {
         // Silently move the resource in the store map — don't use removeResource()
@@ -3213,16 +3179,6 @@ export class Resource<C extends OptionalClass = any> {
    */
   public fork(parent: string): Promise<Resource> {
     return forkResource(this.store, this, parent);
-  }
-
-  /**
-   * Duplicate this resource into a new, independent resource under `parent`,
-   * carrying its content but not its identity, ACL, or history. Unlike
-   * {@link fork}, the copy has no link back and cannot be merged in. See
-   * {@link copyResource}.
-   */
-  public copyTo(parent: string): Promise<Resource> {
-    return copyResource(this.store, this, parent);
   }
 
   /**
@@ -3365,6 +3321,12 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('No agent has been set, you cannot save.');
     }
 
+    if (this.store.requireOnlineWrites && !this.store.serverConnected) {
+      throw new Error(
+        'The local node is not connected; this change was not saved.',
+      );
+    }
+
     if (!this._lastCommit) {
       this._lastCommit = this.get(properties.commit.lastCommit)?.toString();
     }
@@ -3395,21 +3357,20 @@ export class Resource<C extends OptionalClass = any> {
         this._pendingGenesis = undefined;
       } else if (
         hasChanges &&
-        (this.#commitBuilder.isGenesis ||
-          this.subject.startsWith('_new:') ||
+        (this.subject.startsWith('_new:') ||
           (this.new &&
             isAtomicIdentifier(this.subject) &&
             !isAgentSubject(this.subject)))
       ) {
-        // Genesis path for resources NOT created via `store.newResource` —
-        // the new-resource form / `NewInstanceButton`, which mint a
-        // transient `_new:` subject via `store.createSubject()` and then
-        // `set()` + `save()` with no explicit genesis step. The real
-        // `did:ad:<sig>`
-        // subject only exists after signing, so sign now: `signChanges`
-        // auto-detects genesis (no lastCommit stamp + DID-eligible), derives
-        // the DID, and renames this resource in place; we enqueue the
-        // signed genesis under the NEW subject. Without this a `_new:`
+        // Genesis path for drafts whose genesis was not signed at creation:
+        // `store.newResource({ deferGenesis: true })` (the new-resource form,
+        // table rows, forks), and legacy `_new:` placeholders from older
+        // builds, which are `set()` + `save()`d with no explicit genesis step.
+        // Sign now: `signChanges` auto-detects genesis (no lastCommit stamp +
+        // DID-eligible). For a legacy `_new:` subject the real `did:ad:<sig>`
+        // only exists after signing, so it derives the DID and renames this
+        // resource in place; we enqueue the signed genesis under the NEW
+        // subject. Without this a `_new:`
         // subject would be marked dirty and the drain would POST a commit
         // with `subject: "_new:…"`, which the server rejects ("Unable to
         // parse string as URL") and retries forever.
@@ -3429,22 +3390,13 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       if (!this.store.serverConnected) {
-        // Offline: persist the Loro snapshot to clientDb BEFORE
-        // marking the outbox dirty. `pendingDirtyCount > 0` is the
-        // canonical "edit landed durably" signal; bumping it via
-        // `markDirty` before `saveOffline` finishes would leave a
-        // window where a reload loses the OPFS snapshot while the
-        // localStorage dirty bit survives.
-        await this.saveOffline();
-
-        if (hasChanges && !this.#commitBuilder.isGenesis) {
-          this.store.outbox.markDirty(this.subject);
-        }
+        // Offline: the snapshot and the outbox entry are written together.
+        await this.saveOffline(hasChanges);
 
         return 'offline';
       }
 
-      if (hasChanges && !this.#commitBuilder.isGenesis) {
+      if (hasChanges) {
         // Online non-genesis: mark dirty. The store-level drain
         // exports the accumulated Loro delta, signs ONE commit, sends.
         this.store.outbox.markDirty(this.subject);
@@ -3493,6 +3445,15 @@ export class Resource<C extends OptionalClass = any> {
     } catch (e) {
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);
+
+        if (this.store.requireOnlineWrites) {
+          this.commitError = e;
+          throw new Error(
+            'The local node disconnected before confirming this save.',
+            { cause: e },
+          );
+        }
+
         await this.saveOffline();
 
         return 'offline';
@@ -3572,8 +3533,12 @@ export class Resource<C extends OptionalClass = any> {
    *    clientDb so a reload can hydrate the Loro state before the WS
    *    reconnect drain re-signs from the same `_loroVersionAtLastSave`
    *    cursor.
+   *  - Writes the outbox entry (the last-synced cursor and, with
+   *    `markDirty`, the dirty bit) in the same write, so a reload finds
+   *    both or neither. The entry changes in memory only after that write,
+   *    so `pendingDirtyCount > 0` still means the edit is durable.
    */
-  private async saveOffline(): Promise<void> {
+  private async saveOffline(markDirty = false): Promise<void> {
     // Server sets createdAt on apply; we need it locally for sort.
     if (this.get(commits.properties.createdAt) === undefined) {
       this.setCreatedAtValue(Date.now());
@@ -3599,15 +3564,15 @@ export class Resource<C extends OptionalClass = any> {
     // advanced the local cursor to that snapshot; treating it as a rewind
     // baseline makes the post-genesis empty export look like "OPFS not ready"
     // and the drain retries forever (`offline-create-then-online`).
-    if (!signedGenesis) {
-      const baseVersion = this.getEncodedSaveCursor();
+    const baseVersion = signedGenesis
+      ? undefined
+      : this.getEncodedSaveCursor() || undefined;
 
-      if (baseVersion) {
-        this.store.outbox.setBaseVersion(this.subject, baseVersion);
-      }
-    }
-
-    await this.persistToClientDb();
+    await this.store.outbox.recordOfflineSave(
+      this.subject,
+      { baseVersion, dirty: markDirty },
+      outbox => this.persistToClientDb(outbox),
+    );
 
     this.commitError = undefined;
     this.loading = false;
@@ -3627,9 +3592,14 @@ export class Resource<C extends OptionalClass = any> {
    * (`fetchResourceWithLocalFallback`) reads it from clientDb and never
    * consults the racy server view.
    *
+   * `outbox` rows are written in the same worker message and flush, when
+   * the outbox lives in this database. Resolves `true` when they were.
+   *
    * @internal store-level / offline-persistence only.
    */
-  public async persistToClientDb(): Promise<void> {
+  public async persistToClientDb(
+    outbox?: ClientDbOutboxWrite,
+  ): Promise<boolean> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
     const identity = this.store.getAgent()?.subject;
@@ -3640,7 +3610,12 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const clientDb = this.store.getClientDb();
-    if (!clientDb || clientDb.unsupportedEnvironment) return;
+    if (!clientDb || clientDb.unsupportedEnvironment) return false;
+
+    // Rows for the queue's own database only; otherwise the outbox writes
+    // them itself once this resolves.
+    const withOutbox =
+      outbox && this.store.outbox.isStoredIn(clientDb) ? outbox : undefined;
 
     // A resource without propvals still gets its `@id` row: this path is the
     // durable one, and a caller that awaited it expects a row to exist.
@@ -3657,13 +3632,16 @@ export class Resource<C extends OptionalClass = any> {
     const closePersist = perfSpan('resource.persistToClientDb');
 
     try {
-      await clientDb.putResourceWithSnapshot(this.subject, jsonAd, snapshot);
       // This RPC includes the durable flush. A second RPC could race the
       // identity handoff closing this worker after the write has completed.
+      // When the drain already wrote this exact state, this awaits that write.
+      await this.store.persistState(clientDb, this.subject, jsonAd, snapshot, {
+        exact: true,
+        outbox: withOutbox,
+      });
       closePersist();
-      // Tell the store's dedup cache what is now on disk, so the next
-      // `addResource` for this subject does not rewrite the same row.
-      this.store.recordPersistedState(this.subject, jsonAd, snapshot);
+
+      return !!withOutbox;
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 
@@ -3700,6 +3678,12 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
 
+    // The datatype this set() learned (passed in, or fetched to validate).
+    // Used below to tag the value at write time: an object is stored in Loro
+    // as a JSON string, and without its `json` tag every read before the
+    // drain-time `writeDatatypeTags` returns that string instead (#1794).
+    let tagDatatype: string | undefined = knownDatatype;
+
     if (knownDatatype) {
       validateDatatype(value, knownDatatype);
     } else if (validate) {
@@ -3721,6 +3705,8 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       if (fullProp) {
+        tagDatatype = fullProp.datatype;
+
         try {
           validateDatatype(value, fullProp.datatype);
         } catch (e) {
@@ -3743,9 +3729,9 @@ export class Resource<C extends OptionalClass = any> {
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
 
-    if (knownDatatype) {
+    if (tagDatatype) {
       const tags = this.getLoroDoc()?.getMap('datatypes');
-      const tag = datatypeTag(knownDatatype, value);
+      const tag = datatypeTag(tagDatatype, value);
       if (tag && tags?.get(prop) !== tag) tags?.set(prop, tag);
       else if (!tag && tags?.get(prop) !== undefined) tags?.delete(prop);
     }
@@ -3807,6 +3793,13 @@ export class Resource<C extends OptionalClass = any> {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
       this.resetLoroState();
+
+      // The cache is kept: `getLoroDoc()`'s heal pass restores from it what
+      // these bytes never had (an agent's name restored from Cloud Vault,
+      // while the node only holds the stub it made for that agent), and
+      // skips what they deleted, so a property removed at the source stays
+      // removed.
+
       // Point `getLoroDoc()` at these bytes so it imports the snapshot
       // instead of seeding a *new* LoroList per array from `#cache`.
       // Seeding-then-merging was the OPFS cold-load flash: two concurrent
@@ -3919,15 +3912,11 @@ export class Resource<C extends OptionalClass = any> {
   public setSubject(subject: string): void {
     const normalized = this._store?.normalizeSubject(subject) ?? subject;
     Client.tryValidSubject(normalized);
-    this.#commitBuilder.setSubject(normalized);
     this._subject = normalized;
   }
 
   /** Refetches the resource from the server. Will reset all changes to the latest saved version */
   public async refresh(): Promise<void> {
-    // Reset the commit builder so our changes don't get merged with the server version.
-    this.#commitBuilder = new CommitBuilder(this.subject);
-
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
     });
@@ -4028,6 +4017,44 @@ function localizeInternalSubjects(value: JSONValue, origin: string): JSONValue {
   return value;
 }
 
+/**
+ * A `json`-tagged Loro string. Objects and arrays are stored JSON-stringified,
+ * so a string starting with `{` / `[` is parsed. A string that is itself a
+ * JSON string literal wrapping an object or array (`"{\"a\":1}"`) is what
+ * encoding twice leaves behind (#1794); it is read as the object it encodes,
+ * without rewriting what is stored. Anything else is returned as stored.
+ */
+function parseJsonPropval(value: string): JSONValue {
+  const tryParse = (text: string): JSONValue | undefined => {
+    try {
+      return JSON.parse(text) as JSONValue;
+    } catch {
+      return undefined;
+    }
+  };
+
+  if (value.startsWith('{') || value.startsWith('[')) {
+    return tryParse(value) ?? value;
+  }
+
+  if (value.startsWith('"')) {
+    const inner = tryParse(value);
+
+    if (
+      typeof inner === 'string' &&
+      (inner.startsWith('{') || inner.startsWith('['))
+    ) {
+      const unwrapped = tryParse(inner);
+
+      if (unwrapped !== null && typeof unwrapped === 'object') {
+        return unwrapped;
+      }
+    }
+  }
+
+  return value;
+}
+
 function normalizeLoroValue(
   loroDatatypeTag: string | undefined,
   value: unknown,
@@ -4044,9 +4071,12 @@ function normalizeLoroValue(
   // array/JSON content, so only THOSE strings get JSON.parsed — a plain
   // string/markdown propval (a chat title, a resource description) that
   // merely starts with `{` or `[` is never misread as JSON.
+  if (loroDatatypeTag === 'json' && typeof value === 'string') {
+    return parseJsonPropval(value);
+  }
+
   if (
     (loroDatatypeTag === 'resourceArray' ||
-      loroDatatypeTag === 'json' ||
       loroDatatypeTag === 'localizedText') &&
     typeof value === 'string' &&
     (value.startsWith('[') || value.startsWith('{'))

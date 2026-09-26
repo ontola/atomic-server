@@ -193,6 +193,77 @@ describe('ensureSchema', () => {
     expect(mostAtOnce).toBe(3);
   });
 
+  it('refuses an incompatible shared term before creating any sibling', async () => {
+    const shared = 'https://x/drive/shared-count';
+    const store = makeStore({
+      [shared]: {
+        subject: shared,
+        isA: [],
+        props: {
+          [core.properties.isA]: [core.classes.property],
+          [core.properties.datatype]: Datatype.STRING,
+        },
+      },
+    });
+
+    const spec: SchemaSpec = {
+      properties: [
+        ...['one', 'two', 'three'].map(shortname => ({
+          shortname,
+          name: shortname,
+          description: shortname,
+          datatype: Datatype.STRING,
+        })),
+        {
+          shortname: 'count',
+          name: 'Count',
+          description: 'Bound to a term of the wrong datatype.',
+          datatype: Datatype.INTEGER,
+          subject: shared,
+        },
+      ],
+      classes: [],
+    };
+
+    await expect(ensureSchema(store, DRIVE, spec)).rejects.toThrow(
+      /incompatible property datatype/,
+    );
+    expect(store.newResource).not.toHaveBeenCalled();
+  });
+
+  it('keeps the ontology list in spec order however the creates finish', async () => {
+    const store = makeStore();
+    const create = store.newResource;
+    store.newResource = vi.fn(async opts => {
+      // Later specs finish first: the last one waits the least.
+      const shortname = String(opts.propVals[core.properties.shortname]);
+      const delay = 20 - Number(shortname.split('-')[1]) * 5;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      return create(opts);
+    });
+
+    const spec: SchemaSpec = {
+      properties: Array.from({ length: 4 }, (_, i) => ({
+        shortname: `field-${i}`,
+        name: `Field ${i}`,
+        description: 'A field.',
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const terms = await ensureSchema(store, DRIVE, spec);
+    const listed = store.world[ONTOLOGY].props[core.properties.properties];
+
+    expect(listed).toEqual([
+      terms.properties['field-0'],
+      terms.properties['field-1'],
+      terms.properties['field-2'],
+      terms.properties['field-3'],
+    ]);
+  });
+
   it('keeps the ontology in spec order when only some terms are new', async () => {
     // The created terms are awaited together, so their order is whatever the
     // server answers first. What an ontology lists is read by people, so it

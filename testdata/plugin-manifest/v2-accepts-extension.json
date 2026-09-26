@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "accepts": [
+    {
+      "as": "text",
+      "extensions": [
+        "XML"
+      ]
+    }
+  ]
+}

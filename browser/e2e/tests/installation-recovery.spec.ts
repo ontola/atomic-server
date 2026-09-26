@@ -96,10 +96,13 @@ test('table installation reuses saved class after a lost receipt', async ({
 test('duplicate import review links both copies and blocks apply', async ({
   page,
 }) => {
-  // 18.8s alone from a wiped store, and the save below is now allowed 30s, so
-  // the 60s default would be the next thing to expire. Every other assertion
-  // here keeps the 10s default.
-  test.setTimeout(120_000);
+  // 18.8s alone from a wiped store, and three waits below are now allowed 60s
+  // each, so the whole thing has to fit inside a wall bigger than their sum:
+  // 19 + 60 + 60 + 60 is 199, and 240s leaves room for the rest. They are
+  // worst cases that do not land together — the measured total is 20s to 34s —
+  // but the wall has to cover the case where one of them does run long. Every
+  // other assertion here keeps the 10s default.
+  test.setTimeout(240_000);
   const fixture = await page.evaluate(async () => {
     const store = window.store!;
     const drive = store.getDrive()!;
@@ -203,16 +206,46 @@ test('duplicate import review links both copies and blocks apply', async ({
   const url = new URL(page.url());
   url.searchParams.set('subject', fixture.plugin);
   await page.goto(url.href);
-  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  // The same stall as the two waits below, and this is where develop run 4621
+  // died on all three attempts. After the `goto` the app boots and loads the
+  // plugin before the button exists; measured at 2707, 4735, 5104, 5607, 5765
+  // and 6189 ms over six four-worker rounds against a wiped store, so 62% of
+  // the 10s default at its widest. It then failed here anyway on a seventh
+  // round, the locator never resolving inside the 10s — the same bimodal shape
+  // the review waits show, fast almost always and tens of seconds when it is
+  // not. Once resolved the click itself is nothing: 205 to 746 ms.
+  await page
+    .getByRole('button', { name: 'Run', exact: true })
+    .click({ timeout: 60_000 });
   await expect(
     page.getByText('Duplicate source records', { exact: true }),
   ).toBeVisible();
+  // Scoped to `main`, because both copies are children of the drive and so are
+  // ALSO rows in the sidebar. Unscoped this is a strict-mode violation the
+  // moment the sidebar has caught up, which it usually has: it failed that way
+  // in 3 of 6 four-worker rounds against a freshly wiped store, and passed only
+  // when the sidebar happened to be slower than the review panel. It was also
+  // passing for the wrong reason, on the sidebar's copy of the link.
+  //
+  // The budget is 60s because the name resolves off the store, not off the
+  // page, and the whole merge flow is slow under load. Measured over 8
+  // four-worker rounds, each against a wiped store:
+  //
+  //     links    37   200    31  28134  14570    54  19836   2446 ms
+  //     toast  28502 20276 29821  5865   7985  27953  9703  26340 ms
+  //     sum    28539 20476 29852 33999  22555  28007 29539  28786 ms
+  //
+  // The sum is steady at 20.5s to 34.0s and it is the SPLIT that moves: the two
+  // waits are the same work seen from two places, and whichever gets there
+  // first pays for it. So neither can be sized on its own median, and 10s for
+  // this one was simply the wrong shape.
+  const review = page.getByRole('main');
   await expect(
-    page.getByRole('link', { name: 'Offline copy A', exact: true }),
-  ).toBeVisible();
+    review.getByRole('link', { name: 'Offline copy A', exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
   await expect(
-    page.getByRole('link', { name: 'Offline copy B', exact: true }),
-  ).toBeVisible();
+    review.getByRole('link', { name: 'Offline copy B', exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
   await expect(
     page.getByRole('button', { name: /^Apply \d+ changes$/ }),
   ).toHaveCount(0);
@@ -247,9 +280,14 @@ test('duplicate import review links both copies and blocks apply', async ({
   // running, purely on store size, and a shard runs ~70 tests against one
   // server. Reproduced red here at four local workers on the 10s budget, at
   // this exact assertion.
+  //
+  // 30s was not enough either. On a FRESHLY WIPED store at four workers it
+  // landed at 20276 to 29821 ms, and one round was caught arriving at 30110 ms:
+  // 110 ms after the assertion gave up. See the table above the review links
+  // for all eight rounds and why these two waits share one budget.
   await expect(
     page.getByRole('status').filter({ hasText: 'Primary record saved' }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: 60_000 });
   const result = await page.evaluate(async () => {
     const store = window.store!;
     const primary = await store.findByLocalId(

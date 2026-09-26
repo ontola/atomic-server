@@ -212,7 +212,7 @@ export const ButtonDefault = styled(ButtonBase)<ButtonPropsStyled>`
 
   &:focus-visible:not([disabled]),
   &:hover:not([disabled]) {
-    box-shadow: ${p => p.theme.boxShadowSoft};
+    box-shadow: ${p => p.theme.boxShadowButton};
     background-color: var(--button-bg-color-hover);
     color: var(--button-text-color-hover);
     border-color: var(--button-border-color-hover);

@@ -1,10 +1,5 @@
 import { describe, it, vi } from 'vitest';
-import {
-  Commit,
-  commitToJsonADObject,
-  isCommitSubject,
-  parseAndApplyCommit,
-} from './commit.js';
+import { Commit, isCommitSubject } from './commit.js';
 import { Store } from './store.js';
 import { Resource } from './resource.js';
 import { core } from './index.js';
@@ -15,7 +10,7 @@ import { isAtomicIdentifier } from './subject.js';
 // serialization) live in `sign.test.ts`. This file is the consumer-API
 // canary: every test below goes through `store.newResource()` → `set()`
 // → `save()` and never touches `CommitBuilder` / `markNextCommitAsGenesis`
-// / `_new:` / `syncDirtyResources`.
+// / `syncDirtyResources`.
 
 describe('isCommitSubject', () => {
   it('recognizes both the DID and the legacy URL form', ({ expect }) => {
@@ -40,7 +35,7 @@ describe('isCommitSubject', () => {
 
 /**
  * The application-facing flow: create a resource, edit it, save it.
- * No `CommitBuilder`, no `markNextCommitAsGenesis`, no `_new:`
+ * No `CommitBuilder`, no `markNextCommitAsGenesis`, no placeholder
  * subjects, no `syncDirtyResources` — `save()` resolves once the
  * server has acked.
  */
@@ -55,26 +50,69 @@ describe('Resource save flow', () => {
     await drive.save();
     postCommitSpy.mockClear();
 
-    // A table row: a `_new:` placeholder under a saved parent. Its first
-    // commit resolves the drive through the parent, and that write is the
-    // await a second save slips through.
-    const placeholder = `_new:${Math.random().toString(36).slice(2)}`;
-    const draft = store.getResourceLoading(placeholder, { newResource: true });
-    await draft.set(core.properties.parent, drive.subject, false);
+    // A table row: a draft under a saved parent whose genesis is signed on
+    // its first save, so a second save can slip in before it is.
+    const draft = await store.newResource({
+      parent: drive.subject,
+      deferGenesis: true,
+    });
+    const subject = draft.subject;
     await draft.set(core.properties.name, 'Raced', false);
+
+    // Editing a draft queues nothing: its writes belong to the genesis.
+    expect(store.outbox.hasPending(subject)).toBe(false);
 
     // A row's materialize timer and its unmount flush can both call save()
     // before either has signed.
     await Promise.all([draft.save(), draft.save()]);
 
     expect(isAtomicIdentifier(draft.subject)).toBe(true);
+    // The id minted at creation is the one that was saved.
+    expect(draft.subject).toBe(subject);
     expect(postCommitSpy.mock.calls.length).toBe(1);
-    // The placeholder still resolves to the one persisted resource, and does
-    // so stably: a dangling alias would mint a fresh Resource per read.
-    expect(store.getResourceLoading(placeholder).subject).toBe(draft.subject);
-    expect(store.getResourceSnapshot(placeholder)).toBe(
-      store.getResourceSnapshot(placeholder),
-    );
+    const genesis = postCommitSpy.mock.calls[0][0] as Commit;
+    expect(genesis.isGenesis).toBe(true);
+    expect(genesis.subject).toBe(subject);
+  });
+
+  it('saves a child created under an unsaved draft once the draft is saved', async ({
+    expect,
+  }) => {
+    // A dialog opened from inside a new-resource form creates a child of the
+    // form's draft and saves it before the form itself is saved. The draft has
+    // its final subject from the start, so the child's `parent` and the batch
+    // it waits in are keyed by the subject the draft is saved under.
+    const { store, postCommitSpy } = await testStore();
+    const drive = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      propVals: { [core.properties.name]: 'Home' },
+      noParent: true,
+    });
+    await drive.save();
+    postCommitSpy.mockClear();
+
+    const form = await store.newResource({
+      parent: drive.subject,
+      deferGenesis: true,
+    });
+    const child = await store.newResource({
+      parent: form.subject,
+      deferGenesis: true,
+    });
+    await child.set(core.properties.name, 'Child', false);
+
+    // The parent does not exist yet, so the child waits for it.
+    expect(await child.save()).toBe('offline');
+    expect(postCommitSpy).not.toHaveBeenCalled();
+
+    await form.set(core.properties.name, 'Form', false);
+    await form.save();
+    await store.syncDirtyResources();
+
+    const posted = postCommitSpy.mock.calls.map(c => (c[0] as Commit).subject);
+    expect(posted).toEqual([form.subject, child.subject]);
+    expect(child.get(core.properties.parent)).toBe(form.subject);
+    expect(store.outbox.hasPending(child.subject)).toBe(false);
   });
 
   it('creates a DID resource and posts sequential saves', async ({
@@ -277,41 +315,6 @@ describe('Resource save flow', () => {
     expect(posted.length).toBe(1);
     const commitDidSubject = `did:ad:commit:${posted[0].signature}`;
     expect(store.resources.has(commitDidSubject)).toBe(false);
-  });
-});
-
-describe('Commit parse and apply', () => {
-  const store = new Store();
-  it('parses and applies a loroUpdate Commit correctly', async ({ expect }) => {
-    const source = new Resource('https://atomicdata.dev/element/cn6ymb8s8mc');
-    await source.set(
-      'https://atomicdata.dev/properties/description',
-      'My new string',
-      false,
-    );
-    const loroUpdate = source.getLoroDoc()!.export({
-      mode: 'snapshot',
-    });
-    const exampleCommit = JSON.stringify(
-      commitToJsonADObject({
-        subject: source.subject,
-        loroUpdate,
-        signer:
-          'https://atomicdata.dev/agents/8S2U/viqkaAQVzUisaolrpX6hx/G/L3e2MTjWA83Rxk=',
-        createdAt: 1627561366516,
-        signature:
-          'VCHGWxax6j4pPMJWelwpSHVOL+W2R2A0vjFdSpH/HhIZxE6hyaUTtPfKjgWGNhsUsQske4yHIdqc/QsQhV03DA==',
-      }),
-    );
-
-    parseAndApplyCommit(exampleCommit, store);
-    const resource = await store.getResource(
-      'https://atomicdata.dev/element/cn6ymb8s8mc',
-    );
-    const description = resource
-      .get('https://atomicdata.dev/properties/description')!
-      .toString();
-    expect(description).to.equal('My new string');
   });
 });
 

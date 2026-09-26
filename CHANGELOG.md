@@ -7,6 +7,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Removed range-based set reconciliation (RBSR, `lib/src/sync/rbsr.rs`). The
+  server rebuilt a drive's whole inventory for every `RBSR_FP` round trip, so
+  the descent cost more than the one full version-vector `SYNC` it replaced.
+  `RBSR_FP` is now answered with `{"drive","unsupported":true}` and no
+  fingerprints, which makes an older browser fall back to the full `SYNC`
+  immediately. `RBSR_ITEMS` stays as the drive inventory, and a `SYNC` with
+  `subjects` is still honoured. The `rbsr` capability is no longer advertised.
+
 - The server raises its own file-descriptor soft limit to its hard limit at
   startup. It already budgeted HTTP connections against the soft limit and kept
   a reserve, but HTTP is not the only tenant of that pool: the database, Iroh's
@@ -18,6 +26,25 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   limit without privileges, and the connection budget is computed from whatever
   is in force afterwards, so a refused raise is logged and not fatal.
 
+- Publishing a plugin release that is already recorded on the server (the
+  same zip, uploaded by someone else) now grants the new publisher read on
+  the `Release` and its package File. Before, their Installation could not
+  resolve the release and activation failed with a 401.
+
+- Version 2 request signatures (ontola/atomic-plugins#54). A request sent
+  with `x-atomic-signature-version: 2` is checked against
+  `atomic-request-v2\n{METHOD}\n{full URL}\n{timestamp ms}\n{sha-256 hex of
+  the body}` instead of v1's `"{url} {timestamp}"`, so a captured proof can
+  no longer be replayed with a different method or body within its five
+  minutes. v2 is opt-in: a request without the header is checked as v1
+  exactly as before, and a v2 request that fails is refused, never retried as
+  v1. `/app-agent` and `/plugin-view-token` accept v2 (they do not require it
+  yet); every other endpoint refuses a v2 signature with a 401 that says to
+  sign with v1, as do an unknown version and a v2 header without the
+  `x-atomic-*` headers. Cookies and WebSocket `AUTH` stay v1. `atomic_lib`
+  exports `request_signature_message_v2`, `RequestBinding` and
+  `client::get_authentication_headers_v2`; shared test vectors live in
+  `lib/src/authentication_v2_vectors.json`.
 - Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
   `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
   previous `did:ad:` spelling is accepted forever and names the same

@@ -16,7 +16,6 @@ artifact
 /.e2e-store
 /.e2e-runs
 server/assets_tmp
-server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad
@@ -46,7 +45,5 @@ scratchpad
 .pnpm-store/
 **/zed backup settings.json
 node_modules/
-# Generated integration certification evidence
-/artifacts/integration-certification/
 # Raw footage and cuts from browser/e2e/scripts/record-*.mjs
 /browser/e2e/recordings/

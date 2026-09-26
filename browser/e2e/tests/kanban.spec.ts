@@ -346,7 +346,7 @@ test.describe('kanban', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('Open me in a modal');
-    await expect(dialog).toContainText('assignee');
+    await expect(dialog).toContainText('Assignee');
 
     // …and it's a modal, not a navigation: still on the table URL.
     await expect(page).toHaveURL(/\/app\/show/);
