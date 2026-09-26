@@ -4,6 +4,15 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- One Loro wasm panic no longer turns into an error every few seconds for the
+  rest of a tab's life. Presence gives up the drive's ephemeral store on the
+  first failed call, whichever call it is, including a peer's bytes and the
+  read behind the peer list, and it now stops Loro's own expiry timer while
+  doing so. That timer lives in Loro's JavaScript wrapper and keeps calling
+  into the abandoned store, which is how a single panic anywhere in the shared
+  wasm module produced a long stream of unhandled `RuntimeError: unreachable`
+  reports from `setInterval`.
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs

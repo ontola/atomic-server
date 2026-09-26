@@ -151,3 +151,131 @@ describe('announcements Loro cannot store', () => {
     }
   });
 });
+
+/**
+ * Loro's wasm instance is shared by everything in the tab, so a panic in a
+ * document import leaves the presence store trapping too, with a bare
+ * `RuntimeError: unreachable` that no value check on our side could have
+ * prevented. What made that one panic a permanent error source is Loro's own
+ * expiry timer: it lives in the JS wrapper, calls `removeOutdated()` every
+ * TTL/2 for as long as the store holds a key, and dropping our reference to
+ * the store does not stop it. `destroy()` does, and it only clears the
+ * interval, so it works on a module that can no longer be called into.
+ */
+describe('a poisoned wasm module', () => {
+  beforeAll(async () => {
+    await enableLoro();
+  });
+
+  /** A store whose wasm calls trap, as every call does after a panic. */
+  const poisoned = () => {
+    const trap = () => {
+      throw new Error('unreachable');
+    };
+
+    return {
+      set: trap,
+      delete: trap,
+      apply: trap,
+      encode: trap,
+      getAllStates: trap,
+      destroy: vi.fn(),
+    };
+  };
+
+  const install = (manager: unknown, store: unknown) => {
+    (manager as { ephemeral?: unknown }).ephemeral = store;
+  };
+
+  const heartbeatOf = (manager: unknown) =>
+    (manager as { heartbeat?: unknown }).heartbeat;
+
+  it('stops the expiry timer and the heartbeat on the first trap', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = 'did:ad:test-drive-poisoned';
+    store.registerLocalOnlyDrive(drive);
+
+    const manager = store.getPresence(drive);
+    const unsubscribe = manager.subscribe(() => {});
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    try {
+      manager.setLocal({ resource: 'did:ad:a-doc' });
+      expect(heartbeatOf(manager)).toBeDefined();
+
+      const dead = poisoned();
+      install(manager, dead);
+
+      expect(() => manager.rebroadcast()).not.toThrow();
+      expect(dead.destroy).toHaveBeenCalledOnce();
+      expect(heartbeatOf(manager)).toBeUndefined();
+
+      // Nothing calls into the dead store again, so the next heartbeat tick
+      // (were one still scheduled) has nothing left to throw from.
+      expect(() => manager.rebroadcast()).not.toThrow();
+      expect(dead.destroy).toHaveBeenCalledOnce();
+    } finally {
+      consoleError.mockRestore();
+      unsubscribe();
+    }
+  });
+
+  it("gives up on a peer's bytes rather than raising them on a timer", async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = 'did:ad:test-drive-poisoned-peer';
+    store.registerLocalOnlyDrive(drive);
+
+    const manager = store.getPresence(drive);
+    const unsubscribe = manager.subscribe(() => {});
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    try {
+      const dead = poisoned();
+      install(manager, dead);
+
+      // Reading the peer list is what `getSnapshot`'s source does on every
+      // ephemeral event, and it traps just like a write.
+      expect(() =>
+        manager.injectEntry('peer', { agent: 'did:ad:agent:x' }),
+      ).not.toThrow();
+      expect(dead.destroy).toHaveBeenCalledOnce();
+      expect(manager.getSnapshot()).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+      unsubscribe();
+    }
+  });
+
+  it('still stops the timer when the departure announcement traps', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const drive = 'did:ad:test-drive-poisoned-leave';
+    store.registerLocalOnlyDrive(drive);
+
+    const manager = store.getPresence(drive);
+    const unsubscribe = manager.subscribe(() => {});
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const dead = poisoned();
+    install(manager, dead);
+
+    try {
+      // `stop()` used to announce the departure first and reach `destroy()`
+      // only if that call returned.
+      expect(() => unsubscribe()).not.toThrow();
+      expect(dead.destroy).toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+});
