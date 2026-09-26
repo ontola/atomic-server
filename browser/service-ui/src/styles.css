@@ -62,3 +62,177 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* AccountSignIn. Styled completely here, so the portal's global button and
+   input rules and the app's unstyled defaults end up looking the same. */
+.atomic-signin {
+  display: grid;
+  gap: 12px;
+  text-align: left;
+}
+.atomic-signin-option,
+.atomic-signin-submit,
+.atomic-signin-email input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--service-radius, var(--radius, 8px));
+  font: inherit;
+}
+.atomic-signin-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #747775;
+  background: #ffffff;
+  color: #1f1f1f;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+.atomic-signin-option:hover {
+  background: #f2f2f2;
+}
+.atomic-signin-option:focus-visible,
+.atomic-signin-submit:focus-visible {
+  outline: 2px solid var(--service-accent, var(--color-main, #204ce4));
+  outline-offset: 2px;
+}
+.atomic-signin-option[aria-disabled='true'],
+.atomic-signin-option:disabled,
+.atomic-signin-submit:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.atomic-signin-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--service-muted, var(--color-text-light, #666));
+  font-size: 14px;
+}
+.atomic-signin-or::before,
+.atomic-signin-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid
+    var(--service-border, var(--surface-border, rgba(0, 0, 0, 0.12)));
+}
+.atomic-signin-hint {
+  margin: 0;
+  color: var(--service-muted, var(--color-text-light, #666));
+  font-size: 14px;
+}
+.atomic-signin-email {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.atomic-signin-email label {
+  color: var(--service-muted, var(--color-text-light, #666));
+  font-size: 13px;
+  font-weight: 700;
+}
+.atomic-signin-email input {
+  border: 1px solid var(--service-border, var(--color-bg-2, #ccc));
+  background: var(--service-input-bg, var(--color-bg-1, #fff));
+  color: var(--service-text, var(--color-text, #111));
+}
+.atomic-signin-email input:focus {
+  outline: none;
+  border-color: var(--service-accent, var(--color-main, #204ce4));
+}
+.atomic-signin-submit {
+  border: 1px solid transparent;
+  background: var(--service-accent, var(--color-main, #204ce4));
+  color: var(--service-on-accent, #ffffff);
+  font-weight: 700;
+  cursor: pointer;
+}
+.atomic-signin-submit:hover {
+  filter: brightness(0.92);
+}
+/* Google's dark button, and the passkey's with it. An explicit host theme
+   overrides the system one, as on .atomic-product-background. */
+@media (prefers-color-scheme: dark) {
+  .atomic-signin:not([data-signin-theme='light']) .atomic-signin-option {
+    background: #131314;
+    border-color: #8e918f;
+    color: #e3e3e3;
+  }
+  .atomic-signin:not([data-signin-theme='light']) .atomic-signin-option:hover {
+    background: #1f1f20;
+  }
+}
+.atomic-signin[data-signin-theme='dark'] .atomic-signin-option {
+  background: #131314;
+  border-color: #8e918f;
+  color: #e3e3e3;
+}
+.atomic-signin[data-signin-theme='dark'] .atomic-signin-option:hover {
+  background: #1f1f20;
+}
+
+.atomic-signin-info-open {
+  justify-self: center;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--service-muted, var(--color-text-light, #666));
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  text-decoration: underline;
+  cursor: pointer;
+  transform: none;
+}
+.atomic-signin-info-open:hover {
+  background: none;
+  color: var(--service-text, var(--color-text, #111));
+}
+.atomic-signin-info {
+  box-sizing: border-box;
+  width: min(34rem, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 24px;
+  border: 1px solid var(--service-border, var(--surface-border, #ccc));
+  border-radius: var(--service-radius, var(--radius, 8px));
+  background: var(--service-surface, var(--color-bg, #fff));
+  color: var(--service-text, var(--color-text, #111));
+  text-align: left;
+  line-height: 1.5;
+}
+.atomic-signin-info::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.atomic-signin .atomic-signin-info h2 {
+  margin: 0 0 16px;
+  font-size: 1.25em;
+}
+.atomic-signin .atomic-signin-info h3 {
+  margin: 20px 0 6px;
+  font-size: 1em;
+}
+.atomic-signin-info dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.atomic-signin-info dt {
+  font-weight: 700;
+}
+.atomic-signin-info dd,
+.atomic-signin-info p {
+  margin: 0;
+  color: var(--service-muted, var(--color-text-light, #555));
+  font-size: 0.95em;
+}
+.atomic-signin-info form {
+  margin: 20px 0 0;
+}

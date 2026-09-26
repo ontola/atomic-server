@@ -3679,15 +3679,11 @@ msgstr ""
 msgid "Checking your {0} account…"
 msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "To restore your account, sign in to your {0} account first, then come back here."
-msgstr ""
+#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
+#~ msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your {0} account"
-msgstr ""
+#~ msgid "Sign in to your {0} account"
+#~ msgstr ""
 
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
@@ -5325,7 +5321,7 @@ msgstr ""
 msgid "Sign out & forget this device"
 msgstr ""
 
-#. 0: account.email; 1: PRODUCT_NAME
+#. 0: accountAddress(account); 1: PRODUCT_NAME
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr ""
@@ -6411,10 +6407,8 @@ msgstr ""
 msgid "Forgot it? Restore from {0}"
 msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
-msgstr ""
+#~ msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+#~ msgstr ""
 
 #. 0: action.label(ctx)
 #: src/actions/deriveTools.ts
@@ -10890,8 +10884,10 @@ msgstr ""
 #~ msgid "Not set up. With an account on {0} we hold your key sealed, so an email gets you back in on a new device. Without one, losing every device loses this workspace."
 #~ msgstr ""
 
-#~ msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
-#~ msgstr ""
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
+msgstr ""
 
 #~ msgid "You can get back in with:{0} {1}"
 #~ msgstr ""
@@ -12397,4 +12393,50 @@ msgstr ""
 #. 0: query
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Sign in again to unlock your account on this device."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/helpers/managed/recovery.ts
+msgid "{0} account"
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Your account could not unlock this backup."
+msgstr ""
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlocking {0}…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in again to open your account on this device."
+msgstr ""
+
+#~ msgid "Continue with Google"
+#~ msgstr ""
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "That sign-in expired. Pick an option to start again."
+msgstr ""
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "Could not reach your account. Check your connection and try again."
+msgstr ""
+
+#. 0: PRODUCT_NAME; 1: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account is enough to open your identity on a new device. {1} holds a key for that. Turn it off to rely only on your passkey or recovery code."
+msgstr ""
+
+#~ msgid "Only your passkey or recovery code opens your identity. {0} cannot. It is added back the next time you unlock with one of them."
+#~ msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Only your passkey or recovery code opens your identity. {0} cannot."
 msgstr ""

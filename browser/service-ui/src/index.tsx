@@ -72,3 +72,9 @@ export function ServiceGroup({
 }: HTMLAttributes<HTMLDivElement>) {
   return <div {...props} className={`atomic-service-group ${className}`} />;
 }
+
+export {
+  AccountSignIn,
+  ACCOUNT_SIGN_IN_COPY,
+  type AccountSignInCopy,
+} from './AccountSignIn';

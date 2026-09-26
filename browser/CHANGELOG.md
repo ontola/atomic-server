@@ -4,6 +4,24 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Signing in to a hosted account can now be enough to open your identity on a
+  new device (#277). When the account service offers assisted recovery
+  (`assisted_recovery` in `GET /api/auth/providers`), a new account's backup is
+  wrapped by the account alone, so onboarding asks for no passkey and shows no
+  recovery code, and the sign-in and restore steps unlock it by themselves
+  after a recent sign-in. Existing backups get the extra wrapper the next time
+  a passkey or recovery code opens them. The sign-in and restore steps now
+  offer the same account options as the portal's sign-in page (Google when
+  configured, passkey, email link), from one shared `AccountSignIn` component
+  in `@tomic/service-ui`. Builds that know no account service (the FOSS
+  release, self-hosted nodes) show none of it and make no requests for it.
+  Account recovery has a "Let Atomic help me recover" switch: off removes the
+  assisted wrapper, so only a passkey or recovery code opens the identity. A
+  wrapper records which service key made it (`kdf_params.key_id`); after the
+  service rotates its key, the next unlock re-wraps with the new one. Accounts
+  may now have an `acct_` id apart from their address: backups and bindings
+  keep using the id, and the app shows `address` from `GET /api/me`.
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs

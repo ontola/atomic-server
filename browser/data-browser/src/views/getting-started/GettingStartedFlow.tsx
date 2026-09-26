@@ -27,7 +27,10 @@ import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
-import { getManagedAccount } from '../../helpers/managed/session';
+import {
+  accountAddress,
+  getManagedAccount,
+} from '../../helpers/managed/session';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import { safePortalUrl } from '../../helpers/managed/api';
 import {
@@ -44,7 +47,11 @@ import { isRunningInTauri } from '../../helpers/tauri';
 import { openExternal } from '../../helpers/openExternal';
 import {
   buildEnvelopeV2,
+  buildEnvelopeWithAssisted,
   buildEnvelopeWithPasskeyAndCode,
+  decryptEnvelopeWithAssisted,
+  FreshSignInRequiredError,
+  hasAssistedWrapper,
   saveRecoverySecret,
   getRecoverySecret,
   getUnlockableRecoverySecret,
@@ -58,11 +65,14 @@ import {
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
+import {
+  AccountSignInPanel,
+  AccountSignInViaBrowser,
+} from './AccountSignInPanel';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
-import { LinkProviderPanel } from '../../components/Vault/LinkProviderPanel';
 import {
   canHoldProviderCookie,
   getRememberedProvider,
@@ -260,7 +270,7 @@ export function GettingStartedFlow({
         const account = await getManagedAccount();
 
         if (!cancelled && account?.email) {
-          setManagedUsername(account.email.split('@')[0]);
+          setManagedUsername(accountAddress(account).split('@')[0]);
         }
       } catch {
         // Not signed in to the managed (or unreachable) — continue without a
@@ -356,6 +366,74 @@ export function GettingStartedFlow({
     return recoveryCode;
   }
 
+  /**
+   * The account's own ways in, above the passkey, code and secret: while the
+   * account is unlocking the identity by itself, say so; where there is no
+   * session, or it is too old to unlock with, offer the same sign-in options
+   * as the portal (the shared `AccountSignIn`), which end back here signed in.
+   */
+  function accountSignIn() {
+    if (restore.phase === 'ready' && assistedUnlock === 'trying') {
+      return (
+        <CardSubtitle key='account'>Unlocking {restore.email}…</CardSubtitle>
+      );
+    }
+
+    const offerSignIn =
+      !!knownPortalUrl &&
+      (restore.phase === 'no-session' ||
+        (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
+
+    if (!offerSignIn || !knownPortalUrl) return null;
+
+    const onSignedIn = () => setRestoreAttempt(n => n + 1);
+
+    return (
+      <Column key='account' gap='0.75rem'>
+        {assistedUnlock === 'needs-sign-in' ? (
+          <CardSubtitle>
+            Sign in again to open your account on this device.
+          </CardSubtitle>
+        ) : null}
+        {/* The same options either way; an app that cannot hold the
+            account cookie finishes each one in the system browser. */}
+        {canHoldProviderCookie(knownPortalUrl) ? (
+          <AccountSignInPanel
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        ) : (
+          <AccountSignInViaBrowser
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        )}
+      </Column>
+    );
+  }
+
+  // The backup when the account service offers assisted recovery: wrapped by
+  // the account alone, so there is no passkey to register and no code to
+  // save, and signing in on any other device opens it. Resolves false when
+  // the service does not offer it, so the passkey and code step runs as
+  // before.
+  async function backupWithAccount(secret: string): Promise<boolean> {
+    try {
+      const request = await buildEnvelopeWithAssisted({
+        secret,
+        agentSubject: requireAgentSubject(),
+        driveSubject: newDriveSubject.current ?? null,
+      });
+      await saveRecoverySecret(request);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ─── Restore ("Forgot your secret?") ─────────────────────────────────────
   const [restore, setRestore] = useState<RestoreState>({ phase: 'checking' });
   const returnToPortal =
@@ -410,6 +488,15 @@ export function GettingStartedFlow({
    * step. A page reload would do the same and lose the user's place.
    */
   const [restoreAttempt, setRestoreAttempt] = useState(0);
+  /**
+   * Opening the backup with the account alone (assisted recovery), which
+   * runs by itself as soon as a signed-in account's backup allows it.
+   * `needs-sign-in`: the sign-in is too old to unlock with, so the step
+   * offers signing in again next to the passkey and the code.
+   */
+  const [assistedUnlock, setAssistedUnlock] = useState<
+    'idle' | 'trying' | 'needs-sign-in'
+  >('idle');
 
   useEffect(() => {
     if (step !== 'restore' && step !== 'signin') return;
@@ -434,15 +521,38 @@ export function GettingStartedFlow({
           setRestore({
             phase: 'ready',
             secret,
-            email: account?.email ?? secret.owner_email,
+            email: account
+              ? accountAddress(account)
+              : (secret.owner_address ?? secret.owner_email),
           });
+
+          if (
+            account?.email === secret.owner_email &&
+            hasAssistedWrapper(secret)
+          ) {
+            setAssistedUnlock('trying');
+
+            try {
+              const plaintext = await decryptEnvelopeWithAssisted(secret);
+              if (cancelled) return;
+              await handleSignInWithSecret(plaintext);
+            } catch (err) {
+              if (!cancelled) {
+                setAssistedUnlock(
+                  err instanceof FreshSignInRequiredError
+                    ? 'needs-sign-in'
+                    : 'idle',
+                );
+              }
+            }
+          }
 
           return;
         }
 
         setRestore(
           account?.email
-            ? { phase: 'no-backup', email: account.email }
+            ? { phase: 'no-backup', email: accountAddress(account) }
             : { phase: 'no-session' },
         );
       } catch {
@@ -973,6 +1083,8 @@ export function GettingStartedFlow({
                   </CardSubtitle>
                 ) : null}
 
+                {accountSignIn()}
+
                 {/* Several accounts on this machine: ask which, rather than
                     guessing and raising a prompt for the wrong one. */}
                 {knownAccounts.length > 1 ? (
@@ -990,7 +1102,7 @@ export function GettingStartedFlow({
                         onClick={() => unlockWithPasskey(account)}
                         data-test='account-choice'
                       >
-                        {account.owner_email}
+                        {account.owner_address ?? account.owner_email}
                       </Button>
                     ))}
                     <OtherWaysLabel>or sign in another way</OtherWaysLabel>
@@ -1081,9 +1193,7 @@ export function GettingStartedFlow({
                         step checks whether this account has a backup. */}
                     {knownAccounts.length === 0 &&
                     knownPortalUrl &&
-                    (restore.phase === 'ready' ||
-                      (restore.phase === 'no-session' &&
-                        !canHoldProviderCookie(knownPortalUrl))) ? (
+                    restore.phase === 'ready' ? (
                       <Button
                         key='forgot'
                         type='button'
@@ -1195,52 +1305,14 @@ export function GettingStartedFlow({
             <OnboardingCard key='card'>
               <Column gap='1rem'>
                 <CardTitle key='title'>Restore account</CardTitle>
+                {/* Signed out, this is the whole step: the portal's options,
+                    finished in the system browser where this app cannot hold
+                    the account cookie. */}
+                {accountSignIn()}
                 {restore.phase === 'checking' ? (
                   <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
-                ) : restore.phase === 'no-session' ? (
-                  // Two ways to get a session, and only one works per client.
-                  // A page on the portal's own site signs in there and comes
-                  // back with the cookie. The desktop and Android apps, and a
-                  // self-hosted origin, cannot hold that cookie: sending them
-                  // to the portal's sign-in ends with a session in some
-                  // browser and none here — which used to be this screen's
-                  // only advice, with the button missing on top when the
-                  // build knew no portal. They link this device instead, with
-                  // a code approved wherever they are already signed in.
-                  !canHoldProviderCookie(knownPortalUrl) ? (
-                    <Column key='no-session-link' gap='0.75rem'>
-                      <p key='copy'>
-                        {`Your backup is kept by your ${PRODUCT_NAME} account. Connect this device to it to restore.`}
-                      </p>
-                      <LinkProviderPanel
-                        key='link'
-                        portalUrl={knownPortalUrl}
-                        onLinked={() => setRestoreAttempt(n => n + 1)}
-                      />
-                    </Column>
-                  ) : (
-                    <Column key='no-session' gap='0.75rem'>
-                      <p key='copy'>
-                        {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
-                      </p>
-                      {knownPortalUrl && (
-                        <Button
-                          key='signin'
-                          type='button'
-                          onClick={() => {
-                            // `/signin` rather than the root, which is the sales
-                            // page — someone mid-recovery should land on the form.
-                            window.location.assign(
-                              new URL('/signin', knownPortalUrl).toString(),
-                            );
-                          }}
-                        >
-                          {`Sign in to your ${PRODUCT_NAME} account`}
-                        </Button>
-                      )}
-                    </Column>
-                  )
-                ) : restore.phase === 'no-backup' ? (
+                ) : restore.phase === 'no-session' ? null : restore.phase ===
+                  'no-backup' ? (
                   inviteToken ? (
                     // The portal sends an invitee here whenever it cannot rule
                     // out an earlier identity. With nothing to restore, the
@@ -1449,6 +1521,9 @@ export function GettingStartedFlow({
                       fromManaged ? backupWithPasskey : undefined
                     }
                     onBackupWithCode={fromManaged ? backupWithCode : undefined}
+                    onBackupWithAccount={
+                      fromManaged ? backupWithAccount : undefined
+                    }
                     onAfterCreate={
                       fromManaged ? enableEncryptedBackup : undefined
                     }
