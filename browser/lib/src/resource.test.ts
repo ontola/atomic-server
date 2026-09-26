@@ -440,6 +440,44 @@ describe('resource.ts', () => {
   });
 
   /**
+   * A snapshot that never saw this copy's history is not its source removing
+   * what it lacks. A second device restores the agent's profile from Cloud
+   * Vault, while the node only holds the stub it made for the agent: the name
+   * must survive the node's snapshot, and JSON-AD read together with a stored
+   * snapshot must still fill in what that snapshot lacks.
+   */
+  it('a replacing snapshot keeps what its source never had', async ({
+    expect,
+  }) => {
+    const name = core.properties.name;
+    const publicKey = core.properties.publicKey;
+    const subject = 'did:ad:agent:replace-keeps';
+
+    const stub = new Resource(subject);
+    await stub.set(publicKey, 'key', false);
+    const stubBytes = stub.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const profile = new Resource(subject);
+    await profile.set(publicKey, 'key', false);
+    await profile.set(name, 'Returning', false);
+    const profileBytes = profile.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const restored = new Resource(subject);
+    restored.importLoroUpdate(profileBytes, true);
+    restored.importLoroUpdate(stubBytes, true);
+    expect(restored.get(name)).toBe('Returning');
+    expect(restored.get(publicKey)).toBe('key');
+
+    const hydrated = new Resource(subject);
+    hydrated.applyHydratedValues([
+      [publicKey, 'key'],
+      [name, 'Returning'],
+    ]);
+    hydrated.importLoroUpdate(stubBytes, true);
+    expect(hydrated.get(name)).toBe('Returning');
+  });
+
+  /**
    * Regression: drawing onto a canvas whose strokes were seeded in bulk via
    * `set()` (template/demo content) threw "pushContainer is not a function"
    * and the new stroke was dropped. `set()` must store an array of objects as

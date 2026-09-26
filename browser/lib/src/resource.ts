@@ -889,6 +889,24 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
+  /** Whether a full snapshot holds every op in `version`. */
+  private static snapshotCovers(
+    snapshot: Uint8Array,
+    version: VersionVector,
+  ): boolean {
+    try {
+      const end = LoroLoader.Loro.decodeImportBlobMeta(
+        snapshot,
+        false,
+      ).partialEndVersionVector;
+      const order = version.compare(end);
+
+      return order === 0 || order === -1;
+    } catch {
+      return false;
+    }
+  }
+
   private resetLoroState(): void {
     this._loroDoc = undefined;
     this._loroMap = undefined;
@@ -3786,15 +3804,27 @@ export class Resource<C extends OptionalClass = any> {
   ): { complete: boolean } {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
+      const replacedVersion = this._loroDoc?.oplogVersion();
       this.resetLoroState();
 
-      // The cache holds the state being replaced, not values that arrived with
-      // these bytes. Left in place, `getLoroDoc()`'s heal pass writes every key
-      // the snapshot lacks back into the doc — so a property removed at the
-      // source came back as a local op (an app's `/app-write` remove seemed
-      // not to stick). Server-derived keys are not in Loro; keep those.
-      for (const key of Object.keys(this.#cache)) {
-        if (!isDerivedByServer(key)) delete this.#cache[key];
+      // When the snapshot has seen everything the replaced doc held, the cache
+      // is only that older state. Left in place, `getLoroDoc()`'s heal pass
+      // writes every key the snapshot lacks back into the doc — so a property
+      // removed at the source came back as a local op (an app's `/app-write`
+      // remove seemed not to stick). Server-derived keys are not in Loro; keep
+      // those.
+      //
+      // Otherwise a missing key is one the source never had, not one it
+      // removed, and the cache is what the heal needs: JSON-AD read with these
+      // very bytes (no doc yet), or a doc the source never saw, like an agent
+      // profile restored from Cloud Vault that the node only knows as a stub.
+      if (
+        replacedVersion &&
+        Resource.snapshotCovers(loroUpdate, replacedVersion)
+      ) {
+        for (const key of Object.keys(this.#cache)) {
+          if (!isDerivedByServer(key)) delete this.#cache[key];
+        }
       }
 
       // Point `getLoroDoc()` at these bytes so it imports the snapshot
