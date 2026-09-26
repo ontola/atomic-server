@@ -62,12 +62,14 @@ import {
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
-import { AccountSignInPanel } from './AccountSignInPanel';
+import {
+  AccountSignInPanel,
+  AccountSignInViaBrowser,
+} from './AccountSignInPanel';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
-import { LinkProviderPanel } from '../../components/Vault/LinkProviderPanel';
 import {
   canHoldProviderCookie,
   getRememberedProvider,
@@ -376,12 +378,12 @@ export function GettingStartedFlow({
 
     const offerSignIn =
       !!knownPortalUrl &&
-      !isRunningInTauri() &&
-      canHoldProviderCookie(knownPortalUrl) &&
       (restore.phase === 'no-session' ||
         (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
 
     if (!offerSignIn || !knownPortalUrl) return null;
+
+    const onSignedIn = () => setRestoreAttempt(n => n + 1);
 
     return (
       <Column key='account' gap='0.75rem'>
@@ -390,11 +392,21 @@ export function GettingStartedFlow({
             Sign in again to open your account on this device.
           </CardSubtitle>
         ) : null}
-        <AccountSignInPanel
-          portalUrl={knownPortalUrl}
-          disabled={loading}
-          onSignedIn={() => setRestoreAttempt(n => n + 1)}
-        />
+        {/* The same options either way; an app that cannot hold the
+            account cookie finishes each one in the system browser. */}
+        {canHoldProviderCookie(knownPortalUrl) ? (
+          <AccountSignInPanel
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        ) : (
+          <AccountSignInViaBrowser
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        )}
       </Column>
     );
   }
@@ -1176,9 +1188,7 @@ export function GettingStartedFlow({
                         step checks whether this account has a backup. */}
                     {knownAccounts.length === 0 &&
                     knownPortalUrl &&
-                    (restore.phase === 'ready' ||
-                      (restore.phase === 'no-session' &&
-                        !canHoldProviderCookie(knownPortalUrl))) ? (
+                    restore.phase === 'ready' ? (
                       <Button
                         key='forgot'
                         type='button'
@@ -1290,34 +1300,14 @@ export function GettingStartedFlow({
             <OnboardingCard key='card'>
               <Column gap='1rem'>
                 <CardTitle key='title'>Restore account</CardTitle>
+                {/* Signed out, this is the whole step: the portal's options,
+                    finished in the system browser where this app cannot hold
+                    the account cookie. */}
                 {accountSignIn()}
                 {restore.phase === 'checking' ? (
                   <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
-                ) : restore.phase === 'no-session' ? (
-                  // Two ways to get a session, and only one works per client.
-                  // A page on the portal's own site signs in right here and
-                  // holds the shared cookie. The desktop and Android apps, and a
-                  // self-hosted origin, cannot hold that cookie: sending them
-                  // to the portal's sign-in ends with a session in some
-                  // browser and none here — which used to be this screen's
-                  // only advice, with the button missing on top when the
-                  // build knew no portal. They link this device instead, with
-                  // a code approved wherever they are already signed in.
-                  !canHoldProviderCookie(knownPortalUrl) ? (
-                    <Column key='no-session-link' gap='0.75rem'>
-                      <p key='copy'>
-                        {`Your backup is kept by your ${PRODUCT_NAME} account. Connect this device to it to restore.`}
-                      </p>
-                      <LinkProviderPanel
-                        key='link'
-                        portalUrl={knownPortalUrl}
-                        onLinked={() => setRestoreAttempt(n => n + 1)}
-                      />
-                    </Column>
-                  ) : // Signed in right here, above: the same options as the
-                  // portal's sign-in page (`accountSignIn`).
-                  null
-                ) : restore.phase === 'no-backup' ? (
+                ) : restore.phase === 'no-session' ? null : restore.phase ===
+                  'no-backup' ? (
                   inviteToken ? (
                     // The portal sends an invitee here whenever it cannot rule
                     // out an earlier identity. With nothing to restore, the

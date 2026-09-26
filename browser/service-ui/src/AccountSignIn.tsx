@@ -41,6 +41,7 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
 
 export function AccountSignIn({
   googleHref,
+  onGoogle,
   onPasskey,
   passkeySupported = true,
   email,
@@ -58,6 +59,9 @@ export function AccountSignIn({
   /** Where "Continue with Google" goes; `null` when the account service has
    * no Google client, which is the same answer on every screen. */
   googleHref: string | null;
+  /** Instead of `googleHref`, for a host that has to do something first
+   * (the desktop apps open Google in the system browser). */
+  onGoogle?: () => void;
   onPasskey: () => void;
   passkeySupported?: boolean;
   email: string;
@@ -89,6 +93,17 @@ export function AccountSignIn({
           <GoogleMark />
           <span>{copy.google}</span>
         </a>
+      ) : onGoogle ? (
+        <button
+          type='button'
+          className='atomic-signin-option'
+          disabled={busy}
+          onClick={onGoogle}
+          data-test='google-sign-in'
+        >
+          <GoogleMark />
+          <span>{copy.google}</span>
+        </button>
       ) : null}
       {passkeySupported ? (
         <button

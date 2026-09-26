@@ -10,6 +10,13 @@ import {
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import { getManagedAccount } from '../../helpers/managed/session';
 import { hasPasskeyApi } from '../../helpers/passkeySupport';
+import {
+  approvalUrl,
+  awaitDeviceLink,
+  requestDeviceLink,
+  type LinkRequest,
+} from '../../helpers/managed/deviceLink';
+import { openExternal } from '../../helpers/openExternal';
 import { CardError } from './chrome';
 
 const EMAIL_POLL_MS = 2000;
@@ -156,3 +163,124 @@ const Sent = styled.p`
   font-size: 0.9rem;
   color: ${p => p.theme.colors.textLight};
 `;
+
+/**
+ * The same options for an app that cannot hold the account cookie (the
+ * desktop and Android apps, a self-hosted origin): each one opens the
+ * portal in the system browser, straight at that option, with a device-link
+ * code, and this screen continues once the code is approved there. Google
+ * refuses to sign in inside an app window anyway.
+ */
+export function AccountSignInViaBrowser({
+  portalUrl,
+  disabled,
+  onSignedIn,
+}: {
+  portalUrl: string;
+  disabled?: boolean;
+  onSignedIn: () => void;
+}) {
+  const theme = useTheme();
+  const [google, setGoogle] = useState(false);
+  const [email, setEmail] = useState('');
+  const [request, setRequest] = useState<LinkRequest | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const waiting = useRef<AbortController | null>(null);
+  const signedIn = useRef(onSignedIn);
+
+  useEffect(() => {
+    signedIn.current = onSignedIn;
+  });
+
+  useEffect(() => {
+    let live = true;
+    void getAccountProviders().then(p => live && setGoogle(p.google));
+
+    return () => {
+      live = false;
+      waiting.current?.abort();
+    };
+  }, []);
+
+  function wait(issued: LinkRequest) {
+    if (waiting.current) return;
+
+    const controller = new AbortController();
+    waiting.current = controller;
+
+    void awaitDeviceLink(portalUrl, issued, { signal: controller.signal })
+      .catch(() => 'expired' as const)
+      .then(outcome => {
+        waiting.current = null;
+        setRequest(null);
+
+        if (controller.signal.aborted) return;
+
+        if (outcome === 'linked') signedIn.current();
+        else setError('That sign-in expired. Pick an option to start again.');
+      });
+  }
+
+  async function open(via: 'google' | 'passkey' | 'email') {
+    setBusy(true);
+    setError(null);
+
+    const issued =
+      request ??
+      (await requestDeviceLink(portalUrl).catch((err: unknown) =>
+        err instanceof Error ? err : new Error(String(err)),
+      ));
+    setBusy(false);
+
+    if (issued instanceof Error) {
+      setError(
+        issued instanceof TypeError
+          ? 'Could not reach your account. Check your connection and try again.'
+          : issued.message,
+      );
+
+      return;
+    }
+
+    setRequest(issued);
+    const url = new URL(approvalUrl(portalUrl, issued.user_code));
+    url.searchParams.set('via', via);
+
+    if (via === 'email' && email.trim()) {
+      url.searchParams.set('email', email.trim());
+    }
+
+    await openExternal(url.toString());
+    wait(issued);
+  }
+
+  return (
+    <Themed>
+      <AccountSignIn
+        googleHref={null}
+        onGoogle={google ? () => void open('google') : undefined}
+        onPasskey={() => void open('passkey')}
+        email={email}
+        onEmailChange={setEmail}
+        onSubmitEmail={e => {
+          e.preventDefault();
+          void open('email');
+        }}
+        busy={busy || disabled}
+        theme={theme.darkMode ? 'dark' : 'light'}
+        notice={
+          error ? (
+            <CardError role='alert'>{error}</CardError>
+          ) : request ? (
+            <Sent role='status' data-testid='link-user-code'>
+              Finish in your browser, then approve the code{' '}
+              <strong>{request.user_code}</strong>. This screen continues by
+              itself.
+            </Sent>
+          ) : null
+        }
+      />
+    </Themed>
+  );
+}

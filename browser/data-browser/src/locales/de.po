@@ -6407,10 +6407,8 @@ msgstr ""
 msgid "Forgot it? Restore from {0}"
 msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
-msgstr ""
+#~ msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+#~ msgstr ""
 
 #. 0: action.label(ctx)
 #: src/actions/deriveTools.ts
@@ -12419,4 +12417,12 @@ msgstr ""
 
 #: src/views/getting-started/GoogleSignInButton.tsx
 msgid "Continue with Google"
+msgstr ""
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "That sign-in expired. Pick an option to start again."
+msgstr ""
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "Could not reach your account. Check your connection and try again."
 msgstr ""
