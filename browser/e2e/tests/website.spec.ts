@@ -335,30 +335,55 @@ test('Assistant creates and redesigns a website using existing table content', a
   await page.getByRole('button', { name: 'Page edit', exact: true }).click();
   await expect(preview.locator('[contenteditable="true"]')).toHaveCount(2);
   const field = preview.locator('[contenteditable="true"]').first();
+  // The three waits below guard the SAME thing: one inline-edit save, which is
+  // `commitWebsiteField` re-reading the site config, checking the row still
+  // belongs to the selected table, then `resource.save()`. Until it settles the
+  // status line reads "Saving content…", so each of these was guarding a commit
+  // round-trip with the 10 s `expect.timeout` default. `test.slow()` raises the
+  // WALL, never the per-assertion budget, so it never covered them.
+  //
+  // Measured on this spec, store wiped, five rounds (three alone and two with
+  // the other three website specs at four workers): the first of these saves
+  // costs 1433, 1925, 3981, 4069 and 4150 ms, so 42% of the default at worst on
+  // a quiet box. A CI shard runs ~71 tests against one server, and store growth
+  // alone has been measured to more than double a step of this shape
+  // (4533 ms to 10814 ms on `installation-recovery:96`), on top of three other
+  // shards, clippy and the vitest suites. That is how develop run 4665 failed
+  // all three attempts here with the page still reading "Saving content…".
+  //
+  // 30 s is ~7x the worst local sample and 3x the budget CI overran. The
+  // neighbouring assistant wait at the top of this test already carries 60 s.
+  // If this ever fails ON 30 s, that is not a budget any more: it means the
+  // save really does not settle, and the place to look is the save counters
+  // `waitForSynced` reads, not this number.
+  const SAVE_TIMEOUT = 30_000;
+
   await field.fill('Plant winter lettuce in October');
   await page.getByText('Click an outlined field', { exact: false }).click();
   await expect(
     page.getByText('Content saved. The existing release is unchanged.'),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: SAVE_TIMEOUT });
   // Clearing a text field is an explicit write, not a silently ignored blur.
   await field.fill('');
   await page.getByText('Click an outlined field', { exact: false }).click();
   await expect
-    .poll(async () =>
-      page.evaluate(
-        async row =>
-          (await window.store.getResource(row)).get(
-            'https://atomicdata.dev/properties/name',
-          ),
-        rowSubject,
-      ),
+    .poll(
+      async () =>
+        page.evaluate(
+          async row =>
+            (await window.store.getResource(row)).get(
+              'https://atomicdata.dev/properties/name',
+            ),
+          rowSubject,
+        ),
+      { timeout: SAVE_TIMEOUT },
     )
     .toBe('');
   await field.fill('Plant winter lettuce in October');
   await page.getByText('Click an outlined field', { exact: false }).click();
   await expect(
     page.getByText('Content saved. The existing release is unchanged.'),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: SAVE_TIMEOUT });
   const stored = await page.evaluate(
     async row =>
       (await window.store.getResource(row)).get(
