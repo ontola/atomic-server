@@ -335,14 +335,21 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
           </NavIconButton>
         </WideOnly>
       )}
-      <NavIconButton
-        color='textLight'
+      {/* Labelled, with its shortcut: as a bare magnifier among the bar's
+       * icons it went unnoticed in user testing (#1807). Collapses to the icon
+       * with the other labels when the bar gets tight. */}
+      <SearchButton
         type='button'
-        title={`Search (${shortcuts.search})`}
+        $iconOnly={iconOnly}
+        title={`Search (${displayShortcut(shortcuts.search)})`}
+        aria-label='Search'
         onClick={() => openSearchOverlay()}
+        data-testid='navbar-search'
       >
         <FaMagnifyingGlass />
-      </NavIconButton>
+        <span>Search</span>
+        <Kbd>{displayShortcut(shortcuts.search)}</Kbd>
+      </SearchButton>
       <VerticalDivider />
       <CrumbGroup $iconOnly={iconOnly}>
         {parent && <DirectParent subject={parent} />}
@@ -457,6 +464,36 @@ const NavIconButton = styled(IconButton)`
       color: ${p => p.theme.colors.text};
     }
   }
+`;
+
+const SearchButton = styled(LabelButton)<{ $iconOnly: boolean }>`
+  /* Narrow bars keep only the icon; the label and hint return when there is
+   * room. */
+  @container breadcrumb-bar (max-width: 600px) {
+    & > span,
+    & > kbd {
+      display: none;
+    }
+  }
+
+  ${p =>
+    p.$iconOnly &&
+    css`
+      & > span,
+      & > kbd {
+        display: none;
+      }
+    `}
+`;
+
+const Kbd = styled.kbd`
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  padding: 0 0.3rem;
+  margin-inline-start: 0.25rem;
 `;
 
 const VerticalDivider = styled.div`

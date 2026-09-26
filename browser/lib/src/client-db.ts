@@ -118,6 +118,14 @@ export interface ClientDbQueryOpts {
   expressionFilters?: ExpressionFilter[];
 }
 
+/** Outbox rows to store (`puts`) and subjects whose row goes (`deletes`),
+ *  for one agent's queue. Values are opaque JSON owned by `LocalOutbox`. */
+export interface ClientDbOutboxWrite {
+  agent: string;
+  puts: Array<{ subject: string; value: string }>;
+  deletes: string[];
+}
+
 /** Options for opening a specific (per-agent) local database. */
 export interface ClientDbOptions {
   /** OPFS file name of the database. Defaults to the legacy shared name
@@ -168,6 +176,7 @@ const REPEATABLE_RPC_TYPES = new Set([
   'envelopesFor',
   'getAllVersionVectors',
   'getVersionVectorsForDrive',
+  'outboxEntries',
 ]);
 
 /**
@@ -725,13 +734,34 @@ export class ClientDbWorker {
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
+    outbox?: ClientDbOutboxWrite,
   ): Promise<void> {
     await this.send({
       type: 'putResourceWithSnapshot',
       subject,
       jsonAd,
       snapshot,
+      outbox,
     });
+  }
+
+  /** The outbox rows stored for `agent`: one JSON value per subject. */
+  async outboxEntries(agent: string): Promise<string[]> {
+    const rows = await this.send({ type: 'outboxEntries', agent });
+
+    return (rows as string[] | null) ?? [];
+  }
+
+  /**
+   * Store and remove outbox rows in one write. With `durable`, resolves only
+   * once the write is flushed to disk; otherwise the worker's periodic flush
+   * persists it within a second.
+   */
+  async outboxWrite(
+    write: ClientDbOutboxWrite,
+    durable: boolean,
+  ): Promise<void> {
+    await this.send({ type: 'outboxWrite', ...write, durable });
   }
 
   /** Put many resources in a single worker round-trip. The worker

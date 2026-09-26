@@ -24,6 +24,37 @@ export const PROPERTIES = {
   loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
 
+/**
+ * Click "Page edit" on a website resource, waiting as long as the draft build
+ * behind it can take.
+ *
+ * That button is `disabled={!draft || busy || refreshing || !!problem}`
+ * (`WebsitePage.tsx`), and `refreshing` stays true until the page's effect has
+ * read the website config and run `buildWebsiteArtifact`. So the click is not a
+ * click, it is a wait on that build, and it was sitting on Playwright's 10 s
+ * ACTION default rather than on any assertion budget.
+ *
+ * Measured on this container (4 cores, so a four-worker round is oversubscribed),
+ * over the website specs at four workers:
+ *
+ *     website-inline-content.spec.ts   3708 to 9170 ms   (n=8)
+ *     website-inline-fixture.ts        1235 to 7629 ms   (n=11)
+ *
+ * 9170 ms is 91% of the old budget, and a further round blew past it outright:
+ * `locator.click: Timeout 10000ms exceeded`, the element `disabled` for all
+ * fifteen retries. A CI shard runs ~71 tests against one server with three other
+ * shards alongside, so 91% locally is not a budget at all.
+ *
+ * 30 s is ~3x the worst sample, matching the wait in `waitForSynced` below.
+ * `website.spec.ts`'s own "Page edit" click needs none of this and is left alone:
+ * it happens after a release round-trip, by which time the draft is long settled,
+ * and it measures 109 to 203 ms (2%) over the same eight rounds.
+ */
+export const clickPageEdit = (page: Page) =>
+  page
+    .getByRole('button', { name: 'Page edit', exact: true })
+    .click({ timeout: 30_000 });
+
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
 
@@ -1433,7 +1464,35 @@ export async function waitForSynced(page: Page, timeoutMs = 30_000) {
               }),
             ) ?? [];
 
-        return { status, entries };
+        // `pendingDirtyCount` is a sum:
+        //
+        //     outbox.size - blockedCount + inFlightSaves + _scheduledSaves
+        //
+        // so a timeout with an empty outbox says only that one of the other
+        // two terms is stuck, and the sum cannot say which. Develop run 4596
+        // (25 September) timed out here with `entries: []`, `blockedCount: 0`
+        // and `pendingDirtyCount: 1`, and there was nothing in the message to
+        // tell a save that never settled from a debounce slot that was never
+        // balanced. Split it, so the next one names its own cause.
+        const savingSubjects = [...(store?.resources.values() ?? [])]
+          .filter(resource => resource.isSaving)
+          .map(resource => resource.subject);
+        const outboxSize = store?.outbox?.size ?? 0;
+        const blocked = status?.blockedCount ?? 0;
+        const breakdown = {
+          outboxSize,
+          blocked,
+          savingSubjects,
+          // The store does not expose the debounce counter, so take it as what
+          // the other terms cannot account for.
+          scheduledSaves:
+            (status?.pendingDirtyCount ?? 0) -
+            outboxSize +
+            blocked -
+            savingSubjects.length,
+        };
+
+        return { status, breakdown, entries };
       })
       .catch(() => undefined);
     throw new Error(
@@ -1648,8 +1707,8 @@ function ddmmyyyyToIso(value: string): string {
 /**
  * Waits until every row typed into a grid is a real member of its table.
  *
- * A new row is held purely locally under a `_new:` subject until its
- * materialize timer fires — no commit, no collection membership. Anything
+ * A new row is a draft held purely locally (its genesis is unsigned) until
+ * its materialize timer fires — no commit, no collection membership. Anything
  * computed OVER that collection therefore cannot see it yet: a total renders
  * an em-dash, a filter does not match it, a chart omits it. Asserting on such
  * a value before this point is asserting about a table that does not contain
@@ -1662,13 +1721,22 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
   await page.waitForFunction(
     () => {
       const resources = Array.from(window.store.resources?.values?.() ?? []);
+      // What creating a draft row writes; anything more is a row someone
+      // typed into.
+      const seeded = new Set([
+        'https://atomicdata.dev/properties/isA',
+        'https://atomicdata.dev/properties/parent',
+        'https://atomicdata.dev/properties/drive',
+        'https://atomicdata.dev/properties/genesis',
+      ]);
       const stillVirtual = resources.some(
-        // A placeholder holds only its seeded `isA` + `parent`; anything more
-        // is a row someone typed into.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (r: any) =>
-          String(r.subject).startsWith('_new:') &&
-          (r.getEntries?.()?.length ?? 0) > 2,
+          r.new &&
+          /^(did:ad|atomic):/.test(String(r.subject)) &&
+          (r.getEntries?.() ?? []).some(
+            ([property]: [string]) => !seeded.has(property),
+          ),
       );
 
       return (

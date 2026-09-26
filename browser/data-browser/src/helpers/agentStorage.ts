@@ -1,12 +1,18 @@
 import {
   Agent,
+  decodeSecret,
   SubtleCryptoProvider,
   JSCryptoProvider,
   legacySubjectFromSecret,
 } from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
 import { adoptAgentOnDevice } from './adoptAgent';
-import { clearSessionDbKeys, ensureDbKeyOnSignIn } from './localDbKey';
+import {
+  clearSessionDbKeys,
+  ensureDbKeyOnSignIn,
+  trackDbKeySignIn,
+  type SignInCredentials,
+} from './localDbKey';
 
 const AGENT_IDB_KEY = 'atomic.agent';
 
@@ -177,7 +183,15 @@ export async function saveAgentToIDB(
   }
 
   if (typeof keyPairOrSecret === 'string') {
-    await storeSecret(keyPairOrSecret);
+    const stored = storeSecret(keyPairOrSecret);
+    // Announced before anything is awaited: callers often set the agent first,
+    // and the database opener that event starts must know a sign-in is about
+    // to deliver this agent's key (see `waitForSessionDbKey`).
+    const signingIn = subjectOfSecret(keyPairOrSecret);
+
+    if (signingIn) trackDbKeySignIn(signingIn, stored);
+
+    await stored;
 
     // The device now holds this agent; its node should sign as this agent too.
     // Best-effort and last, so a node that isn't up yet can't block sign-in.
@@ -210,6 +224,18 @@ export async function saveAgentToIDB(
       previous?.subject === subject ? previous.aiChatsFolders : undefined,
     vaultProof: previous?.subject === subject ? previous.vaultProof : undefined,
   } satisfies StoredAgent);
+}
+
+/**
+ * The agent subject a secret signs in as (the same one `storeSecret` stores),
+ * or undefined when the secret cannot be read.
+ */
+function subjectOfSecret(secret: string): string | undefined {
+  try {
+    return decodeSecret(secret).subject;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Persist the agent's key, preferring a non-extractable keypair. */
@@ -245,7 +271,10 @@ async function storeSecret(secret: string): Promise<void> {
         } satisfies StoredAgent);
         await del(AGENT_FALLBACK_KEY);
 
-        await ensureLocalDbKey(resolvedSubject, decoded.privateKey);
+        await ensureLocalDbKey(resolvedSubject, {
+          privateKey: decoded.privateKey,
+          vaultProof,
+        });
 
         return;
       } catch {
@@ -269,7 +298,10 @@ async function storeSecret(secret: string): Promise<void> {
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);
 
-    await ensureLocalDbKey(newSubject, decoded.privateKey);
+    await ensureLocalDbKey(newSubject, {
+      privateKey: decoded.privateKey,
+      vaultProof,
+    });
   }
 }
 
@@ -280,10 +312,10 @@ async function storeSecret(secret: string): Promise<void> {
  */
 async function ensureLocalDbKey(
   subject: string,
-  privateKey: string,
+  credentials: SignInCredentials,
 ): Promise<void> {
   try {
-    await ensureDbKeyOnSignIn(subject, privateKey);
+    await ensureDbKeyOnSignIn(subject, credentials);
   } catch (e) {
     console.warn('Failed to prepare local database key:', e);
   }

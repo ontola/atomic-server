@@ -14,7 +14,11 @@ import {
 } from './history-attribution.js';
 import { readFile } from 'node:fs/promises';
 
-import type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+import type {
+  ClientDbOutboxWrite,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -142,13 +146,10 @@ export class NodeClientDb {
   async getResourceWithSnapshot(
     subject: string,
   ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
-    const db = this.requireDb();
-    const jsonAd = (await db.getResource(subject)) as string | null;
-    const snapshot = jsonAd
-      ? (db.getLoroSnapshot(subject) as Uint8Array | null)
-      : null;
-
-    return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+    return (await this.requireDb().getResourceWithSnapshot(subject)) as {
+      jsonAd: string | null;
+      snapshot: Uint8Array | null;
+    };
   }
 
   async getResourcesWithSnapshots(
@@ -171,10 +172,37 @@ export class NodeClientDb {
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
+    outbox?: ClientDbOutboxWrite,
   ): Promise<void> {
     const db = this.requireDb();
-    await db.putResource(jsonAd);
-    if (snapshot) db.putLoroSnapshot(subject, snapshot);
+
+    if (snapshot) {
+      await db.putResourceWithSnapshot(jsonAd, snapshot);
+    } else {
+      await db.putResource(jsonAd);
+    }
+
+    if (outbox) await this.outboxWrite(outbox, true);
+  }
+
+  /** Mirror of {@link ClientDbWorker.outboxEntries}. */
+  async outboxEntries(agent: string): Promise<string[]> {
+    return this.requireDb().outboxEntries(agent) as string[];
+  }
+
+  /** Mirror of {@link ClientDbWorker.outboxWrite}; in memory, so `durable`
+   *  only flushes. */
+  async outboxWrite(
+    write: ClientDbOutboxWrite,
+    durable: boolean,
+  ): Promise<void> {
+    const db = this.requireDb();
+    db.outboxWrite(
+      write.agent,
+      JSON.stringify(write.puts),
+      JSON.stringify(write.deletes),
+    );
+    if (durable) db.flush();
   }
 
   /** Mirror of {@link ClientDbWorker.putResources} for the Node integration

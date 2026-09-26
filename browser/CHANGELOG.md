@@ -18,6 +18,39 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   was written raw, so a trailing slash or a legacy `did:ad:` identifier could
   store a key nothing found again, and a resource inside such a workspace could
   still try to reach the server.
+- `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
+  (they still work). The app no longer creates temporary `_new:` subjects
+  that are renamed on first save: the new-resource form, new-resource dialogs
+  and new table rows all create their resource with `store.newResource()`, so
+  it has its final subject from the start. Use `store.newResource()` (with
+  `deferGenesis: true` for a draft that is filled in before its first save)
+  and read `resource.subject`. `_new:` subjects written by older builds are
+  still read and synced as before.
+
+- `@tomic/lib` answers a stale drive-sync probe (`SYNC_RESEND`) with the full
+  version-vector `SYNC` instead of a range-based set reconciliation over
+  `RBSR_FP` / `RBSR_ITEMS`. The range descent cost the server more than the
+  full exchange. `rbsr.ts` is gone, and `WSClient.rbsrItems` is
+  now `WSClient.driveInventory`.
+
+- A workspace a Cloud Server node refuses ("not enrolled") no longer sits on
+  "Connecting…" with changes pending forever. The server card says the server
+  doesn't host it, and "Sync this workspace with this server" can be turned
+  off even though the server won't answer, keeping it on this device. A
+  suspended Cloud Server enrollment no longer counts as hosted, so the app
+  stops pointing a drive at a node that will refuse it.
+- Fixed opening the app while signed in to atomic.place sending you to sign
+  in again, and signing in with your secret then signing you out of
+  atomic.place. A backup saved before the `did:ad:` → `atomic:` rename names
+  your agent in the old spelling, and the check that compares it with the
+  agent on this device compared the text, so one agent looked like two. The
+  gate then switched identities, and the secret sign-in ended the account
+  session as if the secret belonged to someone else.
+- Fixed a drive restored from Cloud Vault on a new device showing its raw
+  identifier as its title, or being replaced by an empty new workspace. The
+  app kept the answer it had before the restore ("not found") and trusted it
+  over the data the restore had just written, so sign-in could decide there
+  was nothing and create a new home over the restored one.
 - A private workspace the app has to recreate is titled after whoever it
   belongs to, like the one onboarding and an accepted invitation already
   make. A returning account on a second device, and a sign-in whose cloud

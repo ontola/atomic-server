@@ -71,8 +71,7 @@ pub mod tag {
     pub const CHALLENGE: u8 = 0x42;
     /// Responder → client, the negative answer to a `SYNC` probe:
     /// `[0x38] [drive_utf8]`. The drive hashes differ, so the client should
-    /// reconcile (RBSR over the text frames, then a `SYNC` for the
-    /// differing subjects). The positive answer is `SYNC_OK`. Until
+    /// send its full version-vector `SYNC`. The positive answer is `SYNC_OK`. Until
     /// 2026-09-04 this was the text frame `SYNC_RESEND <drive>` and the
     /// probe itself was the text `SYNC_VV`; both transports now speak the
     /// binary form.
@@ -88,7 +87,9 @@ pub mod tag {
 /// - `auth-max-age`: `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused
 ///   and a failed `AUTH` carries `error_code::AUTH_FAILED`.
 /// - `keepalive`: understands `KEEPALIVE` (0x41); echoes it over WebSocket.
-/// - `rbsr`: answers the `RBSR_FP` / `RBSR_ITEMS` text frames.
+/// - `rbsr` (retired 2026-09, no longer advertised; do not reuse): answered
+///   the `RBSR_FP` range-fingerprint frames. `RBSR_ITEMS` is still answered,
+///   as a drive inventory.
 /// - `pull-from`: `SYNC_DIFF` carries `pullFrom` version vectors.
 /// - `signed-destroy`: on a peer stream, destroys travel as signed `COMMIT`
 ///   frames and a naked `DESTROY` from a peer is ignored.
@@ -113,7 +114,6 @@ pub mod tag {
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
-    "rbsr",
     "pull-from",
     "signed-destroy",
     "unsub",
@@ -1333,8 +1333,8 @@ pub fn encode_sync_probe(drive: &str, drive_hash: &str) -> Vec<u8> {
     )
 }
 
-/// A `SYNC` over only `subjects` (the ones an RBSR descent found
-/// differing): the responder builds version vectors for that set instead
+/// A `SYNC` over only `subjects` (a differing set the client chose): the
+/// responder builds version vectors for that set instead
 /// of walking the drive, and both comparison loops skip anything outside it.
 pub fn encode_sync_filtered(
     drive: &str,
@@ -1375,7 +1375,7 @@ pub struct DecodedSync {
     /// Hash-first probe: only `drive_hash` is meaningful; answer with
     /// `SYNC_OK` or `SYNC_RESEND` rather than a diff.
     pub probe: bool,
-    /// When present, reconcile only these subjects (the RBSR-reduced set).
+    /// When present, reconcile only these subjects.
     pub subjects: Option<Vec<String>>,
 }
 

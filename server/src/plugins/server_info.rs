@@ -71,8 +71,8 @@ pub fn server_info_endpoint(info: ServerInfo) -> Endpoint {
 ///
 /// Node-local state, not resources in a drive, so it is built per request.
 fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
-    let live = crate::iroh_transport::live_peer_ids();
-    let known = crate::iroh_transport::get_known_peers(store);
+    let live = atomic_lib::sync::peer::live_peer_ids();
+    let known = atomic_lib::sync::peer::get_known_peers(store);
 
     // (node id, name, live, last synced). `last_synced` is already tracked on
     // the stored peer; reporting it is what lets a device card say when it last
@@ -83,14 +83,14 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
     let stored_for = |id: &str| -> Option<&atomic_lib::sync::peer::KnownPeer> {
         known
             .iter()
-            .find(|p| crate::iroh_transport::normalize_node_id(&p.node_id) == id)
+            .find(|p| atomic_lib::sync::peer::normalize_node_id(&p.node_id) == id)
     };
 
     for id in &live {
-        let name = crate::iroh_transport::live_peer_name(id).or_else(|| {
+        let name = atomic_lib::sync::peer::live_peer_name(id).or_else(|| {
             known
                 .iter()
-                .find(|p| crate::iroh_transport::normalize_node_id(&p.node_id) == *id)
+                .find(|p| atomic_lib::sync::peer::normalize_node_id(&p.node_id) == *id)
                 .map(|p| p.name.clone())
                 .filter(|n| !n.is_empty())
         });
@@ -106,7 +106,7 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
     }
 
     for peer in &known {
-        let id = crate::iroh_transport::normalize_node_id(&peer.node_id);
+        let id = atomic_lib::sync::peer::normalize_node_id(&peer.node_id);
 
         if seen.iter().any(|(known_id, ..)| known_id == &id) {
             continue;
@@ -196,7 +196,7 @@ fn handle_get(
 
         if !hide_node_inventory {
             // Absent rather than null: a node with no p2p transport has no node ID.
-            if let Some(node_id) = crate::iroh_transport::get_node_id() {
+            if let Some(node_id) = atomic_lib::sync::peer::get_node_id() {
                 resource.set_unsafe(
                     urls::SERVER_NODE_ID.into(),
                     Value::String(atomic_lib::identifiers::node_subject(node_id)),

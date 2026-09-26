@@ -15,6 +15,7 @@ import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { RootWelcomeGate } from './RootWelcomeGate';
 import { VaultRestoreAction } from '../components/Vault/VaultRestoreAction';
+import { constructOpenURL } from '../helpers/navigation';
 
 import type { JSX } from 'react';
 
@@ -23,7 +24,7 @@ import type { JSX } from 'react';
  * for App wide errors.
  */
 function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
-  const { agent, baseURL } = useSettings();
+  const { agent, baseURL, drive } = useSettings();
   const store = useStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -97,6 +98,35 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
               onClick={() => store.fetchResourceFromServer(resource.subject)}
             >
               Retry
+            </Button>
+          </Row>
+        </Column>
+      </ContainerWide>
+    );
+  }
+
+  // Deleted on this device: going back in history after leaving a demo or a
+  // template preview lands here, since leaving deletes it. Retrying cannot
+  // bring it back, so offer the way forward instead of a raw error.
+  if (store.isDestroyed(resource.subject)) {
+    const home = drive && drive !== resource.subject ? drive : undefined;
+
+    return (
+      <ContainerWide>
+        <Column>
+          <h1>This page no longer exists</h1>
+          <p>It was deleted, for example when you left a demo or a preview.</p>
+          <Row>
+            {home && (
+              <Button onClick={() => navigate({ to: constructOpenURL(home) })}>
+                Open your drive
+              </Button>
+            )}
+            <Button
+              subtle={!!home}
+              onClick={() => navigate({ to: paths.newDrive })}
+            >
+              Choose a template
             </Button>
           </Row>
         </Column>

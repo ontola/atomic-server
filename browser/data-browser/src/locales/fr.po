@@ -285,6 +285,7 @@ msgstr "Choisir un modèle par défaut"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Retour"
 
@@ -1341,9 +1342,8 @@ msgstr "Raccourcis clavier"
 msgid "Plugin Description"
 msgstr "Description du plugin"
 
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
-msgid "<0/> Save"
-msgstr "<0/> Enregistrer"
+#~ msgid "<0/> Save"
+#~ msgstr "<0/> Enregistrer"
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1445,6 +1445,7 @@ msgstr "Description textuelle <0/>"
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -2357,7 +2358,7 @@ msgstr "Retour"
 msgid "Go forward"
 msgstr "Avancer"
 
-#. 0: shortcuts.search
+#. 0: displayShortcut(shortcuts.search)
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
 msgstr "Rechercher ({0})"
@@ -3425,6 +3426,8 @@ msgstr "Curseur"
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr "Entrez une URL Atomique ou recherchez (appuyez sur \"/\")"
 
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
 msgid "Search"
 msgstr "Rechercher"
@@ -3433,7 +3436,6 @@ msgstr "Rechercher"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
-#: src/helpers/managed/reconcile.ts
 #: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr ""
@@ -4919,9 +4921,11 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr ""
 
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr ""
@@ -7378,6 +7382,8 @@ msgid "Drive name"
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
 msgstr ""
 
@@ -7418,9 +7424,8 @@ msgstr ""
 msgid "Or, tell Atomic what you need"
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Template preview"
-msgstr ""
+#~ msgid "Template preview"
+#~ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "<0/> Include example content"
@@ -7450,9 +7455,8 @@ msgstr ""
 msgid "Could not open the preview. Please refresh."
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Back to template selection"
-msgstr ""
+#~ msgid "Back to template selection"
+#~ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "/app/new-drive?blank=1"
@@ -7462,17 +7466,14 @@ msgstr ""
 msgid "<0/> Keep demo content and my edits"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Welcome"
-msgstr ""
+#~ msgid "Welcome"
+#~ msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Board"
-msgstr ""
+#~ msgid "Board"
+#~ msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Team chat"
-msgstr ""
+#~ msgid "Team chat"
+#~ msgstr ""
 
 #. 0: ' '
 #: src/chunks/Templates/DriveTemplateSetup.tsx
@@ -8930,7 +8931,7 @@ msgstr ""
 msgid "All day"
 msgstr ""
 
-#. 0: title || subject
+#. 0: name
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr ""
@@ -12271,4 +12272,129 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Some recurring meetings could not be displayed"
+msgstr ""
+
+#. 0: label
+#. 0: label
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Show all events on {0}"
+msgstr ""
+
+#. 0: total; 1: label
+#. 0: total; 1: label
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Show all {0} events on {1}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "more"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDayList.tsx
+msgid "Nothing on this day."
+msgstr ""
+
+#. 0: shortDayLabel(day)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Moved to {0}"
+msgstr ""
+
+#. 0: name; 1: longDayLabel(movedTo)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "{0} · Moved to {1} (opens the moved meeting)"
+msgstr ""
+
+#. 0: name; 1: longDayLabel(movedFrom)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "{0} · Moved from {1}"
+msgstr ""
+
+#. 0: shortDayLabel(day)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Moved from {0}"
+msgstr ""
+
+#. 0: label
+#. 0: label
+#: src/components/PropVal.tsx
+#: src/components/PropVal.tsx
+msgid "Open {0} in a new tab"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "This page no longer exists"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted, for example when you left a demo or a preview."
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "Open your drive"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
+#: src/views/ErrorPage.tsx
+msgid "Choose a template"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+msgid "Leave demo"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+msgid "Demo workspace"
+msgstr ""
+
+#. 0: resource.title
+#: src/components/DemoExitButton.tsx
+msgid "Preview: {0}"
+msgstr ""
+
+#: src/components/SetupBar.tsx
+msgid "Setup"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the demo"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the preview"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Name your drive"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This server doesn’t host this workspace, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Not hosted here"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column…"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column to filter by"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "No column matches"
+msgstr ""
+
+#. 0: query
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Search the drive for “{0}”"
 msgstr ""

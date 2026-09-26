@@ -101,7 +101,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod store_tests {
     use super::*;
     use crate::agents::Agent;

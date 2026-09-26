@@ -27,12 +27,14 @@ import {
   dataTypeCellMap,
 } from './dataTypeMaps';
 import { StringCell } from './EditorCells/StringCell';
+import { floatSeed, integerSeed } from './EditorCells/numberInput';
 import { TablePageContext } from './tablePageContext';
 import { useColumnLabel } from './helpers/useColumnLabel';
 import { createValueChangedHistoryItem } from './helpers/useTableHistory';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { RemoteCellPresence, TablePresenceContext } from './TablePresence';
 import { useSettings } from '../../helpers/AppSettings';
+import { hasUserContent, isUnsavedDraft } from './draftRow';
 
 interface TableCellProps {
   columnIndex: number;
@@ -48,6 +50,26 @@ interface TableCellProps {
 }
 
 const SAVE_DEBOUNCE_TIME = 200;
+
+/**
+ * Datatypes whose editor reads typed text and stores a value only when it is
+ * committed, with the characters it may start from. Typing on such a selected
+ * cell seeds the editor with an accepted character instead of writing it as a
+ * value (#1822, #1825). Any other character opens the editor on what is stored
+ * and is dropped: a letter is not the start of a number.
+ */
+const textSeededDatatypes = new Map<string, RegExp>([
+  [Datatype.DATE, /^.$/u],
+  [Datatype.INTEGER, integerSeed],
+  [Datatype.FLOAT, floatSeed],
+]);
+
+/**
+ * Datatypes whose editor cannot start from a typed character at all, so the
+ * character is dropped and the editor opens on the stored value. A timestamp
+ * editor is a native date-and-time picker: a lone digit is not a time (#1825).
+ */
+const unseededDatatypes = new Set<string>([Datatype.TIMESTAMP]);
 
 function useIsEditing(row: number, column: number) {
   const { cursorMode, selectedColumn, selectedRow } = useTableEditorContext();
@@ -91,10 +113,8 @@ export function TableCell({
     { commit: false, commitDebounce: 0 },
   );
 
-  // Remote sessions whose active cell this is. Match on the RESOLVED
-  // subject (`resource.subject`, not the `subject` prop): peers announce
-  // real `did:ad:` subjects, and a materialized session row's `_new:`
-  // prop subject aliases to one.
+  // Remote sessions whose active cell this is. Match on the resource's own
+  // (normalized) subject: that is what peers announce.
   const remoteAgents = useContext(TablePresenceContext)
     .rows.get(resource.subject)
     ?.filter(p => p.column === property.subject)
@@ -125,15 +145,15 @@ export function TableCell({
 
       await setValue(v);
 
-      // A `_new:` row is virtual: it stays purely local (the Loro dirty
-      // subscriber skips `_new:` subjects, so it never auto-drains) and is
+      // A draft row stays purely local (the Loro dirty subscriber skips
+      // resources that are still `new`, so it never auto-drains) and is
       // materialized when the user moves off it (`useMaterializeWhenDeselected`).
       // NOT persisting per-keystroke is what keeps rapid row entry stable — no
       // save → re-fetch → remount churn reaches the cell mid-typing. Existing
       // rows still persist as you type. Instead of a save spawning the next
       // empty row (the old mechanism), the virtual row spawns it directly on
       // first content via `onFirstContent`.
-      if (resource.subject.startsWith('_new:')) {
+      if (isUnsavedDraft(resource)) {
         onFirstContent?.();
       } else {
         save();
@@ -154,7 +174,7 @@ export function TableCell({
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       // While editing, keep the native menu (copy/paste in the input). A
-      // virtual `_new:` row isn't a real resource, so the menu no-ops there.
+      // draft row isn't saved yet, so the menu no-ops there.
       if (isEditing) {
         return;
       }
@@ -174,6 +194,9 @@ export function TableCell({
   // from this synchronous state closes that window; under load (where the write
   // is slower) it was losing the character most of the time.
   const [pendingValue, setPendingValue] = useState<JSONValue | undefined>();
+  // The same character for an editor that takes it as text (see
+  // `textSeededDatatypes`): only the editor stores anything, on commit.
+  const [seed, setSeed] = useState<string | undefined>();
 
   const handleEnterEditModeWithCharacter = useCallback(
     (key: string) => {
@@ -193,7 +216,31 @@ export function TableCell({
         return;
       }
 
+      // A date is typed as text (`2/10/2026`), a number as `-2.5`, so the
+      // first character is not a value yet. Hand it to the editor to start
+      // from, and store nothing until the editor commits a whole value.
+      const seedAccepts = textSeededDatatypes.get(dataType);
+
+      if (seedAccepts) {
+        if (seedAccepts.test(key)) {
+          setSeed(key);
+        }
+
+        return;
+      }
+
+      if (unseededDatatypes.has(dataType)) {
+        return;
+      }
+
       const next = appendStringToType(undefined, key, dataType);
+
+      // The character is not a value of this type. Writing `undefined` would
+      // clear the cell, so just open the editor on what is stored.
+      if (next === undefined) {
+        return;
+      }
+
       setPendingValue(next);
       onChange(next);
     },
@@ -213,25 +260,29 @@ export function TableCell({
     [onChange],
   );
 
-  // Leaving edit mode drops the seed regardless.
+  // Leaving edit mode drops both seeds regardless.
   useEffect(() => {
     if (!isEditing && pendingValue !== undefined) {
       setPendingValue(undefined);
     }
-  }, [isEditing, pendingValue]);
+
+    if (!isEditing && seed !== undefined) {
+      setSeed(undefined);
+    }
+  }, [isEditing, pendingValue, seed]);
 
   const handleEditNextRow = useCallback(() => {
     // Advance to the next row. The trailing empty row to move into already
     // exists — a virtual row spawns its successor via `onFirstContent` the
     // moment it gains content — so this is pure navigation, no spawning here.
     //
-    // Only advance if this row has real content (a fresh row has just `isA` +
-    // `parent`) — avoids hopping off an empty row on a stray Enter. Read the
+    // Only advance if this row has real content (a fresh row has only what
+    // creating it wrote) — avoids hopping off an empty row on a stray Enter. Read the
     // count FRESH from the resource, not a render-time snapshot: the keystroke
     // just typed updates the resource synchronously, but the cell's rerender
     // lags under load, so a stale closure would skip the advance — piling the
     // next value onto the same cell.
-    if (resource.getEntries().length > 2) {
+    if (hasUserContent(resource)) {
       setActiveCell(rowIndex + 1, columnIndex);
     }
   }, [setActiveCell, rowIndex, columnIndex, resource]);
@@ -253,6 +304,7 @@ export function TableCell({
           property={property.subject}
           resource={resource}
           languageTag={languageTag}
+          seed={seed}
         />
       ) : (
         <Editor.Display

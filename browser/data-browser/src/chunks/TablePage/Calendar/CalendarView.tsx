@@ -1,11 +1,9 @@
-import {
-  calendarRecurrenceShortname,
-  type CalendarRecord,
-  type CalendarOccurrence,
-} from '@tomic/lib';
+import { calendarRecurrenceShortname, type CalendarRecord } from '@tomic/lib';
 import {
   calendarOccurrenceBuckets,
   calendarPropertyMatches,
+  type CalendarDayOccurrence,
+  type InvalidCalendarRecord,
 } from './calendarOccurrences';
 import { WarningBlock } from '@components/WarningBlock';
 import {
@@ -25,10 +23,11 @@ import { styled } from 'styled-components';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 import { LoaderBlock } from '@components/Loader';
 import { IconButton } from '@components/IconButton/IconButton';
-import { Button } from '@components/Button';
+import { Button, ButtonClean } from '@components/Button';
 import { ExpandedRowDialog } from '../ExpandedRowDialog';
 import { useCalendarDateProp } from './useCalendarDateProp';
 import { CalendarDay } from './CalendarDay';
+import { CalendarDayList } from './CalendarDayList';
 import { withTableRowDefaults } from '../rowDefaults';
 import { calendarFields, isAllDayOnDate, nextCalendarDate } from '@tomic/lib';
 
@@ -75,6 +74,27 @@ function valueToDayKey(
 const WEEKDAY_LABELS = Array.from({ length: 7 }, (_, i) =>
   new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' }),
 );
+
+/** Invalid rows are isolated per series and come back in `invalid`; only
+ * view-wide limits (too many records) fail the whole set. */
+function expandRecurrences(
+  records: CalendarRecord[],
+  days: string[],
+): {
+  buckets: Map<string, CalendarDayOccurrence[]>;
+  invalid: InvalidCalendarRecord[];
+  error: string;
+} {
+  try {
+    return { ...calendarOccurrenceBuckets(records, days), error: '' };
+  } catch (error) {
+    return {
+      buckets: new Map(),
+      invalid: [],
+      error: `Could not display recurring meetings: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
 
 export function CalendarView({
   tableSubject,
@@ -205,17 +225,14 @@ export function CalendarView({
     }
   }
 
-  let recurrenceError = '';
-  let occurrenceBuckets = new Map<string, CalendarOccurrence[]>();
-
-  try {
-    occurrenceBuckets = calendarOccurrenceBuckets(
-      recurrenceRecords,
-      gridDays.map(day => day.dayKey),
-    );
-  } catch (error) {
-    recurrenceError = `Could not display recurring meetings: ${error instanceof Error ? error.message : String(error)}`;
-  }
+  const {
+    buckets: occurrenceBuckets,
+    invalid: invalidRecurrences,
+    error: recurrenceError,
+  } = expandRecurrences(
+    recurrenceRecords,
+    gridDays.map(day => day.dayKey),
+  );
 
   // Bucket each row onto its day. Reactive: `useResources` re-snapshots when a
   // row's date changes, so the grid recomputes.
@@ -264,10 +281,21 @@ export function CalendarView({
   const [expandedSubject, setExpandedSubject] = useState<string>();
   const [showExpanded, setShowExpanded] = useState(false);
 
-  const handleOpenItem = useCallback((subject: string) => {
+  // No useCallback: the React Compiler memoizes this, and a manual [] made it
+  // bail out of optimizing the whole component.
+  const handleOpenItem = (subject: string) => {
     setExpandedSubject(subject);
     setShowExpanded(true);
-  }, []);
+  };
+
+  // The day list ("+N more", or a click on a day's empty space).
+  const [listedDay, setListedDay] = useState<string>();
+  const [showDayList, setShowDayList] = useState(false);
+
+  const handleOpenDay = (dayKey: string) => {
+    setListedDay(dayKey);
+    setShowDayList(true);
+  };
 
   // Create a new item already placed on a day: a row of the table's class with
   // its date property preset. `createdAt` is required for it to appear in the
@@ -319,6 +347,16 @@ export function CalendarView({
   return (
     <>
       {recurrenceError && <WarningBlock>{recurrenceError}</WarningBlock>}
+      {invalidRecurrences.length > 0 && (
+        <InvalidRecurrenceWarning
+          invalid={invalidRecurrences.map(({ subject, message }) => ({
+            subject,
+            message,
+            title: rows.get(subject)?.title || subject,
+          }))}
+          onOpenItem={handleOpenItem}
+        />
+      )}
       <CalendarWrapper data-testid='calendar-view'>
         <Toolbar>
           <MonthLabel>{monthLabel}</MonthLabel>
@@ -344,7 +382,9 @@ export function CalendarView({
         </Toolbar>
         <WeekdayRow>
           {WEEKDAY_LABELS.map(label => (
-            <Weekday key={label}>{label}</Weekday>
+            <Weekday key={label} data-testid='calendar-weekday'>
+              {label}
+            </Weekday>
           ))}
         </WeekdayRow>
         <Grid $weeks={gridDays.length / 7}>
@@ -361,10 +401,20 @@ export function CalendarView({
               readOnly={readOnly}
               onAddItem={handleAddItem}
               onOpenItem={handleOpenItem}
+              onOpenDay={handleOpenDay}
             />
           ))}
         </Grid>
       </CalendarWrapper>
+      <CalendarDayList
+        dayKey={listedDay}
+        open={showDayList}
+        bindOpen={setShowDayList}
+        eventSubjects={(listedDay && buckets.get(listedDay)) || []}
+        occurrences={(listedDay && occurrenceBuckets.get(listedDay)) || []}
+        allDaySubjects={allDaySubjects}
+        onOpenItem={handleOpenItem}
+      />
       <ExpandedRowDialog
         subject={expandedSubject ?? unknownSubject}
         open={showExpanded}
@@ -382,6 +432,45 @@ const CalendarWrapper = styled.div`
    * still leaves the page chrome visible. Mirrors the kanban Board's model. */
   height: min(80vh, calc(100dvh - 13rem));
   min-height: 24rem;
+`;
+
+/** Names each row whose recurrence could not be expanded; the rest of the
+ * calendar still renders. Clicking a name opens the row to fix it. */
+function InvalidRecurrenceWarning({
+  invalid,
+  onOpenItem,
+}: {
+  invalid: (InvalidCalendarRecord & { title: string })[];
+  onOpenItem: (subject: string) => void;
+}): JSX.Element {
+  return (
+    <WarningBlock>
+      <WarningBlock.Title>
+        Some recurring meetings could not be displayed
+      </WarningBlock.Title>
+      <InvalidList data-testid='calendar-invalid-recurrences'>
+        {invalid.map(({ subject, message, title }) => (
+          <li key={subject}>
+            <InvalidLink type='button' onClick={() => onOpenItem(subject)}>
+              {title}
+            </InvalidLink>
+            : {message}
+          </li>
+        ))}
+      </InvalidList>
+    </WarningBlock>
+  );
+}
+
+const InvalidList = styled.ul`
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.25rem;
+`;
+
+const InvalidLink = styled(ButtonClean)`
+  color: ${p => p.theme.colors.main};
+  text-decoration: underline;
+  user-select: text;
 `;
 
 const Toolbar = styled.div`
@@ -410,15 +499,29 @@ const NavIcon = styled(IconButton)`
   width: 1.85rem;
 `;
 
+/**
+ * The one column template for both the weekday header row and the day grid,
+ * so the two cannot size their columns differently (#1792). `minmax(0, 1fr)`
+ * rather than `1fr`: a bare `1fr` track never shrinks below its content's
+ * min-width, so a long title widened its column in the grid but not in the
+ * header row, and at phone width pushed Sunday off the screen.
+ */
+const WEEK_COLUMNS = 'repeat(7, minmax(0, 1fr))';
+
 const WeekdayRow = styled.div`
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: ${WEEK_COLUMNS};
   gap: 1px;
+  /* Matches the Grid's 1px border, so both rows' tracks start at the same x. */
   padding-inline: 1px;
   flex-shrink: 0;
 `;
 
 const Weekday = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 0.25rem 0.3rem;
   font-size: 0.8em;
   color: ${p => p.theme.colors.textLight};
@@ -427,7 +530,7 @@ const Weekday = styled.span`
 
 const Grid = styled.div<{ $weeks: number }>`
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: ${WEEK_COLUMNS};
   grid-template-rows: repeat(${p => p.$weeks}, minmax(5rem, 1fr));
   gap: 1px;
   /* The gap + this background paints the hairline grid between the cells. */

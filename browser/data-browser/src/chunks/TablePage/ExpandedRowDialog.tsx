@@ -50,6 +50,7 @@ export function ExpandedRowDialog({
         <AllProps
           editable
           columns
+          labelByName
           resource={resource}
           except={EXCLUDED_PROPS}
         />

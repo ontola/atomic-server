@@ -35,6 +35,7 @@ import {
 import type { DerivedColumnSpec } from './derivedColumns';
 import { derivedFilterKey, filterKey } from './tableFiltering';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
+import { ColumnFilterDropdown } from './ColumnFilterDropdown';
 import {
   normalizeViewKind,
   VIEW_KINDS,
@@ -242,7 +243,7 @@ function FilterMenu({
     );
   }
 
-  return <DropdownMenu Trigger={FilterTrigger} items={items} />;
+  return <ColumnFilterDropdown Trigger={FilterTrigger} items={items} />;
 }
 
 function ViewTab({

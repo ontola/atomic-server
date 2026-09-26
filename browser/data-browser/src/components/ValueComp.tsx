@@ -12,7 +12,7 @@ import {
 } from '@tomic/react';
 import { LocalizedTextValue } from './LocalizedTextValue';
 import { ResourceInline } from '../views/ResourceInline';
-import { DateTime } from './datatypes/DateTime';
+import { CalendarDate, DateTime } from './datatypes/DateTime';
 import Markdown from './datatypes/Markdown';
 import Nestedresource from './datatypes/NestedResource';
 import ResourceArray from './datatypes/ResourceArray';
@@ -53,6 +53,7 @@ function renderValue(value: AtomicValue, datatype: Datatype): JSX.Element {
     }
 
     case Datatype.DATE:
+      return <CalendarDate value={valToString(value)} />;
     case Datatype.TIMESTAMP:
       return <DateTime date={valToDate(value)} />;
     case Datatype.MARKDOWN:

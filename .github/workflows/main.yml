@@ -180,6 +180,8 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10.15.1
+          # Per-runner, not the shared ~/setup-pnpm; see main-ci.yml.
+          dest: ${{ runner.temp }}/setup-pnpm
 
       - name: Install Node
         uses: actions/setup-node@v4

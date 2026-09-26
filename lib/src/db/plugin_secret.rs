@@ -143,7 +143,7 @@ pub fn mentions_handle(value: &str) -> bool {
     value.contains(SECRET_HANDLE_PREFIX)
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod store_tests {
     use super::*;
     use crate::db::Db;

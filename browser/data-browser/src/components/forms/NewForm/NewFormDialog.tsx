@@ -1,6 +1,5 @@
 import { Core, JSONValue, useResource } from '@tomic/react';
 import { useState, useCallback, type JSX } from 'react';
-import { useEffectOnce } from '../../../hooks/useEffectOnce';
 import { Button } from '../../Button';
 import { DialogTitle, DialogContent, DialogActions } from '../../Dialog';
 import { ErrorBlock, ErrorLook } from '../../ErrorLook';
@@ -30,33 +29,22 @@ export const NewFormDialog = ({
   const klass = useResource<Core.Class>(classSubject);
   const [subject, setSubject] = useState<string>();
   const [isFormValid, setIsFormValid] = useState(false);
-  const { subjectErr, subjectValue, setSubjectValue, resource } = useNewForm({
-    klass,
-    setSubject,
-    initialSubject: subject,
-    parent,
-  });
+  const { subjectErr, subjectValue, setSubjectValue, resource, initialized } =
+    useNewForm({
+      klass,
+      setSubject,
+      initialSubject: subject,
+      parent,
+      initialProps,
+    });
 
   const handleValidationChange = useCallback((valid: boolean) => {
     setIsFormValid(valid);
   }, []);
 
-  const [initialValuesSet, setInitialValuesSet] = useState(false);
-
   const onResourceSave = useCallback(() => {
     onSaveClick(resource.subject);
   }, [onSaveClick, resource]);
-
-  // Onmount we generate a new subject based on the classtype and the user input.
-  useEffectOnce(() => {
-    (async () => {
-      for (const [prop, value] of Object.entries(initialProps ?? {})) {
-        await resource.set(prop, value);
-      }
-
-      setInitialValuesSet(true);
-    })();
-  });
 
   const [save, saving, error] = useSaveResource(resource, onResourceSave);
 
@@ -68,7 +56,11 @@ export const NewFormDialog = ({
     return <ErrorBlock error={resource.error}></ErrorBlock>;
   }
 
-  if (!initialValuesSet) {
+  if (subjectErr && !initialized) {
+    return <ErrorBlock error={subjectErr}></ErrorBlock>;
+  }
+
+  if (!initialized) {
     return <>loading</>;
   }
 

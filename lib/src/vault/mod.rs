@@ -1,14 +1,12 @@
 //! Shared crypto for client-side envelope encryption: a random DEK encrypts
-//! the protected secret once, wrapped independently per enrolled credential
-//! (a generated recovery code today; a WebAuthn PRF wrapper is a planned
-//! addition). Consumed today by atomic-saas's recovery-secret backup
-//! (`planning/BACKUP_SECURITY.md`); the same module is the intended home for
-//! the drive-level Cloud Vault key material later
-//! (`planning/CLOUD_VAULT_ARCHITECTURE.md`, Phase 0).
+//! the protected secret once, wrapped independently per credential
+//! (`secret_envelope`: the agent's vault proof, or a node key). `keys` also
+//! carries the Argon2id KDF that the browser's recovery-code backup
+//! (`recovery.ts`, stored by atomic-saas) loads through `atomic-wasm`; that
+//! backup's envelope format itself lives in TypeScript.
 //!
-//! Nothing here ever runs server-side against real secrets — only the
-//! browser (via the `atomic-wasm` bindings) calls these functions. The
-//! server only ever stores the opaque output.
+//! The drive-level Cloud Vault key material lives here too
+//! (`planning/CLOUD_VAULT_ARCHITECTURE.md`).
 
 pub mod keys;
 
@@ -16,15 +14,15 @@ pub mod keys;
 // envelope. Gated on `db-redb` because that is the feature carrying
 // `chacha20poly1305`, and every host that can run a vault client already
 // enables it (see the host table in CLOUD_VAULT_ARCHITECTURE.md).
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod dek;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod envelope;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod pack;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod secret_envelope;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod store;
-#[cfg(feature = "db-redb")]
+#[cfg(feature = "db")]
 pub mod sync;
