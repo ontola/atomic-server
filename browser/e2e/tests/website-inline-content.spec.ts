@@ -133,6 +133,21 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
   await page.getByRole('button', { name: 'Done editing', exact: true }).click();
   await expect(frame.getByText('Fresh pastries every morning.')).toBeVisible();
   await page.reload();
-  await expect(frame.getByText('Fresh pastries every morning.')).toBeVisible();
+  // The same assertion as the line above, but a reload costs the whole cold path
+  // again: the app boots, reads the website config and runs buildWebsiteArtifact
+  // before the preview iframe has any content. Measured over eight four-worker
+  // rounds on this container, that is the entire difference:
+  //
+  //     before the reload    613 to 1484 ms
+  //     after the reload    2643 to 9990 ms
+  //
+  // 9990 ms of the 10 s default is a test that passed by ten milliseconds, and
+  // the same round it exceeded it outright, with the text never appearing. The
+  // "Page edit" click waits on this same build and is already on 30 s for the
+  // same reason (`clickPageEdit` in test-utils), so this matches it rather than
+  // being a new allowance.
+  await expect(frame.getByText('Fresh pastries every morning.')).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(frame.locator('dd').nth(1)).toHaveText('5.75');
 });
