@@ -489,7 +489,13 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (!isDerivedByServer(key) && this._loroMap.get(key) === undefined) {
+          if (
+            !isDerivedByServer(key) &&
+            this._loroMap.get(key) === undefined &&
+            // A key with a last editor was deleted in this doc: the snapshot
+            // removed it, it did not miss it.
+            this._loroMap.getLastEditor(key) === undefined
+          ) {
             this.loroSetProperty(key, value);
           }
         }
@@ -3788,14 +3794,11 @@ export class Resource<C extends OptionalClass = any> {
     if (replace) {
       this.resetLoroState();
 
-      // The cache holds the state being replaced, not values that arrived with
-      // these bytes. Left in place, `getLoroDoc()`'s heal pass writes every key
-      // the snapshot lacks back into the doc — so a property removed at the
-      // source came back as a local op (an app's `/app-write` remove seemed
-      // not to stick). Server-derived keys are not in Loro; keep those.
-      for (const key of Object.keys(this.#cache)) {
-        if (!isDerivedByServer(key)) delete this.#cache[key];
-      }
+      // The cache is kept: `getLoroDoc()`'s heal pass restores from it what
+      // these bytes never had (an agent's name restored from Cloud Vault,
+      // while the node only holds the stub it made for that agent), and
+      // skips what they deleted, so a property removed at the source stays
+      // removed.
 
       // Point `getLoroDoc()` at these bytes so it imports the snapshot
       // instead of seeding a *new* LoroList per array from `#cache`.
