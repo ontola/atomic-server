@@ -12398,3 +12398,29 @@ msgstr ""
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
 msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Sign in again to unlock your account on this device."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/helpers/managed/recovery.ts
+msgid "{0} account"
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Your account could not unlock this backup."
+msgstr ""
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlocking {0}…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in again to open your account on this device."
+msgstr ""
+
+#: src/views/getting-started/GoogleSignInButton.tsx
+msgid "Continue with Google"
+msgstr ""

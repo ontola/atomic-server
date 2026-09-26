@@ -44,7 +44,11 @@ import { isRunningInTauri } from '../../helpers/tauri';
 import { openExternal } from '../../helpers/openExternal';
 import {
   buildEnvelopeV2,
+  buildEnvelopeWithAssisted,
   buildEnvelopeWithPasskeyAndCode,
+  decryptEnvelopeWithAssisted,
+  FreshSignInRequiredError,
+  hasAssistedWrapper,
   saveRecoverySecret,
   getRecoverySecret,
   getUnlockableRecoverySecret,
@@ -58,6 +62,7 @@ import {
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
+import { GoogleSignInButton } from './GoogleSignInButton';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
@@ -356,6 +361,60 @@ export function GettingStartedFlow({
     return recoveryCode;
   }
 
+  /**
+   * The account's own way in, above the passkey, code and secret: while the
+   * account is unlocking the identity by itself, say so; where there is no
+   * session, or it is too old to unlock with, offer "Continue with Google",
+   * which comes straight back here signed in.
+   */
+  function accountSignIn() {
+    if (restore.phase === 'ready' && assistedUnlock === 'trying') {
+      return (
+        <CardSubtitle key='account'>Unlocking {restore.email}…</CardSubtitle>
+      );
+    }
+
+    const offerGoogle =
+      !!knownPortalUrl &&
+      !isRunningInTauri() &&
+      canHoldProviderCookie(knownPortalUrl) &&
+      (restore.phase === 'no-session' ||
+        (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
+
+    if (!offerGoogle || !knownPortalUrl) return null;
+
+    return (
+      <Column key='account' gap='0.75rem'>
+        {assistedUnlock === 'needs-sign-in' ? (
+          <CardSubtitle>
+            Sign in again to open your account on this device.
+          </CardSubtitle>
+        ) : null}
+        <GoogleSignInButton portalUrl={knownPortalUrl} disabled={loading} />
+      </Column>
+    );
+  }
+
+  // The backup when the account service offers assisted recovery: wrapped by
+  // the account alone, so there is no passkey to register and no code to
+  // save, and signing in on any other device opens it. Resolves false when
+  // the service does not offer it, so the passkey and code step runs as
+  // before.
+  async function backupWithAccount(secret: string): Promise<boolean> {
+    try {
+      const request = await buildEnvelopeWithAssisted({
+        secret,
+        agentSubject: requireAgentSubject(),
+        driveSubject: newDriveSubject.current ?? null,
+      });
+      await saveRecoverySecret(request);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ─── Restore ("Forgot your secret?") ─────────────────────────────────────
   const [restore, setRestore] = useState<RestoreState>({ phase: 'checking' });
   const returnToPortal =
@@ -410,6 +469,15 @@ export function GettingStartedFlow({
    * step. A page reload would do the same and lose the user's place.
    */
   const [restoreAttempt, setRestoreAttempt] = useState(0);
+  /**
+   * Opening the backup with the account alone (assisted recovery), which
+   * runs by itself as soon as a signed-in account's backup allows it.
+   * `needs-sign-in`: the sign-in is too old to unlock with, so the step
+   * offers signing in again next to the passkey and the code.
+   */
+  const [assistedUnlock, setAssistedUnlock] = useState<
+    'idle' | 'trying' | 'needs-sign-in'
+  >('idle');
 
   useEffect(() => {
     if (step !== 'restore' && step !== 'signin') return;
@@ -436,6 +504,27 @@ export function GettingStartedFlow({
             secret,
             email: account?.email ?? secret.owner_email,
           });
+
+          if (
+            account?.email === secret.owner_email &&
+            hasAssistedWrapper(secret)
+          ) {
+            setAssistedUnlock('trying');
+
+            try {
+              const plaintext = await decryptEnvelopeWithAssisted(secret);
+              if (cancelled) return;
+              await handleSignInWithSecret(plaintext);
+            } catch (err) {
+              if (!cancelled) {
+                setAssistedUnlock(
+                  err instanceof FreshSignInRequiredError
+                    ? 'needs-sign-in'
+                    : 'idle',
+                );
+              }
+            }
+          }
 
           return;
         }
@@ -973,6 +1062,8 @@ export function GettingStartedFlow({
                   </CardSubtitle>
                 ) : null}
 
+                {accountSignIn()}
+
                 {/* Several accounts on this machine: ask which, rather than
                     guessing and raising a prompt for the wrong one. */}
                 {knownAccounts.length > 1 ? (
@@ -1195,6 +1286,7 @@ export function GettingStartedFlow({
             <OnboardingCard key='card'>
               <Column gap='1rem'>
                 <CardTitle key='title'>Restore account</CardTitle>
+                {accountSignIn()}
                 {restore.phase === 'checking' ? (
                   <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
                 ) : restore.phase === 'no-session' ? (
@@ -1449,6 +1541,9 @@ export function GettingStartedFlow({
                       fromManaged ? backupWithPasskey : undefined
                     }
                     onBackupWithCode={fromManaged ? backupWithCode : undefined}
+                    onBackupWithAccount={
+                      fromManaged ? backupWithAccount : undefined
+                    }
                     onAfterCreate={
                       fromManaged ? enableEncryptedBackup : undefined
                     }

@@ -6,9 +6,10 @@ import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
 import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
+import { getAccountProviders } from './accountProviders';
 
 export type RecoveryWrapperInput = {
-  wrapper_type: 'webauthn-prf' | 'recovery-code';
+  wrapper_type: 'webauthn-prf' | 'recovery-code' | 'atomic-assisted';
   /** Empty for `webauthn-prf`: the authenticator's PRF output *is* the KEK. */
   kdf_algorithm: string;
   kdf_params: Record<string, unknown>;
@@ -770,6 +771,7 @@ export async function buildEnvelopeWithPasskeyAndCode({
   });
   const recoveryCode = generateRecoveryCode();
   const codeWrapper = await wrapDekWithCode(sealed.dek, recoveryCode);
+  const assisted = await tryWrapDekWithAssisted(sealed.dek, agentSubject);
 
   return {
     recoveryCode,
@@ -777,7 +779,7 @@ export async function buildEnvelopeWithPasskeyAndCode({
       agentSubject,
       driveSubject,
       sealed,
-      wrappers: [passkeyWrapper, codeWrapper],
+      wrappers: [passkeyWrapper, codeWrapper, ...assisted],
     }),
   };
 }
@@ -799,6 +801,7 @@ export async function buildEnvelopeV2({
   const sealed = await sealSecret(secret);
   const recoveryCode = generateRecoveryCode();
   const wrapper = await wrapDekWithCode(sealed.dek, recoveryCode);
+  const assisted = await tryWrapDekWithAssisted(sealed.dek, agentSubject);
 
   return {
     recoveryCode,
@@ -806,9 +809,203 @@ export async function buildEnvelopeV2({
       agentSubject,
       driveSubject,
       sealed,
-      wrappers: [wrapper],
+      wrappers: [wrapper, ...assisted],
     }),
   };
+}
+
+// --- Assisted recovery: signing in to the account unlocks the identity ---
+//
+// The control plane holds a service key and hands a signed-in account the
+// key-encryption key for one of its wrappers (see atomic-saas
+// `src/assisted_recovery.rs`). Wrapping and unwrapping stay here, so the DEK
+// and the secret never leave the browser. Unlocking needs a sign-in from the
+// last half hour; an older session gets `FreshSignInRequiredError`.
+
+const ASSISTED_WRAPPER = 'atomic-assisted';
+
+/** The account's sign-in is too old to unlock the identity; sign in again. */
+export class FreshSignInRequiredError extends Error {
+  constructor() {
+    super('Sign in again to unlock your account on this device.');
+    this.name = /* @wc-ignore */ 'FreshSignInRequiredError';
+  }
+}
+
+/** Whether this deployment can unlock an identity for a signed-in account. */
+export async function isAssistedRecoveryAvailable(): Promise<boolean> {
+  return (await getAccountProviders()).assisted_recovery;
+}
+
+async function assistedKey(
+  agentSubject: string,
+  salt: string,
+  usage: KeyUsage[],
+): Promise<CryptoKey> {
+  const response = await managedFetch('/recovery-secret/assisted-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_subject: agentSubject, salt }),
+  });
+
+  if (!response.ok) {
+    const body = await response
+      .json()
+      .catch(() => null as { error_code?: string } | null);
+
+    if (body?.error_code === 'fresh_sign_in_required') {
+      throw new FreshSignInRequiredError();
+    }
+
+    throw new Error(
+      `Could not reach your ${PRODUCT_NAME} account to unlock this backup.`,
+    );
+  }
+
+  const { key } = (await response.json()) as { key: string };
+
+  return crypto.subtle.importKey(
+    'raw',
+    base64ToBytes(key),
+    'AES-GCM',
+    false,
+    usage,
+  );
+}
+
+async function wrapDekWithAssisted(
+  dek: Uint8Array<ArrayBuffer>,
+  agentSubject: string,
+): Promise<RecoveryWrapperInput> {
+  const salt = bytesToBase64(randomBytes(SALT_BYTES));
+  const key = await assistedKey(agentSubject, salt, ['encrypt']);
+  const wrapNonce = randomBytes(NONCE_BYTES);
+  const wrappedDek = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: wrapNonce },
+    key,
+    dek,
+  );
+
+  return {
+    wrapper_type: ASSISTED_WRAPPER,
+    kdf_algorithm: 'hmac-sha256',
+    kdf_params: {},
+    salt,
+    wrapped_dek: bytesToBase64(new Uint8Array(wrappedDek)),
+    wrap_nonce: bytesToBase64(wrapNonce),
+    label: `${PRODUCT_NAME} account`,
+  };
+}
+
+/** The assisted wrapper when this deployment offers it, else nothing. Never
+ * throws: a backup without it still works with its passkey or code. */
+async function tryWrapDekWithAssisted(
+  dek: Uint8Array<ArrayBuffer>,
+  agentSubject: string,
+): Promise<RecoveryWrapperInput[]> {
+  try {
+    if (!(await isAssistedRecoveryAvailable())) return [];
+
+    return [await wrapDekWithAssisted(dek, agentSubject)];
+  } catch {
+    return [];
+  }
+}
+
+export function hasAssistedWrapper(recovery: RecoverySecret): boolean {
+  return (
+    recovery.format_version >= 2 &&
+    recovery.wrappers.some(w => w.wrapper_type === ASSISTED_WRAPPER)
+  );
+}
+
+/**
+ * The backup for a signed-in account that nobody has to type or tap anything
+ * for: the DEK is wrapped only by the account's assisted key. Throws when the
+ * deployment does not offer assisted recovery, so the caller can fall back to
+ * a passkey or a recovery code.
+ */
+export async function buildEnvelopeWithAssisted({
+  secret,
+  agentSubject,
+  driveSubject,
+}: {
+  secret: string;
+  agentSubject: string;
+  driveSubject?: string | null;
+}): Promise<RecoverySecretInput> {
+  if (!(await isAssistedRecoveryAvailable())) {
+    throw new Error('Assisted recovery is not available here.');
+  }
+
+  const sealed = await sealSecret(secret);
+  const wrapper = await wrapDekWithAssisted(sealed.dek, agentSubject);
+
+  return envelopeRequest({
+    agentSubject,
+    driveSubject,
+    sealed,
+    wrappers: [wrapper],
+  });
+}
+
+/** Unlock with the account alone. Needs a recent sign-in. */
+export async function decryptEnvelopeWithAssisted(
+  recovery: RecoverySecret,
+): Promise<string> {
+  const wrapper = recovery.wrappers.find(
+    w => w.wrapper_type === ASSISTED_WRAPPER,
+  );
+
+  if (!wrapper)
+    throw new Error('This backup cannot be unlocked by signing in.');
+
+  const key = await assistedKey(recovery.agent_subject, wrapper.salt, [
+    'decrypt',
+  ]);
+
+  return openWithDekKey(
+    recovery,
+    wrapper,
+    key,
+    'Your account could not unlock this backup.',
+  );
+}
+
+/**
+ * After a passkey or a recovery code opened a backup: add the assisted
+ * wrapper, so on the next device signing in is enough. In the background and
+ * best-effort; the unlock that just happened never waits on it.
+ */
+function addAssistedWrapperInBackground(
+  recovery: RecoverySecret,
+  dek: Uint8Array<ArrayBuffer>,
+): void {
+  if (recovery.format_version !== 2 || hasAssistedWrapper(recovery)) return;
+
+  void (async () => {
+    if (!(await isAssistedRecoveryAvailable())) return;
+    // The wrapper is appended to the signed-in account's backup, so only
+    // when that account is the one owning this backup.
+    const account = await getManagedAccount().catch(() => null);
+
+    if (!account || account.email !== recovery.owner_email) return;
+
+    const wrapper = await wrapDekWithAssisted(dek, recovery.agent_subject);
+    const response = await managedFetch('/recovery-secret/wrappers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_subject: recovery.agent_subject,
+        encrypted_secret: recovery.encrypted_secret,
+        nonce: recovery.nonce,
+        wrapper,
+      }),
+    });
+
+    if (response.ok)
+      cacheRecoverySecret((await response.json()) as RecoverySecret);
+  })().catch(() => undefined);
 }
 
 /** Whether this backup can be unlocked by a passkey / by a typed code. */
@@ -827,11 +1024,13 @@ async function openWithDekKey(
   wrapper: RecoveryWrapper,
   wrapKey: CryptoKey,
   wrongKeyMessage: string,
+  onDek?: (dek: Uint8Array<ArrayBuffer>) => void,
 ): Promise<string> {
   let plaintext: ArrayBuffer;
+  let dek: ArrayBuffer;
 
   try {
-    const dek = await crypto.subtle.decrypt(
+    dek = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: base64ToBytes(wrapper.wrap_nonce) },
       wrapKey,
       base64ToBytes(wrapper.wrapped_dek),
@@ -847,6 +1046,8 @@ async function openWithDekKey(
   } catch {
     throw new Error(wrongKeyMessage);
   }
+
+  onDek?.(new Uint8Array(dek));
 
   return new TextDecoder().decode(plaintext);
 }
@@ -949,6 +1150,7 @@ export async function decryptEnvelopeWithPasskey(
     wrapper,
     key,
     'That passkey could not unlock this backup.',
+    dek => addAssistedWrapperInBackground(recovery, dek),
   );
 }
 
@@ -977,7 +1179,13 @@ export async function decryptEnvelopeV2(
     wrapper.kdf_params,
   );
 
-  return openWithDekKey(recovery, wrapper, wrapKey, 'Wrong recovery code');
+  return openWithDekKey(
+    recovery,
+    wrapper,
+    wrapKey,
+    'Wrong recovery code',
+    dek => addAssistedWrapperInBackground(recovery, dek),
+  );
 }
 
 /**

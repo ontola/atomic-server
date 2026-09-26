@@ -4,6 +4,16 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Signing in to a hosted account can now be enough to open your identity on a
+  new device (#277). When the account service offers assisted recovery
+  (`assisted_recovery` in `GET /api/auth/providers`), a new account's backup is
+  wrapped by the account alone, so onboarding asks for no passkey and shows no
+  recovery code, and the sign-in and restore steps unlock it by themselves
+  after a recent sign-in. Existing backups get the extra wrapper the next time
+  a passkey or recovery code opens them. The steps also offer "Continue with
+  Google" when the account service has it configured. Standalone servers are
+  unaffected: without those endpoints nothing changes.
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs
