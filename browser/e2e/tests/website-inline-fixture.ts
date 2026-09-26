@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { waitForSynced } from './test-utils';
+import { clickPageEdit, waitForSynced } from './test-utils';
 
 /**
  * A bakery website with one document and one product row, opened in
@@ -84,9 +84,16 @@ export async function createBakery(page: Page) {
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(fixture.subject)}`,
   );
-  await page.getByRole('button', { name: 'Page edit', exact: true }).click();
+  await clickPageEdit(page);
   const frame = page.frameLocator('iframe[title="Website preview"]');
   const editor = frame.getByLabel('Rich Text Editor', { exact: true });
+  // Deliberately left on the 10 s default: raising it would hide nothing. Over
+  // 11 measured rounds this wait is 394, 421, 427, 433, 461, 521, 566, 643, 729
+  // or 1031 ms, and in the one round it failed it was 10047 ms with the editor
+  // never existing at all. There is no middle, so it is binary rather than slow
+  // and a bigger number would only wait longer before failing the same way.
+  // Two causes for that have been tested and ruled out already; if it fails
+  // here, read `e2e-website-inline-rte-two-flakes` before touching this number.
   await expect(editor).toContainText('Fresh bread every morning.');
 
   // Emptying the editor commits, and the server echoes that commit back into

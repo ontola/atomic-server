@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before, waitForSynced } from './test-utils';
+import { before, clickPageEdit, waitForSynced } from './test-utils';
 
 test('inline website editing saves rich documents and typed prices to Atomic', async ({
   page,
@@ -72,7 +72,7 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(fixture.subject)}`,
   );
-  await page.getByRole('button', { name: 'Page edit', exact: true }).click();
+  await clickPageEdit(page);
   const frame = page.frameLocator('iframe[title="Website preview"]');
   const priceField = frame.locator('dd [contenteditable]').nth(1);
   await expect(priceField).toHaveText('4.5');
