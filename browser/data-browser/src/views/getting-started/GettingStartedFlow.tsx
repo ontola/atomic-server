@@ -62,7 +62,7 @@ import {
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
-import { GoogleSignInButton } from './GoogleSignInButton';
+import { AccountSignInPanel } from './AccountSignInPanel';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
@@ -362,10 +362,10 @@ export function GettingStartedFlow({
   }
 
   /**
-   * The account's own way in, above the passkey, code and secret: while the
+   * The account's own ways in, above the passkey, code and secret: while the
    * account is unlocking the identity by itself, say so; where there is no
-   * session, or it is too old to unlock with, offer "Continue with Google",
-   * which comes straight back here signed in.
+   * session, or it is too old to unlock with, offer the same sign-in options
+   * as the portal (the shared `AccountSignIn`), which end back here signed in.
    */
   function accountSignIn() {
     if (restore.phase === 'ready' && assistedUnlock === 'trying') {
@@ -374,14 +374,14 @@ export function GettingStartedFlow({
       );
     }
 
-    const offerGoogle =
+    const offerSignIn =
       !!knownPortalUrl &&
       !isRunningInTauri() &&
       canHoldProviderCookie(knownPortalUrl) &&
       (restore.phase === 'no-session' ||
         (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
 
-    if (!offerGoogle || !knownPortalUrl) return null;
+    if (!offerSignIn || !knownPortalUrl) return null;
 
     return (
       <Column key='account' gap='0.75rem'>
@@ -390,7 +390,11 @@ export function GettingStartedFlow({
             Sign in again to open your account on this device.
           </CardSubtitle>
         ) : null}
-        <GoogleSignInButton portalUrl={knownPortalUrl} disabled={loading} />
+        <AccountSignInPanel
+          portalUrl={knownPortalUrl}
+          disabled={loading}
+          onSignedIn={() => setRestoreAttempt(n => n + 1)}
+        />
       </Column>
     );
   }
@@ -1291,8 +1295,8 @@ export function GettingStartedFlow({
                   <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
                 ) : restore.phase === 'no-session' ? (
                   // Two ways to get a session, and only one works per client.
-                  // A page on the portal's own site signs in there and comes
-                  // back with the cookie. The desktop and Android apps, and a
+                  // A page on the portal's own site signs in right here and
+                  // holds the shared cookie. The desktop and Android apps, and a
                   // self-hosted origin, cannot hold that cookie: sending them
                   // to the portal's sign-in ends with a session in some
                   // browser and none here — which used to be this screen's
@@ -1310,28 +1314,9 @@ export function GettingStartedFlow({
                         onLinked={() => setRestoreAttempt(n => n + 1)}
                       />
                     </Column>
-                  ) : (
-                    <Column key='no-session' gap='0.75rem'>
-                      <p key='copy'>
-                        {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
-                      </p>
-                      {knownPortalUrl && (
-                        <Button
-                          key='signin'
-                          type='button'
-                          onClick={() => {
-                            // `/signin` rather than the root, which is the sales
-                            // page — someone mid-recovery should land on the form.
-                            window.location.assign(
-                              new URL('/signin', knownPortalUrl).toString(),
-                            );
-                          }}
-                        >
-                          {`Sign in to your ${PRODUCT_NAME} account`}
-                        </Button>
-                      )}
-                    </Column>
-                  )
+                  ) : // Signed in right here, above: the same options as the
+                  // portal's sign-in page (`accountSignIn`).
+                  null
                 ) : restore.phase === 'no-backup' ? (
                   inviteToken ? (
                     // The portal sends an invitee here whenever it cannot rule

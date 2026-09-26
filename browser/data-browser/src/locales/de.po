@@ -3679,15 +3679,11 @@ msgstr ""
 msgid "Checking your {0} account…"
 msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "To restore your account, sign in to your {0} account first, then come back here."
-msgstr ""
+#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
+#~ msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your {0} account"
-msgstr ""
+#~ msgid "Sign in to your {0} account"
+#~ msgstr ""
 
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx

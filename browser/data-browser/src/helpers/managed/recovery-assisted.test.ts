@@ -11,7 +11,11 @@ import { getManagedAccount } from './session';
 import { managedFetch, getManagedApiBase } from './api';
 
 vi.mock('./session', () => ({ getManagedAccount: vi.fn() }));
-vi.mock('./api', () => ({ managedFetch: vi.fn(), getManagedApiBase: vi.fn() }));
+vi.mock('./api', () => ({
+  managedFetch: vi.fn(),
+  getManagedApiBase: vi.fn(),
+  hasManagedApi: vi.fn(() => true),
+}));
 
 const AGENT = 'atomic:agent:9Hc-J_2n4jIpXqzTZMDSnNFOFB1fWqCsGSk3Wdyy9Bs';
 
@@ -105,4 +109,17 @@ it('an old sign-in is told to sign in again', async () => {
   await expect(decryptEnvelopeWithAssisted(backup)).rejects.toBeInstanceOf(
     FreshSignInRequiredError,
   );
+});
+
+it('a build without an account service asks nobody', async () => {
+  const { hasManagedApi } = await import('./api');
+  const { getAccountProviders } = await import('./accountProviders');
+  vi.mocked(hasManagedApi).mockReturnValueOnce(false);
+  vi.mocked(managedFetch).mockClear();
+
+  expect(await getAccountProviders()).toEqual({
+    google: false,
+    assisted_recovery: false,
+  });
+  expect(managedFetch).not.toHaveBeenCalled();
 });

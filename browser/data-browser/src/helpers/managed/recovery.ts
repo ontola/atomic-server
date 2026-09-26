@@ -1012,10 +1012,15 @@ function addAssistedWrapperInBackground(
 export function envelopeWrapperKinds(recovery: RecoverySecret): {
   hasPasskey: boolean;
   hasCode: boolean;
+  /** Signing in to the account opens it (assisted recovery). */
+  hasAccount: boolean;
 } {
   return {
     hasPasskey: recovery.wrappers.some(w => w.wrapper_type === 'webauthn-prf'),
     hasCode: recovery.wrappers.some(w => w.wrapper_type === 'recovery-code'),
+    hasAccount: recovery.wrappers.some(
+      w => w.wrapper_type === 'atomic-assisted',
+    ),
   };
 }
 

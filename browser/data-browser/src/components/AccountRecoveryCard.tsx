@@ -544,7 +544,9 @@ export function AccountRecoveryCard({
     );
   }
 
-  const { hasPasskey, hasCode } = envelopeWrapperKinds(backup.secret);
+  const { hasPasskey, hasCode, hasAccount } = envelopeWrapperKinds(
+    backup.secret,
+  );
   const deviceOnly = backup.onServer === false;
 
   return (
@@ -555,7 +557,11 @@ export function AccountRecoveryCard({
             into a space and the sentence read "your passkey ." */}
         You can get back in with:{' '}
         {`${
-          [hasPasskey && 'your passkey', hasCode && 'your recovery code']
+          [
+            hasAccount && `signing in to your ${PRODUCT_NAME} account`,
+            hasPasskey && 'your passkey',
+            hasCode && 'your recovery code',
+          ]
             .filter(Boolean)
             .join(' or ') || 'your recovery password'
         }${deviceOnly ? ', on this device' : ''}.`}

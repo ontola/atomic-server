@@ -124,3 +124,54 @@ export async function accountPasskey(
     existing,
   };
 }
+
+/**
+ * Sign in to the account with a passkey, from the app: the same ceremony as
+ * the portal's "Sign in with passkey", which the account service accepts
+ * from the app's origin too. Ends with the shared session cookie set.
+ * Resolves false when the person dismissed the prompt.
+ */
+export async function signInWithAccountPasskey(email = ''): Promise<boolean> {
+  const start = await managedFetch('/passkeys/login/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  if (!start.ok) throw new Error('Could not start passkey sign-in.');
+  const { publicKey } = await start.json();
+
+  let credential: PublicKeyCredential | null;
+
+  try {
+    credential = (await navigator.credentials.get({
+      publicKey: {
+        ...publicKey,
+        challenge: decode(publicKey.challenge),
+        allowCredentials: (publicKey.allowCredentials ?? []).map(
+          (c: { id: string; type: string }) => ({ ...c, id: decode(c.id) }),
+        ),
+      },
+    } as CredentialRequestOptions)) as PublicKeyCredential | null;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'NotAllowedError') {
+      return false;
+    }
+
+    throw error;
+  }
+
+  if (!credential) return false;
+  const finish = await managedFetch('/passkeys/login/finish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(authenticationResponse(credential)),
+  });
+
+  if (!finish.ok) {
+    throw new Error(
+      'That passkey is not linked to an account. Use Google or an email link instead.',
+    );
+  }
+
+  return true;
+}

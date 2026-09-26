@@ -3679,15 +3679,11 @@ msgstr "Enter your agent secret to unlock this drive on this device."
 msgid "Checking your {0} account…"
 msgstr "Checking your {0} account…"
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "To restore your account, sign in to your {0} account first, then come back here."
-msgstr "To restore your account, sign in to your {0} account first, then come back here."
+#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
+#~ msgstr "To restore your account, sign in to your {0} account first, then come back here."
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your {0} account"
-msgstr "Sign in to your {0} account"
+#~ msgid "Sign in to your {0} account"
+#~ msgstr "Sign in to your {0} account"
 
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
