@@ -44,12 +44,10 @@ test('a fresh Mac install can start account recovery before it has an agent', as
   await page.goto(`${FRONTEND_URL}/app/welcome`);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByLabel('Agent secret', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /^Forgot it\? Restore from/ }).click();
-
+  // No agent and no session: the sign-in step itself offers the account's
+  // options, each finished in the system browser, so recovery starts here.
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Restore account' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Connect existing account' }),
+    page.getByRole('button', { name: 'Email me a link' }),
   ).toBeVisible();
 });
