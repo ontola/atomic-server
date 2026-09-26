@@ -618,6 +618,21 @@ export class DemoDirector {
     }
   }
 
+  /**
+   * `newResource` reads the parent's drive from memory. A parent that is not
+   * loaded makes the child claim the parent itself as its drive, so the store
+   * no longer sees it as local-only and posts its genesis to the server, which
+   * answers 404 on every outbox retry. Load the parent (from the local
+   * database) first, and refuse to create under one that is gone.
+   */
+  private async loadParent(subject: string): Promise<void> {
+    const parent = await this.store.getResource(subject);
+
+    if (parent.error || !this.store.isLocalOnlySubject(subject)) {
+      throw new Error(`Demo parent ${subject} is not in the local demo drive`);
+    }
+  }
+
   private touch(subject: string): void {
     this.recentlyTouched.set(subject, Date.now());
   }
@@ -855,6 +870,7 @@ export class DemoDirector {
       const agent = agentSubject
         ? await this.store.getResource(agentSubject)
         : undefined;
+      await this.loadParent(team.table);
       const row = await this.store.newResource({
         parent: team.table,
         isA: team.rowClass,
@@ -894,6 +910,7 @@ export class DemoDirector {
 
     try {
       const tag = this.manifest.checklist.statusTags[status];
+      await this.loadParent(this.manifest.checklist.table);
       const card = await this.store.newResource({
         parent: this.manifest.checklist.table,
         isA: this.manifest.checklist.rowClass,
