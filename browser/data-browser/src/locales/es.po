@@ -12398,3 +12398,42 @@ msgstr ""
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
 msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Notifications"
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "This browser can't show system notifications."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "Notifications are blocked for this site. Allow them in your browser or system settings, then come back here."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "You get a notification for new chat messages, comments on things you made, and replies to you. While you're in the app it shows in the corner; otherwise it comes from your system."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "Show system notifications on this device"
+msgstr ""
+
+#. 0: author
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} replied to you"
+msgstr ""
+
+#. 0: author; 1: on
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} commented on {1}"
+msgstr ""
+
+#. 0: author; 1: on
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} in {1}"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Someone"
+msgstr ""

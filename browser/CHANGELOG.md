@@ -4,6 +4,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Notifications while the app is open, on the web and in the desktop and
+  Android apps: new chat messages, comments on things you made and replies to
+  you show as a toast, or as a system notification when you're in another tab,
+  window or app. Nothing shows for the conversation you're already looking
+  at. System notifications are switched per device under Settings →
+  Notifications. The desktop and Android apps get them through
+  `tauri-plugin-notification`.
+
 - Android app: the back button closes an open sidebar drawer or dialog
   instead of navigating away underneath it. With nothing open, back works as
   before (previous page, then leave the app).

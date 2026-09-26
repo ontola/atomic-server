@@ -15,6 +15,7 @@ import { appRoute } from './RootRoutes';
 import { IntegrationSettings } from '@components/Settings/IntegrationSettings';
 import AISettings from '@components/AI/AISettings';
 import { VirtualDriveSettings } from '@components/Settings/VirtualDriveSettings';
+import { NotificationSettings } from '@components/Settings/NotificationSettings';
 import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
 import { SUPPORTED_LOCALES, useLocale } from '@components/LocaleContext';
 import { BasicSelect } from '@components/forms/BasicSelect';
@@ -229,6 +230,12 @@ const AppSettings: React.FunctionComponent = () => {
                   <span>Enable keyboard drag & drop in sidebar</span>
                 </CheckboxLabel>
               </Column>
+            </SettingsSection>
+            <SettingsSection
+              label='Notifications'
+              childSearchKeywords='notify notifications alerts messages comments replies push'
+            >
+              <NotificationSettings />
             </SettingsSection>
             {isVirtualDriveAvailable() && (
               <SettingsSection label='Virtual drive'>
