@@ -63,7 +63,23 @@ export function run() { return { intents: [] }; }
     ).toBeVisible();
     expect(page.url()).not.toBe(original);
     await page.goto(original);
-    await page.getByRole('tab', { name: 'Code', exact: true }).click();
+    // This click is the same locator as the one near the top of the test, but it
+    // follows a full navigation, so the app has to boot again and re-read the
+    // plugin before the tab exists. Measured over six four-worker rounds on this
+    // container, the contrast is the whole argument:
+    //
+    //     Code tab click, no navigation before it   103 to  263 ms
+    //     the `page.goto` itself                    575 to 1353 ms
+    //     Code tab click after it                  2467 to 8190 ms
+    //
+    // So 8190 ms is 82% of Playwright's 10 s ACTION default, which no `expect`
+    // budget covers. Develop run 4671 failed here on all three attempts, and the
+    // call log carried no "locator resolved to" line, which reads like the tab
+    // never existing but is what a tab arriving after 10 s also looks like.
+    // The first click keeps the default: at 3% it is not guarding anything.
+    await page
+      .getByRole('tab', { name: 'Code', exact: true })
+      .click({ timeout: 30_000 });
     await expect(
       page
         .getByRole('main')
