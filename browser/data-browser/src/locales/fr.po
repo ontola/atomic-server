@@ -5321,7 +5321,7 @@ msgstr ""
 msgid "Sign out & forget this device"
 msgstr ""
 
-#. 0: account.email; 1: PRODUCT_NAME
+#. 0: accountAddress(account); 1: PRODUCT_NAME
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr ""
@@ -12433,7 +12433,10 @@ msgstr ""
 msgid "Signing in to your {0} account is enough to open your identity on a new device. {1} holds a key for that. Turn it off to rely only on your passkey or recovery code."
 msgstr ""
 
+#~ msgid "Only your passkey or recovery code opens your identity. {0} cannot. It is added back the next time you unlock with one of them."
+#~ msgstr ""
+
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
-msgid "Only your passkey or recovery code opens your identity. {0} cannot. It is added back the next time you unlock with one of them."
+msgid "Only your passkey or recovery code opens your identity. {0} cannot."
 msgstr ""

@@ -991,6 +991,30 @@ export async function decryptEnvelopeWithAssisted(
   );
 }
 
+/** The DEK behind the assisted wrapper, for adding another way in. */
+async function assistedDek(recovery: RecoverySecret): Promise<ArrayBuffer> {
+  const wrapper = recovery.wrappers.find(
+    w => w.wrapper_type === ASSISTED_WRAPPER,
+  );
+
+  if (!wrapper)
+    throw new Error('This backup cannot be unlocked by signing in.');
+
+  const { key } = await assistedKey(recovery.agent_subject, wrapper.salt, [
+    'decrypt',
+  ]);
+
+  try {
+    return await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes(wrapper.wrap_nonce) },
+      key,
+      base64ToBytes(wrapper.wrapped_dek),
+    );
+  } catch {
+    throw new Error('Your account could not unlock this backup.');
+  }
+}
+
 /**
  * Turn assisted recovery on or off for the signed-in account. Off removes the
  * assisted wrapper from the stored backup straight away; on lets the next
@@ -1385,6 +1409,13 @@ export async function unifyAccountPasskey(
         'Wrong recovery code. Use the recovery code saved for this account, not your agent secret.',
       );
     }
+  } else if (
+    hasAssistedWrapper(recovery) &&
+    !recovery.wrappers.some(w => w.wrapper_type === 'webauthn-prf')
+  ) {
+    // Only the account opens this backup so far: a recent sign-in is enough
+    // to reach the DEK and add the passkey next to it.
+    dek = await assistedDek(recovery);
   } else {
     const { wrapper, key } = await unlockPasskeyWrapper(recovery);
     dek = await crypto.subtle.decrypt(

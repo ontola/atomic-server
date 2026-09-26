@@ -270,7 +270,7 @@ export function GettingStartedFlow({
         const account = await getManagedAccount();
 
         if (!cancelled && account?.email) {
-          setManagedUsername(account.email.split('@')[0]);
+          setManagedUsername(accountAddress(account).split('@')[0]);
         }
       } catch {
         // Not signed in to the managed (or unreachable) — continue without a
@@ -552,7 +552,7 @@ export function GettingStartedFlow({
 
         setRestore(
           account?.email
-            ? { phase: 'no-backup', email: account.email }
+            ? { phase: 'no-backup', email: accountAddress(account) }
             : { phase: 'no-session' },
         );
       } catch {

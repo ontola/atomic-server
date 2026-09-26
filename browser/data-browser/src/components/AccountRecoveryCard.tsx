@@ -424,7 +424,9 @@ export function AccountRecoveryCard({
 
     if (!agentSubject || backup.phase !== 'ready') return;
 
-    if (!envelopeWrapperKinds(backup.secret).hasPasskey && !codeInput.trim()) {
+    const kinds = envelopeWrapperKinds(backup.secret);
+
+    if (!kinds.hasPasskey && !kinds.hasAccount && !codeInput.trim()) {
       setAddingAccountPasskey(true);
       setNeedsCode(true);
       setError(undefined);
@@ -631,7 +633,7 @@ export function AccountRecoveryCard({
           <Hint>
             {assistedOn
               ? `Signing in to your ${PRODUCT_NAME} account is enough to open your identity on a new device. ${PRODUCT_NAME} holds a key for that. Turn it off to rely only on your passkey or recovery code.`
-              : `Only your passkey or recovery code opens your identity. ${PRODUCT_NAME} cannot. It is added back the next time you unlock with one of them.`}
+              : `Only your passkey or recovery code opens your identity. ${PRODUCT_NAME} cannot.`}
             {assistedOn && !hasPasskey && !hasCode
               ? ' Add a passkey or recovery code first.'
               : null}
