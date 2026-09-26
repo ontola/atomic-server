@@ -489,7 +489,13 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (!isDerivedByServer(key) && this._loroMap.get(key) === undefined) {
+          if (
+            !isDerivedByServer(key) &&
+            this._loroMap.get(key) === undefined &&
+            // A key with a last editor was deleted in this doc: the snapshot
+            // removed it, it did not miss it.
+            this._loroMap.getLastEditor(key) === undefined
+          ) {
             this.loroSetProperty(key, value);
           }
         }
@@ -886,24 +892,6 @@ export class Resource<C extends OptionalClass = any> {
       // and the creation metadata (createdBy/createdAt) must ride on it. A later
       // `commit()` would be a no-op (no pending ops) and never attach them.
       doc.commit(commitOptions);
-    }
-  }
-
-  /** Whether a full snapshot holds every op in `version`. */
-  private static snapshotCovers(
-    snapshot: Uint8Array,
-    version: VersionVector,
-  ): boolean {
-    try {
-      const end = LoroLoader.Loro.decodeImportBlobMeta(
-        snapshot,
-        false,
-      ).partialEndVersionVector;
-      const order = version.compare(end);
-
-      return order === 0 || order === -1;
-    } catch {
-      return false;
     }
   }
 
@@ -3804,28 +3792,13 @@ export class Resource<C extends OptionalClass = any> {
   ): { complete: boolean } {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
-      const replacedVersion = this._loroDoc?.oplogVersion();
       this.resetLoroState();
 
-      // When the snapshot has seen everything the replaced doc held, the cache
-      // is only that older state. Left in place, `getLoroDoc()`'s heal pass
-      // writes every key the snapshot lacks back into the doc — so a property
-      // removed at the source came back as a local op (an app's `/app-write`
-      // remove seemed not to stick). Server-derived keys are not in Loro; keep
-      // those.
-      //
-      // Otherwise a missing key is one the source never had, not one it
-      // removed, and the cache is what the heal needs: JSON-AD read with these
-      // very bytes (no doc yet), or a doc the source never saw, like an agent
-      // profile restored from Cloud Vault that the node only knows as a stub.
-      if (
-        replacedVersion &&
-        Resource.snapshotCovers(loroUpdate, replacedVersion)
-      ) {
-        for (const key of Object.keys(this.#cache)) {
-          if (!isDerivedByServer(key)) delete this.#cache[key];
-        }
-      }
+      // The cache is kept: `getLoroDoc()`'s heal pass restores from it what
+      // these bytes never had (an agent's name restored from Cloud Vault,
+      // while the node only holds the stub it made for that agent), and
+      // skips what they deleted, so a property removed at the source stays
+      // removed.
 
       // Point `getLoroDoc()` at these bytes so it imports the snapshot
       // instead of seeding a *new* LoroList per array from `#cache`.

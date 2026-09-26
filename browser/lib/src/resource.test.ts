@@ -440,11 +440,11 @@ describe('resource.ts', () => {
   });
 
   /**
-   * A snapshot that never saw this copy's history is not its source removing
-   * what it lacks. A second device restores the agent's profile from Cloud
-   * Vault, while the node only holds the stub it made for the agent: the name
-   * must survive the node's snapshot, and JSON-AD read together with a stored
-   * snapshot must still fill in what that snapshot lacks.
+   * A property a snapshot never had is not one its source removed. A second
+   * device restores the agent's profile from Cloud Vault, while the node only
+   * holds the stub it made for the agent: the name must survive the node's
+   * snapshot, and JSON-AD read together with a stored snapshot must still fill
+   * in what that snapshot lacks. What the snapshot did delete stays deleted.
    */
   it('a replacing snapshot keeps what its source never had', async ({
     expect,
@@ -475,6 +475,18 @@ describe('resource.ts', () => {
     ]);
     hydrated.importLoroUpdate(stubBytes, true);
     expect(hydrated.get(name)).toBe('Returning');
+
+    profile.getLoroDoc()!.getMap('properties').delete(name);
+    profile.getLoroDoc()!.commit();
+    const removedBytes = profile.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const stale = new Resource(subject);
+    stale.applyHydratedValues([
+      [publicKey, 'key'],
+      [name, 'Returning'],
+    ]);
+    stale.importLoroUpdate(removedBytes, true);
+    expect(stale.get(name)).toBeUndefined();
   });
 
   /**
