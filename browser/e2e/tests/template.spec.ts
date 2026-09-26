@@ -15,9 +15,7 @@ import { positiveInteger } from '../scripts/concurrency.mjs';
 const test = baseTest.extend<{
   site: { directory: string; processes: OwnedProcess[] };
 }>({
-  // Playwright requires destructuring even for a fixture with no dependencies.
-  // eslint-disable-next-line no-empty-pattern
-  site: async ({}, use, testInfo) => {
+  site: async ({ page }, use, testInfo) => {
     const directory = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), 'atomic-template-'),
     );
@@ -26,6 +24,36 @@ const test = baseTest.extend<{
     try {
       await use({ directory, processes });
     } finally {
+      // This fixture owns the generated site's server, so it has to end the
+      // page's use of it: the server must not stop while a page is still
+      // reading from it. The page keeps hydrating after the last assertion
+      // returns — a post view reads a document, which calls
+      // `initializeLoro()`, whose `loro-crdt` chunk is fetched lazily — and
+      // killing `vite preview` underneath turns that in-flight import into
+      // `ERR_CONNECTION_REFUSED` plus a `[LoroLoader]` console error. The
+      // diagnostics fixture counts both, so the test fails naming a chunk hash
+      // and nothing that points here. That is how develop run 4652 went red on
+      // `apply sveltekit template`, and it reproduces alone on the first try,
+      // so it is not load.
+      //
+      // Closing rather than navigating, because `about:blank` is not quiet
+      // either: the `pagehide` it fires makes the loader drop its load
+      // silently (`pageRequestSignal()`), but it also cancels whatever the
+      // page had in flight, and SvelteKit's router logs the resulting
+      // `RequestCancelledError` from the layout's `load`. Measured: the
+      // two loro lines go away and that one takes their place. A closed page
+      // has nothing in flight to cancel and nothing left to log.
+      //
+      // Only when nothing has failed yet, so a test that failed in its BODY
+      // keeps its page and the diagnostics fixture can still collect failure
+      // state from it. `browserDiagnostics` asserts after this fixture tears
+      // down, so a test destined to fail on its diagnostics alone still reads
+      // as passing here — which is the case being fixed, and the one whose
+      // evidence is the attached diagnostics rather than the live page.
+      if (testInfo.status === testInfo.expectedStatus) {
+        await page.close().catch(() => undefined);
+      }
+
       await Promise.all(processes.map(process => process.stop()));
 
       for (const [index, process] of processes.entries()) {
