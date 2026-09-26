@@ -6,11 +6,11 @@ on:
 
 # Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
 # on a temporary branch containing the exact PR heads to test together.
-# Keep develop and tag validation running to completion because deployments
-# consume their results. Per-ref groups isolate integration batches.
+# A newer push supersedes validation of the previous develop commit. Tags run
+# to completion, and per-ref groups isolate manually dispatched PR batches.
 concurrency:
   group: main-pipeline-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_type == 'branch' && github.ref_name != 'develop' }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
 # Heavy CI runs on GitHub-hosted only when explicitly selected, never as a
