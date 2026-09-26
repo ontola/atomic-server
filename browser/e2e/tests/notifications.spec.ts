@@ -1,7 +1,8 @@
 /**
  * Notifications for new chat messages while the app is open: a toast when
  * the person is looking at the app but not at the chat, and an OS
- * notification when the app isn't focused.
+ * notification when the app isn't focused. Each lands in the Inbox, which the
+ * Notifications page lists with an unread count in the sidebar.
  *
  * The OS side is observed through a stub `window.Notification`: the real one
  * needs a permission prompt, and the app itself only ever talks to that API
@@ -154,6 +155,34 @@ test.describe('notifications', () => {
         title: expect.stringContaining('Notify Chat'),
         body: away,
       });
+
+    // Both are in the Inbox: the one opened from the toast is read, the one
+    // announced while away is not.
+    await page.evaluate(() => (window.__blurred = false));
+    await expect(page.getByLabel('Notifications, 1 unread')).toBeAttached({
+      timeout: 20_000,
+    });
+    await page.goto(new URL('/app/notifications', FRONTEND_URL).href);
+    const list = page.getByRole('list', { name: 'Notifications' });
+    await expect(list.getByRole('listitem')).toHaveCount(2, {
+      timeout: 15_000,
+    });
+    const awayItem = list.getByRole('button', { name: new RegExp(away) });
+    await expect(awayItem.getByLabel('Unread')).toBeVisible();
+    await expect(
+      list
+        .getByRole('button', { name: new RegExp(inApp) })
+        .getByLabel('Unread'),
+    ).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Mark all as read' }).click();
+    await expect(awayItem.getByLabel('Unread')).toHaveCount(0);
+    await expect(page.getByLabel('Notifications, 1 unread')).toHaveCount(0);
+
+    await awayItem.click();
+    await expect(
+      page.getByRole('heading', { name: 'Notify Chat' }),
+    ).toBeVisible({ timeout: 15_000 });
 
     await guestContext.close();
   });

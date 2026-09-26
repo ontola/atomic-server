@@ -22,6 +22,11 @@ import {
   type MessageNotification,
 } from '../../helpers/notifications/messageNotification';
 import { showOsNotification } from '../../helpers/notifications/osNotifications';
+import {
+  markReadAbout,
+  recordNotification,
+} from '../../helpers/notifications/inbox';
+import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 
 const TEXT_MAX = 140;
 
@@ -89,13 +94,32 @@ export function MessageNotifier(): null {
   const [currentSubject] = useCurrentSubject();
   const { activePanel, setPanelOpen } = useRightPanel();
   const navigate = useNavigateWithTransition();
+  const { privateDrive } = usePrivateDrive();
 
   const handled = useRef(new Set<string>());
+  // Inbox writes still in flight, per target, so reading waits for them.
+  const recording = useRef(new Map<string, Promise<unknown>>());
+
+  const readAbout = useEffectEvent((target: string) => {
+    if (!privateDrive) return;
+
+    const pending = recording.current.get(target) ?? Promise.resolve();
+
+    void pending
+      .then(() => markReadAbout(store, privateDrive, target))
+      .catch(e => console.error('Could not mark notifications read:', e));
+  });
 
   const open = useEffectEvent((n: MessageNotification) => {
     navigate(constructOpenURL(n.target));
     if (n.openComments) setPanelOpen('comments', true);
+    readAbout(n.target);
   });
+
+  // Opening something reads what the Inbox says about it.
+  useEffect(() => {
+    if (currentSubject) readAbout(currentSubject);
+  }, [currentSubject]);
 
   const isLookingAt = useEffectEvent((n: MessageNotification) => {
     if (document.hidden || !document.hasFocus()) return false;
@@ -140,7 +164,14 @@ export function MessageNotifier(): null {
       creatorOf: s => related.get(s)?.getCreatedBy(),
     });
 
-    if (!n || isLookingAt(n)) return;
+    if (!n) return;
+
+    if (isLookingAt(n)) {
+      // Another open device may still record it; read that copy too.
+      setTimeout(() => readAbout(n.target), 3000);
+
+      return;
+    }
 
     const authorName = related.get(n.author)?.title ?? 'Someone';
     const targetTitle = related.get(n.target)?.title ?? '';
@@ -150,6 +181,26 @@ export function MessageNotifier(): null {
         | string
         | undefined) ?? '';
     const body = text.length > TEXT_MAX ? `${text.slice(0, TEXT_MAX)}…` : text;
+
+    if (privateDrive) {
+      const before = recording.current.get(n.target);
+      const record = recordNotification(store, privateDrive, {
+        source: subject,
+        about: n.target,
+        kind: n.kind,
+        actor: n.author,
+        title,
+        body,
+        occurredAt: facts.createdAt ?? Date.now(),
+      }).catch(e => console.error('Could not add to the inbox:', e));
+      const all = Promise.all([before, record]);
+      recording.current.set(n.target, all);
+      void all.then(() => {
+        if (recording.current.get(n.target) === all) {
+          recording.current.delete(n.target);
+        }
+      });
+    }
 
     if (!document.hidden && document.hasFocus()) {
       toast.custom(

@@ -8,6 +8,7 @@ import { EditRoute } from './EditRoute';
 import { DataRoute } from './DataRoute';
 import { ShortcutsRoute } from './ShortcutsRoute';
 import { AboutRoute } from './AboutRoute';
+import { NotificationsRoute } from './NotificationsRoute';
 import { AgentSettingsRoute } from './SettingsAgent';
 import { SyncRoute } from './SyncRoute';
 import { ServerSettingsRoute } from './SettingsServer';
@@ -83,6 +84,7 @@ const routeTree = rootRoute.addChildren({
     OnboardingRoute,
     ShareRoute,
     AboutRoute,
+    NotificationsRoute,
     TokenRoute,
     HistoryRoute,
     NewRoute,

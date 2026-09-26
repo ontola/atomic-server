@@ -11,6 +11,7 @@ import {
   server,
   core,
   ai,
+  notifications,
   useArray,
 } from '@tomic/react';
 
@@ -26,6 +27,7 @@ import { FilePage } from './File/FilePage';
 import { ResourcePageDefault } from './ResourcePageDefault';
 import { Spinner } from '../components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
+import { InboxPage } from './InboxPage';
 import { MessagePage } from './MessagePage';
 import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
@@ -316,6 +318,8 @@ function selectComponent(klass: string | undefined) {
       return MeetingPage;
     case canvas.classes.canvas:
       return CanvasPage;
+    case notifications.classes.inbox:
+      return InboxPage;
     case server.classes.installation:
       return InstallationPage;
     default:

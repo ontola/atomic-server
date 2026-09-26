@@ -1,6 +1,7 @@
 import {
   ai,
   dataBrowser,
+  notifications,
   server,
   useCanWrite,
   useChildren,
@@ -80,6 +81,9 @@ export function SideBarDrive({
   // And the AI Chats folder (on the personal drive): chats re-open through
   // the AI sidebar on the resource they were started on.
   const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
+  // And the Inbox (on the personal drive): it opens from Notifications in the
+  // app menu.
+  const [inbox] = useString(driveResource, notifications.properties.inbox);
   const subResources = useMemo(
     () =>
       allChildren.filter(subject => {
@@ -88,10 +92,11 @@ export function SideBarDrive({
         return (
           canonical !== canonicalizeScheme(defaultOntology ?? '') &&
           canonical !== canonicalizeScheme(commentsFolder ?? '') &&
-          canonical !== canonicalizeScheme(aiChatsFolder ?? '')
+          canonical !== canonicalizeScheme(aiChatsFolder ?? '') &&
+          canonical !== canonicalizeScheme(inbox ?? '')
         );
       }),
-    [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
+    [allChildren, defaultOntology, commentsFolder, aiChatsFolder, inbox],
   );
   const [title] = useTitle(driveResource);
   const isPrivateDrive = useIsPrivateDrive(drive);

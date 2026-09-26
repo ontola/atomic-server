@@ -12445,6 +12445,9 @@ msgstr "No column matches"
 msgid "Search the drive for “{0}”"
 msgstr "Search the drive for “{0}”"
 
+#: src/components/Notifications/NotificationList.tsx
+#: src/components/Notifications/NotificationList.tsx
+#: src/components/SideBar/NotificationsMenuItem.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
 msgstr "Notifications"
@@ -12483,3 +12486,24 @@ msgstr "{0} in {1}"
 #: src/components/Notifications/MessageNotifier.tsx
 msgid "Someone"
 msgstr "Someone"
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Unread"
+msgstr "Unread"
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Nothing yet. New messages in your chats, comments on your things and replies to you show up here."
+msgstr "Nothing yet. New messages in your chats, comments on your things and replies to you show up here."
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Mark all as read"
+msgstr "Mark all as read"
+
+#. 0: unread
+#: src/components/SideBar/NotificationsMenuItem.tsx
+msgid "Notifications, {0} unread"
+msgstr "Notifications, {0} unread"
+
+#: src/components/SideBar/NotificationsMenuItem.tsx
+msgid "Messages, comments and replies for you"
+msgstr "Messages, comments and replies for you"
