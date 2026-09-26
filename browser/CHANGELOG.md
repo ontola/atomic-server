@@ -4,6 +4,23 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Notifications while the app is open, on the web and in the desktop and
+  Android apps: new chat messages, comments on things you made and replies to
+  you show as a toast, or as a system notification when you're in another tab,
+  window or app. Nothing shows for the conversation you're already looking
+  at. System notifications are switched per device under Settings →
+  Notifications. The desktop and Android apps get them through
+  `tauri-plugin-notification`.
+
+- Notifications page and Inbox: every notification is kept in an Inbox in
+  your private drive, so it's there on all your devices. The sidebar shows
+  Notifications with an unread count; the page lists them newest first, and
+  opening one (or the conversation it's about) marks it read.
+
+- Android app: the back button closes an open sidebar drawer or dialog
+  instead of navigating away underneath it. With nothing open, back works as
+  before (previous page, then leave the app).
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs

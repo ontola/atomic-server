@@ -29,6 +29,10 @@ serde_json = "1.0"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-process = "2"
+# OS notifications for new messages and comments. Its init script replaces
+# `window.Notification` in the webview with one backed by the OS, so the
+# data-browser uses the same Notification API in the app as on the web.
+tauri-plugin-notification = "2"
 # Opening a URL in the system browser: the tray menu, and what an <a
 # target="_blank"> ultimately needs in a webview with nowhere to put a tab.
 # Deliberately the only plugin here that opens things — `tauri-plugin-shell`
