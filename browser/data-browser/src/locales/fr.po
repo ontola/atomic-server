@@ -10884,8 +10884,10 @@ msgstr ""
 #~ msgid "Not set up. With an account on {0} we hold your key sealed, so an email gets you back in on a new device. Without one, losing every device loses this workspace."
 #~ msgstr ""
 
-#~ msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
-#~ msgstr ""
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
+msgstr ""
 
 #~ msgid "You can get back in with:{0} {1}"
 #~ msgstr ""
@@ -12415,9 +12417,8 @@ msgstr ""
 msgid "Sign in again to open your account on this device."
 msgstr ""
 
-#: src/views/getting-started/GoogleSignInButton.tsx
-msgid "Continue with Google"
-msgstr ""
+#~ msgid "Continue with Google"
+#~ msgstr ""
 
 #: src/views/getting-started/AccountSignInPanel.tsx
 msgid "That sign-in expired. Pick an option to start again."
@@ -12425,4 +12426,14 @@ msgstr ""
 
 #: src/views/getting-started/AccountSignInPanel.tsx
 msgid "Could not reach your account. Check your connection and try again."
+msgstr ""
+
+#. 0: PRODUCT_NAME; 1: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account is enough to open your identity on a new device. {1} holds a key for that. Turn it off to rely only on your passkey or recovery code."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Only your passkey or recovery code opens your identity. {0} cannot. It is added back the next time you unlock with one of them."
 msgstr ""

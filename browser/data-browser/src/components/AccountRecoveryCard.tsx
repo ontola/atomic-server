@@ -3,13 +3,20 @@ import { styled } from 'styled-components';
 import { FaKey } from 'react-icons/fa6';
 import { Agent, useStore, isAtomicIdentifier } from '@tomic/react';
 import { Button } from './Button';
+import { Checkbox, CheckboxLabel } from './forms/Checkbox';
 import { hasPasskeyApi } from '../helpers/passkeySupport';
 import { Column, Row } from './Row';
 import { CodeBlock } from './CodeBlock';
 import { SecretCodeBlock } from './SecretCodeBlock';
 import { ErrorLook } from './ErrorLook';
 import { InputStyled, InputWrapper } from './forms/InputStyles';
-import { getManagedAccount, PRODUCT_NAME } from '../helpers/managed';
+import {
+  accountAddress,
+  getManagedAccount,
+  isAssistedRecoveryAvailable,
+  PRODUCT_NAME,
+  setAssistedRecovery,
+} from '../helpers/managed';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
@@ -100,23 +107,29 @@ export function AccountRecoveryCard({
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  /** Assisted recovery: offered here at all, and whether it is on. */
+  const [assistedOffered, setAssistedOffered] = useState(false);
+  const [assistedOn, setAssistedOn] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      const [session, info] = await Promise.all([
+      const [session, info, assisted] = await Promise.all([
         getManagedAccount().catch(() => null),
         fetchManagedInfo(baseURL).catch(() => null),
+        isAssistedRecoveryAvailable().catch(() => false),
       ]);
 
       if (cancelled) return;
 
       setHasSession(!!session);
+      setAssistedOffered(!!session && assisted);
+      setAssistedOn(!session?.assisted_recovery_off);
       // Kept for the passkey's label, which is what the user will see in their
       // password manager a year from now when they have forgotten what this
       // credential was for.
-      setAccountEmail(session?.email ?? null);
+      setAccountEmail(session ? accountAddress(session) : null);
       // Resolve the portal the same way every other surface does, rather than
       // reading `info.portalUrl` straight off the connected node.
       //
@@ -549,6 +562,41 @@ export function AccountRecoveryCard({
   );
   const deviceOnly = backup.onServer === false;
 
+  async function handleAssistedChange(enabled: boolean) {
+    if (backup.phase !== 'ready') return;
+
+    const current = backup;
+    setLoading(true);
+    setError(undefined);
+
+    const failed = await setAssistedRecovery(enabled).then(
+      () => null,
+      (err: unknown) => (err instanceof Error ? err.message : String(err)),
+    );
+    setLoading(false);
+
+    if (failed) {
+      setError(failed);
+
+      return;
+    }
+
+    setAssistedOn(enabled);
+
+    // Off removes the wrapper on the server; show the backup without it.
+    if (!enabled) {
+      setBackup({
+        ...current,
+        secret: {
+          ...current.secret,
+          wrappers: current.secret.wrappers.filter(
+            w => w.wrapper_type !== 'atomic-assisted',
+          ),
+        },
+      });
+    }
+  }
+
   return (
     <Column gap='0.75rem'>
       {error && <ErrorLook role='alert'>{error}</ErrorLook>}
@@ -566,6 +614,30 @@ export function AccountRecoveryCard({
             .join(' or ') || 'your recovery password'
         }${deviceOnly ? ', on this device' : ''}.`}
       </Protections>
+
+      {assistedOffered &&
+      !deviceOnly &&
+      (hasPasskey || hasCode || hasAccount) ? (
+        <Column gap='0.25rem'>
+          <CheckboxLabel>
+            <Checkbox
+              checked={assistedOn}
+              onChange={enabled => void handleAssistedChange(enabled)}
+              disabled={loading || (assistedOn && !hasPasskey && !hasCode)}
+              data-test='assisted-recovery-switch'
+            />
+            Let {PRODUCT_NAME} help me recover
+          </CheckboxLabel>
+          <Hint>
+            {assistedOn
+              ? `Signing in to your ${PRODUCT_NAME} account is enough to open your identity on a new device. ${PRODUCT_NAME} holds a key for that. Turn it off to rely only on your passkey or recovery code.`
+              : `Only your passkey or recovery code opens your identity. ${PRODUCT_NAME} cannot. It is added back the next time you unlock with one of them.`}
+            {assistedOn && !hasPasskey && !hasCode
+              ? ' Add a passkey or recovery code first.'
+              : null}
+          </Hint>
+        </Column>
+      ) : null}
 
       {/* The gap worth naming: everything above still works here, and none of
           it survives this browser. Said plainly because the Sync page reads

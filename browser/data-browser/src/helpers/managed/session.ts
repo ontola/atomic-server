@@ -7,9 +7,20 @@ import { PRODUCT_NAME } from './product';
 import { hasManagedApi, managedFetch, setManagedDeviceToken } from './api';
 
 export type ManagedAccount = {
+  /** The account key backups and bindings are stored under (`owner_email`).
+   * For older accounts it is their address; newer ones have an `acct_` id. */
   email: string;
+  /** The address to show. Absent from control planes before account ids. */
+  address?: string;
+  /** The person turned assisted recovery off in their settings. */
+  assisted_recovery_off?: boolean;
   created_at?: number;
 };
+
+/** The address to show for an account. */
+export function accountAddress(account: ManagedAccount): string {
+  return account.address ?? account.email;
+}
 
 let sessionGeneration = 0;
 let pendingLogouts = 0;

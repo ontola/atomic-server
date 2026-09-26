@@ -60,7 +60,7 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
       ],
       unlockTitle: 'What signing in opens',
       unlockAssisted:
-        'Any of these is enough to open your Atomic identity on a new device. That works because Atomic keeps a key that, together with our database, can unlock your encrypted identity backup. Our service only hands it to your own account right after you sign in. So this is convenient, but not zero-knowledge: someone who got hold of both that key and our database could open your identity.',
+        'Any of these is enough to open your Atomic identity on a new device. That works because Atomic keeps a key that, together with our database, can unlock your encrypted identity backup. Our service only hands it to your own account right after you sign in. So this is convenient, but not zero-knowledge: someone who got hold of both that key and our database could open your identity. You can turn this off under account recovery in the app, and rely only on your passkey or recovery code.',
       unlockSeparate:
         'Signing in gives you your account: billing, hosted drives and your encrypted backup. Opening your Atomic identity on a new device also needs your passkey or recovery code, which Atomic cannot read.',
     },
@@ -94,7 +94,7 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
       ],
       unlockTitle: 'Wat inloggen opent',
       unlockAssisted:
-        'Elk van deze opties is genoeg om je Atomic-identiteit op een nieuw apparaat te openen. Dat kan omdat Atomic een sleutel bewaart die, samen met onze database, je versleutelde identiteitsback-up kan openen. Onze dienst geeft die alleen aan je eigen account, direct nadat je bent ingelogd. Dat is handig, maar niet zero-knowledge: wie zowel die sleutel als onze database in handen krijgt, kan je identiteit openen.',
+        'Elk van deze opties is genoeg om je Atomic-identiteit op een nieuw apparaat te openen. Dat kan omdat Atomic een sleutel bewaart die, samen met onze database, je versleutelde identiteitsback-up kan openen. Onze dienst geeft die alleen aan je eigen account, direct nadat je bent ingelogd. Dat is handig, maar niet zero-knowledge: wie zowel die sleutel als onze database in handen krijgt, kan je identiteit openen. Je kunt dit uitzetten bij accountherstel in de app. Dan werken alleen je passkey of herstelcode nog.',
       unlockSeparate:
         'Inloggen geeft je je account: facturering, gehoste drives en je versleutelde back-up. Om je Atomic-identiteit op een nieuw apparaat te openen, heb je daarnaast je passkey of herstelcode nodig. Die kan Atomic niet lezen.',
     },

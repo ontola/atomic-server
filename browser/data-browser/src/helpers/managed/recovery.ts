@@ -42,7 +42,10 @@ export type RecoverySecretInput = {
 };
 
 export type RecoverySecret = {
+  /** The account key this backup is bound to. */
   owner_email: string;
+  /** The address to show for that account, from newer control planes. */
+  owner_address?: string;
   agent_subject: string;
   drive_subject?: string | null;
   encrypted_secret: string;
@@ -841,7 +844,7 @@ async function assistedKey(
   agentSubject: string,
   salt: string,
   usage: KeyUsage[],
-): Promise<CryptoKey> {
+): Promise<{ key: CryptoKey; keyId?: string; rotate: boolean }> {
   const response = await managedFetch('/recovery-secret/assisted-key', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -862,15 +865,24 @@ async function assistedKey(
     );
   }
 
-  const { key } = (await response.json()) as { key: string };
+  const { key, key_id, rotate } = (await response.json()) as {
+    key: string;
+    key_id?: string;
+    rotate?: boolean;
+  };
 
-  return crypto.subtle.importKey(
-    'raw',
-    base64ToBytes(key),
-    'AES-GCM',
-    false,
-    usage,
-  );
+  return {
+    key: await crypto.subtle.importKey(
+      'raw',
+      base64ToBytes(key),
+      'AES-GCM',
+      false,
+      usage,
+    ),
+    keyId: key_id,
+    // The wrapper was made with a service key that has since been rotated.
+    rotate: rotate === true,
+  };
 }
 
 async function wrapDekWithAssisted(
@@ -878,7 +890,7 @@ async function wrapDekWithAssisted(
   agentSubject: string,
 ): Promise<RecoveryWrapperInput> {
   const salt = bytesToBase64(randomBytes(SALT_BYTES));
-  const key = await assistedKey(agentSubject, salt, ['encrypt']);
+  const { key, keyId } = await assistedKey(agentSubject, salt, ['encrypt']);
   const wrapNonce = randomBytes(NONCE_BYTES);
   const wrappedDek = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: wrapNonce },
@@ -889,7 +901,8 @@ async function wrapDekWithAssisted(
   return {
     wrapper_type: ASSISTED_WRAPPER,
     kdf_algorithm: 'hmac-sha256',
-    kdf_params: {},
+    // Which service key made it, so it still opens after a rotation.
+    kdf_params: keyId ? { key_id: keyId } : {},
     salt,
     wrapped_dek: bytesToBase64(new Uint8Array(wrappedDek)),
     wrap_nonce: bytesToBase64(wrapNonce),
@@ -960,16 +973,41 @@ export async function decryptEnvelopeWithAssisted(
   if (!wrapper)
     throw new Error('This backup cannot be unlocked by signing in.');
 
-  const key = await assistedKey(recovery.agent_subject, wrapper.salt, [
-    'decrypt',
-  ]);
+  const { key, rotate } = await assistedKey(
+    recovery.agent_subject,
+    wrapper.salt,
+    ['decrypt'],
+  );
 
   return openWithDekKey(
     recovery,
     wrapper,
     key,
     'Your account could not unlock this backup.',
+    // Re-wrap with the current service key; the new wrapper replaces this one.
+    rotate
+      ? dek => addAssistedWrapperInBackground(recovery, dek, true)
+      : undefined,
   );
+}
+
+/**
+ * Turn assisted recovery on or off for the signed-in account. Off removes the
+ * assisted wrapper from the stored backup straight away; on lets the next
+ * unlock with a passkey or recovery code add it again.
+ */
+export async function setAssistedRecovery(enabled: boolean): Promise<void> {
+  const response = await managedFetch('/recovery-secret/assisted', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Could not change this setting in your ${PRODUCT_NAME} account.`,
+    );
+  }
 }
 
 /**
@@ -980,8 +1018,13 @@ export async function decryptEnvelopeWithAssisted(
 function addAssistedWrapperInBackground(
   recovery: RecoverySecret,
   dek: Uint8Array<ArrayBuffer>,
+  replace = false,
 ): void {
-  if (recovery.format_version !== 2 || hasAssistedWrapper(recovery)) return;
+  if (
+    recovery.format_version !== 2 ||
+    (hasAssistedWrapper(recovery) && !replace)
+  )
+    return;
 
   void (async () => {
     if (!(await isAssistedRecoveryAvailable())) return;
@@ -989,7 +1032,12 @@ function addAssistedWrapperInBackground(
     // when that account is the one owning this backup.
     const account = await getManagedAccount().catch(() => null);
 
-    if (!account || account.email !== recovery.owner_email) return;
+    if (
+      !account ||
+      account.email !== recovery.owner_email ||
+      account.assisted_recovery_off
+    )
+      return;
 
     const wrapper = await wrapDekWithAssisted(dek, recovery.agent_subject);
     const response = await managedFetch('/recovery-secret/wrappers', {
@@ -1347,8 +1395,8 @@ export async function unifyAccountPasskey(
   }
 
   const { wrapper } = await wrapDekWithPasskey(new Uint8Array(dek), {
-    userName: recovery.owner_email,
-    userDisplayName: recovery.owner_email,
+    userName: recovery.owner_address ?? recovery.owner_email,
+    userDisplayName: recovery.owner_address ?? recovery.owner_email,
     createNew,
   });
   if (!wrapper.kdf_params.account_passkey)

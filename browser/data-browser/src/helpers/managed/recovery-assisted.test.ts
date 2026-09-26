@@ -23,7 +23,9 @@ const AGENT = 'atomic:agent:9Hc-J_2n4jIpXqzTZMDSnNFOFB1fWqCsGSk3Wdyy9Bs';
  * HMAC, and a switch for a sign-in that is too old to unlock with. */
 function fakeService({ fresh }: { fresh: boolean }) {
   const keys = new Map<string, string>();
+  const keyIds = new Map<string, string>();
   const seenSalts: string[] = [];
+  const service = { currentKey: 'key-1', appended: [] as unknown[] };
 
   vi.mocked(managedFetch).mockImplementation(async (path, init) => {
     if (path === '/auth/providers') {
@@ -47,13 +49,27 @@ function fakeService({ fresh }: { fresh: boolean }) {
       if (!keys.has(id)) {
         const bytes = crypto.getRandomValues(new Uint8Array(32));
         keys.set(id, btoa(String.fromCharCode(...bytes)));
+        keyIds.set(id, service.currentKey);
       }
 
-      return Response.json({ key: keys.get(id) });
+      return Response.json({
+        key: keys.get(id),
+        key_id: keyIds.get(id),
+        rotate: keyIds.get(id) !== service.currentKey,
+      });
+    }
+
+    if (path === '/recovery-secret/wrappers') {
+      const body = JSON.parse(String(init?.body));
+      service.appended.push(body.wrapper);
+
+      return Response.json({ ...body, owner_email: 'person@example.com' });
     }
 
     return new Response(null, { status: 404 });
   });
+
+  return service;
 }
 
 function stored(
@@ -122,4 +138,42 @@ it('a build without an account service asks nobody', async () => {
     assisted_recovery: false,
   });
   expect(managedFetch).not.toHaveBeenCalled();
+});
+
+it('a wrapper from a rotated key is re-wrapped with the current one', async () => {
+  const service = fakeService({ fresh: true });
+  const request = await buildEnvelopeWithAssisted({
+    secret: 'the-agent-secret',
+    agentSubject: AGENT,
+  });
+  expect(request.wrappers![0].kdf_params).toEqual({ key_id: 'key-1' });
+
+  service.currentKey = 'key-2';
+  expect(await decryptEnvelopeWithAssisted(stored(request))).toBe(
+    'the-agent-secret',
+  );
+
+  await vi.waitFor(() => expect(service.appended).toHaveLength(1));
+  const [rewrapped] = service.appended as {
+    kdf_params: unknown;
+    salt: string;
+  }[];
+  expect(rewrapped.kdf_params).toEqual({ key_id: 'key-2' });
+  expect(rewrapped.salt).not.toBe(request.wrappers![0].salt);
+});
+
+it('an account that turned assisted recovery off gets no new wrapper', async () => {
+  const service = fakeService({ fresh: true });
+  const request = await buildEnvelopeWithAssisted({
+    secret: 's',
+    agentSubject: AGENT,
+  });
+  vi.mocked(getManagedAccount).mockResolvedValue({
+    email: 'person@example.com',
+    assisted_recovery_off: true,
+  });
+  service.currentKey = 'key-2';
+  await decryptEnvelopeWithAssisted(stored(request));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(service.appended).toHaveLength(0);
 });

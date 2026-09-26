@@ -27,7 +27,10 @@ import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
-import { getManagedAccount } from '../../helpers/managed/session';
+import {
+  accountAddress,
+  getManagedAccount,
+} from '../../helpers/managed/session';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import { safePortalUrl } from '../../helpers/managed/api';
 import {
@@ -518,7 +521,9 @@ export function GettingStartedFlow({
           setRestore({
             phase: 'ready',
             secret,
-            email: account?.email ?? secret.owner_email,
+            email: account
+              ? accountAddress(account)
+              : (secret.owner_address ?? secret.owner_email),
           });
 
           if (
@@ -1097,7 +1102,7 @@ export function GettingStartedFlow({
                         onClick={() => unlockWithPasskey(account)}
                         data-test='account-choice'
                       >
-                        {account.owner_email}
+                        {account.owner_address ?? account.owner_email}
                       </Button>
                     ))}
                     <OtherWaysLabel>or sign in another way</OtherWaysLabel>
