@@ -1,4 +1,10 @@
-import { core, dataBrowser, useResources, useServerSearch } from '@tomic/react';
+import {
+  core,
+  dataBrowser,
+  useResources,
+  useServerSearch,
+  useStore,
+} from '@tomic/react';
 import {
   ClipboardEventHandler,
   KeyboardEventHandler,
@@ -27,6 +33,7 @@ import { stringToSlug } from '../../../helpers/stringToSlug';
 import { addIf } from '../../../helpers/addIf';
 import { Row } from '../../Row';
 import React from 'react';
+import { externalOrigin, searchLoadedExternal } from './loadedExternal';
 
 /**
  * Options shown at the top of the results when the `isA` prop matches a key in this object.
@@ -50,6 +57,13 @@ type Option = {
   type: OptionType;
   data: string;
 };
+
+/**
+ * Classes whose search also looks at external resources the store has already
+ * fetched, e.g. shared classes published outside the drive. The server search
+ * only covers the drive and atomicdata.dev.
+ */
+const INCLUDE_LOADED_EXTERNAL: string[] = [core.classes.class];
 
 const BOX_HEIGHT_REM = 20;
 
@@ -83,6 +97,7 @@ export function SearchBoxWindow({
   onCreateItem,
 }: SearchBoxWindowProps): JSX.Element {
   const { drive } = useSettings();
+  const store = useStore();
 
   const [index, setIndex] = useState<number | undefined>(undefined);
   const [results, setResults] = useState<string[]>([]);
@@ -106,6 +121,23 @@ export function SearchBoxWindow({
     return [];
   }, [isA, searchValue]);
 
+  const serverUrl = store.getServerUrl();
+
+  // Externals are only merged into an unscoped server search: a caller that
+  // passes `scopes` or `allowsOnly` asked for exactly those.
+  const loadedExternal = useMemo(
+    () =>
+      isA && !scopes && !allowsOnly && INCLUDE_LOADED_EXTERNAL.includes(isA)
+        ? searchLoadedExternal(
+            store.resources,
+            searchValue,
+            isA,
+            serverUrl,
+          ).filter(subject => !results.includes(subject))
+        : [],
+    [isA, scopes, allowsOnly, store, searchValue, serverUrl, results],
+  );
+
   const options: Option[] = useMemo(
     () => [
       ...addIf(showCreateOption, {
@@ -117,8 +149,12 @@ export function SearchBoxWindow({
         data: option,
       })),
       ...results.map(result => ({ type: OptionType.Result, data: result })),
+      ...loadedExternal.map(result => ({
+        type: OptionType.Result,
+        data: result,
+      })),
     ],
-    [showCreateOption, standardOptions, results],
+    [showCreateOption, standardOptions, results, loadedExternal],
   );
 
   const selectedIndex =
@@ -307,6 +343,7 @@ export function SearchBoxWindow({
                 line = (
                   <ResourceResultLine
                     subject={option.data}
+                    origin={externalOrigin(option.data, serverUrl)}
                     selected={i === selectedIndex}
                     onMouseOver={() => handleMouseMove(i)}
                     onClick={() => {
@@ -336,9 +373,11 @@ export function SearchBoxWindow({
               );
             })}
           </List>
-          {!!searchValue && results.length === 0 && (
-            <CenteredMessage>No Results</CenteredMessage>
-          )}
+          {!!searchValue &&
+            results.length === 0 &&
+            loadedExternal.length === 0 && (
+              <CenteredMessage>No Results</CenteredMessage>
+            )}
         </StyledScrollArea>
       </ResultBox>
       {allowsOnly ? (
