@@ -36,7 +36,10 @@ export function AccountSignInPanel({
   onSignedIn: () => void;
 }) {
   const theme = useTheme();
-  const [google, setGoogle] = useState(false);
+  const [providers, setProviders] = useState({
+    google: false,
+    assisted_recovery: false,
+  });
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -50,7 +53,7 @@ export function AccountSignInPanel({
 
   useEffect(() => {
     let live = true;
-    void getAccountProviders().then(p => live && setGoogle(p.google));
+    void getAccountProviders().then(p => live && setProviders(p));
 
     return () => {
       live = false;
@@ -123,7 +126,9 @@ export function AccountSignInPanel({
     <Themed>
       <AccountSignIn
         googleHref={
-          google ? googleSignInUrl(portalUrl, window.location.href) : null
+          providers.google
+            ? googleSignInUrl(portalUrl, window.location.href)
+            : null
         }
         onPasskey={() => void handlePasskey()}
         passkeySupported={hasPasskeyApi()}
@@ -133,6 +138,7 @@ export function AccountSignInPanel({
         busy={busy || disabled}
         sending={sending}
         theme={theme.darkMode ? 'dark' : 'light'}
+        assistedRecovery={providers.assisted_recovery}
         notice={
           error ? (
             <CardError role='alert'>{error}</CardError>
@@ -150,6 +156,7 @@ export function AccountSignInPanel({
 
 const Themed = styled.div`
   --service-accent: ${p => p.theme.colors.main};
+  --service-surface: ${p => p.theme.colors.bg};
   --service-on-accent: ${p => p.theme.colors.bg};
   --service-muted: ${p => p.theme.colors.textLight};
   --service-text: ${p => p.theme.colors.text};
@@ -181,7 +188,10 @@ export function AccountSignInViaBrowser({
   onSignedIn: () => void;
 }) {
   const theme = useTheme();
-  const [google, setGoogle] = useState(false);
+  const [providers, setProviders] = useState({
+    google: false,
+    assisted_recovery: false,
+  });
   const [email, setEmail] = useState('');
   const [request, setRequest] = useState<LinkRequest | null>(null);
   const [busy, setBusy] = useState(false);
@@ -195,7 +205,7 @@ export function AccountSignInViaBrowser({
 
   useEffect(() => {
     let live = true;
-    void getAccountProviders().then(p => live && setGoogle(p.google));
+    void getAccountProviders().then(p => live && setProviders(p));
 
     return () => {
       live = false;
@@ -259,7 +269,7 @@ export function AccountSignInViaBrowser({
     <Themed>
       <AccountSignIn
         googleHref={null}
-        onGoogle={google ? () => void open('google') : undefined}
+        onGoogle={providers.google ? () => void open('google') : undefined}
         onPasskey={() => void open('passkey')}
         email={email}
         onEmailChange={setEmail}
@@ -269,6 +279,7 @@ export function AccountSignInViaBrowser({
         }}
         busy={busy || disabled}
         theme={theme.darkMode ? 'dark' : 'light'}
+        assistedRecovery={providers.assisted_recovery}
         notice={
           error ? (
             <CardError role='alert'>{error}</CardError>

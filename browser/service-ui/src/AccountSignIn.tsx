@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react';
+import { useRef, type FormEvent, type ReactNode } from 'react';
 
 /**
  * Every way into an Atomic account, in one order, wherever someone signs in:
@@ -14,6 +14,20 @@ export type AccountSignInCopy = {
   emailLabel: string;
   send: string;
   sending: string;
+  info: AccountSignInInfoCopy;
+};
+
+/** "How safe is each option?": what each one trusts, and who can see what. */
+export type AccountSignInInfoCopy = {
+  open: string;
+  title: string;
+  close: string;
+  options: { name: string; text: string }[];
+  unlockTitle: string;
+  /** When signing in alone opens the identity (assisted recovery). */
+  unlockAssisted: string;
+  /** When the identity also needs a passkey or recovery code. */
+  unlockSeparate: string;
 };
 
 export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
@@ -26,6 +40,30 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     emailLabel: 'Email',
     send: 'Email me a link',
     sending: 'Sending',
+    info: {
+      open: 'How safe is each option?',
+      title: 'How safe is each option?',
+      close: 'Close',
+      options: [
+        {
+          name: 'Passkey',
+          text: 'The safest. Your fingerprint, face or screen lock proves it is you. The key stays on your device or in your password manager, a fake website cannot use it, and nobody else is involved.',
+        },
+        {
+          name: 'Google',
+          text: 'Google confirms your email address to us, and that address is all we receive. Google learns that you signed in to Atomic. Whoever controls your Google account can sign in.',
+        },
+        {
+          name: 'Email link',
+          text: 'We send a link that works once, within 24 hours. Whoever can read your inbox can sign in. The email goes out through our mail provider, Postmark.',
+        },
+      ],
+      unlockTitle: 'What signing in opens',
+      unlockAssisted:
+        'Any of these is enough to open your Atomic identity on a new device. That works because Atomic keeps a key that, together with our database, can unlock your encrypted identity backup. Our service only hands it to your own account right after you sign in. So this is convenient, but not zero-knowledge: someone who got hold of both that key and our database could open your identity.',
+      unlockSeparate:
+        'Signing in gives you your account: billing, hosted drives and your encrypted backup. Opening your Atomic identity on a new device also needs your passkey or recovery code, which Atomic cannot read.',
+    },
   },
   nl: {
     google: 'Doorgaan met Google',
@@ -36,6 +74,30 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     emailLabel: 'E-mail',
     send: 'Stuur me een link',
     sending: 'Bezig met versturen',
+    info: {
+      open: 'Hoe veilig is elke optie?',
+      title: 'Hoe veilig is elke optie?',
+      close: 'Sluiten',
+      options: [
+        {
+          name: 'Passkey',
+          text: 'Het veiligst. Je vingerafdruk, gezicht of schermvergrendeling bewijst dat jij het bent. De sleutel blijft op je apparaat of in je wachtwoordbeheerder, een nepwebsite kan hem niet gebruiken en er komt niemand anders aan te pas.',
+        },
+        {
+          name: 'Google',
+          text: 'Google bevestigt je e-mailadres aan ons, en dat adres is alles wat we krijgen. Google ziet dat je bij Atomic inlogt. Wie je Google-account beheert, kan inloggen.',
+        },
+        {
+          name: 'E-maillink',
+          text: 'We sturen een link die één keer werkt, binnen 24 uur. Wie je inbox kan lezen, kan inloggen. De e-mail gaat via onze mailprovider Postmark.',
+        },
+      ],
+      unlockTitle: 'Wat inloggen opent',
+      unlockAssisted:
+        'Elk van deze opties is genoeg om je Atomic-identiteit op een nieuw apparaat te openen. Dat kan omdat Atomic een sleutel bewaart die, samen met onze database, je versleutelde identiteitsback-up kan openen. Onze dienst geeft die alleen aan je eigen account, direct nadat je bent ingelogd. Dat is handig, maar niet zero-knowledge: wie zowel die sleutel als onze database in handen krijgt, kan je identiteit openen.',
+      unlockSeparate:
+        'Inloggen geeft je je account: facturering, gehoste drives en je versleutelde back-up. Om je Atomic-identiteit op een nieuw apparaat te openen, heb je daarnaast je passkey of herstelcode nodig. Die kan Atomic niet lezen.',
+    },
   },
 };
 
@@ -55,6 +117,7 @@ export function AccountSignIn({
   autoFocusEmail = false,
   notice,
   theme,
+  assistedRecovery = false,
 }: {
   /** Where "Continue with Google" goes; `null` when the account service has
    * no Google client, which is the same answer on every screen. */
@@ -79,7 +142,11 @@ export function AccountSignIn({
   notice?: ReactNode;
   /** The host's explicit theme; the system's when left out. */
   theme?: 'light' | 'dark';
+  /** Signing in alone opens the identity; the info dialog says so. */
+  assistedRecovery?: boolean;
 }) {
+  const info = useRef<HTMLDialogElement>(null);
+
   return (
     <div className='atomic-signin' data-signin-theme={theme}>
       {googleHref ? (
@@ -143,6 +210,44 @@ export function AccountSignIn({
         </button>
       </form>
       {notice}
+      <button
+        type='button'
+        className='atomic-signin-info-open'
+        onClick={() => info.current?.showModal()}
+        data-test='sign-in-info'
+      >
+        {copy.info.open}
+      </button>
+      <dialog
+        ref={info}
+        className='atomic-signin-info'
+        aria-labelledby='atomic-signin-info-title'
+        onClick={e => {
+          // A press on the backdrop lands on the dialog itself.
+          if (e.target === e.currentTarget) e.currentTarget.close();
+        }}
+      >
+        <h2 id='atomic-signin-info-title'>{copy.info.title}</h2>
+        <dl>
+          {copy.info.options.map(option => (
+            <div key={option.name}>
+              <dt>{option.name}</dt>
+              <dd>{option.text}</dd>
+            </div>
+          ))}
+        </dl>
+        <h3>{copy.info.unlockTitle}</h3>
+        <p>
+          {assistedRecovery
+            ? copy.info.unlockAssisted
+            : copy.info.unlockSeparate}
+        </p>
+        <form method='dialog'>
+          <button type='submit' className='atomic-signin-submit'>
+            {copy.info.close}
+          </button>
+        </form>
+      </dialog>
     </div>
   );
 }
