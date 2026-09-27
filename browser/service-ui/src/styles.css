@@ -107,6 +107,18 @@
   opacity: 0.6;
   pointer-events: none;
 }
+.atomic-signin-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.atomic-signin-row > * {
+  flex: 1 1 0;
+  min-width: 112px;
+}
+.atomic-signin-row:empty {
+  display: none;
+}
 .atomic-signin-or {
   display: flex;
   align-items: center;

@@ -32,7 +32,7 @@ export type AccountSignInInfoCopy = {
 
 export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
   en: {
-    google: 'Continue with Google',
+    google: 'Google',
     passkey: 'Sign in with passkey',
     passkeyUnavailable:
       'This browser does not support passkeys. Use Google or an email link instead.',
@@ -66,7 +66,7 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     },
   },
   nl: {
-    google: 'Doorgaan met Google',
+    google: 'Google',
     passkey: 'Inloggen met passkey',
     passkeyUnavailable:
       'Deze browser ondersteunt geen passkeys. Gebruik Google of een e-maillink.',
@@ -119,7 +119,7 @@ export function AccountSignIn({
   theme,
   assistedRecovery = false,
 }: {
-  /** Where "Continue with Google" goes; `null` when the account service has
+  /** Where the Google option goes; `null` when the account service has
    * no Google client, which is the same answer on every screen. */
   googleHref: string | null;
   /** Instead of `googleHref`, for a host that has to do something first
@@ -149,46 +149,6 @@ export function AccountSignIn({
 
   return (
     <div className='atomic-signin' data-signin-theme={theme}>
-      {googleHref ? (
-        <a
-          className='atomic-signin-option'
-          href={googleHref}
-          aria-disabled={busy || undefined}
-          onClick={e => busy && e.preventDefault()}
-          data-test='google-sign-in'
-        >
-          <GoogleMark />
-          <span>{copy.google}</span>
-        </a>
-      ) : onGoogle ? (
-        <button
-          type='button'
-          className='atomic-signin-option'
-          disabled={busy}
-          onClick={onGoogle}
-          data-test='google-sign-in'
-        >
-          <GoogleMark />
-          <span>{copy.google}</span>
-        </button>
-      ) : null}
-      {passkeySupported ? (
-        <button
-          type='button'
-          className='atomic-signin-option'
-          disabled={busy}
-          onClick={onPasskey}
-          data-test='passkey-sign-in'
-        >
-          <PasskeyMark />
-          <span>{copy.passkey}</span>
-        </button>
-      ) : (
-        <p className='atomic-signin-hint'>{copy.passkeyUnavailable}</p>
-      )}
-      <p className='atomic-signin-or' aria-hidden='true'>
-        <span>{copy.or}</span>
-      </p>
       <form className='atomic-signin-email' onSubmit={onSubmitEmail}>
         <label htmlFor={emailInputId}>{copy.emailLabel}</label>
         <input
@@ -209,6 +169,48 @@ export function AccountSignIn({
           {sending ? copy.sending : copy.send}
         </button>
       </form>
+      <p className='atomic-signin-or' aria-hidden='true'>
+        <span>{copy.or}</span>
+      </p>
+      {passkeySupported ? (
+        <button
+          type='button'
+          className='atomic-signin-option'
+          disabled={busy}
+          onClick={onPasskey}
+          data-test='passkey-sign-in'
+        >
+          <PasskeyMark />
+          <span>{copy.passkey}</span>
+        </button>
+      ) : (
+        <p className='atomic-signin-hint'>{copy.passkeyUnavailable}</p>
+      )}
+      <div className='atomic-signin-row'>
+        {googleHref ? (
+          <a
+            className='atomic-signin-option'
+            href={googleHref}
+            aria-disabled={busy || undefined}
+            onClick={e => busy && e.preventDefault()}
+            data-test='google-sign-in'
+          >
+            <GoogleMark />
+            <span>{copy.google}</span>
+          </a>
+        ) : onGoogle ? (
+          <button
+            type='button'
+            className='atomic-signin-option'
+            disabled={busy}
+            onClick={onGoogle}
+            data-test='google-sign-in'
+          >
+            <GoogleMark />
+            <span>{copy.google}</span>
+          </button>
+        ) : null}
+      </div>
       {notice}
       <button
         type='button'
