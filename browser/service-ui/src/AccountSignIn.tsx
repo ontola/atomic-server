@@ -1,4 +1,4 @@
-import { useRef, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 /**
  * Every way into an Atomic account, in one order, wherever someone signs in:
@@ -11,6 +11,10 @@ export type AccountSignInCopy = {
   apple: string;
   github: string;
   passkey: string;
+  /** "Sign in with secret", and its field once opened. */
+  secret: string;
+  secretLabel: string;
+  secretSubmit: string;
   or: string;
   emailLabel: string;
   send: string;
@@ -37,6 +41,9 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     apple: 'Apple',
     github: 'GitHub',
     passkey: 'Sign in with passkey',
+    secret: 'Sign in with secret',
+    secretLabel: 'Your Atomic secret',
+    secretSubmit: 'Sign in',
     or: 'or',
     emailLabel: 'Email',
     send: 'Email me a link',
@@ -66,6 +73,10 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
           name: 'Email link',
           text: 'We send a link that works once, within 24 hours. Whoever can read your inbox can sign in. The email goes out through our mail provider, Postmark.',
         },
+        {
+          name: 'Secret',
+          text: 'The key of your Atomic identity itself. It never leaves your device: it only signs a one-time challenge, and nobody else is involved. Whoever has it is you, so keep it somewhere safe, like a password manager.',
+        },
       ],
       unlockTitle: 'What signing in opens',
       unlockAssisted:
@@ -79,6 +90,9 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     apple: 'Apple',
     github: 'GitHub',
     passkey: 'Inloggen met passkey',
+    secret: 'Inloggen met secret',
+    secretLabel: 'Je Atomic-secret',
+    secretSubmit: 'Inloggen',
     or: 'of',
     emailLabel: 'E-mail',
     send: 'Stuur me een link',
@@ -108,6 +122,10 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
           name: 'E-maillink',
           text: 'We sturen een link die één keer werkt, binnen 24 uur. Wie je inbox kan lezen, kan inloggen. De e-mail gaat via onze mailprovider Postmark.',
         },
+        {
+          name: 'Secret',
+          text: 'De sleutel van je Atomic-identiteit zelf. Hij verlaat je apparaat nooit: hij ondertekent alleen een eenmalige uitdaging, en er komt niemand anders aan te pas. Wie hem heeft, kan als jou inloggen, dus bewaar hem veilig, bijvoorbeeld in een wachtwoordbeheerder.',
+        },
       ],
       unlockTitle: 'Wat inloggen opent',
       unlockAssisted:
@@ -125,6 +143,7 @@ export function AccountSignIn({
   onApple,
   githubHref = null,
   onGitHub,
+  onSecret,
   onPasskey,
   passkeySupported = true,
   email,
@@ -152,6 +171,10 @@ export function AccountSignIn({
   /** The GitHub option, as `googleHref`. */
   githubHref?: string | null;
   onGitHub?: () => void;
+  /** Sign in with the Atomic secret the person pastes. The host proves it
+   * (it never leaves the device) and reports failures through `notice`.
+   * Left out, the option is not shown: a host with its own secret field. */
+  onSecret?: (secret: string) => void;
   onPasskey: () => void;
   passkeySupported?: boolean;
   email: string;
@@ -173,6 +196,8 @@ export function AccountSignIn({
   assistedRecovery?: boolean;
 }) {
   const info = useRef<HTMLDialogElement>(null);
+  const [secretOpen, setSecretOpen] = useState(false);
+  const [secret, setSecret] = useState('');
 
   return (
     <div className='atomic-signin' data-signin-theme={theme}>
@@ -237,6 +262,48 @@ export function AccountSignIn({
           label={copy.github}
         />
       </div>
+      {onSecret && !secretOpen ? (
+        <button
+          type='button'
+          className='atomic-signin-option'
+          disabled={busy}
+          onClick={() => setSecretOpen(true)}
+          data-test='secret-sign-in'
+        >
+          <SecretMark />
+          <span>{copy.secret}</span>
+        </button>
+      ) : null}
+      {onSecret && secretOpen ? (
+        <form
+          className='atomic-signin-email'
+          onSubmit={e => {
+            e.preventDefault();
+            onSecret(secret.trim());
+          }}
+        >
+          <label htmlFor={`${emailInputId}-secret`}>{copy.secretLabel}</label>
+          <input
+            id={`${emailInputId}-secret`}
+            type='password'
+            name='secret'
+            value={secret}
+            onChange={e => setSecret(e.target.value)}
+            autoComplete='current-password'
+            spellCheck={false}
+            autoFocus
+            required
+            data-test='secret-input'
+          />
+          <button
+            type='submit'
+            className='atomic-signin-submit'
+            disabled={busy || !secret.trim()}
+          >
+            {copy.secretSubmit}
+          </button>
+        </form>
+      ) : null}
       {notice}
       <button
         type='button'
@@ -405,6 +472,22 @@ function GitHubMark() {
       fill='currentColor'
     >
       <path d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z' />
+    </svg>
+  );
+}
+
+// A lock, in the text colour: the secret is the key to the identity itself.
+function SecretMark() {
+  return (
+    <svg
+      width='18'
+      height='18'
+      viewBox='0 0 24 24'
+      aria-hidden='true'
+      focusable='false'
+      fill='currentColor'
+    >
+      <path d='M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9zm3 4a2 2 0 0 1 1 3.73V19h-2v-1.27A2 2 0 0 1 12 14z' />
     </svg>
   );
 }
