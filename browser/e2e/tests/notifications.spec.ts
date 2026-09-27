@@ -4,6 +4,9 @@
  * notification when the app isn't focused. Each lands in the Inbox, which the
  * Notifications page lists with an unread count in the sidebar.
  *
+ * Focus and visibility are stubbed too, so the runner's window layout can't
+ * decide which path a notification takes.
+ *
  * The OS side is observed through a stub `window.Notification`: the real one
  * needs a permission prompt, and the app itself only ever talks to that API
  * (in Tauri too, where the notification plugin provides it).
@@ -62,6 +65,15 @@ test.describe('notifications', () => {
       // @ts-expect-error: test stand-in for the browser API
       window.Notification = FakeNotification;
       document.hasFocus = () => !window.__blurred;
+      // A headless browser with a second window open can report this page
+      // as hidden, which would send everything to the OS path. The test
+      // decides, not the runner.
+      Object.defineProperty(document, 'hidden', {
+        get: () => !!window.__blurred,
+      });
+      Object.defineProperty(document, 'visibilityState', {
+        get: () => (window.__blurred ? 'hidden' : 'visible'),
+      });
     });
     await page.reload();
 
