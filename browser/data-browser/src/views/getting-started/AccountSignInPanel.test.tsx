@@ -14,6 +14,9 @@ const state = vi.hoisted(() => ({
     assisted_recovery: false,
   },
   openExternal: vi.fn(async () => undefined),
+  inTauri: false,
+  requested: [] as (string | undefined)[],
+  redeem: vi.fn(async (..._args: unknown[]) => true),
 }));
 
 vi.mock('../../helpers/managed/accountProviders', async original => ({
@@ -22,10 +25,22 @@ vi.mock('../../helpers/managed/accountProviders', async original => ({
   >()),
   getAccountProviders: async () => state.providers,
 }));
-vi.mock('../../helpers/managed/deviceLink', () => ({
+vi.mock('../../helpers/managed/deviceLink', async original => ({
+  parseAccountReturn: (
+    await original<typeof import('../../helpers/managed/deviceLink')>()
+  ).parseAccountReturn,
   approvalUrl: (portal: string, code: string) => `${portal}/link?code=${code}`,
   awaitDeviceLink: () => new Promise(() => undefined),
-  requestDeviceLink: async () => ({ user_code: 'ABCD-EFGH' }),
+  newReturnVerifier: () => ({ verifier: 'V', challenge: 'C' }),
+  redeemDeviceLink: state.redeem,
+  requestDeviceLink: async (_p: string, _n?: string, challenge?: string) => {
+    state.requested.push(challenge);
+
+    return { user_code: 'ABCD-EFGH', device_code: 'DC' };
+  },
+}));
+vi.mock('../../helpers/tauri', () => ({
+  isRunningInTauri: () => state.inTauri,
 }));
 vi.mock('../../helpers/openExternal', () => ({
   openExternal: state.openExternal,
@@ -74,4 +89,43 @@ it('opens a provider in the system browser from an app window', async () => {
   expect(state.openExternal).toHaveBeenCalledWith(
     `${PORTAL}/link?code=ABCD-EFGH&via=github`,
   );
+});
+
+it('in the desktop app, signing in in the browser is enough', async () => {
+  state.inTauri = true;
+  state.requested = [];
+  const onSignedIn = vi.fn();
+  await show(
+    <AccountSignInViaBrowser portalUrl={PORTAL} onSignedIn={onSignedIn} />,
+  );
+
+  await act(async () => {
+    screen.getByRole('button', { name: 'Google' }).click();
+  });
+
+  expect(state.requested).toEqual(['C']);
+  expect(state.openExternal).toHaveBeenLastCalledWith(
+    `${PORTAL}/link?code=ABCD-EFGH&via=google&return=app`,
+  );
+
+  // Another request's handoff is not this one's.
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent('atomic-deep-link', {
+        detail: 'atomic://account-return?code=ZZZZ-ZZZZ&handoff=X',
+      }),
+    );
+  });
+  expect(state.redeem).not.toHaveBeenCalled();
+
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent('atomic-deep-link', {
+        detail: 'atomic://account-return?code=ABCD-EFGH&handoff=H1',
+      }),
+    );
+  });
+  expect(state.redeem).toHaveBeenCalledWith(PORTAL, 'DC', 'H1', 'V');
+  expect(onSignedIn).toHaveBeenCalledOnce();
+  state.inTauri = false;
 });

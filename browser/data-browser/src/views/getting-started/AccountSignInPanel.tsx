@@ -15,10 +15,15 @@ import { hasPasskeyApi } from '../../helpers/passkeySupport';
 import {
   approvalUrl,
   awaitDeviceLink,
+  newReturnVerifier,
+  parseAccountReturn,
+  redeemDeviceLink,
   requestDeviceLink,
   type LinkRequest,
 } from '../../helpers/managed/deviceLink';
+import { setAccountReturnHandler } from '../../helpers/deepLinkQueue';
 import { openExternal } from '../../helpers/openExternal';
+import { isRunningInTauri } from '../../helpers/tauri';
 import { CardError } from './chrome';
 
 const EMAIL_POLL_MS = 2000;
@@ -205,6 +210,11 @@ export function AccountSignInViaBrowser({
   const [error, setError] = useState<string | null>(null);
   const waiting = useRef<AbortController | null>(null);
   const signedIn = useRef(onSignedIn);
+  /** The request in flight and, for an app the provider can send back to,
+   * the verifier only this app holds. */
+  const pending = useRef<{ request: LinkRequest; verifier?: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     signedIn.current = onSignedIn;
@@ -214,11 +224,40 @@ export function AccountSignInViaBrowser({
     let live = true;
     void getAccountProviders().then(p => live && setProviders(p));
 
+    // Signed in in the browser, which sent the handoff back through
+    // atomic://. Only this request's own handoff, redeemed with its verifier,
+    // can finish it; anything else is ignored.
+    const stopListening = setAccountReturnHandler(uri => {
+      const back = parseAccountReturn(uri);
+      const current = pending.current;
+
+      if (!back || !current?.verifier) return;
+      if (back.code !== current.request.user_code) return;
+
+      void redeemDeviceLink(
+        portalUrl,
+        current.request.device_code,
+        back.handoff,
+        current.verifier,
+      )
+        .catch(() => false)
+        .then(ok => {
+          if (!ok || !live) return;
+
+          pending.current = null;
+          waiting.current?.abort();
+          waiting.current = null;
+          setRequest(null);
+          signedIn.current();
+        });
+    });
+
     return () => {
       live = false;
+      stopListening();
       waiting.current?.abort();
     };
-  }, []);
+  }, [portalUrl]);
 
   function wait(issued: LinkRequest) {
     if (waiting.current) return;
@@ -230,6 +269,7 @@ export function AccountSignInViaBrowser({
       .catch(() => 'expired' as const)
       .then(outcome => {
         waiting.current = null;
+        pending.current = null;
         setRequest(null);
 
         if (controller.signal.aborted) return;
@@ -243,9 +283,17 @@ export function AccountSignInViaBrowser({
     setBusy(true);
     setError(null);
 
+    // The desktop and Android apps can be sent back to through atomic://,
+    // so signing in there is enough; a browser app keeps the code.
+    const sendBack = isRunningInTauri();
+    const returnVerifier = sendBack ? newReturnVerifier() : undefined;
     const issued =
       request ??
-      (await requestDeviceLink(portalUrl).catch((err: unknown) =>
+      (await requestDeviceLink(
+        portalUrl,
+        undefined,
+        returnVerifier?.challenge,
+      ).catch((err: unknown) =>
         err instanceof Error ? err : new Error(String(err)),
       ));
     setBusy(false);
@@ -260,9 +308,15 @@ export function AccountSignInViaBrowser({
       return;
     }
 
+    if (!request) {
+      pending.current = { request: issued, verifier: returnVerifier?.verifier };
+    }
+
     setRequest(issued);
     const url = new URL(approvalUrl(portalUrl, issued.user_code));
     url.searchParams.set('via', via);
+
+    if (pending.current?.verifier) url.searchParams.set('return', 'app');
 
     if (via === 'email' && email.trim()) {
       url.searchParams.set('email', email.trim());
