@@ -4,8 +4,10 @@ import { AccountSignIn } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
 import {
   getAccountProviders,
-  googleSignInUrl,
+  providerSignInUrl,
   sendAccountEmailLink,
+  type AccountProviders,
+  type SignInProvider,
 } from '../../helpers/managed/accountProviders';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import { getManagedAccount } from '../../helpers/managed/session';
@@ -21,9 +23,16 @@ import { CardError } from './chrome';
 
 const EMAIL_POLL_MS = 2000;
 
+const NO_PROVIDERS: AccountProviders = {
+  google: false,
+  apple: false,
+  github: false,
+  assisted_recovery: false,
+};
+
 /**
  * The account's ways in, the same component and the same options as the
- * portal's sign-in page: Google, passkey, email link. `onSignedIn` runs once
+ * portal's sign-in page: Google, Apple, GitHub, passkey, email link. `onSignedIn` runs once
  * this browser holds an account session, however it got one.
  */
 export function AccountSignInPanel({
@@ -36,10 +45,7 @@ export function AccountSignInPanel({
   onSignedIn: () => void;
 }) {
   const theme = useTheme();
-  const [providers, setProviders] = useState({
-    google: false,
-    assisted_recovery: false,
-  });
+  const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -122,14 +128,17 @@ export function AccountSignInPanel({
     setSentTo(email.trim());
   }
 
+  const href = (provider: SignInProvider) =>
+    providers[provider]
+      ? providerSignInUrl(provider, portalUrl, window.location.href)
+      : null;
+
   return (
     <Themed>
       <AccountSignIn
-        googleHref={
-          providers.google
-            ? googleSignInUrl(portalUrl, window.location.href)
-            : null
-        }
+        googleHref={href('google')}
+        appleHref={href('apple')}
+        githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
         passkeySupported={hasPasskeyApi()}
         email={email}
@@ -176,7 +185,8 @@ const Sent = styled.p`
  * desktop and Android apps, a self-hosted origin): each one opens the
  * portal in the system browser, straight at that option, with a device-link
  * code, and this screen continues once the code is approved there. Google
- * refuses to sign in inside an app window anyway.
+ * refuses to sign in inside an app window anyway, and Apple's answer is a
+ * POST no app window could receive.
  */
 export function AccountSignInViaBrowser({
   portalUrl,
@@ -188,10 +198,7 @@ export function AccountSignInViaBrowser({
   onSignedIn: () => void;
 }) {
   const theme = useTheme();
-  const [providers, setProviders] = useState({
-    google: false,
-    assisted_recovery: false,
-  });
+  const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
   const [email, setEmail] = useState('');
   const [request, setRequest] = useState<LinkRequest | null>(null);
   const [busy, setBusy] = useState(false);
@@ -232,7 +239,7 @@ export function AccountSignInViaBrowser({
       });
   }
 
-  async function open(via: 'google' | 'passkey' | 'email') {
+  async function open(via: SignInProvider | 'passkey' | 'email') {
     setBusy(true);
     setError(null);
 
@@ -270,6 +277,10 @@ export function AccountSignInViaBrowser({
       <AccountSignIn
         googleHref={null}
         onGoogle={providers.google ? () => void open('google') : undefined}
+        appleHref={null}
+        onApple={providers.apple ? () => void open('apple') : undefined}
+        githubHref={null}
+        onGitHub={providers.github ? () => void open('github') : undefined}
         onPasskey={() => void open('passkey')}
         email={email}
         onEmailChange={setEmail}
