@@ -682,7 +682,10 @@ export class AtomicServer {
     // by the rust/wasm lanes. A Locked mount here used to serialize pub get /
     // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
     // the step that merely ran `flutter pub get`).
-    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
+    // The volume is still mounted Shared, so its Cargo locks live inside it
+    // (see the symlinks below). A fresh name keeps older branches, which
+    // mount it with private locks, out of this cache.
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo-shared-locks-v1');
     const flutterRustTarget = this.targetCache('flutter-plugin-rust-target');
     const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
     const flutterRustup = dag.cacheVolume('flutter-rustup');
@@ -748,6 +751,22 @@ export class AtomicServer {
         .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
           sharing: CacheSharingMode.Shared,
         })
+        // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
+        // in CARGO_HOME, outside the shared volume, so two runs on one engine
+        // unpacked the same crate at once and failed with
+        // "failed to unpack package ... .cargo-ok: File exists".
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache',
+          '/root/.cargo/.package-cache',
+        ])
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache-mutate',
+          '/root/.cargo/.package-cache-mutate',
+        ])
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
@@ -1600,6 +1619,15 @@ export class AtomicServer {
         // The musl-cross image needs `/usr/local/musl/bin` (for
         // `x86_64-unknown-linux-musl-gcc`); a hardcoded PATH drop caused
         // "linker not found" while compiling plugin-example tests.
+        //
+        // The install unpacks into a staging directory and renames the binary
+        // into place, because the volume is Shared and two runs on one engine
+        // race on it. `tar` straight into `$BIN_DIR` creates the executable
+        // before it has finished writing it, so the other run's `-x` test
+        // passes, it skips the install, and its `cargo nextest` exec of a
+        // file still open for writing fails with "Text file busy
+        // (os error 26)" before any test body runs. A rename is atomic, so a
+        // concurrent run sees either no binary or a complete one.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
         })
@@ -1627,7 +1655,10 @@ export class AtomicServer {
           'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
             'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
-            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
+            'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
+            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
+            'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
+            'rm -rf "$STAGE"; fi && ' +
             'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +

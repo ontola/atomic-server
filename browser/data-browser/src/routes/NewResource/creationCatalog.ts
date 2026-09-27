@@ -55,7 +55,14 @@ export const BASIC_CREATIONS = [
   },
 ];
 
-/** These classes are minted per drive, so they must be offered before they exist. */
+/**
+ * These classes are minted per drive, so they must be offered before they exist.
+ *
+ * `searchOnly` ones stay out of the Start blank grid. A blank Website or App is
+ * only a starting point for the assistant: without it, an App's code cannot be
+ * changed from its page and a Website's design cannot be changed at all. They
+ * still turn up when searched for by name, so they can be made without AI.
+ */
 export const DRIVE_CREATIONS = [
   {
     shortname: 'plugin-script',
@@ -67,11 +74,13 @@ export const DRIVE_CREATIONS = [
     shortname: 'website-project',
     title: 'Website',
     description: 'Build a website from your documents and tables.',
+    searchOnly: true,
   },
   {
     shortname: 'app',
     title: 'App',
     description: 'Create an interactive app backed by its own data.',
+    searchOnly: true,
   },
 ] as const;
 
