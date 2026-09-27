@@ -4,6 +4,21 @@ import { before, clickPageEdit, waitForSynced } from './test-utils';
 test('inline website editing saves rich documents and typed prices to Atomic', async ({
   page,
 }) => {
+  // The 60s default is not enough for this journey. It creates a website with a
+  // table, a Property and a document, opens the preview, edits a typed field and
+  // a rich-text document through it, then reloads and checks both survived.
+  // Measured over eight four-worker rounds on a 4-core box, the test itself:
+  //
+  //     40873  44664  46061  46298  49503  50259  51255  52214 ms
+  //
+  // 52.2s of 60s leaves nothing for a slow step anywhere, and one round in
+  // fourteen died on the wall while the post-reload wait was still running,
+  // which reports the wall rather than the step that was late. Two of the six
+  // rounds run after this change went to 59.6s and 60.0s, so the old wall was
+  // being won rather than met. 120s matches `website-inline-rte.spec.ts`, the
+  // other test that drives this preview, and keeps the individual action limits
+  // doing the work of naming a failure.
+  test.setTimeout(120_000);
   await before({ page });
   await page
     .getByRole('button', { name: 'New Document', exact: true })

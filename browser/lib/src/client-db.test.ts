@@ -3,6 +3,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { ClientDbWorker } from './client-db.js';
 import { RequestCancelledError } from './error.js';
 
+/** The 2s leader election plus the 15s a steal gets to settle, and a tick. */
+const LEADER_ELECTION_AND_STEAL_MS = 17_500;
+
 describe('ClientDbWorker without a secure context', () => {
   it('parks in server-only mode with a clear error when Web Locks are unavailable', async () => {
     // Simulate an insecure context (plain HTTP on a non-localhost origin, e.g.
@@ -67,6 +70,158 @@ describe('ClientDbWorker cold initialization', () => {
       await initialized;
       expect(request).toHaveBeenCalledTimes(1);
       expect(warn).not.toHaveBeenCalled();
+    } finally {
+      db.destroy();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  // Run 4686 carried 60 "reclaiming the lock did not succeed" messages and not
+  // one "stealing OPFS lock" warning beside them, which can only mean the lock
+  // was ours the whole time and the page was waiting on its own wasm import.
+  // The message sent the reader after another tab that never existed.
+  it('does not blame another tab for its own slow boot', async () => {
+    vi.useFakeTimers();
+    const request = vi.fn((_name, _options, callback) => callback());
+    vi.stubGlobal('navigator', { locks: { request } });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        postMessage() {}
+        close() {}
+      },
+    );
+    // Longer than the boot gets, so the give-up path runs. On the CI box the
+    // same boot measured 7.9s.
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage?: (event: unknown) => void;
+        postMessage(message: { id: string; type?: string }) {
+          if (message.type !== 'init') return;
+
+          setTimeout(
+            () =>
+              this.onmessage?.({ data: { id: message.id, type: 'result' } }),
+            30_000,
+          );
+        }
+        terminate() {}
+      },
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const db = new ClientDbWorker('wasm-url', 'worker-url');
+
+    try {
+      const initialized = db.init('https://example.com');
+      await vi.advanceTimersByTimeAsync(LEADER_ELECTION_AND_STEAL_MS);
+      await initialized;
+
+      // One lock request, so nothing was stolen and nothing else held it.
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('stealing OPFS lock'),
+      );
+      expect(db.initError?.message).toMatch(/has not finished opening/i);
+      expect(db.initError?.message).not.toMatch(/another tab/i);
+
+      // And it recovers on its own once the boot lands, without a reload.
+      await vi.advanceTimersByTimeAsync(14_000);
+      expect(db.initError).toBeUndefined();
+      await expect(db.waitForReady()).resolves.toBe(true);
+    } finally {
+      db.destroy();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  // The budget this pins is not free: `send()` parks every caller on the init
+  // promise, and `Store.hydrateFromLocalDb` runs before the server fetch, so
+  // raising it to let a slow write through also blocks every read for the whole
+  // boot. A class lookup then burns its three tries on its own 10s timeouts and
+  // gives up for good, which renders a website as a bare property list.
+  it('lets a read give up while its own boot drags on, rather than waiting it out', async () => {
+    vi.useFakeTimers();
+    const request = vi.fn((_name, _options, callback) => callback());
+    vi.stubGlobal('navigator', { locks: { request } });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        postMessage() {}
+        close() {}
+      },
+    );
+    // A boot far longer than any budget here, so the read cannot be waiting on
+    // anything but the park.
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage?: (event: unknown) => void;
+        postMessage(message: { id: string; type?: string }) {
+          if (message.type !== 'init') return;
+
+          setTimeout(
+            () =>
+              this.onmessage?.({ data: { id: message.id, type: 'result' } }),
+            40_000,
+          );
+        }
+        terminate() {}
+      },
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const db = new ClientDbWorker('wasm-url', 'worker-url');
+
+    try {
+      void db.init('https://example.com');
+      const read = db.getResource('atomic:some-class');
+      const settled = vi.fn();
+      void read.then(settled, settled);
+
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      await expect(read).rejects.toThrow(/ClientDb unavailable/);
+    } finally {
+      db.destroy();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('still names a real holder when the lock had to be stolen', async () => {
+    vi.useFakeTimers();
+    // A ghost leader: the lock is held, so our queued callback never runs and
+    // no worker is ever spawned. The steal is ignored, as an engine without
+    // `steal` support does.
+    const request = vi.fn(() => new Promise(() => {}));
+    vi.stubGlobal('navigator', { locks: { request } });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        postMessage() {}
+        close() {}
+      },
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const db = new ClientDbWorker('wasm-url', 'worker-url');
+
+    try {
+      const initialized = db.init('https://example.com');
+      await vi.advanceTimersByTimeAsync(LEADER_ELECTION_AND_STEAL_MS);
+      await initialized;
+
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('stealing OPFS lock'),
+      );
+      expect(db.initError?.message).toMatch(/another tab/i);
     } finally {
       db.destroy();
       vi.restoreAllMocks();
