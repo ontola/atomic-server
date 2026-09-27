@@ -66,6 +66,7 @@
 /* AccountSignIn. Styled completely here, so the portal's global button and
    input rules and the app's unstyled defaults end up looking the same. */
 .atomic-signin {
+  container: atomic-signin / inline-size;
   display: grid;
   gap: 12px;
   text-align: left;
@@ -93,6 +94,9 @@
   box-shadow: none;
   cursor: pointer;
 }
+.atomic-signin-option svg {
+  flex-shrink: 0;
+}
 .atomic-signin-option:hover {
   background: #f2f2f2;
 }
@@ -114,7 +118,17 @@
 }
 .atomic-signin-row > * {
   flex: 1 1 0;
-  min-width: 112px;
+  min-width: 0;
+}
+.atomic-signin-row .atomic-signin-option {
+  padding-inline: 8px;
+  gap: 8px;
+}
+/* Three names side by side need about 330px; narrower, one per line. */
+@container atomic-signin (max-width: 330px) {
+  .atomic-signin-row {
+    flex-direction: column;
+  }
 }
 .atomic-signin-row:empty {
   display: none;
