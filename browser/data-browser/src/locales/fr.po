@@ -6280,10 +6280,8 @@ msgstr ""
 msgid "Couldn’t reach {0}. Check your connection and try again."
 msgstr ""
 
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect to {0}"
-msgstr ""
+#~ msgid "Connect to {0}"
+#~ msgstr ""
 
 #: src/routes/History/VersionTitle.tsx
 msgid "Verified"
@@ -6794,9 +6792,8 @@ msgstr ""
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Impossible de déverrouiller avec une clé d’accès. Utilisez votre code de récupération."
 
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect existing account"
-msgstr ""
+#~ msgid "Connect existing account"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Error: Sign in before syncing with another device"
@@ -6819,10 +6816,8 @@ msgstr ""
 msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
 msgstr ""
 
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
-msgstr ""
+#~ msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
+#~ msgstr ""
 
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
@@ -10372,4 +10367,17 @@ msgstr ""
 
 #: src/routes/DemoRoute.tsx
 msgid "Demo setup finished after stall"
+msgstr ""
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Connect this app to your existing {0} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace."
+msgstr ""
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Sign in on this device instead"
+msgstr ""
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Signed in on another device? Use a code"
 msgstr ""
