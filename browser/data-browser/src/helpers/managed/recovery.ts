@@ -67,6 +67,31 @@ export function sameAgent(a: string, b: string): boolean {
   return canonicalIdentifier(a) === canonicalIdentifier(b);
 }
 
+/** A pasted secret that opens a different agent than the signed-in account's. */
+export type SecretAccountConflict = {
+  email: string;
+  accountAgent: string;
+  secretAgent: string;
+};
+
+/**
+ * Whether signing in with `secretAgent` would replace the account that is
+ * signed in here. Using it means ending that account's session, which also
+ * signs the user out of the portal, so the caller has to ask first.
+ */
+export function secretAccountConflict(
+  stored: Pick<RecoverySecret, 'owner_email' | 'agent_subject'> | null,
+  secretAgent: string,
+): SecretAccountConflict | null {
+  if (!stored || sameAgent(stored.agent_subject, secretAgent)) return null;
+
+  return {
+    email: stored.owner_email,
+    accountAgent: stored.agent_subject,
+    secretAgent,
+  };
+}
+
 const RECOVERY_FORMAT_VERSION = 1;
 const ENVELOPE_V2_FORMAT_VERSION = 2;
 const KDF_ITERATIONS = 310_000;

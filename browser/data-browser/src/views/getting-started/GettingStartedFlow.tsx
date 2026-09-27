@@ -17,7 +17,7 @@ import { useSettings } from '../../helpers/AppSettings';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
 import { beat } from '../../helpers/deviceLock';
 import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
-import { connectHostedDrive } from '../../helpers/managed/reconcile';
+import { connectHostedDrive, shortDid } from '../../helpers/managed/reconcile';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { openPrivateHome } from '../../helpers/openPrivateHome';
 import { privateHomeNudge } from '../../helpers/privateHomeNudge';
@@ -53,9 +53,10 @@ import {
   decryptEnvelopeV2,
   decryptEnvelopeWithPasskey,
   envelopeWrapperKinds,
-  sameAgent,
+  secretAccountConflict,
   upgradeToEnvelopeV2,
   type RecoverySecret,
+  type SecretAccountConflict,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
@@ -85,6 +86,7 @@ type Step =
   | 'create'
   | 'restore'
   | 'restore-upgraded'
+  | 'secret-conflict'
   | 'connect-device'
   | 'opening-workspace';
 
@@ -235,6 +237,10 @@ export function GettingStartedFlow({
   >();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
+  /** A pasted secret for another agent, held until the user says which wins. */
+  const [secretConflict, setSecretConflict] = useState<
+    (SecretAccountConflict & { secret: string }) | null
+  >(null);
   /** Shown only after blur/Enter — every prefix of a valid secret is invalid,
    * so erroring while typing would be constant noise. */
   const [secretError, setSecretError] = useState<string | undefined>();
@@ -578,38 +584,68 @@ export function GettingStartedFlow({
   }
 
   /**
-   * Pasting a secret is an explicit "I am this agent". If the control-plane
-   * session belongs to an account whose backup names a *different* agent, the
-   * reconcile gate would bounce the user straight back here
-   * (IDENTITY_RECONCILE_SCENARIOS.md scenario 4) — silently undoing what they
-   * just did, and looking exactly like "I can't sign in".
-   *
-   * That gate exists to converge a *stray* local agent at boot, not to
-   * override a deliberate action. So the stale thing here is the portal
-   * session: end it, and let the secret win.
+   * The account signed in here, when its agent is not the one `agentSubject`
+   * names. A pasted secret may simply be another identity the person owns (an
+   * older agent, or a local node's), and using it means ending this account's
+   * session, which signs them out of the portal too. That is never done
+   * without asking (IDENTITY_RECONCILE_SCENARIOS.md scenario 4).
    */
-  async function releaseConflictingPortalSession(agentSubject: string) {
+  async function findSecretConflict(
+    agentSubject: string,
+  ): Promise<SecretAccountConflict | null> {
     try {
-      const stored = await getRecoverySecret();
-
-      if (stored && !sameAgent(stored.agent_subject, agentSubject)) {
-        clearManagedAccountBinding();
-        await logoutManagedSession();
-        toast(
-          'Signed out of your account here — that secret belongs to a different one.',
-        );
-      }
+      return secretAccountConflict(await getRecoverySecret(), agentSubject);
     } catch {
-      // No session, or the control plane is unreachable: nothing to release.
+      // No session, or the control plane is unreachable: nothing to replace.
+      return null;
     }
   }
 
-  async function handleSignInWithSecret(secret: string) {
+  /**
+   * The user chose the pasted secret over the signed-in account. The reconcile
+   * gate would otherwise bounce them straight back here, so the account
+   * session is the stale thing now: end it, and say which account that was.
+   */
+  async function releaseConflictingPortalSession(
+    conflict: SecretAccountConflict,
+  ) {
+    try {
+      clearManagedAccountBinding();
+      await logoutManagedSession();
+      toast(`Signed out of ${conflict.email}.`);
+    } catch {
+      // Already gone, or the control plane is unreachable: nothing to release.
+    }
+  }
+
+  async function handleSignInWithSecret(
+    secret: string,
+    confirmed?: SecretAccountConflict,
+  ) {
     setLoading(true);
     setError(undefined);
 
     try {
       const newAgent = await Agent.fromSecret(secret);
+
+      const conflict =
+        confirmed ??
+        (newAgent.subject
+          ? await withDeadline(
+              findSecretConflict(newAgent.subject),
+              SIGN_IN_LOOKUP_TIMEOUT_MS,
+              null,
+            )
+          : null);
+
+      if (conflict && !confirmed) {
+        setSecretConflict({ ...conflict, secret });
+        setStep('secret-conflict');
+
+        return;
+      }
+
+      setSecretConflict(null);
       setWorkspaceStage('identity');
       setStep('opening-workspace');
       setAgent(newAgent);
@@ -618,9 +654,9 @@ export function GettingStartedFlow({
       // again, so start the clock fresh (see deviceLock.ts).
       beat();
 
-      if (newAgent.subject) {
+      if (conflict) {
         await withDeadline(
-          releaseConflictingPortalSession(newAgent.subject),
+          releaseConflictingPortalSession(conflict),
           SIGN_IN_LOOKUP_TIMEOUT_MS,
           undefined,
         );
@@ -1387,6 +1423,57 @@ export function GettingStartedFlow({
             </FooterBar>
           </OnboardingWrap>
         </Swap>
+      ) : step === 'secret-conflict' && secretConflict ? (
+        <Swap key='secret-conflict'>
+          <OnboardingWrap>
+            <OnboardingCard key='card'>
+              <Column gap='1rem'>
+                <CardTitle key='title'>
+                  This secret is for a different account
+                </CardTitle>
+                <p key='copy'>
+                  You&apos;re signed in as {secretConflict.email}, but the
+                  secret you entered opens another agent. Using it signs you out
+                  of {secretConflict.email} on {PRODUCT_NAME}.
+                </p>
+                <AgentList key='agents'>
+                  <dt>{secretConflict.email}</dt>
+                  <dd>{shortDid(secretConflict.accountAgent)}</dd>
+                  <dt>This secret</dt>
+                  <dd>{shortDid(secretConflict.secretAgent)}</dd>
+                </AgentList>
+                <Button
+                  key='keep'
+                  type='button'
+                  disabled={loading}
+                  data-test='secret-conflict-keep'
+                  onClick={() => {
+                    setSecretConflict(null);
+                    setSecretValue('');
+                    setStep('signin');
+                  }}
+                >
+                  {`Stay signed in as ${secretConflict.email}`}
+                </Button>
+                <Button
+                  key='replace'
+                  type='button'
+                  subtle
+                  disabled={loading}
+                  data-test='secret-conflict-replace'
+                  onClick={() =>
+                    void handleSignInWithSecret(
+                      secretConflict.secret,
+                      secretConflict,
+                    )
+                  }
+                >
+                  Use this secret and sign out
+                </Button>
+              </Column>
+            </OnboardingCard>
+          </OnboardingWrap>
+        </Swap>
       ) : step === 'restore-upgraded' ? (
         <Swap key='restore-upgraded'>
           <OnboardingWrap>
@@ -1597,6 +1684,25 @@ const PlainExternalLink = styled.a`
   text-decoration: underline;
   /* A link that reads as one thing should wrap as one thing. */
   white-space: nowrap;
+`;
+
+/** The two agents a secret conflict is about, so the choice is concrete. */
+const AgentList = styled.dl`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+
+  & dt {
+    color: ${p => p.theme.colors.textLight};
+  }
+
+  & dd {
+    margin: 0;
+    font-family: monospace;
+    overflow-wrap: anywhere;
+  }
 `;
 
 const OtherWaysLabel = styled.span`

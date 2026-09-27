@@ -5272,9 +5272,8 @@ msgstr ""
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Signed out of your account here — that secret belongs to a different one."
-msgstr ""
+#~ msgid "Signed out of your account here — that secret belongs to a different one."
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "More profile fields"
@@ -12397,4 +12396,31 @@ msgstr ""
 #. 0: query
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
+msgstr ""
+
+#. 0: conflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signed out of {0}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret"
+msgstr ""
+
+#. 0: secretConflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Stay signed in as {0}"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret is for a different account"
+msgstr ""
+
+#. 0: secretConflict.email; 1: secretConflict.email; 2: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use this secret and sign out"
 msgstr ""

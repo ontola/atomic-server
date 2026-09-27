@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Pasting an agent secret that opens a different agent than the signed-in
+  account no longer signs that account out on its own. The app now says which
+  account is signed in, shows both agents, and lets the user stay signed in or
+  use the secret and sign out.
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs

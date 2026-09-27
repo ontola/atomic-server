@@ -5283,9 +5283,8 @@ msgstr "Unlock {0} with your fingerprint, face, or screen lock."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Signed out of your account here — that secret belongs to a different one."
-msgstr "Signed out of your account here — that secret belongs to a different one."
+#~ msgid "Signed out of your account here — that secret belongs to a different one."
+#~ msgstr "Signed out of your account here — that secret belongs to a different one."
 
 #: src/routes/SettingsAgent.tsx
 msgid "More profile fields"
@@ -12444,3 +12443,30 @@ msgstr "No column matches"
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
 msgstr "Search the drive for “{0}”"
+
+#. 0: conflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signed out of {0}."
+msgstr "Signed out of {0}."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret"
+msgstr "This secret"
+
+#. 0: secretConflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Stay signed in as {0}"
+msgstr "Stay signed in as {0}"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret is for a different account"
+msgstr "This secret is for a different account"
+
+#. 0: secretConflict.email; 1: secretConflict.email; 2: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+msgstr "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use this secret and sign out"
+msgstr "Use this secret and sign out"
