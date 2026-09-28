@@ -282,16 +282,13 @@ export const before = async (
 
   if (testInfo) registerPerfPage(testInfo, page);
 
-  // Peer discovery never reaches the public service from a test, whichever
-  // `test` the spec imported. `fixtures.ts` installs this for the specs that
-  // take their `test` from there, but 22 spec files import `test` straight from
-  // `@playwright/test` and so never got it, and every page they open dials
-  // `wss://atomic.place/webrtc-signal` for real. That is silent exactly where it
-  // matters: on a runner that can reach the host the socket connects and the
-  // suite passes while depending on a production service, and only where the
-  // host is unreachable does it surface, as console noise. Nineteen of those 22
-  // call this function, which is why it goes here; the fixture registering it a
-  // second time is harmless.
+  // Peer discovery never reaches a real signalling service from a test,
+  // whichever `test` the spec imported. `fixtures.ts` installs this for the
+  // specs that take their `test` from there; twenty-two spec files import it
+  // straight from `@playwright/test`, and nineteen of those call this function,
+  // which is why it goes here. The app contacts no service unless one is
+  // configured, so this is a guard for the day a build or a stored setting
+  // names one; registering it a second time is harmless.
   await installEmptyDiscoveryRoom(page.context());
 
   await installCommitWatcher(page);

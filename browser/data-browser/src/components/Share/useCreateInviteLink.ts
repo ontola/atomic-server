@@ -4,7 +4,7 @@ import { prepareDriveSharing } from '../../helpers/managed/prepareDriveSharing';
 import { managedFetch } from '../../helpers/managed/api';
 import {
   automaticPeerRoom,
-  defaultPeerSignalingUrl,
+  requirePeerSignalingUrl,
   savePeerLink,
   resumePeerLinks,
 } from '../../helpers/browserPeerSync';
@@ -63,6 +63,7 @@ export function useCreateInviteLink(
       throw new Error(
         'Wait for this drive to be saved on this device before sharing.',
       );
+    const signalingUrl = browserPeer ? requirePeerSignalingUrl() : undefined;
     const tokenBase64 = await generateInviteToken(
       target.subject,
       agent,
@@ -76,7 +77,7 @@ export function useCreateInviteLink(
       savePeerLink(store, {
         drive: target.subject,
         room: await automaticPeerRoom(target.subject),
-        signalingUrl: defaultPeerSignalingUrl(),
+        signalingUrl: signalingUrl!,
       });
       resumePeerLinks(store);
     }

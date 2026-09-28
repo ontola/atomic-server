@@ -9,7 +9,7 @@ import { ErrorLook } from '../components/ErrorLook';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import {
   automaticPeerRoom,
-  defaultPeerSignalingUrl,
+  requirePeerSignalingUrl,
   savePeerLink,
   resumePeerLinks,
   peerLinkStatus,
@@ -81,7 +81,7 @@ export function PeerInvitePage({ token }: { token: string }) {
       savePeerLink(store, {
         drive: checked.drive,
         room: await automaticPeerRoom(checked.drive),
-        signalingUrl: defaultPeerSignalingUrl(),
+        signalingUrl: requirePeerSignalingUrl(),
         expectedPeer: checked.issuer,
         invitation: token,
       });

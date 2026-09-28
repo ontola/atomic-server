@@ -16,6 +16,14 @@ test('joins an unhosted drive through its signed browser invitation', async ({
   const guestContext = await browser.newContext();
 
   for (const context of [ownerContext, guestContext]) {
+    // The app has no built-in signalling service; this suite chooses one, and
+    // the route below answers it in-process.
+    await context.addInitScript(() =>
+      localStorage.setItem(
+        'peer-signaling-url',
+        'wss://signalling.invalid/webrtc-signal',
+      ),
+    );
     await context.routeWebSocket('**/webrtc-signal', socket => {
       let room: Map<string, WebSocketRoute> | undefined;
       let peer: string | undefined;
