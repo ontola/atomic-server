@@ -33,6 +33,27 @@ pub enum Refusal {
     UniqueLocal,
     /// An IPv4 address wearing an IPv6 costume; judged on what it maps to.
     MappedV4(&'static str),
+    /// A cloud instance-metadata endpoint that sits inside a range the proxy
+    /// exception would otherwise allow ([METADATA_V4], [METADATA_V6]).
+    Metadata,
+}
+
+/// Instance-metadata endpoints outside link-local. Every plugin destination
+/// already refuses them as private or unique-local; they are named here so the
+/// proxy exception, which lets those ranges through, still refuses them.
+/// 100.100.100.200 is Alibaba Cloud's (in carrier-grade NAT).
+const METADATA_V4: [Ipv4Addr; 1] = [Ipv4Addr::new(100, 100, 100, 200)];
+/// `fd00:ec2::254` is AWS's IPv6 IMDS endpoint (in unique-local).
+const METADATA_V6: [Ipv6Addr; 1] = [Ipv6Addr::new(0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x0254)];
+
+fn is_metadata(addr: IpAddr) -> bool {
+    match addr {
+        IpAddr::V4(v4) => METADATA_V4.contains(&v4),
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(mapped) => METADATA_V4.contains(&mapped),
+            None => METADATA_V6.contains(&v6),
+        },
+    }
 }
 
 /// Whether a plugin may connect to this address.
@@ -249,8 +270,12 @@ pub async fn checked_addresses_with(
 /// (`host.docker.internal` is 192.168.65.x on Docker Desktop and 172.17.0.1 on
 /// Linux; a LAN proxy is 192.168.x.x). Link-local is not: it is where cloud
 /// instance metadata answers, and that is never a legitimate proxy. Nor are
-/// the unspecified and multicast addresses, which are not a host at all.
+/// the metadata endpoints that live inside the allowed ranges ([is_metadata]),
+/// or the unspecified and multicast addresses, which are not a host at all.
 pub fn refuse_proxy_address(addr: IpAddr) -> Option<Refusal> {
+    if is_metadata(addr) {
+        return Some(Refusal::Metadata);
+    }
     match refuse_address(addr)? {
         Refusal::Loopback | Refusal::Private | Refusal::UniqueLocal => None,
         Refusal::MappedV4("loopback" | "private") => None,
@@ -848,20 +873,30 @@ mod tests {
             "http://[::ffff:169.254.169.254]:8787",
             "http://0.0.0.0:8787",
             "http://224.0.0.1:8787",
+            "http://100.100.100.200",
+            "http://[::ffff:100.100.100.200]:8787",
+            "http://[fd00:ec2::254]",
         ] {
             assert!(ProxyOrigin::parse(literal).is_err(), "{literal}");
         }
+        // Their neighbours are still ordinary private proxies.
+        assert!(ProxyOrigin::parse("http://100.100.100.201:8787").is_ok());
+        assert!(ProxyOrigin::parse("http://[fd00:ec2::253]:8787").is_ok());
         // A name that resolves there is refused per request, including when
         // only one of its answers is link-local.
         let table = Table::new(&[
             ("metadata.lan", &["169.254.169.254"]),
             ("mixed.lan", &["192.168.1.10", "169.254.169.254"]),
             ("v6.lan", &["fe80::1"]),
+            ("alibaba.lan", &["100.100.100.200"]),
+            ("aws6.lan", &["fd00:ec2::254"]),
         ]);
         for origin in [
             "http://metadata.lan",
             "http://mixed.lan:8787",
             "http://v6.lan:8787",
+            "http://alibaba.lan:8787",
+            "http://aws6.lan:8787",
         ] {
             let proxy = ProxyOrigin::parse(origin).unwrap();
             let err = destination_addresses_with(
@@ -871,7 +906,10 @@ mod tests {
             )
             .await
             .unwrap_err();
-            assert!(err.contains("LinkLocal"), "{origin}: {err}");
+            assert!(
+                err.contains("LinkLocal") || err.contains("Metadata"),
+                "{origin}: {err}"
+            );
         }
     }
 

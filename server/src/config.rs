@@ -94,8 +94,8 @@ pub struct Opts {
     /// on loopback or a private network (e.g. http://host.docker.internal:8787 or
     /// http://proxy.lan:8787), which every other plugin destination is refused; the name is
     /// resolved once per request and the checked addresses are the ones connected to.
-    /// Link-local and cloud-metadata addresses (169.254.0.0/16, fe80::/10) are refused even
-    /// here. Omit to configure none.
+    /// Link-local and cloud-metadata addresses (169.254.0.0/16, fe80::/10, 100.100.100.200,
+    /// fd00:ec2::254) are refused even here. Omit to configure none.
     #[clap(long, env = "ATOMIC_INTEGRATION_PROXY_URL")]
     pub integration_proxy_url: Option<String>,
 
