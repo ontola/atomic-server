@@ -141,6 +141,11 @@ export interface ClientDbOptions {
    *  hold a local-only drive that exists nowhere else, and a key that is
    *  missing now is not necessarily gone (see `client-db-open.ts`). */
   discardUndecryptable?: boolean;
+  /** The database's WebAssembly, already fetched and compiled. The page can
+   *  start that long before this worker exists (the app does it from
+   *  index.html), and a compiled module crosses into the worker for free. A
+   *  rejection, or none, falls back to the worker fetching it itself. */
+  wasmModule?: Promise<WebAssembly.Module | undefined>;
 }
 
 type PendingRequest = {
@@ -604,9 +609,11 @@ export class ClientDbWorker {
     };
 
     const endWorkerInit = perfSpan('clientdb.workerInit');
+    const wasmModule = await this.opts.wasmModule?.catch(() => undefined);
     const timings = (await this.sendToWorker({
       type: 'init',
       wasmUrl: this.wasmUrl,
+      wasmModule,
       baseUrl,
       dbName: this.opts.dbName,
       dbKey: this.opts.dbKey,

@@ -25,6 +25,7 @@ vi.mock('./api', () => ({
 vi.mock('../wasmUrls', () => ({
   wasmJsUrl: () => './test-fixtures/recovery-wasm.ts',
   wasmBinaryUrl: () => '',
+  atomicWasmSource: async () => '',
 }));
 vi.mock('./binding', () => ({ writeManagedAccountBinding: vi.fn() }));
 

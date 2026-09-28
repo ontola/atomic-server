@@ -29,8 +29,10 @@ import { YUSUF_LIVE_STROKES } from './moodboardStrokes';
 /** Presence entries expire after 30s; refresh well inside that. */
 const HEARTBEAT_MS = 10_000;
 /** Base delay between typed characters; jittered per character, with an
- *  extra beat at word boundaries so the rhythm reads as human typing. */
-const LETTER_MS = 35;
+ *  extra beat at word boundaries so the rhythm reads as human typing. Slow
+ *  enough to read along: at 35 ms the first lines raced past before a new
+ *  visitor had found them. */
+const LETTER_MS = 50;
 /** How often Yusuf's canvas cursor moves while he's idling on the
  *  moodboard. Short enough that the dot glides instead of hopping. */
 const WANDER_TICK_MS = 120;
@@ -102,6 +104,7 @@ export class DemoDirector {
   private unsubscribePresence?: () => void;
   private unsubscribeSaved?: () => void;
   private personas: Record<PersonaKey, PersonaState>;
+  private startWhen: Promise<void> = Promise.resolve();
 
   public constructor(
     private store: Store,
@@ -114,9 +117,11 @@ export class DemoDirector {
     };
   }
 
-  public start(): void {
+  /** @param when Resolves when the scenario may begin; immediately if absent. */
+  public start(when: Promise<void> = Promise.resolve()): void {
     if (this.started) return;
     this.started = true;
+    this.startWhen = when;
 
     // Keep the presence manager alive for the whole scenario, even
     // while no presence-consuming UI is mounted — and watch for the
@@ -189,6 +194,9 @@ export class DemoDirector {
 
   private async run(): Promise<void> {
     const { manifest } = this;
+
+    await this.startWhen;
+    if (this.stopped) return;
 
     // Mara and Yusuf are already here when the user lands.
     this.announceMara(manifest.welcomeDoc);
