@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import React from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { IdentityReconcileResult } from '../helpers/managed/reconcile';
 
@@ -48,6 +48,8 @@ vi.mock('../helpers/managed', () => ({
   clearManagedAccountBinding: vi.fn(),
   logoutManagedSession: vi.fn(),
   PRODUCT_NAME: 'Atomic',
+  sameAgent: (a: string, b: string) =>
+    a.replace(/^did:ad:/, 'atomic:') === b.replace(/^did:ad:/, 'atomic:'),
 }));
 vi.mock('../helpers/managed/driveHandover', () => ({
   handOverDrives: state.handOver,
@@ -69,6 +71,7 @@ vi.mock('@sentry/react', () => ({ captureException: state.capture }));
 vi.mock('./Button', () => ({ Button: 'button' }));
 vi.mock('./Row', () => ({ Column: 'div' }));
 vi.mock('../views/getting-started/chrome', () => ({
+  CardError: 'p',
   CardSubtitle: 'p',
   CardTitle: 'h1',
   OnboardingCard: 'div',
@@ -236,4 +239,56 @@ it('imports carried-over drives and lists handed-over ones once the account iden
     store,
     'did:ad:agent:account',
   );
+});
+
+it('brings the workspace into the account from the conflict, then switches', async () => {
+  state.evaluate.mockResolvedValue(mismatch);
+  state.workspace.mockResolvedValue('some');
+  state.handOver.mockRejectedValueOnce(new Error('offline'));
+  const { findByTestId, queryByRole } = render(view());
+  const bring = await findByTestId('identity-conflict-bring');
+  // The two earlier choices stay, as fallbacks.
+  expect(await findByTestId('identity-conflict-switch')).toBeTruthy();
+  expect(await findByTestId('identity-conflict-keep')).toBeTruthy();
+  expect(state.navigate).not.toHaveBeenCalled();
+
+  await act(async () => fireEvent.click(bring));
+  expect(state.handOver).toHaveBeenCalledTimes(2);
+  expect(state.handOver).toHaveBeenLastCalledWith(
+    store,
+    expect.objectContaining({
+      from: 'did:ad:agent:old',
+      to: 'did:ad:agent:account',
+    }),
+  );
+  expect(queryByRole('alert')).toBeNull();
+  expect(state.navigate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      to: '/app/welcome',
+      search: expect.objectContaining({ step: 'signin' }),
+    }),
+  );
+});
+
+it('says so, and keeps the fallbacks, when bringing the workspace fails again', async () => {
+  state.evaluate.mockResolvedValue(mismatch);
+  state.workspace.mockResolvedValue('some');
+  state.handOver.mockRejectedValue(new Error('offline'));
+  const { findByTestId, findByRole } = render(view());
+  const bring = await findByTestId('identity-conflict-bring');
+  await act(async () => fireEvent.click(bring));
+  expect(await findByRole('alert')).toBeTruthy();
+  expect(await findByTestId('identity-conflict-switch')).toBeTruthy();
+  expect(state.navigate).not.toHaveBeenCalled();
+});
+
+it('offers no bring-along for an identity that has hosted drives', async () => {
+  state.guest = false;
+  state.evaluate.mockResolvedValue(mismatch);
+  state.workspace.mockResolvedValue('some');
+  state.archive.mockRejectedValue(new Error('no stored key'));
+  const { findByTestId, queryByTestId } = render(view());
+  expect(await findByTestId('identity-conflict')).toBeTruthy();
+  expect(queryByTestId('identity-conflict-bring')).toBeNull();
+  expect(queryByTestId('identity-conflict-switch')).toBeTruthy();
 });

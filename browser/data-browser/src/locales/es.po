@@ -12461,3 +12461,20 @@ msgstr ""
 #: src/components/SideBar/NotificationsMenuItem.tsx
 msgid "Messages, comments and replies for you"
 msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bringing your workspace…"
+msgstr "Trayendo tu espacio de trabajo…"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bring this workspace into my account"
+msgstr "Traer este espacio de trabajo a mi cuenta"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Your workspace could not be brought into your account. Try again, or choose one of the options below."
+msgstr "No se pudo traer tu espacio de trabajo a tu cuenta. Inténtalo de nuevo o elige una de las opciones de abajo."
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cambia a esa identidad. Todo sigue siendo editable y se respalda con tu cuenta."

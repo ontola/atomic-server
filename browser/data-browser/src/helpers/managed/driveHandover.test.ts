@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { core, server } from '@tomic/react';
 import {
   applyPendingDriveHandover,
+  grantsWrite,
   handOverDrives,
   PENDING_DRIVE_HANDOVER_KEY,
   readPendingDriveHandover,
@@ -252,6 +253,49 @@ describe('handing drives to the account identity', () => {
     expect(resources['did:ad:kept'].save).toHaveBeenCalledOnce();
   });
 
+  it('grants each owned drive once, whatever spelling its rights use', async () => {
+    // Rights written before the `did:ad:` → `atomic:` rename name the same
+    // agent in the legacy spelling: already granted, no second commit.
+    const legacy = fake({ [core.properties.write]: [guest, account] });
+    const fresh = owned();
+    const resources = {
+      [guest]: fake({ [core.properties.personalDrive]: 'did:ad:home' }),
+      'did:ad:home': owned({
+        [server.properties.drives]: ['did:ad:legacy', 'did:ad:fresh'],
+      }),
+      'did:ad:legacy': legacy,
+      'did:ad:fresh': fresh,
+    };
+    const to = account.replace('did:ad:', 'atomic:');
+
+    const pending = await handOverDrives(fixture(resources), {
+      from: guest,
+      to,
+      skip: [],
+      archiveIdentity: vi.fn(async () => {}),
+    });
+
+    expect(legacy.save).not.toHaveBeenCalled();
+    expect(fresh.get(core.properties.write)).toEqual([guest, to]);
+    expect(fresh.save).toHaveBeenCalledOnce();
+    // Both are listed for the account, granted now or before.
+    expect(pending).toEqual({
+      agent: to,
+      drives: ['did:ad:legacy', 'did:ad:fresh'],
+    });
+  });
+
+  it('reads rights as the same agent in either spelling', () => {
+    const drive = fake({
+      [core.properties.write]: ['atomic:agent:account', 42],
+    });
+
+    expect(grantsWrite(drive, 'did:ad:agent:account')).toBe(true);
+    expect(grantsWrite(drive, 'atomic:agent:account')).toBe(true);
+    expect(grantsWrite(drive, 'did:ad:agent:other')).toBe(false);
+    expect(grantsWrite(fake({}), 'did:ad:agent:account')).toBe(false);
+  });
+
   it('falls back to the recorded home when the agent cannot be read', async () => {
     const resources = {
       'did:ad:home': owned({ [server.properties.drives]: ['did:ad:kept'] }),
@@ -337,6 +381,21 @@ describe('listing handed-over drives after the switch', () => {
     // Nothing left to do the second time.
     expect(await applyPendingDriveHandover(store, account)).toBe(false);
     expect(home.save).toHaveBeenCalledOnce();
+  });
+
+  it('lists them for the account signed in under the other spelling', async () => {
+    pending(['did:ad:kept']);
+    const signedIn = account.replace('did:ad:', 'atomic:');
+    const home = fake({});
+    const store = fixture({
+      [signedIn]: fake({
+        [core.properties.personalDrive]: 'did:ad:accounthome',
+      }),
+      'did:ad:accounthome': home,
+    });
+
+    expect(await applyPendingDriveHandover(store, signedIn)).toBe(true);
+    expect(home.get(server.properties.drives)).toEqual(['did:ad:kept']);
   });
 
   it('lists carried-over drives once they are imported', async () => {

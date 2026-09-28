@@ -113,5 +113,18 @@ test('rich text menus, popovers and handles work inside the website preview', as
   await page.getByText('Click an outlined field', { exact: false }).click();
   await waitForSynced(page);
   await page.reload();
-  await expect(frame.getByText('Drag me')).toBeVisible();
+  // A reload pays the whole cold path again before the preview iframe has any
+  // content: the app boots, reads the website config and runs
+  // `buildWebsiteArtifact`. Measured over eight four-worker rounds on a
+  // four-core box, this wait alone:
+  //
+  //     3627  4145  5176  6386  6564  6663  7220  7689 ms
+  //
+  // 7689 ms is 77% of the 10 s default, and two further rounds exceeded it
+  // outright and failed here with the text never appearing. The sibling spec's
+  // identical post-reload assertion is already on 30 s for exactly this reason,
+  // and so is the "Page edit" click that waits on the same build
+  // (`clickPageEdit` in test-utils), so this matches the family rather than
+  // granting a new allowance.
+  await expect(frame.getByText('Drag me')).toBeVisible({ timeout: 30_000 });
 });
