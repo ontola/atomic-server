@@ -211,6 +211,12 @@ pub trait PluginHost: Send + 'static {
     async fn resource_grants(&mut self) -> ResourceGrants {
         ResourceGrants::default()
     }
+    /// Keys the host sets on the run's input, over whatever the caller sent:
+    /// for an Installation, `app` and `connections` (#1700, answers 1 and 3).
+    /// A host without an Installation adds nothing.
+    async fn run_context(&mut self) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::Map::new()
+    }
 }
 
 /// The resource grants of a JS plugin: the approved `grants` of the

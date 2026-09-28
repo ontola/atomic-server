@@ -227,6 +227,20 @@ checks `GET /app-agent` reports the identity activation mints for a JS
 Installation. Not covered: a real integration proxy (atomic-plugins#122)
 accepting these requests, delegations and `POST /runtimes`, and a second node.
 
+Installation identities for the proxy (#1700, answers 1–3):
+`plugins::installation_identity` tests commit real Installations and check that
+a keyless `integrationAppAgent` is stored, refused when it is not an agent id,
+and can be added but never changed; that activation publishes the node's agent
+once on an `InstallationRuntime` child, written by that agent and writable by
+it; that `integrationConnections` must map platforms to id strings; and that a
+server-side JS run gets `ctx.app` and `ctx.connections` from the Installation,
+over whatever the caller sent. `browser/lib/src/plugin-install.test.ts` checks
+`installRelease` records a fresh `atomic:agent:` in the genesis with no key
+material. Not covered: the page reading the runtime child and calling
+`POST /runtimes`, the page writing `integrationConnections` when it delegates,
+a second node publishing its own runtime child, and syncing those children
+between nodes.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for

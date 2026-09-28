@@ -53,6 +53,8 @@ pub mod host_core;
 pub mod importer;
 #[cfg(feature = "wasm-plugins")]
 pub mod installation;
+#[cfg(feature = "wasm-plugins")]
+pub mod installation_identity;
 pub mod invite;
 #[cfg(feature = "wasm-plugins")]
 pub mod journal;

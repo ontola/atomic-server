@@ -245,6 +245,38 @@
     "https://atomicdata.dev/properties/shortname": "installation-status"
   },
   {
+    "@id": "https://atomicdata.dev/properties/integrationAppAgent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Installation's app id at the integration proxy: a keyless `atomic:agent:<public key>` that the installing page generated and recorded in a commit signed by the user, discarding the private key. Proxy delegations and frame capabilities name it; nobody signs as it. Each node's own agent for the Installation is registered as a runtime of it. It cannot change once set.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "integration-app-agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/integrationConnections",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The integration-proxy connections delegated to an Installation, as a JSON object `{platform: connection_id}`. The page writes it when it delegates; it is not secret. The host passes it to the plugin as `ctx.connections`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "integration-connections"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/integrationRuntimeAgent",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "On an InstallationRuntime: the agent one node minted for the Installation when it activated it. The node signs its integration-proxy requests with it, and the page registers it as a runtime of the Installation's app.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "integration-runtime-agent"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/domains",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
     "https://atomicdata.dev/properties/description": "Domains a Listing applies to, as a JSON array of strings.",
@@ -326,7 +358,9 @@
       "https://atomicdata.dev/properties/pluginAgent",
       "https://atomicdata.dev/properties/pluginPermissions",
       "https://atomicdata.dev/properties/jsonSchema",
-      "https://atomicdata.dev/properties/version"
+      "https://atomicdata.dev/properties/version",
+      "https://atomicdata.dev/properties/integrationAppAgent",
+      "https://atomicdata.dev/properties/integrationConnections"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/release",
@@ -334,6 +368,22 @@
       "https://atomicdata.dev/properties/installationStatus"
     ],
     "https://atomicdata.dev/properties/shortname": "installation",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/InstallationRuntime",
+    "https://atomicdata.dev/properties/description": "A child of an Installation on which one node publishes the agent it minted for that Installation. The node creates it when it activates the Installation, signed by that agent, which may write it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/integrationRuntimeAgent"
+    ],
+    "https://atomicdata.dev/properties/shortname": "installation-runtime",
     "https://atomicdata.dev/properties/subresources": []
   },
   {

@@ -41,6 +41,23 @@ fn consumer_run(input: &str) -> Option<String> {
     }
 }
 
+/// The run's input with the host's keys set on it, so `ctx.connections` sits
+/// next to `ctx.config`. The host's value wins: a caller cannot hand a plugin
+/// another installation's connections. An input that is not a JSON object, or
+/// a host that adds nothing, passes through byte for byte.
+fn with_run_context(input: &str, context: serde_json::Map<String, serde_json::Value>) -> String {
+    if context.is_empty() {
+        return input.to_string();
+    }
+    match serde_json::from_str::<serde_json::Value>(input) {
+        Ok(serde_json::Value::Object(mut map)) => {
+            map.extend(context);
+            serde_json::Value::Object(map).to_string()
+        }
+        _ => input.to_string(),
+    }
+}
+
 struct RuntimeState<H: PluginHost> {
     table: ResourceTable,
     ctx: WasiCtx,
@@ -153,6 +170,8 @@ impl JsRuntime {
         // its installation was granted.
         let mut host = host;
         let limits = host_core::limits(Runtime::Js, host.resource_grants().await);
+        let input = with_run_context(input, host.run_context().await);
+        let input = input.as_str();
 
         let mut store = Store::new(
             &self.engine,
@@ -374,6 +393,10 @@ impl PluginHost for StoreHost {
     async fn resource_grants(&mut self) -> ResourceGrants {
         host_core::installation_grants(&self.db, &self.drive, &self.plugin, self.manifest.as_ref())
             .await
+    }
+
+    async fn run_context(&mut self) -> serde_json::Map<String, serde_json::Value> {
+        super::installation_identity::run_context(&self.db, &self.drive, &self.plugin).await
     }
 }
 
