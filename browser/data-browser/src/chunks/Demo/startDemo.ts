@@ -8,8 +8,16 @@ import {
 } from './demoWorkspace';
 import { DemoDirector } from './DemoDirector';
 import { ensureAgentForDemo } from './guestAgent';
+import { checkOnboardingStorage } from '../../helpers/onboardingStorage';
+import { whenRevealed } from '../../helpers/bootSplash';
 
 let activeDirector: DemoDirector | undefined;
+
+/** Pause between the workspace appearing and the first persona moving. */
+const DIRECTOR_DELAY_MS = 1_200;
+
+const sleep = (ms: number) =>
+  new Promise<void>(resolve => setTimeout(resolve, ms));
 
 /** localStorage key holding every demo drive subject ever created, so a
  *  re-run can hard-clean ALL of them — not just the last manifest's. */
@@ -46,11 +54,17 @@ export async function startDemoWorkspace(
   store: Store,
   onStep: (step: DemoSetupStep) => void = () => {},
 ): Promise<DemoManifest> {
-  onStep('storage');
-  await enableLoro();
-
   onStep('identity');
-  const isGuest = await ensureAgentForDemo(store);
+  const [isGuest] = await Promise.all([
+    ensureAgentForDemo(store),
+    enableLoro(),
+  ]);
+
+  // The identity comes first because its database is the one that opens
+  // (App.tsx defers the anonymous one on this route). This used to be a
+  // separate "Checking local storage…" screen before the demo's own.
+  onStep('storage');
+  await checkOnboardingStorage(store);
 
   activeDirector?.stop();
   activeDirector = undefined;
@@ -65,7 +79,10 @@ export async function startDemoWorkspace(
   store.setDrive(manifest.drive);
 
   activeDirector = new DemoDirector(store, manifest);
-  activeDirector.start();
+  // The scenario waits until the workspace is on screen and has had a moment
+  // to be looked at; starting while the splash was still up meant arriving
+  // mid-sentence.
+  activeDirector.start(whenRevealed().then(() => sleep(DIRECTOR_DELAY_MS)));
 
   return manifest;
 }

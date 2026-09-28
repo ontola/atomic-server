@@ -4,6 +4,15 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Starting the demo is one calm screen. From "Try Atomic" to the workspace
+  the page shows only the orbiting mark from atomic.place, instead of a blank
+  page, a "Checking local storage…" card and a "Setting up your demo…"
+  spinner in turn. The workspace fades in once its welcome document has
+  content, and the scripted teammates wait a moment before they start.
+  Setup is also faster: the database's WebAssembly is fetched and compiled
+  once, from the first line of the page, instead of up to twice after the app
+  loaded; the demo opens only the guest's database; and it no longer waits for
+  an account check it does not need.
 - Turning workspace sync off says what is actually in the way. All three of its
   preconditions used to answer with "Open this drive with local storage
   available before disconnecting", so someone signed out, or on a server this

@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import App from './App';
 import { initSentry } from './helpers/sentry';
+import { afterNextPaint, hideBootSplash } from './helpers/bootSplash';
+import { getManagedApiBase, hasManagedApi } from './helpers/managed/api';
 // Side-effect import: installs a global capture-phase `wheel` listener
 // before any route mounts. CanvasPage uses it to ignore momentum-scroll
 // tails carried over from the previous view (see the file's doc-comment).
@@ -76,3 +78,25 @@ root.render(
     <App />
   </StrictMode>,
 );
+
+// The demo keeps the boot splash up until its workspace is ready (DemoRoute).
+// Every other page is ready at its first render, as it was when the splash
+// lived inside #root and React replaced it.
+if (window.location.pathname !== '/app/demo') {
+  void afterNextPaint().then(hideBootSplash);
+}
+
+// The account server is another origin, and the first session check against
+// it paid for DNS, TLS and CORS on the spot: 1.2 s on a first visit. Open the
+// connection now, while the app is still starting.
+if (hasManagedApi()) {
+  try {
+    const link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = new URL(getManagedApiBase(), window.location.href).origin;
+    link.crossOrigin = 'use-credentials';
+    document.head.appendChild(link);
+  } catch {
+    // An unparsable base is reported where it is used.
+  }
+}

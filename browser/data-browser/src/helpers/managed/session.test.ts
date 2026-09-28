@@ -7,6 +7,7 @@ vi.mock('./api', () => ({
   managedFetch: fetchMock,
   setManagedDeviceToken: setTokenMock,
   hasManagedApi: configured,
+  getManagedDeviceToken: () => null,
 }));
 import { getManagedAccount, logoutManagedSession } from './session';
 it('discards a session response that arrives after logout', async () => {
@@ -38,4 +39,22 @@ it('does not probe for an account without a configured control plane', async () 
   fetchMock.mockClear();
   expect(await getManagedAccount()).toBeNull();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it('asks the account server once for callers asking at the same time', async () => {
+  fetchMock.mockClear();
+  fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
+
+  const answers = await Promise.all([
+    getManagedAccount(),
+    getManagedAccount(),
+    getManagedAccount(),
+  ]);
+
+  expect(answers).toEqual([null, null, null]);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  // A later check, such as the one right after signing in, asks again.
+  await getManagedAccount();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });

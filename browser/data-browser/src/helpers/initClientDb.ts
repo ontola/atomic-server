@@ -10,7 +10,7 @@ import {
   hasWrappedDbKey,
   waitForSessionDbKey,
 } from './localDbKey';
-import { wasmJsUrl } from './wasmUrls';
+import { compiledAtomicWasm, wasmJsUrl } from './wasmUrls';
 
 // Track the current worker so we can terminate it on HMR reload and on
 // agent switches.
@@ -210,6 +210,8 @@ async function startForIdentity(
     // active at upgrade time. No-ops once it's gone.
     migrateLegacy: true,
     discardUndecryptable,
+    // Fetched and compiled once for the whole page, starting in index.html.
+    wasmModule: compiledAtomicWasm(),
   });
   currentWorker = clientDb;
 

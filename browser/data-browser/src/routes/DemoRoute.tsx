@@ -8,8 +8,13 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { isRunningInTauri } from '../helpers/tauri';
-import { Shell } from '../views/getting-started/chrome';
-import { Spinner } from '../components/Spinner';
+import {
+  afterNextPaint,
+  hideBootSplash,
+  isBootSplashVisible,
+  setBootSplashCaption,
+  showBootSplash,
+} from '../helpers/bootSplash';
 import { Button } from '../components/Button';
 import * as Sentry from '@sentry/react';
 import type { DemoSetupStep } from '../chunks/Demo/startDemo';
@@ -96,7 +101,12 @@ function startRun(
       if (target) return target;
       const { startDemoWorkspace } = await import('../chunks/Demo/startDemo');
 
-      return startDemoWorkspace(store, step => updateRun({ step }));
+      return startDemoWorkspace(store, step => {
+        // Visible in a performance trace, to see which step a slow start spent
+        // its time in.
+        performance.mark(`demo.${step}`);
+        updateRun({ step });
+      });
     })
     .then(result => {
       updateRun({ done: true });
@@ -140,6 +150,12 @@ const DemoRoute: React.FC = () => {
       return;
     }
 
+    // One loading screen for the whole setup: the boot splash that is already
+    // up on a first visit, brought back when the demo is started from inside
+    // the app.
+    showBootSplash();
+    setBootSplashCaption('Setting up your demo…');
+
     // Re-running the demo must always start fresh, so only a run still in
     // progress is joined.
     if (!run || run.done || run.error) {
@@ -148,9 +164,12 @@ const DemoRoute: React.FC = () => {
         drive,
         manifest => {
           if (window.innerWidth < SIDEBAR_TOGGLE_WIDTH) setSideBarLocked(true);
+          void revealWhenReady(store, manifest.welcomeDoc);
           navigate(constructOpenURL(manifest.welcomeDoc));
         },
         target => {
+          void afterNextPaint().then(hideBootSplash);
+
           if (target === paths.newDrive) {
             navigate(target);
 
@@ -189,11 +208,20 @@ const DemoRoute: React.FC = () => {
 
   const error = current?.error;
   const step = current?.step;
+  const needsAttention = !!error || stalled || !supported;
+
+  // Something to read or a button to press has to be on the page, not behind
+  // the splash.
+  useEffect(() => {
+    if (needsAttention) hideBootSplash();
+  }, [needsAttention]);
+
+  // Otherwise the splash is the loading screen, and this renders nothing.
+  if (!needsAttention && isBootSplashVisible()) return null;
 
   return (
-    <Shell>
+    <Surface>
       <DemoStatus>
-        {!error && <Spinner size='3.5rem' />}
         <DemoTitle>
           {error ? 'The demo could not start' : 'Setting up your demo…'}
         </DemoTitle>
@@ -214,9 +242,36 @@ const DemoRoute: React.FC = () => {
           <Button onClick={() => window.location.reload()}>Try again</Button>
         )}
       </DemoStatus>
-    </Shell>
+    </Surface>
   );
 };
+
+/**
+ * Take the splash away once the welcome document can be shown with its
+ * content, not as soon as the route changes: a reveal onto "Loading…" is the
+ * very jump the splash is there to hide. Capped, so a slow document still
+ * gets revealed.
+ */
+async function revealWhenReady(store: Store, welcomeDoc: string) {
+  await withDeadline(
+    store.getResource(welcomeDoc).then(() => undefined),
+    2_000,
+    undefined,
+  ).catch(() => undefined);
+  await afterNextPaint();
+  // The editor mounts a beat after the route; let it lay out first.
+  await new Promise(resolve => setTimeout(resolve, 150));
+  hideBootSplash();
+}
+
+const Surface = styled.main`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: ${p => p.theme.size(6)};
+  box-sizing: border-box;
+`;
 
 const DemoStatus = styled.div`
   display: flex;
