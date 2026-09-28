@@ -241,6 +241,17 @@ material. Not covered: the page reading the runtime child and calling
 a second node publishing its own runtime child, and syncing those children
 between nodes.
 
+`atomic-proxy:` URLs (#1700, answer 4): the shared fixtures in
+`testdata/plugin-manifest/` (Rust `shared_manifest_conformance` and the
+`plugin-manifest.test.ts` mirror) cover `proxy` platforms and proxy-relative
+operations, including undeclared platforms, bad names, duplicates, dot
+segments and queries. `manifest::proxy_relative_tests` covers the URL parser.
+`host_core` tests send a proxy-relative request to a one-shot loopback proxy
+and check the resolved `/proxy/{connection}/{platform}/...` request line and
+its v2 signature. They also check refusals, before any connection, for an
+undeclared platform, no delegated connection, no configured proxy, no
+matching operation and a dot segment.
+
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for

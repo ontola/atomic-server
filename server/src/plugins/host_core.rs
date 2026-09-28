@@ -28,7 +28,7 @@ use wasmtime::{Engine, Store, StoreLimits, StoreLimitsBuilder};
 
 use super::{
     egress,
-    manifest::{CapabilityName, Manifest},
+    manifest::{CapabilityName, Manifest, ProxyRelative},
 };
 
 // ---------------------------------------------------------------------------
@@ -768,8 +768,19 @@ impl HostCore {
         request: FetchRequest,
         effect: &str,
     ) -> Result<FetchResponse, String> {
-        let authorized = self.authorize(request, effect)?;
         let proxy = self.integration_proxy()?;
+        let (request, relative) = self.resolve_proxy_relative(request, proxy.as_ref()).await?;
+        let authorized = self.authorize(request, effect, relative.as_ref())?;
+        if relative.is_none()
+            && proxy
+                .as_ref()
+                .is_some_and(|proxy| proxy.is_target_of(&authorized.url))
+        {
+            tracing::warn!(
+                plugin = ?self.plugin,
+                "a plugin called the integration proxy by its absolute URL; this is deprecated, use `atomic-proxy:/<platform>/...` and declare the platform in the manifest's `proxy`"
+            );
+        }
         let addresses = egress::destination_addresses(&authorized.url, proxy.as_ref()).await?;
         let mut headers = self.substitute_secrets(&authorized.origin, authorized.headers)?;
         if proxy
@@ -841,6 +852,65 @@ impl HostCore {
         })
     }
 
+    /// Resolves an `atomic-proxy:/<platform>/<path>` request to
+    /// `{proxy origin}/proxy/{connection id}/{platform}/<path>` on the
+    /// configured proxy, with the connection delegated to this installation
+    /// for that platform (#1700, answer 4). Any other request passes through.
+    ///
+    /// Refused, before anything else is looked up, when no proxy is
+    /// configured or the manifest does not declare the platform; then when no
+    /// connection is delegated for it.
+    async fn resolve_proxy_relative(
+        &self,
+        mut request: FetchRequest,
+        proxy: Option<&egress::ProxyOrigin>,
+    ) -> Result<(FetchRequest, Option<ProxyRelative>), String> {
+        let Some(relative) = ProxyRelative::parse(&request.url) else {
+            return Ok((request, None));
+        };
+        let relative = relative?;
+        let proxy = proxy.ok_or(
+            "no integration proxy is configured on this node (--integration-proxy-url), so atomic-proxy: URLs cannot be reached",
+        )?;
+        let declared = match &self.fetch_policy {
+            FetchPolicy::Operations(manifest) => manifest.proxy.contains(&relative.platform),
+            _ => false,
+        };
+        if !declared {
+            return Err(format!(
+                "this plugin does not declare proxy platform '{}' in its manifest, so it cannot reach it",
+                relative.platform
+            ));
+        }
+        let installation = self.signing_as.as_ref().ok_or(
+            "this installation has no app agent on this node, so it has no delegated connections",
+        )?;
+        let connection = super::installation_identity::delegated_connection(
+            &self.db,
+            &installation.app,
+            &relative.platform,
+        )
+        .await?
+        .ok_or_else(|| {
+            format!(
+                "no {} connection is delegated to this installation; connect one and delegate it first",
+                relative.platform
+            )
+        })?;
+        request.url = format!(
+            "{}/proxy/{connection}/{}{}{}",
+            proxy.origin(),
+            relative.platform,
+            relative.path,
+            relative
+                .query
+                .as_deref()
+                .map(|q| format!("?{q}"))
+                .unwrap_or_default(),
+        );
+        Ok((request, Some(relative)))
+    }
+
     /// The integration proxy this node is configured with, if any.
     fn integration_proxy(&self) -> Result<Option<egress::ProxyOrigin>, String> {
         self.db
@@ -891,7 +961,16 @@ impl HostCore {
     }
 
     /// Every check that needs no network: handles, policy, method.
-    fn authorize(&self, request: FetchRequest, effect: &str) -> Result<Authorized, String> {
+    ///
+    /// `relative` is the proxy-relative form of a request
+    /// [`Self::resolve_proxy_relative`] already resolved: the manifest's
+    /// operations are checked against that form, which is how they declare it.
+    fn authorize(
+        &self,
+        request: FetchRequest,
+        effect: &str,
+        relative: Option<&ProxyRelative>,
+    ) -> Result<Authorized, String> {
         if self.plugin.is_none() {
             return Err("this plugin has no subject, so it has no secrets".to_string());
         }
@@ -905,15 +984,28 @@ impl HostCore {
         let url = url::Url::parse(&request.url).map_err(|e| format!("not a URL: {e}"))?;
         let origin = egress::origin_of(&url)?;
 
-        match &self.fetch_policy {
-            FetchPolicy::Origins(origins) => {
+        match (&self.fetch_policy, relative) {
+            (FetchPolicy::Operations(manifest), Some(relative)) => {
+                if !manifest.allows_proxy_effect(
+                    request.operation.as_deref(),
+                    &request.method,
+                    relative,
+                    effect,
+                ) {
+                    return Err("proxy fetch requires a declared operation on an atomic-proxy: URL; external writes need an approved intent".into());
+                }
+            }
+            (_, Some(_)) => {
+                return Err("only a versioned manifest can declare proxy platforms".into());
+            }
+            (FetchPolicy::Origins(origins), None) => {
                 if !origins.iter().any(|o| o == &origin) {
                     return Err(format!(
                         "this plugin does not declare {origin} in its manifest, so it cannot reach it",
                     ));
                 }
             }
-            FetchPolicy::Operations(manifest) => {
+            (FetchPolicy::Operations(manifest), None) => {
                 if !manifest.allows_effect(
                     request.operation.as_deref(),
                     &request.method,
@@ -923,7 +1015,7 @@ impl HostCore {
                     return Err("preview fetch requires a declared read operation; external writes need an approved intent".into());
                 }
             }
-            FetchPolicy::SecretOrigins => {
+            (FetchPolicy::SecretOrigins, None) => {
                 if effect != "read" || !matches!(request.method.as_str(), "GET" | "HEAD") {
                     return Err("legacy preview fetch permits only GET and HEAD; declare read operations in a versioned manifest".into());
                 }
@@ -1544,6 +1636,193 @@ mod tests {
                 .await
                 .unwrap_err();
             assert!(err.contains("refused address"), "{other}: {err}");
+        }
+    }
+
+    // -- atomic-proxy: (#1700, answer 4) -----------------------------------
+
+    fn proxy_relative_manifest() -> Manifest {
+        Manifest::parse(serde_json::json!({
+            "schemaVersion": 2,
+            "proxy": ["clockify"],
+            "operations": [{
+                "id": "user",
+                "method": "GET",
+                "url": "atomic-proxy:/clockify/api/v1/user",
+                "effect": "read",
+            }],
+        }))
+        .unwrap()
+        .unwrap()
+    }
+
+    fn proxy_relative_request(url: &str) -> FetchRequest {
+        FetchRequest {
+            operation: Some("user".into()),
+            method: "GET".into(),
+            url: url.into(),
+            headers: vec![("x-atomic-agent".into(), "did:ad:agent:forged".into())],
+            body: None,
+        }
+    }
+
+    /// A JS run host on a node configured with `proxy` (if any), whose
+    /// installation has an app agent on this node and was delegated
+    /// `connections`.
+    async fn proxy_relative_host(
+        name: &str,
+        proxy: Option<&str>,
+        connections: Option<serde_json::Value>,
+        node_agent: &Agent,
+    ) -> (crate::plugins::test_fixture::Fixture, HostCore) {
+        let mut fixture = crate::plugins::test_fixture::fixture(name).await;
+        crate::plugins::test_fixture::write_plugin(&mut fixture, "probe").await;
+        let db = Arc::new(fixture.appstate.store.clone());
+        db.set_integration_proxy(proxy.map(str::to_string));
+        db.set_app_agent(
+            &AppAgentKey::new(&fixture.drive, &fixture.plugin),
+            &atomic_lib::db::app_agent::AppAgent::new(
+                node_agent.subject.to_string(),
+                node_agent.build_secret().unwrap(),
+                0,
+            ),
+        )
+        .unwrap();
+        if let Some(connections) = connections {
+            let mut plugin = db
+                .get_resource(&fixture.plugin.as_str().into())
+                .await
+                .unwrap();
+            plugin
+                .set_unsafe(
+                    urls::INTEGRATION_CONNECTIONS.into(),
+                    Value::Json(connections),
+                )
+                .unwrap();
+            plugin.save(db.as_ref()).await.unwrap();
+        }
+        let host = HostCore::for_run(
+            db.clone(),
+            &fixture.drive,
+            &fixture.plugin,
+            ForAgent::AgentSubject(db.get_default_agent().unwrap().subject),
+            Some(proxy_relative_manifest()),
+        )
+        .await
+        .unwrap();
+        (fixture, host)
+    }
+
+    #[actix_rt::test]
+    async fn a_proxy_relative_request_reaches_the_delegated_connection_signed() {
+        let (origin, served) = one_shot_proxy().await;
+        let node_agent = Agent::new(None).unwrap();
+        let (_fixture, host) = proxy_relative_host(
+            "host_core_proxy_relative",
+            Some(&origin),
+            Some(serde_json::json!({"clockify": "conn-1"})),
+            &node_agent,
+        )
+        .await;
+
+        let response = host
+            .fetch(
+                proxy_relative_request("atomic-proxy:/clockify/api/v1/user?page=2"),
+                "read",
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        let raw = served.await.unwrap();
+
+        // integration-proxy's route: /proxy/{connection_id}/{platform}/{path}.
+        assert!(
+            raw.starts_with("GET /proxy/conn-1/clockify/api/v1/user?page=2 HTTP/1.1\r\n"),
+            "{raw}"
+        );
+        assert_eq!(
+            header(&raw, "x-atomic-agent"),
+            vec![node_agent.subject.to_string().as_str()]
+        );
+        // Signed over the resolved URL, which is what the proxy rebuilds.
+        let url = format!("{origin}/proxy/conn-1/clockify/api/v1/user?page=2");
+        atomic_lib::authentication::check_auth_signature(
+            &url,
+            &atomic_lib::authentication::AuthValues {
+                public_key: header(&raw, "x-atomic-public-key")[0].to_string(),
+                timestamp: header(&raw, "x-atomic-timestamp")[0].parse().unwrap(),
+                signature: header(&raw, "x-atomic-signature")[0].to_string(),
+                requested_subject: url.clone(),
+                agent_subject: node_agent.subject.to_string(),
+                request: Some(atomic_lib::authentication::RequestBinding::new("GET", b"")),
+            },
+        )
+        .expect("a valid v2 signature over the resolved URL");
+    }
+
+    #[actix_rt::test]
+    async fn a_proxy_relative_request_is_refused_without_what_it_needs() {
+        let node_agent = Agent::new(None).unwrap();
+        // Nothing listens here: every refusal has to come before a connection.
+        let origin = "http://127.0.0.1:9";
+        let delegated = Some(serde_json::json!({"clockify": "conn-1"}));
+        type Case<'a> = (
+            &'a str,
+            Option<&'a str>,
+            Option<serde_json::Value>,
+            &'a str,
+            &'a str,
+        );
+        let cases: [Case; 5] = [
+            (
+                "undeclared",
+                Some(origin),
+                Some(serde_json::json!({"github-issues": "conn-2"})),
+                "atomic-proxy:/github-issues/api/v1/user",
+                "does not declare proxy platform 'github-issues'",
+            ),
+            (
+                "undelegated",
+                Some(origin),
+                None,
+                "atomic-proxy:/clockify/api/v1/user",
+                "no clockify connection is delegated",
+            ),
+            (
+                "unconfigured",
+                None,
+                delegated.clone(),
+                "atomic-proxy:/clockify/api/v1/user",
+                "no integration proxy is configured",
+            ),
+            (
+                "no_operation",
+                Some(origin),
+                delegated.clone(),
+                "atomic-proxy:/clockify/api/v1/workspaces",
+                "declared operation on an atomic-proxy: URL",
+            ),
+            (
+                "traversal",
+                Some(origin),
+                delegated.clone(),
+                "atomic-proxy:/clockify/api/../../admin",
+                "atomic-proxy: URLs",
+            ),
+        ];
+        for (name, proxy, connections, url, expected) in cases {
+            let (_fixture, host) = proxy_relative_host(
+                &format!("host_core_proxy_relative_{name}"),
+                proxy,
+                connections,
+                &node_agent,
+            )
+            .await;
+            let err = host
+                .fetch(proxy_relative_request(url), "read")
+                .await
+                .unwrap_err();
+            assert!(err.contains(expected), "{name}: {err}");
         }
     }
 }
