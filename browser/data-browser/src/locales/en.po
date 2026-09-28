@@ -138,6 +138,7 @@ msgstr "AI Agents"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/routes/ConnectAgentRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -568,6 +569,7 @@ msgstr "Not configured"
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/components/SideBar/SyncMenuItem.tsx
+#: src/routes/ConnectAgentRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connected"
@@ -2049,6 +2051,7 @@ msgstr "Edit value"
 
 #: src/components/SignInButton.tsx
 #: src/helpers/managed/cloudSync.ts
+#: src/routes/ConnectAgentRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
@@ -2411,6 +2414,7 @@ msgstr "Allow all writes done by this plugin"
 msgid "Deny"
 msgstr "Deny"
 
+#: src/routes/ConnectAgentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr "Allow"
@@ -9840,6 +9844,7 @@ msgstr "Pause"
 msgid "Resume"
 msgstr "Resume"
 
+#: src/components/ConnectedAppsCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke"
@@ -12524,3 +12529,84 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "An app"
+msgstr "An app"
+
+#: src/routes/ConnectAgentRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Connect an app"
+msgstr "Connect an app"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "This link is missing the app's key. Start again from the app that sent you here."
+msgstr "This link is missing the app's key. Start again from the app that sent you here."
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Sign in first, then open this link again."
+msgstr "Sign in first, then open this link again."
+
+#. 0: name; 1: write ? 'read and edit' \\: 'read'
+#: src/routes/ConnectAgentRoute.tsx
+msgid "{0} can now {1} what you shared. You can go back to it. To stop it, revoke it under Connected apps in your account settings."
+msgstr "{0} can now {1} what you shared. You can go back to it. To stop it, revoke it under Connected apps in your account settings."
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Account settings"
+msgstr "Account settings"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Read only"
+msgstr "Read only"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Read and edit"
+msgstr "Read and edit"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "What it can reach"
+msgstr "What it can reach"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "What it can do"
+msgstr "What it can do"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Connecting"
+msgstr "Connecting"
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
+msgstr "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
+msgstr "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
+
+#. 0: report.failed.length; 1: report.failed.length === 1 ? 'resource' \\: 'resources'; 2: report.failed.map(f => f.reason).join('\; ')
+#: src/components/ConnectedAppsCard.tsx
+msgid "Still has access to {0} {1}: {2}"
+msgstr "Still has access to {0} {1}: {2}"
+
+#. 0: subject.slice(-8)
+#: src/components/ConnectedAppsCard.tsx
+msgid "App {0}"
+msgstr "App {0}"
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "No access left"
+msgstr "No access left"
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "Revoking"
+msgstr "Revoking"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
+msgstr "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Connected apps"
+msgstr "Connected apps"

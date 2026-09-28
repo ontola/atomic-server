@@ -14,6 +14,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   app with its own key can use the same page: `connectAgentUrl` builds the link
   (optionally asking for edit rights or specific resources), `waitForGrant`
   waits for Allow, and `publishAgentName` sets the name the person sees.
+  `@tomic/lib/node` has `loadOrCreateLocalAgent` for the key file. `@tomic/cli`
+  gets `ad-generate connect`, so private ontologies no longer need an agent
+  secret in `atomic.config.json`.
   `@tomic/lib` now also exports the
   data verbs behind it and behind the in-app assistant (`readResourceCompact`,
   `queryResources`, `textSearch`, `semanticSearch`, `listDriveClasses`,

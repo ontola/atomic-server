@@ -7,6 +7,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- `atomic-cli connect`: connect the CLI with a key made on this machine,
+  approved in the app (`/app/connect-agent`), instead of pasting your agent
+  secret. Without a config file, the CLI now points you to it rather than
+  asking for the secret.
+
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private
   drive points to its Inbox with.

@@ -1182,6 +1182,7 @@ dependencies = [
  "promptly",
  "regex",
  "tokio",
+ "url",
 ]
 
 [[package]]

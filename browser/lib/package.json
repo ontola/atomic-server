@@ -56,6 +56,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./node": {
+      "import": {
+        "types": "./dist/src/node.d.ts",
+        "default": "./dist/node.js"
+      },
+      "require": {
+        "types": "./dist/src/node.d.ts",
+        "default": "./dist/node.cjs"
+      }
+    },
     "./ontologies/*.js": {
       "import": {
         "types": "./dist/src/ontologies/*.d.ts",

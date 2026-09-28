@@ -18,7 +18,7 @@ import {
   sharedWith,
   waitForGrant,
 } from '@tomic/lib';
-import { loadOrCreateLocalAgent } from './local-agent.js';
+import { loadOrCreateLocalAgent } from '@tomic/lib/node';
 import { createAtomicMcpServer, type Access } from './server.js';
 
 // stdout is the protocol channel: everything human-readable goes to stderr,
@@ -45,7 +45,9 @@ if (!serverUrl || !appUrl) {
 await enableLoro();
 
 const secret = process.env.ATOMIC_AGENT_SECRET;
-const local = secret ? undefined : await loadOrCreateLocalAgent(serverUrl);
+const local = secret
+  ? undefined
+  : await loadOrCreateLocalAgent('atomic-mcp', serverUrl);
 const agent = secret ? await Agent.fromSecret(secret) : local!.agent;
 
 const store = new Store({ serverUrl, agent });
