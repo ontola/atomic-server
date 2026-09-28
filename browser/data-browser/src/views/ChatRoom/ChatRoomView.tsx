@@ -344,7 +344,11 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   return (
     <MessageComponent about={subject}>
       {createdBy ? (
-        <PresenceAvatarMenu agentSubject={createdBy} size='1.8rem' />
+        <PresenceAvatarMenu
+          agentSubject={createdBy}
+          size='1.8rem'
+          chip={false}
+        />
       ) : (
         <AvatarSpacer />
       )}

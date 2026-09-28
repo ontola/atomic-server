@@ -221,10 +221,10 @@ export class DemoDirector {
       'Feel free to edit, remove or create anything you like!',
     ]);
 
-    // Mara starts a meeting: the top-bar Join banner lights up, and the
-    // welcome doc closes with a link into it straight away.
-    await this.startTourMeeting();
-    await this.appendMeetingLink();
+    // Mara starts a meeting while she types the line that invites the user
+    // into it: the top-bar Join banner lights up mid-sentence, and the
+    // sentence ends in a link to it. No pause between the two.
+    await this.appendMeetingLink(this.startTourMeeting());
 
     // Wait for the user to Join (open the meeting). If they don't within
     // ~25s, carry on anyway so the log exists for whenever they do.
@@ -394,14 +394,14 @@ export class DemoDirector {
 
   /** Close the welcome doc with a link to the tour meeting — the single
    *  most important thing to point a new teammate at. */
-  private async appendMeetingLink(): Promise<void> {
-    if (!this.meeting) return;
+  private async appendMeetingLink(
+    meetingStarted: Promise<void>,
+  ): Promise<void> {
     const resource = await this.getBeatResource(this.manifest.welcomeDoc);
 
     if (!resource || this.stopped) return;
 
     const doc = this.manifest.welcomeDoc;
-    const meeting = this.meeting;
     const typist = new SimulatedTypist(
       this.store,
       resource,
@@ -417,10 +417,13 @@ export class DemoDirector {
       await this.typeText(
         typist,
         doc,
-        'Your tour is starting — join it here: ',
+        'I’m about to start a tour to show you around. Join it here: ',
       );
 
-      if (this.stopped) return;
+      await meetingStarted;
+      const meeting = this.meeting;
+
+      if (this.stopped || !meeting) return;
 
       this.touch(doc);
       typist.appendInline({
@@ -719,7 +722,10 @@ export class DemoDirector {
 
         if (this.stopped) return;
 
-        await this.sleep(500);
+        // A beat between paragraphs, not after the last: whatever comes next
+        // (the meeting invite) should follow without a gap.
+        if (paragraph !== paragraphs[paragraphs.length - 1])
+          await this.sleep(500);
       }
     } finally {
       typist.stop();
