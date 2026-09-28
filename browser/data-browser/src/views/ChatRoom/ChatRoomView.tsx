@@ -16,7 +16,7 @@ import {
   useSubject,
   useTypingPresence,
 } from '@tomic/react';
-import { memo, useCallback, useRef, useState, useEffect } from 'react';
+import { memo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   FaCopy,
@@ -27,7 +27,7 @@ import {
   FaReply,
   FaXmark,
 } from 'react-icons/fa6';
-import { styled } from 'styled-components';
+import { css, keyframes, styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
 import { PresenceAvatarMenu } from '../../components/Presence/PresenceAvatarMenu';
 import { Button } from '../../components/Button';
@@ -81,10 +81,22 @@ export function ChatView({
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
   const internalInputRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = inputRefProp ?? internalInputRef;
-  const [textAreaHight, setTextAreaHight] = useState(1);
   const [scrollToBottomTrigger, setScrollToBottomTrigger] = useState(0);
 
   const { typers, notifyTyping, stopTyping } = useTypingPresence(threadSubject);
+
+  // Messages that arrive once the chat is on screen grow into place from
+  // the bottom, where the "is typing" line was; the ones already there when
+  // it opened just appear. A short wait after loading lets a list that loads
+  // in a few batches count as already there.
+  const [settled, setSettled] = useState(false);
+
+  useEffect(() => {
+    if (messagesLoading || settled) return;
+    const timer = setTimeout(() => setSettled(true), 400);
+
+    return () => clearTimeout(timer);
+  }, [messagesLoading, settled]);
 
   const disableSend = newMessageVal.length === 0;
 
@@ -118,13 +130,12 @@ export function ChatView({
     }
   };
 
-  const handleReply = useCallback(
-    (subject: string) => {
-      setReplyTo(subject);
-      inputRef.current?.focus();
-    },
-    [setReplyTo, inputRef],
-  );
+  // The React Compiler memoizes this; a manual useCallback over `inputRef`
+  // could no longer be preserved once the input's height is read from it.
+  const handleReply = (subject: string) => {
+    setReplyTo(subject);
+    inputRef.current?.focus();
+  };
 
   const handleChangeMessageText: React.ChangeEventHandler<
     HTMLTextAreaElement
@@ -132,28 +143,24 @@ export function ChatView({
     setNewMessage(e.target.value);
 
     if (e.target.value === '') {
-      // Make the textarea small again when the user removed their message
-      setTextAreaHight(1);
       stopTyping();
 
       return;
     }
 
     notifyTyping();
-
-    // Auto-grow the textarea
-    const overflowStyle = e.target.style.overflow;
-    e.target.style.overflow = 'scroll';
-    // in Firefox, scrollHeight only works if overflow is set to scroll
-    const height = e.target.scrollHeight;
-    e.target.style.overflow = overflowStyle;
-    const rowHeight = 30;
-    const trows = Math.ceil(height / rowHeight) - 1;
-
-    if (trows !== textAreaHight) {
-      setTextAreaHight(trows);
-    }
   };
+
+  // Grow the input with its text, to exactly the text's height. Counting
+  // rows at an assumed 30px each left a line-height of 24px short: a few
+  // lines in, the input could be scrolled by a line's worth. Runs on every
+  // change of the value, so it also shrinks back after sending.
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+  }, [newMessageVal, inputRef]);
 
   return (
     <ViewWrapper>
@@ -173,11 +180,9 @@ export function ChatView({
             </EmptyChatState>
           ) : (
             messages.map(message => (
-              <Message
-                key={message}
-                subject={message}
-                setReplyTo={handleReply}
-              />
+              <Appear key={message} animate={settled}>
+                <Message subject={message} setReplyTo={handleReply} />
+              </Appear>
             ))
           )}
         </ChatMessagesContainer>
@@ -194,7 +199,7 @@ export function ChatView({
       <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
         <MessageInput
           aria-label='Chat input'
-          rows={textAreaHight}
+          rows={1}
           ref={inputRef}
           autoFocus
           value={newMessageVal}
@@ -613,6 +618,40 @@ const AvatarSpacer = styled.div`
   flex-shrink: 0;
 `;
 
+/** Grows a message into place if it arrived while the chat was open. Whether
+ *  to animate is fixed at mount, so messages already listed never replay it. */
+function Appear({
+  animate,
+  children,
+}: {
+  animate: boolean;
+  children: React.ReactNode;
+}) {
+  const [grow] = useState(animate);
+
+  return <AppearWrapper $grow={grow}>{children}</AppearWrapper>;
+}
+
+const growIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.96);
+  }
+`;
+
+const AppearWrapper = styled.div<{ $grow: boolean }>`
+  ${p =>
+    p.$grow &&
+    css`
+      transform-origin: left bottom;
+      animation: ${growIn} 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    `}
+`;
+
 const MessageComponent = styled.div`
   display: flex;
   align-items: flex-start;
@@ -643,6 +682,8 @@ const SendButton = styled(Button)`
 `;
 
 const MessageInput = styled.textarea`
+  box-sizing: border-box;
+  resize: none;
   color: ${p => p.theme.colors.text};
   background: none;
   flex: 1;
