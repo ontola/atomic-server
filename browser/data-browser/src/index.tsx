@@ -2,6 +2,8 @@ import { reactErrorHandler } from '@sentry/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
+// Before App: may turn a reload inside the demo into a fresh /app/demo.
+import './helpers/restartDemoOnReload';
 import App from './App';
 import { initSentry } from './helpers/sentry';
 import { afterNextPaint, hideBootSplash } from './helpers/bootSplash';
