@@ -231,6 +231,16 @@ describe('importing into the account identity database', () => {
     expect(idb.has(DRIVE_CARRY_OVER_KEY)).toBe(false);
   });
 
+  it('imports for the account signed in under the other spelling', async () => {
+    await stage();
+    const signedIn = account.replace('did:ad:', 'atomic:');
+    const db = fakeDb();
+
+    expect(
+      await importDriveCarryOver(fakeStore(signedIn, db), signedIn),
+    ).toEqual(['did:ad:home', 'did:ad:kept']);
+  });
+
   it('waits while another identity, or no database, is active', async () => {
     await stage();
 

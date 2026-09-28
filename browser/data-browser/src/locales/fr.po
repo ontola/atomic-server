@@ -12398,3 +12398,20 @@ msgstr ""
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
 msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bringing your workspace…"
+msgstr "Transfert de votre espace de travail…"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bring this workspace into my account"
+msgstr "Ajouter cet espace de travail à mon compte"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Your workspace could not be brought into your account. Try again, or choose one of the options below."
+msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Réessayez ou choisissez l’une des options ci-dessous."
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."

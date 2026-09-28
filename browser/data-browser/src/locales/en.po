@@ -12444,3 +12444,20 @@ msgstr "No column matches"
 #: src/chunks/TablePage/ColumnFilterDropdown.tsx
 msgid "Search the drive for “{0}”"
 msgstr "Search the drive for “{0}”"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bringing your workspace…"
+msgstr "Bringing your workspace…"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bring this workspace into my account"
+msgstr "Bring this workspace into my account"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Your workspace could not be brought into your account. Try again, or choose one of the options below."
+msgstr "Your workspace could not be brought into your account. Try again, or choose one of the options below."
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
