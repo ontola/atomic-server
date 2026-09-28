@@ -45,6 +45,20 @@ export const ChatMessagesContainer: React.FC<
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   };
 
+  // New messages glide the list down instead of jumping, unless the reader
+  // asked for less motion.
+  const glideToBottom = () => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const reduced = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    scroller.scrollTo({
+      top: scroller.scrollHeight,
+      behavior: reduced ? 'auto' : 'smooth',
+    });
+  };
+
   const isNearBottom = () => {
     const el = scrollRef.current;
 
@@ -161,7 +175,7 @@ export const ChatMessagesContainer: React.FC<
         );
 
         if (hasContentChanges) {
-          scrollToBottom();
+          glideToBottom();
         }
       });
 
