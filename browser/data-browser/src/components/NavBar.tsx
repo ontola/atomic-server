@@ -62,6 +62,7 @@ import { ContentLanguageSelect } from './ContentLanguageSelect';
 import { ResourcePresenceRow } from './Presence/ResourcePresenceRow';
 import { FollowStatus } from './Presence/FollowStatus';
 import { MeetingBanner } from './Presence/MeetingBanner';
+import { NotificationsBell } from './Notifications/NotificationsBell';
 
 export type NavBarProps = {
   resource?: Resource;
@@ -407,6 +408,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             />
           </>
         )}
+        <NotificationsBell />
       </ButtonArea>
     </NavBarWrapper>
   );

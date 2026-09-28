@@ -65,6 +65,33 @@ export function turnOffOsNotifications(): void {
   setTurnedOff(true);
 }
 
+const ASKED_KEY = 'atomic.osNotifications.asked';
+
+/**
+ * Whether it makes sense to offer system notifications: the browser can show
+ * them, nobody decided yet (no permission either way, not switched off here),
+ * and the offer wasn't turned down before on this device.
+ */
+export function shouldOfferOsNotifications(): boolean {
+  if (!osNotificationsSupported()) return false;
+  if (Notification.permission !== 'default' || turnedOff()) return false;
+
+  try {
+    return localStorage.getItem(ASKED_KEY) === null;
+  } catch {
+    return false;
+  }
+}
+
+/** Remembers that the offer was turned down, so it isn't made again. */
+export function declineOsNotifications(): void {
+  try {
+    localStorage.setItem(ASKED_KEY, 'no');
+  } catch {
+    // Storage blocked: the offer may come back, which is harmless.
+  }
+}
+
 export interface OsNotification {
   title: string;
   body: string;
