@@ -1,10 +1,6 @@
-import { test, expect, type Page } from './fixtures';
-import {
-  before,
-  FRONTEND_URL,
-  SERVER_URL,
-  nodeReachableServerUrl,
-} from './test-utils';
+import { type Page } from './fixtures';
+import { test, expect, beforeShared } from './shared-drive';
+import { FRONTEND_URL, SERVER_URL, nodeReachableServerUrl } from './test-utils';
 
 /**
  * The Sync page's device-facing surface: the pairing code a user scans, and
@@ -30,7 +26,7 @@ async function gotoSync(page: Page) {
 }
 
 test.describe('sync page devices', () => {
-  test.beforeEach(before);
+  test.beforeEach(beforeShared);
 
   test('an unenrolled drive does not inherit another drive cloud status', async ({
     page,

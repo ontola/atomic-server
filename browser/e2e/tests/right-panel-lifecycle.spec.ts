@@ -1,5 +1,5 @@
-import { test, expect, type Page } from './fixtures';
-import { before } from './test-utils';
+import { type Page } from './fixtures';
+import { test, expect, beforeShared } from './shared-drive';
 
 async function expectLeftSidebarClosed(page: Page) {
   const sidebar = page.getByTestId('sidebar');
@@ -24,9 +24,10 @@ for (const [name, trigger, panel] of [
 ] as const) {
   test(`opening ${name} closes the left sidebar at tablet width`, async ({
     page,
+    sharedDevDrive,
   }) => {
     await page.setViewportSize({ width: 828, height: 1160 });
-    await before({ page });
+    await beforeShared({ page, sharedDevDrive });
     const sidebar = page.getByTestId('sidebar');
     await expect
       .poll(() =>
@@ -50,9 +51,10 @@ for (const [name, trigger, panel] of [
 
 test('opening meeting chat closes the left sidebar at tablet width', async ({
   page,
+  sharedDevDrive,
 }) => {
   await page.setViewportSize({ width: 828, height: 1160 });
-  await before({ page });
+  await beforeShared({ page, sharedDevDrive });
   await expect
     .poll(() =>
       page
@@ -74,8 +76,9 @@ test('opening meeting chat closes the left sidebar at tablet width', async ({
 for (const panel of ['followSession', 'comments', 'ai']) {
   test(`does not restore stale ${panel} panel from another session`, async ({
     page,
+    sharedDevDrive,
   }) => {
-    await before({ page });
+    await beforeShared({ page, sharedDevDrive });
     await page.evaluate(
       value =>
         localStorage.setItem('atomic.rightPanel.active', JSON.stringify(value)),
@@ -95,8 +98,9 @@ for (const panel of ['followSession', 'comments', 'ai']) {
 
 test('comments close when navigating to a page without a resource', async ({
   page,
+  sharedDevDrive,
 }) => {
-  await before({ page });
+  await beforeShared({ page, sharedDevDrive });
   await page.getByTestId('navbar-comments-button').click();
   await expect(page.getByTestId('comments-panel')).toHaveAttribute(
     'data-open',
@@ -117,8 +121,9 @@ test('comments close when navigating to a page without a resource', async ({
 
 test('deleting an explicitly opened meeting closes its panel', async ({
   page,
+  sharedDevDrive,
 }) => {
-  await before({ page });
+  await beforeShared({ page, sharedDevDrive });
   await page.getByRole('button', { name: 'New Meeting' }).first().click();
   await page.getByRole('button', { name: 'Open chat', exact: true }).click();
   await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
@@ -137,8 +142,9 @@ test('deleting an explicitly opened meeting closes its panel', async ({
 
 test('switching drives closes a panel without resurrecting it on return', async ({
   page,
+  sharedDevDrive,
 }) => {
-  await before({ page });
+  await beforeShared({ page, sharedDevDrive });
   const original = await page.evaluate(() => window.store.getDrive());
   // The last assertion is about returning to this drive, so it is vacuous if
   // there was never one to return to.

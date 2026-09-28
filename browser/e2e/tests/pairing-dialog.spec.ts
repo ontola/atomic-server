@@ -1,6 +1,6 @@
-import { test, expect, type Page } from './fixtures';
+import { type Page } from './fixtures';
+import { test, expect, beforeShared } from './shared-drive';
 import {
-  before,
   FRONTEND_URL,
   nodeReachableServerUrl,
   SERVER_URL,
@@ -105,7 +105,7 @@ async function pasteCode(page: Page, code: string) {
 }
 
 test.describe('pairing by pasting a code', () => {
-  test.beforeEach(before);
+  test.beforeEach(beforeShared);
 
   test('the paste form is offered on a device, not in a browser tab', async ({
     page,
@@ -207,7 +207,7 @@ test.describe('pairing by pasting a code', () => {
 });
 
 test.describe('paired devices on the sync page', () => {
-  test.beforeEach(before);
+  test.beforeEach(beforeShared);
 
   /** Seed the peer list the app auto-dials from, before the page loads. */
   async function withStoredPeers(
