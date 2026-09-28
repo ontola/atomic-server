@@ -1,4 +1,3 @@
-// @wc-ignore-file
 /**
  * Short refs for `did:ad:` subjects in LLM tool I/O (see
  * planning/json-ad-compact.md). A full DID is ~90 chars of high-entropy
@@ -14,7 +13,7 @@
  * expanded at the tool boundary and in link rendering only.
  */
 
-import { identifierBody } from '@tomic/lib';
+import { identifierBody } from './subject.js';
 
 /** Plain resource subjects only, in either scheme; agent / commit / blob /
  *  node subjects stay untouched. */
