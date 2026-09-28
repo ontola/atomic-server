@@ -1060,8 +1060,12 @@ export class Store {
     const db = this.getClientDb();
 
     if (!db || !(await db.waitForInit()))
+      // Reached from creating a drive and from sharing, not only from the
+      // Sync page's disconnect: name the cause, not a step the reader never
+      // took.
       throw new Error(
-        'Open this drive with local storage available before disconnecting.',
+        db?.initError?.message ??
+          'This needs local storage in this browser, which is not available right now. Reload the page and try again.',
       );
 
     if (this.isDriveRefusedByServer(drive)) {
