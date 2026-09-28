@@ -178,6 +178,8 @@ pub async fn runtime_of(
     }))
 }
 
+static PUBLISH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Publishes this node's agent for an active Installation on a child the
 /// agent may write, once. Returns that child's subject, or `None` when this
 /// node has no agent for the Installation (not activated here, a wasip2
@@ -194,6 +196,11 @@ pub async fn publish_runtime(
     let AppAgentState::Active(info) = store.get_app_agent_state(&key)? else {
         return Ok(None);
     };
+    // The after-commit hook runs outside the Installation's subject lock, so
+    // two commits landing together would both miss the lookup below and both
+    // create a child. One lock for every Installation: a publish is rare, and
+    // once the child exists it is only that lookup.
+    let _guard = PUBLISH_LOCK.lock().await;
     if let Some(existing) = runtime_of(store, installation, &info.agent).await? {
         return Ok(Some(existing.get_subject().to_string()));
     }
@@ -441,6 +448,71 @@ mod tests {
             .filter(|r| r.has_class(urls::INSTALLATION_RUNTIME))
             .count();
         assert_eq!(all, 1);
+    }
+
+    /// The after-commit hook runs outside the Installation's subject lock, so
+    /// two commits landing together both reach `publish_runtime`. They must
+    /// still leave one child: a duplicate is permanent and syncs everywhere.
+    #[actix_rt::test]
+    async fn concurrent_publishes_leave_one_runtime() {
+        let f = fixture("identity_runtime_concurrent").await;
+        let db = &f.appstate.store;
+        let subject = install(&f, vec![]).await.unwrap();
+        let node = db
+            .get_app_agent_info(&AppAgentKey::new(&f.drive, &subject))
+            .unwrap()
+            .expect("activation minted an agent")
+            .agent;
+        // Start from an active Installation that has no child yet.
+        runtime_of(db, &subject, &node)
+            .await
+            .unwrap()
+            .expect("activation published the node's agent")
+            .destroy(db)
+            .await
+            .unwrap();
+        assert!(runtime_of(db, &subject, &node).await.unwrap().is_none());
+
+        // Separate tasks on separate threads, released together, so the
+        // lookups really overlap. The actix test runtime is single-threaded,
+        // and there they would just run one after another.
+        let threads = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(8)
+            .enable_all()
+            .build()
+            .unwrap();
+        let start = std::sync::Arc::new(tokio::sync::Barrier::new(8));
+        let tasks = (0..8)
+            .map(|_| {
+                let (db, drive, subject, start) =
+                    (db.clone(), f.drive.clone(), subject.clone(), start.clone());
+                threads.spawn(async move {
+                    start.wait().await;
+                    publish_runtime(&db, &drive, &subject).await
+                })
+            })
+            .collect::<Vec<_>>();
+        let results = futures::future::join_all(tasks).await;
+        threads.shutdown_background();
+        let published = results
+            .into_iter()
+            .map(|r| r.unwrap().unwrap().expect("the node has an agent"))
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(published.len(), 1, "{published:?}");
+
+        let children = db
+            .query(&Query {
+                property: Some(urls::INTEGRATION_RUNTIME_AGENT.into()),
+                value: Some(Value::AtomicUrl(node.as_str().into())),
+                include_nested: true,
+                for_agent: ForAgent::Sudo,
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .resources
+            .len();
+        assert_eq!(children, 1);
     }
 
     #[actix_rt::test]
