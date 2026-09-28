@@ -30,10 +30,25 @@ const TEXT_TYPES = new Set<string>([
 const NUMBER_TYPES = new Set<string>([Datatype.INTEGER, Datatype.FLOAT]);
 const DATE_TYPES = new Set<string>([Datatype.DATE, Datatype.TIMESTAMP]);
 
+/**
+ * The form category a property's editor is chosen by, or `undefined` when the
+ * property has no datatype to choose one from.
+ *
+ * Callers read the property from the store by subject, so it can still be on
+ * its way, or have failed to load, while something renders it. Its datatype is
+ * then absent, which is a different thing from a datatype we do not recognise:
+ * there is no category to give yet, and throwing for it took a whole table page
+ * down through its error boundary. A datatype that IS there and is unknown
+ * still throws, because that is a real gap in the list below.
+ */
 export const getCategoryFromResource = (
   resource: Resource<Core.Property>,
-): PropertyFormCategory => {
-  const datatype = resource.props.datatype;
+): PropertyFormCategory | undefined => {
+  const datatype = resource.props.datatype as Datatype | undefined;
+
+  if (datatype === undefined) {
+    return undefined;
+  }
 
   if (TEXT_TYPES.has(datatype)) {
     return 'text';

@@ -21,8 +21,6 @@ import {
   type RunTrigger,
   type Verdict,
   type PluginManifest,
-  server,
-  useStore,
   type Store,
 } from '@tomic/react';
 // Bundle the worker and its shared @tomic/lib chunks. A ?url import copies
@@ -65,141 +63,10 @@ export function pluginClassesFor(
   return resolving;
 }
 
-/**
- * The plugin class of a drive, if it already has one.
- *
- * Read-only: rendering a context menu must not bring a schema into existence.
- * Resolved into React state, because a module cache read during render never
- * re-renders when it later fills.
- *
- * Re-resolves when the drive's ontology changes, so a drive that gains plugin
- * classes — from a plugin created in this tab, or synced from elsewhere — shows
- * the action without a reload.
- */
-export function usePluginClass(drive: string | undefined): string | undefined {
-  return useDriveClass(drive, 'plugin-script');
-}
-
-/** The drive's App class, once resolved. Absent while looking up. */
-export function useAppClass(drive: string | undefined): string | undefined {
-  return useDriveClass(drive, 'app');
-}
-
-/**
- * One of the drive's plugin classes, by shortname.
- *
- * Resolved in state rather than read during render: filling a module cache
- * re-renders nothing, so a page that asked during render would decide the
- * class does not exist and never look again.
- */
-/**
- * The drive's schema, retried, because a failure and an absence are not the
- * same answer and used to arrive as the same `undefined`.
- *
- * A drive with no plugin classes resolves fine and returns nothing; only a
- * genuine failure to ask reaches the throw. Collapsing the two means one
- * unlucky read renders a plugin as a bare list of its properties, with no
- * error anywhere, and nothing re-asks until the ontology happens to change.
- * Outside the hook so the React compiler does not have to reason about a
- * try/catch inside a component.
- */
-async function resolveDriveClass(
-  store: Store,
-  drive: string,
-  shortname: 'plugin-script' | 'app',
-  isCancelled: () => boolean,
-): Promise<{ ok: true; value: string | undefined } | { ok: false }> {
-  const attempts = 3;
-
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      const schema = await findSchema(store, drive, pluginSchema());
-
-      return { ok: true, value: schema.classes?.[shortname] };
-    } catch (error) {
-      if (isCancelled()) return { ok: false };
-
-      if (attempt === attempts) {
-        // Deliberately loud. A page that renders the wrong thing perfectly is
-        // the worst failure to diagnose, and this one has cost CI runs.
-        console.error(
-          `[plugins] could not resolve "${shortname}" for drive ${drive}; showing it as an ordinary resource`,
-          error,
-        );
-
-        return { ok: false };
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 150 * attempt));
-    }
-  }
-
-  return { ok: false };
-}
-
-function useDriveClass(
-  drive: string | undefined,
-  shortname: 'plugin-script' | 'app',
-): string | undefined {
-  const store = useStore();
-  const [pluginClass, setPluginClass] = useState<string>();
-
-  useEffect(() => {
-    if (!drive) {
-      setPluginClass(undefined);
-
-      return;
-    }
-
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-
-    const resolve = async () => {
-      const result = await resolveDriveClass(
-        store,
-        drive,
-        shortname,
-        () => cancelled,
-      );
-
-      if (cancelled) return;
-
-      // A failed lookup leaves whatever was already resolved in place. It is
-      // not evidence that the class is gone, and dropping it turns a working
-      // page into a generic one.
-      if (result.ok) setPluginClass(result.value);
-    };
-
-    (async () => {
-      const driveResource = await store.getResource(drive);
-      const ontology = driveResource.get(server.properties.defaultOntology) as
-        | string
-        | undefined;
-
-      if (cancelled) return;
-
-      await resolve();
-
-      if (ontology && !cancelled) {
-        unsubscribe = store.subscribe(ontology, () => {
-          void resolve();
-        });
-      }
-    })().catch(error => {
-      console.error(
-        `[plugins] could not read drive ${drive} to resolve "${shortname}"`,
-        error,
-      );
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [store, drive, shortname]);
-
-  return pluginClass;
-}
+// The drive's plugin and app class lookups live beside this file so they can be
+// unit tested: this module bundles the plugin worker, which a test environment
+// cannot transform.
+export { usePluginClass, useAppClass } from './useDriveClass';
 
 /**
  * The source a new plugin starts with.

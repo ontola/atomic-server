@@ -44,6 +44,7 @@ import { collections } from './ontologies/collections.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
+import { notifications } from './ontologies/notifications.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import {
@@ -462,6 +463,9 @@ const embeddedVocabulary = new Set<string>([
   core.properties.importBaseline,
   core.properties.importResolution,
   core.properties.importReferenceReview,
+  // lib/defaults/notifications.json, likewise not on the catalog yet.
+  ...Object.values(notifications.classes),
+  ...Object.values(notifications.properties),
 ]);
 
 /** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */

@@ -142,11 +142,29 @@ const AISidebar: React.FC = () => {
     }
 
     const draftChatPromise = draftChatPromiseRef.current;
-    const newChatResource = await draftChatPromise;
 
-    if (draftChatPromiseRef.current === draftChatPromise) {
-      draftChatPromiseRef.current = null;
-    }
+    // Forget the attempt whether it worked or not. A rejected promise left in
+    // the ref is answered from cache for the rest of the session, so one failed
+    // folder or drive read used to mean every later message in this chat failed
+    // the same way, logging the same error again with nothing asking again.
+    const forget = () => {
+      if (draftChatPromiseRef.current === draftChatPromise) {
+        draftChatPromiseRef.current = null;
+      }
+    };
+
+    const newChatResource = await draftChatPromise.then(
+      resource => {
+        forget();
+
+        return resource;
+      },
+      reason => {
+        forget();
+
+        throw reason;
+      },
+    );
 
     if (generation !== chatGenerationRef.current) {
       return undefined;

@@ -42,6 +42,19 @@ test('creation catalog searches templates and creates a selected table inside a 
   });
   await expect(search).toBeFocused();
 
+  // A blank Website or App is a seed for the assistant, so the grid leaves them
+  // out and only a search by name brings them back.
+  const startBlank = page.getByRole('region', { name: 'Start blank' });
+  await expect(
+    startBlank.getByRole('button', { name: 'Dashboard', exact: true }),
+  ).toBeVisible();
+
+  for (const title of ['Website', 'App']) {
+    await expect(
+      startBlank.getByRole('button', { name: title, exact: true }),
+    ).toHaveCount(0);
+  }
+
   for (const title of ['Plugin', 'Website', 'App']) {
     await search.fill(title);
     await expect(

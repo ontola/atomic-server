@@ -18,6 +18,41 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   was written raw, so a trailing slash or a legacy `did:ad:` identifier could
   store a key nothing found again, and a resource inside such a workspace could
   still try to reach the server.
+- One Loro wasm panic no longer turns into an error every few seconds for the
+  rest of a tab's life. Presence gives up the drive's ephemeral store on the
+  first failed call, whichever call it is, including a peer's bytes and the
+  read behind the peer list, and it now stops Loro's own expiry timer while
+  doing so. That timer lives in Loro's JavaScript wrapper and keeps calling
+  into the abandoned store, which is how a single panic anywhere in the shared
+  wasm module produced a long stream of unhandled `RuntimeError: unreachable`
+  reports from `setInterval`.
+- Notifications while the app is open, on the web and in the desktop and
+  Android apps: new chat messages, comments on things you made and replies to
+  you show as a toast, or as a system notification when you're in another tab,
+  window or app. Nothing shows for the conversation you're already looking
+  at. System notifications are switched per device under Settings →
+  Notifications. The desktop and Android apps get them through
+  `tauri-plugin-notification`.
+
+- Notifications page and Inbox: every notification is kept in an Inbox in
+  your private drive, so it's there on all your devices. The sidebar shows
+  Notifications with an unread count; the page lists them newest first, and
+  opening one (or the conversation it's about) marks it read.
+
+- Android app: the back button closes an open sidebar drawer or dialog
+  instead of navigating away underneath it. With nothing open, back works as
+  before (previous page, then leave the app).
+
+- Fix: a table no longer goes to an error screen while one of its columns is
+  still loading. A resource-array cell reads its own property from the store to
+  decide between the select and relation pickers, and asked for that property's
+  form category before the resource had arrived. A property with no datatype
+  yet threw "Unknown datatype: undefined", which reached the page's error
+  boundary and replaced the whole table. An absent datatype now means "no
+  category yet", the cell renders as a relation until the property lands, and a
+  datatype that is present but unrecognised still throws, since that is a real
+  gap rather than a slow fetch.
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs

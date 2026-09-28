@@ -227,6 +227,19 @@ export function useTableView(
     undefined;
   const view = useResource(activeView ?? unknownSubject);
 
+  // The `?view=` the URL carries *now*, rather than as of the render that a
+  // long-running action started in. Creating or duplicating a view writes to the
+  // server before it switches tabs, and by the time that switch lands the person
+  // may have picked a different tab themselves. Measured on a loaded machine:
+  // adding an app view to a fresh table costs two sequential commits, a tab
+  // click arrived while they were in flight, and the switch undid it 250ms
+  // later, which is the one thing adding a way to look at rows must not do.
+  const liveViewParam = useRef(activeViewParam);
+
+  useEffect(() => {
+    liveViewParam.current = activeViewParam;
+  }, [activeViewParam]);
+
   // Reactive reads of the View's persisted config.
   const [viewName] = useString(view, core.properties.name);
   const [storedFilters] = useValue(view, dataBrowser.properties.viewFilters);
@@ -527,13 +540,40 @@ export function useTableView(
   );
 
   const setActiveView = useCallback(
-    (subject: string) => goToView(subject, false),
+    (subject: string) => {
+      // Written here, in the tick the tab was clicked in. The effect above only
+      // lands on the next render, and a switch queued before this click may
+      // resolve in between and has to be able to see that it lost.
+      liveViewParam.current = subject;
+      goToView(subject, false);
+    },
+    [goToView],
+  );
+
+  /**
+   * Switch to a view this code has just made, unless the person has chosen
+   * another tab while it was being written. Theirs is the later intent, and a
+   * `replace` navigation would take it away without a trace in history.
+   *
+   * `from` is the `?view=` read before the writes started, so "unchanged" and
+   * "changed back to where it was" are deliberately the same case.
+   */
+  const goToCreatedView = useCallback(
+    (subject: string, from: string | undefined) => {
+      if (liveViewParam.current !== from) {
+        return;
+      }
+
+      goToView(subject, true);
+    },
     [goToView],
   );
 
   const createView = useCallback(
     (kind: ViewKind | string = DEFAULT_VIEW_KIND, label?: string) => {
       void (async () => {
+        const from = liveViewParam.current;
+
         // A table with no saved views shows one implicit Table tab, and that
         // tab disappears the moment a real view exists. So adding an app to a
         // fresh table would take the table away — the one thing an extra way
@@ -551,10 +591,10 @@ export function useTableView(
           label ?? VIEW_KIND_LABELS[kind as ViewKind],
           kind,
         );
-        goToView(created.subject, true);
+        goToCreatedView(created.subject, from);
       })().catch(() => undefined);
     },
-    [createViewResource, views.length, defaultViewSubject],
+    [createViewResource, views.length, defaultViewSubject, goToCreatedView],
   );
 
   // --- Persist (debounced) whenever the local config changes post-hydration. ---
@@ -933,6 +973,7 @@ export function useTableView(
   const duplicateView = useCallback(
     (subject: string) => {
       void (async () => {
+        const from = liveViewParam.current;
         const src = store.getResourceLoading(subject);
         const srcName = (src.get(core.properties.name) as string) ?? 'View';
 
@@ -981,10 +1022,10 @@ export function useTableView(
           true,
         );
         await table.save();
-        goToView(created.subject, true);
+        goToCreatedView(created.subject, from);
       })().catch(() => undefined);
     },
-    [store, table],
+    [store, table, goToCreatedView],
   );
 
   const deleteView = useCallback(
