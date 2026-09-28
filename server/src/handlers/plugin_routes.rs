@@ -246,6 +246,29 @@ pub async fn status(
     body["state"] = state_name.into();
     body["degraded"] = degraded.into();
     body["level"] = registry.config().level().as_str().into();
+    // The delivery queue (#1719): per route, and for the installation.
+    let deliveries = crate::plugins::route_delivery::status(
+        store,
+        &query.installation,
+        state.route_delivery.per_day(),
+        atomic_lib::utils::now(),
+    );
+    if let Some(routes) = body["routes"].as_array_mut() {
+        for route in routes {
+            let queue = route["id"]
+                .as_str()
+                .and_then(|id| deliveries["routes"].get(id));
+            route["queueDepth"] = queue.map(|q| q["queueDepth"].clone()).unwrap_or(0.into());
+            route["oldestQueueFailure"] = queue
+                .map(|q| q["oldestQueueFailure"].clone())
+                .unwrap_or_default();
+        }
+    }
+    let mut deliveries = deliveries;
+    if let Some(summary) = deliveries.as_object_mut() {
+        summary.remove("routes");
+    }
+    body["deliveries"] = deliveries;
     Ok(HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .json(body))

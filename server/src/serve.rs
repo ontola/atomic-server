@@ -403,6 +403,17 @@ where
     #[cfg(feature = "wasm-plugins")]
     crate::plugins::sync_worker::spawn(appstate.clone());
 
+    // Sends what plugin routes enqueued (#1719). Only at `read-write`: at a
+    // lower level the queued jobs stay on disk until the gate reopens.
+    #[cfg(feature = "plugin-routes")]
+    if appstate
+        .config
+        .plugin_routes
+        .allows(crate::plugin_routes::PluginRoutesLevel::ReadWrite)
+    {
+        crate::plugins::route_delivery::spawn(appstate.route_delivery.clone());
+    }
+
     // Embedder hook: the store, indexes and transports are up, but the HTTP
     // server hasn't started accepting connections yet. A managed-node wrapper
     // (atomic-saas/managed-node) uses this to flip the `managed` flag, install
