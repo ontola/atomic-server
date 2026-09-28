@@ -45,6 +45,22 @@ describe('makeDriveLocal preconditions', () => {
     await expect(store.makeDriveLocal(DRIVE)).rejects.toThrow(/local storage/);
   });
 
+  it("names the database's own reason when it could not open", async ({
+    expect,
+  }) => {
+    // Creating a drive reaches here too; "before disconnecting" named a step
+    // the person never took.
+    const { store } = await testStore();
+    store.setClientDb({
+      ...dbStub(false),
+      initError: new Error('another tab of this site is using it'),
+    } as unknown as ClientDbWorker);
+
+    await expect(store.makeDriveLocal(DRIVE)).rejects.toThrow(
+      'another tab of this site is using it',
+    );
+  });
+
   it('asks for a server once the database is there', async ({ expect }) => {
     const { store } = await testStore();
     store.setClientDb(dbStub(true));
