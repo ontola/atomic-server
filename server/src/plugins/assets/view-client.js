@@ -40,7 +40,7 @@ window.addEventListener('message', event => {
  * They wait as long as the person takes; the host answers `cancelled` when
  * the question goes away.
  */
-const ASKS_THE_PERSON = new Set(['proxyConnect', 'openExternal']);
+const ASKS_THE_PERSON = new Set(['proxyConnect', 'openExternal', 'openResource']);
 
 function send(op, payload) {
   const id = ++nextId;
@@ -177,9 +177,10 @@ export const store = {
   },
 
   /**
-   * Shows a resource in the host page, leaving this app. Only a resource the
-   * person can already read; resolves to `{ status: 'opened', subject }`,
-   * and refuses agents, commits, blobs and anything that is not a subject.
+   * Shows a resource in the host page, leaving this app, after the person
+   * confirms it. Only a resource the person can already read; resolves to
+   * `{ status: 'opened' | 'cancelled', subject }`, and refuses agents,
+   * commits, blobs and anything that is not a subject without asking.
    */
   async openResource(subject) {
     return send('openResource', { subject });

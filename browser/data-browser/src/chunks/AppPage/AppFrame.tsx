@@ -93,15 +93,12 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
-  // An app asking to open a link outside the drive. Same rule: only a click
-  // here opens it, so the frame never needs popup rights.
-  const [externalAsk, setExternalAsk] = useState<ExternalAsk>();
-  const externalAskRef = useRef<ExternalAsk | undefined>(undefined);
+  // An app asking to take the person somewhere else: a link outside the
+  // drive, or another resource in this page. Same rule: only a click here
+  // goes there, so the frame never needs popup or navigation rights.
+  const [openAsk, setOpenAsk] = useState<OpenAsk>();
+  const openAskRef = useRef<OpenAsk | undefined>(undefined);
   const navigate = useNavigateWithTransition();
-  const navigateRef = useRef(navigate);
-  useEffect(() => {
-    navigateRef.current = navigate;
-  }, [navigate]);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -246,6 +243,17 @@ function AppFrameSession({
         return;
       }
 
+      // One question at a time; a second ask answers the first.
+      const ask = (next: OpenAsk) => {
+        const previous = openAskRef.current;
+        previous?.reply({
+          id: previous.id,
+          result: { status: 'cancelled', ...subjectOf(previous) },
+        });
+        openAskRef.current = next;
+        setOpenAsk(next);
+      };
+
       if (data.op === 'openExternal') {
         const link = checkExternalLink(data.url);
 
@@ -255,27 +263,29 @@ function AppFrameSession({
           return;
         }
 
-        const { url } = link;
-        // One question at a time; a second ask answers the first.
-        const previous = externalAskRef.current;
-        previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
-        const ask: ExternalAsk = { id: data.id, url, reply: session.post };
-        externalAskRef.current = ask;
-        setExternalAsk(ask);
+        ask({
+          kind: 'external',
+          id: data.id,
+          url: link.url,
+          reply: session.post,
+        });
 
         return;
       }
 
       if (data.op === 'openResource') {
+        // Refused before asking: the person is only ever asked about a
+        // resource they can already read.
         resourceToOpen(store, data.subject)
-          .then(subject => {
-            session.post({
+          .then(async subject => {
+            const { title } = await store.getResource(subject);
+            ask({
+              kind: 'resource',
               id: data.id,
-              result: { status: 'opened', subject },
+              subject,
+              title,
+              reply: session.post,
             });
-            void navigateRef.current(
-              `${paths.show}?${new URLSearchParams({ subject })}`,
-            );
           })
           .catch((e: Error) => session.post({ id: data.id, error: e.message }));
 
@@ -403,18 +413,26 @@ function AppFrameSession({
       .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
   };
 
-  const finishExternal = (status: 'opened' | 'cancelled') => {
-    if (!externalAsk) return;
+  const finishOpen = (status: 'opened' | 'cancelled') => {
+    if (!openAsk) return;
+
+    openAsk.reply({
+      id: openAsk.id,
+      result: { status, ...subjectOf(openAsk) },
+    });
+    openAskRef.current = undefined;
+    setOpenAsk(undefined);
+
+    if (status !== 'opened') return;
 
     // Opened from this click, so the browser allows the new tab without the
     // frame ever holding popup rights.
-    if (status === 'opened') openInNewTab(externalAsk.url);
-    externalAsk.reply({ id: externalAsk.id, result: { status } });
-    externalAskRef.current = undefined;
-    setExternalAsk(undefined);
+    if (openAsk.kind === 'external') openInNewTab(openAsk.url);
+    else
+      void navigate(
+        `${paths.show}?${new URLSearchParams({ subject: openAsk.subject })}`,
+      );
   };
-
-  const externalHost = externalAsk?.url.host;
 
   const cancelConnect = () => {
     if (!connectAsk) return;
@@ -481,15 +499,30 @@ function AppFrameSession({
           </Row>
         </ProxyConsentBar>
       )}
-      {externalAsk && (
+      {openAsk?.kind === 'external' && (
         <ProxyConsentBar aria-label='Open a link'>
           <ProxyConsentText>
-            This app wants to open <Host>{externalHost}</Host> in a new tab.
-            <ExternalUrl>{externalAsk.url.href}</ExternalUrl>
+            This app wants to open <Host>{openAsk.url.host}</Host> in a new tab.
+            <ExternalUrl>{openAsk.url.href}</ExternalUrl>
           </ProxyConsentText>
           <Row gap='0.5rem'>
-            <Button onClick={() => finishExternal('opened')}>Open link</Button>
-            <Button subtle onClick={() => finishExternal('cancelled')}>
+            <Button onClick={() => finishOpen('opened')}>Open link</Button>
+            <Button subtle onClick={() => finishOpen('cancelled')}>
+              Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {openAsk?.kind === 'resource' && (
+        <ProxyConsentBar aria-label='Open a resource'>
+          <ProxyConsentText>
+            This app wants to open <Host>{openAsk.title}</Host>, leaving the
+            app.
+            <ExternalUrl>{openAsk.subject}</ExternalUrl>
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={() => finishOpen('opened')}>Open</Button>
+            <Button subtle onClick={() => finishOpen('cancelled')}>
               Cancel
             </Button>
           </Row>
@@ -628,11 +661,20 @@ interface ConnectAsk {
   existing?: ProxyConnection[];
 }
 
-interface ExternalAsk {
+/** An app asking to take the person somewhere, until they answer. */
+type OpenAsk = {
   id: number | string;
-  url: URL;
   reply: (reply: HostReply) => void;
-}
+} & (
+  | { kind: 'external'; url: URL }
+  // The title is the resource's own, which the app may have written; the
+  // subject under it is what the person is really deciding about.
+  | { kind: 'resource'; subject: string; title: string }
+);
+
+/** `openResource` answers with the subject, whether opened or cancelled. */
+const subjectOf = (ask: OpenAsk) =>
+  ask.kind === 'resource' ? { subject: ask.subject } : {};
 
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
 

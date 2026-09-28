@@ -108,8 +108,15 @@ export interface RPCMessage<T extends MessageType = any, A = MessageArgs[T]> {
  */
 export type OpenExternalResult = { status: 'opened' | 'cancelled' };
 
-/** What `store.openResource(subject)` resolves to in an app frame. */
-export type OpenResourceResult = { status: 'opened'; subject: string };
+/**
+ * What `store.openResource(subject)` resolves to in an app frame. The host
+ * asks the person first, naming the resource; `cancelled` as for
+ * {@link OpenExternalResult}.
+ */
+export type OpenResourceResult = {
+  status: 'opened' | 'cancelled';
+  subject: string;
+};
 
 export interface PageContext {
   /** The current page resource */

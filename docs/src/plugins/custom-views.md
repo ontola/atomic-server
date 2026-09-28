@@ -204,16 +204,16 @@ A drive app's view (an app made with `createApp`, or an Installation's app) gets
 
 #### `store.openExternal(url): Promise<{ status: 'opened' | 'cancelled' }>`
 
-Opens an `http:` or `https:` link in a new tab. The frame has no popup rights (`allow-popups` is not in its sandbox), so `window.open` and `target="_blank"` do nothing. Instead, the host shows a bar naming the destination's host in full, with the whole link under it, and opens the link only when the person clicks **Open link**. It opens with `noopener,noreferrer`. Other schemes, and links with a user name or password in them, are refused. A second call before the person answers resolves the first as `cancelled`.
+Opens an `http:` or `https:` link in a new tab. The frame has no popup rights (`allow-popups` is not in its sandbox), so `window.open` and `target="_blank"` do nothing. Instead, the host shows a bar naming the destination's host in full, with the whole link under it, and opens the link only when the person clicks **Open link**. It opens with `noopener,noreferrer`. Other schemes, and links with a user name or password in them, are refused. A second call (`openExternal` or `openResource`) before the person answers resolves the first as `cancelled`.
 
 ```js
 const { status } = await store.openExternal('https://www.notion.so/My-page-abc123');
 ```
 
-#### `store.openResource(subject): Promise<{ status: 'opened', subject }>`
+#### `store.openResource(subject): Promise<{ status: 'opened' | 'cancelled', subject }>`
 
-Shows a resource in the host page, leaving the app. Only a resource the signed-in person can already read: the host loads it with their store first and refuses it when that fails. Agents, commits, blobs, nodes and anything that is not a resource subject are refused.
+Shows a resource in the host page, leaving the app. Only a resource the signed-in person can already read: the host loads it with their store first and refuses it when that fails. Agents, commits, blobs, nodes and anything that is not a resource subject are refused. The host then shows a bar naming the resource, with its subject under it, and goes there only when the person clicks **Open**. As with `openExternal`, a second call (of either kind) before the person answers resolves the first as `cancelled`.
 
 ```js
-await store.openResource(table.subject);
+const { status } = await store.openResource(table.subject);
 ```

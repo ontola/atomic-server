@@ -115,6 +115,7 @@ msgstr ""
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -1897,6 +1898,7 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr ""
 
 #: src/actions/resourceActions.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
@@ -9423,9 +9425,6 @@ msgstr ""
 msgid "Sign in to connect an account."
 msgstr ""
 
-#~ msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
-#~ msgstr ""
-
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/views/Installation/InstallationConnections.tsx
 msgid "Connect an account"
@@ -9487,4 +9486,12 @@ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Open a link"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to open <0/>, leaving the app. <1/>"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open a resource"
 msgstr ""

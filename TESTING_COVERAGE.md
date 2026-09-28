@@ -1839,8 +1839,9 @@ the full (punycode) host the confirm bar shows, and opens with
 agents, commits, blobs, nodes and non-subjects before loading anything, and
 refuses a resource the person's store cannot read. `viewProtocol.test.ts`
 checks the generated client sends both ops and waits on the person without a
-deadline. Not covered by an automated browser test: the confirm bar itself
-and the navigation (checked by hand with a throwaway Playwright script).
+deadline. Not covered by an automated browser test: the two confirm bars
+(both ops ask before leaving the app) and the navigation (checked by hand
+with a throwaway Playwright script).
 
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;

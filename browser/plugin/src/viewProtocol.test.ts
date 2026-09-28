@@ -393,9 +393,15 @@ it('asks the host to open links and resources, and waits on the person as long a
   });
 
   // The person may take minutes to decide; that is not a silent host.
-  expect(vi.getTimerCount()).toBe(1);
+  expect(vi.getTimerCount()).toBe(0);
   await vi.advanceTimersByTimeAsync(10 * 60_000);
-  expect(await outcome).toMatch('did not answer openResource');
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: open.id,
+    result: { status: 'opened', subject: 'did:ad:row' },
+  });
+  expect(await outcome).toBe('answered');
   f.reply({
     type: 'atomic.view.response',
     version: 1,
