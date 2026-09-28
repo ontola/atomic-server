@@ -165,19 +165,26 @@ const DemoRoute: React.FC = () => {
         manifest => {
           if (window.innerWidth < SIDEBAR_TOGGLE_WIDTH) setSideBarLocked(true);
           void revealWhenReady(store, manifest.welcomeDoc);
-          navigate(constructOpenURL(manifest.welcomeDoc));
+          // Replace, don't push: /app/demo builds a fresh demo every time it
+          // loads, so leaving it in history made Back rebuild the demo (and
+          // tear down the one just left) instead of returning to the page the
+          // visitor came from.
+          navigate({
+            to: constructOpenURL(manifest.welcomeDoc),
+            replace: true,
+          });
         },
         target => {
           void afterNextPaint().then(hideBootSplash);
 
           if (target === paths.newDrive) {
-            navigate(target);
+            navigate({ to: target, replace: true });
 
             return;
           }
 
           setDrive(target);
-          navigate(constructOpenURL(target));
+          navigate({ to: constructOpenURL(target), replace: true });
         },
       );
     }
