@@ -251,6 +251,7 @@ pub async fn status(
         store,
         &query.installation,
         state.route_delivery.per_day(),
+        state.route_delivery.budget(),
         atomic_lib::utils::now(),
     );
     if let Some(routes) = body["routes"].as_array_mut() {

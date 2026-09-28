@@ -29,6 +29,16 @@ pub const COMPILED: bool = false;
 /// (the design proposed 10,000); operators can raise or lower it.
 pub const DEFAULT_DELIVERIES_PER_DAY: u64 = 1_000;
 
+/// Disk one installation's delivery queue may use, the default of
+/// `--plugin-route-queue-bytes`: 64 MiB. That is 250 bodies at the 256 KiB
+/// maximum, or the full 10,000-job queue at about 6 KiB a delivery.
+pub const DEFAULT_QUEUE_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Disk the delivery queues of all installations may use together, the
+/// default of `--plugin-route-node-queue-bytes`: 1 GiB, which is 16
+/// installations at their full budget.
+pub const DEFAULT_NODE_QUEUE_BYTES: u64 = 1024 * 1024 * 1024;
+
 /// `/.well-known/` names the host multiplexes between installations
 /// (design 2.4).
 pub const SHARED_WELL_KNOWN: [&str; 1] = ["webfinger"];

@@ -354,6 +354,28 @@ pub struct Opts {
         env = "ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY"
     )]
     pub plugin_route_deliveries_per_day: u64,
+
+    /// Disk one plugin installation's delivery queue may use, in bytes:
+    /// queued jobs with their bodies, plus the receipts, dead letters and
+    /// idempotency records it keeps. Past it, a route that enqueues answers
+    /// `503`; nothing already queued is dropped. Default 64 MiB. `0` turns
+    /// this budget off. Only used at `--plugin-routes read-write`.
+    #[clap(
+        long,
+        default_value_t = crate::plugin_routes::DEFAULT_QUEUE_BYTES,
+        env = "ATOMIC_PLUGIN_ROUTE_QUEUE_BYTES"
+    )]
+    pub plugin_route_queue_bytes: u64,
+
+    /// Disk the delivery queues of all plugin installations on this node
+    /// may use together, in bytes. Works like `--plugin-route-queue-bytes`.
+    /// Default 1 GiB. `0` turns this budget off.
+    #[clap(
+        long,
+        default_value_t = crate::plugin_routes::DEFAULT_NODE_QUEUE_BYTES,
+        env = "ATOMIC_PLUGIN_ROUTE_NODE_QUEUE_BYTES"
+    )]
+    pub plugin_route_node_queue_bytes: u64,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -860,6 +882,14 @@ mod tests {
             (
                 "plugin_route_deliveries_per_day",
                 "ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY",
+            ),
+            (
+                "plugin_route_queue_bytes",
+                "ATOMIC_PLUGIN_ROUTE_QUEUE_BYTES",
+            ),
+            (
+                "plugin_route_node_queue_bytes",
+                "ATOMIC_PLUGIN_ROUTE_NODE_QUEUE_BYTES",
             ),
         ] {
             let arg = command

@@ -187,6 +187,9 @@ ignored.
 | `--routes-origin` | `ATOMIC_ROUTES_ORIGIN` | A dedicated origin, e.g. `https://routes.example.net`, where each plugin installation gets its own subdomain. It has to be separate from the API, drive and website domains (`http://routes.localhost:PORT` works in development). Without it, plugin routes are only served under `/_routes/` on each drive, and the server says so at startup. |
 | `--plugin-listeners` | `ATOMIC_PLUGIN_LISTENERS` | Ports you bind for server-extension plugins, as `name:port,...`, e.g. `willow-wgps:4455`. Needs `read-write`. |
 | `--plugin-sidecars` | `ATOMIC_PLUGIN_SIDECARS` | Loopback daemons plugins may call, as `name=http://127.0.0.1:port,...`, e.g. `pds=http://127.0.0.1:2583`. Only loopback addresses are accepted. Needs `read-write`. |
+| `--plugin-route-deliveries-per-day` | `ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY` | Outbound requests one plugin installation may send per UTC day, retries included (default 1000, `0` for no cap). Past it, deliveries wait for the next day. |
+| `--plugin-route-queue-bytes` | `ATOMIC_PLUGIN_ROUTE_QUEUE_BYTES` | Disk one plugin installation's delivery queue may use: queued deliveries with their bodies, plus the receipts and dead letters it keeps (default 64 MiB, `0` for no budget). Past it, a route that wants to queue a delivery answers `503` and stores nothing. |
+| `--plugin-route-node-queue-bytes` | `ATOMIC_PLUGIN_ROUTE_NODE_QUEUE_BYTES` | The same, for all plugin installations on the server together (default 1 GiB). Set it to what you can spare on the data disk before running `read-write`. |
 
 Clients see what the server allows in `hostFeatures.pluginRoutes` of
 `GET /plugin-catalog`: `compiled`, `level`, `routesOrigin` and the names of

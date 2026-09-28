@@ -303,17 +303,23 @@ impl AppState {
                 .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts)),
         );
         #[cfg(feature = "plugin-routes")]
-        let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(
-            store.clone(),
-            config.opts.plugin_route_deliveries_per_day,
-            Arc::new(plugins::route_delivery::RegistryHost {
-                registry: route_registry.clone(),
-                db: store.clone(),
+        let route_delivery = Arc::new(
+            plugins::route_delivery::DeliveryQueue::new(
+                store.clone(),
+                config.opts.plugin_route_deliveries_per_day,
+                Arc::new(plugins::route_delivery::RegistryHost {
+                    registry: route_registry.clone(),
+                    db: store.clone(),
+                }),
+                Arc::new(plugins::route_delivery::EgressTransport {
+                    loopback: config.plugin_delivery_loopback,
+                }),
+            )
+            .with_budget(plugins::route_delivery::Budget {
+                installation: config.opts.plugin_route_queue_bytes,
+                node: config.opts.plugin_route_node_queue_bytes,
             }),
-            Arc::new(plugins::route_delivery::EgressTransport {
-                loopback: config.plugin_delivery_loopback,
-            }),
-        ));
+        );
         Ok(AppState {
             store,
             config,
