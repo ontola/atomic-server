@@ -154,10 +154,14 @@ export async function recordNotification(
 export const isUnread = (notification: Resource): boolean =>
   notification.get(notifications.properties.readAt) === undefined;
 
-/** Marks the given Notifications read, skipping those that already are. */
+/**
+ * Marks the given Notifications read, skipping those that already are, and
+ * those about something that happened after `upTo`.
+ */
 export async function markRead(
   store: Store,
   subjects: string[],
+  upTo = Number.POSITIVE_INFINITY,
 ): Promise<void> {
   const now = Date.now();
 
@@ -166,6 +170,7 @@ export async function markRead(
       const notification = await store.getResource(subject);
 
       if (notification.error || !isUnread(notification)) return;
+      if (occurredAt(notification) > upTo) return;
 
       await notification.set(notifications.properties.readAt, now, false);
       await notification.save();
@@ -173,11 +178,16 @@ export async function markRead(
   );
 }
 
-/** Marks every Notification about `target` read, e.g. once it was opened. */
+/**
+ * Marks every Notification about `target` read, e.g. once it was opened.
+ * Only what happened up to `upTo`: the query can take a while, and a message
+ * that arrives meanwhile, while the person has moved on, is still news.
+ */
 export async function markReadAbout(
   store: Store,
   privateDrive: string,
   target: string,
+  upTo = Date.now(),
 ): Promise<void> {
   const collection = new CollectionBuilder(store)
     .setProperty(dataBrowser.properties.about)
@@ -200,7 +210,7 @@ export async function markReadAbout(
     if (member) found.push(member);
   }
 
-  await markRead(store, found);
+  await markRead(store, found, upTo);
 }
 
 /**

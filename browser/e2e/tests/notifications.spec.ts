@@ -33,6 +33,7 @@ declare global {
 }
 
 const chatInput = (page: Page) => page.getByLabel('Chat input');
+const appMenu = (page: Page) => page.getByRole('region', { name: 'App menu' });
 
 async function send(page: Page, text: string) {
   await chatInput(page).fill(text);
@@ -127,8 +128,9 @@ test.describe('notifications', () => {
       await expect(guest.getByText(hello)).toBeVisible({ timeout: 15_000 });
     }
 
-    // The owner is in the app, but somewhere else.
-    await page.goto(new URL('/app/settings', FRONTEND_URL).href);
+    // The owner is in the app, but somewhere else. Navigated in-app rather
+    // than by reloading, so the owner's session keeps its live connection.
+    await appMenu(page).getByText('Settings', { exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Settings', exact: true }),
     ).toBeVisible();
@@ -171,14 +173,14 @@ test.describe('notifications', () => {
     // Both are in the Inbox: the one opened from the toast is read, the one
     // announced while away is not.
     await page.evaluate(() => (window.__blurred = false));
-    await expect(page.getByLabel('Notifications, 1 unread')).toBeAttached({
-      timeout: 20_000,
-    });
-    await page.goto(new URL('/app/notifications', FRONTEND_URL).href);
+    await appMenu(page).getByText('Notifications', { exact: true }).click();
     const list = page.getByRole('list', { name: 'Notifications' });
     await expect(list.getByRole('listitem')).toHaveCount(2, {
-      timeout: 15_000,
+      timeout: 30_000,
     });
+    await expect(
+      appMenu(page).getByLabel('Notifications, 1 unread'),
+    ).toBeVisible();
     const awayItem = list.getByRole('button', { name: new RegExp(away) });
     await expect(awayItem.getByLabel('Unread')).toBeVisible();
     await expect(

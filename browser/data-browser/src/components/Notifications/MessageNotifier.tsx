@@ -100,13 +100,13 @@ export function MessageNotifier(): null {
   // Inbox writes still in flight, per target, so reading waits for them.
   const recording = useRef(new Map<string, Promise<unknown>>());
 
-  const readAbout = useEffectEvent((target: string) => {
+  const readAbout = useEffectEvent((target: string, upTo = Date.now()) => {
     if (!privateDrive) return;
 
     const pending = recording.current.get(target) ?? Promise.resolve();
 
     void pending
-      .then(() => markReadAbout(store, privateDrive, target))
+      .then(() => markReadAbout(store, privateDrive, target, upTo))
       .catch(e => console.error('Could not mark notifications read:', e));
   });
 
@@ -168,7 +168,8 @@ export function MessageNotifier(): null {
 
     if (isLookingAt(n)) {
       // Another open device may still record it; read that copy too.
-      setTimeout(() => readAbout(n.target), 3000);
+      const seenAt = Date.now();
+      setTimeout(() => readAbout(n.target, seenAt), 3000);
 
       return;
     }
