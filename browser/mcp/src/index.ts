@@ -9,13 +9,16 @@
 import { spawn } from 'node:child_process';
 import { hostname } from 'node:os';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { Agent, Store, enableLoro } from '@tomic/lib';
 import {
-  approvalUrl,
-  grantedTargets,
-  loadOrCreateLocalAgent,
-  publishName,
-} from './local-agent.js';
+  Agent,
+  Store,
+  connectAgentUrl,
+  enableLoro,
+  publishAgentName,
+  sharedWith,
+  waitForGrant,
+} from '@tomic/lib';
+import { loadOrCreateLocalAgent } from './local-agent.js';
 import { createAtomicMcpServer, type Access } from './server.js';
 
 // stdout is the protocol channel: everything human-readable goes to stderr,
@@ -49,12 +52,12 @@ const store = new Store({ serverUrl, agent });
 store.setServerConnected(true);
 
 const link = local
-  ? approvalUrl(appUrl, local.publicKey, clientName)
+  ? connectAgentUrl(appUrl, { publicKey: local.publicKey, name: clientName })
   : undefined;
 
 if (local) {
   // Best effort: the grant works without it, the person just sees a key.
-  await publishName(store, agent.subject!, clientName).catch(e =>
+  await publishAgentName(store, clientName).catch(e =>
     log(`Could not publish this key's name: ${e}`),
   );
 }
@@ -74,7 +77,7 @@ async function resolveAccess(): Promise<Access> {
     return { drive, targets: [drive] };
   }
 
-  const targets = await grantedTargets(store, agent.subject!);
+  const targets = await sharedWith(store, agent.subject!);
 
   if (targets.length === 0) {
     throw new Error(
@@ -113,7 +116,7 @@ if (command === 'connect') {
     process.exit(0);
   }
 
-  const already = await grantedTargets(store, agent.subject!);
+  const already = await sharedWith(store, agent.subject!);
 
   if (already.length === 0) {
     process.stderr.write(
@@ -121,15 +124,11 @@ if (command === 'connect') {
     );
     openInBrowser(link);
 
-    const deadline = Date.now() + 15 * 60 * 1000;
-
-    while ((await grantedTargets(store, agent.subject!)).length === 0) {
-      if (Date.now() > deadline) {
-        log('Gave up waiting. Run this again when you are ready.');
-        process.exit(1);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      await waitForGrant(store, agent.subject!);
+    } catch {
+      log('Gave up waiting. Run this again when you are ready.');
+      process.exit(1);
     }
   }
 

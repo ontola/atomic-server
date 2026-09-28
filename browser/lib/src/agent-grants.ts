@@ -104,3 +104,109 @@ export async function revokeAgent(
 
   return { revoked, failed };
 }
+
+/**
+ * Asking for access from an app that holds its own key: a CLI, an MCP server,
+ * a script, another app. The app makes a keypair, sends the person to
+ * {@link connectAgentUrl}, and waits with {@link waitForGrant}. The person's
+ * secret never leaves their app, and what they allow is revocable from
+ * account settings (Connected apps).
+ */
+export const CONNECT_AGENT_PATH = '/app/connect-agent';
+
+export interface ConnectAgentRequest {
+  /** The app's public key (base64), or its agent subject. */
+  publicKey: string;
+  /** What the person sees, e.g. "Claude Code on MacBook". */
+  name: string;
+  /** Preselect "Read and edit". The person still decides. */
+  write?: boolean;
+  /** Preselect these resources. The person still decides. */
+  targets?: string[];
+}
+
+/** The page in the app where the person allows a key. */
+export function connectAgentUrl(
+  appUrl: string,
+  request: ConnectAgentRequest,
+): string {
+  const url = new URL(CONNECT_AGENT_PATH, appUrl);
+  url.searchParams.set('key', request.publicKey);
+  url.searchParams.set('name', request.name);
+
+  if (request.write) {
+    url.searchParams.set('write', '1');
+  }
+
+  for (const target of request.targets ?? []) {
+    url.searchParams.append('target', target);
+  }
+
+  return url.toString();
+}
+
+/**
+ * What the person shared with `agent`: resources whose `read` names it. A
+ * resource where it only holds `write` is one it created itself.
+ */
+export async function sharedWith(
+  store: Store,
+  agent: string,
+): Promise<string[]> {
+  return (await grantsTo(store, agent))
+    .filter(grant => grant.read)
+    .map(grant => grant.subject);
+}
+
+/**
+ * Poll until the person allows `agent` (the store must sign as it), and
+ * return what they shared. Rejects after `timeoutMs` or when `signal` aborts.
+ */
+export async function waitForGrant(
+  store: Store,
+  agent: string,
+  opts: { timeoutMs?: number; intervalMs?: number; signal?: AbortSignal } = {},
+): Promise<string[]> {
+  const deadline = Date.now() + (opts.timeoutMs ?? 15 * 60 * 1000);
+
+  for (;;) {
+    const shared = await sharedWith(store, agent);
+
+    if (shared.length > 0) {
+      return shared;
+    }
+
+    opts.signal?.throwIfAborted();
+
+    if (Date.now() > deadline) {
+      throw new Error('Nobody allowed this key in time.');
+    }
+
+    await new Promise(resolve => setTimeout(resolve, opts.intervalMs ?? 2000));
+  }
+}
+
+/**
+ * Put a readable name on the store's own Agent resource, so the person sees
+ * it in Connected apps rather than a key. Only an agent may edit its own
+ * Agent resource, so the app has to do this itself.
+ */
+export async function publishAgentName(
+  store: Store,
+  name: string,
+): Promise<void> {
+  const subject = store.getAgent()?.subject;
+
+  if (!subject) {
+    throw new Error('publishAgentName needs a store that signs as the app');
+  }
+
+  const profile = await store.getResource(subject);
+
+  if (profile.get(core.properties.name) === name) {
+    return;
+  }
+
+  await profile.set(core.properties.name, name, false);
+  await profile.save();
+}

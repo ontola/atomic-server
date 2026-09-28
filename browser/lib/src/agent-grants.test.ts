@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { Agent } from './agent.js';
-import { grantAgent, grantsTo, revokeAgent } from './agent-grants.js';
+import {
+  connectAgentUrl,
+  grantAgent,
+  grantsTo,
+  revokeAgent,
+  sharedWith,
+  waitForGrant,
+} from './agent-grants.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { agentSubject } from './subject.js';
@@ -70,5 +77,42 @@ describe('agent grants', () => {
     );
     expect(await grantsTo(store, app)).toEqual([]);
     expect(notes.get(core.properties.read)).toEqual([agentDID]);
+  });
+
+  it('builds a link an app can send the person to', () => {
+    const url = new URL(
+      connectAgentUrl('https://atomic.example', {
+        publicKey: 'abc+/=',
+        name: 'My CLI',
+        write: true,
+        targets: ['did:ad:one', 'did:ad:two'],
+      }),
+    );
+
+    expect(url.pathname).toBe('/app/connect-agent');
+    expect(url.searchParams.get('key')).toBe('abc+/=');
+    expect(url.searchParams.get('name')).toBe('My CLI');
+    expect(url.searchParams.get('write')).toBe('1');
+    expect(url.searchParams.getAll('target')).toEqual([
+      'did:ad:one',
+      'did:ad:two',
+    ]);
+  });
+
+  it('waits until the person shares something, ignoring what it created', async () => {
+    const { store, agentDID } = await testStore();
+    searchFromMemory(store);
+    const app = agentSubject((await Agent.generateKeyPair()).publicKey);
+    const notes = await workspace(store, agentDID, 'Notes');
+    const own = await workspace(store, agentDID, 'Made by the app');
+    await own.set(core.properties.write, [agentDID, app]);
+    await own.save();
+
+    expect(await sharedWith(store, app)).toEqual([]);
+
+    const waiting = waitForGrant(store, app, { intervalMs: 5 });
+    await grantAgent(store, app, [notes.subject], true);
+
+    expect(await waiting).toEqual([notes.subject]);
   });
 });

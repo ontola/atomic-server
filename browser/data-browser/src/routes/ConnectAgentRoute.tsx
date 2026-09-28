@@ -27,13 +27,17 @@ import { appRoute } from './RootRoutes';
 export interface ConnectAgentSearch {
   key: string;
   name: string;
+  /** Hints from the app (see `connectAgentUrl`): the person still decides. */
+  write?: boolean;
+  target?: string[];
 }
 
 /**
- * /app/connect-agent?key=<public key>&name=<label>
+ * /app/connect-agent?key=<public key>&name=<label>[&write=1][&target=<subject>]
  *
- * Where a person lets an app that made its own key (the Atomic MCP server,
- * `atomic-mcp connect`) use some of their data. The app never sees the
+ * Where a person lets any app that made its own key (the Atomic MCP server,
+ * a CLI, a script) use some of their data. Apps build the link with
+ * `connectAgentUrl` from @tomic/lib and wait with `waitForGrant`. The app never sees the
  * person's secret: it keeps its own key, and gets read or write rights on the
  * drives picked here, revocable from account settings. The name comes from the
  * link and is the app's own claim; the key is what the rights are bound to.
@@ -45,6 +49,11 @@ export const ConnectAgentRoute = createRoute({
   validateSearch: (search): ConnectAgentSearch => ({
     key: typeof search.key === 'string' ? search.key : '',
     name: typeof search.name === 'string' ? search.name : '',
+    write: search.write === 1 || search.write === '1' || search.write === true,
+    target: (Array.isArray(search.target)
+      ? search.target
+      : [search.target]
+    ).filter((t): t is string => typeof t === 'string' && t.length > 0),
   }),
 });
 
@@ -52,7 +61,12 @@ function ConnectAgentPage() {
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const { agent, drive } = useSettings();
-  const { key, name: requestedName } = ConnectAgentRoute.useSearch();
+  const {
+    key,
+    name: requestedName,
+    write: requestedWrite,
+    target: requestedTargets,
+  } = ConnectAgentRoute.useSearch();
   const { privateDrive, loading: homeLoading } = usePrivateDrive();
   const [savedDrives] = useSavedDrives();
   const catalog = useAccountDriveCatalog(
@@ -61,14 +75,23 @@ function ConnectAgentPage() {
 
   const name = requestedName.trim() || 'An app';
   const [picked, setPicked] = useState<string[] | undefined>();
-  const [write, setWrite] = useState(false);
+  const [write, setWrite] = useState(!!requestedWrite);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [done, setDone] = useState(false);
 
-  // Until the person touches the list, offer the drive they are on.
+  // Until the person touches the list, offer what the app asked for, or else
+  // the drive they are on. Only drives of theirs can be offered either way.
+  const asked = (requestedTargets ?? []).filter(t =>
+    catalog.subjects.includes(t),
+  );
   const selected =
-    picked ?? (drive && catalog.subjects.includes(drive) ? [drive] : []);
+    picked ??
+    (asked.length > 0
+      ? asked
+      : drive && catalog.subjects.includes(drive)
+        ? [drive]
+        : []);
 
   let keySubject: string | undefined;
 

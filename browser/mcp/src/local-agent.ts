@@ -1,19 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import {
-  Agent,
-  JSCryptoProvider,
-  agentSubject,
-  core,
-  grantsTo,
-  type Store,
-} from '@tomic/lib';
+import { Agent, JSCryptoProvider, agentSubject } from '@tomic/lib';
 
 /**
  * This machine's own Agent for one server: a keypair made here, kept in the
  * user's config directory, never shown to anyone. The person grants it rights
- * from the app ({@link approvalUrl}), the way an issued app key works, so their
+ * from the app (`connectAgentUrl` in @tomic/lib), so their
  * own secret never leaves the app and every edit is signed as this client.
  */
 export interface LocalAgent {
@@ -59,51 +52,4 @@ export async function loadOrCreateLocalAgent(
   );
 
   return { agent, publicKey: stored.publicKey, path };
-}
-
-/** The page in the app where the person allows this key, with a name for it. */
-export function approvalUrl(
-  appUrl: string,
-  publicKey: string,
-  name: string,
-): string {
-  const url = new URL('/app/connect-agent', appUrl);
-  url.searchParams.set('key', publicKey);
-  url.searchParams.set('name', name);
-
-  return url.toString();
-}
-
-/**
- * What the person let this key reach: every resource whose ACL names it.
- * Empty until they click Allow, and again after they revoke it.
- */
-export async function grantedTargets(
-  store: Store,
-  agentSubjectValue: string,
-): Promise<string[]> {
-  // `read` is what the person shared; `write` alone is what this key created.
-  return (await grantsTo(store, agentSubjectValue))
-    .filter(grant => grant.read)
-    .map(grant => grant.subject);
-}
-
-/**
- * Put a readable name on this key's public Agent resource, so the person sees
- * "Claude Code on MacBook" in their Connected apps rather than a key. Only the
- * key itself may edit that resource, so this is the one place it can happen.
- */
-export async function publishName(
-  store: Store,
-  agentSubjectValue: string,
-  name: string,
-): Promise<void> {
-  const profile = await store.getResource(agentSubjectValue);
-
-  if (profile.get(core.properties.name) === name) {
-    return;
-  }
-
-  await profile.set(core.properties.name, name, false);
-  await profile.save();
 }
