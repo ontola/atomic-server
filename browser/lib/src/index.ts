@@ -193,6 +193,7 @@ export {
   type RecordRunOptions,
   type RunStatus,
 } from './plugin-log.js';
+export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
   createApp,

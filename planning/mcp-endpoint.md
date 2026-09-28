@@ -4,7 +4,11 @@
 > data verbs live in `@tomic/lib` (`assistant-tools.ts`, with
 > `json-ad-compact.ts`, `subject-refs.ts`, `class-schema.ts`), the in-app
 > assistant calls them, and `browser/mcp` (`@tomic/mcp`) is the local stdio
-> server. Steps 3 to 5 (hosted, OAuth) are not started.
+> server. It signs with its own key, which the person approves in the app
+> (`/app/connect-agent`) for chosen drives, read or read and edit, and can
+> revoke under Connected apps; the grant is the ACL on those drives, since
+> only an agent may edit its own Agent resource. Steps 3 to 5 (hosted,
+> OAuth) are not started.
 > Companion to [`actions.md`](./actions.md) (one verb list, many surfaces),
 > [`json-ad-compact.md`](./json-ad-compact.md) (the wire dialect),
 > [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) (`AtomicNode`),
@@ -152,8 +156,9 @@ module. Long-term the graph verbs belong on `AtomicNode`; UI verbs do not.
    working; this is the shared library MCP will call. Cheap, unblocks
    everything, and is the
    [`actions.md`](./actions.md) "fifth enumeration" fix even if MCP slips.
-2. [x] **Local stdio MCP.** Node script or small binary. Agent secret from
-   env / config (same family as `/app/token`). Read + write. This is the
+2. [x] **Local stdio MCP.** Node script or small binary. Its own key,
+   approved in the app (the agent secret still works for scripts). Read +
+   write. This is the
    Cursor/Claude Desktop config people actually add. Highest ROI; no AS.
 3. [ ] **Server `format=compact`.** json-ad-compact phase 4. Needed before a
    Rust remote handler is worth writing.

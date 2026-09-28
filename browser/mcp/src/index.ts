@@ -1,14 +1,22 @@
 #!/usr/bin/env node
 /**
- * `atomic-mcp`: an MCP server over stdio that reads and edits Atomic Data as
- * the Agent whose secret it is given. See ../README.md for client setup.
+ * `atomic-mcp`: an MCP server over stdio that reads and edits Atomic Data.
+ *
+ * By default it signs as its own Agent, a key made on this machine that the
+ * person allows from the app (`atomic-mcp connect`). `ATOMIC_AGENT_SECRET`
+ * still works for scripts and CI. See ../README.md for client setup.
  */
+import { spawn } from 'node:child_process';
+import { hostname } from 'node:os';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Agent, Store, enableLoro } from '@tomic/lib';
-import { createAtomicMcpServer } from './server.js';
-
-const serverUrl = process.env.ATOMIC_SERVER_URL;
-const secret = process.env.ATOMIC_AGENT_SECRET;
+import {
+  approvalUrl,
+  grantedTargets,
+  loadOrCreateLocalAgent,
+  publishName,
+} from './local-agent.js';
+import { createAtomicMcpServer, type Access } from './server.js';
 
 // stdout is the protocol channel: everything human-readable goes to stderr,
 // including the library's own console logging.
@@ -17,20 +25,15 @@ console.log = console.info = console.debug = console.error;
 const log = (message: string) =>
   process.stderr.write(`[atomic-mcp] ${message}\n`);
 
-if (!serverUrl) {
+const command = process.argv[2];
+const serverUrl = process.env.ATOMIC_SERVER_URL;
+const appUrl = process.env.ATOMIC_APP_URL ?? serverUrl;
+const clientName =
+  process.env.ATOMIC_CLIENT_NAME ?? `AI assistant on ${hostname()}`;
+
+if (!serverUrl || !appUrl) {
   log(
     'Set ATOMIC_SERVER_URL to the server your drives live on, e.g. https://atomicdata.dev',
-  );
-  process.exit(1);
-}
-
-const agent = secret ? await Agent.fromSecret(secret) : undefined;
-const drive =
-  process.env.ATOMIC_DRIVE ?? agent?.initialDrive ?? agent?.privateDrive;
-
-if (!drive) {
-  log(
-    'Set ATOMIC_DRIVE to a drive subject, or ATOMIC_AGENT_SECRET to your agent secret (in the app: /app/agent, Account recovery).',
   );
   process.exit(1);
 }
@@ -38,16 +41,109 @@ if (!drive) {
 // Resources arrive as Loro snapshots; without Loro they never finish loading.
 await enableLoro();
 
+const secret = process.env.ATOMIC_AGENT_SECRET;
+const local = secret ? undefined : await loadOrCreateLocalAgent(serverUrl);
+const agent = secret ? await Agent.fromSecret(secret) : local!.agent;
+
 const store = new Store({ serverUrl, agent });
 store.setServerConnected(true);
 
+const link = local
+  ? approvalUrl(appUrl, local.publicKey, clientName)
+  : undefined;
+
+if (local) {
+  // Best effort: the grant works without it, the person just sees a key.
+  await publishName(store, agent.subject!, clientName).catch(e =>
+    log(`Could not publish this key's name: ${e}`),
+  );
+}
+
+/** What this agent may reach. A local key needs the person's approval. */
+async function resolveAccess(): Promise<Access> {
+  if (!local) {
+    const drive =
+      process.env.ATOMIC_DRIVE ?? agent.initialDrive ?? agent.privateDrive;
+
+    if (!drive) {
+      throw new Error(
+        'Set ATOMIC_DRIVE to a drive subject: this secret names no drive.',
+      );
+    }
+
+    return { drive, targets: [drive] };
+  }
+
+  const targets = await grantedTargets(store, agent.subject!);
+
+  if (targets.length === 0) {
+    throw new Error(
+      `This connection has no access to any Atomic data yet. Ask the person to open this link, choose what to share and click Allow, then try again: ${link}`,
+    );
+  }
+
+  const drive =
+    process.env.ATOMIC_DRIVE && targets.includes(process.env.ATOMIC_DRIVE)
+      ? process.env.ATOMIC_DRIVE
+      : targets[0];
+
+  return { drive, targets: [drive, ...targets.filter(t => t !== drive)] };
+}
+
+function openInBrowser(url: string) {
+  const opener =
+    process.platform === 'darwin'
+      ? 'open'
+      : process.platform === 'win32'
+        ? 'explorer'
+        : 'xdg-open';
+
+  try {
+    spawn(opener, [url], { detached: true, stdio: 'ignore' })
+      .on('error', () => undefined)
+      .unref();
+  } catch {
+    // No browser to open: the printed link is enough.
+  }
+}
+
+if (command === 'connect') {
+  if (!local || !link) {
+    log('ATOMIC_AGENT_SECRET is set, so there is nothing to connect.');
+    process.exit(0);
+  }
+
+  const already = await grantedTargets(store, agent.subject!);
+
+  if (already.length === 0) {
+    process.stderr.write(
+      `\nOpen this link to let "${clientName}" use your Atomic data:\n\n  ${link}\n\nWaiting for you to click Allow...\n`,
+    );
+    openInBrowser(link);
+
+    const deadline = Date.now() + 15 * 60 * 1000;
+
+    while ((await grantedTargets(store, agent.subject!)).length === 0) {
+      if (Date.now() > deadline) {
+        log('Gave up waiting. Run this again when you are ready.');
+        process.exit(1);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+
+  process.stderr.write(
+    `\nConnected. This machine's key is ${agent.subject}, stored in ${local.path}.\nYou can revoke it any time in the app under your account settings.\n`,
+  );
+  process.exit(0);
+}
+
 const mcp = createAtomicMcpServer({
   store,
-  drive,
-  allowWrites: !!agent && process.env.ATOMIC_READ_ONLY !== 'true',
+  access: resolveAccess,
+  allowWrites: process.env.ATOMIC_READ_ONLY !== 'true',
 });
 
 await mcp.connect(new StdioServerTransport());
-log(
-  `Connected to ${serverUrl} as ${agent?.subject ?? 'a public reader'}, default drive ${drive}`,
-);
+log(`Connected to ${serverUrl} as ${agent.subject}`);

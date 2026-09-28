@@ -19,10 +19,22 @@ import {
 import { z } from 'zod';
 import { documentText } from './document-text.js';
 
-export interface AtomicMcpOptions {
-  store: Store;
+/** What the signed-in agent may reach. */
+export interface Access {
   /** The drive tools default to: class lookup, search scope. */
   drive: string;
+  /** Every drive or folder the agent was granted, `drive` first. */
+  targets: string[];
+}
+
+export interface AtomicMcpOptions {
+  store: Store;
+  /**
+   * Resolves what this agent may reach, before every tool call. Throws when
+   * it has no access yet; the message (e.g. an approval link) is what the
+   * model reads, so it can pass it on to the person.
+   */
+  access: () => Promise<Access>;
   /** Set to false to register only the read tools. */
   allowWrites?: boolean;
 }
@@ -76,13 +88,17 @@ const hasDocumentBody = (classes: string[]) =>
  */
 export function createAtomicMcpServer({
   store,
-  drive,
+  access,
   allowWrites = true,
 }: AtomicMcpOptions): McpServer {
+  /** A tool body that needs to know what the agent may reach. */
+  const withAccess = <A>(body: (args: A, access: Access) => Promise<unknown>) =>
+    run(async (args: A) => body(args, await access()));
+
   const mcp = new McpServer(
     { name: 'atomic', version: '0.41.0' },
     {
-      instructions: `Tools for reading and editing Atomic Data (a graph of resources, each with a subject such as did:ad:… and properties). Results use compact JSON-AD: property shortnames as keys, "@id", "@class" and "@parent" as structural keys, and short refs like #AbCd1234 for subjects, which every tool accepts back. The default drive is ${shortenSubject(drive)}. Start with list_drives or search, read resources with get_resource, and use get_user_classes / get_schema before creating resources of a custom class.`,
+      instructions: `Tools for reading and editing Atomic Data (a graph of resources, each with a subject such as did:ad:… and properties). Results use compact JSON-AD: property shortnames as keys, "@id", "@class" and "@parent" as structural keys, and short refs like #AbCd1234 for subjects, which every tool accepts back. Start with list_drives or search, read resources with get_resource, and use get_user_classes / get_schema before creating resources of a custom class.`,
     },
   );
 
@@ -91,13 +107,13 @@ export function createAtomicMcpServer({
     {
       title: 'List drives',
       description:
-        'List the drives (top-level workspaces) the signed-in agent has, and which one is the default for the other tools.',
+        'List the drives and folders this connection may reach, and which one is the default for the other tools.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    run(async () => {
+    withAccess(async (_args: Record<string, never>, { drive, targets }) => {
       const agent = store.getAgent();
-      const subjects = new Set<string>([drive]);
+      const subjects = new Set<string>(targets);
 
       if (agent?.subject) {
         const agentResource = await store.getResource(agent.subject);
@@ -141,7 +157,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: true },
     },
-    run(async ({ subjects, includeCommitData }) => {
+    withAccess(async ({ subjects, includeCommitData }) => {
       const result: Record<string, unknown> = {};
 
       for (const subjectOrRef of subjects) {
@@ -182,7 +198,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: true },
     },
-    run(({ query, parents, limit }) =>
+    withAccess(({ query, parents, limit }, { drive }) =>
       textSearch(store, query, { parents: parents ?? [drive], limit }),
     ),
   );
@@ -204,7 +220,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: true },
     },
-    run(({ query, text_query, parents, limit }) =>
+    withAccess(({ query, text_query, parents, limit }, { drive }) =>
       semanticSearch(store, query, {
         parents: parents ?? [drive],
         limit,
@@ -240,7 +256,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: true },
     },
-    run(args =>
+    withAccess((args, { drive }) =>
       queryResources(store, drive, {
         ...args,
         where: args.where.map(({ property, value }) => ({
@@ -260,7 +276,9 @@ export function createAtomicMcpServer({
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    run(() => listDriveClasses(store, drive)),
+    withAccess((_args: Record<string, never>, { drive }) =>
+      listDriveClasses(store, drive),
+    ),
   );
 
   mcp.registerTool(
@@ -274,7 +292,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: true },
     },
-    run(({ subject }) => toClassObject(expandSubject(subject), store)),
+    withAccess(({ subject }) => toClassObject(expandSubject(subject), store)),
   );
 
   if (!allowWrites) {
@@ -299,7 +317,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    run(({ subject, property, value }) =>
+    withAccess(({ subject, property, value }) =>
       setResourceProperty(store, subject, property, value),
     ),
   );
@@ -315,7 +333,7 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    run(async ({ resources }) => {
+    withAccess(async ({ resources }, { drive }) => {
       const created: string[] = [];
       const errors: string[] = [];
       const resolved: Record<string, string> = {};
@@ -355,7 +373,7 @@ export function createAtomicMcpServer({
       inputSchema: { subject: z.string() },
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
-    run(async ({ subject }) => {
+    withAccess(async ({ subject }) => {
       const resource = await store.getResource(expandSubject(subject));
 
       if (resource.error) {

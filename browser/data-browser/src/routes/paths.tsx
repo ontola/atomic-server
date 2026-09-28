@@ -30,10 +30,12 @@ export const pathNames = {
   devDrive: '/dev-drive',
   demo: '/demo',
   invite: '/invite',
+  connectAgent: '/connect-agent',
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
   agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
+  connectAgent: `${pathNames.app}${pathNames.connectAgent}`,
   appSettings: `${pathNames.app}${pathNames.appSettings}`,
   integrations: `${pathNames.app}${pathNames.integrations}`,
   notifications: `${pathNames.app}${pathNames.notifications}`,

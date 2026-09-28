@@ -6,7 +6,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 - New package `@tomic/mcp`: an MCP server that lets Claude Code, Claude
   Desktop, Cursor and other MCP clients read and edit your Atomic Data. It runs
-  locally and signs edits with your own Agent key. `@tomic/lib` now exports the
+  locally with its own key: `atomic-mcp connect` opens a link in the app
+  (`/app/connect-agent`) where you pick the drives it may reach and whether it
+  may edit, so your own secret is never shared. Account settings lists
+  connected apps under **Connected apps**, with Revoke. The grants are the ACLs
+  themselves (`grantAgent`, `grantsTo`, `revokeAgent` in `@tomic/lib`).
+  `@tomic/lib` now also exports the
   data verbs behind it and behind the in-app assistant (`readResourceCompact`,
   `queryResources`, `textSearch`, `semanticSearch`, `listDriveClasses`,
   `setResourceProperty`, `createResourceFromCompact`), plus the compact JSON-AD
