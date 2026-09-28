@@ -13,6 +13,11 @@ interface PresenceAvatarMenuProps {
   agentSubject: string;
   /** Avatar diameter, forwarded to {@link AgentAvatar}. */
   size?: string;
+  /** Whether hovering a followed avatar grows the "Following" chip. Off
+   *  where the avatar sits in a column of content (chat messages): the chip
+   *  widened the avatar and pushed the message text aside. The blue ring
+   *  and the menu still say it. */
+  chip?: boolean;
 }
 
 /**
@@ -27,6 +32,7 @@ interface PresenceAvatarMenuProps {
 export function PresenceAvatarMenu({
   agentSubject,
   size,
+  chip = true,
 }: PresenceAvatarMenuProps): React.JSX.Element {
   const navigate = useNavigateWithTransition();
   const { followedAgent, follow, unfollow, isFollowDisabledFor } = useFollow();
@@ -80,8 +86,9 @@ export function PresenceAvatarMenu({
   ]);
 
   const Trigger = useMemo(
-    () => buildPresenceTrigger(agentSubject, name, size, isFollowing, online),
-    [agentSubject, name, size, isFollowing, online],
+    () =>
+      buildPresenceTrigger(agentSubject, name, size, isFollowing, online, chip),
+    [agentSubject, name, size, isFollowing, online, chip],
   );
 
   return <DropdownMenu items={items} Trigger={Trigger} />;
@@ -93,11 +100,13 @@ const buildPresenceTrigger = (
   size: string | undefined,
   following: boolean,
   online: boolean,
+  chip: boolean,
 ): React.FC<DropdownTriggerProps> => {
   const Comp = (props: DropdownTriggerProps) => (
     <FollowingIndicator
       {...props}
       following={following}
+      chip={chip}
       title={following ? 'Following — press for actions' : name}
       ariaLabel={following ? `Following ${name}` : name}
     >
