@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../helpers/AppSettings';
 import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
-import { useStore, type Store } from '@tomic/react';
+import { STORAGE_BLOCKED_ERROR_NAME, useStore, type Store } from '@tomic/react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
@@ -238,7 +238,13 @@ const DemoRoute: React.FC = () => {
             browser. Enable it on the Sync page and try again.
           </p>
         )}
-        {error && <p role='alert'>{error.message}</p>}
+        {error && (
+          <p role='alert'>
+            {error.name === STORAGE_BLOCKED_ERROR_NAME
+              ? 'The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo.'
+              : error.message}
+          </p>
+        )}
         {!error && stalled && (
           <p>
             This is taking longer than usual.
@@ -283,10 +289,9 @@ const Surface = styled.main`
 const DemoStatus = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: ${p => p.theme.size(5)};
-  max-width: 24rem;
-  text-align: center;
+  max-width: 30rem;
 
   p {
     margin: 0;
