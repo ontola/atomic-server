@@ -42,13 +42,14 @@ Notifications page.
 - The recipient must be able to read the thing the notification is about.
   Rights are checked at delivery time, so a notification never leaks a title
   or excerpt the recipient could not open.
-- **v1 delivers only to Inboxes this server hosts.** Recipients whose private
-  drive lives elsewhere get nothing from this server yet; cross-server
-  delivery is the same append, sent as a commit to the other server, later.
+- **Only Inboxes this server hosts** (decided 2026-09-28: skip the rest for
+  now). Recipients whose private drive lives elsewhere, or only on their
+  device, get nothing from this server; cross-server delivery is the same
+  append, sent as a commit to the other server, later.
 
 ### Following: who cares about what
 
-A per-person, private list of what they follow, stored in their own private
+Following does not exist yet; this is new. A per-person, private list of what they follow, stored in their own private
 drive (a `following` array on the Inbox) and indexed by the server into a
 reverse map `resource → followers`. Nothing on the followed resource reveals
 who follows it.
@@ -85,6 +86,15 @@ A Follow button (bell) in the resource's top bar shows and changes the level.
   writes the headline at display time, in the reader's language and with
   current titles. `name` stays as a plain-text fallback for other clients.
 
+**Batching.** Nothing about edits is sent per commit (decided 2026-09-28:
+every change, but no spam). The notifier queues `changed` and `created`
+events per recipient and resource (for `created`: per parent) in a tree of its
+own, so a restart loses nothing, and delivers once the resource has been
+quiet for 10 minutes, or at the latest an hour after the first queued event.
+One delivery is one notification: "Sanne and Polle edited Roadmap (12
+changes)", "Sanne added 8 rows to Tasks". Messages, mentions, replies,
+access and meetings are not queued: they are conversations or time-bound.
+
 **Coalescing.** While a notification is unread, a new event with the same
 `about` and `kind` updates it (count + 1, newest excerpt, `occurredAt` moves
 up, `actor` becomes the latest) instead of adding a row. So five messages in
@@ -106,7 +116,7 @@ event starts a new item.
 | `access-answered` | the requester | the request is allowed or denied | the resource, or the reason |
 | `created` | followers at *New items* or *Everything* of an ancestor | new resource | the new resource |
 | `changed` | followers at *Everything* | a commit changing a followed resource, by someone else | the resource |
-| `meeting-started` | followers of the meeting's chat or drive, and invitees | `meetingStartedAt` set | the meeting, joining the leader |
+| `meeting-started` | everyone with read access to the drive, and invitees | `meetingStartedAt` set | the meeting, joining the leader |
 | `meeting-invite` | the invited agents | added to `meetingAttendees` | the meeting |
 | `meeting-reminder` | attendees | scheduled time minus 5 minutes | the meeting |
 | `meeting-minutes` | attendees | `meetingEndedAt` set | the minutes |
@@ -138,7 +148,8 @@ the drive chat and adds it to `currentMeetings`. Proposed:
 - `meetingAttendees` (agents) and `meetingScheduledAt` (timestamp) on
   `Meeting`. Adding someone sends `meeting-invite`; the server scheduler
   (`server/src/plugins/scheduler.rs`) sends `meeting-reminder`.
-- Starting a meeting notifies attendees, and followers of the drive's chat. A
+- Starting a meeting notifies attendees and everyone with access to the
+  drive (decided 2026-09-28), except whoever muted the drive. A
   meeting-started notification is **urgent**: it shows as a toast even on the
   page you are on, and as an OS notification with a Join action.
 - When it ends, attendees get the minutes.
@@ -167,14 +178,44 @@ the drive chat and adds it to `currentMeetings`. Proposed:
   meetings), stored on the Inbox so they apply on every device; the per-device
   OS switch stays.
 
+## Local-first FOSS and hosted
+
+One notifier, in both. It lives in `lib`, next to commit apply, not in a
+hosted-only service, so a self-hosted atomic-server computes exactly what
+atomic.place computes. Notifications are ordinary resources in the person's
+own private drive: there is no separate notification database, and moving
+your drive to another host takes your Inbox and follows with it. The FOSS
+release depends on nothing hosted; hosting only adds delivery channels.
+
+| | Self-hosted FOSS server | atomic.place |
+| --- | --- | --- |
+| Notifier, Inbox, follows, batching | yes | yes, same code |
+| Toast and OS notification while the app is open | yes | yes |
+| Web Push when closed (browsers, desktop app) | yes, with the server's own VAPID keys; no account anywhere | yes |
+| Android push when closed | only through a configurable push gateway (for example UnifiedPush / ntfy); FCM credentials belong to the official build | FCM |
+| Email (digest of unread, or instant for access requests) | a hook the notifier calls; no mailer in the server | sent by the hosting layer |
+
+**Local-only and offline.**
+
+- A drive that lives only on your device (`registerLocalOnlyDrive`) has no
+  server to run the notifier, and usually nobody else writing to it. When
+  others do reach it (peer sync), the client applies their commits, so the
+  client runs the same rules: that is #1859's client-side recording, kept for
+  drives whose host does not run the notifier. A host announces that it does,
+  and the client then stops recording for its drives, so nothing is written
+  twice.
+- Offline, nothing is lost: the server keeps writing your Inbox, and on
+  reconnect the client syncs it like any other resource. What arrived while
+  you were away is summarized once ("12 new notifications") instead of
+  replayed as a burst of toasts.
+- Read state is a property on the Notification, so reading on one device
+  reads it everywhere, online or after the next sync.
+
 ## Push and email
 
 With the server writing the Inbox, push is "send the new Notification to the
-recipient's registered devices": Web Push (VAPID) for browsers and the desktop
-app, FCM for Android, APNs later. Device registrations live in the private
-drive. Email digests are a hosting concern: the FOSS server exposes the
-notifier's output as a hook, and a host may send mail from it. The FOSS server
-itself sends no email and depends on nothing hosted.
+recipient's registered devices". Device registrations live in the private
+drive. What each deployment can use is in the table above.
 
 ## Phases
 
@@ -190,11 +231,15 @@ itself sends no email and depends on nothing hosted.
    `meeting-minutes`.
 6. **Push when closed.** Web Push, FCM.
 
+## Decisions (2026-09-28, Joep)
+
+- Recipients whose private drive is on another server or only on a device:
+  skip for now.
+- A meeting starting notifies everyone with access to the drive.
+- Changes to things you follow: every change, batched rather than sent one by
+  one.
+
 ## Open questions
 
-- Recipients whose private drive is on another server, or only on their
-  device: skip in v1 (proposed), or queue on this server until they connect?
-- Should a meeting starting notify everyone with access to the drive, or only
-  attendees and followers of the drive chat (proposed)?
-- `changed` for things you created: default *Everything* (proposed), or *New
-  items* to keep it quiet?
+- The push gateway for self-hosted Android: pick one (UnifiedPush is the
+  FOSS-friendly default), or leave Android push to atomic.place for now?
