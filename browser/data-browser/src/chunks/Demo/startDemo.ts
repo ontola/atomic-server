@@ -10,6 +10,7 @@ import { DemoDirector } from './DemoDirector';
 import { ensureAgentForDemo } from './guestAgent';
 import { checkOnboardingStorage } from '../../helpers/onboardingStorage';
 import { whenRevealed } from '../../helpers/bootSplash';
+import { holdDemoLock, releaseDemoLock } from '../../helpers/demoTabLock';
 
 let activeDirector: DemoDirector | undefined;
 
@@ -83,6 +84,8 @@ export async function startDemoWorkspace(
   // to be looked at; starting while the splash was still up meant arriving
   // mid-sentence.
   activeDirector.start(whenRevealed().then(() => sleep(DIRECTOR_DELAY_MS)));
+  // Other tabs join this demo rather than replacing it (demoTabLock.ts).
+  holdDemoLock();
 
   return manifest;
 }
@@ -91,6 +94,7 @@ export async function startDemoWorkspace(
 export function stopDemoDirector(): void {
   activeDirector?.stop();
   activeDirector = undefined;
+  releaseDemoLock();
 }
 
 /** Tear down every demo drive this browser created. */
