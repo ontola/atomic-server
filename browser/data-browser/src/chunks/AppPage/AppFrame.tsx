@@ -5,7 +5,18 @@ import { styled } from 'styled-components';
 import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  resourceToOpen,
+  type HostReply,
+} from './hostStore';
+import {
+  checkExternalLink,
+  openInNewTab,
+} from '@helpers/extensions/externalLink';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { paths } from '../../routes/paths';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -82,6 +93,12 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  // An app asking to take the person somewhere else: a link outside the
+  // drive, or another resource in this page. Same rule: only a click here
+  // goes there, so the frame never needs popup or navigation rights.
+  const [openAsk, setOpenAsk] = useState<OpenAsk>();
+  const openAskRef = useRef<OpenAsk | undefined>(undefined);
+  const navigate = useNavigateWithTransition();
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -226,6 +243,55 @@ function AppFrameSession({
         return;
       }
 
+      // One question at a time; a second ask answers the first.
+      const ask = (next: OpenAsk) => {
+        const previous = openAskRef.current;
+        previous?.reply({
+          id: previous.id,
+          result: { status: 'cancelled', ...subjectOf(previous) },
+        });
+        openAskRef.current = next;
+        setOpenAsk(next);
+      };
+
+      if (data.op === 'openExternal') {
+        const link = checkExternalLink(data.url);
+
+        if ('error' in link) {
+          session.post({ id: data.id, error: link.error });
+
+          return;
+        }
+
+        ask({
+          kind: 'external',
+          id: data.id,
+          url: link.url,
+          reply: session.post,
+        });
+
+        return;
+      }
+
+      if (data.op === 'openResource') {
+        // Refused before asking: the person is only ever asked about a
+        // resource they can already read.
+        resourceToOpen(store, data.subject)
+          .then(async subject => {
+            const { title } = await store.getResource(subject);
+            ask({
+              kind: 'resource',
+              id: data.id,
+              subject,
+              title,
+              reply: session.post,
+            });
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
@@ -347,6 +413,27 @@ function AppFrameSession({
       .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
   };
 
+  const finishOpen = (status: 'opened' | 'cancelled') => {
+    if (!openAsk) return;
+
+    openAsk.reply({
+      id: openAsk.id,
+      result: { status, ...subjectOf(openAsk) },
+    });
+    openAskRef.current = undefined;
+    setOpenAsk(undefined);
+
+    if (status !== 'opened') return;
+
+    // Opened from this click, so the browser allows the new tab without the
+    // frame ever holding popup rights.
+    if (openAsk.kind === 'external') openInNewTab(openAsk.url);
+    else
+      void navigate(
+        `${paths.show}?${new URLSearchParams({ subject: openAsk.subject })}`,
+      );
+  };
+
   const cancelConnect = () => {
     if (!connectAsk) return;
     finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
@@ -407,6 +494,35 @@ function AppFrameSession({
               Connect
             </Button>
             <Button subtle onClick={cancelConnect}>
+              Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {openAsk?.kind === 'external' && (
+        <ProxyConsentBar aria-label='Open a link'>
+          <ProxyConsentText>
+            This app wants to open <Host>{openAsk.url.host}</Host> in a new tab.
+            <ExternalUrl>{openAsk.url.href}</ExternalUrl>
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={() => finishOpen('opened')}>Open link</Button>
+            <Button subtle onClick={() => finishOpen('cancelled')}>
+              Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {openAsk?.kind === 'resource' && (
+        <ProxyConsentBar aria-label='Open a resource'>
+          <ProxyConsentText>
+            This app wants to open <Host>{openAsk.title}</Host>, leaving the
+            app.
+            <ExternalUrl>{openAsk.subject}</ExternalUrl>
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={() => finishOpen('opened')}>Open</Button>
+            <Button subtle onClick={() => finishOpen('cancelled')}>
               Cancel
             </Button>
           </Row>
@@ -545,6 +661,21 @@ interface ConnectAsk {
   existing?: ProxyConnection[];
 }
 
+/** An app asking to take the person somewhere, until they answer. */
+type OpenAsk = {
+  id: number | string;
+  reply: (reply: HostReply) => void;
+} & (
+  | { kind: 'external'; url: URL }
+  // The title is the resource's own, which the app may have written; the
+  // subject under it is what the person is really deciding about.
+  | { kind: 'resource'; subject: string; title: string }
+);
+
+/** `openResource` answers with the subject, whether opened or cancelled. */
+const subjectOf = (ask: OpenAsk) =>
+  ask.kind === 'resource' ? { subject: ask.subject } : {};
+
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
 
 /**
@@ -629,6 +760,16 @@ const ErrorText = styled.span`
   color: ${p => p.theme.colors.textLight};
   overflow-wrap: anywhere;
   min-width: 0;
+`;
+
+/** The destination host, in full: what the person is deciding about. */
+const Host = styled.strong``;
+
+/** The whole link, under the host, for anyone who wants to check the path. */
+const ExternalUrl = styled.span`
+  display: block;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
 `;
 
 const Problem = styled.p`
