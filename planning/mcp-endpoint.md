@@ -1,6 +1,10 @@
 # Atomic as an MCP server
 
-> **Status:** Proposal (2026-09). Nothing in this file is implemented.
+> **Status:** Steps 1 and 2 of the sequencing below are in (2026-09): the
+> data verbs live in `@tomic/lib` (`assistant-tools.ts`, with
+> `json-ad-compact.ts`, `subject-refs.ts`, `class-schema.ts`), the in-app
+> assistant calls them, and `browser/mcp` (`@tomic/mcp`) is the local stdio
+> server. Steps 3 to 5 (hosted, OAuth) are not started.
 > Companion to [`actions.md`](./actions.md) (one verb list, many surfaces),
 > [`json-ad-compact.md`](./json-ad-compact.md) (the wire dialect),
 > [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) (`AtomicNode`),
@@ -143,21 +147,21 @@ module. Long-term the graph verbs belong on `AtomicNode`; UI verbs do not.
 
 ## Sequencing
 
-1. **Extract headless tools** from `useAtomicTools.ts` (and
+1. [x] **Extract headless tools** from `useAtomicTools.ts` (and
    `jsonAdCompact.ts`) so they take a `Store`, not a hook. Assistant keeps
    working; this is the shared library MCP will call. Cheap, unblocks
    everything, and is the
    [`actions.md`](./actions.md) "fifth enumeration" fix even if MCP slips.
-2. **Local stdio MCP.** Node script or small binary. Agent secret from
+2. [x] **Local stdio MCP.** Node script or small binary. Agent secret from
    env / config (same family as `/app/token`). Read + write. This is the
    Cursor/Claude Desktop config people actually add. Highest ROI; no AS.
-3. **Server `format=compact`.** json-ad-compact phase 4. Needed before a
+3. [ ] **Server `format=compact`.** json-ad-compact phase 4. Needed before a
    Rust remote handler is worth writing.
-4. **Remote Streamable HTTP, read-only.** RFC 9728 metadata, OAuth 2.1
+4. [ ] **Remote Streamable HTTP, read-only.** RFC 9728 metadata, OAuth 2.1
    against Atomic-as-AS (#1275 reopened) *or* the operator IdP if #1310
    has already advertised one. Writes return a clear "use local MCP /
    issued agent not yet" error, not a silent server-side save.
-5. **Remote writes as issued agent.** Same key-on-node pattern as plugin
+5. [ ] **Remote writes as issued agent.** Same key-on-node pattern as plugin
    unattended runs. Consent scopes: at least drive + read/write. `signer`
    is the issued DID. The user's root never touches the commit.
 

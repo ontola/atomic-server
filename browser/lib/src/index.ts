@@ -72,6 +72,11 @@ export * from './pairing.js';
 export * from './loro-loader.js';
 export * from './page-request-signal.js';
 export * from './presence.js';
+export * from './json-ad-compact.js';
+export * from './subject-refs.js';
+export * from './standard-class-alias.js';
+export * from './class-schema.js';
+export * from './assistant-tools.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
 export {

@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Button } from '@components/Button';
 import { truncateMarkdown } from '@helpers/markdown';
-import { tryExpandRef } from '@helpers/subjectRefs';
+import { tryExpandRef } from '@tomic/react';
 import { FC, useState } from 'react';
 import { AtomicLink, AtomicLinkProps } from '@components/AtomicLink';
 import { isAtomicIdentifier } from '@tomic/react';
