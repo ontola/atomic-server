@@ -23,6 +23,7 @@ import {
 import { colorForAgent } from '../../components/Presence/AgentAvatar';
 import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 import { simulatePropEdit } from './simulatedEdits';
+import { DEMO_SPEAKER } from './messageSpeaker';
 import { SimulatedTypist } from './SimulatedTypist';
 import { YUSUF_LIVE_STROKES } from './moodboardStrokes';
 
@@ -33,6 +34,8 @@ const HEARTBEAT_MS = 10_000;
  *  enough to read along: at 35 ms the first lines raced past before a new
  *  visitor had found them. */
 const LETTER_MS = 50;
+/** A breath between tour stops, so a page change never lands mid-sentence. */
+const STEP_PAUSE_MS = 2_500;
 /** How often Yusuf's canvas cursor moves while he's idling on the
  *  moodboard. Short enough that the dot glides instead of hopping. */
 const WANDER_TICK_MS = 120;
@@ -140,10 +143,18 @@ export class DemoDirector {
         // meeting chat ("say something"). An open editor re-saving
         // imported persona ops can't reach this — those aren't Messages
         // parented to the meeting.
+        // Only something the user typed counts. Joining the meeting and
+        // following Mara also post messages here, as the user: the "Demo
+        // User joined the meeting" and "Viewing …" trail entries. Those
+        // ticked off "Say hi" the moment the user joined, before they had
+        // typed anything. A persona's line carries its speaker, which also
+        // covers overlapping saves the shared `selfSaving` flag misses.
         if (
           this.meeting &&
           resource.get(core.properties.parent) === this.meeting &&
-          resource.hasClasses(dataBrowser.classes.message)
+          resource.hasClasses(dataBrowser.classes.message) &&
+          !resource.hasClasses(dataBrowser.classes.followEvent) &&
+          !resource.get(DEMO_SPEAKER)
         ) {
           this.userChatted = true;
           this.userChatWaiters.forEach(resolve => resolve());
@@ -208,39 +219,47 @@ export class DemoDirector {
     await this.type('mara', manifest.welcomeDoc, [
       'This workspace is a demo of AtomicServer.',
       'Feel free to edit, remove or create anything you like!',
-      'I’m about to start a tour to show you around.',
     ]);
 
     // Mara starts a meeting: the top-bar Join banner lights up, and the
-    // welcome doc closes with a link into it. Nothing is said in the
-    // meeting yet — the greeting waits until the user actually opens it.
+    // welcome doc closes with a link into it straight away.
     await this.startTourMeeting();
-    await this.narrate('Welcome to your onboarding meeting! 👋');
     await this.appendMeetingLink();
 
     // Wait for the user to Join (open the meeting). If they don't within
-    // ~25s, greet + play anyway so the log exists for whenever they do.
+    // ~25s, carry on anyway so the log exists for whenever they do.
     await this.waitForJoin(25_000);
-    // Now that they've (probably) opened the meeting, greet them.
 
     if (this.stopped) return;
 
-    await this.sleep(100);
+    // Joining takes them straight to the board, where their first task is
+    // waiting, and that task is to say hi. The tour only moves on once they
+    // have (or after a while), so nothing changes page while they are still
+    // finding the chat.
+    this.announceMara(manifest.checklist.table, {
+      row: manifest.checklist.rows[ROW_SAY_HI],
+      column: manifest.checklist.statusColumn,
+    });
+    await this.narrate('Welcome to your onboarding meeting! 👋');
+    await this.narrate(
+      'First things first: say hi in this chat. That ticks off “Say hi in the meeting chat” on the board.',
+    );
+
+    if (await this.waitForUserChat(45_000)) {
+      await this.completeSayHi();
+    }
+
+    if (this.stopped) return;
+
+    await this.sleep(STEP_PAUSE_MS);
     // Call out the Meeting feature itself while we're in one.
     await this.narrate(
-      'This is a Meeting 🎥 — anyone on the team can start one to chat with colleagues and focus on the same thing at the same time.',
+      'This is a Meeting 🎥. Anyone on the team can start one to chat with colleagues and look at the same thing at the same time.',
     );
-    await this.sleep(100);
     await this.narrate(
-      'I’ll walk you through everything right here. Just follow along.',
+      'You’re following me right now, so we’re looking at the same thing. I’ll walk you through the rest.',
     );
-    await this.sleep(100);
-    await this.narrate(
-      'You’re following me right now, so we’re looking at the same thing.',
-    );
-    await this.sleep(100);
-    await this.narrate("I'll open the issue tracker first!");
-    await this.sleep(100);
+    await this.sleep(STEP_PAUSE_MS);
 
     // ── Tour stop 1: the board (the long, lively, meta stop) ──
     this.announceMara(manifest.checklist.table, {
@@ -278,7 +297,7 @@ export class DemoDirector {
     await this.postChat('pip', "ooh a new teammate, I'll add a card👋");
     await this.addChecklistCard('Invite the rest of your team', 'Todo');
     await this.narrate("Next: the moodboard, Yusuf's mid-doodle 🎨");
-    await this.sleep(1_000);
+    await this.sleep(STEP_PAUSE_MS);
 
     // ── Tour stop 2: the moodboard, Yusuf drawing live ──
     this.announceMara(manifest.moodboard, { x: 340, y: 220 });
@@ -286,14 +305,13 @@ export class DemoDirector {
     await this.sleep(7_000);
     await this.moveCard('mara', manifest.checklist.rows[ROW_DOODLE], 'Done');
     await this.narrate('And that ticks off “Doodle on the moodboard” ✅');
-    await this.sleep(3_000);
+    await this.narrate('One more stop: the Team table.');
+    await this.sleep(STEP_PAUSE_MS);
 
     // ── Tour stop 3: the team table — the user becomes a row in it ──
     this.announceMara(manifest.team.table);
     this.startTableWander();
-    await this.narrate(
-      'One more stop: the Team table. This is where we keep track of our members!',
-    );
+    await this.narrate('This is where we keep track of our members!');
     await this.narrate(
       'Tables in AtomicServer are pretty powerful, you can define custom columns, filters and views.',
     );
@@ -322,8 +340,13 @@ export class DemoDirector {
           this.store,
           rowResource,
           manifest.personas.mara,
-          properties =>
-            properties.set(manifest.team.roleColumn, 'Newest teammate 🎉'),
+          properties => {
+            properties.set(manifest.team.roleColumn, 'Newest teammate 🎉');
+            // They said hi at the start, before this row existed, so the
+            // say-hi payoff could not tick it then.
+            if (this.userChatted)
+              properties.set(manifest.team.onboardingColumn, true);
+          },
         );
       }
 
@@ -333,22 +356,21 @@ export class DemoDirector {
     await this.sleep(3_000);
     this.stopTableWander();
 
-    // ── The ask ──
+    // ── The ask, only if they skipped it at the start ──
     this.announceMara(manifest.checklist.table);
-    await this.narrate(
-      'Last step 👇 say hi in this chat — that’ll tick off “Say hi in the meeting chat” for you.',
-    );
 
-    // Don't wind down until the user has actually said hi — ending the
-    // meeting first leaves them chatting into a dead room and the "Say hi"
-    // card never ticks. Wait generously (they may explore first); the
-    // reactive listener also fires `completeSayHi` the moment they chat.
-    const chatted = await this.waitForUserChat(4 * 60_000);
+    if (!this.userChatted) {
+      await this.narrate(
+        'Last step 👇 say hi in this chat. That’ll tick off “Say hi in the meeting chat” for you.',
+      );
 
-    if (this.stopped) return;
+      // Don't wind down until the user has actually said hi: ending the
+      // meeting first leaves them chatting into a dead room. The reactive
+      // listener also fires `completeSayHi` the moment they chat.
+      const chatted = await this.waitForUserChat(4 * 60_000);
 
-    if (chatted) {
-      await this.completeSayHi();
+      if (this.stopped) return;
+      if (chatted) await this.completeSayHi();
     }
 
     await this.sleep(6_000);
