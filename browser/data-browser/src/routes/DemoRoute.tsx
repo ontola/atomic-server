@@ -18,11 +18,14 @@ import {
 import { Button } from '../components/Button';
 import * as Sentry from '@sentry/react';
 import type { DemoSetupStep } from '../chunks/Demo/startDemo';
-import type { DemoManifest } from '../chunks/Demo/demoWorkspace';
 import { localAgentIsDisposable } from '../helpers/managed/reconcile';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { withDeadline } from '../helpers/withDeadline';
-import { demoForDrive } from '../chunks/Templates/demoSession';
+import {
+  demoForDrive,
+  readInteractiveDemo,
+} from '../chunks/Templates/demoSession';
+import { demoRunningInAnotherTab } from '../helpers/demoTabLock';
 import { paths } from './paths';
 
 // Setup takes seconds on a laptop and several times that on a phone. Past
@@ -90,7 +93,7 @@ async function signedInDrive(
 function startRun(
   store: Store,
   currentDrive: string | undefined,
-  onReady: (manifest: DemoManifest) => void,
+  onReady: (manifest: { welcomeDoc: string }) => void,
   onSignedIn: (target: string) => void,
 ): void {
   run = { startedAt: Date.now(), done: false, reported: false };
@@ -99,6 +102,17 @@ function startRun(
   signedInDrive(store, currentDrive)
     .then(async target => {
       if (target) return target;
+
+      // Another tab is running the demo: join it. Starting a new one here
+      // would delete that tab's workspace.
+      const running = readInteractiveDemo();
+
+      if (running && (await demoRunningInAnotherTab())) {
+        store.setDrive(running.drive);
+
+        return running;
+      }
+
       const { startDemoWorkspace } = await import('../chunks/Demo/startDemo');
 
       return startDemoWorkspace(store, step => {
