@@ -34,6 +34,8 @@ export interface SideBarMenuItemProps extends AtomicLinkProps {
   disabled?: boolean;
   /** Is called when clicking on the item. Used for closing the menu. */
   onClick?: () => void;
+  /** Shown at the end of the row, e.g. a count. */
+  suffix?: React.ReactNode;
 }
 
 export function SideBarMenuItem({
@@ -44,6 +46,7 @@ export function SideBarMenuItem({
   href,
   subject,
   onClick,
+  suffix,
 }: SideBarMenuItemProps) {
   const { pathname } = useLocation();
   const targetPath = path || href || subject;
@@ -59,6 +62,7 @@ export function SideBarMenuItem({
       >
         {icon && <SideBarMenuRowIcon>{icon}</SideBarMenuRowIcon>}
         <SideBarMenuRowLabel>{label}</SideBarMenuRowLabel>
+        {suffix}
       </SideBarMenuRow>
     </SideBarMenuItemLink>
   );
