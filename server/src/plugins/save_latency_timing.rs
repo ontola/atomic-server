@@ -32,7 +32,7 @@ async fn timed_save(resource: &mut Resource, store: &impl Storelike) -> Duration
     start.elapsed()
 }
 
-#[tokio::test]
+#[actix_rt::test]
 #[ignore]
 async fn save_latency_timing() {
     let f = fixture("save_latency_timing").await;
@@ -41,7 +41,7 @@ async fn save_latency_timing() {
 
 /// Same workload on a bare `atomic_lib` store: no search/vector index, no
 /// commit monitor, no class extenders.
-#[tokio::test]
+#[actix_rt::test]
 #[ignore]
 async fn save_latency_timing_bare_db() {
     let store = Db::init_temp("save_latency_timing_bare_db").await.unwrap();
@@ -84,6 +84,7 @@ async fn run(store: &Db, drive: &str) {
             (urls::IS_A, Value::ResourceArray(vec![VIEW.into()])),
             (urls::PARENT, Value::AtomicUrl(table.as_str().into())),
             (urls::NAME, Value::String("view".into())),
+            (VIEW_KIND, Value::String("table".into())),
         ],
     )
     .await;
