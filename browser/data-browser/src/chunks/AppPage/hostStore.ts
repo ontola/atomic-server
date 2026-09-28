@@ -1,10 +1,15 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
-import type { ProxyHost } from '@helpers/proxyConnections';
+import { isPlatformId, type ProxyHost } from '@helpers/proxyConnections';
+import {
+  connectionsOf,
+  forgetInstallationConnection,
+} from '@helpers/installationConnections';
 import {
   CollectionBuilder,
   core,
   errorMessageFromResponse,
+  server,
   findSchema,
   isAtomicIdentifier,
   isResourceSubject,
@@ -207,6 +212,31 @@ export async function handleRequest(
       return proxy
         ? await proxy.connections(required(request.platform, 'platform'))
         : [];
+
+    // Only this app's own access goes: its delegation at the proxy, and on
+    // an Installation the recorded `integrationConnections[platform]`, as the
+    // Installation page's Disconnect does. The connection itself stays;
+    // other apps may use it, and deleting it is a page action.
+    case 'proxyDisconnect': {
+      if (!proxy)
+        throw new Error('This host cannot reach the integration proxy.');
+      const platform = required(request.platform, 'platform');
+      if (!isPlatformId(platform)) throw new Error('Invalid platform');
+
+      const recorded = connectionsOf(
+        (await store.getResource(app)).get(
+          server.properties.integrationConnections,
+        ),
+      )[platform];
+      const connectionIds = await proxy.disconnect(
+        platform,
+        recorded ? [recorded] : [],
+      );
+
+      if (recorded) await forgetInstallationConnection(store, app, platform);
+
+      return { status: 'disconnected', platform, connectionIds };
+    }
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.

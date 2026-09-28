@@ -118,6 +118,17 @@ export type OpenResourceResult = {
   subject: string;
 };
 
+/**
+ * What `store.proxy.disconnect({ platform })` resolves to in an app frame:
+ * the connections this app's delegation was taken off. The connections
+ * themselves are left alone.
+ */
+export type ProxyDisconnectResult = {
+  status: 'disconnected';
+  platform: string;
+  connectionIds: string[];
+};
+
 export interface PageContext {
   /** The current page resource */
   resource: Resource;
