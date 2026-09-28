@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
-import { Agent } from '@tomic/lib';
+import { Agent, decodeSecret } from '@tomic/lib';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
 import { useSettings } from '../../helpers/AppSettings';
@@ -202,6 +202,12 @@ export function GettingStartedFlow({
   // call back to the control plane (whose session cookie we don't have here).
   const emailParam =
     new URLSearchParams(window.location.search).get('email') || undefined;
+  // Someone who signed up on the portal with a secret they made there: that
+  // identity, handed over in the fragment (which no server sees), is the one
+  // to open, not a new one. Read once and taken out of the address bar.
+  const [presetKeys] = useState(() =>
+    fromManaged ? takeSecretFragment() : undefined,
+  );
   // A sign-in guard (clicking a drive you're not signed in for) sends the user
   // here with `next` carrying that drive's subject, so we open straight to the
   // sign-in step and return them to that drive afterwards (not their home).
@@ -1600,7 +1606,9 @@ export function GettingStartedFlow({
                   <NewIdentitySection
                     autoStart
                     navigateToDrive={!inviteToken}
-                    verifySecret
+                    // Already saved and confirmed on the portal.
+                    verifySecret={!presetKeys}
+                    presetKeys={presetKeys}
                     stepIndicatorPortal={stepDotsSlotRef.current}
                     defaultProfileName={managedUsername}
                     offerRecoveryBackup={fromManaged}
@@ -1804,3 +1812,29 @@ const StepDotsSlot = styled.div`
     gap: 6px;
   }
 `;
+
+/** The `#secret=` the portal hands over after a secret sign-up, removed from
+ * the URL as it is read. */
+function takeSecretFragment():
+  | { privateKey: string; agentSubject: string }
+  | undefined {
+  const secret = new URLSearchParams(window.location.hash.slice(1)).get(
+    'secret',
+  );
+
+  if (!secret) return undefined;
+
+  window.history.replaceState(
+    window.history.state,
+    '',
+    window.location.pathname + window.location.search,
+  );
+
+  try {
+    const { privateKey, subject } = decodeSecret(secret);
+
+    return subject ? { privateKey, agentSubject: subject } : undefined;
+  } catch {
+    return undefined;
+  }
+}

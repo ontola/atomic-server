@@ -15,11 +15,26 @@ export type AccountSignInCopy = {
   secret: string;
   secretLabel: string;
   secretSubmit: string;
+  /** Making a new secret, for someone who has none yet. */
+  secretCreate: SecretCreateCopy;
   or: string;
   emailLabel: string;
   send: string;
   sending: string;
   info: AccountSignInInfoCopy;
+};
+
+/** Signing up with a secret made on the spot, then an email address. */
+export type SecretCreateCopy = {
+  open: string;
+  title: string;
+  text: string;
+  copy: string;
+  copied: string;
+  saved: string;
+  emailText: string;
+  submit: string;
+  back: string;
 };
 
 /** "How safe is each option?": what each one trusts, and who can see what. */
@@ -44,6 +59,18 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     secret: 'Sign in with secret',
     secretLabel: 'Your Atomic secret',
     secretSubmit: 'Sign in',
+    secretCreate: {
+      open: 'No secret yet? Create one',
+      title: 'Your new secret',
+      text: 'This is the key to your Atomic identity. Save it in your password manager now: nobody can show it to you again or reset it.',
+      copy: 'Copy',
+      copied: 'Copied',
+      saved: 'I have saved my secret',
+      emailText:
+        'Add your email to finish. Your account always has one, for invoices and for signing in when your secret is not at hand.',
+      submit: 'Create account',
+      back: 'Back',
+    },
     or: 'or',
     emailLabel: 'Email',
     send: 'Email me a link',
@@ -93,6 +120,18 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
     secret: 'Inloggen met secret',
     secretLabel: 'Je Atomic-secret',
     secretSubmit: 'Inloggen',
+    secretCreate: {
+      open: 'Nog geen secret? Maak er een',
+      title: 'Je nieuwe secret',
+      text: 'Dit is de sleutel van je Atomic-identiteit. Bewaar hem nu in je wachtwoordbeheerder: niemand kan hem je opnieuw laten zien of hem resetten.',
+      copy: 'Kopiëren',
+      copied: 'Gekopieerd',
+      saved: 'Ik heb mijn secret bewaard',
+      emailText:
+        'Vul je e-mailadres in om af te ronden. Je account heeft er altijd een, voor facturen en om in te loggen als je je secret niet bij de hand hebt.',
+      submit: 'Account aanmaken',
+      back: 'Terug',
+    },
     or: 'of',
     emailLabel: 'E-mail',
     send: 'Stuur me een link',
@@ -144,6 +183,7 @@ export function AccountSignIn({
   githubHref = null,
   onGitHub,
   onSecret,
+  secretSignUp,
   onPasskey,
   passkeySupported = true,
   email,
@@ -175,6 +215,13 @@ export function AccountSignIn({
    * (it never leaves the device) and reports failures through `notice`.
    * Left out, the option is not shown: a host with its own secret field. */
   onSecret?: (secret: string) => void;
+  /** Sign up with a secret made here: `create` makes one (on this device),
+   * which the person saves, and `submit` sends it with the email field's
+   * address. Left out, only existing secrets are offered. */
+  secretSignUp?: {
+    create: () => Promise<string>;
+    submit: (secret: string) => void;
+  };
   onPasskey: () => void;
   passkeySupported?: boolean;
   email: string;
@@ -198,6 +245,25 @@ export function AccountSignIn({
   const info = useRef<HTMLDialogElement>(null);
   const [secretOpen, setSecretOpen] = useState(false);
   const [secret, setSecret] = useState('');
+  const [created, setCreated] = useState<string | null>(null);
+
+  if (created !== null && secretSignUp) {
+    return (
+      <div className='atomic-signin' data-signin-theme={theme}>
+        <SecretCreated
+          secret={created}
+          copy={copy}
+          email={email}
+          onEmailChange={onEmailChange}
+          emailInputId={emailInputId}
+          busy={busy || sending}
+          onSubmit={() => secretSignUp.submit(created)}
+          onBack={() => setCreated(null)}
+        />
+        {notice}
+      </div>
+    );
+  }
 
   return (
     <div className='atomic-signin' data-signin-theme={theme}>
@@ -302,6 +368,19 @@ export function AccountSignIn({
           >
             {copy.secretSubmit}
           </button>
+          {secretSignUp ? (
+            <button
+              type='button'
+              className='atomic-signin-link'
+              disabled={busy}
+              onClick={() =>
+                void secretSignUp.create().then(setCreated, () => undefined)
+              }
+              data-test='secret-create'
+            >
+              {copy.secretCreate.open}
+            </button>
+          ) : null}
         </form>
       ) : null}
       {notice}
@@ -344,6 +423,91 @@ export function AccountSignIn({
         </form>
       </dialog>
     </div>
+  );
+}
+
+/** A secret just made: shown once to save, then the email that finishes
+ * the account. */
+function SecretCreated({
+  secret,
+  copy,
+  email,
+  onEmailChange,
+  emailInputId,
+  busy,
+  onSubmit,
+  onBack,
+}: {
+  secret: string;
+  copy: AccountSignInCopy;
+  email: string;
+  onEmailChange: (email: string) => void;
+  emailInputId: string;
+  busy: boolean;
+  onSubmit: () => void;
+  onBack: () => void;
+}) {
+  const text = copy.secretCreate;
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <form
+      className='atomic-signin-email'
+      onSubmit={e => {
+        e.preventDefault();
+        onSubmit();
+      }}
+      data-test='secret-created'
+    >
+      <h3 className='atomic-signin-title'>{text.title}</h3>
+      <p className='atomic-signin-hint'>{text.text}</p>
+      <div className='atomic-signin-secret'>
+        <code data-test='secret-created-value'>{secret}</code>
+        <button
+          type='button'
+          className='atomic-signin-option'
+          onClick={() =>
+            void navigator.clipboard?.writeText(secret).then(
+              () => setCopied(true),
+              () => undefined,
+            )
+          }
+        >
+          {copied ? text.copied : text.copy}
+        </button>
+      </div>
+      <label className='atomic-signin-check'>
+        <input
+          type='checkbox'
+          checked={saved}
+          onChange={e => setSaved(e.target.checked)}
+          data-test='secret-saved'
+        />
+        <span>{text.saved}</span>
+      </label>
+      <p className='atomic-signin-hint'>{text.emailText}</p>
+      <label htmlFor={`${emailInputId}-new`}>{copy.emailLabel}</label>
+      <input
+        id={`${emailInputId}-new`}
+        type='email'
+        value={email}
+        onChange={e => onEmailChange(e.target.value)}
+        autoComplete='email'
+        required
+        data-test='secret-email'
+      />
+      <button
+        type='submit'
+        className='atomic-signin-submit'
+        disabled={busy || !saved || !email.trim()}
+      >
+        {text.submit}
+      </button>
+      <button type='button' className='atomic-signin-link' onClick={onBack}>
+        {text.back}
+      </button>
+    </form>
   );
 }
 

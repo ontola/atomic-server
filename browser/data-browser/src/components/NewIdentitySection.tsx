@@ -81,6 +81,10 @@ interface NewIdentitySectionProps {
    * nothing to register or save; false moves on to the passkey and code
    * step. */
   onBackupWithAccount?: (secret: string) => Promise<boolean>;
+  /** The keys of an identity made elsewhere and already saved by the person
+   * (a secret made while signing up on the account portal). Used instead of
+   * making new ones; everything after the keys happens as usual. */
+  presetKeys?: { privateKey: string; agentSubject: string };
 }
 
 interface IdentityData {
@@ -111,6 +115,7 @@ export function NewIdentitySection({
   onBackupWithPasskey,
   onBackupWithCode,
   onBackupWithAccount,
+  presetKeys,
 }: NewIdentitySectionProps) {
   const store = useStore();
   const { setAgent, setDrive } = useSettings();
@@ -147,9 +152,15 @@ export function NewIdentitySection({
     setError(undefined);
 
     try {
-      const agentKeys = await Agent.generateKeyPair();
-      const agentDID = agentSubject(agentKeys.publicKey);
+      const agentKeys = presetKeys ?? (await Agent.generateKeyPair());
       const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
+      const agentDID = agentSubject(await agentProvider.getPublicKey());
+
+      // A preset identity is only used when its key really is that agent's.
+      if (presetKeys && presetKeys.agentSubject !== agentDID) {
+        throw new Error('That secret does not match its identity.');
+      }
+
       const newAgent = new Agent(agentProvider, agentDID);
 
       store.setAgent(newAgent);

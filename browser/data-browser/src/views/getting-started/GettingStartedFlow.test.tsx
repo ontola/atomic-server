@@ -41,6 +41,7 @@ const state = vi.hoisted(() => ({
     }),
   },
   restoreVault: vi.fn(),
+  identityProps: undefined as Record<string, unknown> | undefined,
 }));
 vi.mock('@tomic/react', async original => ({
   ...(await original<typeof import('@tomic/react')>()),
@@ -122,7 +123,11 @@ vi.mock('../../helpers/navigation', () => ({
   constructOpenURL: (subject: string) => `/app/show?subject=${subject}`,
 }));
 vi.mock('../../components/NewIdentitySection', () => ({
-  NewIdentitySection: () => <div>Create identity</div>,
+  NewIdentitySection: (props: Record<string, unknown>) => {
+    state.identityProps = props;
+
+    return <div>Create identity</div>;
+  },
 }));
 vi.mock('./ConnectDeviceStep', () => ({
   ConnectDeviceStep: () => <div>Connect device</div>,
@@ -220,6 +225,29 @@ it('preserves private-drive unlock', async () => {
 it('preserves new-account creation from the portal', async () => {
   await show('?from_portal=true&email=new%40example.com');
   expect(screen.getByText('Create identity')).toBeTruthy();
+});
+
+it('opens the identity made while signing up on the portal', async () => {
+  const secret = btoa(
+    JSON.stringify({ privateKey: 'cHJpdmF0ZQ', subject: 'atomic:agent:pub' }),
+  );
+  await show(
+    `?from_portal=true&email=new%40example.com#secret=${encodeURIComponent(secret)}`,
+  );
+  expect(state.identityProps?.presetKeys).toEqual({
+    privateKey: 'cHJpdmF0ZQ',
+    agentSubject: 'atomic:agent:pub',
+  });
+  // Saved and confirmed on the portal already.
+  expect(state.identityProps?.verifySecret).toBe(false);
+  // The secret does not stay in the address bar.
+  expect(window.location.hash).toBe('');
+});
+
+it('makes a new identity when the portal hands none over', async () => {
+  await show('?from_portal=true&email=new%40example.com');
+  expect(state.identityProps?.presetKeys).toBeUndefined();
+  expect(state.identityProps?.verifySecret).toBe(true);
 });
 
 it.each([true, false])(
