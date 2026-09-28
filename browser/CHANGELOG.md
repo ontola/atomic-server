@@ -4,6 +4,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- New package `@tomic/mcp`: an MCP server that lets Claude Code, Claude
+  Desktop, Cursor and other MCP clients read and edit your Atomic Data. It runs
+  locally and signs edits with your own Agent key. `@tomic/lib` now exports the
+  data verbs behind it and behind the in-app assistant (`readResourceCompact`,
+  `queryResources`, `textSearch`, `semanticSearch`, `listDriveClasses`,
+  `setResourceProperty`, `createResourceFromCompact`), plus the compact JSON-AD
+  helpers (`toCompact`, `fromCompact`, ...) and short subject refs
+  (`shortenSubject`, `expandSubject`) that used to live in the data-browser.
 - Turning workspace sync off says what is actually in the way. All three of its
   preconditions used to answer with "Open this drive with local storage
   available before disconnecting", so someone signed out, or on a server this
