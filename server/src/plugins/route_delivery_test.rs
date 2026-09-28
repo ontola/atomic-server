@@ -1,6 +1,6 @@
 //! The delivery queue (#1719): enqueue, send, retry, dead letters, the
 //! restart, the daily cap, per-host concurrency, idempotency, holding and
-//! dropping, and host-side signatures. First against the queue alone (a fake
+//! dropping, host-side signatures, and the disk budget. First against the queue alone (a fake
 //! installation, a loopback stub or a scripted transport), then through the
 //! app with the inbox fixture's `POST /deliver` at `--plugin-routes
 //! read-write`.
@@ -19,7 +19,7 @@ use super::{
     http_signatures::{self, Message, PublicKey},
     manifest::Manifest,
     route_delivery::{
-        self, backoff, DeliveryQueue, EgressTransport, Job, JobState, Outgoing, QueueHost,
+        self, backoff, Budget, DeliveryQueue, EgressTransport, Job, JobState, Outgoing, QueueHost,
         RegistryHost, Sent, Standing, Transport, MAX_ATTEMPTS,
     },
     route_keys,
@@ -302,7 +302,7 @@ async fn a_delivery_goes_through_the_egress_guard_to_a_local_stub() {
         Arc::new(EgressTransport { loopback: true }),
     );
     let jobs = delivery(&format!("{origin}/inbox"), "create-1");
-    let enqueued = route_delivery::enqueue(&db, jobs, NOW).unwrap();
+    let enqueued = route_delivery::enqueue(&db, jobs, Budget::default(), NOW).unwrap();
     assert_eq!(enqueued.queued, 1);
     assert_eq!(only_job(&db).state, JobState::Queued);
 
@@ -321,7 +321,7 @@ async fn a_delivery_goes_through_the_egress_guard_to_a_local_stub() {
     assert_eq!(done[0].receipts[0].status, Some(202));
     // Settled jobs keep no payload.
     assert!(done[0].body.is_none() && done[0].headers.is_empty());
-    let status = route_delivery::status(&db, INSTALLATION, 10, NOW);
+    let status = route_delivery::status(&db, INSTALLATION, 10, Budget::default(), NOW);
     assert_eq!(status["delivered24h"], 1, "{status}");
     assert_eq!(status["queued"], 0);
     assert_eq!(status["sentToday"], 1);
@@ -342,7 +342,13 @@ async fn the_egress_guard_refuses_loopback_and_private_addresses() {
         FakeHost::new(),
         Arc::new(EgressTransport { loopback: false }),
     );
-    route_delivery::enqueue(&db, delivery(&format!("{origin}/inbox"), "a"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery(&format!("{origin}/inbox"), "a"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     // A wildcard delivery to a private address: refused even with the seam.
     let seam = queue(
         &db,
@@ -351,8 +357,20 @@ async fn the_egress_guard_refuses_loopback_and_private_addresses() {
         Arc::new(EgressTransport { loopback: true }),
     );
     tick(&q, NOW).await;
-    route_delivery::enqueue(&db, delivery("https://10.0.0.7/inbox", "b"), NOW).unwrap();
-    route_delivery::enqueue(&db, delivery("https://169.254.169.254/inbox", "c"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://10.0.0.7/inbox", "b"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://169.254.169.254/inbox", "c"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     tick(&seam, NOW).await;
     assert!(received.lock().unwrap().is_empty());
     let dead = settled(&db);
@@ -363,7 +381,7 @@ async fn the_egress_guard_refuses_loopback_and_private_addresses() {
         let error = job.receipts[0].error.clone().unwrap();
         assert!(error.contains("egress guard"), "{error}");
     }
-    let status = route_delivery::status(&db, INSTALLATION, 0, NOW);
+    let status = route_delivery::status(&db, INSTALLATION, 0, Budget::default(), NOW);
     assert_eq!(status["dead"], 3);
     assert_eq!(status["lastFailures"].as_array().unwrap().len(), 3);
     assert!(status["dailyCap"].is_null());
@@ -374,7 +392,13 @@ async fn failures_back_off_with_jitter_and_end_as_a_dead_letter() {
     let db = Db::init_temp("delivery_backoff").await.unwrap();
     let script = Script::always(answered(500));
     let q = queue(&db, 0, FakeHost::new(), script.clone());
-    route_delivery::enqueue(&db, delivery("https://a.example/inbox", "x"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://a.example/inbox", "x"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
 
     let mut now = NOW;
     for attempt in 1..MAX_ATTEMPTS {
@@ -398,7 +422,7 @@ async fn failures_back_off_with_jitter_and_end_as_a_dead_letter() {
     assert_eq!(dead.state, JobState::Dead);
     assert_eq!(dead.attempts, MAX_ATTEMPTS);
     assert_eq!(script.sent().len(), MAX_ATTEMPTS as usize);
-    let status = route_delivery::status(&db, INSTALLATION, 0, now);
+    let status = route_delivery::status(&db, INSTALLATION, 0, Budget::default(), now);
     assert_eq!(status["dead"], 1);
     let failure = &status["lastFailures"][0];
     assert!(
@@ -441,10 +465,22 @@ async fn what_is_retried_and_what_is_not() {
         ("moved.example", "b"),
         ("slow.example", "c"),
     ] {
-        route_delivery::enqueue(&db, delivery(&format!("https://{host}/inbox"), id), NOW).unwrap();
+        route_delivery::enqueue(
+            &db,
+            delivery(&format!("https://{host}/inbox"), id),
+            Budget::default(),
+            NOW,
+        )
+        .unwrap();
         tick(&q, NOW).await;
     }
-    route_delivery::enqueue(&db, delivery("https://busy.example/inbox", "d"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://busy.example/inbox", "d"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     tick(&q, NOW).await;
 
     let dead = settled(&db);
@@ -461,7 +497,13 @@ async fn what_is_retried_and_what_is_not() {
     // `Retry-After` wins over a shorter backoff, and holds back the host.
     let busy = queued.iter().find(|j| j.url.contains("busy")).unwrap();
     assert_eq!(busy.next_at - NOW, 2 * 3_600_000);
-    route_delivery::enqueue(&db, delivery("https://busy.example/inbox", "e"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://busy.example/inbox", "e"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     tick(&q, NOW + 1).await;
     let e = route_delivery::jobs(&db, INSTALLATION)
         .into_iter()
@@ -492,10 +534,16 @@ async fn a_job_survives_a_restart_and_an_interrupted_attempt_is_retried() {
         gate: Some(Arc::new(tokio::sync::Semaphore::new(0))),
     });
     let q = queue(&db, 0, FakeHost::new(), hanging.clone());
-    route_delivery::enqueue(&db, delivery("https://a.example/inbox", "sending"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://a.example/inbox", "sending"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     let mut later = delivery("https://b.example/inbox", "later");
     later[0].next_at = NOW + 1;
-    route_delivery::enqueue(&db, later, NOW + 1).unwrap();
+    route_delivery::enqueue(&db, later, Budget::default(), NOW + 1).unwrap();
     let handles = q.tick(NOW).await;
     assert_eq!(handles.len(), 1, "only the first is due");
     for handle in handles {
@@ -551,6 +599,7 @@ async fn the_daily_cap_defers_jobs_to_the_next_day() {
         route_delivery::enqueue(
             &db,
             delivery(&format!("https://{host}.example/inbox"), &i.to_string()),
+            Budget::default(),
             NOW,
         )
         .unwrap();
@@ -561,7 +610,7 @@ async fn the_daily_cap_defers_jobs_to_the_next_day() {
     assert_eq!(waiting.attempts, 0, "waiting for the cap is not an attempt");
     let tomorrow = (NOW / DAY_MS + 1) * DAY_MS;
     assert!((tomorrow..=tomorrow + 60_000).contains(&waiting.next_at));
-    let status = route_delivery::status(&db, INSTALLATION, 2, NOW);
+    let status = route_delivery::status(&db, INSTALLATION, 2, Budget::default(), NOW);
     assert_eq!(status["waitingForCap"], 1, "{status}");
     assert_eq!(status["sentToday"], 2);
     // Still waiting later that day; not dropped.
@@ -583,7 +632,7 @@ async fn the_daily_cap_defers_jobs_to_the_next_day() {
         tomorrow,
     )
     .unwrap();
-    route_delivery::enqueue(&db, jobs, tomorrow).unwrap();
+    route_delivery::enqueue(&db, jobs, Budget::default(), tomorrow).unwrap();
     assert_eq!(tick(&q, tomorrow + 60_000).await, 1);
 }
 
@@ -602,11 +651,18 @@ async fn one_destination_host_gets_at_most_two_requests_at_once() {
         route_delivery::enqueue(
             &db,
             delivery("https://busy.example/inbox", &format!("busy-{i}")),
+            Budget::default(),
             NOW,
         )
         .unwrap();
     }
-    route_delivery::enqueue(&db, delivery("https://quiet.example/inbox", "quiet"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://quiet.example/inbox", "quiet"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     let first = q.tick(NOW).await;
     assert_eq!(first.len(), 3, "two to busy.example, one to quiet.example");
     // Ticking again while they are in flight starts nothing new for busy.
@@ -641,24 +697,33 @@ async fn an_idempotency_key_is_delivered_once() {
     let script = Script::always(answered(202));
     let q = queue(&db, 0, FakeHost::new(), script.clone());
     let url = "https://a.example/inbox";
-    let first = route_delivery::enqueue(&db, delivery(url, "activity-1"), NOW).unwrap();
+    let first =
+        route_delivery::enqueue(&db, delivery(url, "activity-1"), Budget::default(), NOW).unwrap();
     assert_eq!((first.queued, first.duplicates), (1, 0));
     // Queued: a second enqueue is a duplicate, even with another body.
     let again = prepare(json!({
         "operation": "deliver", "url": url, "body": "changed", "idempotencyKey": "activity-1"
     }))
     .unwrap();
-    let second = route_delivery::enqueue(&db, again, NOW).unwrap();
+    let second = route_delivery::enqueue(&db, again, Budget::default(), NOW).unwrap();
     assert_eq!((second.queued, second.duplicates), (0, 1));
     tick(&q, NOW).await;
     // Delivered: still a duplicate while it is kept.
-    let third = route_delivery::enqueue(&db, delivery(url, "activity-1"), NOW + DAY_MS).unwrap();
+    let third = route_delivery::enqueue(
+        &db,
+        delivery(url, "activity-1"),
+        Budget::default(),
+        NOW + DAY_MS,
+    )
+    .unwrap();
     assert_eq!((third.queued, third.duplicates), (0, 1));
     assert_eq!(script.sent().len(), 1);
     // Once forgotten, the key may be used again.
     let later = NOW + route_delivery::KEEP_SETTLED_MS + 1;
     tick(&q, later).await;
-    let fourth = route_delivery::enqueue(&db, delivery(url, "activity-1"), later).unwrap();
+    let fourth =
+        route_delivery::enqueue(&db, delivery(url, "activity-1"), Budget::default(), later)
+            .unwrap();
     assert_eq!(fourth.queued, 1);
 
     // Without a key, the same content is one delivery, other content two;
@@ -674,9 +739,15 @@ async fn an_idempotency_key_is_delivered_once() {
     )
     .unwrap();
     assert_eq!(jobs.len(), 2);
-    let stored = route_delivery::enqueue(&db, jobs, later).unwrap();
+    let stored = route_delivery::enqueue(&db, jobs, Budget::default(), later).unwrap();
     assert_eq!(stored.queued, 2);
-    let again = route_delivery::enqueue(&db, prepare(unkeyed("x")).unwrap(), later).unwrap();
+    let again = route_delivery::enqueue(
+        &db,
+        prepare(unkeyed("x")).unwrap(),
+        Budget::default(),
+        later,
+    )
+    .unwrap();
     assert_eq!(again.duplicates, 1);
 }
 
@@ -686,14 +757,23 @@ async fn held_jobs_wait_and_resume_and_gone_ones_are_dropped() {
     let host = FakeHost::new();
     let script = Script::always(answered(202));
     let q = queue(&db, 0, host.clone(), script.clone());
-    route_delivery::enqueue(&db, delivery("https://a.example/inbox", "held"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://a.example/inbox", "held"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     // Paused or degraded: kept, not sent.
     host.set(INSTALLATION, Standing::Held);
     assert_eq!(tick(&q, NOW).await, 0);
     let job = only_job(&db);
     assert!(job.held);
     assert_eq!(job.next_at, NOW + route_delivery::HOLD_RECHECK_MS);
-    assert_eq!(route_delivery::status(&db, INSTALLATION, 0, NOW)["held"], 1);
+    assert_eq!(
+        route_delivery::status(&db, INSTALLATION, 0, Budget::default(), NOW)["held"],
+        1
+    );
     // Active again: resumed at once.
     host.set(INSTALLATION, Standing::Active);
     assert_eq!(route_delivery::resume(&db, INSTALLATION, NOW + 5), 1);
@@ -701,13 +781,159 @@ async fn held_jobs_wait_and_resume_and_gone_ones_are_dropped() {
     assert_eq!(script.sent().len(), 1);
 
     // Gone (revoked): every job of the installation is dropped unsent.
-    route_delivery::enqueue(&db, delivery("https://a.example/inbox", "one"), NOW).unwrap();
-    route_delivery::enqueue(&db, delivery("https://b.example/inbox", "two"), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://a.example/inbox", "one"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://b.example/inbox", "two"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
     host.set(INSTALLATION, Standing::Gone);
     assert_eq!(tick(&q, NOW + 10).await, 0);
     assert!(route_delivery::jobs(&db, INSTALLATION).is_empty());
     assert!(settled(&db).is_empty());
     assert_eq!(script.sent().len(), 1);
+}
+
+/// The byte counts `recover` recounts from what is stored, without changing
+/// anything else (nothing is sending or held).
+fn assert_counts_hold(q: &DeliveryQueue, db: &Db, now: i64) {
+    let (mine, node) = (
+        route_delivery::stored_bytes(db, INSTALLATION),
+        route_delivery::node_bytes(db),
+    );
+    q.recover(now);
+    assert_eq!(route_delivery::stored_bytes(db, INSTALLATION), mine);
+    assert_eq!(route_delivery::node_bytes(db), node);
+}
+
+fn for_installation(jobs: Vec<Job>, installation: &str) -> Vec<Job> {
+    jobs.into_iter()
+        .map(|mut job| {
+            job.installation = installation.to_string();
+            job
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn the_byte_counts_follow_the_queue_through_its_life() {
+    let db = Db::init_temp("delivery_bytes").await.unwrap();
+    let script = Script::always(answered(202));
+    let q = queue(&db, 0, FakeHost::new(), script.clone());
+    assert_eq!(route_delivery::stored_bytes(&db, INSTALLATION), 0);
+
+    let big = prepare(json!({
+        "operation": "deliver", "url": "https://a.example/inbox",
+        "body": "x".repeat(100_000), "idempotencyKey": "big",
+    }))
+    .unwrap();
+    route_delivery::enqueue(&db, big, Budget::default(), NOW).unwrap();
+    route_delivery::enqueue(
+        &db,
+        delivery("https://b.example/inbox", "small"),
+        Budget::default(),
+        NOW,
+    )
+    .unwrap();
+    let queued = route_delivery::stored_bytes(&db, INSTALLATION);
+    assert!(queued > 100_000, "{queued}");
+    assert_eq!(route_delivery::node_bytes(&db), queued);
+    assert_counts_hold(&q, &db, NOW);
+
+    // Settled jobs keep no body: the count drops with it.
+    assert_eq!(tick(&q, NOW).await, 2);
+    let settled_bytes = route_delivery::stored_bytes(&db, INSTALLATION);
+    assert!(settled_bytes < 10_000, "{settled_bytes}");
+    assert_counts_hold(&q, &db, NOW);
+    let status = route_delivery::status(&db, INSTALLATION, 0, Budget::default(), NOW);
+    assert_eq!(status["storedBytes"], settled_bytes);
+    assert_eq!(status["byteBudget"], Budget::default().installation);
+
+    // Pruned after a week, day counts too: nothing is left to count.
+    let later = NOW + route_delivery::KEEP_SETTLED_MS + 3 * DAY_MS;
+    tick(&q, later).await;
+    assert_eq!(route_delivery::stored_bytes(&db, INSTALLATION), 0);
+    assert_eq!(route_delivery::node_bytes(&db), 0);
+
+    // Dropping an installation returns its bytes to the node.
+    let other = "did:ad:otherInstallation";
+    route_delivery::enqueue(
+        &db,
+        delivery("https://a.example/inbox", "mine"),
+        Budget::default(),
+        later,
+    )
+    .unwrap();
+    route_delivery::enqueue(
+        &db,
+        for_installation(delivery("https://a.example/inbox", "theirs"), other),
+        Budget::default(),
+        later,
+    )
+    .unwrap();
+    let theirs = route_delivery::stored_bytes(&db, other);
+    route_delivery::drop_installation(&db, INSTALLATION);
+    assert_eq!(route_delivery::stored_bytes(&db, INSTALLATION), 0);
+    assert_eq!(route_delivery::node_bytes(&db), theirs);
+    assert_counts_hold(&q, &db, later);
+}
+
+#[tokio::test]
+async fn an_enqueue_past_the_disk_budget_is_refused_whole() {
+    let db = Db::init_temp("delivery_budget").await.unwrap();
+    let body = |id: &str| {
+        prepare(json!({
+            "operation": "deliver", "url": "https://a.example/inbox",
+            "body": "x".repeat(10_000), "idempotencyKey": id,
+        }))
+        .unwrap()
+    };
+    let budget = Budget {
+        installation: 25_000,
+        node: 0,
+    };
+    route_delivery::enqueue(&db, body("1"), budget, NOW).unwrap();
+    route_delivery::enqueue(&db, body("2"), budget, NOW).unwrap();
+    let before = route_delivery::stored_bytes(&db, INSTALLATION);
+    let err = route_delivery::enqueue(&db, body("3"), budget, NOW).unwrap_err();
+    assert!(err.contains("25000 bytes"), "{err}");
+    assert_eq!(route_delivery::jobs(&db, INSTALLATION).len(), 2);
+    assert_eq!(route_delivery::stored_bytes(&db, INSTALLATION), before);
+    // `check_room`, which a route asks before applying anything, agrees.
+    assert!(route_delivery::check_room(&db, INSTALLATION, &body("3"), budget).is_err());
+    // Duplicates take no room, so they are not refused.
+    assert_eq!(
+        route_delivery::enqueue(&db, body("2"), budget, NOW)
+            .unwrap()
+            .duplicates,
+        1
+    );
+
+    // Another installation has its own budget, but shares the node's.
+    let other = "did:ad:otherInstallation";
+    route_delivery::enqueue(&db, for_installation(body("a"), other), budget, NOW).unwrap();
+    let budget = Budget {
+        node: route_delivery::node_bytes(&db) + 1_000,
+        ..budget
+    };
+    let err =
+        route_delivery::enqueue(&db, for_installation(body("b"), other), budget, NOW).unwrap_err();
+    assert!(err.contains("on this server"), "{err}");
+
+    // `0` is no budget.
+    let none = Budget {
+        installation: 0,
+        node: 0,
+    };
+    route_delivery::enqueue(&db, body("3"), none, NOW).unwrap();
 }
 
 #[tokio::test]
@@ -734,7 +960,7 @@ async fn a_signed_delivery_verifies_against_the_installations_public_key() {
             "idempotencyKey": key,
         }))
         .unwrap();
-        route_delivery::enqueue(&db, jobs, NOW).unwrap();
+        route_delivery::enqueue(&db, jobs, Budget::default(), NOW).unwrap();
     }
     assert_eq!(tick(&q, NOW).await, 2);
     let received = received.lock().unwrap().clone();
@@ -1133,6 +1359,44 @@ async fn a_refused_delivery_refuses_the_whole_verdict() {
         assert_eq!(problem["type"], "route-enqueue-refused");
     }
     // Neither the deliveries nor the notes of the same verdicts were stored.
+    assert!(route_delivery::jobs(store, &i.installation).is_empty());
+    let inbox = store.get_resource(&i.inbox.as_str().into()).await.unwrap();
+    assert!(inbox.get_children(store).await.unwrap().is_empty());
+}
+
+#[actix_rt::test]
+async fn a_route_past_the_disk_budget_answers_503_and_stores_nothing() {
+    let mut i = setup("delivery_budget_route").await;
+    let queue = DeliveryQueue::new(
+        i.f.appstate.store.clone(),
+        0,
+        Arc::new(RegistryHost {
+            registry: i.f.appstate.route_registry.clone(),
+            db: i.f.appstate.store.clone(),
+        }),
+        Arc::new(EgressTransport { loopback: true }),
+    )
+    .with_budget(Budget {
+        installation: 100,
+        node: 0,
+    });
+    i.f.appstate.route_delivery = Arc::new(queue);
+    let app = app!(i.f.appstate);
+    let store = &i.f.appstate.store;
+    let resp = actix_test::call_service(
+        &app,
+        post(
+            &format!("{}/deliver", i.prefix),
+            json!({ "to": "https://remote.example/inbox", "note": "too big" }),
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), 503);
+    assert_eq!(resp.headers().get(header::RETRY_AFTER).unwrap(), "60");
+    let problem: Json = actix_test::read_body_json(resp).await;
+    assert_eq!(problem["type"], "route-queue-full");
+    // Neither the delivery nor the note of the same verdict was stored.
     assert!(route_delivery::jobs(store, &i.installation).is_empty());
     let inbox = store.get_resource(&i.inbox.as_str().into()).await.unwrap();
     assert!(inbox.get_children(store).await.unwrap().is_empty());

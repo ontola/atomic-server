@@ -39,6 +39,17 @@
 //!   requests per installation per UTC day, retries included. Past it, jobs
 //!   wait for the next day; they are not dropped.
 //!
+//! **Disk budget.** Besides [`MAX_QUEUED`] jobs, an installation's queue may
+//! take `--plugin-route-queue-bytes` on disk, and all queues together
+//! `--plugin-route-node-queue-bytes` ([`Budget`]). That counts every record
+//! the queue keeps (jobs with their bodies, the due index, dead letters,
+//! idempotency records, day counts), keys included. [`apply`] keeps a running
+//! total per installation and for the node, in the same batch as the records,
+//! and [`DeliveryQueue::recover`] recounts it at startup. An enqueue that
+//! would go over either budget is refused whole (`503`), like a full queue.
+//! The worker's own writes are not refused: settling a job drops its body,
+//! so the total only grows by a few receipts until then.
+//!
 //! **Receipts.** Each attempt leaves a receipt on the job (the last
 //! [`RECEIPTS`]). An attempt that was running when the server stopped, or
 //! that timed out after the request was sent, is marked *uncertain*, like the
@@ -159,6 +170,29 @@ const SETTLED: &str = "route-delivery:settled:";
 const IDEM: &str = "route-delivery:idem:";
 /// `day:<installation>\0<UTC day>` → requests sent that day.
 const DAY: &str = "route-delivery:day:";
+/// `bytes:<installation>\0` → bytes the installation's records above take,
+/// keys included. Kept by [`apply`].
+const BYTES: &str = "route-delivery:bytes:";
+/// The same, for every installation on the node.
+const NODE_BYTES: &str = "route-delivery:bytes";
+
+/// The installation a queue record belongs to (its pure id), or `None` for
+/// a key that is not counted against a budget.
+fn owner(key: &[u8]) -> Option<&[u8]> {
+    for kind in [JOB, SETTLED, IDEM, DAY] {
+        if let Some(rest) = key.strip_prefix(kind.as_bytes()) {
+            return rest.split(|b| *b == 0).next();
+        }
+    }
+    key.strip_prefix(DUE.as_bytes())?.split(|b| *b == 0).nth(1)
+}
+
+fn bytes_key(owner: &[u8]) -> Vec<u8> {
+    let mut key = BYTES.as_bytes().to_vec();
+    key.extend_from_slice(owner);
+    key.push(0);
+    key
+}
 
 fn pure(subject: &str) -> String {
     Subject::from(subject).pure_id()
@@ -375,8 +409,90 @@ fn store_ops(before: Option<&Job>, job: &Job) -> Vec<Operation> {
     ops
 }
 
+/// What a record takes on disk, as the budget counts it.
+fn size(key: &[u8], value: Option<&[u8]>) -> u64 {
+    value.map_or(0, |v| (key.len() + v.len()) as u64)
+}
+
+/// Every queue write goes through here: it adds the change in bytes, per
+/// installation and for the node, to the same batch.
 fn apply(db: &Db, ops: &[Operation]) -> Result<(), String> {
-    db.kv.apply_batch(ops).map_err(|e| e.to_string())
+    // A batch may write one key twice (a due entry deleted and put back).
+    let mut sizes: HashMap<&[u8], u64> = HashMap::new();
+    let mut deltas: BTreeMap<&[u8], i64> = BTreeMap::new();
+    for op in ops {
+        let Some(owner) = owner(&op.key) else {
+            continue;
+        };
+        let before = match sizes.get(op.key.as_slice()) {
+            Some(n) => *n,
+            None => size(
+                &op.key,
+                db.kv
+                    .get(Tree::PluginMeta, &op.key)
+                    .ok()
+                    .flatten()
+                    .as_deref(),
+            ),
+        };
+        let after = match op.method {
+            Method::Insert => size(&op.key, op.val.as_deref()),
+            Method::Delete => 0,
+        };
+        sizes.insert(op.key.as_slice(), after);
+        *deltas.entry(owner).or_default() += after as i64 - before as i64;
+    }
+    let mut all = ops.to_vec();
+    let mut node = 0;
+    for (owner, delta) in deltas.into_iter().filter(|(_, d)| *d != 0) {
+        node += delta;
+        all.push(add(db, bytes_key(owner), delta));
+    }
+    if node != 0 {
+        all.push(add(db, NODE_BYTES.as_bytes().to_vec(), node));
+    }
+    db.kv.apply_batch(&all).map_err(|e| e.to_string())
+}
+
+/// The write that adds `delta` to a byte count.
+fn add(db: &Db, key: Vec<u8>, delta: i64) -> Operation {
+    let total = (read::<u64>(db, &key).unwrap_or(0) as i64 + delta).max(0) as u64;
+    if total == 0 {
+        delete(key)
+    } else {
+        put(key, &total)
+    }
+}
+
+/// The writes that set every byte count to what is stored now.
+fn recount(db: &Db) -> Vec<Operation> {
+    let mut totals: BTreeMap<Vec<u8>, u64> = BTreeMap::new();
+    for kind in [JOB, DUE, SETTLED, IDEM, DAY] {
+        for (key, value) in db
+            .kv
+            .scan_prefix(Tree::PluginMeta, kind.as_bytes())
+            .flatten()
+        {
+            if let Some(owner) = owner(&key) {
+                *totals.entry(bytes_key(owner)).or_default() += size(&key, Some(&value));
+            }
+        }
+    }
+    let mut ops: Vec<Operation> = db
+        .kv
+        .scan_prefix(Tree::PluginMeta, BYTES.as_bytes())
+        .flatten()
+        .filter(|(key, _)| !totals.contains_key(key.as_slice()))
+        .map(|(key, _)| delete(key))
+        .collect();
+    let node: u64 = totals.values().sum();
+    ops.extend(totals.iter().map(|(key, total)| put(key.clone(), total)));
+    ops.push(if node == 0 {
+        delete(NODE_BYTES.as_bytes().to_vec())
+    } else {
+        put(NODE_BYTES.as_bytes().to_vec(), &node)
+    });
+    ops
 }
 
 // -- preparing a verdict's enqueues ----------------------------------------------
@@ -575,15 +691,83 @@ pub struct Enqueued {
     pub duplicates: usize,
 }
 
+/// How much disk the delivery queues may use; `0` is no limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Budget {
+    /// Bytes per installation (`--plugin-route-queue-bytes`).
+    pub installation: u64,
+    /// Bytes for every installation together
+    /// (`--plugin-route-node-queue-bytes`).
+    pub node: u64,
+}
+
+impl Default for Budget {
+    fn default() -> Self {
+        Self {
+            installation: crate::plugin_routes::DEFAULT_QUEUE_BYTES,
+            node: crate::plugin_routes::DEFAULT_NODE_QUEUE_BYTES,
+        }
+    }
+}
+
 fn queued_count(db: &Db, installation: &str) -> usize {
     db.kv
         .scan_prefix(Tree::PluginMeta, &prefix(JOB, installation))
         .count()
 }
 
-/// Whether `n` more jobs fit in the installation's queue.
-pub fn has_room(db: &Db, installation: &str, n: usize) -> bool {
-    n == 0 || queued_count(db, installation) + n <= MAX_QUEUED
+/// Bytes an installation's queue takes on disk, as the budget counts them.
+pub fn stored_bytes(db: &Db, installation: &str) -> u64 {
+    read(db, &prefix(BYTES, installation)).unwrap_or(0)
+}
+
+/// Bytes every installation's queue takes on disk together.
+pub fn node_bytes(db: &Db) -> u64 {
+    read(db, NODE_BYTES.as_bytes()).unwrap_or(0)
+}
+
+/// The writes that enqueue `job`.
+fn enqueue_ops(job: &Job) -> Vec<Operation> {
+    let mut ops = store_ops(None, job);
+    ops.push(put(
+        idem_key(&job.installation, &job.idempotency_key),
+        &Idem {
+            id: job.id.clone(),
+            until: None,
+        },
+    ));
+    ops
+}
+
+/// Whether `jobs` fit in the installation's queue: in [`MAX_QUEUED`], and
+/// in the budget. Says which limit they don't fit in.
+pub fn check_room(db: &Db, installation: &str, jobs: &[Job], budget: Budget) -> Result<(), String> {
+    if jobs.is_empty() {
+        return Ok(());
+    }
+    if queued_count(db, installation) + jobs.len() > MAX_QUEUED {
+        return Err(format!(
+            "this installation already has {MAX_QUEUED} deliveries queued"
+        ));
+    }
+    let adding: u64 = jobs
+        .iter()
+        .flat_map(enqueue_ops)
+        .map(|op| size(&op.key, op.val.as_deref()))
+        .sum();
+    if budget.installation > 0 && stored_bytes(db, installation) + adding > budget.installation {
+        return Err(format!(
+            "this installation's deliveries would take more than {} bytes on disk",
+            budget.installation
+        ));
+    }
+    if budget.node > 0 && node_bytes(db) + adding > budget.node {
+        return Err(format!(
+            "the deliveries on this server would take more than {} bytes on disk",
+            budget.node
+        ));
+    }
+    Ok(())
 }
 
 fn duplicate(db: &Db, job: &Job, now: i64) -> bool {
@@ -592,8 +776,8 @@ fn duplicate(db: &Db, job: &Job, now: i64) -> bool {
 }
 
 /// Stores prepared jobs, durably, skipping duplicates. Refused whole when
-/// they don't fit in the installation's queue.
-pub fn enqueue(db: &Db, jobs: Vec<Job>, now: i64) -> Result<Enqueued, String> {
+/// they don't fit in the installation's queue or the budget.
+pub fn enqueue(db: &Db, jobs: Vec<Job>, budget: Budget, now: i64) -> Result<Enqueued, String> {
     let _guard = lock();
     let mut out = Enqueued::default();
     let Some(installation) = jobs.first().map(|j| j.installation.clone()) else {
@@ -607,22 +791,8 @@ pub fn enqueue(db: &Db, jobs: Vec<Job>, now: i64) -> Result<Enqueued, String> {
             !dup
         })
         .collect();
-    if queued_count(db, &installation) + fresh.len() > MAX_QUEUED {
-        return Err(format!(
-            "this installation already has {MAX_QUEUED} deliveries queued"
-        ));
-    }
-    let mut ops = Vec::new();
-    for job in &fresh {
-        ops.extend(store_ops(None, job));
-        ops.push(put(
-            idem_key(&job.installation, &job.idempotency_key),
-            &Idem {
-                id: job.id.clone(),
-                until: None,
-            },
-        ));
-    }
+    check_room(db, &installation, &fresh, budget)?;
+    let ops: Vec<Operation> = fresh.iter().flat_map(enqueue_ops).collect();
     apply(db, &ops)?;
     db.flush().map_err(|e| e.to_string())?;
     out.queued = fresh.len();
@@ -719,7 +889,7 @@ fn day_count(db: &Db, installation: &str, day: i64) -> u64 {
 /// queued and the oldest one that is failing; for the installation, the
 /// counts, today's use of the cap, and the last failures (dead letters
 /// first, then failing jobs), newest first.
-pub fn status(db: &Db, installation: &str, per_day: u64, now: i64) -> Json {
+pub fn status(db: &Db, installation: &str, per_day: u64, budget: Budget, now: i64) -> Json {
     let queued = jobs(db, installation);
     let settled = settled(db, installation);
     let mut routes: BTreeMap<String, (u64, Option<&Job>)> = BTreeMap::new();
@@ -771,6 +941,8 @@ pub fn status(db: &Db, installation: &str, per_day: u64, now: i64) -> Json {
         "dead": settled.iter().filter(|j| j.state == JobState::Dead).count(),
         "sentToday": day_count(db, installation, now.div_euclid(DAY_MS)),
         "dailyCap": (per_day > 0).then_some(per_day),
+        "storedBytes": stored_bytes(db, installation),
+        "byteBudget": (budget.installation > 0).then_some(budget.installation),
         "lastFailures": failures.into_iter().take(FAILURES_SHOWN).map(failure).collect::<Vec<_>>(),
     })
 }
@@ -993,6 +1165,7 @@ pub struct DeliveryQueue {
     in_flight: Arc<AtomicUsize>,
     wake: tokio::sync::Notify,
     ticking: tokio::sync::Mutex<i64>,
+    budget: Budget,
 }
 
 /// A taken send slot: one for the node, one for the destination host.
@@ -1032,7 +1205,18 @@ impl DeliveryQueue {
             in_flight: Default::default(),
             wake: tokio::sync::Notify::new(),
             ticking: tokio::sync::Mutex::new(0),
+            budget: Budget::default(),
         }
+    }
+
+    pub fn with_budget(mut self, budget: Budget) -> Self {
+        self.budget = budget;
+        self
+    }
+
+    /// The disk the queues may use.
+    pub fn budget(&self) -> Budget {
+        self.budget
     }
 
     /// The daily cap per installation; `0` is none.
@@ -1087,7 +1271,12 @@ impl DeliveryQueue {
             // `before: None`: every due entry was deleted above.
             ops.extend(store_ops(None, &job));
         }
-        if let Err(e) = apply(db, &ops).and_then(|_| db.flush().map_err(|e| e.to_string())) {
+        // The byte counts are recounted after, from what is stored: that
+        // heals any drift, and counts records from before they were kept.
+        if let Err(e) = apply(db, &ops)
+            .and_then(|_| apply(db, &recount(db)))
+            .and_then(|_| db.flush().map_err(|e| e.to_string()))
+        {
             tracing::warn!("could not recover plugin deliveries: {e}");
         }
         uncertain
@@ -1202,10 +1391,9 @@ impl DeliveryQueue {
                 if self.per_day > 0 && used >= self.per_day {
                     false
                 } else {
-                    let _ = self.db.kv.insert(
-                        Tree::PluginMeta,
-                        &day_key(&job.installation, day),
-                        (used + 1).to_string().as_bytes(),
+                    let _ = apply(
+                        &self.db,
+                        &[put(day_key(&job.installation, day), &(used + 1))],
                     );
                     true
                 }

@@ -1410,19 +1410,21 @@ async fn run(
                     &format!("route:{}", route.id),
                     at,
                 ) {
-                    Ok(jobs)
-                        if !super::route_delivery::has_room(store, installation, jobs.len()) =>
-                    {
-                        return Outcome {
-                            fuel,
-                            problems,
-                            ..Outcome::failed(
-                                queue_full(),
-                                "the delivery queue is full; nothing was applied",
-                            )
-                        };
+                    Ok(jobs) => {
+                        if let Err(e) = super::route_delivery::check_room(
+                            store,
+                            installation,
+                            &jobs,
+                            appstate.route_delivery.budget(),
+                        ) {
+                            return Outcome {
+                                fuel,
+                                problems,
+                                ..Outcome::failed(queue_full(), format!("{e}; nothing was applied"))
+                            };
+                        }
+                        deliveries = jobs;
                     }
-                    Ok(jobs) => deliveries = jobs,
                     Err(e) => {
                         return Outcome {
                             fuel,
@@ -1485,7 +1487,12 @@ async fn run(
                 }
             }
             if !deliveries.is_empty() {
-                match super::route_delivery::enqueue(store, deliveries, at) {
+                match super::route_delivery::enqueue(
+                    store,
+                    deliveries,
+                    appstate.route_delivery.budget(),
+                    at,
+                ) {
                     Ok(enqueued) => {
                         problems.push(format!(
                             "queued {} deliveries ({} duplicates)",
