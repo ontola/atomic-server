@@ -44,6 +44,15 @@ Speed:
 - `/app/demo` defers the anonymous database (`deferAnonymous`): the guest's
   own encrypted database is the only one opened.
 
+- The build emits `/prefetch.json` (entry chunk, its imports and CSS, both
+  wasm files). atomic.place's portal (`portal/src/warmApp.ts` in
+  atomic-saas) fetches those into the HTTP cache when its page is idle on a
+  fast connection, and when a pointer or focus reaches a link into the app.
+  Same site, so the app reads them from cache: click to workspace about
+  4.0 s → 2.4 s on production. Chromium does not reuse the JS and CSS
+  (module scripts send `Origin`, and the app varies on it); the wasm, the
+  bulk, it does.
+
 After the reveal, the director waits 1.2 s before anyone moves, and Mara
 types at 50 ms a letter instead of 35.
 
