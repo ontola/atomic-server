@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Agents, Skills and MCP servers are edited in a dialog again. Their lists stay
+  on the AI settings page, but creating or editing one opens a dialog with the
+  form and Cancel / Save buttons, instead of swapping the list for the form
+  inside the settings section. Save stays disabled until the required fields
+  are filled in.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
