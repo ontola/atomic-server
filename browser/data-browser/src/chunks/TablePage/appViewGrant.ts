@@ -15,6 +15,7 @@ export async function addAppView({
   createView,
   setViewKind,
   grant,
+  follow,
 }: {
   app: { subject: string; name: string };
   /** The tab being switched to the app; absent when adding a new one. */
@@ -23,6 +24,12 @@ export async function addAppView({
   createView: (kind: string, label: string) => Promise<string | undefined>;
   setViewKind: (view: string, kind: string) => Promise<void>;
   grant: (view: string, via: RowGrantVia) => Promise<RowGrant>;
+  /**
+   * The Read-only answer still lets the app follow the table's changes
+   * (#1851, decision 1). The grant does both on the server, so this is only
+   * called when editing is not allowed.
+   */
+  follow?: (view: string, via: RowGrantVia) => Promise<unknown>;
 }): Promise<{ view?: string; grant?: RowGrant }> {
   let target = view;
 
@@ -32,9 +39,16 @@ export async function addAppView({
     target = await createView(app.subject, app.name);
   }
 
-  if (!allowEditing || !target) return { view: target };
+  if (!target) return { view: target };
 
   const via: RowGrantVia = view ? 'view-type' : 'add-view';
+
+  if (!allowEditing) {
+    if (follow) await grantWhenSaved(() => follow(target!, via));
+
+    return { view: target };
+  }
+
   const given = await grantWhenSaved(() => grant(target!, via));
 
   return { view: target, grant: given };

@@ -90,6 +90,55 @@ describe('making an app a table view (#1740)', () => {
   });
 });
 
+describe('following the table from the same dialog (#1851, decision 1)', () => {
+  it('Read-only still subscribes the app to the table, by the same gesture', async () => {
+    const s = setup();
+    const follow = vi.fn(async (view: string, via: string) => {
+      s.calls.push(`follow ${view} ${via}`);
+    });
+
+    await addAppView({ app: APP, allowEditing: false, follow, ...s });
+
+    expect(s.calls).toEqual([
+      'create did:ad:money Money',
+      'follow did:ad:view-new add-view',
+    ]);
+    expect(s.grant).not.toHaveBeenCalled();
+  });
+
+  it('Allow editing grants, which subscribes on the server; no second request', async () => {
+    const s = setup();
+    const follow = vi.fn();
+
+    await addAppView({
+      app: APP,
+      view: 'did:ad:view-1',
+      allowEditing: true,
+      follow,
+      ...s,
+    });
+
+    expect(follow).not.toHaveBeenCalled();
+    expect(s.calls).toContain('grant did:ad:view-1 view-type');
+  });
+
+  it('a follow refused while the view is still saving is retried', async () => {
+    const s = setup();
+    let tries = 0;
+    const follow = vi.fn(async () => {
+      tries++;
+      if (tries === 1)
+        throw new Error(
+          'That view is not a view of this table showing this app',
+        );
+    });
+
+    await addAppView({ app: APP, allowEditing: false, follow, ...s });
+
+    expect(follow).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('grantWhenSaved', () => {
   const wait = vi.fn(async () => undefined);
 
