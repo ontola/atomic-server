@@ -252,14 +252,20 @@ export function RepeatField({
           </JsonToggle>
         )}
       </Footer>
-      {parsed.kind === 'custom' && (
-        <Hint>
-          This repeat rule has options the Repeat field cannot show. Edit its
-          JSON, or pick a repeat above to replace it.
-        </Hint>
-      )}
+      {parsed.kind === 'custom' && <CustomHint />}
       {json && showJson && <div>{json}</div>}
     </Wrapper>
+  );
+}
+
+// Its own component, so the extractor sees the sentence: inside the guard
+// above it fell out of the catalog.
+function CustomHint(): JSX.Element {
+  return (
+    <Hint>
+      This repeat rule has options the Repeat field cannot show. Edit its JSON,
+      or pick a repeat above to replace it.
+    </Hint>
   );
 }
 
