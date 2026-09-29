@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { passkeyRpId } from './recovery';
+import { passkeyRpId, secretAccountConflict } from './recovery';
 
 /**
  * The RP ID a recovery passkey is created and asserted under.
@@ -60,5 +60,29 @@ describe('passkeyRpId', () => {
   it('is undefined when there is no window at all', () => {
     vi.stubGlobal('window', undefined);
     expect(passkeyRpId()).toBeUndefined();
+  });
+});
+
+describe('secretAccountConflict', () => {
+  const key = 'A7x4uVX5c0bGmCAX2Lr13sB8pH7gcDYHfJk9R0Wn3lE';
+  const account = {
+    owner_email: 'joep@ontola.io',
+    agent_subject: `did:ad:agent:${key}`,
+  };
+
+  it('is no conflict when the secret opens the account agent', () => {
+    expect(secretAccountConflict(account, `atomic:agent:${key}`)).toBeNull();
+  });
+
+  it('is no conflict when nobody is signed in', () => {
+    expect(secretAccountConflict(null, 'atomic:agent:other')).toBeNull();
+  });
+
+  it('names both agents and the account when they differ', () => {
+    expect(secretAccountConflict(account, 'atomic:agent:other')).toEqual({
+      email: 'joep@ontola.io',
+      accountAgent: `did:ad:agent:${key}`,
+      secretAgent: 'atomic:agent:other',
+    });
   });
 });

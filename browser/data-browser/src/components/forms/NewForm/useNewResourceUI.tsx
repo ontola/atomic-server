@@ -137,7 +137,7 @@ export function NewResourceUIProvider({ children }: PropsWithChildren) {
 
       // Default behaviour. Navigate to a new resource form for the given class.
       if (!options?.skipNavigation) {
-        navigate(newURL(isA, parent, store.createSubject()));
+        navigate(newURL(isA, parent));
       }
     },
     [store, settings, createAndNavigate, navigate],

@@ -117,3 +117,34 @@ it('keeps an old session working with its existing folder, but never creates a r
   ).rejects.toThrow('Sign in again');
   expect(d.store.newResource).toHaveBeenCalledTimes(1);
 });
+
+it('creates the folder after a drive read that failed, instead of refusing for the session', async () => {
+  // The personal home is derived from the agent's key and initialized on the
+  // server on first use. A read inside that window comes back not-found, and
+  // `getResource` would hand that same errored resource back for as long as the
+  // tab is open, so the chat could never be saved again.
+  const d = device();
+  const drive = d.resources.get('did:ad:drive')!;
+  drive.error = new AtomicError(
+    'Resource not found locally',
+    ErrorType.NotFound,
+  );
+  const fetchResourceFromServer = vi.fn(async (subject: string) => {
+    if (subject === 'did:ad:drive') {
+      drive.error = undefined;
+
+      return drive;
+    }
+
+    return d.store.getResource(subject);
+  });
+  const store = { ...d.store, fetchResourceFromServer };
+  const folder = await getOrCreateAiChatsFolder(
+    store as unknown as Store,
+    'did:ad:drive',
+  );
+
+  expect(folder).toBe(await d.agent.aiChatsFolderSubject('did:ad:drive'));
+  expect(fetchResourceFromServer).toHaveBeenCalledTimes(1);
+  expect(drive.get(ai.properties.aiChatsFolder)).toBe(folder);
+});

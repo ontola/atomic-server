@@ -489,7 +489,13 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
-          if (!isDerivedByServer(key) && this._loroMap.get(key) === undefined) {
+          if (
+            !isDerivedByServer(key) &&
+            this._loroMap.get(key) === undefined &&
+            // A key with a last editor was deleted in this doc: the snapshot
+            // removed it, it did not miss it.
+            this._loroMap.getLastEditor(key) === undefined
+          ) {
             this.loroSetProperty(key, value);
           }
         }
@@ -585,11 +591,10 @@ export class Resource<C extends OptionalClass = any> {
         // Keyed on `new` (cleared once the genesis is signed), NOT on a subject
         // scheme — the resource carries its real `did:ad:` from birth.
         if (this.new) return;
-        // `_new:` placeholders (the interactive New-Resource form / any
-        // `store.createSubject()` caller, as opposed to `store.newResource()`
-        // which mints a real DID up front) can only be synced by first
-        // deriving their real subject via `signChanges` — that's what
-        // `_saveInner`'s explicit-save path does. `this.new` is supposed to
+        // `_new:` placeholders (created by older builds, before every caller
+        // moved to `store.newResource()`, which mints the real DID up front)
+        // can only be synced by first deriving their real subject via
+        // `signChanges` — that's what `_saveInner`'s explicit-save path does. `this.new` is supposed to
         // gate that window, but it can be reset by unrelated reconciliation
         // (e.g. `applyToStore` merging in a fetch response) before the
         // resource is actually complete. Without this, a `_new:` subject
@@ -770,7 +775,10 @@ export class Resource<C extends OptionalClass = any> {
 
     if (json && typeof json === 'object') {
       for (const [key, value] of Object.entries(json)) {
-        const normalized = normalizeLoroValue(datatypesJson?.[key], value);
+        const normalized = normalizeLoroValue(
+          datatypesJson?.[key] ?? this.untaggedDatatypeTag(key, value),
+          value,
+        );
         nextCache[key] = origin
           ? localizeInternalSubjects(normalized, origin)
           : normalized;
@@ -789,6 +797,33 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.#cache = nextCache;
+  }
+
+  /**
+   * The tag an untagged JSON-looking string would carry, from its Property's
+   * datatype when that Property is already cached (never fetches). Covers
+   * values set without a known datatype until the drain-time
+   * `writeDatatypeTags` runs, and docs written before the `datatypes` map
+   * existed. Only a string starting with `{` or `[` can need a tag to be read
+   * right, so everything else skips the lookup.
+   */
+  private untaggedDatatypeTag(
+    prop: string,
+    value: unknown,
+  ): string | undefined {
+    if (
+      typeof value !== 'string' ||
+      (!value.startsWith('{') && !value.startsWith('['))
+    ) {
+      return undefined;
+    }
+
+    const datatype = this._store?.resources
+      .get(prop)
+      ?.get(core.properties.datatype)
+      ?.toString();
+
+    return datatype === undefined ? undefined : datatypeTag(datatype, value);
   }
 
   /**
@@ -3327,15 +3362,15 @@ export class Resource<C extends OptionalClass = any> {
             isAtomicIdentifier(this.subject) &&
             !isAgentSubject(this.subject)))
       ) {
-        // Genesis path for resources NOT created via `store.newResource` —
-        // the new-resource form / `NewInstanceButton`, which mint a
-        // transient `_new:` subject via `store.createSubject()` and then
-        // `set()` + `save()` with no explicit genesis step. The real
-        // `did:ad:<sig>`
-        // subject only exists after signing, so sign now: `signChanges`
-        // auto-detects genesis (no lastCommit stamp + DID-eligible), derives
-        // the DID, and renames this resource in place; we enqueue the
-        // signed genesis under the NEW subject. Without this a `_new:`
+        // Genesis path for drafts whose genesis was not signed at creation:
+        // `store.newResource({ deferGenesis: true })` (the new-resource form,
+        // table rows, forks), and legacy `_new:` placeholders from older
+        // builds, which are `set()` + `save()`d with no explicit genesis step.
+        // Sign now: `signChanges` auto-detects genesis (no lastCommit stamp +
+        // DID-eligible). For a legacy `_new:` subject the real `did:ad:<sig>`
+        // only exists after signing, so it derives the DID and renames this
+        // resource in place; we enqueue the signed genesis under the NEW
+        // subject. Without this a `_new:`
         // subject would be marked dirty and the drain would POST a commit
         // with `subject: "_new:…"`, which the server rejects ("Unable to
         // parse string as URL") and retries forever.
@@ -3643,6 +3678,12 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
 
+    // The datatype this set() learned (passed in, or fetched to validate).
+    // Used below to tag the value at write time: an object is stored in Loro
+    // as a JSON string, and without its `json` tag every read before the
+    // drain-time `writeDatatypeTags` returns that string instead (#1794).
+    let tagDatatype: string | undefined = knownDatatype;
+
     if (knownDatatype) {
       validateDatatype(value, knownDatatype);
     } else if (validate) {
@@ -3664,6 +3705,8 @@ export class Resource<C extends OptionalClass = any> {
       }
 
       if (fullProp) {
+        tagDatatype = fullProp.datatype;
+
         try {
           validateDatatype(value, fullProp.datatype);
         } catch (e) {
@@ -3686,9 +3729,9 @@ export class Resource<C extends OptionalClass = any> {
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
 
-    if (knownDatatype) {
+    if (tagDatatype) {
       const tags = this.getLoroDoc()?.getMap('datatypes');
-      const tag = datatypeTag(knownDatatype, value);
+      const tag = datatypeTag(tagDatatype, value);
       if (tag && tags?.get(prop) !== tag) tags?.set(prop, tag);
       else if (!tag && tags?.get(prop) !== undefined) tags?.delete(prop);
     }
@@ -3750,6 +3793,13 @@ export class Resource<C extends OptionalClass = any> {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
       this.resetLoroState();
+
+      // The cache is kept: `getLoroDoc()`'s heal pass restores from it what
+      // these bytes never had (an agent's name restored from Cloud Vault,
+      // while the node only holds the stub it made for that agent), and
+      // skips what they deleted, so a property removed at the source stays
+      // removed.
+
       // Point `getLoroDoc()` at these bytes so it imports the snapshot
       // instead of seeding a *new* LoroList per array from `#cache`.
       // Seeding-then-merging was the OPFS cold-load flash: two concurrent
@@ -3967,6 +4017,44 @@ function localizeInternalSubjects(value: JSONValue, origin: string): JSONValue {
   return value;
 }
 
+/**
+ * A `json`-tagged Loro string. Objects and arrays are stored JSON-stringified,
+ * so a string starting with `{` / `[` is parsed. A string that is itself a
+ * JSON string literal wrapping an object or array (`"{\"a\":1}"`) is what
+ * encoding twice leaves behind (#1794); it is read as the object it encodes,
+ * without rewriting what is stored. Anything else is returned as stored.
+ */
+function parseJsonPropval(value: string): JSONValue {
+  const tryParse = (text: string): JSONValue | undefined => {
+    try {
+      return JSON.parse(text) as JSONValue;
+    } catch {
+      return undefined;
+    }
+  };
+
+  if (value.startsWith('{') || value.startsWith('[')) {
+    return tryParse(value) ?? value;
+  }
+
+  if (value.startsWith('"')) {
+    const inner = tryParse(value);
+
+    if (
+      typeof inner === 'string' &&
+      (inner.startsWith('{') || inner.startsWith('['))
+    ) {
+      const unwrapped = tryParse(inner);
+
+      if (unwrapped !== null && typeof unwrapped === 'object') {
+        return unwrapped;
+      }
+    }
+  }
+
+  return value;
+}
+
 function normalizeLoroValue(
   loroDatatypeTag: string | undefined,
   value: unknown,
@@ -3983,9 +4071,12 @@ function normalizeLoroValue(
   // array/JSON content, so only THOSE strings get JSON.parsed — a plain
   // string/markdown propval (a chat title, a resource description) that
   // merely starts with `{` or `[` is never misread as JSON.
+  if (loroDatatypeTag === 'json' && typeof value === 'string') {
+    return parseJsonPropval(value);
+  }
+
   if (
     (loroDatatypeTag === 'resourceArray' ||
-      loroDatatypeTag === 'json' ||
       loroDatatypeTag === 'localizedText') &&
     typeof value === 'string' &&
     (value.startsWith('[') || value.startsWith('{'))

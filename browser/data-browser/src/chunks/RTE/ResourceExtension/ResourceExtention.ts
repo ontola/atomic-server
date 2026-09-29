@@ -4,7 +4,7 @@ import type { Store } from '@tomic/react';
 import type { SuggestionItem } from '../types';
 import { getIconForClass } from '@helpers/iconMap';
 import { PluginKey } from '@tiptap/pm/state';
-import { createRenderFunction } from '../SlashMenu/CommandsExtension';
+import { dismissableRenderer } from '../SlashMenu/CommandsExtension';
 import { getRecentResources } from '@helpers/recentResources';
 
 const resourceSuggestionPluginKey = new PluginKey('resourceSuggestion');
@@ -109,7 +109,7 @@ export const buildResourceSuggestion = (
     }));
   },
 
-  render: createRenderFunction<SuggestionItem>(container),
+  ...dismissableRenderer<SuggestionItem>(container),
 });
 
 const getIsBlockContext = (editor: Editor, range: Range) => {

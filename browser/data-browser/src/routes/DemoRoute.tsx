@@ -17,8 +17,7 @@ import type { DemoManifest } from '../chunks/Demo/demoWorkspace';
 import { localAgentIsDisposable } from '../helpers/managed/reconcile';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { withDeadline } from '../helpers/withDeadline';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
-import { readDemoDrive } from '../components/DemoExitButton';
+import { demoForDrive } from '../chunks/Templates/demoSession';
 import { paths } from './paths';
 
 // Setup takes seconds on a laptop and several times that on a phone. Past
@@ -72,8 +71,7 @@ async function signedInDrive(
   // Guests and identities without a workspace keep getting the demo.
   if (await localAgentIsDisposable(store, agent.subject)) return undefined;
 
-  const demoDrive = readTemplateDemo()?.drive ?? readDemoDrive();
-  if (currentDrive && currentDrive !== demoDrive) return currentDrive;
+  if (currentDrive && !demoForDrive(currentDrive)) return currentDrive;
 
   return (
     (await withDeadline(

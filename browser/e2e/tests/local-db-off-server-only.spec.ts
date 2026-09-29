@@ -30,9 +30,8 @@ test('drive contents load with Local DB disabled (server-only)', async ({
 
     if (!d) throw new Error('no drive');
 
-    const tmp = await s.createSubject('ldb');
     const f = await s.newResource({
-      subject: tmp,
+      deferGenesis: true,
       parent: d,
       isA: 'https://atomicdata.dev/classes/Folder',
     });
@@ -91,9 +90,8 @@ test('UI-created drive contents load with Local DB disabled', async ({
 
   await page.evaluate(async d => {
     const s = window.store;
-    const tmp = await s.createSubject('ldb2');
     const f = await s.newResource({
-      subject: tmp,
+      deferGenesis: true,
       parent: d,
       isA: 'https://atomicdata.dev/classes/Folder',
     });

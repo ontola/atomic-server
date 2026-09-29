@@ -1,11 +1,9 @@
 import { TeamProfileStep } from './TeamProfileStep';
 import {
-  useResource,
   useResourceSnapshot,
   useString,
   useStore,
   Resource,
-  urls,
   useCurrentAgent,
   server,
   dataBrowser,
@@ -20,7 +18,7 @@ import { ErrorLook } from './ErrorLook';
 import { Button } from './Button';
 import { Column, Row } from './Row';
 import { CodeBlock } from './CodeBlock';
-import ResourceField from './forms/ResourceField';
+import { Checkbox, CheckboxLabel } from './forms/Checkbox';
 
 interface InviteFormProps {
   /** The resource that becomes accessible on opening the invite */
@@ -76,10 +74,7 @@ function InviteFormContent({
   secondaryAction,
 }: InviteFormProps & { skipProfile: boolean }) {
   const store = useStore();
-  const [subject] = useState(() => store.createSubject());
-  const invite = useResource(subject, {
-    newResource: true,
-  });
+  const [write, setWrite] = useState(false);
   const isSaas = !!getManagedPortalUrl();
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [agent] = useCurrentAgent();
@@ -137,11 +132,7 @@ function InviteFormContent({
     setErr(undefined);
 
     try {
-      const write = (await invite.get(server.properties.write)) as boolean;
-      const expiresAt = (await invite.get(
-        urls.properties.invite.expiresAt,
-      )) as number;
-      const finalUrl = await createInviteLink({ write: !!write, expiresAt });
+      const finalUrl = await createInviteLink({ write });
 
       setInviteUrl(finalUrl);
       setSaved(true);
@@ -185,11 +176,10 @@ function InviteFormContent({
       >
         <Column gap='1rem'>
           {notice}
-          <ResourceField
-            label={'Allow edits'}
-            propertyURL={server.properties.write}
-            resource={invite}
-          />
+          <CheckboxLabel>
+            <Checkbox checked={write} onChange={setWrite} />
+            <span>Allow edits</span>
+          </CheckboxLabel>
           {seats &&
             seats.drive ===
               (target.hasClasses(server.classes.drive)

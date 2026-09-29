@@ -123,8 +123,10 @@ function NewResourceSelector() {
     allowEmptyQuery: true,
     limit: 100,
   });
+  const searching = query.trim().length > 0;
   const basic = [...BASIC_CREATIONS, ...DRIVE_CREATIONS].filter(
     item =>
+      (searching || !('searchOnly' in item)) &&
       (enableAI ||
         !('subject' in item) ||
         item.subject !== ai.classes.aiChat) &&
@@ -151,7 +153,6 @@ function NewResourceSelector() {
           store.getResourceLoading(subject).get(core.properties.shortname),
       ),
   );
-  const searching = query.trim().length > 0;
   const showUpload = matchesCreationSearch(query, 'files upload');
   const noMatches =
     !showUpload &&

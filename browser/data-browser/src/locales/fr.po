@@ -285,6 +285,7 @@ msgstr "Choisir un modèle par défaut"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back"
 msgstr "Retour"
 
@@ -1341,9 +1342,8 @@ msgstr "Raccourcis clavier"
 msgid "Plugin Description"
 msgstr "Description du plugin"
 
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
-msgid "<0/> Save"
-msgstr "<0/> Enregistrer"
+#~ msgid "<0/> Save"
+#~ msgstr "<0/> Enregistrer"
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1445,6 +1445,7 @@ msgstr "Description textuelle <0/>"
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -2358,7 +2359,7 @@ msgstr "Retour"
 msgid "Go forward"
 msgstr "Avancer"
 
-#. 0: shortcuts.search
+#. 0: displayShortcut(shortcuts.search)
 #: src/components/NavBar.tsx
 msgid "Search ({0})"
 msgstr "Rechercher ({0})"
@@ -3426,6 +3427,8 @@ msgstr "Curseur"
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr "Entrez une URL Atomique ou recherchez (appuyez sur \"/\")"
 
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
 msgid "Search"
 msgstr "Rechercher"
@@ -3434,7 +3437,6 @@ msgstr "Rechercher"
 #: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
-#: src/helpers/managed/reconcile.ts
 #: src/helpers/managed/reconcile.ts
 msgid "Disabled"
 msgstr ""
@@ -4920,9 +4922,11 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr ""
 
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr ""
@@ -5269,9 +5273,8 @@ msgstr ""
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Signed out of your account here — that secret belongs to a different one."
-msgstr ""
+#~ msgid "Signed out of your account here — that secret belongs to a different one."
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "More profile fields"
@@ -7379,6 +7382,8 @@ msgid "Drive name"
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
 msgid "Back to templates"
 msgstr ""
 
@@ -7419,9 +7424,8 @@ msgstr ""
 msgid "Or, tell Atomic what you need"
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Template preview"
-msgstr ""
+#~ msgid "Template preview"
+#~ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "<0/> Include example content"
@@ -7451,9 +7455,8 @@ msgstr ""
 msgid "Could not open the preview. Please refresh."
 msgstr ""
 
-#: src/components/DemoExitButton.tsx
-msgid "Back to template selection"
-msgstr ""
+#~ msgid "Back to template selection"
+#~ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "/app/new-drive?blank=1"
@@ -7463,17 +7466,14 @@ msgstr ""
 msgid "<0/> Keep demo content and my edits"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Welcome"
-msgstr ""
+#~ msgid "Welcome"
+#~ msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Board"
-msgstr ""
+#~ msgid "Board"
+#~ msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
-msgid "Team chat"
-msgstr ""
+#~ msgid "Team chat"
+#~ msgstr ""
 
 #. 0: ' '
 #: src/chunks/Templates/DriveTemplateSetup.tsx
@@ -8931,7 +8931,7 @@ msgstr ""
 msgid "All day"
 msgstr ""
 
-#. 0: title || subject
+#. 0: name
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr ""
@@ -12281,3 +12281,235 @@ msgstr "Ceci est une nouvelle fonctionnalité. Vous voyez des plugins expérimen
 #: src/routes/IntegrationStore.tsx
 msgid "This is a new feature. Plugins will show up here soon for you to try out."
 msgstr "Ceci est une nouvelle fonctionnalité. Des plugins à essayer apparaîtront bientôt ici."
+
+#: src/chunks/TablePage/Calendar/CalendarView.tsx
+msgid "Some recurring meetings could not be displayed"
+msgstr ""
+
+#. 0: label
+#. 0: label
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Show all events on {0}"
+msgstr ""
+
+#. 0: total; 1: label
+#. 0: total; 1: label
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Show all {0} events on {1}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "more"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/CalendarDayList.tsx
+msgid "Nothing on this day."
+msgstr ""
+
+#. 0: shortDayLabel(day)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Moved to {0}"
+msgstr ""
+
+#. 0: name; 1: longDayLabel(movedTo)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "{0} · Moved to {1} (opens the moved meeting)"
+msgstr ""
+
+#. 0: name; 1: longDayLabel(movedFrom)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "{0} · Moved from {1}"
+msgstr ""
+
+#. 0: shortDayLabel(day)
+#: src/chunks/TablePage/Calendar/CalendarDay.tsx
+msgid "Moved from {0}"
+msgstr ""
+
+#. 0: label
+#. 0: label
+#: src/components/PropVal.tsx
+#: src/components/PropVal.tsx
+msgid "Open {0} in a new tab"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "This page no longer exists"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "It was deleted, for example when you left a demo or a preview."
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "Open your drive"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+#: src/routes/NewDriveRoute.tsx
+#: src/views/ErrorPage.tsx
+msgid "Choose a template"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+msgid "Leave demo"
+msgstr ""
+
+#: src/components/DemoExitButton.tsx
+msgid "Demo workspace"
+msgstr ""
+
+#. 0: resource.title
+#: src/components/DemoExitButton.tsx
+msgid "Preview: {0}"
+msgstr ""
+
+#: src/components/SetupBar.tsx
+msgid "Setup"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the demo"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Back to the preview"
+msgstr ""
+
+#: src/routes/NewDriveRoute.tsx
+msgid "Name your drive"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This server doesn’t host this workspace, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Not hosted here"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column…"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Find a column to filter by"
+msgstr ""
+
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "No column matches"
+msgstr ""
+
+#. 0: query
+#: src/chunks/TablePage/ColumnFilterDropdown.tsx
+msgid "Search the drive for “{0}”"
+msgstr ""
+
+#. 0: conflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signed out of {0}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret"
+msgstr ""
+
+#. 0: secretConflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Stay signed in as {0}"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret is for a different account"
+msgstr ""
+
+#. 0: secretConflict.email; 1: secretConflict.email; 2: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use this secret and sign out"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+#: src/components/Notifications/NotificationList.tsx
+#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/routes/AppSettings.tsx
+msgid "Notifications"
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "This browser can't show system notifications."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "Notifications are blocked for this site. Allow them in your browser or system settings, then come back here."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "You get a notification for new chat messages, comments on things you made, and replies to you. While you're in the app it shows in the corner; otherwise it comes from your system."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "Show system notifications on this device"
+msgstr ""
+
+#. 0: author
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} replied to you"
+msgstr ""
+
+#. 0: author; 1: on
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} commented on {1}"
+msgstr ""
+
+#. 0: author; 1: on
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} in {1}"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Someone"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Unread"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Nothing yet. New messages in your chats, comments on your things and replies to you show up here."
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Mark all as read"
+msgstr ""
+
+#. 0: unread
+#: src/components/SideBar/NotificationsMenuItem.tsx
+msgid "Notifications, {0} unread"
+msgstr ""
+
+#: src/components/SideBar/NotificationsMenuItem.tsx
+msgid "Messages, comments and replies for you"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bringing your workspace…"
+msgstr "Transfert de votre espace de travail…"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bring this workspace into my account"
+msgstr "Ajouter cet espace de travail à mon compte"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Your workspace could not be brought into your account. Try again, or choose one of the options below."
+msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Réessayez ou choisissez l’une des options ci-dessous."
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."

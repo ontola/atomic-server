@@ -11,6 +11,7 @@ import { dataBrowser } from './dataBrowser.js';
 import { server } from './server.js';
 import { ai } from './ai.js';
 import { forks } from './forks.js';
+import { notifications } from './notifications.js';
 import { i18n } from './i18n.js';
 
 export function initOntologies(): void {
@@ -22,6 +23,7 @@ export function initOntologies(): void {
     server,
     ai,
     forks,
+    notifications,
     i18n,
   );
 }

@@ -40,3 +40,26 @@ export function readInteractiveDemo():
     /* Storage is unavailable or a previous version wrote invalid data. */
   }
 }
+
+export type ActiveDemo =
+  | { kind: 'template'; session: TemplateDemo }
+  | { kind: 'interactive'; drive: string; welcomeDoc: string };
+
+/**
+ * The demo `drive` belongs to, if any. "In a demo" means exactly this: the
+ * current drive is one of the two demo drives. Each record is matched on its
+ * own, so a stale record of one kind (a template preview left behind by a
+ * closed tab) can never hide the bar of the other.
+ */
+export function demoForDrive(
+  drive: string | undefined,
+): ActiveDemo | undefined {
+  if (!drive) return undefined;
+  const template = readTemplateDemo();
+  if (template?.drive === drive) return { kind: 'template', session: template };
+  const interactive = readInteractiveDemo();
+  if (interactive?.drive === drive)
+    return { kind: 'interactive', ...interactive };
+
+  return undefined;
+}

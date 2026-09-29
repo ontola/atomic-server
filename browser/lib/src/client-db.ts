@@ -75,6 +75,20 @@ function isStorageBlockedDbError(error: unknown): boolean {
  * untouched, because those we DO want to see in full.
  */
 function asInitError(e: unknown): Error {
+  const message = e instanceof Error ? e.message : String(e);
+
+  // Firefox's word for "another sync access handle has this file open":
+  // another tab of this site, or its worker, still holds the database. Left
+  // raw it reached people as "OPFS unavailable: … JsValue(NoModificationAllowedError …)".
+  if (message.includes('NoModificationAllowedError')) {
+    return new Error(
+      'Local caching and offline support are off in this tab: another tab ' +
+        'of this site is using the local database. Close the other tabs and ' +
+        'reload this one to turn them back on. The app still works ' +
+        'meanwhile, reading directly from the server.',
+    );
+  }
+
   if (isStorageBlockedDbError(e)) {
     return new Error(
       'Local caching and offline support are disabled: this browser is not ' +
@@ -212,6 +226,31 @@ const LEADER_ELECTION_WAIT_MS = 2_000;
 // worker's wasm import + OPFS open, which can take seconds on a cold dev
 // server. Ends early on success or on a definite failure.
 const STEAL_SETTLE_WAIT_MS = 15_000;
+
+// The same wait, for the case where nothing was stolen because we already own
+// the lock and our own leader init is simply still running. Nothing is
+// contended there, so the message this cap produces has to say so: see the
+// `still-stuck` branch below.
+//
+// The election times out on essentially every cold load, because
+// `leadershipGained` resolves only after the worker's wasm import and OPFS
+// open, which is far more than 2s: CI run 4686 measured `clientdb.election` at
+// exactly 2000.3ms and `clientdb.workerInit` at 7948.8ms on the same load.
+//
+// The cap is deliberately the SAME as the steal's, and raising it is a trap
+// worth naming, because it looks like an improvement. Parking makes every
+// subsequent write throw `ClientDb unavailable`, and `Resource.save()` then
+// rejects a commit the server has already acked, so waiting longer does let a
+// write through. But `send()` parks every caller on `initPromise`, and
+// `Store.hydrateFromLocalDb` runs BEFORE the server fetch for most subjects,
+// so the same wait blocks every read for as long as the boot takes. Measured
+// against a worker whose init takes 40s: at 15s a read rejects at 17000ms,
+// which is what lets the store fall through and ask the server; raised to 60s
+// the same read settles at 40005ms, and a caller with its own budget (a class
+// lookup gets 10s per read and three tries) gives up for good instead. Reads
+// want to fail fast, writes want to wait. Splitting those two is the fix; one
+// number cannot serve both.
+const OWN_BOOT_SETTLE_WAIT_MS = 15_000;
 
 // Lock stealing (`navigator.locks.request({ steal: true })`) is attempted on
 // every browser. Modern Firefox (and Zen) honors `steal` — verified manually
@@ -386,7 +425,9 @@ export class ClientDbWorker {
       // A worker exists only after we acquire the lock. Cold WASM startup
       // can exceed the election window; wait for our worker instead of
       // stealing our own lock and reporting a false ghost leader.
-      if (!this.worker) {
+      const stealing = !this.worker;
+
+      if (stealing) {
         // Forcibly take the lock from the ghost leader. The previous
         // callback gets aborted by the browser; we run `becomeLeader` from
         // this new callback.
@@ -396,20 +437,23 @@ export class ClientDbWorker {
         this.requestLeaderLock(baseUrl, true);
       }
 
-      // Wait for the steal callback to run `becomeLeader` TO COMPLETION —
-      // `leadershipGained` only resolves after the worker's wasm import and
-      // OPFS open, which legitimately takes several seconds on a cold dev
-      // server. The old cap reused LEADER_ELECTION_WAIT_MS (2s) here and
-      // produced false "reclaiming did not succeed" errors for steals that
-      // were succeeding, just slowly. The wait ends early on success, on
-      // another tab winning, or on a real init error (e.g. the ghost is a
-      // live throttled tab whose worker still holds the OPFS file handle —
-      // a stolen Web Lock can't take that).
+      // Wait for `becomeLeader` TO COMPLETION, whether it is running from the
+      // steal callback or from the lock we already held — `leadershipGained`
+      // only resolves after the worker's wasm import and OPFS open, which
+      // legitimately takes several seconds on a cold dev server. The old cap
+      // reused LEADER_ELECTION_WAIT_MS (2s) here and produced false
+      // "reclaiming did not succeed" errors for steals that were succeeding,
+      // just slowly. The wait ends early on success, on another tab winning,
+      // or on a real init error (e.g. the ghost is a live throttled tab whose
+      // worker still holds the OPFS file handle — a stolen Web Lock can't
+      // take that).
       const stolen = await Promise.race([
         this.leadershipGained.then(() => 'stolen' as const),
         this.leaderObserved.then(() => 'follower' as const),
         (async () => {
-          const deadline = Date.now() + STEAL_SETTLE_WAIT_MS;
+          const deadline =
+            Date.now() +
+            (stealing ? STEAL_SETTLE_WAIT_MS : OWN_BOOT_SETTLE_WAIT_MS);
 
           while (Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 250));
@@ -434,20 +478,32 @@ export class ClientDbWorker {
       }
 
       if (stolen === 'still-stuck') {
-        // Either the engine ignored `steal` (the request queued behind the
-        // ghost) or the steal callback hasn't run. We stay recoverable: the
-        // queued request fires `becomeLeader` the moment the holding
-        // tab/worker closes, and a late `leader-announce` flips us to
-        // follower.
+        // We stay recoverable either way: `becomeLeader` clears `_initError`
+        // and flips the role back to 'leader' whenever it finishes, and a late
+        // `leader-announce` flips us to follower.
         this.role = 'failed';
-        this._initError = new Error(
-          'ClientDb is running without its local cache: another tab — or a ' +
-            'leftover worker — on this site holds the local database, and ' +
-            'reclaiming the lock did not succeed. The app works normally ' +
-            'meanwhile (reading from the server directly), and recovers on ' +
-            'its own when that tab closes. To recover now, close other tabs ' +
-            'of this site and reload.',
-        );
+        this._initError = stealing
+          ? // Either the engine ignored `steal` (the request queued behind the
+            // ghost) or the steal callback hasn't run.
+            new Error(
+              'ClientDb is running without its local cache: another tab — or ' +
+                'a leftover worker — on this site holds the local database, ' +
+                'and reclaiming the lock did not succeed. The app works ' +
+                'normally meanwhile (reading from the server directly), and ' +
+                'recovers on its own when that tab closes. To recover now, ' +
+                'close other tabs of this site and reload.',
+            )
+          : // Nothing else ever held the lock: we own it, and our own worker
+            // has not finished its wasm import and OPFS open. Saying another
+            // tab holds the database sends the reader after a cause that
+            // cannot apply, which is how run 4686 read — 60 of these messages
+            // and not one `stealing OPFS lock` warning beside them.
+            new Error(
+              'ClientDb is running without its local cache: its local ' +
+                'database has not finished opening. The app works normally ' +
+                'meanwhile (reading from the server directly), and starts ' +
+                'using the cache as soon as the database is open.',
+            );
         console.warn('[ClientDb]', this._initError.message);
 
         return;
@@ -516,9 +572,19 @@ export class ClientDbWorker {
         });
       })
       .catch(e => {
-        // A deliberate abort from `destroy()` (the request was still queued)
-        // is teardown, not a failure — ignore it.
-        if (e instanceof DOMException && e.name === 'AbortError') return;
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          // Another tab stole the lock we were holding as leader. It stole it
+          // to open the database itself, and the lock alone does not let it:
+          // our worker's sync access handle keeps the file locked until the
+          // worker goes away. Keeping it left both tabs broken, the thief
+          // with "NoModificationAllowedError" (Firefox) and us leading a
+          // lock we no longer hold, so hand the file over.
+          if (this.worker && !this.destroyed) this.yieldLeadership(baseUrl);
+
+          // Otherwise a deliberate abort from `destroy()` (the request was
+          // still queued): teardown, not a failure.
+          return;
+        }
 
         // Rejects if the callback throws OR if our hold was aborted by
         // another tab stealing the lock. The latter is fine if we're
@@ -529,6 +595,40 @@ export class ClientDbWorker {
           this._initError = asInitError(e);
         }
       });
+  }
+
+  /**
+   * Give the database up after another tab stole the leader lock. Terminating
+   * the worker closes its OPFS handle, which is what the new leader's open is
+   * waiting for (it retries for a few seconds). This tab carries on as a
+   * follower and queues for the lock again, so it takes over when the new
+   * leader closes, or at once if the new leader's open fails after all.
+   */
+  private yieldLeadership(baseUrl: string | undefined): void {
+    console.warn(
+      '[ClientDb] another tab took over the local database; this tab now uses it through that tab',
+    );
+    this.worker?.terminate();
+    this.worker = null;
+    this.releaseLeaderHold = null;
+    this.role = 'follower';
+    // Unknown until the new leader announces itself; that announcement then
+    // replays the calls waiting on a leader.
+    this.observedLeader = undefined;
+
+    // Calls our own worker was answering died with it. Only the caller knows
+    // whether repeating one is safe.
+    for (const [id, pending] of this.pending) {
+      if (pending.onLeaderChanged) continue;
+      this.pending.delete(id);
+      pending.reject(
+        new RequestCancelledError(
+          'ClientDb leader changed; please retry the operation.',
+        ),
+      );
+    }
+
+    this.requestLeaderLock(baseUrl, false);
   }
 
   /**

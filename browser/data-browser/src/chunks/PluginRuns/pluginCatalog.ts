@@ -68,8 +68,8 @@ const cache = new Map<string, Promise<CatalogEntry[]>>();
 // The settled value of each `cache` entry, so a remounted hook starts from it
 // synchronously. With only the promise, the first render after a remount has
 // no entries, so whatever the catalog drives (the "Show experimental plugins"
-// toggle) drops out and comes back a tick later. Remounts are routine: the whole app remounts once per page load when
-// its locale arrives (LocaleContext.tsx).
+// toggle) drops out and comes back a tick later. The whole app still
+// remounts when the person switches locale (LocaleContext.tsx).
 const resolved = new Map<string, CatalogEntry[]>();
 
 function fetchIntegrationCatalog(catalogUrl: string): Promise<CatalogEntry[]> {

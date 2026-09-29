@@ -630,10 +630,21 @@ test.describe('data-browser', async () => {
     page,
     browser,
   }) => {
-    // This is independent of creating/switching our own drives above. Keeping
-    // both journeys in one case spent the timeout on two identity bootstraps.
-    // Opening a drive that is neither personal nor saved lands it in
-    // Recently visited, which makes the section appear.
+    // Two identity bootstraps: the fixture's own for `page`, and `devDrive`'s
+    // for `otherPage`. That is what the invite and chatroom tests above are
+    // slow for, and splitting this case out of the drive journey was not enough
+    // on its own. Measured here, four workers on a four-core box: the whole
+    // body is 17.5 to 18.6s, of which `devDrive` alone is 11.5s, against 7.4s
+    // when the box is idle. Run 4714 on CI spent the 60s default before the
+    // `/app/agent` render at the end, and the wall then named that page's
+    // heading assertion, which had 10s of its own and never got to use it, plus
+    // a `Protocol error ... session closed` as the page was torn down. Same
+    // trap as run 4686's two calendar reds.
+    test.slow();
+
+    // This is independent of creating/switching our own drives above. Opening a
+    // drive that is neither personal nor saved lands it in Recently visited,
+    // which makes the section appear.
     const otherContext = await browser.newContext();
     const otherPage = await otherContext.newPage();
     await devDrive(otherPage);

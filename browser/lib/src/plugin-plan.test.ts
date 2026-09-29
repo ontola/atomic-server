@@ -444,7 +444,7 @@ describe('temporary references from the real Store', () => {
       classType?: string,
     ) => {
       const host = makeHost();
-      host.createSubject = () => '_new:planned';
+      host.createSubject = () => 'planned:1';
       host.getProperty = async subject => ({
         ...property(subject, datatype),
         classType,
@@ -476,11 +476,11 @@ describe('temporary references from the real Store', () => {
     expect((await run(['local:created'], Datatype.RESOURCEARRAY)).blocked).toBe(
       false,
     );
-    expect((await run('_new:not-in-this-plan')).blocked).toBe(true);
+    expect((await run('planned:not-in-this-plan')).blocked).toBe(true);
     expect(
       (
         await run(
-          ['local:created', '_new:not-in-this-plan'],
+          ['local:created', 'planned:not-in-this-plan'],
           Datatype.RESOURCEARRAY,
         )
       ).blocked,

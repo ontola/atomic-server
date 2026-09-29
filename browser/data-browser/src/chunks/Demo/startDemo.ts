@@ -136,7 +136,8 @@ export async function cleanupDemoDrive(
     // table. The identity outlives the demo: removing it would tombstone the
     // agent for the rest of the session, and a later save on it (keeping a
     // template links the guest's home on it) would have nothing to save to.
-    // The next demo run rewrites the row in place.
+    // Removing it left every later write ("Create drive" included) failing
+    // with "Resource has no store". The next demo run rewrites the row in place.
     const agent = store.getAgent()?.subject;
     if (agent) doomed.delete(agent);
 

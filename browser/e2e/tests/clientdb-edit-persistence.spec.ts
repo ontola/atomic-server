@@ -14,8 +14,11 @@ test('edit persists to local ClientDb across the drain', async ({ page }) => {
     const NAME = 'https://atomicdata.dev/properties/name';
     const FOLDER = 'https://atomicdata.dev/classes/Folder';
 
-    const tmp = await s.createSubject('persist-test');
-    const r = await s.newResource({ subject: tmp, parent: drive, isA: FOLDER });
+    const r = await s.newResource({
+      deferGenesis: true,
+      parent: drive,
+      isA: FOLDER,
+    });
     await r.set(NAME, 'PersistProbe-A');
     await r.save();
     const realSubject = r.subject;

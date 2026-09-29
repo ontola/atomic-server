@@ -2,6 +2,7 @@ import { useResource, useStore, useValue, type Property } from '@tomic/react';
 import { useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import type { TableColumn } from './useTableColumns';
+import { useIsUnsavedDraft } from './draftRow';
 import {
   ROW_ACTION_GENERATORS,
   applyRowAction,
@@ -86,6 +87,8 @@ function RowActionCell({
   // internally — so a render-time `get` left the button stuck on its first value
   // while the cell beside it showed the new one.
   const [current] = useValue(row, spec.property);
+  // Subscribing for the same reason: `row.new` is a mutable field.
+  const isDraft = useIsUnsavedDraft(row);
 
   const active = ROW_ACTION_GENERATORS[spec.kind]?.isActive?.(current) ?? false;
 
@@ -93,11 +96,9 @@ function RowActionCell({
     return null;
   }
 
-  // The trailing row of the grid is a purely local draft (a `_new:` placeholder)
-  // that has never been committed, so there is nothing to patch yet. Checked on
-  // the subject rather than on `row.new`: reading a mutable field off the
-  // resource proxy during render has the same problem as above.
-  if (subject.startsWith('_new:')) {
+  // The trailing row of the grid is a purely local draft that has never been
+  // committed, so there is nothing to patch yet.
+  if (isDraft) {
     return null;
   }
 

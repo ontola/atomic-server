@@ -28,6 +28,7 @@ import { getManagedAccount, onManagedLogout } from './session';
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
+import { reopenRestoredDrive } from '../driveData';
 
 /**
  * Cloud Vault without a button.
@@ -81,6 +82,11 @@ export type VaultAutoBackupDeps = {
   restoreDrive: typeof restoreDrive;
   /** Whether the user switched backup off for this drive on purpose. */
   optedOut: (driveSubject: string) => boolean;
+  /**
+   * Replace the store's copy of a drive the restore just wrote locally (see
+   * `reopenRestoredDrive`). Optional so tests without a database can skip it.
+   */
+  reopenDrive?: (store: Store, driveSubject: string) => Promise<void>;
 };
 
 const OPT_OUT_KEY = 'atomic.vault.optOut';
@@ -151,6 +157,7 @@ const defaultDeps: VaultAutoBackupDeps = {
   recoverDriveKey,
   restoreDrive,
   optedOut: isVaultOptedOut,
+  reopenDrive: reopenRestoredDrive,
 };
 
 /**
@@ -510,6 +517,23 @@ export async function restoreFromVault(
     // A transport failure alone says nothing about where the drive is hosted.
     if (absentFromNode && outcome.resourcesRestored > 0) {
       store.registerLocalOnlyDrive(driveSubject);
+    }
+
+    // The import wrote the drive into the local database only. The store
+    // still holds the lookup that found nothing before it: a "not found"
+    // from the node, or "not available locally". Left there, the sign-in
+    // check that follows reads that stale answer, decides the restore
+    // brought nothing and creates an empty "My drive" over it, and the
+    // sidebar shows the drive's bare subject instead of its name.
+    if (outcome.resourcesRestored > 0 && deps.reopenDrive) {
+      try {
+        await deps.reopenDrive(store, driveSubject);
+      } catch (error) {
+        console.warn(
+          '[cloud-vault] reopening the restored drive failed',
+          error,
+        );
+      }
     }
 
     // The device now holds the drive and the key; later edits here should go

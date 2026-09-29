@@ -23,6 +23,60 @@ import {
   type IntegrationVisibilityValues,
 } from '@helpers/integrationVisibility';
 
+/** A failed read backs off to at most this while recovery is still likely. */
+const RETRY_CEILING_MS = 5_000;
+/**
+ * And to this once it is not, so a drive that cannot be read at all does not
+ * leave an open settings page polling the server every five seconds.
+ */
+const SLOW_CEILING_MS = 60_000;
+/** After this many failed passes, recovery is no longer the likely case. */
+const SLOW_AFTER_PASSES = 10;
+
+/**
+ * One pass at the private drive's visibility schema.
+ *
+ * Kept out of the hook, and exported, so the retry above is testable without
+ * rendering the settings page.
+ *
+ * `fromServer` is what makes asking again worth anything. A read that timed out
+ * leaves an errored resource in the store's cache, and `getResource` hands that
+ * same error back for as long as the tab is open, so a retry that asked the
+ * cache would get the same answer forever. Going back to the server also heals
+ * the drive resource that this panel's `ready` gate reads directly.
+ */
+export async function resolveVisibilitySchema(
+  store: Store,
+  privateDrive: string,
+  fromServer: boolean,
+): Promise<
+  | { ok: true; properties: Record<string, string> }
+  | { ok: false; error: string }
+> {
+  try {
+    const drive = fromServer
+      ? await store.fetchResourceFromServer(privateDrive)
+      : await store.getResource(privateDrive);
+
+    // An errored drive resource is not an answer. `findSchema` would read no
+    // `default-ontology` off it and report an empty schema, which is exactly
+    // what a drive that genuinely has none looks like, and the `ready` gate
+    // below reads this same resource: a pass that accepted that would leave the
+    // panel unready with nothing asking again.
+    if (drive.error) return { ok: false, error: String(drive.error) };
+
+    const schema = await findSchema(
+      store,
+      privateDrive,
+      integrationVisibilitySchema(),
+    );
+
+    return { ok: true, properties: schema.properties ?? {} };
+  } catch (reason) {
+    return { ok: false, error: String(reason) };
+  }
+}
+
 /**
  * These preferences only decide what discovery shows, so the toggle is applied
  * locally right away and written to the private drive in the background. That
@@ -79,26 +133,60 @@ export function useIntegrationVisibility({
     setError(undefined);
   }, [actor]);
 
+  // Resolving the schema is what makes this panel ready, so a read that failed
+  // has to be asked again. It used to be a single attempt: one timed-out read of
+  // the private drive rejected `findSchema`, the panel stayed `data-ready=false`
+  // with an error beside its checkboxes, and nothing asked again, so the
+  // preferences could not be changed until the page was reloaded. Measured on a
+  // loaded box: "Async Request for subject atomic:… timed out after 10000ms",
+  // then 30 seconds of a panel that never became ready.
   useEffect(() => {
     let active = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
     setResolved(undefined);
     setError(undefined);
     if (!privateDrive || loading || !actor) return;
-    void findSchema(store, privateDrive, integrationVisibilitySchema())
-      .then(schema => {
-        if (active)
-          setResolved({
-            actor,
-            drive: privateDrive,
-            properties: schema.properties ?? {},
-          });
-      })
-      .catch(reason => {
-        if (active) setError(String(reason));
+
+    const resolve = async () => {
+      const result = await resolveVisibilitySchema(
+        store,
+        privateDrive,
+        // The store cannot answer differently than it did a moment ago, so
+        // every pass after the first goes back to the server.
+        failures > 0,
+      );
+
+      if (!active) return;
+
+      if (!result.ok) {
+        failures += 1;
+        setError(result.error);
+        retry = setTimeout(
+          () => void resolve(),
+          Math.min(
+            150 * 2 ** (failures - 1),
+            failures > SLOW_AFTER_PASSES ? SLOW_CEILING_MS : RETRY_CEILING_MS,
+          ),
+        );
+
+        return;
+      }
+
+      failures = 0;
+      setError(undefined);
+      setResolved({
+        actor,
+        drive: privateDrive,
+        properties: result.properties,
       });
+    };
+
+    void resolve();
 
     return () => {
       active = false;
+      clearTimeout(retry);
     };
   }, [
     store,

@@ -8,18 +8,20 @@ import {
   ErrorCode,
   CLIENT_CAPABILITIES,
   decodeCommit,
+  encodeEphemeral,
+  decodeEphemeral,
+  EphemeralKind,
+  Flags,
+} from './ws-v2.js';
+import {
   decodeHelloCaps,
   encodeChallenge,
   encodeCommitOkSlim,
   encodeSyncResend,
-  encodeEphemeral,
-  decodeEphemeral,
-  EphemeralKind,
   encodeCommitOk,
   encodeError,
   encodeAuthOk,
-  Flags,
-} from './ws-v2.js';
+} from './test-ws-v2-server.js';
 import { LoroLoader } from './loro-loader.js';
 import type { Commit } from './commit.js';
 import { serializeDeterministically } from './commit.js';

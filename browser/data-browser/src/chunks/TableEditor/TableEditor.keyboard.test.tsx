@@ -179,6 +179,16 @@ beforeAll(() => {
 
   globalThis.ResizeObserver =
     ResizeObserverStub as unknown as typeof ResizeObserver;
+
+  // The first render in this file costs an order of magnitude more than the
+  // ones after it, measured at rest: 251 ms against 17 to 20 ms. It is where
+  // styled-components builds its stylesheet and jsdom parses it, and where the
+  // grid's own modules run for the first time. That one-time cost used to land
+  // on whichever test happened to run first, which under CI load put that test
+  // over vitest's 5 s default. Paying it here, where the hook's own timeout
+  // covers it, leaves each test measuring only its own work.
+  renderGrid();
+  cleanup();
 });
 
 afterEach(cleanup);

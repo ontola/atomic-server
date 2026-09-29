@@ -1,6 +1,7 @@
 import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
-import { DemoActionsBar, readDemoDrive } from './DemoExitButton';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { DemoActionsBar } from './DemoExitButton';
+import { SETUP_BAR_HEIGHT } from './SetupBar';
+import { demoForDrive } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
 import { type JSX, useMemo } from 'react';
@@ -16,6 +17,7 @@ import { RightPanelProvider } from './RightPanel/RightPanelContext';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
+import { MessageNotifier } from './Notifications/MessageNotifier';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -70,10 +72,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     pathname === `${pathNames.app}${pathNames.invite}` ||
     signedOutHosted;
 
-  const previewBar =
-    !hideGlobalChrome &&
-    (readTemplateDemo()?.drive ?? readDemoDrive()) === drive;
-  const previewHeight = previewBar ? '3.5rem' : '0px';
+  // The setup bar follows one rule: the current drive is a demo drive. Pages
+  // without the app chrome (the template gallery, sign-in, the splash) are
+  // not part of the demo; the gallery renders its own setup bar.
+  const demo = hideGlobalChrome ? undefined : demoForDrive(drive);
+  const previewHeight = demo ? SETUP_BAR_HEIGHT : '0px';
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -99,9 +102,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             <ResourceContextMenuHost />
             {/* Toasts new meeting messages when the meeting panel isn't open. */}
             {!hideGlobalChrome && <MeetingMessageToaster />}
-            {previewBar && (
+            {/* New chat messages, comments and replies: toast or OS notification. */}
+            <MessageNotifier />
+            {demo && (
               <PreviewHeader>
-                <DemoActionsBar />
+                <DemoActionsBar demo={demo} />
               </PreviewHeader>
             )}
             {!hideGlobalChrome && (
@@ -203,7 +208,7 @@ const SideBarWrapper = styled.div<{
   ${p =>
     p.fullViewportContent
       ? CalculatedPageHeight.define(
-          `min(calc(100dvh - var(--keyboard-inset, 0px)), var(--visible-viewport-height, 100dvh))`,
+          `min(calc(100dvh - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.previewHeight}))`,
         )
       : CalculatedPageHeight.define(
           `min(calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight}))`,
@@ -213,7 +218,7 @@ const SideBarWrapper = styled.div<{
   position: fixed;
   ${p => {
     if (p.fullViewportContent) {
-      return 'top: 0;';
+      return `top: ${p.previewHeight};`;
     }
 
     return `top: calc(${p.previewHeight} + ${p.top ? p.theme.heights.breadCrumbBar : '0px'});`;
@@ -238,6 +243,6 @@ const SideBarWrapper = styled.div<{
 const PreviewHeader = styled.div`
   position: fixed;
   inset: 0 0 auto;
-  height: 3.5rem;
+  height: ${SETUP_BAR_HEIGHT};
   z-index: ${p => p.theme.zIndex.sidebar};
 `;

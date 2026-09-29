@@ -56,6 +56,7 @@ pub async fn resolve(db: &Db, drive: &str, entrypoint: &str) -> Result<Installat
         .map_err(|e| e.to_string())?;
     let mut seen = std::collections::HashSet::new();
     let mut signing_as = None;
+    let mut identities = None;
     loop {
         if seen.len() >= 64 {
             return Err("plugin parent hierarchy is too deep".into());
@@ -77,7 +78,18 @@ pub async fn resolve(db: &Db, drive: &str, entrypoint: &str) -> Result<Installat
                     )
                 }
                 AppAgentState::Active(_) => signing_as = Some(key),
-                AppAgentState::Legacy => {}
+                AppAgentState::Legacy => {
+                    if let Some(agent) =
+                        app_identity_without_key(db, drive, &current, &mut identities).await
+                    {
+                        return Err(format!(
+                            "{} writes as its own agent {agent}, but this node holds no key \
+                             for it; connect the app's identity on this node before running \
+                             it here",
+                            current.get_subject()
+                        ));
+                    }
+                }
             }
         }
         if let Some(owner) = current.get_drive() {
@@ -93,6 +105,63 @@ pub async fn resolve(db: &Db, drive: &str, entrypoint: &str) -> Result<Installat
             .await
             .map_err(|_| "the plugin has no owning drive".to_string())?;
     }
+}
+
+/// The app agent this resource was issued, when this node cannot sign as it.
+///
+/// Called only once the key lookup came back `Legacy`. An app's agent
+/// resource syncs with the drive. Its key, posted once to `POST /app-agent`,
+/// stays on the node it was posted to. On any other node the missing key
+/// reads as `Legacy`, and without this check a run falls back to the server's
+/// own agent. The app's writes are then attributed to the server, and the
+/// app's own rights no longer bound them (ontola/atomic-plugins#41).
+///
+/// "Issued an app agent" is read from synced data only: an agent DID in the
+/// resource's `write` list whose agent resource sits in the drive's
+/// app-identities folder, which is where `createApp` puts every app agent.
+/// `identities` caches that folder's subject across one resolve walk.
+async fn app_identity_without_key(
+    db: &Db,
+    drive: &str,
+    resource: &Resource,
+    identities: &mut Option<Option<String>>,
+) -> Option<String> {
+    let writers: Vec<String> = resource
+        .get(urls::WRITE)
+        .ok()
+        .and_then(|value| value.to_subjects(None).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|writer| Subject::from(writer.as_str()).is_agent_did())
+        .collect();
+    if writers.is_empty() {
+        return None;
+    }
+    if identities.is_none() {
+        *identities = Some(app_identities_folder(db, drive).await);
+    }
+    let folder = identities.as_ref()?.as_ref()?;
+    for writer in writers {
+        let Ok(agent) = db.get_resource(&writer.as_str().into()).await else {
+            continue;
+        };
+        let parent = agent.get(urls::PARENT).ok().map(|p| p.to_string());
+        if parent.as_deref() == Some(folder.as_str()) {
+            return Some(writer);
+        }
+    }
+    None
+}
+
+/// The drive's app-identities folder, found through the drive-schema property
+/// `createApp` points at it with.
+async fn app_identities_folder(db: &Db, drive: &str) -> Option<String> {
+    let property = super::scheduler::drive_terms(db, drive)
+        .await?
+        .properties
+        .remove("app-identities")?;
+    let drive_resource = db.get_resource(&drive.into()).await.ok()?;
+    drive_resource.get(&property).ok().map(|v| v.to_string())
 }
 
 #[cfg(test)]

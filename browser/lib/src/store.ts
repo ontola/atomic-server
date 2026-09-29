@@ -22,7 +22,7 @@ import {
   setCookieAuthentication,
   signRequest,
 } from './authentication.js';
-import { Client, type FileOrFileLike } from './client.js';
+import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
 import {
   CommitBuilder,
   commitIdOf,
@@ -44,6 +44,7 @@ import { collections } from './ontologies/collections.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
+import { notifications } from './ontologies/notifications.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import {
@@ -60,6 +61,7 @@ import {
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
+import { LoroLoader } from './loro-loader.js';
 import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
@@ -95,6 +97,7 @@ import {
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
+  isNotEnrolledMessage,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -252,7 +255,6 @@ export interface CommitLogEntry {
   hasLoroUpdate: boolean;
   destroy: boolean;
   summary: string;
-  propertySummaries?: CommitLogPropertySummary[];
   error?: string;
 }
 
@@ -418,6 +420,21 @@ const GET_MANY_CHUNK = 200;
 const LOCAL_HYDRATION_CHUNK = GET_MANY_CHUNK;
 
 /**
+ * Whether a failed direct fetch of a foreign subject is worth retrying
+ * through the own server's `/path` proxy: the origin could not be reached
+ * (network, DNS, CORS) or failed itself (5xx). A 404 or 401 is an answer
+ * about the resource, which the proxy would only repeat.
+ */
+function isProxyWorthyError(error?: Error): boolean {
+  if (!error) return false;
+
+  return (
+    isTransportError(error) ||
+    (error instanceof AtomicError && error.type === ErrorType.Server)
+  );
+}
+
+/**
  * Subjects of the vocabulary every host carries in its own store.
  *
  * They are `atomicdata.dev` URLs that name a shape, not a deployment: a fixed,
@@ -446,6 +463,9 @@ const embeddedVocabulary = new Set<string>([
   core.properties.importBaseline,
   core.properties.importResolution,
   core.properties.importReferenceReview,
+  // lib/defaults/notifications.json, likewise not on the catalog yet.
+  ...Object.values(notifications.classes),
+  ...Object.values(notifications.properties),
 ]);
 
 /** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */
@@ -535,6 +555,12 @@ export class Store {
    *  so subsequent calls (e.g. a forced refresh after a known change)
    *  can re-fetch. Keyed by normalized subject. */
   private _inFlightFetches: Map<string, Promise<Resource>> = new Map();
+
+  /** Foreign origins whose direct fetch failed while the own server's
+   *  `/path` proxy answered. Later fetches from them go straight to the
+   *  proxy for the rest of the session: one failed request per origin, not
+   *  one per term. */
+  private _proxiedOrigins: Set<string> = new Set();
 
   /** Subjects with a gap-recovery fetch in flight. A delta that cannot apply
    *  triggers one full-state fetch; this stops a burst of unappliable deltas
@@ -675,13 +701,16 @@ export class Store {
   private _syncedDrives = new Set<string>();
   private _commitLog: CommitLogEntry[] = [];
   /**
-   * Per-subject ACCUMULATED Loro snapshot bytes (genesis + every commit seen
-   * so far), used by `summarizeCommitProperties` to diff each new commit and
-   * show ONLY the properties it changed. A non-genesis commit's `loroUpdate`
-   * is a delta, so the diff must be against this running full state — diffing
-   * against the bare delta would make untouched properties look removed.
+   * Commit-log entry id → that commit's `loroUpdate`, kept only while the
+   * entry is in the (capped) log, so {@link getCommitPropertySummaries} can
+   * diff it when the Sync page asks.
    */
-  private _commitLogPriorSnapshots = new Map<string, Uint8Array>();
+  private _commitLogUpdates = new Map<string, Uint8Array>();
+  /** Entry id → property summaries already computed for it. */
+  private _commitLogSummaries = new Map<
+    string,
+    CommitLogPropertySummary[] | undefined
+  >();
 
   private eventManager = new EventManager<StoreEvents, StoreEventHandlers>();
 
@@ -765,7 +794,14 @@ export class Store {
         const rawLocalOnly = localStorage.getItem('atomic.localOnlyDrives');
 
         if (rawLocalOnly) {
-          this.localOnlyDrives = new Set(JSON.parse(rawLocalOnly));
+          // Normalized on the way back in: an earlier build stored whatever
+          // spelling the caller passed, and every reader looks with the
+          // canonical form.
+          this.localOnlyDrives = new Set(
+            (JSON.parse(rawLocalOnly) as string[]).map(subject =>
+              this.normalizeSubject(subject),
+            ),
+          );
         }
       } catch {
         // ignore corrupt value
@@ -950,28 +986,129 @@ export class Store {
   private localOnlyDrives = new Set<string>();
 
   /** Mark a drive as local-only. Must be called BEFORE the drive's first
-   *  `save()` — registration is what routes saves away from the outbox. */
+   *  `save()` — registration is what routes saves away from the outbox.
+   *
+   *  Normalized on the way in, because every reader normalizes before it
+   *  looks (`isLocalOnlyDrive`, `isLocalOnlySubject`): a caller's trailing
+   *  slash or `did:ad:` spelling would otherwise store a key nothing finds. */
   public registerLocalOnlyDrive(drive: string): void {
+    const normalized = this.normalizeSubject(drive);
+
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(
         'atomic.localOnlyDrives',
-        JSON.stringify([...new Set([...this.localOnlyDrives, drive])]),
+        JSON.stringify([...new Set([...this.localOnlyDrives, normalized])]),
       );
     }
 
-    this.localOnlyDrives.add(drive);
+    this.localOnlyDrives.add(normalized);
+  }
+
+  /**
+   * Whether the server in use refuses `drive` outright because it does not
+   * host it: a managed node answering "not enrolled" to our pushes, seen
+   * either on the last drive sync or on a parked outbox entry of that drive.
+   */
+  public isDriveRefusedByServer(drive: string | undefined): boolean {
+    if (!drive || this.isLocalOnlyDrive(drive)) return false;
+
+    if (
+      this._lastDriveSyncError?.drive === drive &&
+      isNotEnrolledMessage(this._lastDriveSyncError.message)
+    ) {
+      return true;
+    }
+
+    const normalized = this.normalizeSubject(drive);
+
+    return this.outbox
+      .pending()
+      .some(
+        entry =>
+          isNotEnrolledMessage(entry.lastAttemptError) &&
+          this.driveOf(this.normalizeSubject(entry.subject)) === normalized,
+      );
   }
 
   /** Switch this client to browser-only sync after verifying its local copy.
-   * Does not delete data from the server or alter other devices' configuration. */
+   * Does not delete data from the server or alter other devices' configuration.
+   *
+   * The three preconditions each get their own message. They used to share
+   * "Open this drive with local storage available before disconnecting", which
+   * is only true for one of them: someone signed out, or on a server this
+   * client holds no socket for, was told to do something they had already done
+   * and given nothing to act on.
+   *
+   * A drive the server refuses ({@link isDriveRefusedByServer}) skips the
+   * verification: the server will not serve its copy, so this device's copy
+   * is the only one there is, and waiting on its inventory or on the refused
+   * writes would never end. Those writes are dropped from the outbox, since a
+   * local-only drive is never pushed; turning sync on again resyncs the whole
+   * drive rather than replaying them. */
   public async makeDriveLocal(drive: string): Promise<void> {
-    const db = this.getClientDb();
+    const normalized = this.normalizeSubject(drive);
     const agent = this.getAgent();
-    const serverUrl = this.serverUrl;
-    const ws = this.getDefaultWebSocket();
-    if (!db?.isReady || !agent || !ws)
+
+    if (!agent) throw new Error('Sign in before disconnecting this workspace.');
+
+    // The local database attaches a few hundred ms after boot and again after
+    // every agent change, so a click inside that window found no database at
+    // all. Wait for the attach rather than refusing. `waitForInit` and not
+    // `isReady`, because the latter also demands the bootstrap seed and
+    // nothing below reads a bootstrap resource.
+    await this.waitForClientDb();
+    const db = this.getClientDb();
+
+    if (!db || !(await db.waitForInit()))
+      // Reached from creating a drive and from sharing, not only from the
+      // Sync page's disconnect: name the cause, not a step the reader never
+      // took.
       throw new Error(
-        'Open this drive with local storage available before disconnecting.',
+        db?.initError?.message ??
+          'This needs local storage in this browser, which is not available right now. Reload the page and try again.',
+      );
+
+    if (this.isDriveRefusedByServer(drive)) {
+      this.registerLocalOnlyDrive(drive);
+      this.getDefaultWebSocket()?.unsubscribeFromDrive(drive);
+
+      for (const entry of this.outbox.pending()) {
+        const subject = this.normalizeSubject(entry.subject);
+
+        if (
+          subject === normalized ||
+          this.driveOf(subject) === normalized ||
+          this.isLocalOnlySubject(entry.subject)
+        ) {
+          this.outbox.discard(entry.subject);
+        }
+      }
+
+      if (this._lastDriveSyncError?.drive === drive) {
+        this._lastDriveSyncError = undefined;
+      }
+
+      this.emitSyncStatus();
+
+      return;
+    }
+
+    const serverUrl = this.serverUrl;
+    // Sockets are registered under whatever string opened them, which is not
+    // always `serverUrl`, so fall back to the drive's origin exactly as
+    // `promoteLocalDrive` does. An open one, at that: the inventory below is a
+    // live request, and a socket that merely exists left `driveInventory` to fail
+    // with "WebSocket is not open", which is not something a user can act on.
+    const open = (candidate: WSClient | undefined) =>
+      candidate?.readyState === WebSocket.OPEN ? candidate : undefined;
+    const ws =
+      open(this.getDefaultWebSocket()) ??
+      open(this.getWebSocketForSubject(normalized));
+
+    if (!ws)
+      throw new AtomicError(
+        'Connect to a server before disconnecting this workspace.',
+        ErrorType.Server,
       );
 
     const current = () => {
@@ -990,6 +1127,11 @@ export class Store {
     };
 
     current();
+    // The caller's spelling goes to the socket and to the verification, not the
+    // normalized one: `driveInventory` echoes the subjects it was asked about,
+    // `verifyLocalDriveCopy` matches the drive against them, and the drive-wide
+    // SUB this later drops was sent under `getDrive()`'s own spelling, which is
+    // not normalized either. `registerLocalOnlyDrive` normalizes for itself.
     const inventory = await ws.driveInventory(drive, '');
     await verifyLocalDriveCopy(db, drive, inventory);
     // A second inventory catches changes made while attachment verification ran.
@@ -1003,7 +1145,8 @@ export class Store {
   /** Forget a local-only drive (e.g. after deleting a demo workspace),
    *  keeping the persisted registration set bounded. */
   public unregisterLocalOnlyDrive(drive: string): void {
-    if (!this.localOnlyDrives.delete(drive)) return;
+    // Normalized to match what `registerLocalOnlyDrive` stored.
+    if (!this.localOnlyDrives.delete(this.normalizeSubject(drive))) return;
 
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(
@@ -1014,7 +1157,9 @@ export class Store {
   }
 
   public isLocalOnlyDrive(drive: string): boolean {
-    return this.localOnlyDrives.has(drive);
+    // Normalized, like the write side: the set holds canonical keys, and a
+    // caller may hold the `did:ad:` spelling or a trailing slash.
+    return this.localOnlyDrives.has(this.normalizeSubject(drive));
   }
 
   /**
@@ -1102,11 +1247,20 @@ export class Store {
     );
     const drive = resource?.get('https://atomicdata.dev/properties/drive');
 
-    if (typeof drive === 'string' && this.localOnlyDrives.has(drive)) {
+    // Normalized, because the set holds normalized keys and a propval is
+    // whatever the server wrote: a `did:ad:` spelling of an `atomic:` drive
+    // would otherwise miss here and let a local-only resource try a POST.
+    if (
+      typeof drive === 'string' &&
+      this.localOnlyDrives.has(this.normalizeSubject(drive))
+    ) {
       return true;
     }
 
-    return this.localOnlyDrives.has(this.driveOf(normalized));
+    // `driveOf` returns a raw `parent` propval, so normalize that too.
+    return this.localOnlyDrives.has(
+      this.normalizeSubject(this.driveOf(normalized)),
+    );
   }
 
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
@@ -1127,22 +1281,10 @@ export class Store {
    */
   private hydrateCommitLogFromOutbox(entry: OutboxEntry): void {
     if (entry.signedGenesis) {
-      const commit = entry.signedGenesis;
-      this.pushCommitLog({
-        timestamp: Date.now(),
-        direction: 'outgoing',
-        status: 'pending',
-        subject: commit.subject,
-        signer: commit.signer,
-        previousCommit: commit.previousCommit,
-        commitId: commit.signature
-          ? commitSubject(commit.signature)
-          : undefined,
-        hasLoroUpdate: !!commit.loroUpdate,
-        destroy: !!commit.destroy,
-        summary: this.summarizeCommit(commit),
-        propertySummaries: this.summarizeCommitProperties(commit),
-      });
+      this.pushCommitLog(
+        this.buildCommitLogEntry(entry.signedGenesis, 'outgoing', 'pending'),
+        entry.signedGenesis.loroUpdate,
+      );
     } else {
       this.pushCommitLog({
         timestamp: entry.enqueuedAt,
@@ -1270,7 +1412,8 @@ export class Store {
   /**
    * Outbox sort order: agents → current drive → everything else,
    * with shallow-parent before deep within the last tier. Agents
-   * must exist on the server before their commits validate; the
+   * must exist on the server before their commits validate (except an
+   * agent whose parent is queued too: see `hasQueuedParent`); the
    * drive must exist before its children's `parent` references
    * resolve.
    */
@@ -1295,7 +1438,7 @@ export class Store {
    */
   private outboxTier(subject: string): [number, number] {
     let priority = 2;
-    if (isAgentSubject(subject)) priority = 0;
+    if (isAgentSubject(subject) && !this.hasQueuedParent(subject)) priority = 0;
     else if (subject === this.drive) priority = 1;
 
     let depth = 0;
@@ -1311,6 +1454,24 @@ export class Store {
     }
 
     return [priority, depth];
+  }
+
+  /**
+   * Whether `subject`'s parent is itself still waiting in the outbox. An
+   * agent created under a parent — an app's agent in the drive's App
+   * identities folder — is admitted through that parent's append right; sent
+   * ahead of it, the server finds no parent and answers that only the agent
+   * itself may create its Agent resource. Such an agent drains in the depth
+   * order below, after its parent, instead of first.
+   */
+  private hasQueuedParent(subject: string): boolean {
+    const parent = this.resources.get(subject)?.get(core.properties.parent);
+
+    return (
+      typeof parent === 'string' &&
+      parent !== subject &&
+      this.outbox.hasPending(parent)
+    );
   }
 
   private outboxTierOf = (entry: OutboxEntry): string => {
@@ -1353,8 +1514,9 @@ export class Store {
     if (!entry) return;
 
     // A `_new:` subject has no derived DID yet — it must be sign-genesis'd
-    // (which renames it to `did:ad:<sig>`) before it can be POSTed.
-    // Reaching the drain with one is a bug in the save path: the server
+    // (which renames it to `did:ad:<sig>`) before it can be POSTed. The
+    // current UI no longer creates these, but an outbox written by an older
+    // build may still hold one. Reaching the drain with one means: the server
     // rejects `subject: "_new:…"` with a 500 ("Unable to parse string as
     // URL") and the failed POST reschedules the drain, storming the server
     // forever. Drop the stray dirty bit rather than retry an un-POSTable
@@ -1944,10 +2106,9 @@ export class Store {
    * True when `subject` is a placeholder (`_new:…`) that has since been aliased
    * to a real subject — i.e. the draft it stood for has been persisted.
    *
-   * Lets a view tell apart the two reasons a collection can grow: one of its
-   * own drafts materialising, versus a resource arriving from elsewhere (a
-   * peer, or another tab). Those need opposite handling, and without a way to
-   * distinguish them a view has to guess.
+   * @deprecated The app no longer creates `_new:` placeholders. Create drafts
+   * with `store.newResource({ deferGenesis: true })`: they keep their subject
+   * when saved, so there is nothing to alias. Kept for backward compatibility.
    */
   public isAliased(subject: string): boolean {
     return this.aliases.has(this.normalizeSubject(subject));
@@ -2729,8 +2890,8 @@ export class Store {
     // The user's saved-drives switcher list lives on the personal DRIVE itself
     // (the per-user home index), not on the Agent. Seed it with this drive so
     // it shows up in the switcher. This must be a second commit: the drive's
-    // real `did:ad:` subject is only derived at save (before save it's a
-    // `_new:` placeholder), so we can't reference it in the creation commit.
+    // genesis commit is signed before this value exists, so it can't be part
+    // of the creation commit.
     drive.push(server.properties.drives, [drive.subject], true);
     await drive.save();
 
@@ -3116,13 +3277,13 @@ export class Store {
   /**
    * Creates a placeholder subject for a brand-new resource. When the current
    * agent is DID-based, returns a temporary `_new:{random}` key that gets
-   * replaced with the real `did:ad:...` on first commit (matching
-   * `newResource()`'s shouldUseDid path). Otherwise builds a random HTTP
-   * subject under `parent` or the server root.
+   * replaced with the real `did:ad:...` on first save. Otherwise builds a
+   * random HTTP subject under `parent` or the server root.
    *
-   * Without this branch, callers like `useNewForm` would mint an HTTP
-   * subject such as `http://localhost:9883/01k…` that a DID-agent has no
-   * edit rights on — saves fail with "Agent does not have edit rights".
+   * @deprecated Use `store.newResource({ parent, isA, deferGenesis: true })`
+   * and read `resource.subject`: the resource gets its final subject up front
+   * and is never renamed. Kept for backward compatibility; nothing in the
+   * library or app calls it any more.
    */
   public createSubject(parent?: string): string {
     const agentSubject = this.getAgent()?.subject;
@@ -3957,14 +4118,52 @@ export class Store {
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
 
-      const { resource, createdResources, cancelled } =
-        await this.client.fetchResourceHTTP(fetchSubject, {
-          from: opts.fromProxy ? this.getServerUrl() : undefined,
+      const fetchVia = (fromProxy: boolean) =>
+        this.client.fetchResourceHTTP(fetchSubject, {
+          from: fromProxy ? this.getServerUrl() : undefined,
           method: opts.method,
           body: opts.body,
           signInfo,
           serverURL: this.getServerUrl(),
         });
+
+      // Only plain documents, the shape of a vocabulary term. A query or
+      // collection URL is an endpoint on that server, whose errors mean
+      // something to the caller (an old server refusing `drive`, say).
+      const foreignOrigin =
+        !opts.fromProxy && opts.method !== 'POST' && !fetchSubject.includes('?')
+          ? this.foreignHttpOrigin(fetchSubject)
+          : undefined;
+      const proxyFirst =
+        foreignOrigin !== undefined && this._proxiedOrigins.has(foreignOrigin);
+
+      let result = await fetchVia(!!opts.fromProxy || proxyFirst);
+
+      // A foreign origin that could not answer (down, blocked by CORS, 5xx):
+      // ask the own server, which fetches external vocabulary on first use
+      // and keeps it. When the proxy was tried first (it served this origin
+      // before) and failed, try the origin itself instead. Either way one
+      // extra attempt, never a loop. The result then takes the same path
+      // below as a direct answer, so it is stored and cached the same way.
+      if (
+        foreignOrigin !== undefined &&
+        !result.cancelled &&
+        isProxyWorthyError(result.resource.error)
+      ) {
+        const retried = await fetchVia(!proxyFirst);
+
+        if (!retried.cancelled && !retried.resource.error) {
+          if (proxyFirst) {
+            this._proxiedOrigins.delete(foreignOrigin);
+          } else {
+            this._proxiedOrigins.add(foreignOrigin);
+          }
+
+          result = retried;
+        }
+      }
+
+      const { resource, createdResources, cancelled } = result;
 
       if (cancelled) {
         const cached = this.resources.get(normalizedSubject);
@@ -4022,6 +4221,22 @@ export class Store {
     // so a fetch by the address-bar URL returns the resource stored under
     // its canonical `@id`.
     return this.resources.get(this.resolveSubject(normalizedSubject))!;
+  }
+
+  /** The origin of an http(s) `subject` that the own server does not serve,
+   *  or undefined for the own server, DIDs and anything unparseable. */
+  private foreignHttpOrigin(subject: string): string | undefined {
+    if (!this.getServerUrl() || !/^https?:\/\//.test(subject)) {
+      return undefined;
+    }
+
+    if (isOwnServerUrl(subject, this.getServerUrl())) return undefined;
+
+    try {
+      return new URL(subject).origin;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Returns the WebSocket for the current Server URL */
@@ -5922,7 +6137,10 @@ export class Store {
     this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
   }
 
-  private pushCommitLog(entry: Omit<CommitLogEntry, 'id'>): void {
+  private pushCommitLog(
+    entry: Omit<CommitLogEntry, 'id'>,
+    loroUpdate?: Uint8Array,
+  ): void {
     // Dedup by commitId so a `pending` entry transitions in place to `sent` /
     // `failed` once the push resolves, rather than producing two rows for the
     // same commit. Incoming commits without an outgoing pending counterpart
@@ -5932,29 +6150,25 @@ export class Store {
       : -1;
 
     if (existingIdx >= 0) {
-      // Status transition for an already-logged commit. Two things
-      // matter: (1) reuse the original \`propertySummaries\` —
-      // \`summarizeCommitProperties\` is destructive on the second
-      // call (it stored the snapshot as the prior baseline; the
-      // second pass diffs the snapshot against itself → empty); (2)
-      // move the merged entry to the top so users see fresh status
-      // changes on the right side of the activity log.
+      // Status transition for an already-logged commit: keep its id (and so
+      // its update bytes) and move it to the top so users see fresh status
+      // changes first.
       const prior = this._commitLog[existingIdx];
-      const merged: CommitLogEntry = {
-        ...prior,
-        ...entry,
-        propertySummaries: prior.propertySummaries,
-      };
+      const merged: CommitLogEntry = { ...prior, ...entry };
       this._commitLog = [
         merged,
         ...this._commitLog.slice(0, existingIdx),
         ...this._commitLog.slice(existingIdx + 1),
       ];
     } else {
-      this._commitLog = [{ ...entry, id: ulid() }, ...this._commitLog].slice(
-        0,
-        50,
-      );
+      const id = ulid();
+      if (loroUpdate) this._commitLogUpdates.set(id, loroUpdate);
+      this._commitLog = [{ ...entry, id }, ...this._commitLog];
+
+      for (const dropped of this._commitLog.splice(50)) {
+        this._commitLogUpdates.delete(dropped.id);
+        this._commitLogSummaries.delete(dropped.id);
+      }
     }
 
     this.eventManager.emit(StoreEvents.CommitLogChanged, this.getCommitLog());
@@ -5983,7 +6197,6 @@ export class Store {
       hasLoroUpdate: !!commit.loroUpdate,
       destroy: !!commit.destroy,
       summary: this.summarizeCommit(commit),
-      propertySummaries: this.summarizeCommitProperties(commit),
       ...(extras.error !== undefined ? { error: extras.error } : {}),
     };
   }
@@ -5994,7 +6207,10 @@ export class Store {
    * `commitId` so the entry transitions in place to `sent` or `failed`.
    */
   public logPendingCommit(commit: Commit): void {
-    this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'pending'));
+    this.pushCommitLog(
+      this.buildCommitLogEntry(commit, 'outgoing', 'pending'),
+      commit.loroUpdate,
+    );
   }
 
   /** @internal Settle a commit that will never be POSTed (local-only
@@ -6054,7 +6270,10 @@ export class Store {
   }
 
   public logLocalOnlyCommitSettled(commit: Commit): void {
-    this.pushCommitLog(this.buildCommitLogEntry(commit, 'outgoing', 'sent'));
+    this.pushCommitLog(
+      this.buildCommitLogEntry(commit, 'outgoing', 'sent'),
+      commit.loroUpdate,
+    );
   }
 
   private summarizeCommit(commit: Commit): string {
@@ -6076,26 +6295,49 @@ export class Store {
   }
 
   /**
-   * Diff this commit's loro snapshot against the previous one we logged for
-   * the same subject. Only properties that differ — added, modified, removed
-   * — are emitted. Genesis commits (no prior) treat every property as
-   * `changed`. Returning an empty list is itself useful debug info: it means
-   * the commit's snapshot has identical contents to the previous one, which
-   * usually points to a duplicate-send or a UI that signed without a real
-   * change.
-   *
-   * `pushCommitLog` is responsible for not stomping a real summary on a
-   * status transition; this method always recomputes against the stored
-   * baseline.
+   * The properties a logged commit changed, computed when asked (the Sync
+   * page) rather than on every save. The commit's `loroUpdate` is a delta, so
+   * it is applied on top of the resource's own state at the version the delta
+   * starts from (a fork of the live Loro doc), and the two are compared. A
+   * genesis starts from an empty doc, so every property shows as `changed`.
+   * Returns `undefined` when there is nothing to diff: no update bytes, the
+   * resource is no longer loaded, or its history no longer reaches back that
+   * far.
    */
-  private summarizeCommitProperties(
-    commit: Commit,
+  public getCommitPropertySummaries(
+    entry: CommitLogEntry,
   ): CommitLogPropertySummary[] | undefined {
-    if (!commit.loroUpdate) {
-      return undefined;
+    if (this._commitLogSummaries.has(entry.id)) {
+      return this._commitLogSummaries.get(entry.id);
     }
 
+    const update = this._commitLogUpdates.get(entry.id);
+    if (!update) return undefined;
+    const summaries = this.diffCommitProperties(entry.subject, update);
+    this._commitLogSummaries.set(entry.id, summaries);
+
+    return summaries;
+  }
+
+  private diffCommitProperties(
+    subject: string,
+    update: Uint8Array,
+  ): CommitLogPropertySummary[] | undefined {
     try {
+      const start = LoroLoader.Loro.decodeImportBlobMeta(
+        update,
+        false,
+      ).partialStartVersionVector;
+      let prior: Uint8Array | undefined;
+
+      if (start.length() > 0) {
+        const doc = this.resources.get(subject)?.getLoroDoc();
+        if (!doc) return undefined;
+        prior = doc
+          .forkAt(doc.vvToFrontiers(start))
+          .export({ mode: 'snapshot' });
+      }
+
       const entriesOf = (resource: Resource): Map<string, JSONValue> => {
         const map = new Map<string, JSONValue>();
 
@@ -6113,34 +6355,15 @@ export class Store {
         return map;
       };
 
-      // A non-genesis commit's `loroUpdate` is a DELTA, not full state. To show
-      // what THIS commit changed we must diff against the accumulated state of
-      // all prior commits — `_commitLogPriorSnapshots` holds that running
-      // snapshot. Importing a bare delta into a fresh doc would drop the base
-      // and make every untouched genesis property look "removed".
-      const acc = new Resource(commit.subject);
-      const priorBytes = this._commitLogPriorSnapshots.get(commit.subject);
-
-      if (priorBytes) {
-        try {
-          acc.importLoroUpdate(priorBytes);
-        } catch (e) {
-          console.warn('[summarizeCommitProperties] prior decode failed:', e);
-        }
-      }
-
+      const acc = new Resource(subject);
+      if (prior) acc.importLoroUpdate(prior);
       const priorEntries = entriesOf(acc);
-
-      // Apply this commit on top of the accumulated state.
-      acc.importLoroUpdate(commit.loroUpdate);
+      acc.importLoroUpdate(update);
       const currentEntries = entriesOf(acc);
-
       const summaries: CommitLogPropertySummary[] = [];
 
       for (const [prop, value] of currentEntries) {
-        const before = priorEntries.get(prop);
-
-        if (!commitLogValuesEqual(before, value)) {
+        if (!commitLogValuesEqual(priorEntries.get(prop), value)) {
           summaries.push({ property: prop, value, changeType: 'changed' });
         }
       }
@@ -6155,17 +6378,9 @@ export class Store {
         }
       }
 
-      // Persist the ACCUMULATED snapshot (not this commit's delta) so the next
-      // commit diffs against full state.
-      const snapshot = acc.getLoroDoc?.()?.export({ mode: 'snapshot' });
-
-      if (snapshot) {
-        this._commitLogPriorSnapshots.set(commit.subject, snapshot);
-      }
-
       return summaries.length > 0 ? summaries.slice(0, 20) : undefined;
     } catch (e) {
-      console.warn('[summarizeCommitProperties] failed:', e);
+      console.warn('[getCommitPropertySummaries] failed:', e);
 
       return undefined;
     }
@@ -6277,41 +6492,6 @@ export class Store {
       return subjects;
     }
 
-    // A child's certificate binds its parent permanently. Settle the form's
-    // certificate DID first, but leave its genesis unsigned until Save so the
-    // required attachment property is included in the first server commit.
-    if (
-      parent.startsWith('_new:') &&
-      !!agent.subject &&
-      isAgentSubject(agent.subject)
-    ) {
-      const parentResource = this.resources.get(parent);
-      if (!parentResource) throw new Error('Upload parent is not in the store');
-      const parentParent = parentResource.get(core.properties.parent) as
-        | string
-        | undefined;
-      const driveProperty = 'https://atomicdata.dev/properties/drive';
-      const driveSubject =
-        (parentResource.get(driveProperty) as string | undefined) ??
-        (this.resources.get(parentParent ?? '')?.get(driveProperty) as
-          | string
-          | undefined) ??
-        parentParent ??
-        this.getDrive() ??
-        '';
-      const minted = await this.mintCertDid(parentParent ?? '', driveSubject);
-      await parentResource.set(
-        'https://atomicdata.dev/properties/genesis',
-        minted.certB64,
-        false,
-      );
-      await parentResource.set(driveProperty, driveSubject, false);
-      this.resources.delete(parent);
-      parentResource.setSubject(minted.did);
-      this.addResource(parentResource, { alias: parent });
-      parent = minted.did;
-    }
-
     const createdSubjects: string[] = [];
     const agentForDid = this.getAgent()!.subject;
     const useDid = !!agentForDid && isAgentSubject(agentForDid);
@@ -6412,6 +6592,7 @@ export class Store {
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
           commitId: commitIdOf(created),
         }),
+        commit.loroUpdate,
       );
 
       return created;
@@ -6425,6 +6606,7 @@ export class Store {
         this.buildCommitLogEntry(commit, 'outgoing', 'failed', {
           error: errMsg,
         }),
+        commit.loroUpdate,
       );
       throw e;
     }

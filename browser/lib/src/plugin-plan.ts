@@ -1,3 +1,4 @@
+import { ulid } from 'ulidx';
 import { Datatype, validateDatatype } from './datatypes.js';
 import {
   LOCAL_REF_PREFIX,
@@ -73,7 +74,6 @@ export interface PlanHost {
  * the CLI and the server-side runner also want.
  */
 export interface PlanStore {
-  createSubject(parent?: string): string;
   getProperty(subject: string): Promise<Property>;
   getResource(subject: string): Promise<{
     error?: Error;
@@ -84,7 +84,9 @@ export interface PlanStore {
 /** Adapts a `Store` to a {@link PlanHost}. */
 export function planHostFromStore(store: PlanStore): PlanHost {
   return {
-    createSubject: parent => store.createSubject(parent),
+    // A placeholder, never a resource: `applyPlan` creates each resource with
+    // `store.newResource` and rewrites references onto the subject it got.
+    createSubject: () => `planned:${ulid()}`,
     getProperty: subject => store.getProperty(subject),
     readResource: async subject => {
       const resource = await store.getResource(subject);
@@ -380,7 +382,7 @@ async function checkProperties(
     }
 
     try {
-      // Store-backed plans use temporary _new: subjects until genesis signing.
+      // Planned creates carry placeholder subjects until they are applied.
       // Only references to resources this very plan creates may defer URL
       // validation. applyPlan rewrites them to their final DIDs before saving.
       const isPlannedLink = (v: JSONValue) =>

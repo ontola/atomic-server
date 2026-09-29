@@ -13,6 +13,7 @@ import { AppMenu } from './AppMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
+import { useAndroidBack } from '../../helpers/androidBack';
 import { Column } from '../Row';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
@@ -64,6 +65,10 @@ export function SideBar(): JSX.Element {
     onOpen: () => setSideBarLocked(true),
     onClose: () => setSideBarLocked(false),
   });
+
+  // On a narrow screen the open sidebar is a drawer over the page, and back
+  // closes it before it navigates.
+  useAndroidBack(sideBarLocked && !isWideScreen, () => setSideBarLocked(false));
 
   const { enabledPanels } = usePanelList();
 

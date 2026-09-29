@@ -141,9 +141,17 @@ jobs:
           fi
           ref=main
           source="main"
+          # Pair only with a namesake that still has an open PR. atomic-saas keeps
+          # old claude/project-thread-* branches after their PRs merge, and building
+          # one of those fails on its stale Cargo.lock rather than on this commit.
           if [ "$BRANCH" != "develop" ] && gh api "repos/ontola/atomic-saas/branches/$BRANCH" >/dev/null 2>&1; then
-            ref="$BRANCH"
-            source="paired branch '$BRANCH'"
+            open=$(gh api "repos/ontola/atomic-saas/pulls?state=open&head=ontola:$BRANCH" -q length 2>/dev/null || echo 0)
+            if [ "${open:-0}" -gt 0 ]; then
+              ref="$BRANCH"
+              source="paired branch '$BRANCH'"
+            else
+              source="main (namesake '$BRANCH' has no open PR)"
+            fi
           fi
           sha=$(gh api "repos/ontola/atomic-saas/commits/$ref" -q .sha)
           echo "atomic-saas $sha ($source)"
@@ -180,6 +188,8 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10.15.1
+          # Per-runner, not the shared ~/setup-pnpm; see main-ci.yml.
+          dest: ${{ runner.temp }}/setup-pnpm
 
       - name: Install Node
         uses: actions/setup-node@v4
