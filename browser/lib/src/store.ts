@@ -24,6 +24,11 @@ import {
 } from './authentication.js';
 import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
 import {
+  fetchTableChanges,
+  type TableChangesOptions,
+  type TableChangesPage,
+} from './table-changes.js';
+import {
   CommitBuilder,
   commitIdOf,
   isCommitSubject,
@@ -4303,6 +4308,25 @@ export class Store {
     ]);
 
     return mergeHistoryAttributions(remote, local);
+  }
+
+  /**
+   * Rows of `table` that changed since `opts.since`, including rows that
+   * left it (tombstones), each with its Loro version. Without `since`, lists
+   * every current row. Page through with the returned `cursor` while
+   * `hasMore`. Throws {@link TableChangesCursorExpiredError} when the cursor
+   * is older than the server's retention: resync without `since`.
+   * `GET /changes` on the connected server (atomic-server #1850).
+   */
+  public async getTableChanges(
+    table: string,
+    opts: TableChangesOptions = {},
+  ): Promise<TableChangesPage> {
+    if (!this.serverUrl) {
+      throw new Error('getTableChanges needs a server');
+    }
+
+    return fetchTableChanges(this.serverUrl, this.getAgent(), table, opts);
   }
 
   private async fetchHistoryAttributionFromServer(
