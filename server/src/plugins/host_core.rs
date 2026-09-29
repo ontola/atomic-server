@@ -2143,7 +2143,16 @@ mod tests {
     async fn a_sidecar_request_is_refused_without_what_it_needs() {
         // Nothing listens here: every refusal must come before a connection.
         let configured = [("nextgraph", "http://127.0.0.1:9")];
-        let cases: [(&str, &[(&str, &str)], &str, &str, &str, &str); 6] = [
+        /// Name, configured sidecars, operation id, URL, effect, expected error.
+        type Case<'a> = (
+            &'a str,
+            &'a [(&'a str, &'a str)],
+            &'a str,
+            &'a str,
+            &'a str,
+            &'a str,
+        );
+        let cases: [Case; 6] = [
             (
                 "not_configured",
                 &[],
