@@ -9441,9 +9441,6 @@ msgstr "Finishing the connection…"
 msgid "Sign in to connect an account."
 msgstr "Sign in to connect an account."
 
-#~ msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
-#~ msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
-
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/views/Installation/InstallationConnections.tsx
 msgid "Connect an account"
@@ -9508,10 +9505,6 @@ msgstr "Not now"
 msgid "Let this app edit rows"
 msgstr "Let this app edit rows"
 
-#: src/chunks/AppPage/RowGrantText.tsx
-msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. You can take this back from the tab's menu."
-msgstr "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. You can take this back from the tab's menu."
-
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "This app"
 msgstr "This app"
@@ -9538,3 +9531,16 @@ msgstr "Let {0} edit rows?"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Read-only"
 msgstr "Read-only"
+
+#: src/chunks/TablePage/ExpandedRowDialog.tsx
+msgid "Kept by apps"
+msgstr "Kept by apps"
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "It also keeps its own sync information on the rows. That is not shown as columns, only under \"Kept by apps\" when you open a row. "
+msgstr "It also keeps its own sync information on the rows. That is not shown as columns, only under \"Kept by apps\" when you open a row. "
+
+#. 0: extras
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."
+msgstr "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."

@@ -186,6 +186,7 @@ export function TableViewTabs({
       {pendingApp && (
         <RowGrantDialog
           show
+          app={pendingApp.app.subject}
           appName={pendingApp.app.name}
           bindShow={show => !show && setPendingApp(undefined)}
           onChoose={onAppViewChosen}
@@ -542,6 +543,7 @@ function ViewTab({
       {showRowGrant && subject && viewApp && (
         <RowGrantDialog
           show
+          app={viewApp}
           appName={appName}
           bindShow={setShowRowGrant}
           onChoose={allow => {

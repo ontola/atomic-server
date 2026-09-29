@@ -133,6 +133,13 @@ export function pluginSchema(): SchemaSpec {
         datatype: Datatype.RESOURCEARRAY,
       },
       {
+        shortname: 'row-extras',
+        name: 'Row extras',
+        description:
+          "Properties this app keeps on rows of a table it may edit, besides the table's columns: a sync's provider id, ETag or version, and baseline. A grant to edit a table's rows covers the ones declared when it was given, and only while they are still declared here. Never shown as table columns.",
+        datatype: Datatype.RESOURCEARRAY,
+      },
+      {
         shortname: 'app-data',
         name: 'Data',
         description:
@@ -166,7 +173,7 @@ export function pluginSchema(): SchemaSpec {
         // only be made once the app has a subject — a property that cannot be
         // set at creation time must not be required, or creating one is
         // impossible.
-        recommends: ['entrypoint', 'app-data', 'renders'],
+        recommends: ['entrypoint', 'app-data', 'renders', 'row-extras'],
       },
     ],
   };

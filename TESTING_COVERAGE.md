@@ -2334,3 +2334,18 @@ View, or switching its kind away and back all refuse further writes.
 `rowGrant.test.ts` the in-app request, and `appViewGrant.test.ts` the "+ Add
 view" / "View type" confirmation choices. Gap: no Playwright test clicks the
 confirmation; the money app's host E2E (atomic-plugins#148) is the natural one.
+
+Row extras (#1849): the `app_row_grant` tests in
+`server/src/handlers/app_row_grant_test.rs` (13 in all) add four for extras —
+a granted app writes the extras it declared in `row-extras` and nothing else;
+extras reach neither another app's properties nor another table; an app cannot
+claim another app's or forbidden properties as extras; and a wider declaration
+needs a new grant (the old one kept as `superseded`) while a narrower one
+applies at once. `browser/lib/src/plugin-app.test.ts` checks the App declares
+the extras it was given and none by default; `useRowExtras.test.ts` reads an app's declaration
+(none when absent or without the plugin vocabulary) and collects the extras of
+every app shown as one of a table's views; `rowGrant.test.ts` covers the request
+naming the extras, an answer at once when the grant covers them, a new request
+when the declaration widened, and a pre-extras grant covering none. Gap:
+nothing automated checks the row dialog's read-only "Kept by apps" fold or that
+the table shows no extra columns.

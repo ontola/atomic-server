@@ -323,6 +323,8 @@ export type RowAccess =
       grantedBy: string;
       grantedAt: number;
       via: string;
+      /** The row extras this grant also covers (#1849). */
+      extras: string[];
     }
   | { status: 'none' }
   /** Not shown as a table's view, so there are no rows to be given. */
@@ -344,6 +346,7 @@ export async function rowAccess(
         grantedBy: grant.grantedBy,
         grantedAt: grant.grantedAt,
         via: grant.via,
+        extras: grant.extras ?? [],
       }
     : { status: 'none' };
 }
