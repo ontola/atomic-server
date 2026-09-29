@@ -386,7 +386,13 @@ export function DropdownMenu({
       handleToggle();
       setUseKeys(true);
     },
-    { enabled: !!isMainMenu },
+    // Also while typing: Cmd/Ctrl+M means nothing to a text field, and left to
+    // the browser it minimized the window on a Mac mid-sentence in a document.
+    {
+      enabled: !!isMainMenu,
+      enableOnContentEditable: true,
+      enableOnFormTags: ['INPUT', 'TEXTAREA', 'SELECT'],
+    },
     [isActive],
   );
 
