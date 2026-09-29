@@ -406,6 +406,11 @@ pub struct Db {
     /// to it with the installation's app agent, and lets exactly this origin
     /// through the loopback check. `None` means no proxy is configured.
     integration_proxy: Arc<RwLock<Option<String>>>,
+    /// Operator sidecars plugins reach through declared `atomic-sidecar:`
+    /// operations, by name: the loopback base URL from
+    /// `ATOMIC_PLUGIN_SIDECARS`. Empty unless the server was built with the
+    /// `plugin-routes` feature and runs at `read-write`.
+    plugin_sidecars: Arc<RwLock<std::collections::BTreeMap<String, String>>>,
     /// Endpoints are checked whenever a resource is requested. They calculate (some properties of) the resource and return it.
     endpoints: Vec<Endpoint>,
     /// List of class extenders.
@@ -714,6 +719,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             integration_proxy: Arc::new(RwLock::new(None)),
+            plugin_sidecars: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
 
@@ -759,6 +765,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             integration_proxy: Arc::new(RwLock::new(None)),
+            plugin_sidecars: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
 
@@ -800,6 +807,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             integration_proxy: Arc::new(RwLock::new(None)),
+            plugin_sidecars: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
 
@@ -928,6 +936,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             integration_proxy: Arc::new(RwLock::new(None)),
+            plugin_sidecars: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
 
@@ -1147,6 +1156,7 @@ impl Db {
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             integration_proxy: Arc::new(RwLock::new(None)),
+            plugin_sidecars: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
             endpoints: vec![],
             class_extenders: Arc::new(RwLock::new(vec![])),
 
@@ -2701,6 +2711,22 @@ impl Db {
             .read()
             .ok()
             .and_then(|slot| slot.clone())
+    }
+
+    /// Sets the operator sidecars (name to loopback base URL) plugins may
+    /// reach. Validating them is the server's job; this only holds them.
+    pub fn set_plugin_sidecars(&self, sidecars: std::collections::BTreeMap<String, String>) {
+        if let Ok(mut slot) = self.plugin_sidecars.write() {
+            *slot = sidecars;
+        }
+    }
+
+    /// The base URL of the operator sidecar with this name, if configured.
+    pub fn plugin_sidecar(&self, name: &str) -> Option<String> {
+        self.plugin_sidecars
+            .read()
+            .ok()
+            .and_then(|slot| slot.get(name).cloned())
     }
 
     /// Wraps host-held key material (a plugin route's installation key) the

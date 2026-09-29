@@ -100,6 +100,26 @@ impl AppState {
             let proxy = crate::plugins::egress::ProxyOrigin::parse(raw)?;
             store.set_integration_proxy(Some(proxy.origin().to_string()));
         }
+        // Operator sidecars (`ATOMIC_PLUGIN_SIDECARS`), which declared
+        // `atomic-sidecar:` operations reach. Startup already refused them
+        // below `read-write` or without the feature; this is the one place the
+        // host learns their loopback URLs.
+        #[cfg(feature = "plugin-routes")]
+        if config.plugin_routes.level() == crate::plugin_routes::PluginRoutesLevel::ReadWrite {
+            store.set_plugin_sidecars(
+                config
+                    .plugin_routes
+                    .sidecars()
+                    .iter()
+                    .map(|s| {
+                        (
+                            s.name.clone(),
+                            s.url.as_str().trim_end_matches('/').to_string(),
+                        )
+                    })
+                    .collect(),
+            );
+        }
 
         // `config.toml` holds this server's agent secret and was created
         // world-readable by every version before this one. Narrowed on every

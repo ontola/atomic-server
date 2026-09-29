@@ -34,12 +34,10 @@ pub async fn apply(
     let manifest = Manifest::parse(release.manifest)?.ok_or_else(|| {
         AtomicServerError::bad_request("Remote writes require a versioned release")
     })?;
-    let url = url::Url::parse(&body.intent.url)
-        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
-    if !manifest.allows_effect(
+    if !manifest.allows_request(
         Some(&body.intent.operation),
         &body.intent.method,
-        &url,
+        &body.intent.url,
         "write",
     ) {
         return Err(AtomicServerError::bad_request(

@@ -460,21 +460,34 @@ impl Manifest {
             if operation.id.is_empty() || !names.insert(&operation.id) {
                 return Err("operation IDs must be nonempty and unique".into());
             }
-            match ProxyRelative::parse(&operation.url) {
-                Some(relative) => {
-                    let relative = relative?;
-                    if relative.query.is_some() {
-                        return Err(PROXY_URL_RULE.into());
-                    }
-                    if !self.proxy.contains(&relative.platform) {
-                        return Err(format!(
-                            "operation {} does not declare proxy platform '{}' in `proxy`",
-                            operation.id, relative.platform
-                        ));
-                    }
+            if let Some(relative) = SidecarRelative::parse(&operation.url) {
+                let relative = relative?;
+                if relative.query.is_some() {
+                    return Err(SIDECAR_URL_RULE.into());
                 }
-                None => {
-                    endpoint(&operation.url)?;
+                if !self.declares_sidecar(&relative.name) {
+                    return Err(format!(
+                        "operation {} does not declare sidecar '{}' in `http.sidecars`",
+                        operation.id, relative.name
+                    ));
+                }
+            } else {
+                match ProxyRelative::parse(&operation.url) {
+                    Some(relative) => {
+                        let relative = relative?;
+                        if relative.query.is_some() {
+                            return Err(PROXY_URL_RULE.into());
+                        }
+                        if !self.proxy.contains(&relative.platform) {
+                            return Err(format!(
+                                "operation {} does not declare proxy platform '{}' in `proxy`",
+                                operation.id, relative.platform
+                            ));
+                        }
+                    }
+                    None => {
+                        endpoint(&operation.url)?;
+                    }
                 }
             }
             if !matches!(
@@ -636,6 +649,49 @@ impl Manifest {
                     && declared.platform == request.platform
                     && matches_path(&declared.path, &request.path)
             })
+    }
+
+    /// Whether the `http` block names this operator sidecar.
+    pub fn declares_sidecar(&self, name: &str) -> bool {
+        self.http
+            .as_ref()
+            .is_some_and(|http| http.sidecars.iter().any(|s| s.name == name))
+    }
+
+    /// Whether a declared operation admits this sidecar-relative request: the
+    /// sidecar is declared in `http.sidecars`, and an operation with this id,
+    /// method and effect names this sidecar and path.
+    pub fn allows_sidecar_effect(
+        &self,
+        id: Option<&str>,
+        method: &str,
+        request: &SidecarRelative,
+        effect: &str,
+    ) -> bool {
+        self.declares_sidecar(&request.name)
+            && self.operations.iter().any(|operation| {
+                let Some(Ok(declared)) = SidecarRelative::parse(&operation.url) else {
+                    return false;
+                };
+                id == Some(operation.id.as_str())
+                    && operation.method == method
+                    && operation.effect == effect
+                    && declared.name == request.name
+                    && matches_path(&declared.path, &request.path)
+            })
+    }
+
+    /// [`Self::allows_effect`] for a request URL as a plugin or an approved
+    /// intent writes it: an `atomic-sidecar:` URL is checked as one, anything
+    /// else as an HTTP endpoint.
+    pub fn allows_request(&self, id: Option<&str>, method: &str, url: &str, effect: &str) -> bool {
+        match SidecarRelative::parse(url) {
+            Some(Ok(relative)) => self.allows_sidecar_effect(id, method, &relative, effect),
+            Some(Err(_)) => false,
+            None => {
+                url::Url::parse(url).is_ok_and(|url| self.allows_effect(id, method, &url, effect))
+            }
+        }
     }
 
     pub fn allows_read(&self, id: Option<&str>, method: &str, url: &url::Url) -> bool {
@@ -947,6 +1003,53 @@ impl ProxyRelative {
             path: format!("/{path}"),
             query,
         })
+    }
+}
+
+/// The scheme of a sidecar-relative URL: `atomic-sidecar:/<name>/<path>`.
+pub const SIDECAR_SCHEME: &str = "atomic-sidecar:";
+
+const SIDECAR_URL_RULE: &str =
+    "atomic-sidecar: URLs are `atomic-sidecar:/<name>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query";
+
+/// A request to an operator-run sidecar (`ATOMIC_PLUGIN_SIDECARS`), relative
+/// to it: `atomic-sidecar:/nextgraph/v1/query` is sidecar `nextgraph`, path
+/// `/v1/query`. The host resolves it to the sidecar's configured loopback URL;
+/// the plugin never learns, and cannot choose, where the sidecar listens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SidecarRelative {
+    pub name: String,
+    /// Starts with `/`, and has at least one segment after the name.
+    pub path: String,
+    pub query: Option<String>,
+}
+
+impl SidecarRelative {
+    /// `None` when `raw` is not an `atomic-sidecar:` URL at all, and an error
+    /// when it is one that is malformed. The same path rules as
+    /// [`ProxyRelative`]; the name follows `http.sidecars`' naming rule.
+    pub fn parse(raw: &str) -> Option<Result<Self, String>> {
+        let rest = raw.strip_prefix(SIDECAR_SCHEME)?;
+        Some(
+            ProxyRelative::parse_rest(rest)
+                .map_err(|_| SIDECAR_URL_RULE.to_string())
+                .and_then(|relative| {
+                    let name = relative.platform;
+                    let valid = !name.is_empty()
+                        && name.len() <= 64
+                        && name
+                            .bytes()
+                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-');
+                    if !valid {
+                        return Err(SIDECAR_URL_RULE.to_string());
+                    }
+                    Ok(Self {
+                        name,
+                        path: relative.path,
+                        query: relative.query,
+                    })
+                }),
+        )
     }
 }
 

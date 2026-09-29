@@ -47,3 +47,6 @@ scratchpad
 node_modules/
 # Raw footage and cuts from browser/e2e/scripts/record-*.mjs
 /browser/e2e/recordings/
+
+# Local plugin lane data (node keys, databases); never committed.
+.lane-store/
