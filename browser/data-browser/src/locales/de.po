@@ -566,8 +566,8 @@ msgstr ""
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connected"
@@ -737,7 +737,6 @@ msgid "Ontologies"
 msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
-#: src/components/SideBar/index.tsx
 msgid "App"
 msgstr ""
 
@@ -828,43 +827,42 @@ msgstr ""
 #~ msgid "User Settings"
 #~ msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Login / New User"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
-msgid "See and edit the current Agent / User (u)"
-msgstr ""
+#~ msgid "See and edit the current Agent / User (u)"
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Settings"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
-msgid "Change client settings (t)"
-msgstr ""
+#~ msgid "Change client settings (t)"
+#~ msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "About"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Welcome page, tells about this app"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Install App"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Install app to desktop"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
-msgid "App menu"
-msgstr ""
+#~ msgid "App menu"
+#~ msgstr ""
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Unauthorized"
@@ -1369,28 +1367,28 @@ msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr ""
 
-#: src/components/SideBar/SyncMenuItem.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr ""
 
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr ""
 
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr ""
 
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "Syncing..."
 msgstr ""
 
@@ -4064,12 +4062,12 @@ msgid "Create Invite"
 msgstr ""
 
 #. 0: status.blockedCount
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "{0} changes could not sync (no access)"
 msgstr ""
 
 #. 0: status.pendingDirtyCount
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "{0} changes pending"
 msgstr ""
 
@@ -4525,7 +4523,7 @@ msgstr ""
 #: src/chunks/AI/ReportAIChatDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 #: src/routes/NewDriveRoute.tsx
 msgid "Close"
@@ -6703,42 +6701,42 @@ msgstr ""
 msgid "Local stays on your devices. Vault is encrypted backup. Server hosts a readable copy. Remote is another connected server."
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Send feedback"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Sending feedback"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Thank you. Your feedback has been received."
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback could not be sent. Your text is still here. Try again or email"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr ""
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Email for a reply (optional) <0/>"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback reporting is unavailable on this installation. Email"
 msgstr ""
 
@@ -7734,12 +7732,12 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Discover published integrations"
 msgstr ""
 
@@ -11620,7 +11618,7 @@ msgid "AI settings…"
 msgstr ""
 
 #: src/actions/appActions.ts
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr ""
@@ -11663,8 +11661,8 @@ msgstr ""
 msgid "Local copy unavailable"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Report this error"
 msgstr ""
 
@@ -12427,7 +12425,7 @@ msgstr ""
 
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
-#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
 msgstr ""
@@ -12480,11 +12478,11 @@ msgid "Mark all as read"
 msgstr ""
 
 #. 0: unread
-#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Notifications, {0} unread"
 msgstr ""
 
-#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Messages, comments and replies for you"
 msgstr ""
 
@@ -12504,3 +12502,23 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Profile"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "See and edit the current Agent / User"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Sign in, or create a new Agent / User"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Report a bug or suggest an improvement"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Account and app menu"
+msgstr ""

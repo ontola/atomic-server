@@ -14,6 +14,8 @@
 import { test, expect, type Page } from './fixtures';
 import {
   before,
+  clickAccountMenuItem,
+  openAccountMenu,
   editableTitle,
   getCurrentSubject,
   newResource,
@@ -33,7 +35,6 @@ declare global {
 }
 
 const chatInput = (page: Page) => page.getByLabel('Chat input');
-const appMenu = (page: Page) => page.getByRole('region', { name: 'App menu' });
 
 async function send(page: Page, text: string) {
   await chatInput(page).fill(text);
@@ -130,7 +131,7 @@ test.describe('notifications', () => {
 
     // The owner is in the app, but somewhere else. Navigated in-app rather
     // than by reloading, so the owner's session keeps its live connection.
-    await appMenu(page).getByText('Settings', { exact: true }).click();
+    await page.getByTestId('sidebar-settings-button').click();
     await expect(
       page.getByRole('heading', { name: 'Settings', exact: true }),
     ).toBeVisible();
@@ -173,14 +174,15 @@ test.describe('notifications', () => {
     // Both are in the Inbox: the one opened from the toast is read, the one
     // announced while away is not.
     await page.evaluate(() => (window.__blurred = false));
-    await appMenu(page).getByText('Notifications', { exact: true }).click();
+    await clickAccountMenuItem(page, 'Notifications');
     const list = page.getByRole('list', { name: 'Notifications' });
     await expect(list.getByRole('listitem')).toHaveCount(2, {
       timeout: 30_000,
     });
     await expect(
-      appMenu(page).getByLabel('Notifications, 1 unread'),
+      (await openAccountMenu(page)).getByLabel('Notifications, 1 unread'),
     ).toBeVisible();
+    await page.keyboard.press('Escape');
     const awayItem = list.getByRole('button', { name: new RegExp(away) });
     await expect(awayItem.getByLabel('Unread')).toBeVisible();
     await expect(
@@ -191,7 +193,12 @@ test.describe('notifications', () => {
 
     await page.getByRole('button', { name: 'Mark all as read' }).click();
     await expect(awayItem.getByLabel('Unread')).toHaveCount(0);
-    await expect(page.getByLabel('Notifications, 1 unread')).toHaveCount(0);
+    const menu = await openAccountMenu(page);
+    await expect(
+      menu.getByRole('menuitem', { name: /^Notifications\b/ }),
+    ).toBeVisible();
+    await expect(menu.getByLabel(/^Notifications, \d+ unread$/)).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     await awayItem.click();
     await expect(
