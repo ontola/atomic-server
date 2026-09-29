@@ -21,12 +21,18 @@ import {
   StoreContext,
   useResource,
   useString,
+  type AggregateOutcome,
+  type Aggregation,
   type Collection,
   type Property,
 } from '@tomic/react';
 import { buildTheme } from '../../styling';
 import { QuickFilterField } from './QuickFilterField';
-import { subjectListCollection, useQuickFilter } from './useQuickFilter';
+import {
+  subjectListCollection,
+  useQuickFilter,
+  useQuickFilterAggregates,
+} from './useQuickFilter';
 import { useAllMembers } from './helpers/useAllMembers';
 
 beforeAll(async () => {
@@ -48,6 +54,8 @@ afterEach(cleanup);
 const TITLE = '_new:prop-title';
 const OWNER = '_new:prop-owner';
 const DONE = '_new:prop-done';
+/** Not a searched column: only the totals read it. */
+const AMOUNT = '_new:prop-amount';
 
 const properties: Property[] = [
   { subject: TITLE, datatype: Datatype.STRING, shortname: 'title' },
@@ -90,13 +98,42 @@ async function fixture(): Promise<Fixture> {
   });
 
   const rows = [
-    await make('_new:row-1', { [TITLE]: 'Buy oat milk', [DONE]: true }),
-    await make('_new:row-2', { [TITLE]: 'Buy cow milk', [OWNER]: ada }),
-    await make('_new:row-3', { [TITLE]: 'Fix the roof', [DONE]: true }),
+    await make('_new:row-1', {
+      [TITLE]: 'Buy oat milk',
+      [DONE]: true,
+      [AMOUNT]: 3,
+    }),
+    await make('_new:row-2', {
+      [TITLE]: 'Buy cow milk',
+      [OWNER]: ada,
+      [AMOUNT]: 5,
+    }),
+    await make('_new:row-3', {
+      [TITLE]: 'Fix the roof',
+      [DONE]: true,
+      [AMOUNT]: 10,
+    }),
   ];
 
   return { store, rows, doneRows: [rows[0], rows[2]] };
 }
+
+/** A sum and an average of Amount under the table, as a view configures them. */
+const TOTALS: Aggregation = {
+  aggregates: [
+    { id: 'sum', property: AMOUNT, function: 'sum' },
+    { id: 'avg', property: AMOUNT, function: 'avg' },
+  ],
+};
+
+const storeTotals = (sum: number, count: number): AggregateOutcome[] => [
+  { id: 'sum', property: AMOUNT, function: 'sum', value: sum, count },
+  { id: 'avg', property: AMOUNT, function: 'avg', value: sum / count, count },
+];
+
+/** Amounts are 3, 5 and 10; the Done rows hold 3 and 10. */
+const ALL_TOTALS = storeTotals(18, 3);
+const DONE_TOTALS = storeTotals(13, 2);
 
 function RowTitle({ subject }: { subject: string }) {
   const [title] = useString(useResource(subject), TITLE);
@@ -118,6 +155,12 @@ function Harness({ rows, doneRows }: Omit<Fixture, 'store'>) {
 
   const quickFilter = useQuickFilter(collection, columns, text);
   const shown = useAllMembers(quickFilter.collection);
+  // What the store answers for the view's own query (column filter included):
+  // the totals over every row it matches.
+  const storeOutcomes = onlyDone ? DONE_TOTALS : ALL_TOTALS;
+  const totals = useQuickFilterAggregates(quickFilter, TOTALS, storeOutcomes);
+  const total = (id: string) =>
+    `${totals.find(outcome => outcome.id === id)?.value ?? '—'}`;
 
   return (
     <>
@@ -135,6 +178,11 @@ function Harness({ rows, doneRows }: Omit<Fixture, 'store'>) {
           <RowTitle key={subject} subject={subject} />
         ))}
       </ul>
+      <output aria-label='Rows counted'>
+        {quickFilter.collection.totalMembers}
+      </output>
+      <output aria-label='Sum'>{total('sum')}</output>
+      <output aria-label='Average'>{total('avg')}</output>
     </>
   );
 }
@@ -243,4 +291,54 @@ describe('the quick filter field', () => {
     });
     await expectRows(['Buy oat milk', 'Buy cow milk']);
   });
+
+  it('makes the totals cover the matching rows, and restores them when cleared', async () => {
+    await renderHarness();
+    await expectTotals({ rows: '3', sum: '18', average: '6' });
+
+    await type('milk');
+    await expectRows(['Buy oat milk', 'Buy cow milk']);
+    // 3 + 5, over the two rows the footer counts.
+    await expectTotals({ rows: '2', sum: '8', average: '4' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Clear'));
+    });
+    await expectTotals({ rows: '3', sum: '18', average: '6' });
+  });
+
+  it('totals only what both the column filter and the quick filter let through', async () => {
+    await renderHarness();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Column filter: Done'));
+    });
+    await expectTotals({ rows: '2', sum: '13', average: '6.5' });
+
+    await type('milk');
+    await expectRows(['Buy oat milk']);
+    await expectTotals({ rows: '1', sum: '3', average: '3' });
+
+    await type('nothing shows this');
+    await expectRows([]);
+    // No row to add up is not a sum of zero.
+    await expectTotals({ rows: '0', sum: '—', average: '—' });
+  });
 });
+
+async function expectTotals(expected: {
+  rows: string;
+  sum: string;
+  average: string;
+}) {
+  const read = (name: string) =>
+    screen.getByRole('status', { name }).textContent;
+
+  await waitFor(() =>
+    expect({
+      rows: read('Rows counted'),
+      sum: read('Sum'),
+      average: read('Average'),
+    }).toEqual(expected),
+  );
+}
