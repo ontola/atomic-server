@@ -21,7 +21,9 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
+import { DropdownMenu } from './Dropdown';
 import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
+import { useAppMenuItems } from '../actions/appMenuItems';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
@@ -245,6 +247,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
   const { isOpen: aiOpen, setIsOpen } = useAISidebar();
+  const appMenu = useAppMenuItems();
   const hasAiChanges = !!contextResource && changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
@@ -426,6 +429,16 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
               trigger={ParentContextMenuTrigger}
             />
           </>
+        )}
+        {/* Pages that are not a resource (settings, notifications) still get
+         * a More menu: starting something new, and finding places in the app.
+         * Only the resource's own actions are left out. */}
+        {!contextResource && (
+          <DropdownMenu
+            isMainMenu
+            items={[...appMenu.create, ...appMenu.find]}
+            Trigger={ParentContextMenuTrigger}
+          />
         )}
       </ButtonArea>
     </NavBarWrapper>

@@ -1,4 +1,5 @@
 import { styled } from 'styled-components';
+import { FaChevronDown } from 'react-icons/fa6';
 import { Collapse } from '../Collapse';
 import { useRef, useState, type JSX } from 'react';
 import { useResizable } from '@hooks/useResizable';
@@ -146,6 +147,11 @@ export function SideBarPanel({
           onClickCapture={dragAreaListeners.onClickCapture}
         >
           <PanelTitle>{title}</PanelTitle>
+          <Caret
+            aria-hidden
+            $open={open}
+            $dragging={isDragging || openingDrag}
+          />
         </HeaderButton>
         {actions}
       </HeaderRow>
@@ -174,6 +180,19 @@ const PanelTitle = styled.span`
   white-space: nowrap;
 `;
 
+/** Shows the section can fold: points down while open, right while closed. */
+const Caret = styled(FaChevronDown)<{ $open: boolean; $dragging: boolean }>`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  color: ${p => p.theme.colors.textLight};
+  opacity: ${p => (p.$dragging ? 1 : 0)};
+  transform: rotate(${p => (p.$open ? 0 : -90)}deg);
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+`;
+
 const HeaderButton = styled.button<{ $dragging: boolean }>`
   background: none;
   border: none;
@@ -195,26 +214,14 @@ const HeaderButton = styled.button<{ $dragging: boolean }>`
     cursor: row-resize;
   }
 
-  &[aria-expanded='true']::after {
-    content: '';
-    margin-left: auto;
-    flex-shrink: 0;
-    width: 1.25rem;
-    height: 3px;
-    border-radius: 2px;
-    background: ${p => p.theme.colors.textLight};
-    opacity: ${p => (p.$dragging ? 1 : 0)};
-  }
-
-  &:hover::after,
-  &:focus-visible::after {
+  &:hover ${Caret}, &:focus-visible ${Caret} {
     opacity: 1;
   }
 
   @media (pointer: coarse) {
     min-height: 44px;
 
-    &[aria-expanded='true']::after {
+    ${Caret} {
       opacity: 0.5;
     }
   }

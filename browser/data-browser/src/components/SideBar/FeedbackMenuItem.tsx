@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { OPEN_FEEDBACK_EVENT } from '../../actions/appMenuItems';
 import { FaComment } from 'react-icons/fa6';
 import * as Sentry from '@sentry/react';
 import {
@@ -41,6 +42,16 @@ export function FeedbackMenuItem({
   const [failed, setFailed] = useState(false);
   const [sent, setSent] = useState(false);
   const enabled = Sentry.isEnabled();
+
+  // "Give feedback" in the More menu opens the sidebar's feedback dialog. Only
+  // that one listens: error pages and dialogs have their own instance.
+  useEffect(() => {
+    if (floating || reportError) return;
+    const openFeedback = () => showDialog();
+    window.addEventListener(OPEN_FEEDBACK_EVENT, openFeedback);
+
+    return () => window.removeEventListener(OPEN_FEEDBACK_EVENT, openFeedback);
+  }, [floating, reportError, showDialog]);
 
   async function send() {
     if (!emailRef.current?.reportValidity()) return;

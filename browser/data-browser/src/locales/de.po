@@ -1043,7 +1043,7 @@ msgstr ""
 msgid "Resources"
 msgstr ""
 
-#: src/components/NavBar.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
@@ -1319,6 +1319,8 @@ msgid "Show data view"
 msgstr ""
 
 #: src/actions/appActions.ts
+#: src/actions/appMenuItems.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New resource"
 msgstr ""
@@ -1970,13 +1972,11 @@ msgstr ""
 msgid "Open the edit form."
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Add child"
-msgstr ""
+#~ msgid "Add child"
+#~ msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Create a new resource under this resource."
-msgstr ""
+#~ msgid "Create a new resource under this resource."
+#~ msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Use in code"
@@ -1998,9 +1998,8 @@ msgstr ""
 msgid "Search children"
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Scope search to resource"
-msgstr ""
+#~ msgid "Scope search to resource"
+#~ msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Permissions & Invites"
@@ -12508,7 +12507,7 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
 
-#: src/components/NavBar.tsx
+#: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
 msgstr ""
 
@@ -12540,4 +12539,66 @@ msgstr ""
 
 #: src/components/Vault/AICreditsService.tsx
 msgid "Buy more credits"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Create a new resource in this drive."
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "New AI chat"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Open the assistant."
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Open settings"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Switch drive"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Open user settings"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Give feedback"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Show notifications"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this one."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Search only inside this resource"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+msgid "Search everywhere"
+msgstr ""
+
+#. 0: scopeResource.title
+#: src/components/OverlayContainer.tsx
+msgid "Searching in {0}"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+msgid "Recently opened"
+msgstr ""
+
+#: src/routes/AppSettings.tsx
+msgid "Search settings"
+msgstr ""
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Click or drag to open"
 msgstr ""

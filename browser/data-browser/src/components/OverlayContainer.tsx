@@ -54,8 +54,10 @@ import {
   setOverlay,
   subscribeOverlay,
   pendingSearchOverlayQuery,
+  pendingSearchOverlayScope,
   type OverlayType,
 } from './overlayState';
+import { getRecentResources } from '../helpers/recentResources';
 import { useDocumentText } from '../hooks/useDocumentText';
 import { getSearchResultHint } from '../helpers/searchResultHint';
 
@@ -331,7 +333,14 @@ function SearchOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { drive } = useSettings();
   const { privateDrive } = usePrivateDrive();
-  const { scope } = useQueryScopeHandler();
+  const { scope: urlScope } = useQueryScopeHandler();
+  // "Search children" opens this palette limited to one resource; the chip
+  // under the input shows that and can lift it.
+  const [scopeOverride, setScopeOverride] = useState<string | null>(
+    () => pendingSearchOverlayScope() ?? null,
+  );
+  const scope = scopeOverride ?? urlScope;
+  const scopeResource = useResource(scope || undefined);
   const navigate = useNavigateWithTransition();
   const store = useStore();
   const [currentSubject] = useCurrentSubject();
@@ -394,13 +403,22 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
+  // Nothing typed yet: offer what was opened recently, most recent first,
+  // minus the page already open.
+  const showRecent = !query.trim() && filterIsEmpty && !scope;
+  const listed = showRecent
+    ? getRecentResources(drive)
+        .filter(subject => subject !== currentSubject)
+        .slice(0, 8)
+    : results;
+
   const actionHits = currentSubject
     ? matchActionsForPalette(query, resourceActions, actionCtx)
     : [];
   const showAIChatRow = !!privateDrive && query && results.length === 0;
   const rows: PaletteRow[] = [
     ...actionHits.map(action => ({ kind: 'action' as const, action })),
-    ...results.map(subject => ({ kind: 'result' as const, subject })),
+    ...listed.map(subject => ({ kind: 'result' as const, subject })),
     ...(showAIChatRow ? [{ kind: 'aiChat' as const }] : []),
   ];
   const totalItemCount = rows.length;
@@ -502,11 +520,11 @@ function SearchOverlay(): JSX.Element {
     const actionCount = actionHits.length;
     const resultIndex =
       selectedIndex >= actionCount &&
-      selectedIndex < actionCount + results.length
+      selectedIndex < actionCount + listed.length
         ? selectedIndex - actionCount
         : -1;
-    setSearchResults(results, resultIndex);
-  }, [results, selectedIndex, actionHits.length]);
+    setSearchResults(listed, resultIndex);
+  }, [listed, selectedIndex, actionHits.length]);
 
   return (
     <ErrorBoundary>
@@ -526,6 +544,22 @@ function SearchOverlay(): JSX.Element {
         <ShortcutHint onClick={closeOverlay}>esc</ShortcutHint>
       </OverlayInputWrapper>
 
+      {scope && (
+        <ScopeChip data-testid='search-scope'>
+          <span>Searching in {scopeResource.title}</span>
+          <ScopeClear
+            type='button'
+            title='Search everywhere'
+            aria-label='Search everywhere'
+            onClick={() => {
+              setScopeOverride('');
+              inputRef.current?.focus();
+            }}
+          >
+            ×
+          </ScopeClear>
+        </ScopeChip>
+      )}
       {error ? (
         <ErrorLook style={{ padding: '1rem' }}>{error.message}</ErrorLook>
       ) : (
@@ -572,10 +606,15 @@ function SearchOverlay(): JSX.Element {
                       )}
                     </ActionRow>
                   ))}
-                  {results.length > 0 && actionHits.length > 0 && (
-                    <SectionHeading>Resources</SectionHeading>
+                  {showRecent && listed.length > 0 && (
+                    <SectionHeading>Recently opened</SectionHeading>
                   )}
-                  {results.map((subject, resultIndex) => {
+                  {!showRecent &&
+                    listed.length > 0 &&
+                    actionHits.length > 0 && (
+                      <SectionHeading>Resources</SectionHeading>
+                    )}
+                  {listed.map((subject, resultIndex) => {
                     const index = actionHits.length + resultIndex;
 
                     return (
@@ -596,9 +635,9 @@ function SearchOverlay(): JSX.Element {
                   })}
                   {showAIChatRow && (
                     <AIChatRow
-                      data-index={actionHits.length + results.length}
+                      data-index={actionHits.length + listed.length}
                       $selected={
-                        selectedIndex === actionHits.length + results.length
+                        selectedIndex === actionHits.length + listed.length
                       }
                       onClick={async () => {
                         if (!privateDrive) {
@@ -959,3 +998,29 @@ export function OverlayContainer(): JSX.Element | null {
     </>
   );
 }
+
+const ScopeChip = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  font-size: 0.85rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const ScopeClear = styled.button`
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  border-radius: ${p => p.theme.radius};
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+`;

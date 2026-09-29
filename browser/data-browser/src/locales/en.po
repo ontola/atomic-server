@@ -1043,7 +1043,7 @@ msgstr "Add description"
 msgid "Resources"
 msgstr "Resources"
 
-#: src/components/NavBar.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
@@ -1319,6 +1319,8 @@ msgid "Show data view"
 msgstr "Show data view"
 
 #: src/actions/appActions.ts
+#: src/actions/appMenuItems.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New resource"
 msgstr "New resource"
@@ -1970,13 +1972,11 @@ msgstr "Open the resource"
 msgid "Open the edit form."
 msgstr "Open the edit form."
 
-#: src/actions/resourceActions.tsx
-msgid "Add child"
-msgstr "Add child"
+#~ msgid "Add child"
+#~ msgstr "Add child"
 
-#: src/actions/resourceActions.tsx
-msgid "Create a new resource under this resource."
-msgstr "Create a new resource under this resource."
+#~ msgid "Create a new resource under this resource."
+#~ msgstr "Create a new resource under this resource."
 
 #: src/actions/resourceActions.tsx
 msgid "Use in code"
@@ -1998,9 +1998,8 @@ msgstr "Add the resource as context to the AI sidebar"
 msgid "Search children"
 msgstr "Search children"
 
-#: src/actions/resourceActions.tsx
-msgid "Scope search to resource"
-msgstr "Scope search to resource"
+#~ msgid "Scope search to resource"
+#~ msgstr "Scope search to resource"
 
 #: src/actions/resourceActions.tsx
 msgid "Permissions & Invites"
@@ -12554,7 +12553,7 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 
-#: src/components/NavBar.tsx
+#: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
 msgstr "Add or remove tags"
 
@@ -12587,3 +12586,65 @@ msgstr "Opening checkout…"
 #: src/components/Vault/AICreditsService.tsx
 msgid "Buy more credits"
 msgstr "Buy more credits"
+
+#: src/actions/appMenuItems.tsx
+msgid "Create a new resource in this drive."
+msgstr "Create a new resource in this drive."
+
+#: src/actions/appMenuItems.tsx
+msgid "New AI chat"
+msgstr "New AI chat"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open the assistant."
+msgstr "Open the assistant."
+
+#: src/actions/appMenuItems.tsx
+msgid "Open settings"
+msgstr "Open settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Switch drive"
+msgstr "Switch drive"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open user settings"
+msgstr "Open user settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Give feedback"
+msgstr "Give feedback"
+
+#: src/actions/appMenuItems.tsx
+msgid "Show notifications"
+msgstr "Show notifications"
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this one."
+msgstr "Create a new resource under this one."
+
+#: src/actions/resourceActions.tsx
+msgid "Search only inside this resource"
+msgstr "Search only inside this resource"
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+msgid "Search everywhere"
+msgstr "Search everywhere"
+
+#. 0: scopeResource.title
+#: src/components/OverlayContainer.tsx
+msgid "Searching in {0}"
+msgstr "Searching in {0}"
+
+#: src/components/OverlayContainer.tsx
+msgid "Recently opened"
+msgstr "Recently opened"
+
+#: src/routes/AppSettings.tsx
+msgid "Search settings"
+msgstr "Search settings"
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Click or drag to open"
+msgstr "Click or drag to open"
