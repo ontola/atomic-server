@@ -8927,6 +8927,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
 msgid "All day"
 msgstr ""
 
@@ -12505,7 +12506,7 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
 
-#. 0: error instanceof Error ? error.message \\: String(error)
+#. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
 msgid "Could not save the repeat: {0}"
 msgstr ""
@@ -12754,4 +12755,17 @@ msgstr ""
 
 #: src/chunks/TablePage/Calendar/RepeatField.tsx
 msgid "This repeat rule has options the Repeat field cannot show. Edit its JSON, or pick a repeat above to replace it."
+msgstr ""
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the time: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "Start time"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "End time"
 msgstr ""
