@@ -27,6 +27,7 @@ mod replay_cache;
 mod require_v2;
 mod routes;
 pub mod serve;
+mod trusted_proxies;
 pub mod vector_search;
 // #[cfg(feature = "search")]
 mod iroh_transport;

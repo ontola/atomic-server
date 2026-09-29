@@ -1164,6 +1164,24 @@ async fn run(
         return response.into();
     }
 
+    // Which host and scheme this request was addressed to (#1903): before
+    // anything else reads the URL, and a host this server does not serve is
+    // refused here.
+    let reached = match reached(appstate, req, mount) {
+        Ok(reached) => reached,
+        Err(refused) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                "route-host-refused",
+                "This request names a host this server does not answer for",
+                &format!(
+                    "{refused}. Forwarded headers count only from the proxies in --trusted-proxies (ATOMIC_TRUSTED_PROXIES)."
+                ),
+            )
+            .into()
+        }
+    };
+
     let loaded = match load(store, installation, route_id).await {
         Ok(loaded) => loaded,
         Err(e) => {
@@ -1218,15 +1236,7 @@ async fn run(
     // Solid-OIDC (atomic-plugins#167, section 3): a DPoP-bound access token,
     // checked against the URL this node names the request by.
     if route.auth == Auth::Dpop {
-        let Some(url) = canonical_url(appstate, mount, &slug, &loaded.drive, req) else {
-            return unauthorized(
-                route.auth,
-                &slug,
-                super::http_signatures::Refused(
-                    "this server cannot name this request's URL for a DPoP proof".into(),
-                ),
-            );
-        };
+        let url = format!("{}{}", reached.origin(), req.uri().path());
         let header_of = |name: &str| req.headers().get(name).and_then(|v| v.to_str().ok());
         match executor
             .dpop
@@ -1440,12 +1450,8 @@ async fn run(
     // the registry routed on, never from `X-Forwarded-Host`.
     if route.auth == Auth::Atomic && !anonymous {
         let signed_url = format!(
-            "{}://{}{}",
-            req.connection_info().scheme(),
-            req.headers()
-                .get(header::HOST)
-                .and_then(|h| h.to_str().ok())
-                .unwrap_or_default(),
+            "{}{}",
+            reached.origin(),
             req.uri()
                 .path_and_query()
                 .map(|p| p.as_str())
@@ -1560,10 +1566,7 @@ async fn run(
     // Where this request reached the installation: `url` as the client
     // addressed it, `base` the installation's root on that host. A plugin
     // needs them for ids it publishes (an actor, a `keyId`).
-    let origin = {
-        let info = req.connection_info();
-        format!("{}://{}", info.scheme(), info.host())
-    };
+    let origin = reached.origin();
     let base = match mount {
         Mount::DrivePrefix => format!(
             "{origin}/{}/{slug}",
@@ -1584,7 +1587,7 @@ async fn run(
     // the authority of `url`/`base`, which Actix takes from `Forwarded` or
     // `X-Forwarded-Host` when a client sends them. For plugins that answer
     // per host, such as an AT Protocol handle.
-    let host = host_name(crate::handlers::plugin_routes::request_host(req.head()));
+    let host = reached.host.clone();
     let request = json!({
         "method": req.method().as_str(),
         "path": path,
@@ -2111,36 +2114,116 @@ async fn run(
     }
 }
 
-/// The URL a request reached, as this node names it: the scheme and
-/// authority from the operator's configuration (the routes origin, the API
-/// origin, or the drive's own URL), never from `Host` or `Forwarded`
-/// headers, and the request's path. A DPoP proof must be for this URL.
-fn canonical_url(
+/// Where a request reached this server, as plugin routes name it (#1903).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Reached {
+    /// `http` or `https`.
+    pub scheme: String,
+    /// The host and port as addressed, lowercase: `pod.example:8443`.
+    pub authority: String,
+    /// The host name alone: lowercase, no port, no trailing dot.
+    pub host: String,
+}
+
+impl Reached {
+    pub fn origin(&self) -> String {
+        format!("{}://{}", self.scheme, self.authority)
+    }
+}
+
+/// The host and scheme a request was addressed to, for `request.url`,
+/// `request.base`, `request.host` and the URL an `auth: atomic` or `dpop`
+/// signature is bound to.
+///
+/// `X-Forwarded-Host` and `X-Forwarded-Proto` count only when the direct
+/// peer is one of `--trusted-proxies`; from any other peer they are
+/// ignored and the `Host` the registry dispatched on counts, with the scheme
+/// this server is configured with (the routes origin's for an
+/// installation's own origin, the API origin's otherwise). `Forwarded` is
+/// never read. Either way the host must be one this server serves (the
+/// routes origin and its installations, the API origin, a drive's host), or
+/// the request is refused.
+pub(crate) fn reached(
     appstate: &crate::appstate::AppState,
-    mount: Mount,
-    slug: &str,
-    drive: &str,
     req: &HttpRequest,
-) -> Option<String> {
-    let origin = match mount {
-        Mount::InstallationOrigin => {
-            let routes = appstate.route_registry.config().routes_origin()?;
-            let host = routes.host_str()?;
-            match routes.port() {
-                Some(port) => format!("{}://{slug}.{host}:{port}", routes.scheme()),
-                None => format!("{}://{slug}.{host}", routes.scheme()),
-            }
-        }
-        Mount::DrivePrefix => appstate.config.get_origin(),
-        Mount::DriveHost => {
-            let drive = url::Url::parse(drive).ok()?;
-            if !matches!(drive.scheme(), "http" | "https") {
-                return None;
-            }
-            drive.origin().ascii_serialization()
+    mount: Mount,
+) -> Result<Reached, String> {
+    let trusted = req
+        .peer_addr()
+        .is_some_and(|peer| appstate.config.trusted_proxies.trusts(peer.ip()));
+    // The first (client-most) value of a forwarded header, from a trusted
+    // peer only.
+    let forwarded = |name: &str| {
+        trusted
+            .then(|| req.headers().get(name))
+            .flatten()
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next())
+            .map(|v| v.trim().to_ascii_lowercase())
+            .filter(|v| !v.is_empty())
+    };
+    let forwarded_host = forwarded("x-forwarded-host");
+    let dispatched = crate::handlers::plugin_routes::request_host(req.head())
+        .trim()
+        .to_ascii_lowercase();
+    let authority = match &forwarded_host {
+        Some(host) => host.clone(),
+        // No `Host` at all (HTTP/1.0): the server's own name, which the
+        // client did not choose.
+        None if dispatched.is_empty() => url::Url::parse(&appstate.config.get_origin())
+            .ok()
+            .and_then(|u| {
+                let host = u.host_str()?.to_ascii_lowercase();
+                Some(match u.port() {
+                    Some(port) => format!("{host}:{port}"),
+                    None => host,
+                })
+            })
+            .unwrap_or_default(),
+        None => dispatched,
+    };
+    let named = if forwarded_host.is_some() {
+        "X-Forwarded-Host"
+    } else {
+        "Host"
+    };
+    if authority.is_empty()
+        || authority.len() > 255
+        || !authority
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b".-_:[]".contains(&c))
+    {
+        return Err(format!("the {named} header is not a host name"));
+    }
+    let host = host_name(&authority);
+    let registry = &appstate.route_registry;
+    let served = registry.routes_host_label(&host).is_some()
+        || registry.config().is_api_host(&host)
+        || crate::handlers::plugin_routes::drive_of_host(appstate, &host).is_some();
+    if !served {
+        return Err(format!(
+            "the {named} header names `{host}`, which this server does not serve"
+        ));
+    }
+    let scheme = match forwarded("x-forwarded-proto") {
+        Some(proto) if proto == "http" || proto == "https" => proto,
+        Some(_) => return Err("X-Forwarded-Proto must be `http` or `https`".into()),
+        None => {
+            let configured = match mount {
+                Mount::InstallationOrigin => registry.config().routes_origin().cloned(),
+                _ => url::Url::parse(&appstate.config.get_origin()).ok(),
+            };
+            configured
+                .map(|u| u.scheme().to_string())
+                .filter(|s| s == "http" || s == "https")
+                .unwrap_or_else(|| "http".into())
         }
     };
-    Some(format!("{origin}{}", req.uri().path()))
+    Ok(Reached {
+        scheme,
+        authority,
+        host,
+    })
 }
 
 /// Whether a request carries any credentials for `auth`: an

@@ -324,6 +324,18 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_PLUGIN_API_WELL_KNOWN")]
     pub plugin_api_well_known: Option<String>,
 
+    /// The direct peers (reverse proxies) whose `X-Forwarded-Host` and
+    /// `X-Forwarded-Proto` headers plugin routes believe, as comma-separated
+    /// IP addresses or CIDR ranges (e.g. `127.0.0.1,10.0.0.0/8`). Plugin
+    /// routes' `request.url`, `request.base` and `request.host`, and the URL
+    /// an `auth: atomic` or `auth: dpop` signature is bound to, follow those
+    /// headers only from these peers; from any other peer they are ignored
+    /// and the request's `Host` is used. Either way the host must be one
+    /// this server serves, or the route answers `400`. Unset: no peer is
+    /// trusted. Other endpoints are not affected (#1903).
+    #[clap(long, env = "ATOMIC_TRUSTED_PROXIES")]
+    pub trusted_proxies: Option<String>,
+
     /// Solid-OIDC issuers whose DPoP-bound access tokens `auth: dpop` plugin
     /// routes accept, as comma-separated URLs (e.g.
     /// `https://login.inrupt.com`). Unset, such routes serve anonymous
@@ -542,6 +554,8 @@ pub struct Config {
     /// with the loopback seam. The file is read at each connection, so a
     /// test can write it after the server started.
     pub plugin_e2e_peer_ca: Option<std::path::PathBuf>,
+    /// `--trusted-proxies`, parsed ([`crate::trusted_proxies`]).
+    pub trusted_proxies: crate::trusted_proxies::TrustedProxies,
 }
 
 /// The environment variable that turns [`Config::plugin_delivery_loopback`]
@@ -779,7 +793,14 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
             "{E2E_LOOPBACK_PEERS} is set: plugin deliveries and route key fetches may reach loopback (a debug-build test seam)"
         );
     }
+    let trusted_proxies =
+        crate::trusted_proxies::TrustedProxies::parse(opts.trusted_proxies.as_deref())?;
+    tracing::info!(
+        "Trusted proxies for plugin routes' forwarded headers: {}",
+        trusted_proxies.describe()
+    );
     let mut config = Config {
+        trusted_proxies,
         plugin_routes: Default::default(),
         plugin_delivery_loopback,
         plugin_e2e_peer_ca,

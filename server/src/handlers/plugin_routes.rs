@@ -54,7 +54,7 @@ fn routes_enabled(ctx: &guard::GuardContext<'_>) -> bool {
 
 /// The drive `Tree::DriveMapping` maps `host` to. A synchronous key lookup,
 /// so a guard can use it.
-fn drive_of_host(state: &AppState, host: &str) -> Option<String> {
+pub(crate) fn drive_of_host(state: &AppState, host: &str) -> Option<String> {
     let bytes = state
         .store
         .kv
@@ -1246,6 +1246,69 @@ mod tests {
         // As is one that lists no rels (it would answer every relation).
         let err = install_webfinger(&f, "every", "acct:").await.unwrap_err();
         assert!(err.contains("webfinger"), "{err}");
+    }
+
+    /// The atomic-plugins claims as they ship: remoteStorage answers
+    /// `acct:` without `rels` on its own installation origin, the Fediverse
+    /// plugin answers `acct:` for `self` on the drive's host. Claims clash only
+    /// on the same host, so both install, and each answers on its own host.
+    /// Were remoteStorage to move to the drive's host, it would have to list
+    /// its relation, and then the two would share the account (above).
+    #[actix_rt::test]
+    async fn remote_storage_and_fediverse_webfinger_claims_coexist() {
+        const STORAGE: &str = "http://tools.ietf.org/id/draft-dejong-remotestorage";
+        let f = fixture_with_args("wk_rs_fediverse", &ROUTES).await;
+        let release = |name: &str, http: serde_json::Value| {
+            js_release_with_source(
+                JRD,
+                json!({
+                    "schemaVersion": 3,
+                    "name": name,
+                    "namespace": "acme",
+                    "capabilities": [{"name": "storage", "reason": "keeps a cursor"}],
+                    "http": http,
+                }),
+            )
+        };
+        let storage = install_release(
+            &f,
+            &release(
+                "storage",
+                json!({
+                    "mount": "installation-origin",
+                    "routes": [{"id": "storage", "path": "/webfinger", "methods": ["GET"]}],
+                    "wellKnown": [{"name": "webfinger", "kind": "shared",
+                        "match": {"resourcePrefix": "acct:"}, "route": "storage"}],
+                }),
+            ),
+        )
+        .await
+        .unwrap();
+        install_release(
+            &f,
+            &release(
+                "actor",
+                json!({
+                    "mount": "drive-host",
+                    "routes": [{"id": "actor", "path": "/actor/webfinger", "methods": ["GET"]}],
+                    "wellKnown": [{"name": "webfinger", "kind": "shared",
+                        "match": {"resourcePrefix": "acct:", "rels": ["self"]}, "route": "actor"}],
+                }),
+            ),
+        )
+        .await
+        .unwrap();
+        bind(&f, ALICE);
+        let app = app!(f.appstate);
+        let finger = "/.well-known/webfinger?resource=acct%3Aalice%40alice.example";
+        let storage_host = format!("{}.routes.localhost:9883", slug(&storage));
+        for (host, rel) in [(ALICE.to_string(), "self"), (storage_host, STORAGE)] {
+            let resp = test::call_service(&app, on!(&host, finger)).await;
+            assert_eq!(resp.status(), 200, "{host}");
+            let body: serde_json::Value = test::read_body_json(resp).await;
+            assert_eq!(body["links"].as_array().unwrap().len(), 1, "{host}: {body}");
+            assert_eq!(body["links"][0]["rel"], rel, "{host}");
+        }
     }
 
     #[actix_rt::test]

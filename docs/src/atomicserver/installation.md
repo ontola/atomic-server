@@ -187,6 +187,34 @@ ignored.
 | `--routes-origin` | `ATOMIC_ROUTES_ORIGIN` | A dedicated origin, e.g. `https://routes.example.net`, where each plugin installation gets its own subdomain. It has to be separate from the API, drive and website domains (`http://routes.localhost:PORT` works in development). Without it, plugin routes are only served under `/_routes/` on each drive, and the server says so at startup. |
 | `--plugin-listeners` | `ATOMIC_PLUGIN_LISTENERS` | Ports you bind for server-extension plugins, as `name:port,...`, e.g. `willow-wgps:4455`. Needs `read-write`. |
 | `--plugin-sidecars` | `ATOMIC_PLUGIN_SIDECARS` | Loopback daemons plugins may call, as `name=http://127.0.0.1:port,...`, e.g. `pds=http://127.0.0.1:2583`. Only loopback addresses are accepted. Needs `read-write`. |
+| `--trusted-proxies` | `ATOMIC_TRUSTED_PROXIES` | The reverse proxies in front of the server, as comma-separated IP addresses or CIDR ranges of the *direct* peer, e.g. `127.0.0.1,10.0.0.0/8`. See below. Unset, no peer is trusted. |
+
+#### Plugin routes behind a reverse proxy
+
+A plugin route tells its handler which URL the request reached
+(`request.url`, `request.base`, `request.host`), and `auth: atomic` and
+`auth: dpop` signatures are bound to that URL. Any client can send
+`X-Forwarded-Host` and `X-Forwarded-Proto`, so plugin routes only believe them
+when the TCP peer is listed in `--trusted-proxies`. From any other peer they
+are ignored, and the request's `Host` header counts, with the scheme the server
+is configured with (the routes origin's on an installation's own origin, the
+server's own otherwise). `Forwarded` is never read.
+
+Either way the host has to be one this server serves: the routes origin and its
+installations' subdomains, the server's own domain, or a drive's host name.
+Anything else is answered with `400` (`route-host-refused`) before the plugin
+runs. The server logs the trusted list at startup.
+
+So if a proxy terminates TLS for you and rewrites `Host`, list its address:
+
+```ini
+ATOMIC_TRUSTED_PROXIES=127.0.0.1
+```
+
+If the proxy passes `Host` through unchanged and the server's own
+`--https`/`--domain` settings name the public scheme, you don't need it. The
+rest of the server keeps its current handling of forwarded headers for now
+([#1903](https://github.com/ontola/atomic-server/issues/1903)).
 
 Clients see what the server allows in `hostFeatures.pluginRoutes` of
 `GET /plugin-catalog`: `compiled`, `level`, `routesOrigin` and the names of

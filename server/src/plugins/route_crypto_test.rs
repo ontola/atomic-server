@@ -1295,3 +1295,132 @@ fn fetches_name_read_gets_and_need_read_write() {
         WILDCARD_UNLISTED
     );
 }
+
+/// Answers with where the host says the request reached it.
+const WHERE: &str = r#"
+    export function handle(ctx, request) {
+      return { status: 200, body: { url: request.url, base: request.base, host: request.host } };
+    }"#;
+
+/// #1903: `X-Forwarded-Host`/`-Proto` count only from a peer in
+/// `--trusted-proxies`; from anyone else they are ignored and the `Host`
+/// counts. Either way the host must be one this server serves, else `400`.
+#[actix_rt::test]
+async fn forwarded_headers_count_only_from_a_trusted_proxy() {
+    let f = fixture_with_args(
+        "route_trusted_proxies",
+        &[
+            "--plugin-routes",
+            "read-write",
+            "--trusted-proxies",
+            "10.0.0.0/8",
+        ],
+    )
+    .await;
+    let release = crate::plugins::test_fixture::js_release_with_source(
+        WHERE,
+        json!({
+            "schemaVersion": 3,
+            "name": "where",
+            "namespace": "acme",
+            "capabilities": [{"name": "storage", "reason": "a test"}],
+            "http": {
+                "mount": "drive-prefix",
+                "routes": [
+                    {"id": "where", "path": "/where", "methods": ["GET"]},
+                    {"id": "signed", "path": "/signed", "methods": ["POST"],
+                        "principal": "installation", "auth": "atomic", "body": "json"},
+                ],
+            },
+        }),
+    );
+    let installation = crate::plugins::test_fixture::install_release(&f, &release)
+        .await
+        .unwrap();
+    let app = app!(f.appstate);
+    let path = format!("/_routes/{}/where", slug(&installation));
+    let from = |peer: &str, host: &str, forwarded: &[(&str, &str)]| {
+        let mut request = actix_test::TestRequest::get()
+            .uri(&path)
+            .peer_addr(peer.parse().unwrap())
+            .insert_header((header::HOST, host));
+        for (name, value) in forwarded {
+            request = request.insert_header((*name, *value));
+        }
+        request.to_request()
+    };
+    let forwarded = [
+        ("x-forwarded-host", "127.0.0.1:8443"),
+        ("x-forwarded-proto", "https"),
+    ];
+
+    // An untrusted peer: the forwarded headers are ignored.
+    let resp =
+        actix_test::call_service(&app, from("203.0.113.9:4000", "LocalHost", &forwarded)).await;
+    assert_eq!(resp.status(), 200);
+    let answer = json_of(resp).await;
+    assert_eq!(answer["url"], format!("http://localhost{path}"));
+    assert_eq!(answer["host"], "localhost");
+
+    // A trusted proxy: they count.
+    let resp = actix_test::call_service(&app, from("10.1.2.3:4000", "localhost", &forwarded)).await;
+    assert_eq!(resp.status(), 200);
+    let answer = json_of(resp).await;
+    assert_eq!(answer["url"], format!("https://127.0.0.1:8443{path}"));
+    assert_eq!(
+        answer["base"],
+        format!("https://127.0.0.1:8443/_routes/{}", slug(&installation))
+    );
+    assert_eq!(answer["host"], "127.0.0.1");
+
+    // A host this server does not serve: from a trusted proxy's header, or
+    // in the Host itself. A clear 400, and the handler never runs.
+    for request in [
+        from(
+            "10.1.2.3:4000",
+            "localhost",
+            &[("x-forwarded-host", "evil.example")],
+        ),
+        from(
+            "10.1.2.3:4000",
+            "localhost",
+            &[("x-forwarded-proto", "gopher")],
+        ),
+        from("203.0.113.9:4000", "evil.example", &[]),
+    ] {
+        let resp = actix_test::call_service(&app, request).await;
+        assert_eq!(resp.status(), 400);
+        let problem = json_of(resp).await;
+        assert_eq!(problem["type"], "route-host-refused");
+        assert!(
+            problem["detail"]
+                .as_str()
+                .unwrap()
+                .contains("--trusted-proxies"),
+            "{problem}"
+        );
+    }
+
+    // `auth: atomic` binds the signature to that URL: a proof made for
+    // another server, replayed here under its Host, is refused before the
+    // signature is even looked at.
+    let signed_path = format!("/_routes/{}/signed", slug(&installation));
+    let agent = f.appstate.store.get_default_agent().unwrap();
+    let proof = atomic_lib::client::get_authentication_headers_v2(
+        "POST",
+        &format!("http://evil.example{signed_path}"),
+        b"{}",
+        &agent,
+    )
+    .unwrap();
+    let mut request = actix_test::TestRequest::post()
+        .uri(&signed_path)
+        .insert_header((header::HOST, "evil.example"))
+        .insert_header((header::CONTENT_TYPE, "application/json"))
+        .set_payload("{}");
+    for (name, value) in proof {
+        request = request.insert_header((name, value));
+    }
+    let resp = actix_test::call_service(&app, request.to_request()).await;
+    assert_eq!(resp.status(), 400);
+}
