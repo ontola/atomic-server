@@ -1,11 +1,14 @@
 import { styled } from 'styled-components';
 import { Collapse } from '../Collapse';
-import { useRef, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { useResizable } from '@hooks/useResizable';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 
 /** Height of one row in a sidebar section; anything shorter shows nothing. */
 const ROW_HEIGHT = 32;
+const MAX_HEIGHT = 1200;
+/** Movement before a press on the header becomes a drag, not a click. */
+const DRAG_THRESHOLD = 6;
 
 export interface SideBarPanelProps {
   title: string;
@@ -47,11 +50,11 @@ export function SideBarPanel({
     // Free all the way down: the old 60px floor (two rows) left no way to
     // shrink a section away short of the header's toggle.
     minSize: 0,
-    maxSize: 1200,
+    maxSize: MAX_HEIGHT,
     targetRef: contentRef,
     edge: 'bottom',
     mode: 'delta',
-    threshold: 6,
+    threshold: DRAG_THRESHOLD,
     // Remembered when a drag ends, so a drag that ends in a close keeps the
     // height the section had before it.
     onResizeEnd: height => {
@@ -61,22 +64,82 @@ export function SideBarPanel({
         return;
       }
 
+      // Close from where the drag left it; the height to reopen at is set
+      // when the section opens again.
       setOpen(false);
-      setSize(storedHeight);
     },
   });
+
+  // Dragging a closed section's header opens it and follows the pointer, the
+  // same gesture as resizing an open one: up is taller.
+  const [openingDrag, setOpeningDrag] = useState(false);
+  const suppressToggle = useRef(false);
+
+  const startOpeningDrag = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    const startY = event.clientY;
+    let opened = false;
+    let height = 0;
+
+    const move = (e: PointerEvent) => {
+      const grow = startY - e.clientY;
+      if (!opened && grow < DRAG_THRESHOLD) return;
+
+      if (!opened) {
+        opened = true;
+        suppressToggle.current = true;
+        setOpeningDrag(true);
+        setSize(0);
+        setOpen(true);
+      }
+
+      height = Math.min(MAX_HEIGHT, Math.max(0, grow));
+      setSize(height);
+    };
+
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (!opened) return;
+      setOpeningDrag(false);
+
+      if (height >= ROW_HEIGHT) {
+        setStoredHeight(height);
+      } else {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  };
+
+  const toggle = () => {
+    if (suppressToggle.current) {
+      suppressToggle.current = false;
+
+      return;
+    }
+
+    if (!open) setSize(storedHeight);
+    setOpen(!open);
+  };
 
   return (
     <Wrapper $embedded={embedded} data-testid={dataTestId}>
       <HeaderRow>
         <HeaderButton
           type='button'
-          onClick={() => setOpen(prev => !prev)}
+          onClick={toggle}
           aria-expanded={open}
           aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
-          title={open ? 'Drag to resize' : undefined}
-          $dragging={isDragging}
-          onPointerDown={open ? dragAreaListeners.onPointerDown : undefined}
+          title={open ? 'Drag to resize' : 'Click or drag to open'}
+          $dragging={isDragging || openingDrag}
+          onPointerDown={
+            open ? dragAreaListeners.onPointerDown : startOpeningDrag
+          }
           // Always attached: a drag that closes the section re-renders it
           // closed before the click that ends the drag arrives, and that
           // click must not open it straight back up.
@@ -86,7 +149,7 @@ export function SideBarPanel({
         </HeaderButton>
         {actions}
       </HeaderRow>
-      <StyledCollapse open={open} $embedded={embedded}>
+      <StyledCollapse open={open} $embedded={embedded} $instant={openingDrag}>
         <PanelContent ref={contentRef} style={{ maxHeight: size }}>
           {children}
         </PanelContent>
@@ -175,7 +238,12 @@ const PanelContent = styled.div`
   overscroll-behavior-y: contain;
 `;
 
-const StyledCollapse = styled(Collapse)<{ $embedded: boolean }>`
+const StyledCollapse = styled(Collapse)<{
+  $embedded: boolean;
+  $instant: boolean;
+}>`
+  /* Following a drag: the pointer sets the height, not the animation. */
+  ${p => (p.$instant ? 'transition: none;' : '')}
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
