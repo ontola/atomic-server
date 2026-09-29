@@ -199,17 +199,17 @@ const E2E_TIMING_SUMMARY = [
  * Shard sizes, in tests, for `PWTEST_SHARD_WEIGHTS`, keyed by shard count.
  *
  * Playwright cuts the test list into contiguous slices of equal test count, but
- * the tests differ in cost. Measured on run 4783 (one worker per shard), the
- * slices took 30.3, ~22.9, 27.1 and 26.5 min, and a shard's minutes are its
- * `E2E-TIMING test-seconds`. Shard 1 ended in a run of cheap tests (the ai-*
- * specs, ~8s each), so sixty tests instead of seventy-nine shed about 200s,
- * which shard 2 takes on. Weights are proportions, so a growing suite keeps
- * the same split. Re-measure from the `E2E-TIMING` lines when it drifts.
- * Playwright wants the weights separated by ":" and one per shard, so only a
- * shard count with an entry here is weighted.
+ * the tests differ in cost: with equal counts, run 4783 (one worker per shard)
+ * took 30.3, ~22.9, 27.1 and 26.5 min, and a shard's minutes are its
+ * `E2E-TIMING test-seconds`. These sizes come from the per-file timings of all
+ * four shards on run 4790: costed per test in suite order, they put every
+ * shard within 2252 to 2279 s of that run. Weights are proportions, so a
+ * growing suite keeps the same split. Re-measure from the `E2E-TIMING` lines
+ * when it drifts. Playwright wants the weights separated by ":" and one per
+ * shard, so only a shard count with an entry here is weighted.
  */
 const E2E_SHARD_WEIGHTS: Record<number, string> = {
-  4: '60:98:79:78',
+  4: '62:90:84:79',
 };
 
 /**
