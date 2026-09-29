@@ -67,6 +67,8 @@ pub mod aggregate;
 pub mod atoms;
 pub mod authentication;
 #[cfg(feature = "db")]
+pub mod change_log;
+#[cfg(feature = "db")]
 pub mod class_extender;
 pub mod client;
 pub mod collections;

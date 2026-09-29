@@ -451,6 +451,9 @@ pub struct Db {
     /// (`crate::envelopes`). `Latest` by default; a node that wants a signed
     /// audit log runs `All`.
     envelope_retention: Arc<RwLock<crate::envelopes::EnvelopeRetention>>,
+    /// Writer lock and tombstone retention of the per-table change list
+    /// (`crate::change_log`).
+    pub(crate) change_log: Arc<crate::change_log::ChangeLog>,
     /// Short-lived hash → (drive-subject, requested-at) map for blob hashes
     /// the server has asked a peer for (via `BLOB_REQUEST`, emitted from
     /// `import_sync_push` for an already-admitted drive). Consulted when
@@ -501,6 +504,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
+            change_log: Default::default(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -575,6 +579,7 @@ impl Db {
             last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
         }
         let mut transaction = Transaction::new();
+        let mut log_ops = Vec::new();
         let mut batched: Vec<&Resource> = Vec::new();
         for (i, (resource, snapshot)) in entries.iter().enumerate() {
             let key = self.normalize_subject(resource.get_subject()).pure_id();
@@ -586,15 +591,17 @@ impl Db {
                 continue;
             }
             let before = transaction.len();
-            self.build_projection_tx(
-                resource,
-                false,
-                true,
-                true,
-                snapshot.clone(),
-                &mut transaction,
-            )
-            .await?;
+            let ops = self
+                .build_projection_tx(
+                    resource,
+                    false,
+                    true,
+                    true,
+                    snapshot.clone(),
+                    &mut transaction,
+                )
+                .await?;
+            log_ops.extend(ops);
             if defer_search {
                 let mut added = transaction.split_off(before);
                 added.retain(|op| !crate::search::is_search_op(op));
@@ -606,7 +613,7 @@ impl Db {
         if batched.is_empty() {
             return Ok(());
         }
-        self.apply_transaction(&mut transaction)?;
+        self.apply_with_change_log(&log_ops, &mut transaction, None)?;
         for resource in batched {
             let _ = self.db_events.send(DbEvent::Changed {
                 subject: resource.get_subject().without_params(),
@@ -652,16 +659,17 @@ impl Db {
         snapshot: Option<Vec<u8>>,
     ) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
-        self.build_projection_tx(
-            resource,
-            check_required_props,
-            update_index,
-            overwrite_existing,
-            snapshot,
-            &mut transaction,
-        )
-        .await?;
-        self.apply_transaction(&mut transaction)?;
+        let log_ops = self
+            .build_projection_tx(
+                resource,
+                check_required_props,
+                update_index,
+                overwrite_existing,
+                snapshot,
+                &mut transaction,
+            )
+            .await?;
+        self.apply_with_change_log(&log_ops, &mut transaction, None)?;
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
         }
@@ -680,7 +688,9 @@ impl Db {
 
     /// Everything [`Self::persist_resource_projection`] writes for one
     /// resource, appended to `transaction` instead of applied: the index
-    /// entries, the Loro snapshot and the row.
+    /// entries, the Loro snapshot and the row. Returns the resource's
+    /// per-table change-list ops (#1850), which the caller stages with
+    /// [`Self::apply_with_change_log`] when it applies `transaction`.
     async fn build_projection_tx(
         &self,
         resource: &Resource,
@@ -689,7 +699,7 @@ impl Db {
         overwrite_existing: bool,
         snapshot: Option<Vec<u8>>,
         transaction: &mut Transaction,
-    ) -> AtomicResult<()> {
+    ) -> AtomicResult<Vec<crate::change_log::LogOp>> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
@@ -718,8 +728,8 @@ impl Db {
             // member list, and under which sort key it was filed, are facts
             // about the old values: asking the new resource instead makes a
             // row edited out of a filtered view skip the one delete it needs.
-            if let Some(pv) = existing {
-                let old = Resource::from_propvals(pv, resource.get_subject().clone());
+            if let Some(pv) = &existing {
+                let old = Resource::from_propvals(pv.clone(), resource.get_subject().clone());
                 for atom in old.to_atoms() {
                     self.remove_atom_from_index(&atom, &old, transaction)
                         .map_err(|e| format!("Failed to remove atom from index {}. {}", atom, e))?;
@@ -736,11 +746,20 @@ impl Db {
         // the `Tree::Resources` row, so every row is paired with a current
         // snapshot. Commits are native (immutable, not CRDT): they get no
         // snapshot and keep their `loroUpdate` payload in the row.
+        let mut log_ops = Vec::new();
         if !subject.is_commit_did() {
             let snapshot = match snapshot {
                 Some(snapshot) => snapshot,
                 None => resource.build_state_doc()?.export_snapshot(),
             };
+            // A replicated row counts for its table's change list like a
+            // committed one (#1850).
+            log_ops = self.change_log_ops(
+                existing.as_ref(),
+                Some(resource.get_propvals()),
+                &subject_str,
+                crate::change_log::version_of_snapshot(&snapshot),
+            );
             transaction.push(Operation {
                 tree: Tree::LoroSnapshots,
                 method: Method::Insert,
@@ -752,7 +771,7 @@ impl Db {
         // and the removal of other identifier spellings: the same write a
         // commit makes.
         self.add_resource_tx(resource, transaction)?;
-        Ok(())
+        Ok(log_ops)
     }
 
     /// Install a sync admission/quota policy (managed nodes). The default is
@@ -2418,7 +2437,8 @@ impl Db {
         let mut removed = Vec::new();
         self.recursive_remove(subject, &mut transaction, &mut removed, None)
             .await?;
-        self.apply_transaction(&mut transaction)?;
+        let log_ops = self.change_log_ops_for_removed(removed.iter().map(|r| &r.subject));
+        self.apply_with_change_log(&log_ops, &mut transaction, None)?;
         // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
         // does not resurrect them from a peer that still holds a stale copy.
         // Only after the apply succeeded: a tombstone for a resource that is
@@ -2464,7 +2484,7 @@ impl Db {
     /// `atomic:` spelling. Opening a store rewrites every `did:ad:` key
     /// (`canonical_scheme::migrate_if_needed`) and every write keys by
     /// [`Subject::pure_id`], so a legacy spelling only needs normalizing.
-    fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+    pub(crate) fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
         let key = crate::identifiers::canonicalize_scheme(subject);
         let propvals = self.get_propvals(&key)?;
         Ok((key, propvals))
@@ -3315,7 +3335,7 @@ impl Db {
         self.apply_transaction_with_source(transaction, None)
     }
 
-    fn apply_transaction_with_source(
+    pub(crate) fn apply_transaction_with_source(
         &self,
         transaction: &mut Transaction,
         source_id: Option<&str>,
@@ -4489,7 +4509,34 @@ impl Storelike for Db {
             }
         }
 
-        store.apply_transaction_with_source(
+        // The per-table change list (#1850), in the same transaction as the
+        // state it describes. A destroy logs every removed row; anything
+        // else logs the one resource's move between tables.
+        let log_ops = if removal_queued {
+            store.change_log_ops_for_removed(removed.iter().map(|r| &r.subject))
+        } else {
+            let row = store.canonical_id(commit_response.commit.subject.as_str());
+            let version = commit_response
+                .resource_new
+                .as_ref()
+                .and_then(|r| r.loro_version())
+                .map(|vv| crate::change_log::version_map(&vv))
+                .or_else(|| store.stored_version(&row));
+            store.change_log_ops(
+                commit_response
+                    .resource_old
+                    .as_ref()
+                    .map(|r| r.get_propvals()),
+                commit_response
+                    .resource_new
+                    .as_ref()
+                    .map(|r| r.get_propvals()),
+                &row,
+                version,
+            )
+        };
+        store.apply_with_change_log(
+            &log_ops,
             &mut transaction,
             commit_response.source_id.as_deref(),
         )?;
