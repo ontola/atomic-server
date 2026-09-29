@@ -14,6 +14,15 @@
 #   --seed NAME       seed to run on first open (default: calendar; "none" to skip)
 #   --no-build        start from what is already built
 #   --build-only      build, then exit without starting anything
+#   --plugin NAME     also build atomic-plugins' integrations/NAME/app, start
+#                     the mock integration proxy, and seed NAME (installs the
+#                     drive app into the fresh drive). Default seed becomes NAME.
+#   --plugins-dir DIR the atomic-plugins checkout for --plugin, with browser/
+#                     linked (integrations/tooling/link-atomic-server.mjs);
+#                     default $DEMO_HOME/atomic-plugins
+#   --mock-port N     mock integration proxy port (default: --port + 10000)
+#   --mock-scenario S MOCK_SCENARIO for the mock's fixtures (default:
+#                     user-testing; "default" for the fixtures CI uses)
 #
 # Every run gets a fresh data dir under $DEMO_HOME/sessions/<stamp>-<branch>/,
 # next to server.log, vite.log and ux.jsonl (the interaction log). Ctrl-C
@@ -33,6 +42,11 @@ SEED=calendar
 BUILD=1
 BUILD_ONLY=0
 BRANCH=""
+PLUGIN=""
+PLUGINS_DIR="$DEMO_HOME/atomic-plugins"
+MOCK_PORT=""
+MOCK_SCENARIO=user-testing
+SEED_SET=0
 
 log() { printf '\033[36m[demo]\033[0m %s\n' "$*"; }
 die() { printf '\033[31m[demo]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -41,10 +55,14 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="$2"; shift 2 ;;
     --vite-port) VITE_PORT="$2"; shift 2 ;;
-    --seed) SEED="$2"; shift 2 ;;
+    --seed) SEED="$2"; SEED_SET=1; shift 2 ;;
+    --plugin) PLUGIN="$2"; shift 2 ;;
+    --plugins-dir) PLUGINS_DIR="$2"; shift 2 ;;
+    --mock-port) MOCK_PORT="$2"; shift 2 ;;
+    --mock-scenario) MOCK_SCENARIO="$2"; shift 2 ;;
     --no-build) BUILD=0; shift ;;
     --build-only) BUILD_ONLY=1; shift ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
     -*) die "Unknown option $1" ;;
     *) BRANCH="$1"; shift ;;
   esac
@@ -52,8 +70,18 @@ done
 
 BRANCH="${BRANCH:-$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)}"
 SLUG="$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')"
+MOCK_PORT="${MOCK_PORT:-$((PORT + 10000))}"
 
-[ "$BUILD_ONLY" = 1 ] || for port in "$PORT" "$VITE_PORT"; do
+if [ -n "$PLUGIN" ]; then
+  [ "$SEED_SET" = 1 ] || SEED="$PLUGIN"
+  PLUGINS_DIR="$(cd "$PLUGINS_DIR" && pwd)" || die "No atomic-plugins checkout at $PLUGINS_DIR"
+  [ -f "$PLUGINS_DIR/integrations/$PLUGIN/app/build.mjs" ] ||
+    die "No drive app at $PLUGINS_DIR/integrations/$PLUGIN/app/build.mjs"
+  [ -e "$PLUGINS_DIR/browser/package.json" ] ||
+    die "$PLUGINS_DIR has no browser/ linked. Run: (cd $PLUGINS_DIR && node integrations/tooling/link-atomic-server.mjs)"
+fi
+
+[ "$BUILD_ONLY" = 1 ] || for port in "$PORT" "$VITE_PORT" ${PLUGIN:+"$MOCK_PORT"}; do
   if lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     die "Port $port is in use (pid $(lsof -nP -tiTCP:"$port" -sTCP:LISTEN | head -1)). Pick another with --port/--vite-port."
   fi
@@ -181,6 +209,25 @@ APP_URL=http://localhost:$VITE_PORT
 UX_LOG=$UX_LOG
 EOF
 
+# --- Drive app and mock integration proxy (--plugin) --------------------------
+
+PLUGIN_APP=""
+if [ -n "$PLUGIN" ]; then
+  PLUGIN_APP="$SESSION/plugin-app.js"
+  log "Building $PLUGIN's drive app from $PLUGINS_DIR ($(git -C "$PLUGINS_DIR" rev-parse --abbrev-ref HEAD) @ $(git -C "$PLUGINS_DIR" rev-parse --short HEAD))"
+  [ -d "$PLUGINS_DIR/integrations/$PLUGIN/app/node_modules" ] ||
+    (cd "$PLUGINS_DIR/integrations/$PLUGIN/app" && pnpm install --frozen-lockfile)
+  (cd "$PLUGINS_DIR" && node "integrations/$PLUGIN/app/build.mjs" --outfile "$PLUGIN_APP")
+  {
+    echo "PLUGIN=$PLUGIN"
+    echo "PLUGINS_DIR=$PLUGINS_DIR"
+    echo "PLUGINS_COMMIT=$(git -C "$PLUGINS_DIR" rev-parse HEAD)"
+    echo "PLUGIN_APP=$PLUGIN_APP"
+    echo "MOCK_PROXY_URL=http://127.0.0.1:$MOCK_PORT"
+    echo "MOCK_SCENARIO=$MOCK_SCENARIO"
+  } >>"$SESSION/session.env"
+fi
+
 PIDS=()
 cleanup() {
   log "Stopping"
@@ -198,12 +245,35 @@ ATOMIC_CONFIG_DIR="$SESSION/config" \
 ATOMIC_CACHE_DIR="$SESSION/cache" \
 ATOMIC_PORT="$PORT" \
 ATOMIC_DOMAIN=localhost \
+  env ${PLUGIN:+"ATOMIC_INTEGRATION_PROXY_URL=http://127.0.0.1:$MOCK_PORT"} \
+  ${PLUGIN:+"ATOMIC_INTEGRATION_FRONTEND_ORIGIN=http://localhost:$VITE_PORT"} \
   "$SESSION/atomic-server" >"$SESSION/server.log" 2>&1 &
 PIDS+=($!)
+SERVER_PID=$!
+
+if [ -n "$PLUGIN" ]; then
+  # As integrations/tooling/serve.mjs starts it, except that the page is
+  # served by Vite here, so that is the origin /connect redirects back to.
+  log "Starting the mock integration proxy on http://127.0.0.1:$MOCK_PORT, scenario $MOCK_SCENARIO (log: $SESSION/mock-proxy.log)"
+  (
+    cd "$PLUGINS_DIR"
+    MOCK_PROXY_PORT="$MOCK_PORT" \
+    MOCK_PROXY_BASE_URL="http://127.0.0.1:$MOCK_PORT" \
+    MOCK_FRONTEND_ORIGIN="http://localhost:$VITE_PORT" \
+    MOCK_SCENARIO="$MOCK_SCENARIO" \
+      exec node integrations/localthought/mock-proxy.mjs
+  ) >"$SESSION/mock-proxy.log" 2>&1 &
+  PIDS+=($!)
+  for _ in $(seq 60); do
+    curl -sf -o /dev/null "http://127.0.0.1:$MOCK_PORT/catalog" && break
+    sleep 0.5
+  done
+  curl -sf -o /dev/null "http://127.0.0.1:$MOCK_PORT/catalog" || die "The mock proxy did not come up. See $SESSION/mock-proxy.log"
+fi
 
 for _ in $(seq 120); do
   curl -sf -o /dev/null "http://localhost:$PORT/" && break
-  kill -0 "${PIDS[0]}" 2>/dev/null || die "atomic-server exited. See $SESSION/server.log"
+  kill -0 "$SERVER_PID" 2>/dev/null || die "atomic-server exited. See $SESSION/server.log"
   sleep 0.5
 done
 curl -sf -o /dev/null "http://localhost:$PORT/" || die "atomic-server did not come up. See $SESSION/server.log"
@@ -233,6 +303,7 @@ export default async (env: { command: string; mode: string }) => {
           logFile: '$UX_LOG',
           seedFile: '$TOOLING/seed.js',
           clientFile: '$TOOLING/uxLogClient.js',
+          pluginAppFile: '$PLUGIN_APP' || undefined,
         }),
     ],
     server: {
@@ -252,13 +323,15 @@ log "Starting the data-browser on http://localhost:$VITE_PORT (log: $SESSION/vit
   node scripts/build-website-runtime.mjs
   VITE_ATOMIC_SERVER_URL="http://localhost:$PORT" \
   VITE_UX_LOG=true \
-    exec node_modules/.bin/vite --config "$VITE_CONFIG"
+    exec env ${PLUGIN:+"VITE_INTEGRATION_PROXY_URL=http://127.0.0.1:$MOCK_PORT"} \
+    node_modules/.bin/vite --config "$VITE_CONFIG"
 ) >"$SESSION/vite.log" 2>&1 &
 PIDS+=($!)
+VITE_PID=$!
 
 for _ in $(seq 120); do
   curl -sf -o /dev/null "http://localhost:$VITE_PORT/" && break
-  kill -0 "${PIDS[1]}" 2>/dev/null || die "Vite exited. See $SESSION/vite.log"
+  kill -0 "$VITE_PID" 2>/dev/null || die "Vite exited. See $SESSION/vite.log"
   sleep 0.5
 done
 curl -sf -o /dev/null "http://localhost:$VITE_PORT/" || die "Vite did not come up. See $SESSION/vite.log"
@@ -272,5 +345,10 @@ log "  Open:        $OPEN"
 log "               (makes a fresh agent + drive in the browser, seeds '$SEED', opens it)"
 log "  Interaction: tail -f $UX_LOG"
 log "  Server:      tail -f $SESSION/server.log"
+[ -z "$PLUGIN" ] || {
+  log "  Mock proxy:  tail -f $SESSION/mock-proxy.log"
+  log "  Rebuild app: (cd $PLUGINS_DIR && node integrations/$PLUGIN/app/build.mjs --outfile $PLUGIN_APP)"
+  log "  Drivers:     curl -X POST http://127.0.0.1:$MOCK_PORT/fixture/<platform>/<driver> -d '[...]'"
+}
 log "Ctrl-C to stop."
 wait

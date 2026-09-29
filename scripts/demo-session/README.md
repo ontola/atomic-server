@@ -96,6 +96,44 @@ paths as the UI. It can also be run by hand from the console:
 - **Content plan**: a table with a `Publish date` column and no calendar view
   yet, for testing how a user adds one.
 
+## Drive apps (`--plugin`)
+
+```sh
+scripts/demo-session/demo-session.sh <atomic-plugins pin> --plugin issue-tracker \
+  --plugins-dir ~/.cache/atomic-demo/atomic-plugins
+```
+
+`--plugin NAME` uses an atomic-plugins checkout (`--plugins-dir`, with
+`browser/` linked by its `integrations/tooling/link-atomic-server.mjs`). It:
+
+1. builds `integrations/NAME/app/build.mjs` into the session folder
+   (`plugin-app.js`, served to the page at `/__demo-plugin/app.js`);
+2. starts `integrations/localthought/mock-proxy.mjs` on `--mock-port`
+   (default: `--port` + 10000) with `MOCK_SCENARIO=user-testing` (change it
+   with `--mock-scenario`), and points the server
+   (`ATOMIC_INTEGRATION_PROXY_URL`) and Vite (`VITE_INTEGRATION_PROXY_URL`)
+   at it. The mock's `/connect` returns to the Vite origin;
+3. seeds NAME: the app is installed with `createApp` and `handOverAppKey`,
+   as "New app" does, but with the built source instead of the starter.
+
+The provider data comes from the mock's fixture, not from the seed. Its
+drivers change the provider side mid-session:
+`curl -X POST http://127.0.0.1:<mock-port>/fixture/<platform>/<driver> -d '[...]'`.
+To rebuild the app mid-session, run the build line the script prints, then
+reload the page.
+
+Only `issue-tracker` has a seed so far. Known limits:
+
+- **Not in the desktop app's browser pane.** The pane fails every
+  `<iframe sandbox>` load with `net::ERR_BLOCKED_BY_CLIENT`, and drive apps
+  always run in one, so they show a blank panel. Use Chrome.
+- **Connect needs a local host patch.** Under React StrictMode, which only the
+  Vite dev build has, `ProxyConnectReturn` runs its effect twice: the first
+  run redeems the connection code, the second finds it used and shows "This
+  connection return is not one this browser started." Share one redemption
+  per `integration_state` in the worktree under test until the host fixes it.
+- The interaction log sees only the host page, never inside the app's frame.
+
 ## Running a session
 
 - **Keep the browser pane visible.** In the Claude desktop app the app is

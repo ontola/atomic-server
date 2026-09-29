@@ -11,6 +11,7 @@ import * as path from 'node:path';
 const CLIENT_ID = 'virtual:ux-log-client';
 const SEED_ID = 'virtual:demo-seed';
 const ENDPOINT = '/__ux-log';
+const PLUGIN_APP = '/__demo-plugin/app.js';
 
 interface Options {
   /** JSONL file that every event is appended to. */
@@ -19,6 +20,11 @@ interface Options {
   seedFile: string;
   /** The in-page logger (plain JS). */
   clientFile: string;
+  /**
+   * A built drive app module, served at /__demo-plugin/app.js for the seed
+   * that installs it. Read on every request, so a rebuild needs no restart.
+   */
+  pluginAppFile?: string;
 }
 
 // Minimal structural types, so this file needs no `vite` import.
@@ -30,6 +36,7 @@ interface Req {
 }
 interface Res {
   statusCode: number;
+  setHeader(name: string, value: string): void;
   end(body?: string): void;
 }
 interface DevServer {
@@ -38,7 +45,12 @@ interface DevServer {
   };
 }
 
-export function uxLogPlugin({ logFile, seedFile, clientFile }: Options) {
+export function uxLogPlugin({
+  logFile,
+  seedFile,
+  clientFile,
+  pluginAppFile,
+}: Options) {
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
 
   const append = (entries: unknown[]) => {
@@ -70,6 +82,20 @@ export function uxLogPlugin({ logFile, seedFile, clientFile }: Options) {
     },
     configureServer(server: DevServer) {
       server.middlewares.use((req, res, next) => {
+        if (req.url === PLUGIN_APP && req.method === 'GET') {
+          if (!pluginAppFile || !fs.existsSync(pluginAppFile)) {
+            res.statusCode = 404;
+            res.end();
+
+            return;
+          }
+          res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(fs.readFileSync(pluginAppFile, 'utf-8'));
+
+          return;
+        }
+
         if (req.url !== ENDPOINT || req.method !== 'POST') return next();
         let body = '';
         req.on('data', chunk => (body += chunk.toString()));

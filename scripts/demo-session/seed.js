@@ -9,7 +9,7 @@ import { createPropertyOnClass } from '@chunks/TablePage/Kanban/createSelectProp
 import { addToOntology } from '@chunks/Demo/demoWorkspace';
 import { constructOpenURL } from '@helpers/navigation';
 
-const SEEDS = { calendar: seedCalendar };
+const SEEDS = { calendar: seedCalendar, 'issue-tracker': seedIssueTracker };
 
 export async function seed(store, name, drive) {
   const run = SEEDS[name];
@@ -279,4 +279,36 @@ async function seedCalendar(store, drive) {
     contentPlan: content.tableSubject,
     open: constructOpenURL(team.tableSubject),
   };
+}
+
+/**
+ * The GitHub issues drive app from atomic-plugins, installed the way the
+ * "New app" template makes an app (`createApp`, then `handOverAppKey`), with
+ * the source demo-session.sh built (`--plugin issue-tracker`) instead of the
+ * starter. Its data comes from the mock integration proxy's github-issues
+ * fixture, not from this seed; the tester connects and picks the repository
+ * in the app. Imported lazily: branches without drive apps still load the
+ * calendar seed.
+ */
+async function seedIssueTracker(store, drive) {
+  return installPluginApp(store, drive, { name: 'GitHub issues', emoji: '🐞' });
+}
+
+async function installPluginApp(store, drive, { name, emoji }) {
+  const response = await fetch('/__demo-plugin/app.js');
+  if (!response.ok)
+    throw new Error(
+      `No plugin app to install (HTTP ${response.status}); start demo-session.sh with --plugin`,
+    );
+  const source = await response.text();
+  const { createApp } = await import('@tomic/lib');
+  const { handOverAppKey } = await import('@chunks/AppPage/appAgent');
+  const created = await createApp(store, { drive, name, emoji, source });
+  await handOverAppKey(store, {
+    drive,
+    app: created.app,
+    secret: created.secret,
+  });
+
+  return { app: created.app, open: constructOpenURL(created.app) };
 }
