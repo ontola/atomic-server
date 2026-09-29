@@ -487,6 +487,12 @@ export function validateManifest(raw: unknown): PluginManifest {
     return secret as unknown as DeclaredSecret;
   });
   names.clear();
+  // Declared in `http.sidecars`, which is validated last (as in Rust); only
+  // the names are needed here, to check `atomic-sidecar:` operations.
+  const httpEntry = entry.http as { sidecars?: unknown } | undefined;
+  const declaredSidecars = Array.isArray(httpEntry?.sidecars)
+    ? httpEntry.sidecars.map(s => (s as { name?: unknown } | null)?.name)
+    : [];
   const operations = list(entry.operations, 'operations').map(value => {
     const operation = object(value);
     known(operation, ['id', 'method', 'url', 'effect']);
@@ -497,12 +503,22 @@ export function validateManifest(raw: unknown): PluginManifest {
     )
       throw new Error('operation IDs must be nonempty and unique');
     names.add(operation.id);
-    const relative =
+    const sidecar =
       typeof operation.url === 'string'
+        ? parseSidecarRelative(operation.url)
+        : undefined;
+    const relative =
+      typeof operation.url === 'string' && !sidecar
         ? parseProxyRelative(operation.url)
         : undefined;
 
-    if (relative) {
+    if (sidecar) {
+      if (sidecar.query !== undefined) throw new Error(SIDECAR_URL_RULE);
+      if (!declaredSidecars.includes(sidecar.name))
+        throw new Error(
+          `operation ${operation.id} does not declare sidecar '${sidecar.name}' in \`http.sidecars\``,
+        );
+    } else if (relative) {
       if (relative.query !== undefined) throw new Error(PROXY_URL_RULE);
       if (!proxy.includes(relative.platform))
         throw new Error(
@@ -1065,6 +1081,48 @@ const PROXY_PLATFORMS_RULE =
   'proxy platforms must be unique identifiers of letters, digits, `-` and `_`';
 const PROXY_URL_RULE =
   'atomic-proxy: URLs are `atomic-proxy:/<platform>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query';
+
+const SIDECAR_URL_RULE =
+  'atomic-sidecar: URLs are `atomic-sidecar:/<name>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query';
+const SIDECAR_NAME = /^[a-z0-9-]{1,64}$/;
+
+/** An `atomic-sidecar:/<name>/<path>?<query>` URL, split. */
+export interface SidecarRelativeUrl {
+  name: string;
+  /** Starts with `/`. */
+  path: string;
+  query?: string;
+}
+
+/**
+ * Splits an `atomic-sidecar:` URL the way the server does
+ * (`SidecarRelative::parse` in `server/src/plugins/manifest.rs`): the path
+ * rules of `atomic-proxy:`, and a name as `http.sidecars` names one. Returns
+ * `undefined` for any other URL and throws for a malformed one.
+ */
+export function parseSidecarRelative(
+  raw: string,
+): SidecarRelativeUrl | undefined {
+  if (!raw.startsWith('atomic-sidecar:')) return undefined;
+  let split: ProxyRelativeUrl | undefined;
+
+  try {
+    split = parseProxyRelative(
+      `atomic-proxy:${raw.slice('atomic-sidecar:'.length)}`,
+    );
+  } catch {
+    throw new Error(SIDECAR_URL_RULE);
+  }
+
+  if (!split || !SIDECAR_NAME.test(split.platform))
+    throw new Error(SIDECAR_URL_RULE);
+
+  return {
+    name: split.platform,
+    path: split.path,
+    ...(split.query !== undefined ? { query: split.query } : {}),
+  };
+}
 
 /** An `atomic-proxy:/<platform>/<path>?<query>` URL, split. */
 export interface ProxyRelativeUrl {

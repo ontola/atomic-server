@@ -202,6 +202,69 @@
     ]
   },
   {
+    "name": "v3 sidecar with sidecar-relative operations",
+    "file": "v3-sidecar-operation.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [
+        {
+          "id": "query",
+          "method": "POST",
+          "url": "atomic-sidecar:/nextgraph/v1/query",
+          "effect": "read"
+        },
+        {
+          "id": "update",
+          "method": "POST",
+          "url": "atomic-sidecar:/nextgraph/v1/update",
+          "effect": "write"
+        }
+      ],
+      "http": {
+        "sidecars": [
+          {
+            "name": "nextgraph",
+            "reason": "Reads and writes NextGraph documents through the operator's wallet"
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [
+        "nextgraph"
+      ],
+      "surfaces": [
+        {
+          "surface": "sidecar `nextgraph`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "operator-sidecar:nextgraph",
+      "plugin-routes:read-write",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "sidecar operation for an undeclared sidecar",
+    "file": "v3-sidecar-operation-undeclared.json",
+    "error": "does not declare sidecar 'nextgraph'"
+  },
+  {
+    "name": "sidecar operation with a query",
+    "file": "v3-sidecar-operation-query.json",
+    "error": "atomic-sidecar: URLs"
+  },
+  {
+    "name": "sidecar operation with a name that is not a sidecar name",
+    "file": "v3-sidecar-operation-bad-name.json",
+    "error": "atomic-sidecar: URLs"
+  },
+  {
     "name": "v2 fixtures need no gate",
     "file": "v2-js-extension.json",
     "gate": {
