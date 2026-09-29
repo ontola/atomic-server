@@ -1,4 +1,6 @@
 import { styled } from 'styled-components';
+import { FaWandMagicSparkles } from 'react-icons/fa6';
+import { CardIcon } from '../cardSurface';
 import { Button } from '../Button';
 import { openExternal } from '../../helpers/openExternal';
 import {
@@ -33,9 +35,10 @@ const credits = (micros: number) =>
   (micros / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 /**
- * AI credit usage for the managed server card.
+ * AI credit usage for the signed-in managed account.
  *
- * Renders nothing unless AI is on for this person: the local switch is off, or
+ * An account-level section (not tied to a server or drive subscription), shown
+ * under the account header. Renders nothing unless AI is on for this person: the local switch is off, or
  * the account has no hosted AI (status missing or `enabled: false`), or there
  * is no portal, which is what a self-hosted server looks like.
  */
@@ -54,33 +57,54 @@ export function SyncAIUsage({ portalUrl }: { portalUrl?: string | null }) {
 
   return (
     <AIUsage data-testid='sync-ai-usage'>
-      <AIUsageRow>
+      <CardIcon $tone='provider'>
+        <FaWandMagicSparkles />
+      </CardIcon>
+      <AIBody>
+        <AIUsageRow>
+          <strong>AI credits</strong>
+          {canPurchaseHostedAICredits(hostedAI) && (
+            <Button subtle onClick={() => void openExternal(dashboard)}>
+              Order more credits
+            </Button>
+          )}
+        </AIUsageRow>
         <span>{label}</span>
-        {canPurchaseHostedAICredits(hostedAI) && (
-          <Button subtle onClick={() => void openExternal(dashboard)}>
-            Order more credits
-          </Button>
+        <Bar
+          role='progressbar'
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+          aria-label={label}
+        >
+          <Fill style={{ width: `${pct}%` }} $full={pct >= 90} />
+        </Bar>
+        {purchased > 0 && (
+          <Meta>{`${credits(purchased)} purchased credits left · carries over`}</Meta>
         )}
-      </AIUsageRow>
-      <Bar
-        role='progressbar'
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct}
-        aria-label={label}
-      >
-        <Fill style={{ width: `${pct}%` }} $full={pct >= 90} />
-      </Bar>
-      {purchased > 0 && (
-        <Meta>{`${credits(purchased)} purchased credits left · carries over`}</Meta>
-      )}
+      </AIBody>
     </AIUsage>
   );
 }
 
+/** A section of the account card, ruled off like its sibling services. */
 const AIUsage = styled.div`
-  margin-top: 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
   font-size: 0.8rem;
+  min-width: 0;
+`;
+
+const AIBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const AIUsageRow = styled.div`
@@ -88,7 +112,7 @@ const AIUsageRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  color: ${p => p.theme.colors.textLight};
+  color: ${p => p.theme.colors.text};
 `;
 
 const Bar = styled.div`

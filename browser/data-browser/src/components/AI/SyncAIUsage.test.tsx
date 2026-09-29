@@ -87,3 +87,18 @@ it('renders nothing without a portal (self-hosted)', () => {
   renderUsage({ enableAI: true, hostedAI: status() }, null);
   expect(screen.queryByTestId('sync-ai-usage')).toBeNull();
 });
+
+it('is an account-level section: shown without any server card, for a free allowance', () => {
+  renderUsage({
+    enableAI: true,
+    hostedAI: status({
+      paid: false,
+      allowance_micros: 100_000,
+      used_micros: 25_000,
+      remaining_micros: 75_000,
+      purchases_enabled: false,
+    }),
+  });
+  expect(screen.getByText('AI credits')).toBeTruthy();
+  expect(screen.getByText('25% of AI credits used')).toBeTruthy();
+});

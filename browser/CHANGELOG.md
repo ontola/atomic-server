@@ -4,10 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- The managed Cloud Server card on the Sync page shows how much of the AI credits
-  are used, as a percentage of the monthly allowance, with a button to order
-  more where purchases are available. Nothing is shown when AI is switched off
-  locally, when the account has no included AI, or on a self-hosted server.
+- The account card on the Sync page has an "AI credits" section showing how much
+  of the AI credits are used, as a percentage of the monthly allowance, with a
+  button to order more where purchases are available. It belongs to the account,
+  so it shows without a Cloud Server subscription. Nothing is shown when AI is
+  switched off locally, when the account has no included AI, or on a
+  self-hosted server.
 
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which

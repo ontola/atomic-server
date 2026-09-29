@@ -10137,6 +10137,7 @@ msgid "{0} purchased credits · carries over"
 msgstr "{0} purchased credits · carries over"
 
 #: src/chunks/AI/HostedAICredits.tsx
+#: src/components/AI/SyncAIUsage.tsx
 msgid "AI credits"
 msgstr "AI credits"
 
