@@ -46,11 +46,12 @@ it('buckets civil dates near offset boundaries and clips multi-day occurrences',
       },
     },
   ];
-  const { buckets } = calendarOccurrenceBuckets(records, [
-    '2026-03-28',
-    '2026-03-29',
-    '2026-03-30',
-  ]);
+  // Seen from the event's own zone, so its days are the event's days.
+  const { buckets } = calendarOccurrenceBuckets(
+    records,
+    ['2026-03-28', '2026-03-29', '2026-03-30'],
+    'Pacific/Kiritimati',
+  );
   expect(buckets.get('2026-03-28')?.map(x => x.subject)).toEqual(['all-day']);
   expect(buckets.get('2026-03-29')?.map(x => x.subject)).toEqual([
     'all-day',
@@ -263,5 +264,69 @@ describe('moved occurrences (#1804)', () => {
     });
     const gone = calendarOccurrenceBuckets([standup, cancelled], week).buckets;
     expect(gone.get('2026-10-14')).toBeUndefined();
+  });
+});
+
+// #1802: a timed event belongs to the viewer's local day, like Google Calendar.
+describe("timed events on the viewer's day", () => {
+  const boston = {
+    calendarId: 'work',
+    subject: 'boston',
+    event: {
+      id: 'boston',
+      start: {
+        dateTime: '2026-10-06T19:30:00-04:00',
+        timeZone: 'America/New_York',
+      },
+      end: { dateTime: '2026-10-06T20:30:00-04:00' },
+      recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=TU'],
+    },
+  };
+  const week = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'];
+
+  it('puts Tuesday 19:30 in New York on Wednesday 01:30 in Amsterdam', () => {
+    const { buckets } = calendarOccurrenceBuckets(
+      [boston],
+      week,
+      'Europe/Amsterdam',
+    );
+    expect(buckets.get('2026-10-13')).toBeUndefined();
+    const [occurrence] = buckets.get('2026-10-14') ?? [];
+    expect(occurrence).toMatchObject({ subject: 'boston', day: '2026-10-14' });
+    expect(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Amsterdam',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(occurrence.start),
+    ).toBe('01:30');
+  });
+
+  it('keeps it on Tuesday for a viewer in New York', () => {
+    const { buckets } = calendarOccurrenceBuckets(
+      [boston],
+      week,
+      'America/New_York',
+    );
+    expect(buckets.get('2026-10-13')?.map(x => x.subject)).toEqual(['boston']);
+    expect(buckets.get('2026-10-14')).toBeUndefined();
+  });
+
+  it('leaves all-day events on their dates, with the exclusive end', () => {
+    const trip = {
+      calendarId: 'work',
+      subject: 'trip',
+      event: {
+        id: 'trip',
+        start: { date: '2026-10-13' },
+        end: { date: '2026-10-15' },
+        recurrence: ['RRULE:FREQ=WEEKLY;COUNT=1'],
+      },
+    };
+
+    for (const zone of ['Pacific/Kiritimati', 'Pacific/Pago_Pago']) {
+      const { buckets } = calendarOccurrenceBuckets([trip], week, zone);
+      expect([...buckets.keys()]).toEqual(['2026-10-13', '2026-10-14']);
+    }
   });
 });

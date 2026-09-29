@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRepeatRule, nativeCalendarPayload } from '@tomic/lib';
+import { Datatype } from '@tomic/lib';
 import {
   allDayRowTime,
+  calendarRowTime,
+  localTimeInput,
   readRecurrencePayload,
   rowRecord,
+  timedValue,
 } from './calendarRows';
 import { calendarOccurrenceBuckets } from './calendarOccurrences';
 
@@ -71,5 +75,95 @@ describe('readRecurrencePayload', () => {
     expect(readRecurrencePayload('{"weekly":true}')).toBeUndefined();
     expect(readRecurrencePayload(undefined)).toBeUndefined();
     expect(readRecurrencePayload(['RRULE:FREQ=DAILY'])).toBeUndefined();
+  });
+});
+
+// #1802: times live in atomic-calendar-start / -end (RFC 3339 strings with
+// their offset, per the Event ontology); Day and End day keep their meaning.
+describe('calendarRowTime', () => {
+  const columns = {
+    dateProp: { subject: 'day', datatype: Datatype.DATE },
+    allDayProp: { subject: 'allDay' },
+    endDayProp: { subject: 'endDay' },
+    startProp: { subject: 'start' },
+    endProp: { subject: 'end' },
+    calendarDate: true,
+  };
+  const row =
+    (values: Record<string, unknown>) =>
+    (prop: string): unknown =>
+      values[prop];
+  const AMS = 'Europe/Amsterdam';
+
+  it('reads a timed row from its start and end', () => {
+    expect(
+      calendarRowTime(
+        row({
+          day: '2026-10-12',
+          start: '2026-10-12T09:30:00+02:00',
+          end: '2026-10-12T10:15:00+02:00',
+        }),
+        columns,
+        AMS,
+      ),
+    ).toEqual({
+      start: { dateTime: '2026-10-12T09:30:00+02:00', timeZone: AMS },
+      end: { dateTime: '2026-10-12T10:15:00+02:00' },
+      timed: true,
+    });
+  });
+
+  it('keeps an all-day row date-only, with its exclusive end', () => {
+    expect(
+      calendarRowTime(
+        row({
+          day: '2026-11-16',
+          endDay: '2026-11-19',
+          allDay: true,
+          start: '2026-11-16T09:30:00+01:00',
+        }),
+        columns,
+        AMS,
+      ),
+    ).toEqual({
+      start: { date: '2026-11-16' },
+      end: { date: '2026-11-19' },
+    });
+  });
+
+  it('takes the date from Day and the time from Start', () => {
+    // Day moved in the table from the 12th to the 13th.
+    const time = calendarRowTime(
+      row({
+        day: '2026-10-13',
+        start: '2026-10-12T09:30:00+02:00',
+        end: '2026-10-12T10:15:00+02:00',
+      }),
+      columns,
+      AMS,
+    );
+    expect(time?.start.dateTime).toBe('2026-10-13T09:30:00+02:00');
+    expect(time?.end.dateTime).toBe('2026-10-13T10:15:00+02:00');
+  });
+
+  it('gives a start without an end an hour, only to expand it', () => {
+    const time = calendarRowTime(
+      row({ day: '2026-10-12', start: '2026-10-12T09:30:00+02:00' }),
+      columns,
+      AMS,
+    );
+    expect(time?.end).toEqual({ dateTime: '2026-10-12T08:30:00.000Z' });
+  });
+});
+
+describe('time inputs', () => {
+  it('writes a local wall time with its offset, and reads it back', () => {
+    const value = timedValue('2026-10-12', '09:30', 'Europe/Amsterdam');
+    expect(value).toBe('2026-10-12T09:30:00+02:00');
+    expect(localTimeInput(value, 'Europe/Amsterdam')).toBe('09:30');
+    expect(localTimeInput(value, 'America/New_York')).toBe('03:30');
+    expect(timedValue('2026-12-01', '09:30', 'Europe/Amsterdam')).toBe(
+      '2026-12-01T09:30:00+01:00',
+    );
   });
 });

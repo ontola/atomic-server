@@ -2,6 +2,12 @@ import {
   Datatype,
   anchorOf,
   buildRecurrence,
+  calendarInstant,
+  daysBetween,
+  isCalendarInstant,
+  shiftInstantDays,
+  timeInZone,
+  viewerTimeZone,
   isCalendarDate,
   nativeCalendarId,
   nextCalendarDate,
@@ -48,7 +54,14 @@ export function isNativePayload(payload: RecurrencePayload): boolean {
 export interface CalendarRowTime {
   start: CalendarTime;
   end: CalendarTime;
+  /** Has a time of day: shown on the viewer's local day and time. */
+  timed?: boolean;
 }
+
+/** A Start / End value for `day` at `time` (HH:MM) in the viewer's zone. */
+export const timedValue = calendarInstant;
+/** The HH:MM a time input shows for a Start / End value. */
+export const localTimeInput = timeInZone;
 
 /** An all-day row: its day, until its exclusive end day when that is a later
  * date, else for that one day. */
@@ -151,19 +164,52 @@ export interface CalendarColumns {
    * apply. Imported ranges are opt-in: other date columns stay one day. */
   calendarDate: boolean;
   recurrenceProp?: Column;
+  /** `atomic-calendar-start` / `-end`: exact instants of a timed row. */
+  startProp?: Column;
+  endProp?: Column;
 }
 
-/** When a row takes place, from its columns; undefined without a date. */
+/** When a row takes place, from its columns; undefined without a date.
+ * A row is timed when it has a Start and is not All day: Day still says
+ * which date (so moving Day in the table moves the event), Start and End
+ * the time of day. Without an End, the expansion gives it an hour; that is
+ * never stored. `storedZone` is the zone a row's series was set to repeat
+ * in; a series follows wall time there. */
 export function calendarRowTime(
   get: (property: string) => unknown,
   columns: CalendarColumns,
+  zone: string = viewerTimeZone(),
+  storedZone?: string,
 ): CalendarRowTime | undefined {
   const { dateProp, allDayProp, endDayProp, calendarDate } = columns;
   const day = valueToDayKey(get(dateProp.subject), dateProp.datatype);
 
   if (!day) return undefined;
 
-  const ranged = calendarDate && allDayProp && get(allDayProp.subject) === true;
+  const allDay = !!allDayProp && get(allDayProp.subject) === true;
+  const start = columns.startProp && get(columns.startProp.subject);
+
+  if (!allDay && isCalendarInstant(start)) {
+    const shift = daysBetween(start.slice(0, 10), day);
+    const end = columns.endProp && get(columns.endProp.subject);
+    const startMs = Date.parse(start);
+
+    return {
+      start: {
+        dateTime: shiftInstantDays(start, shift),
+        timeZone: storedZone ?? zone,
+      },
+      end: {
+        dateTime:
+          isCalendarInstant(end) && Date.parse(end) > startMs
+            ? shiftInstantDays(end, shift)
+            : new Date(startMs + shift * 86400000 + 3600000).toISOString(),
+      },
+      timed: true,
+    };
+  }
+
+  const ranged = calendarDate && allDay;
 
   return allDayRowTime(
     day,

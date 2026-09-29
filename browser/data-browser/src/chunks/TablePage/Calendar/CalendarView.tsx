@@ -29,18 +29,23 @@ import { useCalendarDateProp } from './useCalendarDateProp';
 import { CalendarDay } from './CalendarDay';
 import { CalendarDayList } from './CalendarDayList';
 import { withTableRowDefaults } from '../rowDefaults';
-import { useCalendarRecurrenceProp } from './useCalendarRecurrenceProp';
+import { useCalendarRowProps } from './useCalendarRowProps';
 import {
   calendarRowTime,
   isNativePayload,
   localDayKey as toDayKey,
   readRecurrencePayload,
   rowRecord,
-  valueToDayKey,
   type CalendarColumns,
 } from './calendarRows';
 import type { CalendarRowContext } from './CalendarRowFields';
-import { calendarFields, isAllDayOnDate, nextCalendarDate } from '@tomic/lib';
+import {
+  calendarFields,
+  dayInZone,
+  isAllDayOnDate,
+  nextCalendarDate,
+  viewerTimeZone,
+} from '@tomic/lib';
 
 interface CalendarViewProps {
   /** The Table resource; new items are created as its children. */
@@ -65,13 +70,14 @@ const WEEKDAY_LABELS = Array.from({ length: 7 }, (_, i) =>
 function expandRecurrences(
   records: CalendarRecord[],
   days: string[],
+  zone: string,
 ): {
   buckets: Map<string, CalendarDayOccurrence[]>;
   invalid: InvalidCalendarRecord[];
   error: string;
 } {
   try {
-    return { ...calendarOccurrenceBuckets(records, days), error: '' };
+    return { ...calendarOccurrenceBuckets(records, days, zone), error: '' };
   } catch (error) {
     return {
       buckets: new Map(),
@@ -185,17 +191,24 @@ export function CalendarView({
     ),
   );
 
-  const { recurrenceProp, ensureRecurrenceProp } = useCalendarRecurrenceProp(
-    tableClass,
-    allColumns,
-  );
+  const {
+    recurrenceProp,
+    ensureRecurrenceProp,
+    startProp,
+    endProp,
+    ensureTimeProps,
+  } = useCalendarRowProps(tableClass, allColumns);
   const columns: CalendarColumns | undefined = dateProp && {
     dateProp,
     allDayProp,
     endDayProp,
     calendarDate,
     recurrenceProp,
+    startProp,
+    endProp,
   };
+  // Timed events go on the viewer's local day, at local times (#1802).
+  const zone = viewerTimeZone();
   const recurringRows = new Set<string>();
   const nativeRows = new Set<string>();
   const recurrenceRecords: CalendarRecord[] = [];
@@ -210,7 +223,12 @@ export function CalendarView({
       // A row's own series (the Repeat field) works on any date column; an
       // imported one only where the view is placed by the calendar's Day.
       if (isNativePayload(payload)) {
-        const time = calendarRowTime(prop => row?.get(prop), columns);
+        const time = calendarRowTime(
+          prop => row?.get(prop),
+          columns,
+          zone,
+          payload.event.start?.timeZone,
+        );
         if (!time) continue;
         nativeRows.add(subject);
         recurringRows.add(subject);
@@ -229,37 +247,52 @@ export function CalendarView({
   } = expandRecurrences(
     recurrenceRecords,
     gridDays.map(day => day.dayKey),
+    zone,
   );
 
-  // A row's own series is placed as an all-day range, but only labelled "All
-  // day" when the row is, like the row itself would be.
+  // A timed occurrence shows its start time. A row's own all-day series is
+  // placed as an all-day range, but only labelled "All day" when the row is,
+  // like the row itself would be.
   const occurrenceBuckets = new Map(
     [...expandedBuckets].map(([day, occurrences]) => [
       day,
-      occurrences.map(occurrence =>
-        nativeRows.has(occurrence.subject) &&
-        !allDaySubjects.has(occurrence.subject)
-          ? { ...occurrence, allDay: false }
-          : occurrence,
-      ),
+      occurrences.map(occurrence => ({
+        ...occurrence,
+        timed: !occurrence.allDay && !occurrence.movedTo,
+        allDay:
+          occurrence.allDay &&
+          (!nativeRows.has(occurrence.subject) ||
+            allDaySubjects.has(occurrence.subject)),
+      })),
     ]),
   );
 
   // Bucket each row onto its day. Reactive: `useResources` re-snapshots when a
   // row's date changes, so the grid recomputes.
+  const eventTimes = new Map<string, number>();
   const buckets = (() => {
     const map = new Map<string, string[]>();
 
-    if (!dateProp) {
+    if (!columns) {
       return map;
     }
 
     for (const subject of memberSubjects) {
       if (recurringRows.has(subject)) continue;
       const resource = rows.get(subject);
-      const value = resource?.get(dateProp.subject);
-      const key = valueToDayKey(value, dateProp.datatype);
+      const time = calendarRowTime(prop => resource?.get(prop), columns, zone);
 
+      if (!time) continue;
+
+      if (time.timed) {
+        const start = Date.parse(time.start.dateTime!);
+        eventTimes.set(subject, start);
+        const key = dayInZone(start, zone);
+        map.set(key, [...(map.get(key) ?? []), subject]);
+        continue;
+      }
+
+      const key = time.start.date!;
       const isAllDay =
         calendarDate &&
         allDayProp &&
@@ -277,6 +310,14 @@ export function CalendarView({
       }
     }
 
+    // Untimed first, then by time of day.
+    for (const subjects of map.values()) {
+      subjects.sort(
+        (a, b) =>
+          (eventTimes.get(a) ?? -Infinity) - (eventTimes.get(b) ?? -Infinity),
+      );
+    }
+
     return map;
   })();
 
@@ -285,6 +326,7 @@ export function CalendarView({
   const rowContext: CalendarRowContext | undefined = columns && {
     ...columns,
     ensureRecurrenceProp,
+    ensureTimeProps,
   };
 
   const monthLabel = new Date(cursor.year, cursor.month, 1).toLocaleDateString(
@@ -414,6 +456,7 @@ export function CalendarView({
               eventSubjects={buckets.get(day.dayKey) ?? []}
               occurrences={occurrenceBuckets.get(day.dayKey) ?? []}
               allDaySubjects={allDaySubjects}
+              eventTimes={eventTimes}
               readOnly={readOnly}
               onAddItem={handleAddItem}
               onOpenItem={handleOpenItem}
@@ -429,6 +472,7 @@ export function CalendarView({
         eventSubjects={(listedDay && buckets.get(listedDay)) || []}
         occurrences={(listedDay && occurrenceBuckets.get(listedDay)) || []}
         allDaySubjects={allDaySubjects}
+        eventTimes={eventTimes}
         onOpenItem={handleOpenItem}
       />
       <ExpandedRowDialog

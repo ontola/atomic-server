@@ -1,6 +1,9 @@
 import {
   anchorOf,
   buildRecurrence,
+  isCalendarInstant,
+  nextCalendarDate,
+  viewerTimeZone,
   nativeCalendarPayload,
   parseRecurrence,
   type RepeatParse,
@@ -13,19 +16,25 @@ import { ValueForm } from '@components/forms/ValueForm';
 import {
   calendarRowTime,
   isNativePayload,
+  localTimeInput,
   readRecurrencePayload,
   rowRecord,
+  timedValue,
+  valueToDayKey,
   type CalendarColumns,
   type RecurrencePayload,
 } from './calendarRows';
 import { RepeatField } from './RepeatField';
+import { EventTimeFields, type EventTimeChange } from './EventTimeFields';
 
 /** What the row dialog needs to show a calendar row's own fields. */
 export interface CalendarRowContext extends CalendarColumns {
   ensureRecurrenceProp: () => Promise<string>;
+  ensureTimeProps: () => Promise<{ start: string; end: string }>;
 }
 
-/** The calendar fields of a row in its dialog: for now, how it repeats. */
+/** The calendar fields of a row in its dialog: its time of day (#1802) and
+ * how it repeats (#1801). */
 export function CalendarRowFields({
   subject,
   calendar,
@@ -59,15 +68,44 @@ export function CalendarRowFields({
       nextPayload(subject, next, payload, time),
     )
       .catch(error =>
-        toast.error(
-          `Could not save the repeat: ${error instanceof Error ? error.message : String(error)}`,
-        ),
+        toast.error(`Could not save the repeat: ${errorMessage(error)}`),
       )
       .then(() => setSaving(false));
   };
 
+  const saveTime = (next: EventTimeChange) => {
+    setSaving(true);
+    void saveTimes(resource, calendar, next)
+      .catch(error =>
+        toast.error(`Could not save the time: ${errorMessage(error)}`),
+      )
+      .then(() => setSaving(false));
+  };
+
+  // An imported series keeps the provider's times.
+  const imported = !!payload && !isNativePayload(payload);
+  const zone = viewerTimeZone();
+  const endValue = calendar.endProp && get(calendar.endProp.subject);
+  const startTime = time?.timed
+    ? localTimeInput(time.start.dateTime!, zone)
+    : undefined;
+  const endTime =
+    time?.timed && isCalendarInstant(endValue)
+      ? localTimeInput(time.end.dateTime!, zone)
+      : undefined;
+
   return (
     <Section>
+      {!imported && (
+        <EventTimeFields
+          key={`${subject}:${startTime}:${endTime}`}
+          allDay={!time?.timed}
+          start={startTime}
+          end={endTime}
+          disabled={!canWrite || saving}
+          onChange={saveTime}
+        />
+      )}
       <RepeatField
         parsed={parsed}
         anchor={anchor}
@@ -86,6 +124,10 @@ export function CalendarRowFields({
   );
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** The row's series as the Repeat field shows it. An imported series repeats
  * from its own start; a native one from the row's day. */
 function readRowRepeat(
@@ -96,7 +138,14 @@ function readRowRepeat(
   const { recurrenceProp } = calendar;
   const value = recurrenceProp ? get(recurrenceProp.subject) : undefined;
   const payload = readRecurrencePayload(value);
-  const time = calendarRowTime(get, calendar);
+  const time = calendarRowTime(
+    get,
+    calendar,
+    undefined,
+    payload && isNativePayload(payload)
+      ? payload.event.start?.timeZone
+      : undefined,
+  );
 
   try {
     // A native series as the view expands it: moved along with its row.
@@ -123,6 +172,44 @@ function readRowRepeat(
       parsed: { kind: 'custom' } as RepeatParse,
     };
   }
+}
+
+/** Stores a row's times, or makes it all day again. The date stays the
+ * row's Day; End day is left as it is. An end at or before the start is
+ * taken to be the next day. */
+async function saveTimes(
+  resource: Resource,
+  calendar: CalendarRowContext,
+  next: EventTimeChange,
+) {
+  const { allDayProp, dateProp } = calendar;
+
+  if (next === 'all-day') {
+    for (const prop of [calendar.startProp, calendar.endProp]) {
+      if (prop) resource.remove(prop.subject);
+    }
+
+    if (allDayProp) await resource.set(allDayProp.subject, true);
+    await resource.save();
+
+    return;
+  }
+
+  const day = valueToDayKey(resource.get(dateProp.subject), dateProp.datatype);
+  if (!day) throw new Error('The event has no date');
+  const zone = viewerTimeZone();
+  const props = await calendar.ensureTimeProps();
+  await resource.set(props.start, timedValue(day, next.start, zone));
+
+  if (next.end) {
+    const endDay = next.end > next.start ? day : nextCalendarDate(day);
+    await resource.set(props.end, timedValue(endDay, next.end, zone));
+  } else {
+    resource.remove(props.end);
+  }
+
+  if (allDayProp) await resource.set(allDayProp.subject, false);
+  await resource.save();
 }
 
 async function saveRepeat(
@@ -171,6 +258,9 @@ function nextPayload(
 }
 
 const Section = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   padding: 0.5rem;
   margin-bottom: 1rem;
   border: 1px solid ${p => p.theme.colors.bg2};

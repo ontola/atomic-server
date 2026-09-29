@@ -25,6 +25,8 @@ interface CalendarDayProps {
   eventSubjects: string[];
   occurrences: CalendarDayOccurrence[];
   allDaySubjects: ReadonlySet<string>;
+  /** The start of each timed row, for its chip. */
+  eventTimes: ReadonlyMap<string, number>;
   readOnly: boolean;
   /** Create a row with its date preset to this day. */
   onAddItem: (dayKey: string, name: string) => void | Promise<void>;
@@ -43,6 +45,7 @@ export function CalendarDay({
   eventSubjects,
   occurrences,
   allDaySubjects,
+  eventTimes,
   readOnly,
   onAddItem,
   onOpenItem,
@@ -118,6 +121,7 @@ export function CalendarDay({
             key={subject}
             subject={subject}
             allDay={allDaySubjects.has(subject)}
+            time={eventTimes.get(subject)}
             overflow={i >= visibleCount}
             onOpen={onOpenItem}
           />
@@ -127,6 +131,7 @@ export function CalendarDay({
             key={occurrenceKey(occurrence)}
             subject={occurrence.subject}
             allDay={occurrence.allDay}
+            time={occurrence.timed ? occurrence.start : undefined}
             recurring={occurrence.recurring}
             movedFrom={occurrence.movedFrom}
             movedTo={occurrence.movedTo}
@@ -248,6 +253,7 @@ export function CalendarEvent({
   subject,
   onOpen,
   allDay,
+  time,
   recurring = false,
   movedFrom,
   movedTo,
@@ -256,6 +262,8 @@ export function CalendarEvent({
 }: {
   subject: string;
   allDay: boolean;
+  /** A timed event's start, shown in local time before its title. */
+  time?: number;
   recurring?: boolean;
   /** This instance was moved here from that day (YYYY-MM-DD). */
   movedFrom?: string;
@@ -319,6 +327,7 @@ export function CalendarEvent({
     >
       {recurring && <span aria-label='Recurring meeting'>↻ </span>}
       {allDay && <AllDayLabel>All day</AllDayLabel>}
+      {time !== undefined && <TimeLabel time={time} />}
       {name}
       {movedFrom && <MovedFromNote day={movedFrom} />}
     </EventChip>
@@ -541,6 +550,25 @@ const AddInput = styled(InputStyled)`
   border: 1px solid ${p => p.theme.colors.main};
   border-radius: ${p => p.theme.radius};
   background-color: ${p => p.theme.colors.bg};
+`;
+
+/** "09:30", in the viewer's locale and zone. Own component, like the moved
+ * notes, so the guarded chip above keeps its strings in the catalog. */
+function TimeLabel({ time }: { time: number }): JSX.Element {
+  return (
+    <EventTime dateTime={new Date(time).toISOString()}>
+      {new Date(time).toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}
+    </EventTime>
+  );
+}
+
+const EventTime = styled.time`
+  font-variant-numeric: tabular-nums;
+  margin-inline-end: 0.4em;
+  font-weight: 600;
 `;
 
 const AllDayLabel = styled.span`

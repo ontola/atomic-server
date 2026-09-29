@@ -18,6 +18,7 @@ interface CalendarDayListProps {
   eventSubjects: string[];
   occurrences: CalendarDayOccurrence[];
   allDaySubjects: ReadonlySet<string>;
+  eventTimes: ReadonlyMap<string, number>;
   /** Opens a row on top of this list; closing it comes back here. */
   onOpenItem: (subject: string) => void;
 }
@@ -30,6 +31,7 @@ export function CalendarDayList({
   eventSubjects,
   occurrences,
   allDaySubjects,
+  eventTimes,
   onOpenItem,
 }: CalendarDayListProps): JSX.Element {
   // Focus goes back to what opened the list ("+N more" or the day number),
@@ -68,6 +70,7 @@ export function CalendarDayList({
                   wrap
                   subject={subject}
                   allDay={allDaySubjects.has(subject)}
+                  time={eventTimes.get(subject)}
                   onOpen={onOpenItem}
                 />
               </li>
@@ -78,6 +81,7 @@ export function CalendarDayList({
                   wrap
                   subject={occurrence.subject}
                   allDay={occurrence.allDay}
+                  time={occurrence.timed ? occurrence.start : undefined}
                   recurring={occurrence.recurring}
                   movedFrom={occurrence.movedFrom}
                   movedTo={occurrence.movedTo}
