@@ -167,6 +167,35 @@ function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
 }
 
 /**
+ * Prints where a shard's time went: seconds per spec file and per shard, in the
+ * last lines of the shard's log. The shards are contiguous slices of the test
+ * list, cut by test count, so a heavy file sits in whichever slice it lands in.
+ * With these numbers `PWTEST_SHARD_WEIGHTS` can be set from measurements
+ * instead of guessed. Never fails the shard: a missing report prints nothing.
+ */
+const E2E_TIMING_SUMMARY = [
+  "const fs = require('fs');",
+  'let report;',
+  "try { report = JSON.parse(fs.readFileSync('/test-results.json', 'utf8')); } catch { process.exit(0); }",
+  'const files = new Map();',
+  'let tests = 0;',
+  'const walk = suite => {',
+  '  for (const spec of suite.specs || []) for (const test of spec.tests) {',
+  '    tests++;',
+  '    const ms = test.results.reduce((sum, result) => sum + result.duration, 0);',
+  '    files.set(spec.file, (files.get(spec.file) || [0, 0]).map((v, i) => v + (i ? 1 : ms)));',
+  '  }',
+  '  for (const child of suite.suites || []) walk(child);',
+  '};',
+  'for (const suite of report.suites) walk(suite);',
+  'let total = 0;',
+  'for (const [, [ms]] of files) total += ms;',
+  "console.log('E2E-TIMING shard=' + process.argv[1] + ' tests=' + tests + ' test-seconds=' + Math.round(total / 1000));",
+  'for (const [file, [ms, count]] of [...files].sort((a, b) => b[1][0] - a[1][0]))',
+  "  console.log('E2E-TIMING shard=' + process.argv[1] + ' ' + String(Math.round(ms / 1000)).padStart(5) + 's ' + String(count).padStart(3) + ' tests ' + file);",
+].join(' ');
+
+/**
  * `bash -c` payload for one Playwright shard.
  *
  * The log label must be safe inside a double-quoted `echo`. The previous
@@ -185,8 +214,11 @@ function e2eShardRunScript(
   return (
     'set -o pipefail; ' +
     `echo "e2e mode grep=${grepLabel} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+    'export PLAYWRIGHT_JSON_OUTPUT_NAME=/test-results.json; ' +
     `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
-    'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0'
+    'echo ${PIPESTATUS[0]} > /test-exit-code; ' +
+    `node -e ${JSON.stringify(E2E_TIMING_SUMMARY)} ${shardIndex}/${shardCount} 2>&1 | tee -a /test-output.log; ` +
+    'exit 0'
   );
 }
 
