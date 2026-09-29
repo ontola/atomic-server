@@ -9,11 +9,18 @@ import {
 import AllProps from '@components/AllProps';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { Title } from '@components/Title';
+import {
+  CalendarRowFields,
+  type CalendarRowContext,
+} from './Calendar/CalendarRowFields';
 
 interface ExpandedRowDialogProps {
   subject: string;
   open: boolean;
   bindOpen: (open: boolean) => void;
+  /** Opened from a calendar view: show the row's calendar fields (Repeat)
+   * instead of their raw values. */
+  calendar?: CalendarRowContext;
 }
 
 const EXCLUDED_PROPS = [
@@ -27,6 +34,7 @@ export function ExpandedRowDialog({
   subject,
   open,
   bindOpen,
+  calendar,
 }: ExpandedRowDialogProps): JSX.Element {
   const { tableRef } = useTableEditorContext();
   const resource = useResource(subject);
@@ -47,12 +55,19 @@ export function ExpandedRowDialog({
         <Title resource={resource} link />
       </DialogTitle>
       <DialogContent>
+        {calendar && (
+          <CalendarRowFields subject={subject} calendar={calendar} />
+        )}
         <AllProps
           editable
           columns
           labelByName
           resource={resource}
-          except={EXCLUDED_PROPS}
+          except={
+            calendar?.recurrenceProp
+              ? [...EXCLUDED_PROPS, calendar.recurrenceProp.subject]
+              : EXCLUDED_PROPS
+          }
         />
       </DialogContent>
     </Dialog>
