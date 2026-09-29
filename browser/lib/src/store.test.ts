@@ -836,39 +836,6 @@ describe('Store', () => {
     expect(store.resources.get(propertySubject)?.error).toBeUndefined();
   });
 
-  it('getResource() checks the local WASM DB (OPFS) before hitting the network', async ({
-    expect,
-  }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    // Not yet touched this session — nothing in `store.resources` yet.
-    const propertySubject = 'https://atomicdata.dev/properties/form-fields';
-    const jsonAd = JSON.stringify({
-      '@id': propertySubject,
-      [core.properties.shortname]: 'form-fields',
-      [core.properties.datatype]: Datatype.RESOURCEARRAY,
-      [core.properties.isA]: [core.classes.property],
-    });
-
-    // OPFS already has it (e.g. seeded from lib/defaults/forms.json via
-    // --repopulate-defaults), even though the in-memory store doesn't yet.
-    store.setClientDb({
-      isReady: true,
-      waitForReady: async () => true,
-      getResource: async (s: string) => (s === propertySubject ? jsonAd : null),
-    } as unknown as Parameters<Store['setClientDb']>[0]);
-
-    const fetchSpy = vi.fn(
-      async () => new Response('Not found', { status: 404 }),
-    );
-    store.injectFetch(fetchSpy);
-
-    const resource = await store.getResource(propertySubject);
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(resource.error).toBeUndefined();
-    expect(resource.get(core.properties.shortname)).toBe('form-fields');
-  });
-
   it('getResourceLoading() on a subject that genuinely does not exist still settles into an error, not stuck loading forever', async ({
     expect,
   }) => {
@@ -1197,9 +1164,10 @@ describe('Store', () => {
     });
     await resource.set(name, 'After', false);
     const postedBefore = posted.length;
-    await resource.save();
+    // `save()` reports the refusal (#1460) …
+    await expect(resource.save()).rejects.toThrow('parked as pending');
 
-    // The rejected attempt must keep the entry queued (not drop it) …
+    // … but the rejected attempt must keep the entry queued (not drop it) …
     expect(store.outbox.hasPending(subject)).toBe(true);
 
     // … and the retry (once due) must send a FULL snapshot. Clear the

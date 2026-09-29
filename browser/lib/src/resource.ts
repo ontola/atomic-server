@@ -1223,18 +1223,31 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * Drop the save cursor entirely so the next drain export falls back to a
-   * FULL snapshot instead of a delta. Recovery path for the server's
-   * pending-deps rejection ("your update depends on ops I don't have"): the
-   * cursor sits past ops the server never received — usually because an
-   * earlier commit was lost in transit after the cursor advanced — so every
-   * delta exported from it is un-importable. A snapshot is self-contained:
-   * the server merges it and recovers the missing range along the way.
+   * Rewind the save cursor to the empty version so the next drain export
+   * carries the WHOLE oplog instead of a delta. Recovery path for the
+   * server's pending-deps rejection ("your update depends on ops I don't
+   * have"): the cursor sits past ops the server never received — usually
+   * because an earlier commit was lost in transit after the cursor advanced —
+   * so every delta exported from it is un-importable. An update from the
+   * empty version is self-contained: the server merges it and recovers the
+   * missing range along the way.
+   *
+   * Rewound, not cleared: an `undefined` cursor reads as "fresh", and the
+   * next import or merge (`initLoroSaveCursorIfFresh`) would re-seat it at
+   * the current version — past the unsent edit, which the drain would then
+   * see as saved and drop.
    *
    * @internal store-level drain only — not part of the public API.
    */
   public clearLoroSaveCursor(): void {
-    this._loroVersionAtLastSave = undefined;
+    if (!this._loroDoc) {
+      this._loroVersionAtLastSave = undefined;
+
+      return;
+    }
+
+    const { VersionVector: VersionVectorClass } = LoroLoader.Loro;
+    this._loroVersionAtLastSave = new VersionVectorClass(new Map());
   }
 
   /** Base64-encode the current save cursor (last-synced Loro version) for
