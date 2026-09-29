@@ -7,7 +7,7 @@ import {
   type Resource,
 } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
-import { useAppClass } from '@chunks/PluginRuns/runScript';
+import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
 export interface DriveApp {
   subject: string;

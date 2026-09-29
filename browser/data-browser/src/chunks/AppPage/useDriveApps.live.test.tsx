@@ -20,7 +20,7 @@ const EVENTS = 'atomic:resource:class-event';
 const LEDGER = 'atomic:resource:ledger';
 const CALENDAR = 'atomic:resource:calendar';
 
-vi.mock('@chunks/PluginRuns/runScript', () => ({
+vi.mock('@chunks/PluginRuns/useDriveClass', () => ({
   useAppClass: () => APP_CLASS,
 }));
 

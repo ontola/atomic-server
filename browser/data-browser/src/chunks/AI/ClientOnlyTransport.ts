@@ -23,7 +23,7 @@ import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
-import { createHostedModel } from '@helpers/managed/ai';
+import { createHostedModel } from './hostedModel';
 import { hostedVoiceModel } from './hostedVoiceModel';
 
 export type Modalities = 'text' | 'image';

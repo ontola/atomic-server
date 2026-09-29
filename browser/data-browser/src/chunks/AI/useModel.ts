@@ -4,7 +4,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { AIProvider } from '@components/AI/aiContstants';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import type { LanguageModel } from 'ai';
-import { createHostedModel } from '@helpers/managed/ai';
+import { createHostedModel } from './hostedModel';
 
 const createOpenRouterProvider = (openRouterApiKey: string, zdr: boolean) => {
   return createOpenRouter({
