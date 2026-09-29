@@ -1,4 +1,4 @@
-import { beforeAll, describe, it } from 'vitest';
+import { beforeAll, describe, it, vi } from 'vitest';
 import { Store } from './store.js';
 import { LoroLoader } from './loro-loader.js';
 import { commits, core } from './index.js';
@@ -172,6 +172,55 @@ describe('a sync delta for a resource with no local Loro history', () => {
     expect([
       ...(written.oplogVersion().toJSON() as Map<string, number>).keys(),
     ]).toEqual(['1']);
+  });
+
+  it('does not warn about, or bring back, a resource deleted during the repair', async ({
+    expect,
+  }) => {
+    // The delete e2e: a sync delta for a child parks as incomplete, the local
+    // database has no base for it, and while the repair waits the parent's
+    // delete cascades to the child. The server's "not found" is then right.
+    const { json, delta } = history();
+    const { store } = storeWith(json, new Uint8Array());
+    let answer!: (error: Error) => void;
+    store.fetchResourceFromServer = (() =>
+      new Promise((_, reject) => {
+        answer = reject;
+      })) as never;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    store.hydrateResourceFromJsonAd(SUBJECT, json);
+    store.applyIncoming({
+      subject: SUBJECT,
+      loroBytes: delta,
+      source: 'ws-sync-push',
+    });
+    await settle();
+    store.removeResource(SUBJECT);
+    answer(new Error(`DID Resource ${SUBJECT} not found locally`));
+    await settle();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.resources.get(SUBJECT)).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it('does not ask the server about a resource already deleted', async ({
+    expect,
+  }) => {
+    const { json, delta } = history();
+    const { store, asked } = storeWith(json, new Uint8Array());
+
+    store.hydrateResourceFromJsonAd(SUBJECT, json);
+    store.removeResource(SUBJECT);
+    store.applyIncoming({
+      subject: SUBJECT,
+      loroBytes: delta,
+      source: 'ws-sync-push',
+    });
+    await settle();
+
+    expect(asked).toEqual([]);
   });
 
   it('still asks the server when the local database has no base either', async ({
