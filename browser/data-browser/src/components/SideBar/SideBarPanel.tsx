@@ -1,8 +1,11 @@
 import { styled } from 'styled-components';
 import { Collapse } from '../Collapse';
-import { useRef, useState, type JSX } from 'react';
+import { useRef, type JSX } from 'react';
 import { useResizable } from '@hooks/useResizable';
 import { useLocalStorage } from '@hooks/useLocalStorage';
+
+/** Height of one row in a sidebar section; anything shorter shows nothing. */
+const ROW_HEIGHT = 32;
 
 export interface SideBarPanelProps {
   title: string;
@@ -27,21 +30,40 @@ export function SideBarPanel({
   embedded = false,
   'data-testid': dataTestId,
 }: React.PropsWithChildren<SideBarPanelProps>): JSX.Element {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useLocalStorage(
+    `${heightStorageKey}.open`,
+    defaultOpen,
+  );
   const contentRef = useRef<HTMLDivElement>(null);
+  // The last height a drag ended at that showed at least one row. Ending a
+  // drag below that is a request to close the section; opening it again comes
+  // back at this height.
   const [storedHeight, setStoredHeight] = useLocalStorage(
     heightStorageKey,
     initialHeight,
   );
-  const { size, dragAreaListeners, isDragging } = useResizable({
+  const { size, dragAreaListeners, isDragging, setSize } = useResizable({
     initialSize: storedHeight,
-    minSize: 60,
+    // Free all the way down: the old 60px floor (two rows) left no way to
+    // shrink a section away short of the header's toggle.
+    minSize: 0,
     maxSize: 1200,
     targetRef: contentRef,
     edge: 'bottom',
     mode: 'delta',
     threshold: 6,
-    onResize: setStoredHeight,
+    // Remembered when a drag ends, so a drag that ends in a close keeps the
+    // height the section had before it.
+    onResizeEnd: height => {
+      if (height >= ROW_HEIGHT) {
+        setStoredHeight(height);
+
+        return;
+      }
+
+      setOpen(false);
+      setSize(storedHeight);
+    },
   });
 
   return (
@@ -54,7 +76,11 @@ export function SideBarPanel({
           aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
           title={open ? 'Drag to resize' : undefined}
           $dragging={isDragging}
-          {...(open ? dragAreaListeners : {})}
+          onPointerDown={open ? dragAreaListeners.onPointerDown : undefined}
+          // Always attached: a drag that closes the section re-renders it
+          // closed before the click that ends the drag arrives, and that
+          // click must not open it straight back up.
+          onClickCapture={dragAreaListeners.onClickCapture}
         >
           <PanelTitle>{title}</PanelTitle>
         </HeaderButton>
