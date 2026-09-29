@@ -2284,16 +2284,33 @@ export class Store {
         `from the local database, else from the server.`,
     );
 
+    // Destroyed while the repair ran (a cascade from its parent's delete,
+    // say): "not found" is then the right answer, not a failure, and the
+    // resource must not come back as an errored copy. The local-base replay
+    // (#1905) waits on the local database first, which widened this window
+    // enough for the delete e2e to hit it.
+    const gone = () =>
+      this.isDestroyed(subject) || this.hasPendingDestroy(subject);
     const fromServer = () =>
-      this.fetchResourceFromServer(subject, { forceOverride: true });
+      gone()
+        ? undefined
+        : this.fetchResourceFromServer(subject, { forceOverride: true });
     const repair: Promise<unknown> = this.clientDb
       ? this.replayOnLocalBase(subject).then(done =>
           done ? undefined : fromServer(),
         )
-      : fromServer();
+      : Promise.resolve(fromServer());
 
     repair
       .catch(error => {
+        if (gone()) {
+          console.info(
+            `[Store] ${subject.slice(0, 60)} was deleted while its missing state was being recovered.`,
+          );
+
+          return;
+        }
+
         console.warn(
           `[Store] failed to recover missing state for ${subject}:`,
           error,
