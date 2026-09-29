@@ -17,9 +17,10 @@
 //! into the route's declared `enqueues` are stored in the durable queue
 //! ([`super::route_delivery`], AS-09), which sends them later. `auth: http-signature` and `auth: bearer` are verified by
 //! [`super::route_auth`] before the sandbox starts (AS-08), `auth: atomic`
-//! by a version 2 Atomic request signature ([`crate::require_v2`]), and a
-//! failure is a `401`; `auth: dpop` and the `caller` principal still answer
-//! `501` without starting it. At `read-write` a handler also gets the
+//! by a version 2 Atomic request signature ([`crate::require_v2`]), `auth:
+//! dpop` (Solid-OIDC) by [`super::route_dpop`], and a failure is a `401`;
+//! the `caller` principal still answers `501` without starting it. At
+//! `read-write` a handler also gets the
 //! host-held `ctx.keys` and `ctx.tokens` ([`super::route_keys`],
 //! [`super::route_tokens`]).
 //!
@@ -99,7 +100,9 @@ const SAMPLE_2XX: u64 = 10;
 
 /// Request headers a handler sees. Everything else is dropped before the
 /// sandbox, including every `x-atomic-*` header and `authorization`.
-const REQUEST_HEADERS: [&str; 15] = [
+/// `link` and `slug` are how a Solid client asks for a container and names
+/// a new resource (Solid Protocol 5.3).
+const REQUEST_HEADERS: [&str; 17] = [
     "accept",
     "accept-language",
     "content-digest",
@@ -111,15 +114,24 @@ const REQUEST_HEADERS: [&str; 15] = [
     "if-modified-since",
     "if-none-match",
     "if-unmodified-since",
+    "link",
     "origin",
     "signature",
     "signature-input",
+    "slug",
     "user-agent",
 ];
 
 /// Response headers a handler may set (design 2.7). CORS headers only as
-/// declared; `location` only to the same host.
-const RESPONSE_HEADERS: [&str; 9] = [
+/// declared; `location` only to the same host. `allow`, `accept-*` and
+/// `wac-allow` describe what the handler itself decides a resource answers
+/// (Solid Protocol 5.1 and 5.2, WAC's `WAC-Allow`); the host does not vouch
+/// for them.
+const RESPONSE_HEADERS: [&str; 14] = [
+    "accept-patch",
+    "accept-post",
+    "accept-put",
+    "allow",
     "cache-control",
     "content-type",
     "etag",
@@ -128,6 +140,7 @@ const RESPONSE_HEADERS: [&str; 9] = [
     "location",
     "retry-after",
     "vary",
+    "wac-allow",
     "www-authenticate",
 ];
 
@@ -304,6 +317,8 @@ pub struct RouteExecutor {
     /// ([`crate::config::Config::plugin_delivery_loopback`] and
     /// [`crate::config::Config::plugin_e2e_peer_ca`]).
     pub egress_seams: (bool, Option<std::path::PathBuf>),
+    /// Solid-OIDC DPoP verification for `auth: dpop` routes.
+    pub dpop: super::route_dpop::DpopVerifier,
 }
 
 impl Default for RouteExecutor {
@@ -324,6 +339,7 @@ impl RouteExecutor {
             consents: Default::default(),
             max_blob_bytes: super::route_blobs::DEFAULT_MAX_BLOB_BYTES,
             egress_seams: (false, None),
+            dpop: Default::default(),
         }
     }
 
@@ -334,6 +350,12 @@ impl RouteExecutor {
         peer_ca: Option<std::path::PathBuf>,
     ) -> Self {
         self.egress_seams = (loopback, peer_ca);
+        self
+    }
+
+    /// This executor with this DPoP verifier.
+    pub fn with_dpop(mut self, dpop: super::route_dpop::DpopVerifier) -> Self {
+        self.dpop = dpop;
         self
     }
 
@@ -558,40 +580,53 @@ pub fn build_response(response: &Json, rules: &ResponseRules) -> Result<Built, S
         Some(Json::Object(map)) => {
             for (name, value) in map {
                 let lower = name.to_ascii_lowercase();
-                let value = match value {
-                    Json::String(s) => s.clone(),
-                    Json::Number(n) => n.to_string(),
+                // `link` may repeat: an array is one header line per value.
+                let values: Vec<String> = match value {
+                    Json::String(s) => vec![s.clone()],
+                    Json::Number(n) => vec![n.to_string()],
+                    Json::Array(items)
+                        if lower == "link"
+                            && !items.is_empty()
+                            && items.iter().all(Json::is_string) =>
+                    {
+                        items
+                            .iter()
+                            .filter_map(|i| i.as_str().map(str::to_string))
+                            .collect()
+                    }
                     _ => {
                         dropped.push(lower);
                         continue;
                     }
                 };
-                let allowed = RESPONSE_HEADERS.contains(&lower.as_str())
-                    || (rules.cors == Cors::AnyOriginNoCredentials
-                        && CORS_HEADERS.contains(&lower.as_str()));
-                let location_ok = same_host(&value, rules.host)
-                    || rules
-                        .consent_page
-                        .as_deref()
-                        .is_some_and(|page| value.starts_with(page))
-                    || origin_of(&value)
-                        .is_some_and(|origin| rules.approved_clients.contains(&origin));
-                if !allowed || (lower == "location" && !location_ok) {
-                    dropped.push(lower);
-                    continue;
+                for value in values {
+                    let allowed = RESPONSE_HEADERS.contains(&lower.as_str())
+                        || (rules.cors == Cors::AnyOriginNoCredentials
+                            && CORS_HEADERS.contains(&lower.as_str()));
+                    let location_ok = same_host(&value, rules.host)
+                        || rules
+                            .consent_page
+                            .as_deref()
+                            .is_some_and(|page| value.starts_with(page))
+                        || origin_of(&value)
+                            .is_some_and(|origin| rules.approved_clients.contains(&origin));
+                    if !allowed || (lower == "location" && !location_ok) {
+                        dropped.push(lower.clone());
+                        continue;
+                    }
+                    let (Ok(name), Ok(value)) = (
+                        HeaderName::from_bytes(lower.as_bytes()),
+                        HeaderValue::from_str(&value),
+                    ) else {
+                        dropped.push(lower.clone());
+                        continue;
+                    };
+                    if name == header::CONTENT_TYPE {
+                        content_type = Some(value.to_str().unwrap_or("").to_string());
+                        continue;
+                    }
+                    headers.push((name, value));
                 }
-                let (Ok(name), Ok(value)) = (
-                    HeaderName::from_bytes(lower.as_bytes()),
-                    HeaderValue::from_str(&value),
-                ) else {
-                    dropped.push(lower);
-                    continue;
-                };
-                if name == header::CONTENT_TYPE {
-                    content_type = Some(value.to_str().unwrap_or("").to_string());
-                    continue;
-                }
-                headers.push((name, value));
             }
         }
         Some(_) => return Err("response headers must be an object".into()),
@@ -1142,15 +1177,15 @@ async fn run(
     *cors = RouteCors::declared(route.cors);
 
     // Authentication (design 2.5, AS-08). `bearer`, `http-signature` and
-    // `atomic` are verified below. The `caller` principal (acting with the
-    // caller's own rights) is not implemented, and `dpop` is phase 3. Never
-    // run a handler that expects a caller this host cannot verify.
-    if route.auth == Auth::Dpop || route.principal == Principal::Caller {
+    // `atomic` and `dpop` are verified below. The `caller` principal (acting
+    // with the caller's own rights) is not implemented. Never run a handler
+    // that expects a caller this host cannot verify.
+    if route.principal == Principal::Caller {
         return problem(
             StatusCode::NOT_IMPLEMENTED,
             "route-auth-unavailable",
             "This plugin route needs authentication this server cannot verify yet",
-            "Routes with `auth: dpop`, or the `caller` principal, are not served by this server version.",
+            "Routes with the `caller` principal are not served by this server version.",
         )
         .into();
     }
@@ -1167,7 +1202,42 @@ async fn run(
             Err(refused) => return unauthorized(route.auth, &slug, refused),
         }
     }
+    // Solid-OIDC (atomic-plugins#167, section 3): a DPoP-bound access token,
+    // checked against the URL this node names the request by. Without any
+    // token the request is anonymous: it reads as the public and may not
+    // write (below).
+    let mut anonymous = false;
+    if route.auth == Auth::Dpop {
+        let Some(url) = canonical_url(appstate, mount, &slug, &loaded.drive, req) else {
+            return unauthorized(
+                route.auth,
+                &slug,
+                super::http_signatures::Refused(
+                    "this server cannot name this request's URL for a DPoP proof".into(),
+                ),
+            );
+        };
+        let header_of = |name: &str| req.headers().get(name).and_then(|v| v.to_str().ok());
+        match executor
+            .dpop
+            .verify(
+                &super::route_dpop::Presented {
+                    method: req.method().as_str(),
+                    url: &url,
+                    authorization: header_of("authorization"),
+                    dpop: header_of("dpop"),
+                },
+                at,
+            )
+            .await
+        {
+            Ok(Some(verified)) => caller = verified,
+            Ok(None) => anonymous = true,
+            Err(refused) => return unauthorized(route.auth, &slug, refused),
+        }
+    }
     let for_agent = match route.principal {
+        _ if anonymous => ForAgent::Public,
         Principal::Anonymous => ForAgent::Public,
         Principal::Installation => {
             match store.get_app_agent_info(&AppAgentKey::new(&loaded.drive, installation)) {
@@ -1386,7 +1456,8 @@ async fn run(
     let caller_key = caller["owner"]
         .as_str()
         .or_else(|| caller["token"]["id"].as_str())
-        .or_else(|| caller["agent"].as_str());
+        .or_else(|| caller["agent"].as_str())
+        .or_else(|| caller["webid"].as_str());
     if let Some(key) = caller_key {
         if let Err(limited) = executor.rate.check(&format!("{slug} caller {key}"), true) {
             let mut response = problem(
@@ -1690,6 +1761,13 @@ async fn run(
                 "route-write-refused",
                 "This plugin route tried to write",
                 "the verdict has intents or enqueues, and at `--plugin-routes read-only` a route cannot write or enqueue; nothing was applied",
+            ))
+        } else if anonymous && (intents || enqueues) {
+            Some((
+                StatusCode::BAD_GATEWAY,
+                "route-write-refused",
+                "This plugin route tried to write",
+                "an unauthenticated request to an `auth: dpop` route cannot write or enqueue; nothing was applied",
             ))
         } else if waits {
             Some((
@@ -1996,6 +2074,38 @@ async fn run(
     }
 }
 
+/// The URL a request reached, as this node names it: the scheme and
+/// authority from the operator's configuration (the routes origin, the API
+/// origin, or the drive's own URL), never from `Host` or `Forwarded`
+/// headers, and the request's path. A DPoP proof must be for this URL.
+fn canonical_url(
+    appstate: &crate::appstate::AppState,
+    mount: Mount,
+    slug: &str,
+    drive: &str,
+    req: &HttpRequest,
+) -> Option<String> {
+    let origin = match mount {
+        Mount::InstallationOrigin => {
+            let routes = appstate.route_registry.config().routes_origin()?;
+            let host = routes.host_str()?;
+            match routes.port() {
+                Some(port) => format!("{}://{slug}.{host}:{port}", routes.scheme()),
+                None => format!("{}://{slug}.{host}", routes.scheme()),
+            }
+        }
+        Mount::DrivePrefix => appstate.config.get_origin(),
+        Mount::DriveHost => {
+            let drive = url::Url::parse(drive).ok()?;
+            if !matches!(drive.scheme(), "http" | "https") {
+                return None;
+            }
+            drive.origin().ascii_serialization()
+        }
+    };
+    Some(format!("{origin}{}", req.uri().path()))
+}
+
 /// `401` from the host: the caller could not be verified, and the sandbox
 /// did not start. The reason names what failed (a stale date, a digest,
 /// an unknown token), never key material.
@@ -2003,6 +2113,7 @@ fn unauthorized(auth: Auth, slug: &str, refused: super::http_signatures::Refused
     let challenge = match auth {
         Auth::Bearer => format!("Bearer realm=\"{slug}\""),
         Auth::Atomic => format!("AtomicRequestV2 realm=\"{slug}\""),
+        Auth::Dpop => format!("DPoP realm=\"{slug}\", algs=\"ES256 RS256 PS256 EdDSA\""),
         _ => format!("Signature realm=\"{slug}\",headers=\"(request-target) host date digest\""),
     };
     let mut response = problem(

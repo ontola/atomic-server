@@ -322,7 +322,11 @@ impl AppState {
                 .with_egress_seams(
                     config.plugin_delivery_loopback,
                     config.plugin_e2e_peer_ca.clone(),
-                ),
+                )
+                .with_dpop(plugins::route_dpop::DpopVerifier::new(
+                    plugins::route_dpop::Issuers::parse(config.opts.solid_oidc_issuers.as_deref())
+                        .map_err(|e| format!("--solid-oidc-issuers: {e}"))?,
+                )),
         );
         #[cfg(feature = "plugin-routes")]
         let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(

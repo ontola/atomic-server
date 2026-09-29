@@ -1648,6 +1648,9 @@ mod tests {
             ("/users/{name}", "/users/alice/", false),
             ("/{*rest}", "/anything/at/all", true),
             ("/{*rest}", "/", false),
+            // A Solid container is named by its trailing slash too.
+            ("/files/{*rest}", "/files/a//", false),
+            ("/{*rest}", "/notes/", true),
         ];
         for (p, path, expected) in cases {
             assert_eq!(
