@@ -113,9 +113,7 @@ msgstr ""
 #~ msgid "<0/> Create New Agent"
 #~ msgstr ""
 
-#: src/chunks/AI/AgentConfig.tsx
-#: src/chunks/AI/MCPConfigTab.tsx
-#: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/AI/ConfigEditorDialog.tsx
 #: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
@@ -148,6 +146,14 @@ msgstr ""
 
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Create Agent"
+msgstr ""
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "New Agent"
+msgstr ""
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Edit Agent"
 msgstr ""
 
 #: src/chunks/AI/AgentConfig.tsx
@@ -379,6 +385,10 @@ msgid "Create Skill"
 msgstr ""
 
 #: src/chunks/AI/SkillsConfigTab.tsx
+msgid "New Skill"
+msgstr ""
+
+#: src/chunks/AI/SkillsConfigTab.tsx
 msgid "The Agent will see this name"
 msgstr ""
 
@@ -448,6 +458,14 @@ msgstr ""
 
 #: src/chunks/AI/MCPConfigTab.tsx
 msgid "Create Server"
+msgstr ""
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "New MCP Server"
+msgstr ""
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Edit MCP Server"
 msgstr ""
 
 #: src/chunks/AI/MCPConfigTab.tsx
