@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 3,
+  "name": "solid-dpop",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "http": {
+    "mount": "installation-origin",
+    "writeTargets": [
+      {
+        "id": "notes",
+        "parent": "config:folder",
+        "classes": ["https://atomicdata.dev/classes/PlainText"]
+      }
+    ],
+    "routes": [
+      {
+        "id": "resource",
+        "path": "/{*path}",
+        "methods": ["GET", "HEAD", "PUT"],
+        "principal": "installation",
+        "auth": "dpop",
+        "body": "text",
+        "cors": "any-origin-no-credentials",
+        "writes": ["notes"]
+      }
+    ]
+  }
+}

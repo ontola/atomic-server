@@ -314,7 +314,11 @@ impl AppState {
         let route_exec = Arc::new(
             plugins::route_exec::RouteExecutor::default()
                 .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts))
-                .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes),
+                .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes)
+                .with_dpop(plugins::route_dpop::DpopVerifier::new(
+                    plugins::route_dpop::Issuers::parse(config.opts.solid_oidc_issuers.as_deref())
+                        .map_err(|e| format!("--solid-oidc-issuers: {e}"))?,
+                )),
         );
         #[cfg(feature = "plugin-routes")]
         let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(

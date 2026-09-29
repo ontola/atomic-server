@@ -324,6 +324,16 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_PLUGIN_API_WELL_KNOWN")]
     pub plugin_api_well_known: Option<String>,
 
+    /// Solid-OIDC issuers whose DPoP-bound access tokens `auth: dpop` plugin
+    /// routes accept, as comma-separated URLs (e.g.
+    /// `https://login.inrupt.com`). Unset, such routes serve anonymous
+    /// requests only and answer `401` to any token. Fetches of these issuers'
+    /// metadata and keys may reach loopback or private addresses, so list
+    /// only issuers you trust. Needs the `plugin-routes` feature and
+    /// `--plugin-routes read-write`.
+    #[clap(long, env = "ATOMIC_SOLID_OIDC_ISSUERS")]
+    pub solid_oidc_issuers: Option<String>,
+
     /// Resources one remote caller may make one plugin installation's
     /// routes create per hour (design 2.6, *proposed* there). Past it the
     /// route answers `429`. `0` turns this quota off. Only used at
@@ -780,6 +790,15 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
             website_origin: config.opts.website_origin.as_deref(),
         },
     )?;
+    #[cfg(feature = "plugin-routes")]
+    crate::plugins::route_dpop::Issuers::parse(config.opts.solid_oidc_issuers.as_deref())?;
+    #[cfg(not(feature = "plugin-routes"))]
+    if config.opts.solid_oidc_issuers.is_some() {
+        return Err(
+            "`--solid-oidc-issuers` (ATOMIC_SOLID_OIDC_ISSUERS) needs a build with the `plugin-routes` feature"
+                .into(),
+        );
+    }
 
     Ok(config)
 }
