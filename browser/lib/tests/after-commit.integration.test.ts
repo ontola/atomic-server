@@ -166,7 +166,7 @@ describe('afterCommit against a real server', () => {
       return answer;
     };
     const followed = await until(
-      'follow (is --plugin-after-commit on, and does the app declare afterCommit?)',
+      'follow (null means: no --plugin-after-commit, a server built without the wasm32-wasip2 plugin runtime, or an app that does not declare afterCommit)',
       follow,
       answer => !!answer?.table,
     );
