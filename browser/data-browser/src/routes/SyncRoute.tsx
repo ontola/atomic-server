@@ -116,6 +116,7 @@ import {
 } from '../helpers/tauri';
 import { deviceHasDriveData } from '../helpers/driveData';
 import { deliverDeepLink } from '../helpers/deepLinkQueue';
+import { SyncAIUsage } from '../components/AI/SyncAIUsage';
 import { PairingCode } from '../components/PairingCode';
 import { ConnectToDeviceForm } from '../components/ConnectToDeviceForm';
 import {
@@ -532,6 +533,7 @@ function ServerCard({
           <UsageFill style={{ width: `${usagePct}%` }} />
         </UsageBar>
       )}
+      {isCloud && <SyncAIUsage portalUrl={getManagedPortalUrl(managedInfo)} />}
     </SyncCard>
   );
 }

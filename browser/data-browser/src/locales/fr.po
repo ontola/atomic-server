@@ -12504,3 +12504,17 @@ msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Rée
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."
+
+#. 0: pct
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0}% of AI credits used"
+msgstr "{0} % des crédits IA utilisés"
+
+#. 0: credits(purchased)
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0} purchased credits left · carries over"
+msgstr "{0} crédits achetés restants · reportés"
+
+#: src/components/AI/SyncAIUsage.tsx
+msgid "Order more credits"
+msgstr "Commander plus de crédits"

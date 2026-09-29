@@ -12504,3 +12504,17 @@ msgstr "No se pudo traer tu espacio de trabajo a tu cuenta. Inténtalo de nuevo 
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cambia a esa identidad. Todo sigue siendo editable y se respalda con tu cuenta."
+
+#. 0: pct
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0}% of AI credits used"
+msgstr "{0} % de los créditos de IA usados"
+
+#. 0: credits(purchased)
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0} purchased credits left · carries over"
+msgstr "{0} créditos comprados restantes · se acumulan"
+
+#: src/components/AI/SyncAIUsage.tsx
+msgid "Order more credits"
+msgstr "Pedir más créditos"

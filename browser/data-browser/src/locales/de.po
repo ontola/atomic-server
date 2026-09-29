@@ -12504,3 +12504,17 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
+
+#. 0: pct
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0}% of AI credits used"
+msgstr "{0} % der KI-Credits verbraucht"
+
+#. 0: credits(purchased)
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0} purchased credits left · carries over"
+msgstr "{0} gekaufte Credits übrig · werden übertragen"
+
+#: src/components/AI/SyncAIUsage.tsx
+msgid "Order more credits"
+msgstr "Weitere Credits bestellen"

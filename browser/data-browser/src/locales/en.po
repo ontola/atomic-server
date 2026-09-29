@@ -12550,3 +12550,17 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#. 0: pct
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0}% of AI credits used"
+msgstr "{0}% of AI credits used"
+
+#. 0: credits(purchased)
+#: src/components/AI/SyncAIUsage.tsx
+msgid "{0} purchased credits left · carries over"
+msgstr "{0} purchased credits left · carries over"
+
+#: src/components/AI/SyncAIUsage.tsx
+msgid "Order more credits"
+msgstr "Order more credits"

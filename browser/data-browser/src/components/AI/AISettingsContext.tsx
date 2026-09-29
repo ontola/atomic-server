@@ -15,7 +15,7 @@ export const DEFAULT_CHAT_MODEL: AIModelIdentifier = {
   provider: AIProvider.OpenRouter,
 };
 
-interface AISettingsContextType {
+export interface AISettingsContextType {
   hostedAI?: HostedAIStatus;
   enableIncludedAI: () => Promise<void>;
   /** Enable all AI features in the app */
