@@ -532,7 +532,7 @@ impl CryptoHost {
                     .push(line);
                 out
             }
-            "willow.subspace" | "willow.authorise" | "willow.list" => {
+            "willow.subspace" | "willow.source" | "willow.authorise" | "willow.list" => {
                 let willow = super::willow::WillowHost {
                     db: &self.db,
                     installation: &self.installation,
@@ -546,6 +546,12 @@ impl CryptoHost {
                 match name {
                     "willow.subspace" => willow.subspace(key)?,
                     "willow.list" => willow.list(key)?,
+                    "willow.source" => {
+                        let subject = request["subject"]
+                            .as_str()
+                            .ok_or("give the source's subject")?;
+                        willow.source(key, subject).await?
+                    }
                     _ => {
                         let authorise: super::willow::AuthoriseRequest =
                             serde_json::from_value(request.clone())

@@ -16,12 +16,15 @@
 //!   issues;
 //! - its subspace is this key's public key, and its path starts with the
 //!   bound prefix;
-//! - its timestamp is not more than [`MAX_FUTURE_US`] ahead of now, read as
-//!   the data model recommends (microseconds of TAI since J2000, see
-//!   [`willow_now`]);
 //! - the route's principal can read the source resource, and its current
 //!   `lastCommit` is the one the plugin says it read: a stale source is
 //!   refused, not signed;
+//! - its timestamp is that commit's `createdAt`, read as the data model
+//!   recommends (microseconds of TAI since J2000, see [`willow_time`]), and
+//!   so never more than [`MAX_FUTURE_US`] ahead of this node's clock. The
+//!   plugin learns it from `ctx.willow.source`: commits are not always
+//!   readable resources, but the host keeps each resource's signed commit
+//!   envelopes ([`atomic_lib::envelopes`]);
 //! - it is not older than the entry this installation last authorised at the
 //!   same namespace, subspace and path (Willow's newer-than order: timestamp,
 //!   then payload digest, then payload length).
@@ -426,6 +429,13 @@ pub struct Source {
     pub commit: String,
 }
 
+/// A source resource's current revision.
+struct Revision {
+    commit: String,
+    committed_at: i64,
+    timestamp: u64,
+}
+
 /// What a route's Willow host calls need.
 pub struct WillowHost<'a> {
     pub db: &'a Db,
@@ -486,7 +496,19 @@ impl WillowHost<'_> {
                     .into(),
             );
         }
-        self.check_source(&request.source).await?;
+        let revision = self.revision(&request.source.subject).await?;
+        if revision.commit != request.source.commit {
+            return Err(format!(
+                "the source changed since it was read (its last commit is now `{}`); read it again",
+                revision.commit
+            ));
+        }
+        if entry.timestamp != revision.timestamp {
+            return Err(format!(
+                "the Entry's timestamp must be its source's last commit time, {} (microseconds of TAI since J2000)",
+                revision.timestamp
+            ));
+        }
 
         let key = record_key(self.installation, &entry);
         if let Some(existing) = read_record(self.db, &key)? {
@@ -540,16 +562,16 @@ impl WillowHost<'_> {
         Ok((answer(&record, &namespace, &subspace, "authorised"), line))
     }
 
-    /// The route's principal can read the source, and it is still at the
-    /// commit the plugin read.
-    async fn check_source(&self, source: &Source) -> Result<(), String> {
-        let subject = Subject::from_raw(&source.subject, self.db.get_base_domain().as_deref());
-        if !subject.is_local() {
+    /// The source's current revision, as the route's principal may see it:
+    /// its `lastCommit`, and that commit's time from the retained envelope.
+    async fn revision(&self, subject: &str) -> Result<Revision, String> {
+        let parsed = Subject::from_raw(subject, self.db.get_base_domain().as_deref());
+        if !parsed.is_local() {
             return Err("the source must be a resource on this server".into());
         }
         let resource = match self
             .db
-            .get_resource_extended(&subject, true, self.reader)
+            .get_resource_extended(&parsed, true, self.reader)
             .await
         {
             Ok(response) => response.to_single(),
@@ -560,16 +582,42 @@ impl WillowHost<'_> {
                 )
             }
         };
-        let current = resource
+        let commit = resource
             .get(urls::LAST_COMMIT)
             .map(|v| v.to_string())
             .unwrap_or_default();
-        if current.is_empty() || current != source.commit {
-            return Err(format!(
-                "the source changed since it was read (its last commit is now `{current}`); read it again"
-            ));
+        let signature = commit.rsplit(':').next().unwrap_or_default();
+        if commit.is_empty() || signature.is_empty() {
+            return Err("the source has no last commit".into());
         }
-        Ok(())
+        // Envelopes are keyed by the subject as the commit named it: the
+        // subject the plugin asked for, or the stored resource's own form.
+        let envelope = [subject.to_string(), resource.get_subject().to_string()]
+            .iter()
+            .flat_map(|s| atomic_lib::envelopes::envelopes(self.db, s).into_iter().rev())
+            .find(|e| e.signature == signature)
+            .ok_or("this server kept no signed envelope of the source's last commit, so its time is unknown")?;
+        let timestamp = willow_time(i128::from(envelope.created_at) * 1000)
+            .ok_or("the source's last commit is older than J2000")?;
+        Ok(Revision {
+            commit,
+            committed_at: envelope.created_at,
+            timestamp,
+        })
+    }
+
+    /// `ctx.willow.source({ key, subject })`: the source's `commit`, its
+    /// `committedAt` (Unix milliseconds) and `timestamp` (the Willow reading,
+    /// decimal text). The entry to authorise must carry that timestamp.
+    pub async fn source(&self, key: &str, subject: &str) -> Result<Json, String> {
+        resolve_binding(self.manifest, key, self.config)?;
+        let revision = self.revision(subject).await?;
+        Ok(json!({
+            "subject": subject,
+            "commit": revision.commit,
+            "committedAt": revision.committed_at,
+            "timestamp": revision.timestamp.to_string(),
+        }))
     }
 
     /// `ctx.willow.list({ key })`: the entries this installation authorised
@@ -760,8 +808,15 @@ mod tests {
         }
     }
 
-    async fn resource(db: &Db, subject: &str) -> String {
+    /// Two invented commits: 2026-09-24T00:00:00Z and one minute later.
+    const T1_MS: i64 = 1_790_208_000_000;
+    const T2_MS: i64 = 1_790_208_060_000;
+
+    /// Puts the resource at the commit with this signature, and keeps that
+    /// commit's envelope the way `envelopes::record_ops` keys it.
+    async fn at_commit(db: &Db, subject: &str, signature: &str, created_at: i64) -> String {
         use atomic_lib::{Resource, Value};
+        let commit = atomic_lib::identifiers::commit_subject(signature);
         let mut resource = Resource::new(subject.to_string());
         resource
             .set_unsafe(urls::NAME.into(), Value::String("note".into()))
@@ -769,19 +824,27 @@ mod tests {
         resource
             .set_unsafe(
                 urls::LAST_COMMIT.into(),
-                Value::AtomicUrl("https://willow.example/commits/1".into()),
+                Value::AtomicUrl(commit.clone().into()),
             )
             .unwrap();
         db.add_resource(&resource).await.unwrap();
-        "https://willow.example/commits/1".into()
+        let mut key = Subject::from_raw(subject, None).pure_id().into_bytes();
+        key.push(0);
+        key.extend_from_slice(&(created_at as u64).to_be_bytes());
+        key.push(0);
+        key.extend_from_slice(signature.as_bytes());
+        db.kv.insert(Tree::Envelopes, &key, b"{}").unwrap();
+        commit
     }
 
     #[tokio::test]
-    async fn authorises_only_bound_fresh_communal_entries_and_records_them() {
+    async fn authorises_only_bound_current_communal_entries_and_records_them() {
         let db = Db::init_temp("willow_authorise").await.unwrap();
         let base = db.get_server_url().to_string();
         let subject = format!("{base}/notes/hello");
-        let commit = resource(&db, &subject).await;
+        let commit1 = at_commit(&db, &subject, "sigone", T1_MS).await;
+        let t1 = willow_time(i128::from(T1_MS) * 1000).unwrap();
+        let t2 = willow_time(i128::from(T2_MS) * 1000).unwrap();
         let m = manifest();
         let config = config();
         let host = WillowHost {
@@ -799,8 +862,12 @@ mod tests {
             .try_into()
             .unwrap();
         assert_eq!(info["pathPrefix"], json!(["61746f6d6963"]));
+        let source = host.source("willow", &subject).await.unwrap();
+        assert_eq!(source["commit"], commit1);
+        assert_eq!(source["committedAt"], T1_MS);
+        assert_eq!(source["timestamp"], t1.to_string());
+
         let path = vec![b"atomic".to_vec(), subject.as_bytes().to_vec()];
-        let entry = entry_for(subspace, path.clone(), 5);
         let request = |entry: &Entry, commit: &str| AuthoriseRequest {
             key: "willow".into(),
             entry: hex(&encode_entry(entry)),
@@ -809,8 +876,8 @@ mod tests {
                 commit: commit.into(),
             },
         };
-
-        let (signed, line) = host.authorise(&request(&entry, &commit)).await.unwrap();
+        let entry = entry_for(subspace, path.clone(), t1);
+        let (signed, line) = host.authorise(&request(&entry, &commit1)).await.unwrap();
         assert_eq!(signed["status"], "authorised");
         assert!(line.contains("willow") && line.contains(&subject));
         assert_eq!(signed["capability"]["receiver"], hex(&subspace));
@@ -829,38 +896,41 @@ mod tests {
             .expect("the signature verifies strictly");
 
         // The same bytes again: the recorded signature, nothing new.
-        let (again, line) = host.authorise(&request(&entry, &commit)).await.unwrap();
+        let (again, line) = host.authorise(&request(&entry, &commit1)).await.unwrap();
         assert_eq!(again["status"], "unchanged");
         assert_eq!(again["signature"], signed["signature"]);
         assert!(line.is_empty());
-        assert_eq!(host.list("willow").unwrap().as_array().unwrap().len(), 1);
 
         // Refusals, each naming its reason, with nothing signed.
-        let moved = "https://willow.example/commits/0".to_string();
+        let moved = "atomic:commit:elsewhere".to_string();
         for (entry, commit, expected) in [
-            (entry_for(subspace, path.clone(), 4), &commit, "newer Entry"),
             (
-                entry_for(subspace, path.clone(), 6),
+                entry_for(subspace, path.clone(), t1 + 1),
+                &commit1,
+                "last commit time",
+            ),
+            (
+                entry_for(subspace, path.clone(), t1),
                 &moved,
                 "source changed",
             ),
-            (entry_for([1; 32], path.clone(), 6), &commit, "subspace"),
+            (entry_for([1; 32], path.clone(), t1), &commit1, "subspace"),
             (
-                entry_for(subspace, vec![b"other".to_vec()], 6),
-                &commit,
+                entry_for(subspace, vec![b"other".to_vec()], t1),
+                &commit1,
                 "prefix",
             ),
             (
                 entry_for(subspace, path.clone(), willow_now() + 3_600_000_000),
-                &commit,
+                &commit1,
                 "ahead",
             ),
             (
                 Entry {
                     namespace: [4; 32],
-                    ..entry_for(subspace, path.clone(), 6)
+                    ..entry_for(subspace, path.clone(), t1)
                 },
-                &commit,
+                &commit1,
                 "namespace",
             ),
         ] {
@@ -868,16 +938,28 @@ mod tests {
             assert!(error.contains(expected), "{expected}: {error}");
         }
         assert_eq!(host.list("willow").unwrap().as_array().unwrap().len(), 1);
-        // A newer entry replaces the record.
-        let (newer_entry, _) = host
-            .authorise(&request(&entry_for(subspace, path.clone(), 6), &commit))
+
+        // An edit: a newer commit, a newer entry, which replaces the record.
+        let commit2 = at_commit(&db, &subject, "sigtwo", T2_MS).await;
+        let (newer, _) = host
+            .authorise(&request(&entry_for(subspace, path.clone(), t2), &commit2))
             .await
             .unwrap();
-        assert_eq!(newer_entry["status"], "authorised");
-        assert_eq!(host.list("willow").unwrap().as_array().unwrap().len(), 1);
+        assert_eq!(newer["status"], "authorised");
+        let listed = host.list("willow").unwrap();
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+        assert_eq!(listed[0]["commit"], commit2);
+        // The resource back at the older commit (a stale replica): the older
+        // entry is refused, since a newer one was authorised at that path.
+        at_commit(&db, &subject, "sigone", T1_MS).await;
+        assert!(host
+            .authorise(&request(&entry_for(subspace, path.clone(), t1), &commit1))
+            .await
+            .unwrap_err()
+            .contains("newer Entry"));
 
-        // Keys without a binding, or the wrong binding, never sign entries,
-        // and a Willow key never signs HTTP requests.
+        // Keys without a binding never sign entries, and a Willow key never
+        // signs HTTP requests.
         assert!(host.subspace("http").is_err());
         let fixed = host.subspace("fixed").unwrap();
         assert_ne!(fixed["subspace"], info["subspace"]);
@@ -910,22 +992,23 @@ mod tests {
         };
         let owned_entry = Entry {
             namespace: unhex(OWNED, "").unwrap().try_into().unwrap(),
-            ..entry_for(subspace, path.clone(), 7)
+            ..entry_for(subspace, path.clone(), t1)
         };
         assert!(owned_host
-            .authorise(&request(&owned_entry, &commit))
+            .authorise(&request(&owned_entry, &commit1))
             .await
             .unwrap_err()
             .contains("owned"));
 
         // Unreadable for the principal (no rights for the public): not
-        // signed, whatever the bytes.
+        // signed, and its revision is not disclosed.
         let public_host = WillowHost {
             reader: &ForAgent::Public,
             ..host
         };
+        assert!(public_host.source("willow", &subject).await.is_err());
         assert!(public_host
-            .authorise(&request(&entry_for(subspace, path.clone(), 8), &commit))
+            .authorise(&request(&entry_for(subspace, path.clone(), t1), &commit1))
             .await
             .unwrap_err()
             .contains("cannot be read"));

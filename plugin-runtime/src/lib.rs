@@ -96,6 +96,7 @@ globalThis.__atomic = (function () {
   // the Entry against the key's binding and the source's current commit.
   input.willow = {
     subspace: (key) => call('willow.subspace', { key }),
+    source: (key, subject) => call('willow.source', { key, subject }),
     authorise: (request) => call('willow.authorise', request),
     list: (key) => call('willow.list', { key }),
   };
