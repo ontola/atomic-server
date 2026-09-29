@@ -32,6 +32,7 @@ export class BrowserPeerSync {
   private readonly connections = new Map<string, BrowserPeerConnection>();
   private readonly members = new Set<string>();
   private readonly retries = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly retryDelays = new Map<string, number>();
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopped = false;
   private iceServers: RTCIceServer[] = [];
@@ -68,6 +69,7 @@ export class BrowserPeerSync {
     clearTimeout(this.reconnect);
     for (const timer of this.retries.values()) clearTimeout(timer);
     this.retries.clear();
+    this.retryDelays.clear();
     for (const connection of this.connections.values()) connection.close();
     this.connections.clear();
     // Closing during the handshake emits a browser network warning. The open
@@ -139,6 +141,7 @@ export class BrowserPeerSync {
           this.members.delete(message.peer);
           clearTimeout(this.retries.get(message.peer));
           this.retries.delete(message.peer);
+          this.retryDelays.delete(message.peer);
           // A live data channel can outlast its signaling socket.
           const connection = this.connections.get(message.peer);
           if (connection && !connection.ready)
@@ -202,6 +205,7 @@ export class BrowserPeerSync {
       this.stopped ||
       id < this.peerId ||
       this.connections.has(id) ||
+      this.retries.has(id) ||
       !this.members.has(id) ||
       this.socket?.readyState !== WebSocket.OPEN
     )
@@ -230,7 +234,10 @@ export class BrowserPeerSync {
       this.agent,
       this.db,
       { ...this.options, onStatus: undefined, iceServers: this.iceServers },
-      () => this.status(),
+      () => {
+        this.retryDelays.delete(id);
+        this.status();
+      },
       error => this.failed(id, connection, error),
     );
     this.connections.set(id, connection);
@@ -257,12 +264,14 @@ export class BrowserPeerSync {
     );
 
     if (this.members.has(id) && id > this.peerId && !this.retries.has(id)) {
+      const delay = this.retryDelays.get(id) ?? 3000;
+      this.retryDelays.set(id, Math.min(delay * 2, 60_000));
       this.retries.set(
         id,
         setTimeout(() => {
           this.retries.delete(id);
           this.dial(id);
-        }, 3000),
+        }, delay),
       );
     }
   }

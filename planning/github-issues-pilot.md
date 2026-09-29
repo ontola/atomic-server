@@ -1,5 +1,7 @@
 # GitHub issues ↔ kanban pilot
 
+> **Moved (PR #1549):** the GitHub issues provider and its tests now live in [atomic-plugins](https://github.com/ontola/atomic-plugins). Paths below under `integrations/github-issues/` no longer exist in this repo.
+
 In progress, 2026-09-06. Private live test repository: `ontola/atomic-github-sync-sandbox`.
 
 - [x] Standalone adapter with repository-scoped capabilities and host-owned credentials.

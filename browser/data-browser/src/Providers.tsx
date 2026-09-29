@@ -31,11 +31,12 @@ import { LazyMCPProvider } from '@components/AI/MCP/LazyMCPProvider';
 import { CustomViewProvider } from '@components/CustomViewProvider';
 import { LazyAIChangesProvider } from '@components/AI/AIChanges/LazyAIChangesProvider';
 import { FollowProvider } from '@components/Presence/FollowContext';
+import { isRunningInTauri } from './helpers/tauri';
 
 // Setup bugsnag for error handling, but only if there's an API key
-const ErrBoundary = window.bugsnagApiKey
-  ? initBugsnag(window.bugsnagApiKey)
-  : ErrorBoundary;
+const bugsnagApiKey =
+  typeof window === 'undefined' ? undefined : window.bugsnagApiKey;
+const ErrBoundary = bugsnagApiKey ? initBugsnag(bugsnagApiKey) : ErrorBoundary;
 
 const VALID_PROPS = ['popover', 'closedby'];
 
@@ -69,7 +70,10 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
               <LazyMCPProvider>
                 <ControlLockProvider>
                   <HotKeysWrapper>
-                    <StyleSheetManager shouldForwardProp={shouldForwardProp}>
+                    <StyleSheetManager
+                      shouldForwardProp={shouldForwardProp}
+                      disableCSSOMInjection={isRunningInTauri()}
+                    >
                       <ThemeWrapper>
                         <GlobalStyle />
                         <ErrBoundary FallbackComponent={CrashPage}>

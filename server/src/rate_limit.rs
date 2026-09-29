@@ -7,7 +7,10 @@
 //! *whether* an agent may write a drive; this decides *how fast* anyone may
 //! try. Two buckets sizes: one for requests that carry a signed agent, keyed
 //! by that agent, and a much smaller one for requests without one, keyed by
-//! the socket peer address. Every bucket refills continuously at
+//! the socket peer address. "Signed" means verified: a key is only ever an
+//! identity the request has proven (an auth header, a WS `AUTH`, a commit
+//! signature that checks out), never one it merely names, or a request could
+//! spend someone else's budget. Every bucket refills continuously at
 //! `per_minute / 60` tokens per second and holds at most `per_minute`
 //! tokens, so a burst up to the minute budget is fine and a sustained flood
 //! is not.

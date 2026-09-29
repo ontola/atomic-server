@@ -16,86 +16,25 @@ use super::{
     trees::{Method, Operation, Tree},
 };
 
-/// redb table definition: all our trees are `&[u8] -> &[u8]`.
-const TABLE_RESOURCES: TableDefinition<&[u8], &[u8]> = TableDefinition::new("resources_v3");
-const TABLE_PROP_VAL_SUB: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("prop_val_sub_index");
-const TABLE_VAL_PROP_SUB: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("reference_index_v1");
-// v3: QueryFilter key encoding changed to [drive_len][drive_bytes][msgpack rest].
-// Must stay in sync with `QUERY_MEMBERS` / `QUERIES_WATCHED` in db/trees.rs.
-const TABLE_QUERY_MEMBERS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("members_index_v3");
-const TABLE_WATCHED_QUERIES: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("watched_queries_v3");
-const TABLE_PLUGIN_META: TableDefinition<&[u8], &[u8]> = TableDefinition::new("plugin_meta");
-const TABLE_PLUGIN_SECRET: TableDefinition<&[u8], &[u8]> = TableDefinition::new("plugin_secret");
-const TABLE_PLUGIN_SCHEDULE: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("plugin_schedule");
-const TABLE_PLUGIN_TRIGGER: TableDefinition<&[u8], &[u8]> = TableDefinition::new("plugin_trigger");
-const TABLE_APP_AGENT: TableDefinition<&[u8], &[u8]> = TableDefinition::new("app_agent");
-const TABLE_DRIVE_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("drive_mapping");
-const TABLE_DID_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("did_mapping");
-const TABLE_LORO_SNAPSHOTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("loro_snapshots");
-const TABLE_BLOBS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("blobs");
-const TABLE_SEARCH_POSTINGS: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("search_postings_v1");
-const TABLE_SEARCH_DOCS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("search_docs_v1");
-const TABLE_SEARCH_DOC_TOKENS: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("search_doc_tokens_v1");
-const TABLE_SEARCH_TRIGRAMS: TableDefinition<&[u8], &[u8]> =
-    TableDefinition::new("search_trigrams_v1");
-const TABLE_ENVELOPES: TableDefinition<&[u8], &[u8]> = TableDefinition::new("envelopes_v1");
-const TABLE_OUTBOX: TableDefinition<&[u8], &[u8]> = TableDefinition::new("outbox_v1");
-
+/// redb table definition: all our trees are `&[u8] -> &[u8]`, named after
+/// [`Tree::name`] so redb and sled can never disagree on a tree's version.
 fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8]> {
-    match tree {
-        Tree::Resources => TABLE_RESOURCES,
-        Tree::PropValSub => TABLE_PROP_VAL_SUB,
-        Tree::ValPropSub => TABLE_VAL_PROP_SUB,
-        Tree::QueryMembers => TABLE_QUERY_MEMBERS,
-        Tree::WatchedQueries => TABLE_WATCHED_QUERIES,
-        Tree::PluginMeta => TABLE_PLUGIN_META,
-        Tree::PluginSecret => TABLE_PLUGIN_SECRET,
-        Tree::PluginSchedule => TABLE_PLUGIN_SCHEDULE,
-        Tree::PluginTrigger => TABLE_PLUGIN_TRIGGER,
-        Tree::AppAgent => TABLE_APP_AGENT,
-        Tree::DriveMapping => TABLE_DRIVE_MAPPING,
-        Tree::DidMapping => TABLE_DID_MAPPING,
-        Tree::LoroSnapshots => TABLE_LORO_SNAPSHOTS,
-        Tree::Blobs => TABLE_BLOBS,
-        Tree::SearchPostings => TABLE_SEARCH_POSTINGS,
-        Tree::SearchDocs => TABLE_SEARCH_DOCS,
-        Tree::SearchDocTokens => TABLE_SEARCH_DOC_TOKENS,
-        Tree::SearchTrigrams => TABLE_SEARCH_TRIGRAMS,
-        Tree::Envelopes => TABLE_ENVELOPES,
-        Tree::Outbox => TABLE_OUTBOX,
-    }
+    TableDefinition::new(tree.name())
 }
 
+/// Tables redb used to open under names that had drifted from `Tree::name`.
+/// The query-members and watched-query layouts moved to v6 and v5 while
+/// redb kept writing both into their v3 tables, so a store from before
+/// this fix can hold rows in an older key layout. Both are caches that
+/// rebuild on the next query, so dropping them is safe.
+const STALE_TABLES: [&str; 2] = ["members_index_v3", "watched_queries_v3"];
+
 fn create_all_tables(tx: &redb::WriteTransaction) {
-    for tree in [
-        Tree::Resources,
-        Tree::PropValSub,
-        Tree::ValPropSub,
-        Tree::QueryMembers,
-        Tree::WatchedQueries,
-        Tree::PluginMeta,
-        Tree::PluginSecret,
-        Tree::PluginSchedule,
-        Tree::PluginTrigger,
-        Tree::AppAgent,
-        Tree::DriveMapping,
-        Tree::DidMapping,
-        Tree::LoroSnapshots,
-        Tree::Blobs,
-        Tree::SearchPostings,
-        Tree::SearchDocs,
-        Tree::SearchDocTokens,
-        Tree::SearchTrigrams,
-        Tree::Envelopes,
-        Tree::Outbox,
-    ] {
+    for tree in Tree::ALL {
         let _ = tx.open_table(table_def(tree));
+    }
+    for name in STALE_TABLES {
+        let _ = tx.delete_table(TableDefinition::<&[u8], &[u8]>::new(name));
     }
 }
 
@@ -151,23 +90,39 @@ impl BatchBuffer {
 /// boots `fsync` a much smaller file, which on macOS is the dominant
 /// cost of `Database::create` (see redb `begin_writable()` at
 /// `page_manager.rs:361-367`).
-#[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let mut db = redb::Database::create(path)
         .map_err(|e| format!("Failed to open redb at {}: {e}", path.display()))?;
-    let did_compact = db
-        .compact()
-        .map_err(|e| format!("Compaction failed: {e}"))?;
+    let did_compact = super::compaction::compact_database(&mut db)?;
     drop(db);
     let size_after = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     Ok((size_before, size_after, did_compact))
 }
 
 impl RedbStore {
-    /// Create a RedbStore backed by a file on disk.
+    /// Create a RedbStore backed by a file on disk. No startup compaction;
+    /// see `new_file_with_policy` for the path `Db::init_redb_file` takes.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_file(path: &std::path::Path) -> AtomicResult<Self> {
+        Self::new_file_with_policy(path, &super::compaction::CompactionPolicy::disabled())
+            .map(|(store, _)| store)
+    }
+
+    /// Open (or create) the file, log its size and open duration, and run
+    /// the startup compaction `policy` on it before any table is touched.
+    /// The second value says whether a compaction ran; a failure there is a
+    /// `Skip::Failed`, never an error, so a store that cannot be compacted
+    /// still opens.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_policy(
+        path: &std::path::Path,
+        policy: &super::compaction::CompactionPolicy,
+    ) -> AtomicResult<(
+        Self,
+        Result<super::compaction::CompactionRecord, super::compaction::Skip>,
+    )> {
         // `Database::create` with defaults uses a 1 GiB cache and the
         // slow full-scan repair path on any unclean shutdown. On a
         // multi-GB store that's 40+ seconds added to every boot
@@ -177,9 +132,18 @@ impl RedbStore {
         // next open is "almost instant" (redb transactions.rs:1246-1258
         // describes the mechanism).
         let t = std::time::Instant::now();
-        let db = Database::create(path)
+        let mut db = Database::create(path)
             .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
-        tracing::info!("RedbStore::new_file: Database::create in {:?}", t.elapsed());
+        let open_duration = t.elapsed();
+        tracing::info!(
+            "RedbStore::new_file: Database::create in {:?}",
+            open_duration
+        );
+
+        // On the handle we already hold: the file lock is taken once, and
+        // a bloated store is not opened a second time just to measure it.
+        let compaction =
+            super::compaction::run_startup_policy(&mut db, path, open_duration, policy);
 
         // Create all tables upfront
         let t = std::time::Instant::now();
@@ -203,11 +167,14 @@ impl RedbStore {
         }
         tracing::info!("RedbStore::new_file: table-create tx in {:?}", t.elapsed());
 
-        Ok(RedbStore {
-            db: Arc::new(db),
-            batch_buffer: std::sync::Mutex::new(None),
-            dirty: AtomicBool::new(false),
-        })
+        Ok((
+            RedbStore {
+                db: Arc::new(db),
+                batch_buffer: std::sync::Mutex::new(None),
+                dirty: AtomicBool::new(false),
+            },
+            compaction,
+        ))
     }
 
     /// Create a new in-memory RedbStore.
@@ -590,7 +557,7 @@ impl KvStore for RedbStore {
         // commit point that persists all prior Durability::None commits.
         {
             let mut table = tx
-                .open_table(TABLE_DRIVE_MAPPING)
+                .open_table(table_def(Tree::DriveMapping))
                 .map_err(|e| format!("redb flush open table: {e}"))?;
             table
                 .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
@@ -669,6 +636,7 @@ impl KvStore for RedbStore {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+    use redb::TableHandle;
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -681,6 +649,48 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("atomic.redb")
+    }
+
+    /// A store written before redb's table names followed `Tree::name`
+    /// kept query members and watched queries in `*_v3` tables, possibly in
+    /// an older key layout. Opening it must switch to the current tables and
+    /// drop the old ones rather than read their rows.
+    #[test]
+    fn opening_drops_tables_from_drifted_names() {
+        let path = temp_path("stale-tables");
+        {
+            let db = Database::create(&path).unwrap();
+            let tx = db.begin_write().unwrap();
+            for name in STALE_TABLES {
+                let mut table = tx
+                    .open_table(TableDefinition::<&[u8], &[u8]>::new(name))
+                    .unwrap();
+                table
+                    .insert(b"old-layout".as_slice(), b"".as_slice())
+                    .unwrap();
+            }
+            tx.commit().unwrap();
+        }
+
+        let store = RedbStore::new_file(&path).unwrap();
+        assert_eq!(store.get(Tree::QueryMembers, b"old-layout").unwrap(), None);
+        assert_eq!(
+            store.get(Tree::WatchedQueries, b"old-layout").unwrap(),
+            None
+        );
+
+        let tx = store.db.begin_read().unwrap();
+        let names: Vec<String> = tx
+            .list_tables()
+            .unwrap()
+            .map(|t| t.name().to_string())
+            .collect();
+        for name in STALE_TABLES {
+            assert!(!names.iter().any(|n| n == name), "{name} should be gone");
+        }
+        for tree in Tree::ALL {
+            assert!(names.iter().any(|n| n == tree.name()), "{tree} missing");
+        }
     }
 
     const ABORT_CHILD_ENV: &str = "ATOMIC_REDB_ABORT_CHILD_PATH";

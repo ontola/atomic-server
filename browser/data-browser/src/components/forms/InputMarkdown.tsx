@@ -1,47 +1,33 @@
-import { useCallback, type JSX } from 'react';
-import { useString, validateDatatype } from '@tomic/react';
+import type { JSX } from 'react';
+import { useString } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { ErrMessage } from './InputStyles';
 import { MarkdownInput } from './MarkdownInput';
-import {
-  checkForInitialRequiredValue,
-  useValidation,
-} from './formValidation/useValidation';
+import { useValidatedInput } from './formValidation/useValidatedInput';
 
 export default function InputMarkdown({
   resource,
   property,
   commit,
+  commitDebounceInterval,
+  required,
   id,
   labelId,
-  ...props
 }: InputProps): JSX.Element {
   const [value, setValue] = useString(resource, property.subject, {
     validate: false,
-    commit: commit,
+    commit,
+    commitDebounce: commitDebounceInterval,
   });
-  const { error, setError, setTouched } = useValidation(
-    checkForInitialRequiredValue(value, props.required),
-  );
 
-  const handleChange = useCallback(
-    (val: string) => {
-      try {
-        validateDatatype(val, property.datatype);
-        setError(undefined);
-      } catch (e) {
-        setError('Invalid value');
-      }
+  const { error, setTouched, update } = useValidatedInput(value, setValue, {
+    datatype: property.datatype,
+    required,
+  });
 
-      if (props.required && (val === '' || val === undefined)) {
-        setError('Required');
-      }
-
-      setValue(val);
-    },
-    [property.datatype, props.required, setError, setValue],
-  );
-
+  // The editor is uncontrolled: `initialContent` seeds it once and it reports
+  // changes back through `onChange`, so `update` never has to write back into
+  // the editor.
   return (
     <>
       <MarkdownInput
@@ -49,7 +35,7 @@ export default function InputMarkdown({
         initialContent={value}
         id={id}
         labelId={labelId}
-        onChange={handleChange}
+        onChange={update}
         onBlur={setTouched}
       />
       {error && <ErrMessage>{error}</ErrMessage>}

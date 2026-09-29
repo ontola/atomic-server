@@ -1,0 +1,118 @@
+[
+  {
+    "@id": "https://atomicdata.dev/ontology/notifications",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "notifications",
+    "https://atomicdata.dev/properties/description": "Telling someone that something happened that concerns them: a new message in a chat they're in, a comment on something they made, a reply to them. Each event becomes a Notification in the Inbox of the recipient's private drive, so what they have read is the same on every device.\n\nToday the recipient's own apps write the Notifications, from data they can already read. The Inbox is also where others will be able to deliver to later (a first message from a stranger, a service, a bridge to another network), through a narrow right to append new items that only the recipient can read. See `planning/authorization-sync.md`.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/classes/Inbox",
+      "https://atomicdata.dev/classes/Notification"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/properties/inbox",
+      "https://atomicdata.dev/properties/notificationSource",
+      "https://atomicdata.dev/properties/notificationKind",
+      "https://atomicdata.dev/properties/actor",
+      "https://atomicdata.dev/properties/occurredAt",
+      "https://atomicdata.dev/properties/readAt"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Inbox",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "inbox",
+    "https://atomicdata.dev/properties/description": "Where Notifications for one person arrive. Lives in their private drive, which points to it with `inbox`.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Notification",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "notification",
+    "https://atomicdata.dev/properties/description": "Something that happened that concerns the owner of the Inbox it is in. `name` is the one-line summary, `description` a short excerpt, `about` what to open, and `notificationSource` the resource that caused it (for example the Message). Unread until `readAt` is set.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/notificationSource"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/about",
+      "https://atomicdata.dev/properties/notificationKind",
+      "https://atomicdata.dev/properties/actor",
+      "https://atomicdata.dev/properties/occurredAt",
+      "https://atomicdata.dev/properties/readAt"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/inbox",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "inbox",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Inbox",
+    "https://atomicdata.dev/properties/description": "Points from a private drive to its owner's Inbox."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationSource",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "notification-source",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The resource whose arrival caused this Notification, such as a new Message. There is at most one Notification per source in an Inbox."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationKind",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "notification-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Why this concerns the recipient: `chat` (a message in a chat room), `comment` (a comment on something they made) or `reply` (a reply to their message)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/actor",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "actor",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
+    "https://atomicdata.dev/properties/description": "The Agent who did the thing this Notification is about."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/occurredAt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "occurred-at",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the event happened, which is not when the Notification was written: a device that was offline can write it later."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/readAt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "read-at",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the recipient read this Notification. Absent while it is unread."
+  }
+]

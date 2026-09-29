@@ -1,11 +1,8 @@
 import { InputProps } from './ResourceField';
-import {
-  checkForInitialRequiredValue,
-  useValidation,
-} from './formValidation/useValidation';
+import { useValidatedInput } from './formValidation/useValidatedInput';
 import { styled } from 'styled-components';
 import { ErrorChipInput } from './ErrorChip';
-import { useString, validateDatatype } from '@tomic/react';
+import { useString } from '@tomic/react';
 import { InputStyled, InputWrapper } from './InputStyles';
 import { ChangeEvent } from 'react';
 
@@ -13,37 +10,29 @@ export function InputDate({
   resource,
   property,
   commit,
+  commitDebounceInterval,
   required,
   ...props
 }: InputProps): React.JSX.Element {
   const [value, setValue] = useString(resource, property.subject, {
     commit,
+    commitDebounce: commitDebounceInterval,
     validate: false,
   });
-  const { error, setError, setTouched } = useValidation(
-    checkForInitialRequiredValue(value, required),
-  );
+
+  const { error, setTouched, update } = useValidatedInput(value, setValue, {
+    datatype: property.datatype,
+    required,
+  });
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const dateStr = event.target.value;
-
-    if (required && !dateStr) {
-      setError('Required');
-      setValue(undefined);
-    } else {
-      try {
-        validateDatatype(dateStr, property.datatype);
-        setValue(dateStr);
-        setError(undefined);
-      } catch (e) {
-        setError(e);
-      }
-    }
+    // A cleared date input yields '', which is "no date", not an invalid one.
+    update(event.target.value === '' ? undefined : event.target.value);
   };
 
   return (
     <Wrapper>
-      <StyledInputWrapper>
+      <StyledInputWrapper $invalid={!!error}>
         <InputStyled
           type='date'
           value={value ?? ''}

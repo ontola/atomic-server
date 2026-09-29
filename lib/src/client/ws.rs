@@ -2,7 +2,7 @@
 //!
 //! Hybrid v2 protocol: auth, resource UPDATEs and live collaboration
 //! (`EPHEMERAL`) are binary frames (`sync::protocol`); the Loro and presence
-//! *subscriptions* and the RBSR descent are still text frames
+//! *subscriptions* and the drive inventory are still text frames
 //! (`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`, ...). `SYNC_DELTAS` was removed (F8,
 //! planning/unified-sync.md) — it imported peer-supplied Loro deltas with
 //! no rights check at all; `SYNC` → `SYNC_PUSH` (binary v2, admission- and
@@ -443,7 +443,7 @@ impl WsClient {
     }
 
     /// Send a raw text frame over the WebSocket (the `LORO_*` / `PRESENCE_*`
-    /// subscribe frames, RBSR).
+    /// subscribe frames, `RBSR_ITEMS`).
     pub async fn send_raw(&self, msg: &str) -> AtomicResult<()> {
         self.tx
             .send(Message::Text(msg.to_string().into()))
@@ -574,7 +574,7 @@ impl crate::sync::outbox::CommitTransport for std::sync::Arc<WsClient> {
 /// Parse a text frame into a typed `WsMessage`.
 ///
 /// The server's remaining text frames (`docs/src/websockets.md`, "Text
-/// frames") are the RBSR answers and `INDEX_STATUS`, none of which this
+/// frames") are the `RBSR_ITEMS` inventory answer and `INDEX_STATUS`, none of which this
 /// client consumes, so every text frame is reported as
 /// [`WsMessage::Unrecognized`]. Reporting one as `Error` used to fail
 /// whatever `authenticate` / `fetch_blob` / `post_commit` was waiting at

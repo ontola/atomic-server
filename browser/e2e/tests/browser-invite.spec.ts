@@ -16,6 +16,17 @@ test('joins an unhosted drive through its signed browser invitation', async ({
   const guestContext = await browser.newContext();
 
   for (const context of [ownerContext, guestContext]) {
+    // The app has no built-in signalling service; this suite chooses one, and
+    // the route below answers it in-process.
+    // Only on real origins: about:blank refuses localStorage and would report
+    // a page error, which this suite fails on.
+    await context.addInitScript(() => {
+      if (!location.protocol.startsWith('http')) return;
+      localStorage.setItem(
+        'peer-signaling-url',
+        'wss://signalling.invalid/webrtc-signal',
+      );
+    });
     await context.routeWebSocket('**/webrtc-signal', socket => {
       let room: Map<string, WebSocketRoute> | undefined;
       let peer: string | undefined;
@@ -76,19 +87,20 @@ test('joins an unhosted drive through its signed browser invitation', async ({
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
     );
     await topBarShareButton(owner).click();
-    await owner
-      .getByRole('button', { name: 'Create Invite', exact: true })
-      .click();
     await owner.getByLabel('Full name', { exact: true }).fill('Drive Owner');
     await owner
       .getByRole('button', { name: 'Save and continue', exact: true })
       .click();
-    await owner.getByLabel('Allow edits', { exact: true }).check();
-    await owner.getByRole('button', { name: 'Create', exact: true }).click();
-    const code = owner.locator('[data-code-content]');
-    await expect(code).toHaveAttribute('data-code-content', /token=/);
+    await owner
+      .getByLabel('Role for people who join with the link')
+      .selectOption('write');
+    await owner
+      .getByRole('button', { name: 'Copy invite link', exact: true })
+      .click();
+    const code = owner.locator('[data-invite-link]');
+    await expect(code).toHaveAttribute('data-invite-link', /token=/);
     const invitation = new URL(
-      (await code.getAttribute('data-code-content'))!,
+      (await code.getAttribute('data-invite-link'))!,
     ).searchParams.get('token')!;
     const inviteRequests: string[] = [];
     guest.on('request', request => {

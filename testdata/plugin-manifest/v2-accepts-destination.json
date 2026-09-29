@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 2,
+  "name": "statements",
+  "namespace": "example",
+  "version": "0.1.0",
+  "secrets": [],
+  "operations": [],
+  "config": {
+    "key": "statements",
+    "properties": {
+      "table": {
+        "type": "string"
+      },
+      "rowClass": {
+        "type": "string"
+      },
+      "properties": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "table",
+      "rowClass",
+      "properties"
+    ]
+  },
+  "accepts": [
+    {
+      "extensions": [
+        ".sta",
+        ".xml"
+      ],
+      "mediaTypes": [
+        "text/plain",
+        "application/xml"
+      ],
+      "as": "text",
+      "maxBytes": 5000000
+    }
+  ],
+  "destination": {
+    "schema": {
+      "properties": [
+        {
+          "shortname": "statement-amount",
+          "name": "Amount",
+          "description": "Exact decimal string.",
+          "datatype": "https://atomicdata.dev/datatypes/string"
+        }
+      ],
+      "classes": [
+        {
+          "shortname": "statement-line",
+          "name": "Statement line",
+          "description": "One booked entry.",
+          "requires": [
+            "statement-amount"
+          ]
+        }
+      ]
+    },
+    "table": {
+      "name": "Statement lines",
+      "rowClass": "statement-line",
+      "columns": [
+        "statement-amount"
+      ]
+    }
+  }
+}

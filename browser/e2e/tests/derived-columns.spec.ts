@@ -278,10 +278,10 @@ test.describe('computed columns', () => {
     expect((await headings()).slice(0, 3)).toEqual([
       'Duration',
       'Timer',
-      'name',
+      'Name',
     ]);
 
-    // Drag the Duration heading past `name` by its handle.
+    // Drag the Duration heading past `Name` by its handle.
     const handle = page
       .locator('[role="columnheader"][aria-colindex="2"]')
       .getByRole('button', { name: 'Drag column' });
@@ -299,13 +299,13 @@ test.describe('computed columns', () => {
       .poll(async () => {
         const h = await headings();
 
-        return h.indexOf('Duration') > h.indexOf('name');
+        return h.indexOf('Duration') > h.indexOf('Name');
       })
       .toBe(true);
 
     const reordered = await headings();
     expect(reordered.indexOf('Duration')).toBeGreaterThan(
-      reordered.indexOf('name'),
+      reordered.indexOf('Name'),
     );
 
     await waitForSynced(page);

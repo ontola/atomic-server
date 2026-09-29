@@ -59,21 +59,21 @@ Example: `https://atomicdata.dev/download/files/af1349b9f5f9a1a6a0404dea36dcc949
 
 ## Storage model: content-addressed blobs
 
-Files are stored using a [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage) model. Every file's bytes are hashed with [BLAKE3](https://github.com/BLAKE3-team/BLAKE3), and the bytes are stored under that hash in a key-value blob store. The hash is the blob's identity — its canonical form is a [DID](did.md):
+Files are stored using a [content-addressed](https://en.wikipedia.org/wiki/Content-addressable_storage) model. Every file's bytes are hashed with [BLAKE3](https://github.com/BLAKE3-team/BLAKE3), and the bytes are stored under that hash in a key-value blob store. The hash is the blob's identity — its canonical form is an [identifier](identifiers.md):
 
 ```text
-did:ad:blob:{blake3}
+atomic:blob:{blake3}
 ```
 
-where `{blake3}` is the 32-byte BLAKE3 hash, hex-encoded. See [Blob identifiers](did.md#blob-identifiers) for the full identifier definition.
+where `{blake3}` is the 32-byte BLAKE3 hash, hex-encoded. The legacy `did:ad:blob:` spelling is accepted forever. See [Blob identifiers](identifiers.md#blob-identifiers) for the full identifier definition.
 
-This separates the file's *metadata* (the File resource — filename, mimetype, parent, ACL) from its *data* (the bytes), and lets the same blob be referenced by any number of File resources without duplication. The File resource points at its blob via a `blob` property whose value is a `did:ad:blob:` reference. Bytes flow over the peer-to-peer sync protocol independently of the resource graph: a peer that receives a File resource looks up the blob locally, and if it doesn't have the bytes, asks any connected peer for them.
+This separates the file's *metadata* (the File resource — filename, mimetype, parent, ACL) from its *data* (the bytes), and lets the same blob be referenced by any number of File resources without duplication. The File resource points at its blob via a `blob` property whose value is a `atomic:blob:` reference. Bytes flow over the peer-to-peer sync protocol independently of the resource graph: a peer that receives a File resource looks up the blob locally, and if it doesn't have the bytes, asks any connected peer for them.
 
-The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias for the underlying DID and remains the URL clients use over plain HTTP.
+The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias for the underlying identifier and remains the URL clients use over plain HTTP.
 
 ## Authorization model: hashes are bearer capabilities
 
-The blob store has no permission system of its own. Knowing a `did:ad:blob:` identifier is the capability to retrieve the bytes — there is no second authorization check inside the blob store, and there does not need to be. The reasoning:
+The blob store has no permission system of its own. Knowing a `atomic:blob:` identifier is the capability to retrieve the bytes — there is no second authorization check inside the blob store, and there does not need to be. The reasoning:
 
 - A 256-bit BLAKE3 hash is unforgeable. You cannot guess one.
 - The only ways to obtain a blob DID are: you already had the bytes (and computed the hash yourself), or you read the File resource that referenced it.
@@ -85,7 +85,7 @@ Three properties follow from this and should not be tangled up later:
 
 1. **Blobs are facts, not resources.** They have no subject metadata, no parent, no ACL, no class. They are addressed only by content hash.
 2. **The File resource is where read permission is enforced.** Any client that can read the File resource can read its bytes.
-3. **Blob DIDs are bearer tokens.** Treat a leaked `did:ad:blob:` the same as a leaked file — equivalent to leaking an S3 presigned URL.
+3. **Blob identifiers are bearer tokens.** Treat a leaked `atomic:blob:` the same as a leaked file — equivalent to leaking an S3 presigned URL.
 
 ### A note on existence side-channels
 

@@ -12,19 +12,86 @@ use std::str::FromStr;
 use crate::errors::{AppErrorType, AtomicServerError};
 use crate::{appstate::AppState, content_types::ContentType, errors::AtomicServerResult};
 
-/// Returns the authentication headers from the request
+/// The method and the body bytes a handler acts on, which a version 2
+/// request signature (`x-atomic-signature-version: 2`) must cover.
+#[derive(Clone, Copy)]
+pub struct SignedRequest<'a> {
+    pub method: &'a str,
+    pub body: &'a [u8],
+}
+
+/// Which request signature version the headers ask for. Absent is 1.
+/// Anything but `1` or `2` is refused rather than guessed at.
+fn requested_signature_version(map: &HeaderMap) -> AtomicServerResult<u8> {
+    match map.get(atomic_lib::authentication::SIGNATURE_VERSION_HEADER) {
+        None => Ok(1),
+        Some(v) => match v.to_str().map(str::trim) {
+            Ok("1") => Ok(1),
+            Ok(atomic_lib::authentication::SIGNATURE_VERSION_2) => Ok(2),
+            _ => Err(AtomicError::unauthorized(
+                "Unsupported x-atomic-signature-version; this server accepts 1 and 2".into(),
+            )
+            .into()),
+        },
+    }
+}
+
+/// Returns the authentication headers from the request.
+///
+/// For a caller that cannot say what method and body it acts on (a WebSocket
+/// upgrade, most handlers today), so a version 2 signature is refused here
+/// rather than checked as version 1. See [get_auth_headers_for_request].
 #[tracing::instrument(skip_all)]
 pub fn get_auth_headers(
     map: &HeaderMap,
     requested_subject: &str,
 ) -> AtomicServerResult<Option<AuthValues>> {
-    if let Some(bearer) = map.get("authorization") {
-        let bearer = bearer
-            .to_str()
-            .map_err(|_e| "Only string headers allowed in authorization header")?
-            .trim_start_matches("Bearer ");
-        let auth_vals = get_auth_from_base64(bearer, requested_subject)?;
-        return Ok(Some(auth_vals));
+    get_auth_headers_for_request(map, requested_subject, None)
+}
+
+/// Returns the authentication headers from the request, checking a version 2
+/// signature against `request` when the headers ask for one.
+///
+/// Version 2 never falls back to version 1: a v2 request that this caller
+/// cannot bind (`request` is `None`), or that comes as a bearer token instead
+/// of headers, is refused.
+#[tracing::instrument(skip_all)]
+pub fn get_auth_headers_for_request(
+    map: &HeaderMap,
+    requested_subject: &str,
+    request: Option<SignedRequest>,
+) -> AtomicServerResult<Option<AuthValues>> {
+    let binding = match requested_signature_version(map)? {
+        1 => None,
+        _ => {
+            let Some(request) = request else {
+                return Err(AtomicError::unauthorized(
+                    "This endpoint does not check version 2 request signatures yet. Sign it with version 1 (omit x-atomic-signature-version).".into(),
+                )
+                .into());
+            };
+            if map.get("authorization").is_some() {
+                return Err(AtomicError::unauthorized(
+                    "A version 2 request signature goes in the x-atomic-* headers, not in Authorization".into(),
+                )
+                .into());
+            }
+            Some(atomic_lib::authentication::RequestBinding::new(
+                request.method,
+                request.body,
+            ))
+        }
+    };
+
+    if binding.is_none() {
+        if let Some(bearer) = map.get("authorization") {
+            let bearer = bearer
+                .to_str()
+                .map_err(|_e| "Only string headers allowed in authorization header")?
+                .trim_start_matches("Bearer ");
+            let auth_vals = get_auth_from_base64(bearer, requested_subject)?;
+            return Ok(Some(auth_vals));
+        }
     }
 
     let public_key = map.get("x-atomic-public-key");
@@ -51,7 +118,13 @@ pub fn get_auth_headers(
                 .parse::<i64>()
                 .map_err(|_e| "Timestamp must be a number (milliseconds since unix epoch)")?,
             requested_subject: requested_subject.to_string(),
+            request: binding,
         })),
+        // Asking for v2 and sending no proof is not "anonymous": a cookie
+        // must not stand in for the signature that was promised.
+        (None, None, None, None) if binding.is_some() => Err(
+            "x-atomic-signature-version: 2 without the x-atomic-* authentication headers".into(),
+        ),
         (None, None, None, None) => Ok(None),
         _missing => Err("Missing authentication headers. You need `x-atomic-public-key`, `x-atomic-signature`, `x-atomic-agent` and `x-atomic-timestamp` for authentication checks.".into()),
     }
@@ -154,11 +227,14 @@ fn get_auth_from_base64(base64: &str, requested_subject: &str) -> AtomicServerRe
     Ok(auth_values)
 }
 
-pub fn get_auth(
+/// Authentication from the `x-atomic-*` headers, or else from the session
+/// cookie. A version 2 signature is checked against `request`.
+pub fn get_auth_for_request(
     map: &HeaderMap,
     requested_subject: &str,
+    request: Option<SignedRequest>,
 ) -> AtomicServerResult<Option<AuthValues>> {
-    let from_header = get_auth_headers(map, requested_subject)?;
+    let from_header = get_auth_headers_for_request(map, requested_subject, request)?;
 
     match from_header {
         Some(v) => Ok(Some(v)),
@@ -168,9 +244,39 @@ pub fn get_auth(
 
 /// Checks for authentication headers and returns Some agent's subject if everything is well.
 /// Skips these checks in public_mode and returns Ok(None).
+///
+/// A version 2 request signature is refused here, since this caller does not
+/// say which method and body it acts on; see [get_client_agent_for_request].
 #[tracing::instrument(skip(appstate))]
 pub async fn get_client_agent(
     headers: &HeaderMap,
+    appstate: &AppState,
+    requested_subject: &str,
+) -> AtomicServerResult<ForAgent> {
+    get_client_agent_checked(headers, None, appstate, requested_subject).await
+}
+
+/// [get_client_agent] for a handler that knows the body it acts on, so it
+/// also accepts a version 2 request signature (`x-atomic-signature-version:
+/// 2`, ontola/atomic-plugins#54), which covers the method and that body.
+/// Pass `&[]` for a handler that reads no body. Version 1 is still accepted.
+#[tracing::instrument(skip(appstate, req, body))]
+pub async fn get_client_agent_for_request(
+    req: &actix_web::HttpRequest,
+    body: &[u8],
+    appstate: &AppState,
+    requested_subject: &str,
+) -> AtomicServerResult<ForAgent> {
+    let request = SignedRequest {
+        method: req.method().as_str(),
+        body,
+    };
+    get_client_agent_checked(req.headers(), Some(request), appstate, requested_subject).await
+}
+
+async fn get_client_agent_checked(
+    headers: &HeaderMap,
+    request: Option<SignedRequest<'_>>,
     appstate: &AppState,
     requested_subject: &str,
 ) -> AtomicServerResult<ForAgent> {
@@ -178,14 +284,31 @@ pub async fn get_client_agent(
         return Ok(ForAgent::Public);
     }
     // Authentication check. If the user has no headers, continue with the Public Agent.
-    let auth_header_values = get_auth(headers, requested_subject)?;
-    let for_agent = atomic_lib::authentication::get_agent_from_auth_values_and_check(
+    // Whatever goes wrong from here — headers that do not parse, a signature
+    // that does not verify, an unknown agent — the caller is not who they
+    // claim to be, which is a 401, not a 500. Converting the error to a
+    // string here used to lose the lib's `Unauthorized` type, so every
+    // failed sign-in reported itself as a server crash (security audit D).
+    let auth_header_values =
+        get_auth_for_request(headers, requested_subject, request).map_err(unauthorized)?;
+    // `_or_public`, not `_and_check`: nothing here asked to be authenticated.
+    // A proof that has aged out makes this caller nobody, and the rights check
+    // below decides whether that matters for what was requested.
+    let for_agent = atomic_lib::authentication::get_agent_from_auth_values_or_public(
         auth_header_values,
         &appstate.store,
     )
     .await
-    .map_err(|e| format!("Authentication failed: {}", e))?;
+    .map_err(|e| unauthorized(format!("Authentication failed: {}", e).into()))?;
     Ok(for_agent)
+}
+
+/// `error`, answered as 401 whatever it was typed as.
+fn unauthorized(error: AtomicServerError) -> AtomicServerError {
+    AtomicServerError {
+        error_type: AppErrorType::Unauthorized,
+        ..error
+    }
 }
 
 /// Rate-limit key for a request without a signed agent: the socket peer
@@ -264,8 +387,80 @@ fn session_cookies_from_header(header: &HeaderValue) -> AtomicServerResult<Vec<S
 #[cfg(test)]
 mod test {
     use actix_web::http::header::{HeaderMap, HeaderValue};
+    use atomic_lib::Storelike;
 
     use super::*;
+    use crate::tests::init_test_appstate;
+
+    /// A 32-byte ed25519 seed. Any 32 bytes are a valid one.
+    const PRIVATE_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    /// A `Cookie` header holding the auth proof a browser would have stored at
+    /// `timestamp`, exactly as `setCookieAuthentication` writes it.
+    fn cookie_header(server_url: &str, timestamp: i64) -> HeaderMap {
+        use base64::Engine;
+        let pair = atomic_lib::agents::generate_public_key(PRIVATE_KEY);
+        let signature = atomic_lib::agents::sign_message(
+            format!("{} {}", server_url, timestamp).as_bytes(),
+            &pair.private,
+        )
+        .unwrap();
+        let proof = serde_json::json!({
+            "https://atomicdata.dev/properties/auth/agent":
+                format!("did:ad:agent:{}", pair.public),
+            "https://atomicdata.dev/properties/auth/requestedSubject": server_url,
+            "https://atomicdata.dev/properties/auth/publicKey": pair.public,
+            "https://atomicdata.dev/properties/auth/timestamp": timestamp,
+            "https://atomicdata.dev/properties/auth/signature": signature,
+        });
+        let encoded =
+            base64::engine::general_purpose::STANDARD.encode(proof.to_string().as_bytes());
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "Cookie".try_into().unwrap(),
+            HeaderValue::from_str(&format!("atomic_session={}", encoded)).unwrap(),
+        );
+        headers
+    }
+
+    /// The staging 401 flood, at the layer it reached the client. A tab keeps
+    /// the cookie it was given, that cookie's proof ages past
+    /// `AUTH_MAX_AGE_MS`, and every request it makes after that was refused,
+    /// including the polls of the public `/server` endpoint that produced the
+    /// flood. An aged-out proof now makes the caller nobody instead, so the
+    /// rights check is what decides whether the request can be answered.
+    #[actix_rt::test]
+    async fn a_cookie_whose_proof_aged_out_is_the_public_agent() {
+        let appstate = init_test_appstate(&["--domain", "localhost"]).await;
+        let server_url = appstate.store.get_server_url().to_string();
+        let stale = atomic_lib::utils::now() - atomic_lib::authentication::AUTH_MAX_AGE_MS - 60_000;
+
+        let for_agent =
+            get_client_agent(&cookie_header(&server_url, stale), &appstate, &server_url)
+                .await
+                .expect("a stale cookie does not fail the request");
+        assert_eq!(for_agent, ForAgent::Public);
+    }
+
+    /// And a cookie whose proof is still fresh authenticates, as it always has.
+    #[actix_rt::test]
+    async fn a_fresh_cookie_still_authenticates() {
+        let appstate = init_test_appstate(&["--domain", "localhost"]).await;
+        let server_url = appstate.store.get_server_url().to_string();
+
+        let for_agent = get_client_agent(
+            &cookie_header(&server_url, atomic_lib::utils::now()),
+            &appstate,
+            &server_url,
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(for_agent, ForAgent::AgentSubject(ref s) if s.is_did()),
+            "expected the signing agent, got {for_agent:?}"
+        );
+    }
 
     #[test]
     fn parse_cookie() {

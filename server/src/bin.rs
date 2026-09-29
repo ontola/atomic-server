@@ -10,6 +10,7 @@ mod commit_monitor;
 pub mod config;
 mod content_types;
 mod context;
+mod cors;
 mod errors;
 mod forms;
 mod handlers;
@@ -27,7 +28,6 @@ mod routes;
 pub mod serve;
 pub mod vector_search;
 // #[cfg(feature = "search")]
-mod iroh_transport;
 #[cfg(test)]
 mod tests;
 mod trace;

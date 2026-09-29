@@ -75,6 +75,20 @@ function isStorageBlockedDbError(error: unknown): boolean {
  * untouched, because those we DO want to see in full.
  */
 function asInitError(e: unknown): Error {
+  const message = e instanceof Error ? e.message : String(e);
+
+  // Firefox's word for "another sync access handle has this file open":
+  // another tab of this site, or its worker, still holds the database. Left
+  // raw it reached people as "OPFS unavailable: … JsValue(NoModificationAllowedError …)".
+  if (message.includes('NoModificationAllowedError')) {
+    return new Error(
+      'Local caching and offline support are off in this tab: another tab ' +
+        'of this site is using the local database. Close the other tabs and ' +
+        'reload this one to turn them back on. The app still works ' +
+        'meanwhile, reading directly from the server.',
+    );
+  }
+
   if (isStorageBlockedDbError(e)) {
     return new Error(
       'Local caching and offline support are disabled: this browser is not ' +
@@ -118,6 +132,14 @@ export interface ClientDbQueryOpts {
   expressionFilters?: ExpressionFilter[];
 }
 
+/** Outbox rows to store (`puts`) and subjects whose row goes (`deletes`),
+ *  for one agent's queue. Values are opaque JSON owned by `LocalOutbox`. */
+export interface ClientDbOutboxWrite {
+  agent: string;
+  puts: Array<{ subject: string; value: string }>;
+  deletes: string[];
+}
+
 /** Options for opening a specific (per-agent) local database. */
 export interface ClientDbOptions {
   /** OPFS file name of the database. Defaults to the legacy shared name
@@ -128,11 +150,17 @@ export interface ClientDbOptions {
   /** When true (and `dbName` differs from the legacy name), the worker asks
    *  WASM to migrate the legacy shared DB file into `dbName` before opening. */
   migrateLegacy?: boolean;
+  /** When true, a `dbName` that cannot be decrypted with `dbKey` is discarded
+   *  and recreated instead of failing the open. Off by default: the file may
+   *  hold a local-only drive that exists nowhere else, and a key that is
+   *  missing now is not necessarily gone (see `client-db-open.ts`). */
+  discardUndecryptable?: boolean;
 }
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
+  onLeaderChanged?: () => void;
 };
 
 /** Legacy shared database file name, used when no `dbName` is given. */
@@ -143,6 +171,27 @@ const DEFAULT_DB_NAME = 'atomic_data.redb';
 // only owns *its* OPFS file, and cross-tab RPC must stay within one DB.
 const LEADER_LOCK_PREFIX = 'atomic-db-leader';
 const RPC_CHANNEL_PREFIX = 'atomic-db-rpc';
+
+/** Operations whose result remains valid when repeated by a new DB owner. */
+const REPEATABLE_RPC_TYPES = new Set([
+  'blake3Hash',
+  'getBlob',
+  'putBlob', // Content-addressed write of the same bytes.
+  'getResource',
+  'getResourceWithSnapshot',
+  'getResourcesWithSnapshots',
+  'query',
+  'search',
+  'allSubjects',
+  'flush',
+  'exportAllResources',
+  'getLoroSnapshot',
+  'historyAttribution',
+  'envelopesFor',
+  'getAllVersionVectors',
+  'getVersionVectorsForDrive',
+  'outboxEntries',
+]);
 
 /**
  * `'failed'` means leader election timed out: the lock is held by a stale tab
@@ -178,6 +227,31 @@ const LEADER_ELECTION_WAIT_MS = 2_000;
 // server. Ends early on success or on a definite failure.
 const STEAL_SETTLE_WAIT_MS = 15_000;
 
+// The same wait, for the case where nothing was stolen because we already own
+// the lock and our own leader init is simply still running. Nothing is
+// contended there, so the message this cap produces has to say so: see the
+// `still-stuck` branch below.
+//
+// The election times out on essentially every cold load, because
+// `leadershipGained` resolves only after the worker's wasm import and OPFS
+// open, which is far more than 2s: CI run 4686 measured `clientdb.election` at
+// exactly 2000.3ms and `clientdb.workerInit` at 7948.8ms on the same load.
+//
+// The cap is deliberately the SAME as the steal's, and raising it is a trap
+// worth naming, because it looks like an improvement. Parking makes every
+// subsequent write throw `ClientDb unavailable`, and `Resource.save()` then
+// rejects a commit the server has already acked, so waiting longer does let a
+// write through. But `send()` parks every caller on `initPromise`, and
+// `Store.hydrateFromLocalDb` runs BEFORE the server fetch for most subjects,
+// so the same wait blocks every read for as long as the boot takes. Measured
+// against a worker whose init takes 40s: at 15s a read rejects at 17000ms,
+// which is what lets the store fall through and ask the server; raised to 60s
+// the same read settles at 40005ms, and a caller with its own budget (a class
+// lookup gets 10s per read and three tries) gives up for good instead. Reads
+// want to fail fast, writes want to wait. Splitting those two is the fix; one
+// number cannot serve both.
+const OWN_BOOT_SETTLE_WAIT_MS = 15_000;
+
 // Lock stealing (`navigator.locks.request({ steal: true })`) is attempted on
 // every browser. Modern Firefox (and Zen) honors `steal` — verified manually
 // against a real ghost lease — despite older notes here claiming it was
@@ -188,7 +262,7 @@ const STEAL_SETTLE_WAIT_MS = 15_000;
 
 type BroadcastMessage =
   | { type: 'leader-ping' }
-  | { type: 'leader-announce' }
+  | { type: 'leader-announce'; tabId?: string }
   | {
       type: 'rpc-req';
       fromTab: string;
@@ -219,6 +293,7 @@ export class ClientDbWorker {
     : Math.random().toString(36).slice(2);
   private nextId = 1;
   private pending = new Map<string, PendingRequest>();
+  private observedLeader: string | undefined;
   private workerUrl: string;
   private wasmUrl: string;
   private opts: ClientDbOptions;
@@ -350,7 +425,9 @@ export class ClientDbWorker {
       // A worker exists only after we acquire the lock. Cold WASM startup
       // can exceed the election window; wait for our worker instead of
       // stealing our own lock and reporting a false ghost leader.
-      if (!this.worker) {
+      const stealing = !this.worker;
+
+      if (stealing) {
         // Forcibly take the lock from the ghost leader. The previous
         // callback gets aborted by the browser; we run `becomeLeader` from
         // this new callback.
@@ -360,20 +437,23 @@ export class ClientDbWorker {
         this.requestLeaderLock(baseUrl, true);
       }
 
-      // Wait for the steal callback to run `becomeLeader` TO COMPLETION —
-      // `leadershipGained` only resolves after the worker's wasm import and
-      // OPFS open, which legitimately takes several seconds on a cold dev
-      // server. The old cap reused LEADER_ELECTION_WAIT_MS (2s) here and
-      // produced false "reclaiming did not succeed" errors for steals that
-      // were succeeding, just slowly. The wait ends early on success, on
-      // another tab winning, or on a real init error (e.g. the ghost is a
-      // live throttled tab whose worker still holds the OPFS file handle —
-      // a stolen Web Lock can't take that).
+      // Wait for `becomeLeader` TO COMPLETION, whether it is running from the
+      // steal callback or from the lock we already held — `leadershipGained`
+      // only resolves after the worker's wasm import and OPFS open, which
+      // legitimately takes several seconds on a cold dev server. The old cap
+      // reused LEADER_ELECTION_WAIT_MS (2s) here and produced false
+      // "reclaiming did not succeed" errors for steals that were succeeding,
+      // just slowly. The wait ends early on success, on another tab winning,
+      // or on a real init error (e.g. the ghost is a live throttled tab whose
+      // worker still holds the OPFS file handle — a stolen Web Lock can't
+      // take that).
       const stolen = await Promise.race([
         this.leadershipGained.then(() => 'stolen' as const),
         this.leaderObserved.then(() => 'follower' as const),
         (async () => {
-          const deadline = Date.now() + STEAL_SETTLE_WAIT_MS;
+          const deadline =
+            Date.now() +
+            (stealing ? STEAL_SETTLE_WAIT_MS : OWN_BOOT_SETTLE_WAIT_MS);
 
           while (Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 250));
@@ -398,20 +478,32 @@ export class ClientDbWorker {
       }
 
       if (stolen === 'still-stuck') {
-        // Either the engine ignored `steal` (the request queued behind the
-        // ghost) or the steal callback hasn't run. We stay recoverable: the
-        // queued request fires `becomeLeader` the moment the holding
-        // tab/worker closes, and a late `leader-announce` flips us to
-        // follower.
+        // We stay recoverable either way: `becomeLeader` clears `_initError`
+        // and flips the role back to 'leader' whenever it finishes, and a late
+        // `leader-announce` flips us to follower.
         this.role = 'failed';
-        this._initError = new Error(
-          'ClientDb is running without its local cache: another tab — or a ' +
-            'leftover worker — on this site holds the local database, and ' +
-            'reclaiming the lock did not succeed. The app works normally ' +
-            'meanwhile (reading from the server directly), and recovers on ' +
-            'its own when that tab closes. To recover now, close other tabs ' +
-            'of this site and reload.',
-        );
+        this._initError = stealing
+          ? // Either the engine ignored `steal` (the request queued behind the
+            // ghost) or the steal callback hasn't run.
+            new Error(
+              'ClientDb is running without its local cache: another tab — or ' +
+                'a leftover worker — on this site holds the local database, ' +
+                'and reclaiming the lock did not succeed. The app works ' +
+                'normally meanwhile (reading from the server directly), and ' +
+                'recovers on its own when that tab closes. To recover now, ' +
+                'close other tabs of this site and reload.',
+            )
+          : // Nothing else ever held the lock: we own it, and our own worker
+            // has not finished its wasm import and OPFS open. Saying another
+            // tab holds the database sends the reader after a cause that
+            // cannot apply, which is how run 4686 read — 60 of these messages
+            // and not one `stealing OPFS lock` warning beside them.
+            new Error(
+              'ClientDb is running without its local cache: its local ' +
+                'database has not finished opening. The app works normally ' +
+                'meanwhile (reading from the server directly), and starts ' +
+                'using the cache as soon as the database is open.',
+            );
         console.warn('[ClientDb]', this._initError.message);
 
         return;
@@ -453,6 +545,20 @@ export class ClientDbWorker {
           await this.becomeLeader(baseUrl);
         } catch (e) {
           this._initError = asInitError(e);
+          this.worker?.terminate();
+          this.worker = null;
+
+          if (!this.destroyed) {
+            this.role = 'failed';
+            this.ready = false;
+          }
+
+          for (const [id, pending] of this.pending) {
+            if (!pending.onLeaderChanged) continue;
+            this.pending.delete(id);
+            pending.reject(this._initError);
+          }
+
           // Release the lock so another tab can try.
           throw e;
         }
@@ -466,9 +572,19 @@ export class ClientDbWorker {
         });
       })
       .catch(e => {
-        // A deliberate abort from `destroy()` (the request was still queued)
-        // is teardown, not a failure — ignore it.
-        if (e instanceof DOMException && e.name === 'AbortError') return;
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          // Another tab stole the lock we were holding as leader. It stole it
+          // to open the database itself, and the lock alone does not let it:
+          // our worker's sync access handle keeps the file locked until the
+          // worker goes away. Keeping it left both tabs broken, the thief
+          // with "NoModificationAllowedError" (Firefox) and us leading a
+          // lock we no longer hold, so hand the file over.
+          if (this.worker && !this.destroyed) this.yieldLeadership(baseUrl);
+
+          // Otherwise a deliberate abort from `destroy()` (the request was
+          // still queued): teardown, not a failure.
+          return;
+        }
 
         // Rejects if the callback throws OR if our hold was aborted by
         // another tab stealing the lock. The latter is fine if we're
@@ -479,6 +595,40 @@ export class ClientDbWorker {
           this._initError = asInitError(e);
         }
       });
+  }
+
+  /**
+   * Give the database up after another tab stole the leader lock. Terminating
+   * the worker closes its OPFS handle, which is what the new leader's open is
+   * waiting for (it retries for a few seconds). This tab carries on as a
+   * follower and queues for the lock again, so it takes over when the new
+   * leader closes, or at once if the new leader's open fails after all.
+   */
+  private yieldLeadership(baseUrl: string | undefined): void {
+    console.warn(
+      '[ClientDb] another tab took over the local database; this tab now uses it through that tab',
+    );
+    this.worker?.terminate();
+    this.worker = null;
+    this.releaseLeaderHold = null;
+    this.role = 'follower';
+    // Unknown until the new leader announces itself; that announcement then
+    // replays the calls waiting on a leader.
+    this.observedLeader = undefined;
+
+    // Calls our own worker was answering died with it. Only the caller knows
+    // whether repeating one is safe.
+    for (const [id, pending] of this.pending) {
+      if (pending.onLeaderChanged) continue;
+      this.pending.delete(id);
+      pending.reject(
+        new RequestCancelledError(
+          'ClientDb leader changed; please retry the operation.',
+        ),
+      );
+    }
+
+    this.requestLeaderLock(baseUrl, false);
   }
 
   /**
@@ -519,6 +669,7 @@ export class ClientDbWorker {
       dbName: this.opts.dbName,
       dbKey: this.opts.dbKey,
       migrateLegacy: this.opts.migrateLegacy,
+      discardUndecryptable: this.opts.discardUndecryptable,
     })) as ClientDbInitTimings | undefined;
     endWorkerInit(timings);
 
@@ -537,9 +688,20 @@ export class ClientDbWorker {
     this._initError = undefined;
     this.ready = true;
     this.onBecameLeader();
+    this.observedLeader = this.tabId;
     this.bc?.postMessage({
       type: 'leader-announce',
+      tabId: this.tabId,
     } satisfies BroadcastMessage);
+    this.resumeAfterLeaderChange();
+  }
+
+  private resumeAfterLeaderChange(): void {
+    // Snapshot first: retrying adds new pending entries, which must not be
+    // visited again during this same handoff.
+    for (const pending of [...this.pending.values()]) {
+      pending.onLeaderChanged?.();
+    }
   }
 
   private handleBroadcast(msg: BroadcastMessage): void {
@@ -548,6 +710,7 @@ export class ClientDbWorker {
         if (this.role === 'leader') {
           this.bc?.postMessage({
             type: 'leader-announce',
+            tabId: this.tabId,
           } satisfies BroadcastMessage);
         }
 
@@ -566,6 +729,13 @@ export class ClientDbWorker {
 
           this.role = 'follower';
           this.onObservedLeader();
+
+          // Older deployed tabs do not include a tab id. Remain compatible,
+          // but only replay after a positively identified replacement.
+          if (msg.tabId && msg.tabId !== this.observedLeader) {
+            this.observedLeader = msg.tabId;
+            this.resumeAfterLeaderChange();
+          }
         }
 
         break;
@@ -664,13 +834,34 @@ export class ClientDbWorker {
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
+    outbox?: ClientDbOutboxWrite,
   ): Promise<void> {
     await this.send({
       type: 'putResourceWithSnapshot',
       subject,
       jsonAd,
       snapshot,
+      outbox,
     });
+  }
+
+  /** The outbox rows stored for `agent`: one JSON value per subject. */
+  async outboxEntries(agent: string): Promise<string[]> {
+    const rows = await this.send({ type: 'outboxEntries', agent });
+
+    return (rows as string[] | null) ?? [];
+  }
+
+  /**
+   * Store and remove outbox rows in one write. With `durable`, resolves only
+   * once the write is flushed to disk; otherwise the worker's periodic flush
+   * persists it within a second.
+   */
+  async outboxWrite(
+    write: ClientDbOutboxWrite,
+    durable: boolean,
+  ): Promise<void> {
+    await this.send({ type: 'outboxWrite', ...write, durable });
   }
 
   /** Put many resources in a single worker round-trip. The worker
@@ -1127,8 +1318,10 @@ export class ClientDbWorker {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private sendToLeader(msg: Record<string, any>): Promise<unknown> {
+  private sendToLeader(
+    msg: Record<string, unknown>,
+    retries = 1,
+  ): Promise<unknown> {
     if (!this.bc) {
       return Promise.reject(
         new Error('ClientDb BroadcastChannel not initialized'),
@@ -1141,8 +1334,8 @@ export class ClientDbWorker {
       // If the leader tab dies between sending the request and the
       // response coming back, the BroadcastChannel doesn't surface a
       // "peer closed" event — the pending entry sits forever.
-      // Time out after 30 s. The caller can retry; by then a new
-      // leader will usually have been elected via navigator.locks.
+      // Handoffs settle these entries through onLeaderChanged below. Keep a
+      // deadline as well for a leader that stays alive but stops answering.
       const timer = setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
@@ -1155,6 +1348,31 @@ export class ClientDbWorker {
       }, 30_000);
 
       this.pending.set(id, {
+        onLeaderChanged: () => {
+          this.pending.delete(id);
+          clearTimeout(timer);
+          // Reads, flush, and content-addressed blob writes are safe to
+          // repeat. A general write may have committed before its reply was
+          // lost, and worker-local peer sessions cannot move across tabs.
+          const repeatable =
+            typeof msg.type === 'string' && REPEATABLE_RPC_TYPES.has(msg.type);
+
+          if (!repeatable || retries === 0) {
+            reject(
+              new RequestCancelledError(
+                `ClientDb leader changed during ${msg.type}; please retry the operation.`,
+              ),
+            );
+
+            return;
+          }
+
+          const retry =
+            this.role === 'leader'
+              ? this.sendToWorker(msg)
+              : this.sendToLeader(msg, retries - 1);
+          retry.then(resolve, reject);
+        },
         resolve: (data: unknown) => {
           clearTimeout(timer);
           resolve(data);

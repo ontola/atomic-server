@@ -10,8 +10,10 @@
  *
  * Both are fixed: the doc is preserved across hydrations, and the client
  * now exports full Loro snapshots per commit. The server's causality guard
- * (see `lib/src/commit.rs::validate_loro_causality`) catches any remaining
- * concurrent-write commits with a clear error.
+ * (see `lib/src/commit.rs::validate_loro_causality`) catches a commit from a
+ * doc that never read the resource with a clear error. A doc that holds the
+ * stored history and merely lost the race is accepted, since that is LWW
+ * deciding rather than a write going missing.
  */
 import { test, expect, Page } from './fixtures';
 import { before, editableTitle, newDrive } from './test-utils';

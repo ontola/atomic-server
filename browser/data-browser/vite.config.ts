@@ -4,12 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { oxcReactCompiler } from './oxcReactCompilerPlugin';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
+import { prismjsOptimizeDeps, prismjsOptions } from './prismDeps';
 import wasm from 'vite-plugin-wasm';
 import { wuchale } from 'wuchale/vite';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -126,10 +128,6 @@ export default defineConfig(({ mode }) => {
         // the two WASM memories diverge. Exact-match regex so the
         // `loro-crdt/web` subpath import in `LoroLoader` is left alone.
         {
-          find: '@localthought/atomic-integrations',
-          replacement: 'devonian/platform-lenses/atomic-integrations',
-        },
-        {
           find: '@integration-host/import-records',
           replacement: path.resolve(__dirname, '../lib/src/import-records.ts'),
         },
@@ -178,6 +176,20 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       wasm(),
+      {
+        // `src/chunks/Website/runtime/{search-view.html,website-runtime.min.js}`
+        // are gitignored bundles of the runtime's `.ts` sources. `config` runs
+        // for dev, build and vitest alike, so every consumer finds them fresh.
+        name: 'website-runtime',
+        async config() {
+          await buildWebsiteRuntime();
+        },
+        async handleHotUpdate({ file }) {
+          if (/Website\/runtime\/[^/]+\.ts$/.test(file)) {
+            await buildWebsiteRuntime();
+          }
+        },
+      },
       {
         // index.html preloads the wasm pair to warm the worker's fetch, so those
         // hrefs have to carry the same `?v=` the app requests — a preload for a
@@ -352,13 +364,7 @@ export default defineConfig(({ mode }) => {
             ],
           },
         }),
-      !isVitest &&
-        prismjs({
-          languages: ['typescript', 'json', 'diff'],
-          plugins: ['diff-highlight'],
-          css: true,
-          theme: 'default',
-        }),
+      !isVitest && prismjs(prismjsOptions),
     ],
     optimizeDeps: {
       // React Compiler emits `import { c as _c } from "react/compiler-runtime"`
@@ -398,6 +404,20 @@ export default defineConfig(({ mode }) => {
         // so the first `import('yjs')` does not trigger a mid-session re-optimize
         // that 504s the dynamic import.
         'yjs',
+        // The JSON value editor (`src/chunks/CodeEditor/AsyncJSONEditor.tsx`).
+        // `entries` below lets a fresh scan find these, but Vite leaves
+        // `entries` out of its dep-cache hash, so an older `.vite/deps`
+        // without them is reused as is and the first click on a JSON value
+        // re-optimized and reloaded the page (#1793). Listing them here also
+        // changes that hash, which retires such a cache.
+        '@uiw/react-codemirror',
+        '@uiw/codemirror-theme-github',
+        '@codemirror/lang-json',
+        '@codemirror/lint',
+        'codemirror-json-schema',
+        // Injected by `vite-plugin-prismjs` at transform time, after the scan;
+        // see `prismDeps.ts`. The first rendered JSON value reloaded the page.
+        ...prismjsOptimizeDeps,
       ],
       // `loro-crdt` ships a WASM module that `vite-plugin-wasm` (see the
       // `wasm()` plugin above) handles. esbuild's dep-optimizer CANNOT —
@@ -456,6 +476,9 @@ export default defineConfig(({ mode }) => {
       // boot pre-optimizes everything, so first-open is warm and e2e is stable.
       entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
     },
+    test: {
+      setupFiles: ['./src/test-setup.ts'],
+    },
     build: {
       target: 'baseline-widely-available',
       outDir: isTauri ? 'dist-tauri' : 'dist',
@@ -465,7 +488,7 @@ export default defineConfig(({ mode }) => {
       // the default 4096-byte limit, Vite would otherwise inline our 1.7KB
       // ClientDb worker and break in prod (works in dev because dev has no CSP).
       assetsInlineLimit: (filePath: string) =>
-        filePath.endsWith('.worker.js') ? 0 : undefined,
+        filePath.endsWith('.worker.js') ? false : undefined,
       rollupOptions: {
         output: {
           entryFileNames: `assets/[name]-[hash].js`,

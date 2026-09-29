@@ -151,6 +151,18 @@ test.describe('File Picker', () => {
     'select file and upload using the filepicker',
     smoke,
     async ({ page }) => {
+      // This test does more than any other in the suite: two uploads, an
+      // ontology with a class and a configured property, four dialogs, a third
+      // upload through the picker and a navigation to the created file. It
+      // measures 15.8 to 21.1s alone and 33.7 to 35.1s with the suite running
+      // four ways, so it was spending 58% of the 60s default before anything
+      // went wrong. Run 4747 died on that wall three attempts out of three,
+      // each time with the upload already landed and the file's page on
+      // screen, i.e. still making progress. 120s matches the other tests that
+      // were given their own wall, and leaves the individual action limits to
+      // name a failure instead of the wall.
+      test.setTimeout(120_000);
+
       const SEARCH_BAR_PLACEHOLDER = 'Search or enter a URL...';
 
       await uploadFile(page, 'testFile1.txt');

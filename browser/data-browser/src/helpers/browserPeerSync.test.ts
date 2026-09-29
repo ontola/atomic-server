@@ -12,7 +12,10 @@ import {
   createPeerLink,
   parsePeerLink,
   savePeerLink,
-  defaultPeerSignalingUrl,
+  configuredPeerSignalingUrl,
+  requirePeerSignalingUrl,
+  PEER_SIGNALING_SETTING,
+  NO_PEER_SIGNALING,
 } from './browserPeerSync';
 
 afterEach(() => {
@@ -50,24 +53,66 @@ it('reuses the group room and lets a member issue an invitation naming themselve
   expect(window.dispatchEvent).toHaveBeenCalledOnce();
 });
 
-it('discovers through SaaS without consulting a data server or account', () => {
+it('contacts nobody unless a service is configured', () => {
+  vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
+  vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
+  vi.stubGlobal('localStorage', { getItem: () => null });
+
+  for (const hostname of [
+    'localhost',
+    'atomic.place',
+    'my.self-hosted.example',
+  ]) {
+    vi.stubGlobal('window', { location: { hostname } });
+    expect(configuredPeerSignalingUrl()).toBeNull();
+    expect(() => requirePeerSignalingUrl()).toThrow(NO_PEER_SIGNALING);
+  }
+});
+it('takes a service the person chose, but only over a secure or loopback address', () => {
   vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
   vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
   vi.stubGlobal('window', { location: { hostname: 'localhost' } });
-  expect(defaultPeerSignalingUrl()).toBe('wss://atomicserver.eu/webrtc-signal');
+  const choose = (value: string | null) =>
+    vi.stubGlobal('localStorage', {
+      getItem: (name: string) =>
+        name === PEER_SIGNALING_SETTING ? value : null,
+    });
+
+  choose('https://rendezvous.example/webrtc-signal');
+  expect(configuredPeerSignalingUrl()).toBe(
+    'wss://rendezvous.example/webrtc-signal',
+  );
+  choose('ws://localhost:9000/webrtc-signal');
+  expect(configuredPeerSignalingUrl()).toBe(
+    'ws://localhost:9000/webrtc-signal',
+  );
+  choose('ws://rendezvous.example/webrtc-signal');
+  expect(configuredPeerSignalingUrl()).toBeNull();
+  choose('not a url');
+  expect(configuredPeerSignalingUrl()).toBeNull();
+});
+it('discovers through the SaaS a build was compiled against, without consulting a data server or account', () => {
+  vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
+  vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'https://atomic.place');
+  vi.stubGlobal('localStorage', { getItem: () => null });
+  vi.stubGlobal('window', { location: { hostname: 'localhost' } });
+  expect(configuredPeerSignalingUrl()).toBe('wss://atomic.place/webrtc-signal');
+  vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
   vi.stubGlobal('window', {
     location: { hostname: 'app.staging.atomicserver.eu' },
   });
-  expect(defaultPeerSignalingUrl()).toBe(
+  expect(configuredPeerSignalingUrl()).toBe(
     'wss://staging.atomicserver.eu/webrtc-signal',
   );
 });
 it('uses the configured SaaS deployment and supports explicit signaling overrides', () => {
   vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
   vi.stubEnv('VITE_MANAGED_PORTAL_URL', 'http://localhost:49237');
-  expect(defaultPeerSignalingUrl()).toBe('ws://localhost:49237/webrtc-signal');
+  expect(configuredPeerSignalingUrl()).toBe(
+    'ws://localhost:49237/webrtc-signal',
+  );
   vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', 'wss://community.example/signal');
-  expect(defaultPeerSignalingUrl()).toBe('wss://community.example/signal');
+  expect(configuredPeerSignalingUrl()).toBe('wss://community.example/signal');
 });
 it('creates a local-drive invitation without asking a node for discovery', () => {
   vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
@@ -100,6 +145,7 @@ it('derives the same discovery room independently, and separates drives', async 
 it('automatically connects stored drives once, without bootstrapping unknown drives', async () => {
   const { discoverPeerDrives, stopPeerLinks } =
     await import('./browserPeerSync');
+  vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', 'wss://community.example/signal');
   vi.stubGlobal('window', {
     location: { hostname: 'localhost' },
     dispatchEvent: vi.fn(),
@@ -134,8 +180,18 @@ it('automatically connects stored drives once, without bootstrapping unknown dri
   expect(BrowserPeerSync).toHaveBeenCalledOnce();
   expect(BrowserPeerSync).toHaveBeenCalledWith(
     store,
-    expect.objectContaining({ drive: 'did:ad:stored' }),
+    expect.objectContaining({
+      drive: 'did:ad:stored',
+      signalingUrl: 'wss://community.example/signal',
+    }),
   );
+  stopPeerLinks(store);
+
+  // With no service configured the same store dials nobody.
+  vi.stubEnv('VITE_ATOMIC_SIGNALING_URL', '');
+  vi.mocked(BrowserPeerSync).mockClear();
+  await discoverPeerDrives(store);
+  expect(BrowserPeerSync).not.toHaveBeenCalled();
   stopPeerLinks(store);
 });
 
@@ -145,7 +201,7 @@ it('keeps node-hosted staging apps on staging discovery', () => {
   vi.stubGlobal('window', {
     location: { hostname: 'node1.staging.atomicserver.eu' },
   });
-  expect(defaultPeerSignalingUrl()).toBe(
+  expect(configuredPeerSignalingUrl()).toBe(
     'wss://staging.atomicserver.eu/webrtc-signal',
   );
 });

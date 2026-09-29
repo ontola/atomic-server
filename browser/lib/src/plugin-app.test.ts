@@ -277,7 +277,7 @@ describe('createApp', () => {
       source: SOURCE,
     });
 
-    expect(created.agent).toMatch(/^did:ad:agent:/);
+    expect(created.agent).toMatch(/^atomic:agent:/);
     expect(created.secret).toBeTruthy();
 
     // Not under the app: an app may write its own subtree, so its agent

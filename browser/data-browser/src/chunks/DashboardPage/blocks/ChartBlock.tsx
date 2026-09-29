@@ -1,6 +1,6 @@
 import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { useProperty } from '@tomic/react';
+import { useProperty, isAtomicIdentifier } from '@tomic/react';
 import {
   formatAggregateValue,
   formatGroupKey,
@@ -121,7 +121,7 @@ function BucketLabel({
   granularity: 'exact' | 'day' | 'month';
 }): JSX.Element {
   const looksLikeSubject =
-    bucketKey.startsWith('http') || bucketKey.startsWith('did:');
+    bucketKey.startsWith('http') || isAtomicIdentifier(bucketKey);
 
   if (looksLikeSubject) {
     return <ResourceInline subject={bucketKey} />;

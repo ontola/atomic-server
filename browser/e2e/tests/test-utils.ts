@@ -2,6 +2,7 @@ import {
   Page,
   expect,
   Browser,
+  ConsoleMessage,
   Locator,
   TestInfo,
   test,
@@ -11,6 +12,7 @@ import {
   envCpuThrottle,
   registerPerfPage,
 } from './perf-attach';
+import { installEmptyDiscoveryRoom } from './fixtures';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
 export const smoke = { tag: '@smoke' } as const;
@@ -22,6 +24,37 @@ export const PROPERTIES = {
   push: 'https://atomicdata.dev/properties/push',
   loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
+
+/**
+ * Click "Page edit" on a website resource, waiting as long as the draft build
+ * behind it can take.
+ *
+ * That button is `disabled={!draft || busy || refreshing || !!problem}`
+ * (`WebsitePage.tsx`), and `refreshing` stays true until the page's effect has
+ * read the website config and run `buildWebsiteArtifact`. So the click is not a
+ * click, it is a wait on that build, and it was sitting on Playwright's 10 s
+ * ACTION default rather than on any assertion budget.
+ *
+ * Measured on this container (4 cores, so a four-worker round is oversubscribed),
+ * over the website specs at four workers:
+ *
+ *     website-inline-content.spec.ts   3708 to 9170 ms   (n=8)
+ *     website-inline-fixture.ts        1235 to 7629 ms   (n=11)
+ *
+ * 9170 ms is 91% of the old budget, and a further round blew past it outright:
+ * `locator.click: Timeout 10000ms exceeded`, the element `disabled` for all
+ * fifteen retries. A CI shard runs ~71 tests against one server with three other
+ * shards alongside, so 91% locally is not a budget at all.
+ *
+ * 30 s is ~3x the worst sample, matching the wait in `waitForSynced` below.
+ * `website.spec.ts`'s own "Page edit" click needs none of this and is left alone:
+ * it happens after a release round-trip, by which time the draft is long settled,
+ * and it measures 109 to 203 ms (2%) over the same eight rounds.
+ */
+export const clickPageEdit = (page: Page) =>
+  page
+    .getByRole('button', { name: 'Page edit', exact: true })
+    .click({ timeout: 30_000 });
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
@@ -49,15 +82,9 @@ export function spaUrl(url: string): string {
 }
 
 /**
- * Hostname the Node test process can actually reach.
- *
- * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
- * it as a secure context (`crypto.subtle` / WASM ClientDb). Chromium is told
- * to map that name via `--host-resolver-rules`; Node is not, and `/etc/hosts`
- * is read-only in the playwright container. When `ATOMIC_SERVICE_URL` is set
- * (dagger: `http://atomic:9883`), rewrite browser-facing URLs to that
- * service-binding host for anything fetched from the test process itself
- * (`route.fetch`, create-template, …).
+ * Internal transport URL for intercepted requests forwarded with `route.fetch`.
+ * Keep public URLs in generated configuration and authentication signatures:
+ * `server-dns.cjs` maps those to the CI service without changing their identity.
  */
 export function nodeReachableServerUrl(browserFacingUrl: string): string {
   const service = process.env.ATOMIC_SERVICE_URL?.replace(/\/$/, '');
@@ -255,6 +282,15 @@ export const before = async (
 
   if (testInfo) registerPerfPage(testInfo, page);
 
+  // Peer discovery never reaches a real signalling service from a test,
+  // whichever `test` the spec imported. `fixtures.ts` installs this for the
+  // specs that take their `test` from there; twenty-two spec files import it
+  // straight from `@playwright/test`, and nineteen of those call this function,
+  // which is why it goes here. The app contacts no service unless one is
+  // configured, so this is a guard for the day a build or a stored setting
+  // names one; registering it a second time is harmless.
+  await installEmptyDiscoveryRoom(page.context());
+
   await installCommitWatcher(page);
   await test.step('Initialize fresh agent and drive', () => devDrive(page));
 };
@@ -426,6 +462,26 @@ export async function setTitle(page: Page, title: string) {
   // rename has been committed to the server"; what the server (or its
   // plugins) does next is not setTitle's concern.
   await commitPosted;
+
+  // The waiter above matches ANY commit for this subject, and `useValue`'s
+  // save is debounced, so under load the debounce can fire part-way through
+  // the typing and that first commit satisfies it. `setTitle` then returned
+  // with the rename half done, and a caller that reloaded straight after
+  // persisted the prefix: a title ending `1790210871258` was stored as
+  // `Private home canary 17902`, stable across 23 reads, so it was saved
+  // truncated rather than rendered late.
+  //
+  // Waiting for quiescence here closes that. The objection recorded above —
+  // that `pendingDirtyCount === 0` is trivially true before the debounce
+  // fires — is a statement about checking it BEFORE any commit; by this point
+  // one has posted. Any characters still unsaved are either in the outbox, in
+  // an in-flight `save()`, or in an armed debounce timer, and
+  // `pendingDirtyCount` counts all three (`_scheduledSaves` is incremented by
+  // `startScheduledSave`), so a partial rename cannot read as settled.
+  //
+  // Matching the commit BODY against the title instead cannot work: a rename
+  // travels as a base64 `loroUpdate`, never as a literal substring.
+  await waitForSynced(page);
 }
 
 /** Wait for either an HTTP `/commit` POST or an acknowledged WS COMMIT frame whose
@@ -513,9 +569,18 @@ export async function signIn(page: Page, secret?: string) {
     .locator('a[href$="/app/agent"]')
     .filter({ hasNotText: 'Login / New User' });
   const login = page.getByRole('link', { name: 'Login / New User' });
+  // The first thing this helper waits for is a cold app boot in whatever
+  // context it was handed: wasm, store init and the route all have to land
+  // before any of these four appear. It was on the 10s default while the two
+  // waits below it already had 20s, which is the tell that nobody chose it.
+  // Measured at four workers on 24 September 2026: 751ms to 6118ms, so on this
+  // box it was already at 61% of its budget. On a Mancave running four runners
+  // at once, where a shard took 44 to 50 minutes against the usual 19 to 25,
+  // that doubles and goes past 10s. `meetings.spec.ts:237` failed exactly there
+  // on run 4537, waiting for the `Sign in` button.
   await expect(
     input.or(signInButton).or(settings).or(login).first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
   // Not "is the settings link visible": the signed-in layout renders from
   // stored state and can be up before the agent is in the store, so that
   // check returned for sessions that had no agent at all. Ask the store.
@@ -526,7 +591,9 @@ export async function signIn(page: Page, secret?: string) {
     // unmount while onboarding takes over the initial route.
     if (!(await signInButton.isVisible()))
       await page.goto(`${FRONTEND_URL}/app/welcome`);
-    await signInButton.click();
+    // Same story: an action's own 10s default, guarding a button that only
+    // renders once onboarding has settled. 52ms to 5947ms at four workers.
+    await signInButton.click({ timeout: 20_000 });
   }
 
   await enterSecret(page, secret ?? (await getDevDriveSecret(page)));
@@ -549,7 +616,9 @@ export async function signIn(page: Page, secret?: string) {
  */
 export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
   await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
   const secret = await page.evaluate(() =>
@@ -591,8 +660,20 @@ export async function newDrive(page: Page) {
   await createButton.click();
 
   // Wait for the URL to change to did:ad: (newly created drive)
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
+  // The URL changes when the route does, but the header still shows the drive
+  // you came FROM until the new one's resource has loaded and its name has
+  // arrived, so this waits on a fetch and not on a render. The 10s default does
+  // not cover it: measured at four workers on 24 September 2026, the slowest
+  // few per run were 9.3s, 11.1s and 8.5s, so the budget was already being
+  // blown. Being marginal rather than short is why it presents as a flake,
+  // `saved-drives.spec.ts:81` red 4 of 10, reporting the title of the previous
+  // drive rather than a missing one. 30s, matching the `waitForURL` above it.
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
+    timeout: 30_000,
+  });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
 
@@ -1043,6 +1124,76 @@ export async function openNewResourcePage(page: Page) {
   }).toPass({ timeout: 20_000 });
 }
 
+/** Create a complete starter from the catalog, preserving the current parent. */
+export async function createFromCatalog(page: Page, title: string) {
+  const parent = new URL(page.url()).searchParams.get('subject');
+  await waitForSynced(page);
+  const url = new URL('/app/new', page.url());
+  if (parent) url.searchParams.set('parentSubject', parent);
+  await page.goto(url.href);
+  await page
+    .getByRole('searchbox', { name: 'Search templates and resource types' })
+    .fill(title);
+
+  // `openCreation` (NewRoute.tsx:205) navigates only after the template has
+  // been built, and its catch calls `store.notifyError` and navigates nowhere.
+  // So a creation that failed and a creation still running leave the page on
+  // exactly the same URL, and the wait below reports them identically: a wall
+  // of identical polls and a timeout naming itself. `apps:93` and `apps:182`
+  // both flaked here on develop run 4334 with 90 unchanged polls over the full
+  // 45s and nothing in the log to say which of the two had happened.
+  //
+  // `errorHandler` calls `console.error` before it raises the toast, and an
+  // unhandled rejection reaches it too, so the page's own console is the one
+  // place that can tell them apart. Collect it for the length of this step and
+  // report it only if the wait fails, leaving Playwright's call log intact.
+  const complaints: string[] = [];
+
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === 'error') complaints.push(message.text());
+  };
+
+  const onPageError = (error: Error) => complaints.push(error.message);
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+
+  try {
+    await page
+      .getByRole('region', { name: 'Start blank' })
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    // 90s, not the 45s this used to be. Develop run 4547 failed `apps:180`
+    // here on all three attempts with the page still on `/app/new` and the
+    // console silent, which is the branch below saying the creation had not
+    // finished rather than that it threw — the distinction `62871ba` added
+    // this diagnostic for, answering the question it was left open on.
+    //
+    // Measured since, click to leaving `/app/new`, at four workers over 108
+    // samples across two mixes: 9.6s min, 16.6s median, 25.2s max, and 29.7s
+    // in the 22 September run of the same measurement. So 45s was already
+    // two thirds spent on this box, and Mancave now runs four CI runners at
+    // once: 4547's shards took 31 to 38 minutes against 19.1 on 4512.
+    //
+    // App is what this budget is really for. The other catalog titles are far
+    // cheaper — Plugin 9.9s and Website 4.8s worst — so they pay nothing for
+    // the headroom. An App builds its drive's plugin schema first, nineteen
+    // properties and classes as separate signed commits, which is the same
+    // cost `newPlugin` documents and is a product finding of its own rather
+    // than something a test can shorten.
+    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 90_000 });
+  } catch (waitFailed) {
+    console.error(
+      complaints.length > 0
+        ? `Creating a ${title} from the catalog left the page on /app/new, and the page reported: ${complaints.join(' | ')}`
+        : `Creating a ${title} from the catalog left the page on /app/new, and the page reported no error, so the creation had not finished within the budget.`,
+    );
+    throw waitFailed;
+  } finally {
+    page.off('console', onConsole);
+    page.off('pageerror', onPageError);
+  }
+}
+
 export async function newResource(klass: string, page: Page) {
   await openNewResourcePage(page);
 
@@ -1088,9 +1239,18 @@ export async function newResource(klass: string, page: Page) {
         } as Record<string, string>
       )[klass] ?? klass;
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const classButton = page.getByRole('main').getByRole('button', {
-      name: new RegExp(`^${escaped}$`, 'i'),
-    });
+    // Scoped to the page's `section`s, which is where the class buttons live:
+    // "Start blank" and "Your resource types". The assistant's suggestion row
+    // above them is not a section, and #1577 gave it buttons that carry the
+    // same words, since "Dashboard" and "Custom table" are each both a
+    // suggestion and a class. Unscoped, the name then matches two buttons and
+    // Playwright refuses to touch either.
+    const classButton = page
+      .getByRole('main')
+      .locator('section')
+      .getByRole('button', {
+        name: new RegExp(`^${escaped}$`, 'i'),
+      });
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
     await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a
@@ -1314,7 +1474,35 @@ export async function waitForSynced(page: Page, timeoutMs = 30_000) {
               }),
             ) ?? [];
 
-        return { status, entries };
+        // `pendingDirtyCount` is a sum:
+        //
+        //     outbox.size - blockedCount + inFlightSaves + _scheduledSaves
+        //
+        // so a timeout with an empty outbox says only that one of the other
+        // two terms is stuck, and the sum cannot say which. Develop run 4596
+        // (25 September) timed out here with `entries: []`, `blockedCount: 0`
+        // and `pendingDirtyCount: 1`, and there was nothing in the message to
+        // tell a save that never settled from a debounce slot that was never
+        // balanced. Split it, so the next one names its own cause.
+        const savingSubjects = [...(store?.resources.values() ?? [])]
+          .filter(resource => resource.isSaving)
+          .map(resource => resource.subject);
+        const outboxSize = store?.outbox?.size ?? 0;
+        const blocked = status?.blockedCount ?? 0;
+        const breakdown = {
+          outboxSize,
+          blocked,
+          savingSubjects,
+          // The store does not expose the debounce counter, so take it as what
+          // the other terms cannot account for.
+          scheduledSaves:
+            (status?.pendingDirtyCount ?? 0) -
+            outboxSize +
+            blocked -
+            savingSubjects.length,
+        };
+
+        return { status, breakdown, entries };
       })
       .catch(() => undefined);
     throw new Error(
@@ -1529,8 +1717,8 @@ function ddmmyyyyToIso(value: string): string {
 /**
  * Waits until every row typed into a grid is a real member of its table.
  *
- * A new row is held purely locally under a `_new:` subject until its
- * materialize timer fires — no commit, no collection membership. Anything
+ * A new row is a draft held purely locally (its genesis is unsigned) until
+ * its materialize timer fires — no commit, no collection membership. Anything
  * computed OVER that collection therefore cannot see it yet: a total renders
  * an em-dash, a filter does not match it, a chart omits it. Asserting on such
  * a value before this point is asserting about a table that does not contain
@@ -1543,13 +1731,22 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
   await page.waitForFunction(
     () => {
       const resources = Array.from(window.store.resources?.values?.() ?? []);
+      // What creating a draft row writes; anything more is a row someone
+      // typed into.
+      const seeded = new Set([
+        'https://atomicdata.dev/properties/isA',
+        'https://atomicdata.dev/properties/parent',
+        'https://atomicdata.dev/properties/drive',
+        'https://atomicdata.dev/properties/genesis',
+      ]);
       const stillVirtual = resources.some(
-        // A placeholder holds only its seeded `isA` + `parent`; anything more
-        // is a row someone typed into.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (r: any) =>
-          String(r.subject).startsWith('_new:') &&
-          (r.getEntries?.()?.length ?? 0) > 2,
+          r.new &&
+          /^(did:ad|atomic):/.test(String(r.subject)) &&
+          (r.getEntries?.() ?? []).some(
+            ([property]: [string]) => !seeded.has(property),
+          ),
       );
 
       return (
@@ -1689,7 +1886,7 @@ export async function openConfigureDrive(page: Page) {
   // there too, but go direct).
   await page.goto(`${FRONTEND_URL}/app/agent`);
   await expect(
-    page.getByRole('heading', { name: 'User Settings' }),
+    page.getByRole('heading', { name: 'User', exact: true }),
   ).toBeVisible({
     timeout: 10000,
   });
@@ -1789,6 +1986,33 @@ export async function contextMenuClick(text: string, page: Page) {
   const item = page.getByTestId(`menu-item-${text}`);
   await item.waitFor({ state: 'visible' });
   await item.click();
+}
+
+/**
+ * Open the Connections or Automations dialog of the table page on screen.
+ * Both live in the table's context menu, which only lists them once the table
+ * page has mounted. `timeout` covers opening the menu too, since whatever is
+ * still in front of the page (a setup dialog, say) blocks that click.
+ */
+export async function openWorkspaceDialog(
+  page: Page,
+  section: 'connections' | 'automations',
+  timeout?: number,
+) {
+  // A top-level dialog left over from an earlier step covers the table and
+  // swallows this click: the GitHub setup dialog stays up, its button reading
+  // "Connecting…", until the install settles. A bigger budget does work,
+  // because Playwright retries until the dialog goes, but it makes the budget
+  // the thing under test. Measured on develop at `2c581ff`, running this file
+  // at four workers, the click cost 41.1s against the 45s it had, and 9.8s
+  // unloaded against the 10s it had before that.
+  //
+  // So wait for the dialog to go, the way `waitForTableBuild` above does, and
+  // let the clicks keep their ordinary budgets. A dialog that never closes now
+  // says so, instead of arriving as a click that could not reach its target.
+  await currentDialog(page).waitFor({ state: 'hidden', timeout });
+  await page.click(contextMenu, { timeout });
+  await page.getByTestId(`menu-item-${section}`).click({ timeout });
 }
 
 export const anyValue = Symbol('any');

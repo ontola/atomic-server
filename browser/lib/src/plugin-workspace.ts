@@ -32,10 +32,7 @@ export function pluginWorkspace(
   // source, approval or private sync state just because someone opens a view.
   const connection = object(read('plugin-connection'));
   const schemas = object(read('plugin-schemas'));
-  const table =
-    object(connection.config).table ??
-    schemas.table ??
-    object(schemas.mt940).table;
+  const table = object(connection.config).table ?? schemas.table;
   if (table === undefined) return undefined;
   if (typeof table !== 'string' || !table.trim())
     throw new Error('Invalid connection destination');

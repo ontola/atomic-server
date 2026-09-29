@@ -81,6 +81,10 @@ away.
 *Should have:* wiped it. A warning is the wrong shape when the consequence is a
 failure list that changes every run.
 *Fixed 2026-08-18 (87e12c9a) — wipes by default, `--keep-store` to override.*
+The same shape returned on the #1500 branch with a custom data dir that
+`e2e-server.sh` does not manage: at 1.1 GB, all six `apps` tests and most of
+`plugins` failed a 10s `iframe[title="App"]` wait; a fresh data dir took the
+two specs from 16 failures to 1. Wipe before any full run.
 
 **`waitForSearchIndex(page)` with no query is a 1.5s sleep wearing a
 readiness-helper's name.**
@@ -93,6 +97,61 @@ a name that promises a readiness check.
 **Playwright's `-g` silently keeps only the last one.**
 Passing two spec files with two `-g` filters ran one test and reported
 `1 passed`. Nothing indicated the other filter had been discarded.
+
+**redb's lock outlives the listening socket, so a restart that waits for the
+port runs the suite against nothing.** *(open)*
+Killing the server frees the port within a second, but `atomic.redb` stays
+locked for several more. A restart that only waits for the port exits at once
+with `Failed to create redb ...: Database already open. Cannot acquire lock.`,
+and every spec then fails in ways that look like product defects: missing menu
+items, disabled buttons, empty panels. On the #1500 branch this accounted for
+most of one session's "unexplained" failures. `e2e-server.sh` refuses a busy
+port before starting, but nothing in the repo waits for HTTP 200 or retries the
+spawn.
+*Should have:* gate readiness on `curl` returning 200, never on the port, and
+retry the spawn (not just the wait) when the log says "Database already open".
+Give a fresh server about ten seconds before the first spec; within that
+window `menu-item-website-prepare` renders but stays disabled.
+
+**Compiled i18n catalogs silently shift every string.**
+The `wuchale` plugin rewrites `src/locales/*.po` while Vite runs; the compiled
+catalogs live in `src/locales/.wuchale/`, which is gitignored. So
+`git checkout -- src/locales/` restores the `.po` files and leaves compiled
+artifacts from some other state, and every indexed string lookup shifts.
+Missing entries render as `[i18n-404:NNN]`, which is visible; *shifted* entries
+render as a different real string, which is not. That is how
+`iframe[title="Website preview"]` became a Google Calendar sentence and every
+website spec failed, an hour of bisecting code later. A measurement taken with
+`src/locales/` dirty is suspect; one revert on the #1500 branch was made on
+exactly such a measurement. Making the `.po` files read-only does not help: the
+`.wuchale` output goes stale instead.
+*Should have:* the compiled output regenerated whenever the `.po` files change
+under it, or a refusal to serve when the two disagree. Until then: delete
+`src/locales/.wuchale` together with any `.po` reset and restart Vite (rule in
+`AGENTS.md`).
+
+**Vite serves a stale pre-bundle after a dependency's `dist` is edited.**
+Editing an installed package's `dist/index.js` to instrument it is invisible
+until the Vite cache directory is cleared; one measurement showed zero events
+for that reason alone.
+*Should have:* said which pre-bundle it was serving and when it was built.
+
+**A dependency install borrowed from another checkout.**
+Every `node_modules` under `browser/` was a symlink into a different branch's
+checkout, so this branch's `pnpm-lock.yaml` had never been installed:
+`browser/patches/loro-prosemirror@0.4.3.patch` was not applied (the inline
+editors dropped characters) and the production build died with
+`null pointer passed to rust`, failing every `@smoke` test. Both read as product
+bugs. A real `pnpm install --frozen-lockfile` fixed both.
+*Should have:* the runner refusing to start when `node_modules` does not match
+the lockfile, as `test-server` already refuses a stale binary.
+
+**`normalizeSubject('')` resolved to the server root.**
+`useResource(x ?? '')` and every render before the drive setting hydrated
+fetched `http://host/`, which 404s on a DID-drive server and logged two console
+errors each time. It failed the zero-diagnostics gate in four specs and looked
+like an architectural "nothing lives at the root" problem.
+*Fixed 2026-09-16 (027c090) — the empty string is not a subject.*
 
 **No `webServer` block, so every spec fails on a dead port.**
 With no dev server on 6747 the whole suite fails at `page.goto` with
@@ -112,7 +171,7 @@ errored.
 that, a rejected write should surface where the person who caused it is looking.
 *Fixed 2026-08-18 (ecaa4a63).*
 
-**A client renders a stale row set and never reconciles with its server.** *(open)*
+**A client renders a stale row set and never reconciles with its server.** *(fixed, see below)*
 The Houseplants table showed 22+ rows on desktop and 15 in the browser against
 Home Assistant. It looked exactly like a sync failure, and the peer log
 supported that reading: `SYNC_DIFF: server pushes 0, server pulls 1` — "I have
@@ -136,13 +195,22 @@ with `lastCommit` the peer "did not have". All three were consistent with the
 wrong conclusion. What settled it was querying both servers directly and getting
 24 = 24. Measure the thing itself before believing a story that explains the
 symptoms.
+*Fixed 2026-09-18 (`claude/technical-debt-analysis-b4ifz2-query-index`, see
+the next entry for the mechanism).* The browser answers collections from the
+same `atomic_lib` `Db` the server runs, so this was the same index: rows the
+index held but the read hid. `Db::check_query_index` now compares a query's
+member index with a scan of the store and names the missing and stale
+subjects; the index build cross-checks the constraints it did not scan and
+warns when its candidate index came up short. The UI does not yet compare its
+local answer with the server's — a disagreement between two nodes still needs
+the check run on each.
 
 **`fetchResourceHTTP(url, {agent})` silently ignores the option.**
 Returns `Unauthorized` rather than either signing the request or rejecting an
 unknown option. Reads as a permissions problem, is actually a typo-shaped API
 gap.
 
-**A query index silently disagreed with the data it indexes.** *(open)*
+**A query index silently disagreed with the data it indexes.** *(fixed)*
 The Houseplants table rendered 5 rows on the desktop node and 22 on Home
 Assistant. Every resource was present on both, and every probe said they were
 converged — because the probes were reconstructions of the table's query rather
@@ -167,6 +235,25 @@ the real query in exactly the parameters that break. Capture what the
 application actually sends (patch the fetch, read the server's access log)
 before comparing anything. "Both servers agree" is worthless if the question is
 not the one the product asks.
+*Fixed 2026-09-18 (`claude/technical-debt-analysis-b4ifz2-query-index`).* Two
+causes, both in the read that only this query shape takes. (1) Rows whose
+`isA` read back as a plain `String` (one of four encodings that name the same
+class) were *in* the index and *were* read, then hidden: the built-in
+collection class extender did `to_subjects()?` on the value, and
+`resolve_query_member` treated any extender error as "drop the row" — from the
+page and from `totalMembers`. An extender that cannot decide now logs a
+warning and is skipped; the row is listed. (2) Rows whose `isA` was a `String`
+holding the JSON array were never candidates, because the index keyed them by
+the literal `["…"]`, and the matcher rejected them for the same reason; both
+now read the array's elements, from one helper, so they cannot disagree. What
+should have shouted now does: `Db::check_query_index(query)` reports the
+difference between an index and the store, and a first build that finds
+members through a constraint the planner did not scan says so in the log and
+files them (`lib/src/db.rs`, `cross_check_first_build`). Regression tests:
+`is_a_encodings_all_match_the_class_constraint`,
+`replicated_rows_reach_a_watched_scoped_sorted_query`,
+`first_build_cross_checks_the_unscanned_constraint`,
+`check_query_index_names_missing_and_stale_members` in `lib/src/db/test.rs`.
 
 ## Environment and deployment
 

@@ -4,7 +4,8 @@ import { adoptDriveFromDeepLink } from './adoptDriveFromDeepLink';
 import { isOriginWithoutNode } from './originNode';
 
 vi.mock('./originNode', () => ({ isOriginWithoutNode: vi.fn() }));
-vi.mock('@tomic/react', () => ({
+vi.mock('@tomic/react', async () => ({
+  isAtomicIdentifier: (await import('@tomic/lib')).isAtomicIdentifier,
   enableLoro: vi.fn().mockResolvedValue(undefined),
   isUnauthorized: vi.fn().mockReturnValue(false),
   server: { classes: { drive: 'Drive' } },

@@ -6,6 +6,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { Main } from '@components/Main';
+import { OpenRouterLoginButton } from '@components/AI/OpenRouterLoginButton';
 
 export type LinkOpenRouterSearch = {
   code: string;
@@ -92,14 +93,19 @@ function LinkOpenRouterPage() {
     })();
   }, [code, codeVerifier]);
 
-  const displayError = !codeVerifier ? 'No code verifier found' : error;
+  const displayError = !code
+    ? 'OpenRouter did not return an authorization code. Try connecting again.'
+    : !codeVerifier
+      ? 'Your OpenRouter login session is missing. Try connecting again in this browser.'
+      : error;
 
   if (displayError) {
     return (
       <Center>
         <div>
           <h1>Error</h1>
-          <p>{displayError}</p>
+          <p role='alert'>{displayError}</p>
+          <OpenRouterLoginButton />
         </div>
       </Center>
     );

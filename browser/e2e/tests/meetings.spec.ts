@@ -129,9 +129,8 @@ test('start a meeting, join it, follow along, and end it', async ({
 
       if (!d) throw new Error('no drive');
 
-      const tmp = await s.createSubject('meeting-e2e');
       const f = await s.newResource({
-        subject: tmp,
+        deferGenesis: true,
         parent: d,
         isA: 'https://atomicdata.dev/classes/Folder',
       });

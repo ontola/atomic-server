@@ -1,0 +1,107 @@
+import { afterEach, describe, it, vi } from 'vitest';
+import { core } from './index.js';
+import { Store } from './store.js';
+
+/**
+ * A destroy is not instantaneous for everyone who can answer a query: the
+ * server's `/query` races the local index, and an answer computed before the
+ * destroy landed can arrive after it. The store is where "this subject is
+ * destroyed" lives, so every reader of such an answer agrees — including one
+ * created after the delete.
+ */
+const SUBJECT = 'did:ad:resource:doomed';
+const PARENT = 'did:ad:resource:parent';
+
+/**
+ * Fetches the stores in this file started. Every `getResourceLoading` of an
+ * unknown subject goes to the client, and a real `fetch` to example.com
+ * settles whenever the network says so — in CI, after the test and sometimes
+ * after the file, where the store's `console.error` for the failure hits a
+ * worker that is already closing its RPC. The stub answers "not found"
+ * straight away, and `afterEach` waits for the store to finish handling it.
+ */
+const inFlight = new Set<Promise<unknown>>();
+
+const testStore = () => {
+  const store = new Store({ serverUrl: 'https://example.com' });
+  store.setServerConnected(true);
+  const fetchResourceHTTP = vi.fn(async () => {
+    throw new Error('404 not found');
+  });
+
+  (
+    store as unknown as { client: { fetchResourceHTTP: unknown } }
+  ).client.fetchResourceHTTP = (...args: unknown[]) => {
+    const call = fetchResourceHTTP(...(args as []));
+    inFlight.add(call.catch(() => undefined));
+
+    return call;
+  };
+
+  return { store, fetchResourceHTTP };
+};
+
+afterEach(async () => {
+  await Promise.all(inFlight);
+  inFlight.clear();
+  // The store's own handling of the rejection runs a tick after it.
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+
+describe('destroyed subjects', () => {
+  it('does not fetch a subject it destroyed', async ({ expect }) => {
+    const { store, fetchResourceHTTP: fetchSpy } = testStore();
+
+    store.getResourceLoading(SUBJECT);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(fetchSpy).toHaveBeenCalled();
+
+    fetchSpy.mockClear();
+    store.removeResource(SUBJECT);
+
+    // A view still holding the subject — a row a stale answer put back, a
+    // link in a page that has not re-rendered — asks for it again. Answering
+    // from the tombstone keeps the round-trip off the wire, and keeps the
+    // store from re-creating the entry the destroy removed.
+    const resource = store.getResourceLoading(SUBJECT);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(resource.loading).toBe(false);
+    expect(resource.error).toBeDefined();
+  });
+
+  it('refuses incoming state for a destroyed subject after the ack', async ({
+    expect,
+  }) => {
+    const { store } = testStore();
+    const resource = store.getResourceLoading(SUBJECT);
+    await resource.set(core.properties.parent, PARENT, false);
+
+    store.removeResource(SUBJECT);
+    // `hasPendingDestroy` covers only the window before the server acks; the
+    // stale answer usually arrives after it, with nothing queued.
+    expect(store.hasPendingDestroy(SUBJECT)).toBe(false);
+    expect(store.isDestroyed(SUBJECT)).toBe(true);
+
+    expect(
+      store.applyIncoming({
+        subject: SUBJECT,
+        resource: store.getResourceLoading(SUBJECT),
+        source: 'ws-sub-push',
+      }),
+    ).toBe('deduped');
+  });
+
+  it('lifts the tombstone when the subject is created again', async ({
+    expect,
+  }) => {
+    const { store } = testStore();
+    store.getResourceLoading(SUBJECT);
+    store.removeResource(SUBJECT);
+    expect(store.isDestroyed(SUBJECT)).toBe(true);
+
+    store.clearDestroyed(SUBJECT);
+    expect(store.isDestroyed(SUBJECT)).toBe(false);
+  });
+});

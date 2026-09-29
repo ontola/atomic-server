@@ -26,6 +26,8 @@ function ResourceField({
   autoFocus,
   disabled,
   label: labelProp,
+  commit,
+  commitDebounceInterval,
 }: IFieldProps): JSX.Element {
   const fieldId = useId();
   const labelId = useId();
@@ -67,6 +69,8 @@ function ResourceField({
           resource={resource}
           property={property}
           autoFocus={autoFocus}
+          commit={commit}
+          commitDebounceInterval={commitDebounceInterval}
           disabled
         />
         <Extra center gap='1ch'>
@@ -100,6 +104,8 @@ function ResourceField({
         required={required}
         autoFocus={autoFocus}
         disabled={disabled}
+        commit={commit}
+        commitDebounceInterval={commitDebounceInterval}
       />
     </Field>
   );
@@ -160,6 +166,13 @@ interface IFieldProps {
   disabled?: boolean;
   /** Whether the field should be focused on render */
   autoFocus?: boolean;
+  /**
+   * Whether the input should commit (save) on every change. Off by default:
+   * the surrounding form saves the resource.
+   */
+  commit?: boolean;
+  /** The debounce interval for the commit event in milliseconds */
+  commitDebounceInterval?: number;
   /**
    * This function will be called when the delete icon is clicked. This should
    * remove the item from any parent list

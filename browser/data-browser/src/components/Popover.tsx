@@ -27,6 +27,8 @@ export interface PopoverProps {
   noLock?: boolean;
   modal?: boolean;
   side?: 'top' | 'bottom' | 'left' | 'right';
+  onOpenAutoFocus?: RadixPopover.PopoverContentProps['onOpenAutoFocus'];
+  onCloseAutoFocus?: RadixPopover.PopoverContentProps['onCloseAutoFocus'];
   updatePositionStrategy?: 'optimized' | 'always';
 }
 
@@ -41,6 +43,8 @@ export function Popover({
   onOpenChange,
   Trigger,
   side = 'bottom',
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   updatePositionStrategy = 'optimized',
 }: PropsWithChildren<PopoverProps>): JSX.Element {
   const { setHasOpenInnerPopup } = useDialogTreeInfo();
@@ -72,6 +76,8 @@ export function Popover({
       {Trigger}
       <RadixPopover.Portal container={container}>
         <Content
+          onOpenAutoFocus={onOpenAutoFocus}
+          onCloseAutoFocus={onCloseAutoFocus}
           collisionPadding={10}
           sticky='always'
           className={className}

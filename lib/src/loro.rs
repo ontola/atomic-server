@@ -922,7 +922,9 @@ pub fn loro_value_to_atomic_value_tagged(lv: &loro::LoroValue, tag: Option<&str>
 /// Returns `None` if the tag and primitive shape disagree (caller falls back).
 fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
     match (tag, lv) {
-        ("atomicUrl", loro::LoroValue::String(s)) => Some(Value::AtomicUrl(s.to_string().into())),
+        ("atomicUrl", loro::LoroValue::String(s)) => Some(Value::AtomicUrl(
+            crate::identifiers::canonicalize_scheme(s).into(),
+        )),
         ("json", lv) => {
             if let loro::LoroValue::String(s) = lv {
                 if let Ok(parsed) = serde_json::from_str(s.as_ref()) {
@@ -950,7 +952,9 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
             let subjects: Vec<crate::values::SubResource> = items
                 .iter()
                 .filter_map(|item| match item {
-                    loro::LoroValue::String(s) => Some(s.to_string().into()),
+                    loro::LoroValue::String(s) => {
+                        Some(crate::identifiers::canonicalize_scheme(s).into())
+                    }
                     _ => None,
                 })
                 .collect();
@@ -976,8 +980,10 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
             // Legacy: try to detect JSON-encoded arrays from older Loro docs
             if s.starts_with('[') {
                 if let Ok(arr) = serde_json::from_str::<Vec<String>>(&s) {
-                    let subjects: Vec<crate::values::SubResource> =
-                        arr.into_iter().map(|v| v.into()).collect();
+                    let subjects: Vec<crate::values::SubResource> = arr
+                        .into_iter()
+                        .map(|v| crate::identifiers::canonicalize_scheme(&v).into())
+                        .collect();
                     return Some(Value::ResourceArray(subjects));
                 }
             }
@@ -998,8 +1004,13 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
             // that pattern-match on `Value::AtomicUrl` see them correctly.
             // Without this, e.g. plugin extender's `resource.get(parent)`
             // returns `Value::String` and rejects the commit.
-            if s.starts_with("did:") || s.starts_with("http://") || s.starts_with("https://") {
-                return Some(Value::AtomicUrl(s.into()));
+            if crate::identifiers::is_atomic_identifier(&s)
+                || s.starts_with("http://")
+                || s.starts_with("https://")
+            {
+                return Some(Value::AtomicUrl(
+                    crate::identifiers::canonicalize_scheme(&s).into(),
+                ));
             }
 
             // Untagged fallback only: tagged docs recover Slug/Markdown/Uri/Date
@@ -1062,7 +1073,9 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
                         let subjects: Vec<crate::values::SubResource> = items
                             .iter()
                             .filter_map(|item| match item {
-                                loro::LoroValue::String(s) => Some(s.to_string().into()),
+                                loro::LoroValue::String(s) => {
+                                    Some(crate::identifiers::canonicalize_scheme(s).into())
+                                }
                                 _ => None,
                             })
                             .collect();
@@ -2273,7 +2286,7 @@ mod test {
         match write_val.unwrap() {
             Value::ResourceArray(arr) => {
                 assert_eq!(arr.len(), 1);
-                assert_eq!(arr[0].to_string(), "did:ad:agent:abc");
+                assert_eq!(arr[0].to_string(), "atomic:agent:abc");
             }
             other => panic!("Expected ResourceArray for write, got {:?}", other),
         }
@@ -2281,7 +2294,7 @@ mod test {
         match read_val.unwrap() {
             Value::ResourceArray(arr) => {
                 assert_eq!(arr.len(), 1);
-                assert_eq!(arr[0].to_string(), "did:ad:agent:abc");
+                assert_eq!(arr[0].to_string(), "atomic:agent:abc");
             }
             other => panic!("Expected ResourceArray for read, got {:?}", other),
         }
@@ -2320,8 +2333,8 @@ mod test {
         match write_val.unwrap() {
             Value::ResourceArray(arr) => {
                 assert_eq!(arr.len(), 2);
-                assert_eq!(arr[0].to_string(), "did:ad:agent:alice");
-                assert_eq!(arr[1].to_string(), "did:ad:agent:bob");
+                assert_eq!(arr[0].to_string(), "atomic:agent:alice");
+                assert_eq!(arr[1].to_string(), "atomic:agent:bob");
             }
             other => panic!("Expected ResourceArray, got {:?}", other),
         }

@@ -8,10 +8,12 @@ it to go away. When you add one, add it here and open an upstream issue or PR.
 
 ## loro-prosemirror@0.4.3.patch
 
-Added in #1488. Three changes to the ProseMirror ↔ Loro binding:
+Added in #1488. Changes to the ProseMirror ↔ Loro binding:
 
 - Restore the selection in the same transaction as a remote update instead
   of from a `setTimeout`, which could overwrite a newer local cursor.
+- Preserve explicit pending formatting at an empty selection across imports;
+  otherwise a sync receipt between toggling bold and typing clears the toggle.
 - Apply a single inline `ReplaceStep` straight to the existing `LoroText`
   instead of reconciling the whole tree, so typing stays fast in paragraphs
   with a long formatting history.

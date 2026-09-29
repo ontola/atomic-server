@@ -191,11 +191,11 @@ impl ClassExtender {
     }
 
     pub fn resource_has_extender(&self, resource: &Resource) -> AtomicResult<bool> {
-        let Ok(is_a) = resource.get(urls::IS_A) else {
+        let resource_classes = resource.class_subjects();
+        if resource_classes.is_empty() {
             return Ok(false);
-        };
+        }
 
-        let resource_classes = is_a.to_subjects(None)?;
         let matched = resource_classes
             .iter()
             .any(|c| self.classes.contains(&normalize_class(c)));
@@ -218,20 +218,23 @@ impl ClassExtender {
 
     /// Warn about declared classes that cannot ever match.
     ///
-    /// A class is identified by its subject. The address-bar URL for a DID
-    /// resource (`http://host/did:ad:abc`) is not that subject, so declaring it
-    /// produces an extender that loads cleanly and never fires. Called once
-    /// when an extender is registered, because "never fires" is otherwise only
-    /// discoverable by reading this source.
+    /// A class is identified by its subject. The address-bar URL for an
+    /// identifier (`http://host/atomic:abc` / `http://host/did:ad:abc`) is not
+    /// that subject, so declaring it produces an extender that loads cleanly
+    /// and never fires. Called once when an extender is registered, because
+    /// "never fires" is otherwise only discoverable by reading this source.
     pub fn warn_about_unmatchable_classes(&self) {
         for class in &self.classes {
-            if let Some((_origin, tail)) = class.split_once("/did:") {
+            let Ok(url) = url::Url::parse(class) else {
+                continue;
+            };
+            if crate::identifiers::is_identifier_path_form(url.path()) {
+                let ident = crate::identifiers::canonicalize_scheme(&url.path()[1..]);
                 tracing::warn!(
                     extender = self.id.as_deref().unwrap_or("<unnamed>"),
                     declared = %class,
                     "class extender declares a class by URL, not by subject — it will never \
-                     match. Use the bare DID instead: did:{}",
-                    tail
+                     match. Use the bare identifier instead: {ident}"
                 );
             }
         }
@@ -313,16 +316,12 @@ impl ClassExtender {
             return true;
         };
 
-        let Ok(is_a) = resource.get(urls::IS_A) else {
-            return true;
-        };
-
-        let Ok(is_a_subjects) = is_a.to_subjects(None) else {
-            return true;
-        };
-
-        // Check if the resource is a plugin, if so return false.
-        !is_a_subjects.contains(&urls::PLUGIN.to_string())
+        // An Installation (or a not-yet-migrated legacy Plugin) is the plugin
+        // itself; a plugin must not extend the resource that installs it.
+        !resource
+            .class_subjects()
+            .iter()
+            .any(|class| class == urls::INSTALLATION || class == urls::PLUGIN)
     }
 }
 
@@ -331,7 +330,7 @@ mod tests {
     use super::*;
     use crate::Value;
 
-    const CLASS: &str = "did:ad:guDVPzQKpsfcS5Vpbgdh0cj19CFapvKuQ5NVyYfjcspo0ZMpua9UzgC8WkDZa1_Z";
+    const CLASS: &str = "atomic:guDVPzQKpsfcS5Vpbgdh0cj19CFapvKuQ5NVyYfjcspo0ZMpua9UzgC8WkDZa1_Z";
 
     fn extender_declaring(class: &str) -> ClassExtender {
         ClassExtender::builder()
@@ -349,6 +348,45 @@ mod tests {
             )
             .unwrap();
         resource
+    }
+
+    /// `isA` is not always a `ResourceArray`. A row rebuilt from a Loro doc, or
+    /// written by a client that pinned no datatype, reads back as an
+    /// `AtomicUrl`, a plain string, or a string holding the JSON array. Class
+    /// membership is the same in all of them, which is why nothing reads the
+    /// classes with `Value::to_subjects`, which errors on the scalar shapes.
+    #[test]
+    fn every_is_a_encoding_names_the_same_class() {
+        let encodings = [
+            Value::ResourceArray(vec![CLASS.into()]),
+            Value::AtomicUrl(CLASS.into()),
+            Value::String(CLASS.to_string()),
+            Value::String(format!("[\"{CLASS}\"]")),
+        ];
+
+        for is_a in encodings {
+            let mut resource = Resource::new("did:ad:someresource".to_string());
+            resource
+                .set_unsafe(urls::IS_A.into(), is_a.clone())
+                .unwrap();
+            assert_eq!(
+                resource.class_subjects(),
+                vec![CLASS.to_string()],
+                "{is_a:?}"
+            );
+            assert!(resource.has_class(CLASS), "{is_a:?}");
+            assert!(extender_declaring(CLASS)
+                .resource_has_extender(&resource)
+                .unwrap());
+        }
+
+        // No `isA` at all is no classes, which is not an error.
+        let bare = Resource::new("did:ad:someresource".to_string());
+        assert!(bare.class_subjects().is_empty());
+        assert!(!bare.has_class(CLASS));
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&bare)
+            .unwrap());
     }
 
     #[test]

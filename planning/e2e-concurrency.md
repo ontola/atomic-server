@@ -67,7 +67,7 @@ The shared process supervisor now covers the local runner as well as generated
 site fixtures, so interruption closes only live owned process groups.
 
 First exploratory baseline was invalidated by another job: at 04:20:43 UTC
-Atomic SaaS CI's Stop the stack step used `pkill -f target/debug/atomic-server`,
+The sibling control-plane CI's Stop the stack step used `pkill -f target/debug/atomic-server`,
 and our server logged SIGTERM at that instant. It had reached 156 passes;
 the resulting connection-refused cascade produced 54 failures and two serial
 cases did not run. This is not a concurrency or correctness baseline. The
@@ -388,3 +388,18 @@ at the selected position. Use the existing waitForGridMounted after reload befor
 selecting the row. Keyboard assertions and timeouts are unchanged. E2E typecheck
 passes; focused browser validation and the complete comparison remain pending.
 Trace: Mancave /tmp/e2e-1465-shift-enter-trace.zip.
+
+## Local worker count versus CI (from the #1500 pass, 2026-09-16/17)
+
+CI runs **two workers per shard, four shards on Mancave, each shard with its
+own `atomic-server`**, with retries (`.dagger/src/index.ts`, `HOST_PROFILES`).
+A local four-worker run against one server is much harsher than that and
+invents failures: on the #1500 branch `documents`, `username-live` and two
+`apps` tests failed at four workers and passed at two, and a rotating pair of
+specs (`plugins:909`, `tables:482`, `drive-catalog`, `offline-tables`, ...)
+failed purely from load, different each run. Measure locally with
+`PLAYWRIGHT_WORKERS=2 PLAYWRIGHT_RETRIES=1` and re-run any red in isolation
+before treating it as real. The full-suite numbers on that branch moved from
+41 failed to 5 failed / 4 flaky in a day, and roughly half of the original
+list was environment (no server running, wrong dependencies, desynced i18n
+catalogs, a 1.1 GB data dir) rather than product.

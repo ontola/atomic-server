@@ -13,6 +13,7 @@ import {
 } from '@tomic/react';
 import { FeedbackMenuItem } from './FeedbackMenuItem';
 import { SyncMenuItem } from './SyncMenuItem';
+import { NotificationsMenuItem } from './NotificationsMenuItem';
 import { ResourceGlyph } from '../ResourceGlyph';
 
 // Non standard event type so we have to type it ourselfs for now.
@@ -72,13 +73,14 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         }
         label={
           agent
-            ? (agentResource.get(core.properties.name) ?? 'User Settings')
+            ? (agentResource.get(core.properties.name) ?? 'User')
             : 'Login / New User'
         }
         helper='See and edit the current Agent / User (u)'
         path={paths.agentSettings}
         onClick={onItemClick}
       />
+      {agent && <NotificationsMenuItem onClick={onItemClick} />}
       <SideBarMenuItem
         icon={<FaGear />}
         label='Settings'

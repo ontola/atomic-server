@@ -49,6 +49,8 @@ pub mod export;
 pub mod external;
 pub mod files;
 pub mod form;
+#[cfg(feature = "wasm-plugins")]
+pub mod host_core;
 pub mod importer;
 #[cfg(feature = "wasm-plugins")]
 pub mod installation;
@@ -65,6 +67,8 @@ pub mod plan;
 pub mod plugin;
 pub mod prunetests;
 pub mod query;
+#[cfg(feature = "wasm-plugins")]
+pub mod release;
 #[cfg(feature = "wasm-plugins")]
 pub mod release_binding;
 pub mod replicate;
@@ -87,6 +91,8 @@ pub mod view_token;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm;
 
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod plugin_for_testing_tests;
 #[cfg(feature = "wasm-plugins")]
 pub mod sync_session;
 #[cfg(all(test, feature = "wasm-plugins"))]
@@ -94,16 +100,3 @@ mod sync_session_tests;
 
 #[cfg(feature = "wasm-plugins")]
 pub mod sync_worker;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-mod notion_sync_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-mod clockify_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-#[path = "mt940_tests.rs"]
-mod bank_statement_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
-mod pets_tests;

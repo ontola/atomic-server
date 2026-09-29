@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "runtime": "wasip2/1",
+  "secrets": [],
+  "operations": [],
+  "name": "hello",
+  "namespace": "example",
+  "version": "0.1.0"
+}

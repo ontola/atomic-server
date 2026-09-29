@@ -131,18 +131,33 @@ describe('originsMentionedIn', () => {
 });
 
 describe('versioned manifest conformance', () => {
-  const cases = JSON.parse(
-    readFileSync(
-      new URL('../../../testdata/plugin-manifests.json', import.meta.url),
-      'utf8',
-    ),
-  );
+  // Shared with server/src/plugins/manifest.rs; both sides must agree on
+  // acceptance, the error and the canonical serialized form.
+  const fixture = (name: string) =>
+    JSON.parse(
+      readFileSync(
+        new URL(`../../../testdata/plugin-manifest/${name}`, import.meta.url),
+        'utf8',
+      ),
+    );
+  const cases: {
+    name: string;
+    file: string;
+    error?: string;
+    serialized?: unknown;
+  }[] = fixture('index.json');
 
-  for (const fixture of cases) {
-    it(fixture.name, () => {
-      if (fixture.valid)
-        expect(() => validateManifest(fixture.manifest)).not.toThrow();
-      else expect(() => validateManifest(fixture.manifest)).toThrow();
+  for (const entry of cases) {
+    it(entry.name, () => {
+      const raw = fixture(entry.file);
+
+      if (entry.error !== undefined) {
+        expect(() => validateManifest(raw)).toThrow(entry.error);
+      } else {
+        const manifest = validateManifest(raw);
+        if (entry.serialized !== undefined)
+          expect(manifest).toEqual(entry.serialized);
+      }
     });
   }
 });
@@ -151,15 +166,15 @@ it('validates action schemas and operation references without extending capabili
   const raw = JSON.parse(
     readFileSync(
       new URL(
-        '../../../integrations/github-issues/manifest.fixture.json',
+        '../../../testdata/plugin-for-testing/manifest.json',
         import.meta.url,
       ),
       'utf8',
     ),
   );
   expect(validateManifest(raw).actions?.map(a => a.name)).toEqual([
-    'get_issue',
-    'create_issue',
+    'get_record',
+    'create_record',
   ]);
   expect(() =>
     validateManifest({
@@ -195,4 +210,38 @@ it('validates action schemas and operation references without extending capabili
       ],
     }),
   ).toThrow();
+});
+
+describe('a declared config', () => {
+  const config = {
+    key: 'pets',
+    properties: {
+      table: { type: 'string', description: 'Table the pets are written to' },
+      properties: { type: 'object' },
+    },
+    required: ['table'],
+  };
+
+  it('is kept as the plugin wrote it', () => {
+    expect(validateManifest({ schemaVersion: 1, config }).config).toEqual(
+      config,
+    );
+  });
+
+  it('is absent when the plugin declared none', () => {
+    expect(validateManifest({ schemaVersion: 1 }).config).toBeUndefined();
+  });
+
+  it('is rejected when it could not be checked against', () => {
+    for (const broken of [
+      { ...config, required: ['undeclared'] },
+      { ...config, key: 'not a key' },
+      { ...config, properties: { table: { type: 'number' } } },
+      { ...config, properties: { table: { type: 'string', unknown: 1 } } },
+      { ...config, schema: 'https://remote/schema' },
+    ])
+      expect(() =>
+        validateManifest({ schemaVersion: 1, config: broken }),
+      ).toThrow();
+  });
 });

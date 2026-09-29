@@ -70,12 +70,12 @@ a derived, rebuildable projection:
 | Compact `query_id` keys in `QueryMembers` + id-keyed live `QUERY_UPDATE` routing | **built (this pass)** |
 | `(drive, property)`-routed watched-filter matching | **built (this pass)** |
 | Most-selective-constraint planner for AND filters (bounded cardinality estimates) | **built (this pass)** |
+| First-build cross-check of the constraints the planner did not scan (bounded by the scan cap) + `Db::check_query_index` full-scan diagnostic | **built (2026-09-18, finding 7)** |
+| Drive-stamp scoping of DID resources for watched filters (`filter_drive_roots`, audit C17) | **built (2026-09-18)** |
 | Typed sort keys in `PropValSub`/`ValPropSub` sort segment | not built (their sort segment is currently unused by ordering-sensitive paths) |
 | Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change) |
 | Batched KV reads (one read txn per query) | not built (`KvStore` trait change; per-`get` redb txns remain) |
 | Zones index (walk-free auth) | see [`zones.md`](./zones.md) |
-| Memoized ancestor *fetch* in the rights walk (consult the memo by subject before `get_parent`; ancestors loaded via `get_resource_shallow`) | **built** — see [`slow-collection-queries.md`](./slow-collection-queries.md) |
-| Cap on the auth-denied member cascade (stop resolving after N consecutive denials) | **declined** — would hide later readable members after a private streak; the ancestor-fetch memo is the speedup that stays correct |
 
 ## Benchmark context
 
@@ -137,16 +137,7 @@ attached undecoded (see Target architecture §1). If a row is missing
 of the drive resource per checked member, with a recursive parent walk on
 denial. Mitigated this pass by the per-query `RightsCache`: each distinct
 subject in the ancestry is resolved once per query, and per-member work is a
-hashmap hit + explicit-ACL scan on the row.
-
-**Follow-up 2026-08-10 — the mitigation is incomplete on the *parent* leg.**
-The memo keys on a `&Resource`, so `check_rights_impl` must call
-`resource.get_parent(store)` — a full `get_resource` decode — *before* it can
-find the cached verdict for that parent. The drive fast path avoids this with
-an explicit by-subject `cached_deny` probe; the parent walk has no equivalent.
-On the real store this is still ~6.7ms/member (parent = 21.7KB form snapshot),
-i.e. 0.7s for a 105-member auth-denied query. Details and repro in
-[`slow-collection-queries.md`](./slow-collection-queries.md). [`zones.md`](./zones.md) remains
+hashmap hit + explicit-ACL scan on the row. [`zones.md`](./zones.md) remains
 the structural fix (walk-free, index-lookup auth), and its open question —
 whether the zone index also makes member-row *reads* skippable for
 subjects-only queries — still stands.
@@ -167,6 +158,33 @@ by id.
 filters for every indexable atom of every commit. The registry now routes by
 `(drive, property)`: a filter is registered under each constraint property and
 its `sort_by`; only value-only filters stay in a per-drive catch-all bucket.
+
+### Finding 7 — an index was trusted against evidence it could not have (fixed 2026-09-18)
+
+A drive-scoped, sorted, class-filtered table query returned 5 of 22 rows
+while the store, the unscoped shape and the unsorted shape all had 22
+(`planning/silent-failures.md`). Two things were wrong, neither of them
+visible: `resolve_query_member` hid any member whose class extender check
+errored (a `String`-encoded `isA` did that, for every row so encoded), and
+the planner's premise — that any one constraint's `PropValSub` entries are a
+superset of the members — failed for values whose encoding produced a
+different index key (a `String` holding the JSON array of a `ResourceArray`).
+A build from that constraint filed a partial list; being watched, the list
+was trusted from then on, and every count it produced looked plausible.
+
+Now: the reference strings a value is indexed under and the strings the
+matcher compares come from one helper (`Value::to_reference_index_strings`,
+`Value::contains_value`), so index and matcher cannot disagree; an extender
+that cannot decide is skipped with a warning, never a reason to drop a row;
+a first build walks each other equality constraint whose entries fit under
+`PLANNER_SCAN_CAP` (at most 512 extra key reads per constraint, once per
+filter registration — the hot path is untouched), warns with the filter and
+the missing subjects, and files them (`Db::cross_check_first_build`); and
+`Db::check_query_index(query)` compares a member index with a full scan of
+the store and reports the missing and stale subjects, for tests and
+diagnostics. The build and the commit path also compare a DID resource's
+`drive` stamp with the root its filter resolves to (`filter_drive_roots`),
+so a DID row in another drive no longer enters a filter it merely matches.
 
 ## Empirical numbers (pre-rework reference)
 

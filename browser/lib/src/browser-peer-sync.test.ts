@@ -101,6 +101,21 @@ it('retries only the failed edge while keeping six connections alive', async () 
     true,
   );
 });
+it('backs off repeated failures and does not redial early on discovery refresh', async () => {
+  const socket = SignalSocket.instances[0];
+  socket.message({ type: 'joined', peers: [ids[0]] });
+  peers[0].reject(new Error('ICE failed'));
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(peers).toHaveLength(2);
+  peers[1].reject(new Error('ICE failed'));
+  await vi.advanceTimersByTimeAsync(0);
+  socket.message({ type: 'peer', peer: ids[0] });
+  expect(peers).toHaveLength(2);
+  await vi.advanceTimersByTimeAsync(5999);
+  expect(peers).toHaveLength(2);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(peers).toHaveLength(3);
+});
 it('removes one departing negotiation without interrupting other peers', () => {
   const socket = SignalSocket.instances[0];
   socket.message({ type: 'joined', peers: ids });

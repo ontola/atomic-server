@@ -47,25 +47,25 @@ export function FormScheduleSection({
     openAt !== undefined && closeAt !== undefined && closeAt <= openAt;
 
   return (
-    <Column gap="1rem">
-      <StatusLine data-testid="schedule-status">
+    <Column gap='1rem'>
+      <StatusLine data-testid='schedule-status'>
         <Status
           availability={availability}
           isPublished={publishedAt !== undefined}
         />
       </StatusLine>
       <MomentField
-        label="Opens"
-        testId="schedule-open-input"
-        clearTitle="Clear open date"
+        label='Opens'
+        testId='schedule-open-input'
+        clearTitle='Clear open date'
         title='Before this moment visitors see a "not open yet" page'
         value={openAt}
         onChange={setOpenAt}
       />
       <MomentField
-        label="Closes"
-        testId="schedule-close-input"
-        clearTitle="Clear close date"
+        label='Closes'
+        testId='schedule-close-input'
+        clearTitle='Clear close date'
         title='From this moment on visitors see a "closed" page'
         value={closeAt}
         onChange={setCloseAt}
@@ -133,10 +133,10 @@ function MomentField({
 
   return (
     <Field label={label}>
-      <Row gap="0.5rem" center>
+      <Row gap='0.5rem' center>
         <NarrowInputWrapper>
           <InputStyled
-            type="datetime-local"
+            type='datetime-local'
             data-testid={testId}
             title={title}
             value={localDate ?? ''}

@@ -272,7 +272,8 @@ export const AgentConfigTab = ({
           </AgentsList>
 
           <CreateButton onClick={handleCreateNewAgent}>
-            <FaPlus title='' /> Create New Agent
+            <FaPlus title='' />
+            <span>Create New Agent</span>
           </CreateButton>
         </Column>
       )}
@@ -391,22 +392,24 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
             checked={agent.canReadAtomicData}
             onChange={checked => handleChange('canReadAtomicData', checked)}
           />
-          Read
+          <span>Read</span>
         </CheckboxLabel>
         <CheckboxLabel>
           <Checkbox
             checked={agent.canWriteAtomicData}
             onChange={checked => handleChange('canWriteAtomicData', checked)}
           />
-          Write
+          <span>Write</span>
         </CheckboxLabel>
         <CheckboxLabel>
           <Checkbox
             checked={agent.ragEnabled}
             onChange={checked => handleChange('ragEnabled', checked)}
           />
-          RAG, Automatically provide context from your knowledge base based on
-          your prompt.
+          <span>
+            RAG, Automatically provide context from your knowledge base based on
+            your prompt.
+          </span>
         </CheckboxLabel>
       </StyledField>
       <StyledField label='Tools' multiInput>
@@ -439,7 +442,7 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
             checked={agent.skillsEnabled ?? true}
             onChange={checked => handleChange('skillsEnabled', checked)}
           />
-          Enable skills
+          <span>Enable skills</span>
         </CheckboxLabel>
       </StyledField>
 
@@ -451,7 +454,7 @@ const AgentForm = ({ agent, isDefaultAgent, onChange }: AgentFormProps) => {
               handleChange('model', checked ? undefined : defaultChatModel);
             }}
           />
-          Use Default Model
+          <span>Use Default Model</span>
         </CheckboxLabel>
         {agent.model && (
           <ModelSelect

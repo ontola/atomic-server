@@ -7,6 +7,276 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- New default ontology `notifications` (`lib/defaults/notifications.json`):
+  the `Inbox` and `Notification` classes, and an `inbox` property the private
+  drive points to its Inbox with.
+
+- Removed range-based set reconciliation (RBSR, `lib/src/sync/rbsr.rs`). The
+  server rebuilt a drive's whole inventory for every `RBSR_FP` round trip, so
+  the descent cost more than the one full version-vector `SYNC` it replaced.
+  `RBSR_FP` is now answered with `{"drive","unsupported":true}` and no
+  fingerprints, which makes an older browser fall back to the full `SYNC`
+  immediately. `RBSR_ITEMS` stays as the drive inventory, and a `SYNC` with
+  `subjects` is still honoured. The `rbsr` capability is no longer advertised.
+
+- The server raises its own file-descriptor soft limit to its hard limit at
+  startup. It already budgeted HTTP connections against the soft limit and kept
+  a reserve, but HTTP is not the only tenant of that pool: the database, Iroh's
+  QUIC sockets and every open websocket draw on it too, so on a stock soft limit
+  of 1024 the process can run out while the HTTP budget still looks healthy.
+  Staging did, for twenty-three minutes, with 2,655 `error accepting connection:
+  No file descriptors available`, Iroh unable to bind its hairpin probe, and a
+  panic at the tail. A process may raise its own soft limit as far as the hard
+  limit without privileges, and the connection budget is computed from whatever
+  is in force afterwards, so a refused raise is logged and not fatal.
+
+- Publishing a plugin release that is already recorded on the server (the
+  same zip, uploaded by someone else) now grants the new publisher read on
+  the `Release` and its package File. Before, their Installation could not
+  resolve the release and activation failed with a 401.
+
+- Version 2 request signatures (ontola/atomic-plugins#54). A request sent
+  with `x-atomic-signature-version: 2` is checked against
+  `atomic-request-v2\n{METHOD}\n{full URL}\n{timestamp ms}\n{sha-256 hex of
+  the body}` instead of v1's `"{url} {timestamp}"`, so a captured proof can
+  no longer be replayed with a different method or body within its five
+  minutes. v2 is opt-in: a request without the header is checked as v1
+  exactly as before, and a v2 request that fails is refused, never retried as
+  v1. `/app-agent` and `/plugin-view-token` accept v2 (they do not require it
+  yet); every other endpoint refuses a v2 signature with a 401 that says to
+  sign with v1, as do an unknown version and a v2 header without the
+  `x-atomic-*` headers. Cookies and WebSocket `AUTH` stay v1. `atomic_lib`
+  exports `request_signature_message_v2`, `RequestBinding` and
+  `client::get_authentication_headers_v2`; shared test vectors live in
+  `lib/src/authentication_v2_vectors.json`.
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
+  previous `did:ad:` spelling is accepted forever and names the same
+  resource. New genesis certificates still encode the v1 header byte
+  (`0x01`) so `GenesisCert` literals in downstream crates keep compiling;
+  `GenesisCert::new_v2` canonicalizes parent/drive strings to `atomic:`.
+  Decode accepts a `0x02` header. Existing v1 certificates and the
+  personal-drive singleton stay v1. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
+  endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes
+  subjects and identifier-shaped values on write and on query filters.
+  Opening a pre-rename database rewrites leftover `did:ad:` keys in every
+  subject-keyed tree (resources, snapshots, DID mapping keys and hint
+  values, envelopes, tombstones, the outbox), streaming each tree, and
+  rebuilds indexes. A v2 certificate that carries a `did:ad:` string is
+  refused on decode; a v1 certificate's parent and drive are compared with
+  the resource in one spelling. Sync advertises `canonical-scheme` and
+  emits `did:ad:` to peers that do not list it on every frame that names a
+  subject, over WebSocket and Iroh alike; a client canonicalizes what an
+  old server echoes back. The in-memory store keys resources canonically
+  (#1584).
+
+- The causality guard no longer refuses a commit whose writes lost an honest
+  race. It asked whether the merge kept what the commit sent, which an unseeded
+  client and a client that simply lost to a newer peer both answer no, so a
+  client with a perfectly good doc was told to refetch and retry, and could only
+  resend the same bytes. It now asks what it means to ask: whether the incoming
+  update's version vector carries any peer the stored state also has. A doc
+  seeded from the server does, however far behind it has fallen, and losing
+  last-writer-wins from there is accepted. A doc built from scratch does not,
+  and its vanished writes are still refused, as before. The version comes from
+  the blob header via `update_range`, so the check costs a parse and not a
+  second document build.
+
+- A causality rejection now names the writes it dropped. The error a client
+  gets when its Loro update lost every write to LWW reports each mismatching
+  property as `sent <x>, stored <y>`, in place of the full list of values sent
+  and the bare list of stored keys. Which write lost, and to what, previously
+  lived only in the server's own `[causality-guard] rejecting` log line. The
+  `Commit's Loro update produced no state changes` prefix that
+  `classify_commit_error` and the client outbox match on is unchanged, and so
+  is the condition for accepting or rejecting a commit.
+
+- Fix: a stale authentication proof no longer fails a request that needed no
+  authentication. A browser keeps its proof in the `atomic_session` cookie, and
+  until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
+  is the ordinary state of any tab left open. Every request such a tab made was
+  answered 401, public ones included: on staging one tab polling the public
+  `GET /server` endpoint produced 4,215 rejections, all carrying the same
+  `signed at` timestamp. An HTTP request, and the headers a socket is opened
+  with, now treat a proof that has aged out as no proof at all and continue as
+  the public agent, leaving the rights check to decide whether that matters for
+  what was asked. A signature that does not verify is still refused outright,
+  and so is a stale proof in an `AUTH` frame or a peer handshake, where the
+  caller asked to be authenticated and is owed the answer
+  (`get_agent_from_auth_values_or_public` beside the existing
+  `get_agent_from_auth_values_and_check`).
+
+- Sentry no longer records every server error twice. `sentry_actix` captures a
+  handler's 5xx with the request attached, and `tracing_actix_web` separately
+  logs "Error encountered while processing the incoming HTTP request" at
+  `error!`, which the Sentry tracing layer turned into a second event; the two
+  staging floods of September arrived as paired issue groups of 6313 and 6312
+  events for the same incidents. The tracing layer now ignores the
+  `tracing_actix_web` target and delegates every other target to
+  `default_event_filter`, so background work reports as before and the stdout
+  log line is unchanged (`server/src/trace.rs`).
+
+- Plugin install path, three fixes after the runtime convergence (#1571):
+  - A publish refused for claiming the wrong `world` used to have already
+    stored the package bytes and cached the release record. The claim is now
+    checked before the first write, so a refusal leaves nothing behind
+    (`POST /plugin-release-package`).
+  - A JS plugin whose Installation could not be read, or whose `grants` could
+    not be, ran with everything its own manifest declared. Only a legacy draft
+    with no Installation still reads the manifest; anything else grants nothing
+    and logs why. Reading which classes a resource has also went through
+    `Value::to_subjects`, which errors on the scalar `isA` encodings, so an
+    encoding alone could widen a plugin's grants. `Resource::class_subjects`
+    and `Resource::has_class` are the one encoding-tolerant reader, shared
+    with `ClassExtender`.
+  - An Installation's `release` is declared an `atomicURL` and now holds one.
+    The browser's two zip paths dropped the `Release` subject the publish
+    response carries and stored the bare `blake3:` id, which meant writing the
+    property with datatype validation switched off. `release::resolve` still
+    accepts a bare id, for Installations written before this.
+- `atomic_lib`: a signed destroy commit now removes the resource (and its
+  cascade-deleted children, Loro snapshot, index and search rows) in the same
+  redb transaction that stores its envelope and commit row. `Db::apply_commit`
+  used to call `remove_resource`, which applied a transaction of its own, so a
+  crash between the two left a deleted resource with no signed destroy for
+  `SYNC_DIFF.removeCommits` to carry; tombstones are now recorded once that
+  single transaction has landed. The destroy branch also returns an error on a
+  malformed commit instead of panicking the request.
+- Security hygiene, from the September 2026 audit (`planning/security-audit-2026-09.md`
+  D, C16, F):
+  - CORS: any origin may still read (Atomic is a headless CMS), but
+    `Access-Control-Allow-Credentials` is now sent only to origins this
+    server answers for — the configured domain, a subdomain of the base
+    domain, loopback, and the desktop webview origins (`tauri://localhost`,
+    `http://tauri.localhost`) — by the same rule `RequestContext` uses for
+    trusting `Host`. Before, every origin was told it could attach the
+    session cookie; `SameSite=Lax` was the only thing stopping it
+    (`server/src/cors.rs`).
+  - Client errors are answered as client errors instead of 500: a request
+    body that does not parse is 400 (`AtomicErrorType::ParseError` maps to
+    `BadRequest`; malformed commits are parse errors), a signature that does
+    not verify, an unknown signer, or authentication headers that do not
+    parse are 401 (`Commit::validate_signature` and
+    `get_agent_from_auth_values_and_check` type every failure as
+    unauthorized, and `get_client_agent` no longer flattens the type into a
+    string). These no longer reach Sentry as crashes.
+  - `/upload` returns 400 when the multipart body cannot be read (no
+    boundary, truncated part) instead of ending its loop quietly and
+    answering 200 for the files that made it through.
+  - `atomic_lib`: the "importing from a peer" flag and the import source are
+    a tokio task-local scope (`sync::ws_apply::import_scope`) instead of
+    process-wide statics, so two peer connections importing at once no
+    longer clear each other's flag or stamp each other's peer id on their
+    writes (audit C16). The live push loop no longer consults a global mute;
+    it skips the one peer a change came from, via the `source_id` the scope
+    stamps on the `DbEvent`, which now also covers `COMMIT` frames applied
+    for a live peer. `CommitIngestOpts::suppress_live_echo` is gone: a peer
+    commit is attributed to the connection's import scope instead.
+    `sync::peer::is_importing()` is now per task; a listener on another
+    task should read the event's `source_id` (the Flutter binding does).
+  - `collections::sort_resources` is a total order (missing values last in
+    both directions, numbers compared numerically with `NaN` in a fixed
+    place, numbers before strings), so a collection sorted through the
+    `sort_by` query parameter can no longer panic `sort_by` on Rust 1.81+.
+  - `sync::peer`: the live peer map recovers from a poisoned lock instead of
+    unwrapping it, so one panic no longer stops live broadcast for the rest
+    of the process.
+- `atomic_lib`: `DbEvent::Destroyed` for a cascade-deleted child is sent only
+  after the removal has been applied. `Db::recursive_remove` announced each
+  child while it was still queueing the deletes into a transaction the caller
+  had yet to apply, so a listener (`atomic-server`'s `CommitMonitor`, which
+  fans removals out to WebSocket subscribers; a peer transport) heard of a
+  deletion that could still fail or roll back, and heard of the children
+  before their parent. The callers (`remove_resource`, the destroy branch of
+  `apply_commit`) now announce every removed subject once the transaction has
+  landed; the destroyed subject itself is still announced exactly once, wrapped
+  in its signed destroy commit. `remove_resource` now also announces the
+  subject it was called for, which it never did. Follow-up to #1544.
+
+- `classify_commit_error` classifies "Commits cannot be edited." (a write whose
+  subject is itself a Commit) as the new `IMMUTABLE_COMMIT` (10) error code, on
+  the WS `ERROR` frame and the HTTP `/commit` error body's `errorCode` alike.
+  It was going out as `UNKNOWN`, leaving clients to match the message text to
+  know the refusal is terminal. The Rust outbox drops such entries as terminal.
+- Query index: a drive-scoped, sorted, class-filtered collection could list
+  and count fewer rows than the store held, with nothing to show for it
+  (`planning/silent-failures.md`). Rows whose `isA` read back as a plain
+  `String` were in the index and then hidden, because the built-in
+  collection class extender could not parse the value and
+  `Db::resolve_query_member` dropped any row an extender check errored on;
+  an extender that cannot decide is now skipped with a warning and the row
+  is listed. Rows whose `isA` was a `String` holding the JSON array were
+  never indexed under their class and never matched it; the index keys and
+  the matcher now read the array's elements from one helper
+  (`Value::to_reference_index_strings`, `Value::contains_value`). New
+  `Db::check_query_index(&Query)` compares a query's member index with a
+  scan of the store and reports the missing and stale subjects; the first
+  build of a filter cross-checks the equality constraints the planner did
+  not scan (bounded by its 512-entry scan cap), warns with the filter and
+  the subjects, and files them. DID resources stamped into another drive no
+  longer enter a drive's watched query on commit or build: the `Db` resolves
+  each watched filter's `drive` subject to its drive root and compares
+  stamps (security audit C17; the filter's identity is unchanged).
+- Startup store-size diagnostics and automatic redb compaction. Opening the
+  store now logs the file's size and open duration (a warning above 1 GiB,
+  naming `atomic-server compact`) and, from redb's `DatabaseStats`, how much
+  of the file is live, fragmented and reclaimable (bytes on disk minus pages
+  in use; redb's sparse growth headroom does not count). When the file is at
+  least 256 MiB on disk and at least 30% of that is dead, `Db::init_redb_file`
+  compacts it before the server listens and logs the before/after sizes and
+  duration; the outcome is kept in the store and readable through
+  `Db::last_compaction`. A compaction failure is a warning, never a refused
+  start. New options `--auto-compact` (`ATOMIC_AUTO_COMPACT`, default
+  `true`), `--auto-compact-min-mb` (`ATOMIC_AUTO_COMPACT_MIN_MB`, `256`) and
+  `--auto-compact-min-reclaimable-percent`
+  (`ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT`, `30`); `atomic_lib` callers
+  pass a `db::compaction::CompactionPolicy` to
+  `Db::init_redb_file_with_policy`. Not applied to the OPFS (browser) or sled
+  backends. See `planning/disk-storage-and-persistence-optimization.md`.
+
+- CI: the `:develop` docker image is published by its own job instead of a
+  step tacked onto the end of the CI job. As a step it inherited whatever the
+  CI step had already spent (a wedged Dagger engine on the runner burned the
+  ten minute connect timeout and the publish was skipped without trying), and
+  it could not be re-run on its own, so recovering a missed image meant
+  re-running a pipeline that takes hours. `develop` went 2026-09-15 to
+  2026-09-18 without an image that way. The gate is unchanged: `needs: ci`,
+  so a red pipeline still publishes nothing. A new manual
+  "Publish :develop image" workflow covers the case where the pipeline cannot
+  go green for reasons unrelated to whether the binary builds; it refuses
+  `latest` and `v*` tags, which release.yml owns.
+
+- Error-handling hygiene on the commit and read paths. The legacy
+  `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
+  the parsed commit's properties instead of substring-matching the raw body,
+  so a commit whose subject is one of those Property resources (or whose
+  values quote their URLs) is no longer refused. `Db::get_resource` warns
+  (with the subject and error) when a stored Loro snapshot cannot be read or
+  applied instead of silently serving the stale propvals. The sled
+  `Db::init` wraps a migration failure in its error message (`.map_err`, not
+  `.map`). `AppState::init` drops its own core-models bootstrap branch: its
+  "store did not exist" check ran after the store directory had been
+  created, and `Db::init_redb_file` already seeds a fresh store on open.
+
+- `atomic_lib`: host-to-Drive mappings are reconcilable, so a control plane can
+  install hosted vanity subdomains without an agent that can sign on the
+  Drive's behalf. `Db::sync_drive_mappings` adds, repoints and removes a
+  desired set idempotently and scopes removal to the hosts it installed
+  itself (so `/bind-drive` bindings and the `localhost` entries from setup
+  survive); `Db::list_drive_mappings` and `Db::managed_alias_hosts` read the
+  table, which had no read path beyond a single-host lookup. Mapping keys are
+  now normalized, so a mixed-case `Host` header resolves the Drive it was
+  bound to instead of falling through to the store root.
+- A host bound to a Drive now serves that Drive or answers 404. It used to
+  fall through to the store root when the bound Drive was missing — not synced
+  yet, or moved to another node — which on a multi-tenant server answers one
+  tenant's hostname with another namespace's content.
+- New `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX`: answer for
+  `*.<suffix>` so the request origin follows the hostname the visitor used,
+  without `--base-domain`'s other effect of also becoming the store's base
+  domain (which changes how subjects are normalized and migrated, and is not
+  something to switch on for a server that already holds data).
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
@@ -44,6 +314,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   subject before keeping it, honouring their own `--envelope-retention`. A
   restored or newly invited device therefore shows who signed each change
   instead of "Unattributed" (`planning/auditability-loro-history.md`).
+- Security: `POST /commit` charged the per-agent write budget to the signer
+  the body *named* before verifying the signature, so anyone who knew an
+  agent's public DID could flood the endpoint with forged commits naming that
+  agent and lock them out of writing with `429`s. The signature is now
+  verified first and the budget is charged to the signer it proves; a body
+  that proves no signer spends the peer address's anonymous budget, like any
+  other unsigned write. GHSA-f9rw-g3gr-3jw5, reported by
+  [hackchang](https://github.com/hackchang).
 - Rate-limit the write endpoints. `POST /commit` (HTTP and the WebSocket
   `COMMIT` frame), `/upload`, `PUT /blob`, `/iroh-sync`, `/forget-peer` and
   resource posts spend a per-agent token (`--write-rate-limit`, default 6000
@@ -66,7 +344,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Improve browser database durability and resource save-state handling.
 - Isolate E2E shard state and simplify local test tooling; full develop CI passes on the release base.
 
-- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by Atomic SaaS ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
+- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by the managed signaling service ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
 
 ## [v0.41.0-beta.6] - 2026-09-09
 
@@ -294,6 +572,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   - Integration tests bind the test server to `127.0.0.1` and fall back to an
     OS-assigned port when `portpicker` finds none (hosts without IPv6).
 - Tauri Android: ship `arm64-v8a` only. The sideloadable universal APK was ~369 MB because it bundled four copies of `libatomic_server_tauri.so` (armeabi-v7a / x86 / x86_64 as well). Phones and tablets we install on are arm64; override with `cargo tauri android build --target …` for an Intel emulator.
+- CI: tag releases publish `@tomic/*` to npm. They previously only published
+  crates.io and GitHub assets, which is why npm `latest` stayed on 0.40.0 and
+  `beta` on 0.41.0-beta.0 through v0.41.0-beta.4. Pre-releases use the `beta`
+  (or `rc`, …) dist-tag, not `latest`.
+
+- Docs / planning: Atomic as an MCP server — local stdio signs writes as the
+  user's Agent; remote Streamable HTTP is read-only until issued-agent
+  writes. OAuth Bearer never hits `/commit`. See
+  [`planning/mcp-endpoint.md`](planning/mcp-endpoint.md).
 
 ## [v0.41.0-beta.4] - 2026-09-03
 

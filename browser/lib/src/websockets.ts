@@ -5,11 +5,18 @@
  * Server counterpart: `server/src/handlers/web_sockets.rs`.
  */
 
+import { canonicalDriveHash } from './canonical-drive-hash.js';
 import { createAuthentication } from './authentication.js';
+import {
+  isAgentSubject,
+  isBlobSubject,
+  canonicalizeScheme,
+  emitSubjectForCaps,
+} from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import { StoreEvents, type Store, type DriveSyncState } from './store.js';
-import { reconcile, type Item, type RemoteRange } from './rbsr.js';
+import { StoreEvents, type Store } from './store.js';
+import type { DriveItem } from './local-drive-copy.js';
 import {
   AtomicError,
   ErrorType,
@@ -65,7 +72,7 @@ import { hexToBytes } from './value.js';
 import {
   livenessAction,
   LIVENESS_CHECK_MS,
-  LIVENESS_DEADLINE_MS,
+  LIVENESS_PROBE_TIMEOUT_MS,
 } from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
@@ -227,26 +234,29 @@ export class WSClient {
   private _retryTimer: ReturnType<typeof setTimeout> | undefined;
   private _onlineListener: (() => void) | undefined;
   private _driveUnsub: (() => void) | undefined;
+  private _savedDriveUnsub: (() => void) | undefined;
   /** Drive-sync state computed for a hash-first probe, kept until the server
-   *  either accepts it (`SYNC_OK`) or asks for a reconcile (`SYNC_RESEND`). */
+   *  either accepts it (`SYNC_OK`) or asks for the full state (`SYNC_RESEND`),
+   *  with the guard of the connection and identity that computed it. */
   private _pendingSyncState = new Map<
     string,
-    Awaited<ReturnType<Store['computeDriveSyncState']>>
+    {
+      state: Awaited<ReturnType<Store['computeDriveSyncState']>>;
+      current: () => boolean;
+    }
   >();
-  /** Pending RBSR range-query responses. The reconcile issues these one at a
-   *  time, so at most one of each is in flight; FIFO queues stay correct even
-   *  if that changes. */
-  private _rbsrFpQueue: Array<(fps: string[]) => void> = [];
-  private _rbsrItemsQueue: Array<(items: Item[]) => void> = [];
+  /** Pending `RBSR_ITEMS` inventory responses, answered in order. */
+  private _inventoryQueue: Array<(items: DriveItem[]) => void> = [];
   /** What the server said it speaks, from its `AUTH_OK` payload. */
   private _serverCaps: string[] = [];
-  /** Liveness: when the last inbound frame arrived, whether a `KEEPALIVE`
-   *  probe is outstanding, and the timer that checks both. A browser cannot
+  /** Liveness: when the last inbound frame arrived, when the outstanding
+   *  `KEEPALIVE` probe was sent (`undefined` when none is), and the timer
+   *  that checks both. A browser cannot
    *  observe the server's protocol-level pings, so without this a socket
    *  the network silently dropped stays "connected" until the next write
    *  fails — every subscription push in between is lost. */
   private _lastFrameAt = 0;
-  private _probeSent = false;
+  private _probeSentAt: number | undefined;
   private _livenessTimer: ReturnType<typeof setInterval> | undefined;
 
   /** When true, all WS frames are logged to the console in human-readable form. */
@@ -382,6 +392,16 @@ export class WSClient {
       this._pendingSyncState.clear();
       this.subscribeToDrive();
       void this.reconcileSubscribedDrive();
+    });
+
+    this._savedDriveUnsub = store.on(StoreEvents.ResourceSaved, resource => {
+      if (
+        resource.subject === store.getDrive() &&
+        this._subscribedDrive !== resource.subject
+      ) {
+        this.subscribeToDrive();
+        void this.reconcileSubscribedDrive();
+      }
     });
 
     const wsURL = new URL(url);
@@ -558,6 +578,8 @@ export class WSClient {
 
     this._driveUnsub?.();
     this._driveUnsub = undefined;
+    this._savedDriveUnsub?.();
+    this._savedDriveUnsub = undefined;
 
     if (
       this._onlineListener &&
@@ -708,7 +730,7 @@ export class WSClient {
       return;
     }
 
-    this.sendBinary(encodeUnsub(drive));
+    this.sendBinary(encodeUnsub(this.wireSubject(drive)));
   }
 
   /** Capability names the server advertised on `AUTH_OK` (see
@@ -716,6 +738,27 @@ export class WSClient {
    *  than 2026-09. */
   public get serverCapabilities(): string[] {
     return [...this._serverCaps];
+  }
+
+  /** Subjects on the wire: `atomic:` if the server listed `canonical-scheme`, else `did:ad:`. */
+  private wireSubject(subject: string): string {
+    return emitSubjectForCaps(subject, this._serverCaps);
+  }
+
+  private wireSubjectMap<T>(values: Record<string, T>): Record<string, T> {
+    return Object.fromEntries(
+      Object.entries(values).map(([s, value]) => [this.wireSubject(s), value]),
+    );
+  }
+
+  /** A resource by the subject a server answered with. A server without
+   *  `canonical-scheme` echoes the `did:ad:` we sent while the store keys
+   *  canonically, so the canonical spelling is tried second. */
+  private hydratedResource(subject: string): Resource | undefined {
+    return (
+      this.store.resources.get(subject) ??
+      this.store.resources.get(canonicalizeScheme(subject))
+    );
   }
 
   /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
@@ -841,7 +884,7 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeGet(requestId, subject));
+      this.sendBinary(encodeGet(requestId, this.wireSubject(subject)));
     });
   }
 
@@ -907,7 +950,12 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeGetMany(requestId, subjects));
+      this.sendBinary(
+        encodeGetMany(
+          requestId,
+          subjects.map(s => this.wireSubject(s)),
+        ),
+      );
     });
   }
 
@@ -1059,7 +1107,7 @@ export class WSClient {
   private handleMessage(ev: MessageEvent) {
     // Any inbound frame proves the socket is alive.
     this._lastFrameAt = Date.now();
-    this._probeSent = false;
+    this._probeSentAt = undefined;
 
     if (ev.data instanceof ArrayBuffer) {
       this.handleBinary(new Uint8Array(ev.data));
@@ -1186,10 +1234,9 @@ export class WSClient {
         break;
 
       case Tag.SYNC_RESEND: {
-        // The hash-first probe missed: reconcile via RBSR (find only the
-        // differing subjects) and send version vectors for just those.
+        // The hash-first probe missed: send the full version vector.
         const drive = decodeSyncResend(payload);
-        if (drive) void this.sendReducedSyncState(drive);
+        if (drive) this.sendFullSyncState(drive);
         break;
       }
 
@@ -1244,7 +1291,7 @@ export class WSClient {
           });
           // The resource we just hydrated is what the GET caller is
           // waiting for — read it back from the store map.
-          const resource = this.store.resources.get(msg.subject);
+          const resource = this.hydratedResource(msg.subject);
           if (resource) pending.resolve(resource);
           break;
         }
@@ -1264,7 +1311,7 @@ export class WSClient {
           source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
         });
 
-        const resource = this.store.resources.get(msg.subject);
+        const resource = this.hydratedResource(msg.subject);
         if (resource) this.checkForMissingBlobs(resource);
 
         break;
@@ -1310,7 +1357,7 @@ export class WSClient {
               source: 'ws-pending-get',
               replaceLoroDocsFromRemote: !!(update.flags & Flags.SNAPSHOT),
             });
-            const hydrated = this.store.resources.get(update.subject);
+            const hydrated = this.hydratedResource(update.subject);
 
             return (
               hydrated ??
@@ -1346,7 +1393,11 @@ export class WSClient {
         const msg = decodeSyncOk(payload);
 
         if (msg) {
-          this.store.finishDriveSync(msg.drive, 0, Date.now());
+          this.store.finishDriveSync(
+            canonicalizeScheme(msg.drive),
+            0,
+            Date.now(),
+          );
         }
 
         break;
@@ -1380,7 +1431,7 @@ export class WSClient {
               loroBytes,
               source: 'ws-sync-push',
             });
-            const resource = this.store.resources.get(subject);
+            const resource = this.hydratedResource(subject);
             if (resource) this.checkForMissingBlobs(resource);
           }
 
@@ -1404,7 +1455,7 @@ export class WSClient {
           // the "done" UI state.
           if (msg.last) {
             this.store.finishDriveSync(
-              msg.drive,
+              canonicalizeScheme(msg.drive),
               msg.entries.length,
               Date.now(),
             );
@@ -1456,8 +1507,8 @@ export class WSClient {
     });
   }
 
-  /** Handle the text frames that are still text: the RBSR answers and
-   *  `INDEX_STATUS`. Loro and presence updates arrive as binary
+  /** Handle the text frames that are still text: the `RBSR_ITEMS` inventory
+   *  and `INDEX_STATUS`. Loro and presence updates arrive as binary
    *  `EPHEMERAL` since 2026-09-04. */
   private handleText(text: string) {
     if (this.debug) {
@@ -1476,25 +1527,16 @@ export class WSClient {
       } catch {
         console.warn('Invalid INDEX_STATUS message:', json);
       }
-    } else if (text.startsWith('RBSR_FP ')) {
-      try {
-        const { fps } = JSON.parse(text.slice('RBSR_FP '.length)) as {
-          fps: string[];
-        };
-        this._rbsrFpQueue.shift()?.(fps);
-      } catch (e) {
-        console.warn('Invalid RBSR_FP message:', e);
-      }
     } else if (text.startsWith('RBSR_ITEMS ')) {
       try {
         const { items } = JSON.parse(text.slice('RBSR_ITEMS '.length)) as {
           items: Array<[string, Array<[string, number]>]>;
         };
-        const parsed: Item[] = items.map(([subject, pairs]) => ({
+        const parsed: DriveItem[] = items.map(([subject, pairs]) => ({
           subject,
           vv: Object.fromEntries(pairs),
         }));
-        this._rbsrItemsQueue.shift()?.(parsed);
+        this._inventoryQueue.shift()?.(parsed);
       } catch (e) {
         console.warn('Invalid RBSR_ITEMS message:', e);
       }
@@ -1534,9 +1576,10 @@ export class WSClient {
     // Onboarding can name a key-derived home whose data has not arrived yet.
     // A prior read already established that this server cannot subscribe it.
     if (isNotFound(knownError) || isUnauthorized(knownError)) return;
+    if (drive && this.awaitingDriveGenesis(drive)) return;
 
     if (drive && this.store.isLiveSyncedDrive(drive)) {
-      this.sendBinary(encodeSub(drive));
+      this.sendBinary(encodeSub(this.wireSubject(drive)));
       this._subscribedDrive = drive;
     }
   }
@@ -1563,11 +1606,7 @@ export class WSClient {
 
   /** Agent profiles are public resources outside the reader's active drive. */
   public subscribeAgentProfile(subject: string): void {
-    if (
-      !subject.startsWith('did:ad:agent:') ||
-      this.readyState !== WebSocket.OPEN
-    )
-      return;
+    if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
     if (this.store.isLocalOnlySubject(subject)) return;
     if (
       this.store.getAgent()?.subject &&
@@ -1581,16 +1620,12 @@ export class WSClient {
       isUnauthorized(resource?.error)
     )
       return;
-    this.sendBinary(encodeSub(subject));
+    this.sendBinary(encodeSub(this.wireSubject(subject)));
   }
 
   public unsubscribeAgentProfile(subject: string): void {
-    if (
-      !subject.startsWith('did:ad:agent:') ||
-      this.readyState !== WebSocket.OPEN
-    )
-      return;
-    this.sendBinary(encodeUnsub(subject));
+    if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
+    this.sendBinary(encodeUnsub(this.wireSubject(subject)));
   }
 
   private reSubscribeAll(): void {
@@ -1632,28 +1667,29 @@ export class WSClient {
    * Start the liveness timer for the current socket. Only probes a server
    * that advertised `keepalive` (older servers do not echo the frame, and a
    * probe that is never answered would make an idle socket look dead every
-   * `LIVENESS_DEADLINE_MS`). Anonymous sessions never authenticate, so they
+   * `LIVENESS_PROBE_TIMEOUT_MS`). Anonymous sessions never authenticate, so they
    * learn no capabilities and keep the pre-2026-09 reactive behaviour.
    */
   private startLiveness() {
     this.stopLiveness();
     this._lastFrameAt = Date.now();
-    this._probeSent = false;
+    this._probeSentAt = undefined;
     this._livenessTimer = setInterval(() => {
       if (this.readyState !== WebSocket.OPEN) return;
       if (!this._serverCaps.includes('keepalive')) return;
 
+      const now = Date.now();
       const action = livenessAction(
-        Date.now() - this._lastFrameAt,
-        this._probeSent,
+        now - this._lastFrameAt,
+        this._probeSentAt === undefined ? undefined : now - this._probeSentAt,
       );
 
       if (action === 'probe') {
-        this._probeSent = true;
+        this._probeSentAt = now;
         this.sendBinary(encodeKeepalive());
       } else if (action === 'close') {
         console.warn(
-          `[WS] no frame from the server for ${LIVENESS_DEADLINE_MS}ms (probe unanswered); closing so the reconnect loop takes over`,
+          `[WS] keepalive probe unanswered for ${LIVENESS_PROBE_TIMEOUT_MS}ms; closing so the reconnect loop takes over`,
         );
         this.stopLiveness();
         // Closing fires the `close` handler, which reports disconnection,
@@ -1756,7 +1792,14 @@ export class WSClient {
     }
   }
 
+  /** A local save can finish before its genesis is acknowledged by the server.
+   * ResourceSaved retries subscription after that acknowledgement arrives. */
+  private awaitingDriveGenesis(drive: string): boolean {
+    return !!this.store.outbox.getEntry(drive)?.signedGenesis;
+  }
+
   private async startVVSync(drive: string): Promise<void> {
+    if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
 
     const current = this.connectionGuard();
@@ -1767,15 +1810,26 @@ export class WSClient {
       // hash as a probe. In the common "nothing changed" case the server
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
       // On a mismatch the server replies `SYNC_RESEND` and
-      // `sendReducedSyncState` reconciles from the state stashed here.
-      const syncState = await this.store.computeDriveSyncState(drive);
+      // `sendFullSyncState` sends the state stashed here.
+      const localState = await this.store.computeDriveSyncState(drive);
+      const resources = this.wireSubjectMap(localState.resources);
+      const renamed = Object.keys(localState.resources).some(
+        s => this.wireSubject(s) !== s,
+      );
+      const syncState = {
+        ...localState,
+        resources,
+        driveHash: renamed
+          ? await canonicalDriveHash(resources)
+          : localState.driveHash,
+      };
       close({ resourceCount: Object.keys(syncState.resources).length });
       if (!current()) return;
       this.store.startDriveSync();
-      this._pendingSyncState.set(drive, syncState);
+      this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
         encodeSync(
-          drive,
+          this.wireSubject(drive),
           syncState.driveHash,
           JSON.stringify({ peers: [], resources: {}, probe: true }),
         ),
@@ -1797,101 +1851,44 @@ export class WSClient {
     await this.startVVSync(drive);
   }
 
-  /** Respond to SYNC_RESEND. Instead of sending the whole drive's version
-   *  vector, run RBSR against the server (range fingerprint exchange) to find
-   *  only the differing subjects, and send version vectors for just those. On
-   *  any RBSR failure, fall back to the full VV so the drive always reconciles.
+  /** Respond to SYNC_RESEND: the probe's hash missed, so send the drive's
+   *  full version vector (computed for the probe) and let the server diff it.
    */
-  private async sendReducedSyncState(drive: string): Promise<void> {
-    const agent = this.store.getAgent()?.subject;
-    const current = this.connectionGuard();
-    if (!current() || (agent && this.authenticatedWith !== agent)) return;
-
+  private sendFullSyncState(drive: string): void {
     // A response to a probe invalidated by a drive switch must not restart it.
-    const syncState = this._pendingSyncState.get(drive);
-    this._pendingSyncState.delete(drive);
+    // The probe was keyed by what we sent; a server without
+    // `canonical-scheme` answers with the `did:ad:` spelling of it.
+    const pendingKey = this._pendingSyncState.has(drive)
+      ? drive
+      : canonicalizeScheme(drive);
+    const pending = this._pendingSyncState.get(pendingKey);
+    this._pendingSyncState.delete(pendingKey);
 
-    if (!syncState || !current()) return;
+    // Sent only on the connection, identity and drive that computed it.
+    if (!pending?.current()) return;
+    const pendingState = pending.state;
 
-    const requireCurrent = () => {
-      if (!current()) throw new Error('Sync identity or drive changed');
-    };
-
-    try {
-      const local = syncStateToItems(syncState);
-      const remote: RemoteRange = {
-        fingerprint: async (lo, hi) => {
-          requireCurrent();
-
-          return (await this.rbsrFingerprints(drive, [[lo, hi ?? null]]))[0];
-        },
-        items: (lo, hi) => {
-          requireCurrent();
-
-          return this.rbsrItems(drive, lo, hi);
-        },
-      };
-
-      const diff = await reconcile(local, remote);
-      if (!current()) return;
-      // Subjects the outbox still owns are not offered for reconcile (see
-      // `handleSyncDiff`): the drain delivers them signed.
-      const differing = [
-        ...diff.onlyLocal,
-        ...diff.onlyRemote,
-        ...diff.differ,
-      ].filter(subject => !this.store.outbox.hasPending(subject));
-
-      // Version vectors for the differing subjects the client actually holds
-      // (only-remote subjects it doesn't have — the server pushes those).
-      const reducedResources: Record<string, number[]> = {};
-
-      for (const subject of [...diff.onlyLocal, ...diff.differ]) {
-        if (syncState.resources[subject]) {
-          reducedResources[subject] = syncState.resources[subject];
-        }
-      }
-
-      this.sendBinary(
-        encodeSync(
-          drive,
-          syncState.driveHash,
-          JSON.stringify({
-            peers: syncState.peers,
-            resources: reducedResources,
-            subjects: differing,
-          }),
-        ),
-      );
-    } catch (e) {
-      // Account/drive changes cancel this reconciliation, including its fallback.
-      if (!current()) return;
-      // Safety net: any RBSR failure (query timeout, socket close, parse) falls
-      // back to the full reconcile, which always converges. Never leave the
-      // drive un-reconciled because the optimization stumbled.
-      console.warn('[WS] RBSR reconcile failed, sending full VV:', e);
-
-      if (this.readyState === WebSocket.OPEN) {
-        this.sendBinary(
-          encodeSync(
-            drive,
-            syncState.driveHash,
-            JSON.stringify({
-              peers: syncState.peers,
-              resources: syncState.resources,
-            }),
-          ),
-        );
-      }
-    }
+    this.sendBinary(
+      encodeSync(
+        this.wireSubject(drive),
+        pendingState.driveHash,
+        JSON.stringify({
+          peers: pendingState.peers,
+          resources: this.wireSubjectMap(pendingState.resources),
+        }),
+      ),
+    );
   }
 
-  /** Send an RBSR range-fingerprint query and await the server's fingerprints. */
-  private rbsrFingerprints(
+  /** Ask the server for the drive's inventory: every subject in `[lo, hi)`
+   *  this agent may read, with its version vector. The wire frame keeps its
+   *  `RBSR_ITEMS` name from the removed range reconcile. */
+  public driveInventory(
     drive: string,
-    ranges: Array<[string, string | null]>,
-  ): Promise<string[]> {
-    return new Promise<string[]>((resolve, reject) => {
+    lo: string,
+    hi?: string,
+  ): Promise<DriveItem[]> {
+    return new Promise<DriveItem[]>((resolve, reject) => {
       if (this.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket is not open'));
 
@@ -1899,46 +1896,25 @@ export class WSClient {
       }
 
       const timer = setTimeout(() => {
-        const i = this._rbsrFpQueue.indexOf(settle);
+        const i = this._inventoryQueue.indexOf(settle);
 
-        if (i >= 0) this._rbsrFpQueue.splice(i, 1);
-        reject(new Error('RBSR_FP timed out'));
-      }, 10000);
-
-      const settle = (fps: string[]) => {
-        clearTimeout(timer);
-        resolve(fps);
-      };
-
-      this._rbsrFpQueue.push(settle);
-      this.ws.send('RBSR_FP ' + JSON.stringify({ drive, ranges }));
-    });
-  }
-
-  /** Send an RBSR range-items query and await the server's items. */
-  public rbsrItems(drive: string, lo: string, hi?: string): Promise<Item[]> {
-    return new Promise<Item[]>((resolve, reject) => {
-      if (this.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not open'));
-
-        return;
-      }
-
-      const timer = setTimeout(() => {
-        const i = this._rbsrItemsQueue.indexOf(settle);
-
-        if (i >= 0) this._rbsrItemsQueue.splice(i, 1);
+        if (i >= 0) this._inventoryQueue.splice(i, 1);
         reject(new Error('RBSR_ITEMS timed out'));
       }, 10000);
 
-      const settle = (items: Item[]) => {
+      const settle = (items: DriveItem[]) => {
         clearTimeout(timer);
         resolve(items);
       };
 
-      this._rbsrItemsQueue.push(settle);
+      this._inventoryQueue.push(settle);
       this.ws.send(
-        'RBSR_ITEMS ' + JSON.stringify({ drive, lo, hi: hi ?? null }),
+        'RBSR_ITEMS ' +
+          JSON.stringify({
+            drive: this.wireSubject(drive),
+            lo,
+            hi: hi ?? null,
+          }),
       );
     });
   }
@@ -1993,7 +1969,8 @@ export class WSClient {
 
     const entries: Array<{ subject: string; loroBytes: Uint8Array }> = [];
 
-    for (const subject of diff.pull) {
+    for (const remoteSubject of diff.pull) {
+      const subject = this.store.normalizeSubject(remoteSubject);
       // F1 interim (planning/unified-sync.md): a subject with a pending
       // outbox entry is the drain's to deliver, as a signed commit. Pushing
       // its raw bytes here — from memory or, worse, the clientDb fallback
@@ -2001,10 +1978,14 @@ export class WSClient {
       // `computeDriveSyncState` side already hides these subjects from the
       // version vector we send; this closes the other half, where the
       // server names them in `pull`.
-      if (this.store.outbox.hasPending(subject)) continue;
+      if (
+        this.store.outbox.hasPending(subject) ||
+        this.store.outbox.hasPending(remoteSubject)
+      )
+        continue;
 
       let loroBytes: Uint8Array | undefined;
-      const serverVv = diff.pullFrom?.[subject];
+      const serverVv = diff.pullFrom?.[remoteSubject];
       const memDoc = this.store.resources.get(subject)?.getLoroDoc?.();
 
       if (memDoc) {
@@ -2045,9 +2026,12 @@ export class WSClient {
 
       try {
         for (const frame of encodeSyncPushChunks(
-          diff.drive,
-          entries,
-          envelopes,
+          this.wireSubject(diff.drive),
+          entries.map(entry => ({
+            ...entry,
+            subject: this.wireSubject(entry.subject),
+          })),
+          this.wireSubjectMap(envelopes),
         )) {
           this.sendBinary(frame);
         }
@@ -2060,7 +2044,11 @@ export class WSClient {
 
     // If server has nothing to push, sync is done
     if (diff.push.length === 0) {
-      this.store.finishDriveSync(diff.drive, entries.length, Date.now());
+      this.store.finishDriveSync(
+        this.store.normalizeSubject(diff.drive),
+        entries.length,
+        Date.now(),
+      );
     }
   }
 
@@ -2097,9 +2085,9 @@ export class WSClient {
 
     if (!blobDid) return;
 
-    // Extract the hash from did:ad:blob:{hash}
-    const hashStr = blobDid.startsWith('did:ad:blob:')
-      ? blobDid.substring(12)
+    // Extract the hash from atomic:blob:{hash} / did:ad:blob:{hash}
+    const hashStr = isBlobSubject(blobDid)
+      ? blobDid.replace(/^(atomic:blob:|did:ad:blob:)/, '')
       : blobDid;
 
     const clientDb = this.store.getClientDb();
@@ -2159,30 +2147,6 @@ export class WSClient {
       });
     });
   }
-}
-
-/** Convert a computed drive-sync state (compact peer-indexed counters) into the
- *  sorted `(subject, version vector)` items the RBSR reconcile runs over —
- *  the exact set the probe hash was computed from, so the client reconciles the
- *  same items it hashed. */
-function syncStateToItems(state: DriveSyncState): Item[] {
-  const items: Item[] = Object.entries(state.resources).map(
-    ([subject, counters]) => {
-      const vv: Record<string, number> = {};
-
-      counters.forEach((c, i) => {
-        if (c !== 0) {
-          vv[state.peers[i]] = c;
-        }
-      });
-
-      return { subject, vv };
-    },
-  );
-
-  items.sort((a, b) => (a.subject < b.subject ? -1 : 1));
-
-  return items;
 }
 
 /** Retire asynchronous work with its socket, even when the underlying signer

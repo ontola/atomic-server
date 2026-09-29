@@ -313,14 +313,16 @@ impl SyncPolicy for AllowlistPolicy {
 /// own here. Treating "has write on some hosted drive" as "may enroll a new
 /// one" would be the same hole with extra steps.
 pub struct OwnerPolicy {
-    /// The owner's agent DID. Compared verbatim: an agent DID *is* a public
-    /// key, so equality is the whole check.
+    /// The owner's agent identifier, stored in canonical `atomic:` form.
+    /// Compared via [`crate::identifiers::canonicalize_scheme`] so
+    /// `atomic:agent:X` and `did:ad:agent:X` are the same owner.
     owner_agent: String,
     hosted: AllowlistPolicy,
 }
 
 impl OwnerPolicy {
-    /// `owner_agent` is the DID (`did:ad:agent:…`), never a secret.
+    /// `owner_agent` is an agent identifier (`atomic:agent:…` or
+    /// `did:ad:agent:…`), never a secret.
     ///
     /// Grace is zero, unlike a managed node's. A managed allowlist lags its
     /// control plane, so a freshly-enrolled drive needs a window to sync in;
@@ -331,7 +333,7 @@ impl OwnerPolicy {
         hosted.set_grace(Duration::ZERO);
 
         Self {
-            owner_agent: owner_agent.into(),
+            owner_agent: crate::identifiers::canonicalize_scheme(&owner_agent.into()),
             hosted,
         }
     }
@@ -372,7 +374,9 @@ impl SyncPolicy for OwnerPolicy {
             // importing a backup. Refusing this would mean a gated node could
             // not finish booting.
             crate::agents::ForAgent::Sudo => true,
-            crate::agents::ForAgent::AgentSubject(subject) => subject.as_str() == self.owner_agent,
+            crate::agents::ForAgent::AgentSubject(subject) => {
+                crate::identifiers::canonicalize_scheme(subject.as_str()) == self.owner_agent
+            }
             // An unauthenticated request is never the owner. Stated rather than
             // left to fall out of the comparison, because this is the case the
             // whole policy exists for.
@@ -422,6 +426,7 @@ mod tests {
         let policy = OwnerPolicy::new(OWNER);
 
         assert!(policy.may_enroll_drive("did:ad:drive:new", &agent(OWNER)));
+        assert!(policy.may_enroll_drive("did:ad:drive:new", &agent("atomic:agent:ownerkey")));
         assert!(!policy.may_enroll_drive("did:ad:drive:new", &agent(STRANGER)));
         assert!(!policy.may_enroll_drive("did:ad:drive:new", &ForAgent::Public));
         // The node itself, so a gated node can still finish booting.

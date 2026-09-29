@@ -43,6 +43,58 @@ const PRESENCE_TTL_MS = 30_000;
 const HEARTBEAT_MS = 10_000;
 
 /**
+ * Copy an announcement, refusing anything Loro cannot store.
+ *
+ * Handing the ephemeral store a value it cannot convert does not come back as
+ * an error: `LoroValue`'s conversion *panics*, which in a browser surfaces as
+ * a bare `RuntimeError: unreachable` and leaves the wasm module unusable
+ * afterwards. Functions, bigints, symbols and a getter that throws all do it,
+ * and a cyclic object corrupts the wasm heap instead. Since an entry is
+ * retained and re-sent by the heartbeat, one such write becomes an unhandled
+ * error every {@link HEARTBEAT_MS} for as long as the tab stays open. That is
+ * what a whole family of `RuntimeError: unreachable` reports turned out to be,
+ * all of them from `setInterval`, none naming a cause.
+ *
+ * `data` is the reason this can happen at all: it is the view's own payload
+ * and typed as whatever the view likes, so nothing stops a callback or a class
+ * instance travelling in it. Checking here, before the value reaches wasm,
+ * keeps the failure a named field in the console instead of a poisoned tab.
+ *
+ * `undefined` passes through, since Loro accepts it and the entry type uses it
+ * to mean "unset".
+ */
+const plainCopy = (value: unknown, path: string): unknown => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  switch (typeof value) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+      return value;
+    case 'object':
+      break;
+    default:
+      throw new Error(`${path} is a ${typeof value}`);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => plainCopy(item, `${path}[${index}]`));
+  }
+
+  const copy: Record<string, unknown> = {};
+
+  // Reading the properties here is deliberate: a getter that throws should
+  // throw on this side of the boundary, where it is catchable.
+  for (const [key, item] of Object.entries(value as object)) {
+    copy[key] = plainCopy(item, `${path}.${key}`);
+  }
+
+  return copy;
+};
+
+/**
  * Ephemeral "who is where" state for one drive (issue #1229).
  *
  * Wraps a Loro {@link EphemeralStore} in which every participating session
@@ -121,13 +173,21 @@ export class DrivePresenceManager {
 
     if (!entry || !agent) {
       this.local = undefined;
-      this.ephemeral?.delete(this.sessionId);
+      this.onEphemeral('clearing the local entry', e =>
+        e.delete(this.sessionId),
+      );
 
       return;
     }
 
-    this.local = { ...entry, agent, updatedAt: Date.now() };
-    this.ephemeral?.set(this.sessionId, this.local as never);
+    const next = this.storable({ ...entry, agent, updatedAt: Date.now() });
+
+    if (!next) {
+      return;
+    }
+
+    this.local = next;
+    this.writeLocal();
   }
 
   /**
@@ -143,8 +203,38 @@ export class DrivePresenceManager {
       return;
     }
 
-    this.local = { ...this.local, ...patch, agent, updatedAt: Date.now() };
-    this.ephemeral?.set(this.sessionId, this.local as never);
+    const next = this.storable({
+      ...this.local,
+      ...patch,
+      agent,
+      updatedAt: Date.now(),
+    });
+
+    if (!next) {
+      return;
+    }
+
+    this.local = next;
+    this.writeLocal();
+  }
+
+  /**
+   * The entry as Loro can hold it, or `undefined` when it cannot hold it at
+   * all. A refused announcement leaves the last good one in place: the tab
+   * keeps its presence and the heartbeat keeps working, which is the point of
+   * refusing rather than storing and finding out ten seconds later.
+   */
+  private storable(entry: PresenceEntry): PresenceEntry | undefined {
+    try {
+      return plainCopy(entry, 'presence') as PresenceEntry;
+    } catch (e) {
+      console.error(
+        '[Presence] ignoring an announcement Loro cannot store:',
+        e instanceof Error ? e.message : e,
+      );
+
+      return undefined;
+    }
   }
 
   /**
@@ -161,10 +251,16 @@ export class DrivePresenceManager {
    * stick to local-only drives.
    */
   public injectEntry(sessionId: string, entry: PresenceEntry): void {
-    const stamped = { ...entry, updatedAt: Date.now() };
+    const stamped = this.storable({ ...entry, updatedAt: Date.now() });
+
+    if (!stamped) {
+      return;
+    }
 
     if (this.ephemeral) {
-      this.ephemeral.set(sessionId, stamped as never);
+      this.onEphemeral('injecting an entry', e =>
+        e.set(sessionId, stamped as never),
+      );
     } else {
       this.pendingInjected.set(sessionId, stamped);
     }
@@ -174,7 +270,7 @@ export class DrivePresenceManager {
    *  faster than waiting out the TTL. */
   public removeEntry(sessionId: string): void {
     if (this.ephemeral) {
-      this.ephemeral.delete(sessionId);
+      this.onEphemeral('removing an entry', e => e.delete(sessionId));
     } else {
       this.pendingInjected.delete(sessionId);
     }
@@ -184,22 +280,100 @@ export class DrivePresenceManager {
    *  heartbeat and after websocket reconnects (the server's per-connection
    *  cache starts empty on a fresh connection). */
   public rebroadcast(): void {
-    if (!this.local || !this.ephemeral) {
+    if (!this.local) {
       return;
     }
 
-    // Bump our entry's LWW timestamp so peers' TTL cleanup keeps it alive…
-    this.ephemeral.set(this.sessionId, this.local as never);
-    // …and put the encoded entry on the wire ourselves. Relying on
-    // `subscribeLocalUpdates` alone is fragile here: a value-identical
-    // `set` may not emit one, and the very first broadcast can be dropped
-    // while the websocket is still authenticating — this direct send makes
-    // the heartbeat self-healing (it also repopulates the server's
-    // per-connection cache for late-joiner replay).
-    this.store.broadcastPresenceUpdate(
-      this.drive,
-      this.ephemeral.encode(this.sessionId),
-    );
+    const local = this.local;
+
+    this.onEphemeral('broadcast', ephemeral => {
+      // Bump our entry's LWW timestamp so peers' TTL cleanup keeps it alive…
+      ephemeral.set(this.sessionId, local as never);
+      // …and put the encoded entry on the wire ourselves. Relying on
+      // `subscribeLocalUpdates` alone is fragile here: a value-identical
+      // `set` may not emit one, and the very first broadcast can be dropped
+      // while the websocket is still authenticating — this direct send makes
+      // the heartbeat self-healing (it also repopulates the server's
+      // per-connection cache for late-joiner replay).
+      this.store.broadcastPresenceUpdate(
+        this.drive,
+        ephemeral.encode(this.sessionId),
+      );
+    });
+  }
+
+  /** Write the current local entry, if the store is up. */
+  private writeLocal(): void {
+    const local = this.local;
+
+    if (!local) {
+      return;
+    }
+
+    this.onEphemeral('announcing', e => e.set(this.sessionId, local as never));
+  }
+
+  /**
+   * Run one operation against the ephemeral store, and give up presence for
+   * this tab if it throws.
+   *
+   * Every call here crosses into wasm, and {@link plainCopy} should make a
+   * throw impossible for values we write. What it cannot vet is a peer's bytes
+   * or a module another part of the app has already panicked in: the wasm
+   * instance is shared, so one panic anywhere leaves every later call
+   * trapping with a bare `RuntimeError: unreachable`. There is nothing to
+   * retry after that, and retrying is the whole problem — see
+   * {@link giveUp}.
+   */
+  private onEphemeral<T>(
+    what: string,
+    operation: (ephemeral: EphemeralStore) => T,
+  ): T | undefined {
+    const ephemeral = this.ephemeral;
+
+    if (!ephemeral) {
+      return undefined;
+    }
+
+    try {
+      return operation(ephemeral);
+    } catch (e) {
+      this.giveUp(what, e);
+
+      return undefined;
+    }
+  }
+
+  /**
+   * Stop being present on this drive, for good, after a wasm failure.
+   *
+   * Peers TTL this session out on their own, so dropping the store costs a
+   * name in a list and buys an end to the errors. `destroy()` is the part that
+   * matters: Loro's own expiry timer lives in the JS wrapper, not in wasm, and
+   * calls `removeOutdated()` every TTL/2 for as long as the store holds a key.
+   * Dropping our reference does not stop that timer, so a store abandoned
+   * after a panic went on throwing from `setInterval` for the life of the tab.
+   * `destroy()` only clears the interval, which is safe on a poisoned module.
+   */
+  private giveUp(what: string, cause: unknown): void {
+    const ephemeral = this.ephemeral;
+
+    console.error(`[Presence] ${what} failed, dropping presence:`, cause);
+    this.stopHeartbeat();
+    this.ephemeral = undefined;
+
+    try {
+      ephemeral?.destroy();
+    } catch (e) {
+      console.error('[Presence] could not stop the expiry timer:', e);
+    }
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = undefined;
+    }
   }
 
   private start(): void {
@@ -207,7 +381,8 @@ export class DrivePresenceManager {
       this.drive,
       bytes => {
         if (this.ephemeral) {
-          this.ephemeral.apply(bytes);
+          // A peer's bytes are the one input `plainCopy` cannot vet.
+          this.onEphemeral('applying a peer update', e => e.apply(bytes));
         } else {
           this.pendingRemote.push(bytes);
         }
@@ -229,37 +404,41 @@ export class DrivePresenceManager {
     ephemeral.subscribe(() => this.emit());
 
     for (const bytes of this.pendingRemote) {
-      ephemeral.apply(bytes);
+      this.onEphemeral('applying a buffered peer update', e => e.apply(bytes));
     }
 
     this.pendingRemote = [];
 
     for (const [sessionId, entry] of this.pendingInjected) {
-      ephemeral.set(sessionId, entry as never);
+      this.onEphemeral('injecting a buffered entry', e =>
+        e.set(sessionId, entry as never),
+      );
     }
 
     this.pendingInjected.clear();
 
-    if (this.local) {
-      ephemeral.set(this.sessionId, this.local as never);
-    }
+    this.writeLocal();
 
     this.heartbeat = setInterval(() => this.rebroadcast(), HEARTBEAT_MS);
   }
 
   private stop(): void {
-    if (this.heartbeat) {
-      clearInterval(this.heartbeat);
-      this.heartbeat = undefined;
-    }
-
+    this.stopHeartbeat();
     this.unsubLoroReady?.();
     // Announce the departure so peers don't wait out the TTL. Must happen
     // while still subscribed: the server only relays updates from current
     // subscribers, so a delete sent after PRESENCE_UNSUBSCRIBE is dropped.
-    this.ephemeral?.delete(this.sessionId);
+    // Through the helper, so a throw here still leaves by the route below
+    // rather than skipping `destroy()` and leaking Loro's expiry timer.
+    this.onEphemeral('announcing the departure', e => e.delete(this.sessionId));
     this.unsubTransport?.();
-    this.ephemeral?.destroy();
+
+    try {
+      this.ephemeral?.destroy();
+    } catch (e) {
+      console.error('[Presence] could not stop the expiry timer:', e);
+    }
+
     this.ephemeral = undefined;
     this.pendingRemote = [];
     this.pendingInjected.clear();
@@ -288,14 +467,14 @@ export class DrivePresenceManager {
   }
 
   private computeSnapshot(): PresenceItem[] {
-    if (!this.ephemeral) {
+    const states = this.onEphemeral(
+      'reading the peer list',
+      e => e.getAllStates() as Record<string, PresenceEntry | undefined>,
+    );
+
+    if (!states) {
       return [];
     }
-
-    const states = this.ephemeral.getAllStates() as Record<
-      string,
-      PresenceEntry | undefined
-    >;
 
     return Object.entries(states)
       .filter(

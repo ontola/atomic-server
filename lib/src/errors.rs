@@ -67,6 +67,22 @@ impl AtomicError {
         }
     }
 
+    /// This error, typed as an authentication or authorization failure (a
+    /// server answers 401), unless it already is one. For the paths that
+    /// decide who a caller is, where every failure means "not you": a
+    /// signature that does not verify, a key that does not match the
+    /// subject, an agent this store does not know. The message is kept.
+    pub fn into_unauthorized(self) -> AtomicError {
+        match self.error_type {
+            AtomicErrorType::UnauthorizedError => self,
+            _ => AtomicError {
+                message: format!("Unauthorized. {}", self.message),
+                error_type: AtomicErrorType::UnauthorizedError,
+                subject: self.subject,
+            },
+        }
+    }
+
     /// A server will probably return a 500.
     pub fn other_error(message: String) -> AtomicError {
         AtomicError {

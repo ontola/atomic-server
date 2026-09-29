@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { installEmptyDiscoveryRoom } from './fixtures';
 import { devDrive, FRONTEND_URL } from './test-utils';
+
+test.beforeEach(async ({ context }) => {
+  await installEmptyDiscoveryRoom(context);
+});
 
 for (const keepEdits of [false, true]) {
   test(`template adoption ${keepEdits ? 'keeps edited content' : 'starts fresh without samples'}`, async ({
@@ -43,7 +48,7 @@ for (const keepEdits of [false, true]) {
     });
     expect(tabScroll).toBeGreaterThan(0);
     const previewBar = await page
-      .getByRole('region', { name: 'Template preview' })
+      .getByRole('region', { name: 'Setup' })
       .boundingBox();
     const navigation = await page
       .getByLabel('navigation', { exact: true })
@@ -95,8 +100,11 @@ for (const keepEdits of [false, true]) {
     await page
       .getByRole('button', { name: 'Use this template', exact: true })
       .click();
+    // The naming step's title is hidden on a phone; its Create button is not.
     await expect(
-      page.getByRole('heading', { name: 'Give your space a name' }),
+      page
+        .getByRole('region', { name: 'Setup' })
+        .getByRole('button', { name: 'Create drive', exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel('Drive name')).toHaveValue('Student');
     expect(
@@ -177,40 +185,70 @@ test('blank drive remains a short path without feedback covering it on mobile', 
     page.getByRole('button', { name: 'Close', exact: true }),
   ).toBeVisible();
   const blank = page.getByRole('button', { name: 'Create a blank drive' });
-  await blank.scrollIntoViewIfNeeded();
-  const blankBox = await blank.boundingBox();
-  const feedbackBox = await page
-    .getByRole('button', { name: 'Feedback', exact: true })
-    .boundingBox();
-  expect(feedbackBox!.y).toBeGreaterThanOrEqual(blankBox!.y + blankBox!.height);
+  const feedback = page.getByRole('button', { name: 'Feedback', exact: true });
+  // The gallery above this button keeps loading after the page is
+  // interactive, growing the scroll area by about 250px. A single
+  // `scrollIntoViewIfNeeded` issued inside that window scrolls to what was
+  // then the bottom and is left short, so scroll again on every attempt
+  // rather than measuring once. If the fixed Feedback control really does
+  // cover the last option, no amount of scrolling clears it and this fails.
+  await expect
+    .poll(async () => {
+      await blank.scrollIntoViewIfNeeded();
+      const blankBox = await blank.boundingBox();
+      const feedbackBox = await feedback.boundingBox();
+
+      if (!blankBox || !feedbackBox) return -1;
+
+      return feedbackBox.y - (blankBox.y + blankBox.height);
+    })
+    .toBeGreaterThanOrEqual(0);
   await blank.click();
   await page.getByLabel('Drive name').fill('Blank example');
   await page.getByRole('button', { name: 'Create drive', exact: true }).click();
   await expect(page).not.toHaveURL(/new-drive/);
 });
 
-test('interactive demo returns to template selection from the top bar', async ({
+test('interactive demo leads to template selection and back from the top bar', async ({
   page,
 }) => {
   test.setTimeout(120000);
-  await devDrive(page);
+  // A guest, not a dev drive: a signed-in visitor who opens the demo is sent
+  // to their own workspace instead (DemoRoute's signedInDrive).
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/demo`);
-  const exit = page.getByRole('button', { name: 'Back', exact: true });
-  await expect(exit).toBeVisible({ timeout: 90000 });
-  await expect(exit).toHaveCount(1);
-  const bar = await page
-    .getByRole('region', { name: 'Template preview' })
-    .boundingBox();
+  const bar = page.getByRole('region', { name: 'Setup' });
+  const choose = bar.getByRole('button', { name: 'Choose a template' });
+  await expect(choose).toBeVisible({ timeout: 90000 });
+  await expect(bar.getByRole('button', { name: 'Leave demo' })).toBeVisible();
+  const barBox = await bar.boundingBox();
   const nav = await page
     .getByLabel('navigation', { exact: true })
     .boundingBox();
-  expect(bar!.y + bar!.height).toBeLessThanOrEqual(nav!.y);
-  await exit.click();
-  await expect(exit).toHaveCount(0);
+  expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(nav!.y);
+
+  // A stale template-preview record must not hide the demo's bar.
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'atomic.templateDemo',
+      JSON.stringify({
+        drive: 'did:ad:stale',
+        template: 'student',
+        previousDrive: '',
+      }),
+    ),
+  );
+  await page.reload();
+  await expect(choose).toBeVisible({ timeout: 30000 });
+
+  // The demo is not a template, and the gallery keeps the way back.
+  await choose.click();
   await expect(
-    page.getByRole('link', { name: 'create a blank drive', exact: true }),
+    page.getByRole('button', { name: 'Preview template' }).first(),
   ).toBeVisible();
+  await expect(page.getByText('Meet the demo team')).toHaveCount(0);
+  await bar.getByRole('button', { name: 'Back to the demo' }).click();
+  await expect(choose).toBeVisible();
 });
 
 test('AI setup can be dismissed and reopened without trapping the gallery', async ({
@@ -223,7 +261,7 @@ test('AI setup can be dismissed and reopened without trapping the gallery', asyn
   for (const method of ['outside', 'escape', 'close']) {
     await page.getByRole('button', { name: 'Set up AI', exact: true }).click();
     const title = page.getByRole('heading', {
-      name: 'Connect a model to use Atomic Assistant',
+      name: 'Connect a model to use AI chat',
     });
     await expect(title).toBeVisible();
     if (method === 'outside') await page.mouse.click(5, 5);

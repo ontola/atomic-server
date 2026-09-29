@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "capabilities": [
+    {
+      "name": "storage",
+      "why": "x"
+    }
+  ]
+}

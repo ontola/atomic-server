@@ -1,0 +1,57 @@
+{
+  "note": "Golden version 2 request signatures (ontola/atomic-plugins#54) for lib/src/authentication.rs and browser/lib/src/authentication.ts. Regenerate with `cargo test -p atomic_lib print_v2_vectors -- --ignored --nocapture`; keep both copies identical.",
+  "vectors": [
+    {
+      "name": "post_delegation",
+      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "agent": "atomic:agent:O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "method": "POST",
+      "url": "https://proxy.example/connections/c_123/agents",
+      "timestamp": 1790000000000,
+      "body": "{\"agent\":\"atomic:agent:AAAA\",\"label\":\"Timesheets\"}",
+      "body_sha256_hex": "0074f64be881c338fd6447657907c566c7891e0c90f6ff1f187951c54b5d7eba",
+      "message": "atomic-request-v2\nPOST\nhttps://proxy.example/connections/c_123/agents\n1790000000000\n0074f64be881c338fd6447657907c566c7891e0c90f6ff1f187951c54b5d7eba",
+      "signature": "n9JeQmp-ZaZ9MA-YHRDZCRQrh4-8M-oxGdir0i7BsR1K502_oU38O8-jGHhZ88K0L3KP60Q6mRUNiout-kEbAQ"
+    },
+    {
+      "name": "get_with_query_empty_body",
+      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "agent": "atomic:agent:O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "method": "GET",
+      "url": "https://proxy.example/proxy/c_123/google-calendar/calendars/primary/events?maxResults=10&pageToken=a%2Fb",
+      "timestamp": 1790000000001,
+      "body": "",
+      "body_sha256_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "message": "atomic-request-v2\nGET\nhttps://proxy.example/proxy/c_123/google-calendar/calendars/primary/events?maxResults=10&pageToken=a%2Fb\n1790000000001\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature": "LLL_cPbDuCf8B2XisMtTYWmO_5LfaLIyOhB2M-5PonwTNcUCFfEs-IQco49YiIIc0JMcFxS5VITvPOL40yCzCA"
+    },
+    {
+      "name": "delete_lowercase_method_in",
+      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "agent": "atomic:agent:O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "method": "delete",
+      "url": "http://localhost:8787/connections/c_123",
+      "timestamp": 1790000000002,
+      "body": "",
+      "body_sha256_hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "message": "atomic-request-v2\nDELETE\nhttp://localhost:8787/connections/c_123\n1790000000002\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature": "raCAxZ9mLvMOVG6d0yoorsuunhyIqYZi6Eoeor-_yu4cRJwQUjQyMmIyJaQZlbKQ2XLj8BReManHnpABLspPBg"
+    },
+    {
+      "name": "patch_utf8_body",
+      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "agent": "atomic:agent:O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+      "method": "PATCH",
+      "url": "https://example.com/app-agent?drive=atomic%3Adrive%3Ax",
+      "timestamp": 1790000000003,
+      "body": "{\"title\":\"Café ☕ 😀\"}",
+      "body_sha256_hex": "6a3a0b37d71ba8a66ad1e35175618451758229db66f6766745f901d309e70b21",
+      "message": "atomic-request-v2\nPATCH\nhttps://example.com/app-agent?drive=atomic%3Adrive%3Ax\n1790000000003\n6a3a0b37d71ba8a66ad1e35175618451758229db66f6766745f901d309e70b21",
+      "signature": "zoi3jwOMFwYLp0NSvzwmSlFWKDULQlYHomgyC_BeYXjqbqoeitDH8E9yFkugZGWTOQ2uWLDhJkRj3iccvIhRCQ"
+    }
+  ]
+}

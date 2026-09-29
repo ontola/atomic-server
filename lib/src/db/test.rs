@@ -1267,6 +1267,185 @@ async fn query_by_parent_after_add_resource() {
     );
 }
 
+#[tokio::test]
+async fn sorted_parent_query_deduplicates_legacy_and_canonical_subjects() {
+    let store = Db::init_temp("sorted_parent_alias_dedup").await.unwrap();
+    let drive = "atomic:driveAliasDedup";
+    let legacy = "did:ad:childAliasDedup";
+    let canonical = "atomic:childAliasDedup";
+    let row_class = "atomic:rowAliasClass";
+
+    let child = |subject: &str| {
+        let mut resource = crate::Resource::new(subject.into());
+        resource
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("Document".into()))
+            .unwrap();
+        resource
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(row_class.into())]),
+            )
+            .unwrap();
+        resource
+    };
+
+    store
+        .add_resource_opts(&child(legacy), false, true, true)
+        .await
+        .unwrap();
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, drive);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+    assert_eq!(store.query(&query).await.unwrap().count, 1);
+
+    // Simulate an already-persisted index key written before the scheme fix.
+    let filter = crate::db::query_index::QueryFilter::try_from_query(&query).unwrap();
+    let sort_key = crate::db::query_index::sort_key_for(&child(legacy), urls::NAME);
+    let legacy_key =
+        crate::db::query_index::create_query_index_key(&filter, Some(&sort_key), Some(legacy))
+            .unwrap();
+    store
+        .kv
+        .insert(Tree::QueryMembers, &legacy_key, b"")
+        .unwrap();
+    let stale = store.query(&query).await.unwrap();
+    assert_eq!(
+        stale.count, 1,
+        "stale alias inflated count: {:?}",
+        stale.subjects
+    );
+    assert_eq!(stale.subjects.len(), 1);
+    query.sort_desc = true;
+    let descending = store.query(&query).await.unwrap();
+    assert_eq!(descending.count, 1);
+    assert_eq!(descending.subjects[0].as_str(), canonical);
+    query.sort_desc = false;
+
+    // An upgraded device rewrites the same resource under its canonical name.
+    store
+        .add_resource_opts(&child(canonical), false, true, true)
+        .await
+        .unwrap();
+    let result = store.query(&query).await.unwrap();
+    assert_eq!(
+        result.count, 1,
+        "duplicate index entries: {:?}",
+        result.subjects
+    );
+    assert_eq!(result.subjects[0].pure_id(), canonical);
+
+    query.offset = 1;
+    let second_page = store.query(&query).await.unwrap();
+    assert!(second_page.subjects.is_empty());
+    assert_eq!(second_page.count, 1);
+
+    // Table Views add an isA constraint even when the user has not sorted.
+    let mut table_query = crate::storelike::Query::new_prop_val(urls::PARENT, drive);
+    table_query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    table_query.drive = Some(drive.into());
+    table_query.limit = Some(100);
+    assert_eq!(store.query(&table_query).await.unwrap().count, 1);
+    let table_filter = crate::db::query_index::QueryFilter::try_from_query(&table_query).unwrap();
+    let table_sort_key = crate::db::query_index::sort_key_for(&child(legacy), urls::PARENT);
+    let table_legacy_key = crate::db::query_index::create_query_index_key(
+        &table_filter,
+        Some(&table_sort_key),
+        Some(legacy),
+    )
+    .unwrap();
+    store
+        .kv
+        .insert(Tree::QueryMembers, &table_legacy_key, b"")
+        .unwrap();
+    let table_result = store.query(&table_query).await.unwrap();
+    assert_eq!(
+        table_result.count, 1,
+        "table aliases: {:?}",
+        table_result.subjects
+    );
+    assert_eq!(table_result.subjects[0].as_str(), canonical);
+}
+
+#[tokio::test]
+async fn basic_parent_query_deduplicates_legacy_and_canonical_subjects() {
+    let store = Db::init_temp("basic_parent_alias_dedup").await.unwrap();
+    let parent = "atomic:basicAliasParent";
+    let legacy = "did:ad:basicAliasChild";
+    let canonical = "atomic:basicAliasChild";
+    let child = |subject: &str| {
+        let mut resource = crate::Resource::new(subject.into());
+        resource
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()))
+            .unwrap();
+        resource
+    };
+
+    store
+        .add_resource_opts(&child(legacy), false, true, true)
+        .await
+        .unwrap();
+
+    // Simulate both primary index keys left by a pre-upgrade peer.
+    let legacy_index_atom = child(legacy)
+        .to_atoms()
+        .into_iter()
+        .find(|atom| atom.property == urls::PARENT)
+        .unwrap()
+        .to_indexable_atoms()
+        .remove(0);
+    let prop_key = crate::db::prop_val_sub_index::propvalsub_key(&legacy_index_atom);
+    let value_key = crate::db::val_prop_sub_index::valpropsub_key(&legacy_index_atom);
+    store.kv.insert(Tree::PropValSub, &prop_key, b"").unwrap();
+    store.kv.insert(Tree::ValPropSub, &value_key, b"").unwrap();
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent);
+    let stale = store.query(&query).await.unwrap();
+    assert_eq!(
+        stale.count, 1,
+        "stale alias inflated count: {:?}",
+        stale.subjects
+    );
+    assert_eq!(stale.subjects[0].as_str(), canonical);
+    let mut value_only = crate::storelike::Query::new();
+    value_only.value = Some(Value::AtomicUrl(parent.into()));
+    let value_result = store.query(&value_only).await.unwrap();
+    assert_eq!(
+        value_result.count, 1,
+        "value index aliases: {:?}",
+        value_result.subjects
+    );
+    assert_eq!(value_result.subjects[0].as_str(), canonical);
+    query.offset = 1;
+    let second_page = store.query(&query).await.unwrap();
+    assert!(second_page.subjects.is_empty());
+    assert_eq!(second_page.count, 1);
+
+    store
+        .add_resource_opts(&child(canonical), false, true, true)
+        .await
+        .unwrap();
+
+    query.offset = 0;
+    let result = store.query(&query).await.unwrap();
+    assert_eq!(
+        result.count, 1,
+        "duplicate index entries: {:?}",
+        result.subjects
+    );
+    assert_eq!(result.subjects[0].as_str(), canonical);
+}
+
 /// Production path: create a Drive via `store.create_drive`, add children
 /// via `apply_commit` (what WebSocket/HTTP commits do), then fetch them
 /// with a sorted query — the exact path the folder/table UI takes.
@@ -1661,6 +1840,86 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
     );
 }
 
+/// A signed destroy commit removes the resource and stores its envelope in
+/// one transaction, then tombstones the subject. Before, `apply_commit`
+/// called `remove_resource`, which applied its own transaction: the resource
+/// was gone before the envelope row landed, and a crash in between left a
+/// deletion with no signed destroy for `SYNC_DIFF.removeCommits` to carry.
+#[tokio::test]
+#[timeout(120000)]
+async fn destroy_commit_removes_resource_and_keeps_envelope_atomically() {
+    let store = Db::init_temp("destroy_commit_envelope").await.unwrap();
+
+    let mut resource = crate::Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("doomed".into()), &store)
+        .await
+        .unwrap();
+    let genesis = resource.save_as_genesis(&store).await.unwrap();
+    let subject = genesis.resource_new.unwrap().get_subject().clone();
+    let pure_id = subject.pure_id();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "test premise: a saved resource has a Loro snapshot"
+    );
+    assert!(
+        !crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "test premise: a live resource is not tombstoned"
+    );
+
+    let mut resource = store.get_resource(&subject).await.unwrap();
+    let destroy = resource.destroy(&store).await.unwrap();
+    let signature = destroy
+        .commit
+        .signature
+        .clone()
+        .expect("destroy via the default agent is a signed commit");
+    assert!(destroy.resource_new.is_none());
+
+    // (a) the resource, its Loro snapshot and its stored propvals are gone.
+    assert!(
+        store.get_resource(&subject).await.is_err(),
+        "destroyed resource must not resolve"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::Resources, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "destroyed resource row must be deleted"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "Loro snapshot must be deleted with the resource"
+    );
+
+    // (b) the signed destroy envelope is the subject's latest envelope.
+    let envelope = crate::envelopes::latest_envelope(&store, &pure_id)
+        .expect("the destroy envelope must be stored for the destroyed subject");
+    assert_eq!(envelope.signature, signature);
+    assert!(envelope.is_destroy(), "latest envelope must be the destroy");
+
+    // (c) the subject is tombstoned, and the tombstone resolves to the
+    // signed destroy `SYNC_DIFF.removeCommits` forwards.
+    assert!(
+        crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "destroyed subject must be tombstoned"
+    );
+    assert!(
+        crate::sync::tombstones::destroy_envelope(&store, &pure_id).is_some(),
+        "tombstone must resolve to the signed destroy envelope"
+    );
+}
+
 /// A deleted resource must not leave its Loro snapshot orphaned in
 /// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
 /// does not resurrect it.
@@ -2034,6 +2293,96 @@ async fn a_cascade_deleted_child_names_its_drive() {
     );
 }
 
+/// `DbEvent::Destroyed` is sent only once the removal has been applied.
+///
+/// `recursive_remove` used to announce each cascade-deleted child while it
+/// was still queueing operations into a transaction the caller had yet to
+/// apply. A listener — the WS fan-out in `atomic-server`'s `CommitMonitor`, a
+/// peer transport — heard of a deletion that could still fail or roll back,
+/// and heard of the children before the parent whose removal caused it. Now
+/// the caller announces every removed subject, the parent included, after the
+/// transaction has landed.
+///
+/// The listener runs on its own worker thread and checks the store the moment
+/// each event arrives. With the old ordering there is a wide window in which
+/// that read still finds the resource: the children have yet to be queried,
+/// unindexed and applied.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[timeout(120000)]
+async fn destroyed_events_follow_the_applied_removal() {
+    use crate::DbEvent;
+
+    let store = Db::init_temp("destroyed_after_apply").await.unwrap();
+    let drive = store.create_drive("destroyed-after-apply").await.unwrap();
+    let parent = store
+        .create_resource(urls::FOLDER, &drive, "parent", None)
+        .await
+        .unwrap();
+    let mut expected: Vec<String> = vec![parent.clone()];
+    for name in ["child-1", "child-2"] {
+        let child = store
+            .create_resource(urls::FOLDER, &parent, name, None)
+            .await
+            .unwrap();
+        expected.push(child);
+    }
+    let base = store.get_base_domain();
+    let to_subject = |s: &str| Subject::from_raw(s, base.as_deref()).without_params();
+    expected.sort();
+
+    // Subscribe before the removal, and observe concurrently: what matters is
+    // the state of the store at the moment each event can be seen.
+    let mut events = store.subscribe_events();
+    let observer_store = store.clone();
+    let observer = tokio::spawn(async move {
+        let mut seen: Vec<(Subject, bool)> = Vec::new();
+        while seen.len() < 3 {
+            match events.recv().await.unwrap() {
+                DbEvent::Destroyed { subject, .. } => {
+                    let still_present = observer_store.get_resource(&subject).await.is_ok();
+                    seen.push((subject, still_present));
+                }
+                _ => continue,
+            }
+        }
+        (seen, events)
+    });
+
+    store.remove_resource(&to_subject(&parent)).await.unwrap();
+
+    let (seen, mut events) = tokio::time::timeout(std::time::Duration::from_secs(30), observer)
+        .await
+        .expect("the removal never announced parent and both children")
+        .unwrap();
+
+    let mut announced: Vec<String> = seen.iter().map(|(s, _)| s.pure_id()).collect();
+    announced.sort();
+    assert_eq!(
+        announced, expected,
+        "parent and both children must each be announced exactly once"
+    );
+    for (subject, still_present) in &seen {
+        assert!(
+            !still_present,
+            "{subject} was announced as destroyed while the store still held it"
+        );
+        assert!(
+            store.get_resource(subject).await.is_err(),
+            "{subject} must be gone once its removal is announced"
+        );
+    }
+
+    // `remove_resource` has returned, so anything it sent is already in the
+    // channel: there must be no fourth removal — the parent is not announced
+    // twice.
+    while let Ok(event) = events.try_recv() {
+        assert!(
+            !matches!(event, DbEvent::Destroyed { .. }),
+            "unexpected extra removal event: {event:?}"
+        );
+    }
+}
+
 /// A resource created under a drive must be findable by that drive.
 ///
 /// `drive` is stamped onto the resource by the server (`commit.rs`, from the
@@ -2375,11 +2724,16 @@ async fn sorted_query_index_keeps_up_with_two_constraints() {
 /// as the same subject fails the constraint, the row is silently absent from
 /// the index, and therefore from the table, while being present in the store
 /// and in every unfiltered query.
+///
+/// This reproduced two silent failures at once. The `String` row was in the
+/// index and was read, and then hidden: the built-in collection class
+/// extender did `is_a.to_subjects()?` on it, and `resolve_query_member` took
+/// any extender error as a reason to drop the row from the page and the
+/// count. The JSON-array `String` row was never a candidate: its `isA` was
+/// indexed under the literal `["…"]` string, so the class constraint could
+/// not find it and the matcher did not accept it either.
 #[tokio::test]
 #[timeout(120000)]
-#[ignore = "reproduces an OPEN bug: query_sorted_indexed returns 2 of 3 members \
-            that are written, parseable, local and matching — the read stops \
-            after the second. Run with `--ignored` while working on it."]
 async fn is_a_encodings_all_match_the_class_constraint() {
     use crate::storelike::Query;
 
@@ -2447,6 +2801,415 @@ async fn is_a_encodings_all_match_the_class_constraint() {
         encodings.len(),
         res.subjects
     );
+    assert_eq!(res.subjects.len(), encodings.len());
+    assert_eq!(res.resources.len(), encodings.len());
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(
+        report.is_consistent(),
+        "index and store disagree after the read: {report:?}"
+    );
+    assert_eq!(report.expected, encodings.len());
+}
+
+/// A row built the way sync builds it — a fresh `Resource` given a Loro doc
+/// through `apply_state_doc`, persisted by `persist_replicated_resource` —
+/// must land in a watched, drive-scoped, sorted, class-filtered index, and
+/// the sorted read must then agree with the unsorted and the unscoped
+/// shapes of the same question.
+///
+/// This is the shape from planning/silent-failures.md: a table rendered 5
+/// rows through `query_complex` while 22 existed and every other query shape
+/// returned 22. The first 5 rows are written before the query is watched
+/// (so the build files them), the other 17 arrive as replicas afterwards (so
+/// only commit-time maintenance can file them).
+#[tokio::test]
+#[timeout(120000)]
+async fn replicated_rows_reach_a_watched_scoped_sorted_query() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_replicated_rows").await.unwrap();
+
+    let drive =
+        "did:ad:driveREPLaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableREPLaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classREPLaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    t.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    // What a peer's SYNC_PUSH entry becomes here: propvals materialized from
+    // the Loro doc, not the ones a local caller set.
+    let replicate = |i: usize| {
+        let subj = format!("did:ad:repl{:0>69}==", format!("{i}"));
+        let mut authored = crate::Resource::new(subj.clone());
+        authored
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+            )
+            .unwrap();
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(format!("row {i:02}")))
+            .unwrap();
+        let doc = authored.build_state_doc().unwrap();
+        let mut replica = crate::Resource::new(subj);
+        replica.apply_state_doc(doc).unwrap();
+        replica
+    };
+
+    for i in 0..5 {
+        store
+            .persist_replicated_resource(&replicate(i))
+            .await
+            .unwrap();
+    }
+
+    let table_query = |sort: bool, scope: &str| {
+        let mut q = Query::new_prop_val(urls::PARENT, table);
+        q.filters = vec![crate::storelike::PropVal {
+            property: Some(urls::IS_A.to_string()),
+            value: Some(Value::AtomicUrl(cls.into())),
+            ..Default::default()
+        }];
+        q.sort_by = sort.then(|| urls::NAME.to_string());
+        q.drive = Some(scope.into());
+        q.limit = Some(100);
+        q
+    };
+    let scoped_sorted = table_query(true, drive);
+
+    assert_eq!(store.query(&scoped_sorted).await.unwrap().count, 5);
+    assert!(
+        crate::db::query_index::QueryFilter::try_from_query(&scoped_sorted)
+            .unwrap()
+            .is_watched(&store)
+    );
+
+    for i in 5..22 {
+        store
+            .persist_replicated_resource(&replicate(i))
+            .await
+            .unwrap();
+    }
+
+    let unsorted = table_query(false, drive);
+    let other_scope = table_query(true, table);
+
+    let sorted_res = store.query(&scoped_sorted).await.unwrap();
+    assert_eq!(
+        sorted_res.count, 22,
+        "the watched sorted index lists {} of 22 replicated rows",
+        sorted_res.count
+    );
+    assert_eq!(store.query(&unsorted).await.unwrap().count, 22);
+    assert_eq!(store.query(&other_scope).await.unwrap().count, 22);
+
+    for q in [&scoped_sorted, &unsorted, &other_scope] {
+        let report = store.check_query_index(q).unwrap();
+        assert!(report.is_consistent(), "{report:?}");
+        assert_eq!(report.indexed, 22);
+    }
+}
+
+/// The planner scans one constraint's index and trusts it to hold every
+/// member. When it does not — here one row's `isA` entry is simply gone —
+/// the first build must notice through the other constraint, say so, and
+/// file the row anyway, instead of watching a partial list for good.
+#[tokio::test]
+#[timeout(120000)]
+async fn first_build_cross_checks_the_unscanned_constraint() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_cross_check").await.unwrap();
+    let drive =
+        "did:ad:driveXCHKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableXCHKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classXCHKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    // More rows in the table than in the class, so the planner scans `isA`.
+    for i in 0..6 {
+        let subj = format!("did:ad:xchk{:0>69}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        if i < 4 {
+            r.set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+            )
+            .unwrap();
+        }
+        r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    // Knock one row out of the class index only. Its row still names the
+    // class, and its `parent` entry is intact.
+    let gone = "did:ad:xchk000000000000000000000000000000000000000000000000000000000000000000002==";
+    let mut transaction = crate::db::trees::Transaction::new();
+    transaction.push(
+        crate::db::trees::Operation::remove_atom_from_prop_val_sub_index(
+            &crate::atoms::IndexAtom {
+                subject: Subject::from(gone),
+                property: urls::IS_A.to_string(),
+                ref_value: cls.to_string(),
+                sort_value: cls.to_string(),
+            },
+        ),
+    );
+    store.apply_transaction(&mut transaction).unwrap();
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(cls.into())),
+        ..Default::default()
+    }];
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+
+    let res = store.query(&query).await.unwrap();
+    assert_eq!(res.count, 4, "got {:?}", res.subjects);
+    assert!(res
+        .subjects
+        .iter()
+        .any(|s| s.pure_id() == Subject::from(gone).pure_id()));
+    let report = store.check_query_index(&query).unwrap();
+    assert!(report.is_consistent(), "{report:?}");
+}
+
+/// The consistency check names what is wrong, in both directions.
+#[tokio::test]
+#[timeout(120000)]
+async fn check_query_index_names_missing_and_stale_members() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_report").await.unwrap();
+    let drive =
+        "atomic:driveRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "atomic:tableRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut subjects = vec![];
+    for i in 0..3 {
+        let subj = format!("atomic:rprt{:0>69}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj.clone());
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+        subjects.push(subj);
+    }
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    assert_eq!(store.query(&query).await.unwrap().count, 3);
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(report.is_consistent(), "{report:?}");
+    assert!(report.watched);
+    assert_eq!((report.indexed, report.expected), (3, 3));
+
+    // Drop one member from the index, and file one that is not a row.
+    let q_filter = crate::db::query_index::QueryFilter::try_from_query(&query).unwrap();
+    let ghost =
+        "atomic:rprtGHOSTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let mut transaction = crate::db::trees::Transaction::new();
+    let dropped = store
+        .get_resource_shallow(&Subject::from(subjects[1].clone()))
+        .unwrap();
+    let sort_key = crate::db::query_index::sort_key_for(&dropped, urls::NAME);
+    crate::db::query_index::update_indexed_member(
+        &q_filter,
+        &subjects[1],
+        &sort_key,
+        true,
+        &mut transaction,
+    )
+    .unwrap();
+    crate::db::query_index::update_indexed_member(
+        &q_filter,
+        ghost,
+        &crate::db::query_index::encode_sort_value(Some(&Value::String("zzz".into()))),
+        false,
+        &mut transaction,
+    )
+    .unwrap();
+    store.apply_transaction(&mut transaction).unwrap();
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(!report.is_consistent());
+    assert_eq!(report.missing, vec![subjects[1].clone()]);
+    assert_eq!(report.stale, vec![ghost.to_string()]);
+    assert_eq!((report.indexed, report.expected), (3, 3));
+}
+
+/// A DID row cannot be routed to a drive by its subject, so every drive's
+/// watched filters see it on commit. Its `drive` stamp is what keeps it out
+/// of the drives it does not belong to — compared against the *root* the
+/// filter's `drive` resolves to, since for a `did:` query that field is the
+/// queried subject (a table), not the drive itself. Security audit C17.
+#[tokio::test]
+#[timeout(120000)]
+async fn did_rows_stamped_into_another_drive_stay_out_of_a_watched_query() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_drive_stamp").await.unwrap();
+    let drive_a =
+        "did:ad:driveSTMPAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let drive_b =
+        "did:ad:driveSTMPBaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table_a =
+        "did:ad:tableSTMPAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classSTMPaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    for drive in [drive_a, drive_b] {
+        let mut d = crate::Resource::new(drive.into());
+        d.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                urls::DRIVE.into(),
+            )]),
+        )
+        .unwrap();
+        store
+            .add_resource_opts(&d, false, true, true)
+            .await
+            .unwrap();
+    }
+    let mut t = crate::Resource::new(table_a.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_a.into()))
+        .unwrap();
+    t.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive_a.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let row = |name: &str, drive: Option<&str>| {
+        let subj = format!("did:ad:stmp{name}{}==", "a".repeat(69 - name.len()));
+        let mut r = crate::Resource::new(subj.clone());
+        r.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+        )
+        .unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String(name.into()))
+            .unwrap();
+        if let Some(drive) = drive {
+            r.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+                .unwrap();
+        }
+        (subj, r)
+    };
+
+    // Written before the query exists: the build path.
+    let (in_a, r) = row("inA", Some(drive_a));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+    let (in_b, r) = row("inB", Some(drive_b));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+    let (unstamped, r) = row("noStamp", None);
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+
+    // Every instance of the class, as seen from table A.
+    let mut query = Query::new_class(cls);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(table_a.into());
+    query.limit = Some(100);
+
+    let found: Vec<String> = store
+        .query(&query)
+        .await
+        .unwrap()
+        .subjects
+        .iter()
+        .map(|s| s.as_str().to_string())
+        .collect();
+    assert!(
+        found.contains(&Subject::from(in_a.as_str()).pure_id()),
+        "{found:?}"
+    );
+    assert!(
+        !found.contains(&Subject::from(in_b.as_str()).pure_id()),
+        "a row stamped into drive B is listed by drive A's query: {found:?}"
+    );
+    // No stamp is no evidence; read rights decide at query time.
+    assert!(
+        found.contains(&Subject::from(unstamped.as_str()).pure_id()),
+        "{found:?}"
+    );
+
+    // Written while the query is watched: the commit path.
+    let (in_a2, r) = row("inA2", Some(drive_a));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+    let (in_b2, r) = row("inB2", Some(drive_b));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+
+    let found: Vec<String> = store
+        .query(&query)
+        .await
+        .unwrap()
+        .subjects
+        .iter()
+        .map(|s| s.as_str().to_string())
+        .collect();
+    assert!(
+        found.contains(&Subject::from(in_a2.as_str()).pure_id()),
+        "{found:?}"
+    );
+    assert!(
+        !found.contains(&Subject::from(in_b2.as_str()).pure_id()),
+        "a row committed into drive B reached drive A's watched query: {found:?}"
+    );
+    assert_eq!(found.len(), 3, "{found:?}");
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(report.is_consistent(), "{report:?}");
 }
 
 /// Narrows the previous failure: is the row rejected by the MATCHER
@@ -2456,10 +3219,10 @@ async fn is_a_encodings_all_match_the_class_constraint() {
 #[tokio::test]
 #[timeout(120000)]
 async fn is_a_string_encoding_matcher_vs_candidates() {
-    let cls = "did:ad:classPROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls = "atomic:classPROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
 
     let mut r = crate::Resource::new(
-        "did:ad:probe0000000000000000000000000000000000000000000000000000000000000000==".into(),
+        "atomic:probe0000000000000000000000000000000000000000000000000000000000000000==".into(),
     );
     r.set_unsafe(urls::IS_A.into(), Value::String(cls.into()))
         .unwrap();
@@ -2472,7 +3235,7 @@ async fn is_a_string_encoding_matcher_vs_candidates() {
         }],
         sort_by: None,
         drive:
-            "did:ad:drivePROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=="
+            "atomic:drivePROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=="
                 .into(),
     };
 
@@ -2759,4 +3522,582 @@ async fn file_store_writes_survive_reopen_without_an_explicit_flush() {
     );
     drop(db);
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A store filled before the rename holds `did:ad:X` rows. Opening it moves
+/// them to `atomic:X`; after that, either spelling a caller passes names the
+/// same row: writes do not fork, parent queries match either spelling, and
+/// destroy replay sees a legacy commit id.
+#[tokio::test]
+#[timeout(120000)]
+async fn canonical_scheme_store_boundary() {
+    let store = Db::init_temp("canonical-scheme-boundary").await.unwrap();
+    let legacy_drive = "did:ad:legacyDriveKey";
+    let canon_drive = crate::identifiers::canonicalize_scheme(legacy_drive);
+    assert_eq!(canon_drive, "atomic:legacyDriveKey");
+
+    let mut pv = crate::resources::PropVals::new();
+    pv.insert(urls::PARENT.into(), Value::AtomicUrl(legacy_drive.into()));
+    pv.insert(urls::NAME.into(), Value::String("legacy child".into()));
+    store
+        .kv
+        .insert(
+            Tree::Resources,
+            legacy_drive.as_bytes(),
+            &encode_propvals(&pv).unwrap(),
+        )
+        .unwrap();
+    // A commit a pre-rename store saved as `did:ad:commit:`.
+    let sig = "legacyDestroySig";
+    let legacy_commit = format!("did:ad:commit:{sig}");
+    let canon_commit = crate::identifiers::commit_subject(sig);
+    store
+        .kv
+        .insert(
+            Tree::Resources,
+            legacy_commit.as_bytes(),
+            &encode_propvals(&crate::resources::PropVals::new()).unwrap(),
+        )
+        .unwrap();
+
+    // Reopen as a pre-rename store: the rewrite runs on every open until its
+    // marker is set.
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+    store.migrate_canonical_scheme_if_needed().unwrap();
+
+    // Query-style parent match: either spelling of the drive finds the child.
+    let kids_canon = store.get_children(&canon_drive, None).await.unwrap();
+    let kids_legacy = store.get_children(legacy_drive, None).await.unwrap();
+    assert_eq!(
+        kids_canon.len(),
+        1,
+        "canonical parent must see the migrated child"
+    );
+    assert_eq!(kids_legacy.len(), 1, "legacy parent must see the child");
+
+    // An edit under the canonical subject updates the one row, no fork.
+    let mut resource = store
+        .get_resource(&canon_drive.as_str().into())
+        .await
+        .unwrap();
+    resource
+        .set_string(urls::NAME.into(), "renamed", &store)
+        .await
+        .unwrap();
+    store
+        .add_resource_opts(&resource, false, true, true)
+        .await
+        .unwrap();
+
+    assert!(
+        store.has_resource_locally(&canon_drive),
+        "canonical key present after write"
+    );
+    assert!(
+        store.has_resource_locally(legacy_drive),
+        "legacy spelling is normalized on lookup"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::Resources, canon_drive.as_bytes())
+            .unwrap()
+            .is_some(),
+        "stored under atomic:"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::Resources, legacy_drive.as_bytes())
+            .unwrap()
+            .is_none(),
+        "no did:ad: row after open"
+    );
+
+    // Destroy replay: the migrated commit is present under either spelling.
+    assert!(store.has_resource_locally(&canon_commit));
+    assert!(store.has_resource_locally(&legacy_commit));
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn canonical_scheme_open_rewrites_legacy_keys() {
+    let store = Db::init_temp("canonical-scheme-migrate").await.unwrap();
+    let legacy = "did:ad:migrateMe";
+    let canon = crate::identifiers::canonicalize_scheme(legacy);
+    let mut pv = crate::resources::PropVals::new();
+    pv.insert(
+        urls::PARENT.into(),
+        Value::AtomicUrl("did:ad:migrateParent".into()),
+    );
+    store
+        .kv
+        .insert(
+            Tree::Resources,
+            legacy.as_bytes(),
+            &encode_propvals(&pv).unwrap(),
+        )
+        .unwrap();
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+
+    store.migrate_canonical_scheme_if_needed().unwrap();
+
+    assert!(store
+        .kv
+        .get(Tree::Resources, canon.as_bytes())
+        .unwrap()
+        .is_some());
+    assert!(store
+        .kv
+        .get(Tree::Resources, legacy.as_bytes())
+        .unwrap()
+        .is_none());
+    let (_, rewritten) = store.get_propvals_canonical(&canon).unwrap();
+    assert_eq!(
+        rewritten.get(urls::PARENT).unwrap().to_string(),
+        "atomic:migrateParent"
+    );
+}
+
+/// Every tree that is looked up by canonical subject after the rename is
+/// rewritten on open, not only the three a resource is read from.
+#[tokio::test]
+async fn canonical_scheme_open_rewrites_every_subject_keyed_tree() {
+    let store = Db::init_temp("canonical-scheme-migrate-all").await.unwrap();
+    let legacy = "did:ad:migrateAll";
+    let canon = crate::identifiers::canonicalize_scheme(legacy);
+    let legacy_agent = "did:ad:agent:migrateAgent";
+    let canon_agent = crate::identifiers::canonicalize_scheme(legacy_agent);
+
+    // Loro snapshot, keyed by subject; the bytes are opaque.
+    store
+        .kv
+        .insert(Tree::LoroSnapshots, legacy.as_bytes(), b"snapshot")
+        .unwrap();
+    // DID mapping: a legacy key AND a legacy routing-hint value.
+    store
+        .kv
+        .insert(Tree::DidMapping, legacy.as_bytes(), b"did:ad:migrateDrive")
+        .unwrap();
+    // Envelope: `{subject}\0{created_at be}\0{signature}`; signed JSON value.
+    let mut envelope_key = legacy.as_bytes().to_vec();
+    envelope_key.push(0);
+    envelope_key.extend_from_slice(&42u64.to_be_bytes());
+    envelope_key.push(0);
+    envelope_key.extend_from_slice(b"sig");
+    store
+        .kv
+        .insert(Tree::Envelopes, &envelope_key, b"{}")
+        .unwrap();
+    // Tombstone marker on the plugin-meta tree.
+    let tombstone_key = format!("tombstone:{legacy}");
+    store
+        .kv
+        .insert(Tree::PluginMeta, tombstone_key.as_bytes(), &[1])
+        .unwrap();
+    // An unrelated plugin-meta row must be left alone.
+    store
+        .kv
+        .insert(Tree::PluginMeta, b"unrelated:did:ad:x", b"keep")
+        .unwrap();
+    // Outbox: `{agent}\0{subject}`, both halves legacy.
+    let mut outbox_key = legacy_agent.as_bytes().to_vec();
+    outbox_key.push(0);
+    outbox_key.extend_from_slice(legacy.as_bytes());
+    store
+        .kv
+        .insert(Tree::Outbox, &outbox_key, b"{\"subject\":\"x\"}")
+        .unwrap();
+
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+    store.migrate_canonical_scheme_if_needed().unwrap();
+
+    let get = |tree, key: &[u8]| store.kv.get(tree, key).unwrap();
+
+    assert_eq!(
+        get(Tree::LoroSnapshots, canon.as_bytes()),
+        Some(b"snapshot".to_vec())
+    );
+    assert!(get(Tree::LoroSnapshots, legacy.as_bytes()).is_none());
+
+    assert_eq!(
+        get(Tree::DidMapping, canon.as_bytes()),
+        Some(b"atomic:migrateDrive".to_vec()),
+        "the routing hint value is canonical too"
+    );
+    assert!(get(Tree::DidMapping, legacy.as_bytes()).is_none());
+
+    let mut canon_envelope_key = canon.as_bytes().to_vec();
+    canon_envelope_key.extend_from_slice(&envelope_key[legacy.len()..]);
+    assert_eq!(
+        get(Tree::Envelopes, &canon_envelope_key),
+        Some(b"{}".to_vec())
+    );
+    assert!(get(Tree::Envelopes, &envelope_key).is_none());
+
+    let canon_tombstone = format!("tombstone:{canon}");
+    assert_eq!(
+        get(Tree::PluginMeta, canon_tombstone.as_bytes()),
+        Some(vec![1])
+    );
+    assert!(get(Tree::PluginMeta, tombstone_key.as_bytes()).is_none());
+    assert_eq!(
+        get(Tree::PluginMeta, b"unrelated:did:ad:x"),
+        Some(b"keep".to_vec())
+    );
+
+    let mut canon_outbox_key = canon_agent.as_bytes().to_vec();
+    canon_outbox_key.push(0);
+    canon_outbox_key.extend_from_slice(canon.as_bytes());
+    assert!(get(Tree::Outbox, &canon_outbox_key).is_some());
+    assert!(get(Tree::Outbox, &outbox_key).is_none());
+
+    // Idempotent: a second open finds the flag and touches nothing.
+    store.migrate_canonical_scheme_if_needed().unwrap();
+    assert!(get(Tree::Outbox, &canon_outbox_key).is_some());
+}
+
+#[tokio::test]
+async fn canonical_scheme_resumes_index_rebuild_after_rows_moved() {
+    let store = Db::init_temp("canonical-scheme-resume-index")
+        .await
+        .unwrap();
+    let mut pv = crate::resources::PropVals::new();
+    pv.insert(
+        urls::NAME.into(),
+        Value::String("migrationresumeneedle".into()),
+    );
+    store
+        .kv
+        .insert(
+            Tree::Resources,
+            b"atomic:migrated",
+            &encode_propvals(&pv).unwrap(),
+        )
+        .unwrap();
+    // Simulate a stop after canonical rows were written and indexes cleared,
+    // but before the completion marker was committed.
+    store
+        .kv
+        .insert(
+            Tree::PluginMeta,
+            super::canonical_scheme::INDEX_REBUILD_PENDING_KEY,
+            b"1",
+        )
+        .unwrap();
+    store.clear_index().unwrap();
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+    store.migrate_canonical_scheme_if_needed().unwrap();
+    let hits = store
+        .search_hits("migrationresumeneedle", &Default::default())
+        .unwrap();
+    assert!(
+        !hits.is_empty(),
+        "restart must rebuild even when no rows remain to rename"
+    );
+}
+
+/// A replica written with the snapshot the caller holds stores that snapshot
+/// byte for byte, beside the row and its index entries. Rebuilding it from
+/// the propvals instead would give the doc a fresh peer id, and the next
+/// merge with the caller's real history would duplicate every value.
+#[tokio::test]
+#[timeout(120000)]
+async fn replica_keeps_the_callers_snapshot() {
+    let store = Db::init_temp("replica_keeps_snapshot").await.unwrap();
+    let subject =
+        "did:ad:snapKEEPaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let mut authored = crate::Resource::new(subject.into());
+    authored
+        .set_unsafe(urls::NAME.into(), Value::String("kept".into()))
+        .unwrap();
+    let snapshot = authored.build_state_doc().unwrap().export_snapshot();
+    let mut replica = crate::Resource::new(subject.into());
+    replica
+        .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap())
+        .unwrap();
+
+    store
+        .persist_replicated_resource_with_snapshot(&replica, snapshot.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        store.get_loro_snapshot_bytes(subject),
+        Some(snapshot),
+        "the stored snapshot must be the caller's, not a re-seeded one"
+    );
+    let read = store.get_resource(&subject.into()).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "kept");
+}
+
+/// A replica that is written again with a changed value only re-indexes that
+/// value, and the watched queries still follow it: a renamed row moves in a
+/// sorted view, a row whose class changes leaves a class-filtered view, and a
+/// re-put with nothing new leaves the index as it was.
+#[tokio::test]
+#[timeout(120000)]
+async fn replica_edits_keep_watched_queries_current() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("replica_edits_index").await.unwrap();
+    let drive =
+        "did:ad:driveEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let other_cls =
+        "did:ad:otherEDITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    t.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let replica = |i: usize, name: &str, class: &str| {
+        let subj = format!("did:ad:edit{:0>69}==", format!("{i}"));
+        let mut authored = crate::Resource::new(subj.clone());
+        authored
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(class.into())]),
+            )
+            .unwrap();
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(name.into()))
+            .unwrap();
+        let mut replica = crate::Resource::new(subj);
+        replica
+            .apply_state_doc(authored.build_state_doc().unwrap())
+            .unwrap();
+        replica
+    };
+
+    for (i, name) in ["a", "b", "c"].iter().enumerate() {
+        store
+            .persist_replicated_resource(&replica(i, name, cls))
+            .await
+            .unwrap();
+    }
+
+    let mut sorted = Query::new_prop_val(urls::PARENT, table);
+    sorted.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(cls.into())),
+        ..Default::default()
+    }];
+    sorted.sort_by = Some(urls::NAME.to_string());
+    sorted.drive = Some(drive.into());
+    sorted.limit = Some(100);
+    async fn names(store: &Db, q: &Query) -> Vec<String> {
+        let res = store.query(q).await.unwrap();
+        let mut out = Vec::new();
+        for subject in &res.subjects {
+            let r = store.get_resource(&subject.as_str().into()).await.unwrap();
+            out.push(r.get(urls::NAME).unwrap().to_string());
+        }
+        out
+    }
+    assert_eq!(names(&store, &sorted).await, ["a", "b", "c"]);
+
+    // Rename "a" to "z": it moves to the end of the sorted view.
+    store
+        .persist_replicated_resource(&replica(0, "z", cls))
+        .await
+        .unwrap();
+    assert_eq!(names(&store, &sorted).await, ["b", "c", "z"]);
+
+    // Change "b"'s class: it leaves the class-filtered view.
+    store
+        .persist_replicated_resource(&replica(1, "b", other_cls))
+        .await
+        .unwrap();
+    assert_eq!(names(&store, &sorted).await, ["c", "z"]);
+
+    // The same state again changes nothing.
+    store
+        .persist_replicated_resource(&replica(2, "c", cls))
+        .await
+        .unwrap();
+    assert_eq!(names(&store, &sorted).await, ["c", "z"]);
+}
+
+/// A replica row written from JSON-AD keeps the properties this store has no
+/// definition for, and empty arrays, when the caller hands over the snapshot.
+/// The parser skips a property it cannot type, and the row
+/// `getResourceWithSnapshot` serves must still say what the document says.
+#[tokio::test]
+#[timeout(60000)]
+async fn replica_row_keeps_unresolvable_props_from_snapshot() {
+    let store = Db::init_temp("replica_row_unresolvable").await.unwrap();
+    let subject =
+        "did:ad:rowUNKNOWNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    // A schema term of some drive this store has never seen.
+    let unknown =
+        "did:ad:propUNKNOWNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    // Emptied after having had a member.
+    let emptied =
+        "did:ad:propEMPTIEDaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut authored = crate::Resource::new(subject.into());
+    authored
+        .set_unsafe(urls::NAME.into(), Value::String("automation".into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::REQUIRES.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    authored
+        .set_unsafe(unknown.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    let doc = authored.build_state_doc().unwrap();
+    doc.push_to_loro_list(emptied, &serde_json::json!("https://example.com/member"))
+        .unwrap();
+    doc.commit();
+    doc.clear_loro_list(emptied).unwrap();
+    doc.commit();
+    let snapshot = doc.export_snapshot();
+    let json_ad = serde_json::json!({
+        "@id": subject,
+        urls::NAME: "automation",
+        urls::REQUIRES: [],
+        unknown: [],
+        emptied: [],
+    })
+    .to_string();
+
+    let mut parsed = crate::parse::parse_json_ad_resource(
+        &json_ad,
+        &store,
+        &crate::parse::ParseOpts {
+            skip_unknown_props: true,
+            save: crate::parse::SaveOpts::DontSave,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    // The premise: the parser drops what it cannot type.
+    assert!(parsed.get(unknown).is_err());
+
+    let keys: Vec<String> = [urls::NAME, urls::REQUIRES, unknown, emptied]
+        .iter()
+        .map(|k| k.to_string())
+        .collect();
+    assert_eq!(parsed.restore_props_from_snapshot(&keys, &snapshot), 2);
+    store
+        .persist_replicated_resource_with_snapshot(&parsed, snapshot)
+        .await
+        .unwrap();
+
+    let row = store.get_resource_shallow(&subject.into()).unwrap();
+    assert_eq!(row.get(urls::NAME).unwrap().to_string(), "automation");
+    for prop in [urls::REQUIRES, unknown, emptied] {
+        match row.get(prop) {
+            Ok(Value::ResourceArray(items)) => assert!(items.is_empty(), "{prop}"),
+            other => panic!("{prop} should be an empty array, got {other:?}"),
+        }
+    }
+}
+
+/// A critical commit's `Tree::Resources` row is self-contained: its blob
+/// keeps the signed `loroUpdate` (a CRDT resource's blob drops it in favour
+/// of `Tree::LoroSnapshots`), and the row is findable by the resource it is
+/// about through the `subject` index. See `envelopes::tests::
+/// stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit` for
+/// why the payload cannot be borrowed from the envelope.
+#[tokio::test]
+#[timeout(120000)]
+async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
+    let store = Db::init_temp("commit_row_self_contained").await.unwrap();
+    let (_alice, drive) = store.setup("Alice").await.unwrap();
+    let subject = store
+        .create_resource(urls::CLASS, &drive, "Doc", None)
+        .await
+        .unwrap();
+    let subject = Subject::from_raw(&subject, None);
+    let genesis_id = crate::envelopes::latest_envelope(&store, subject.as_str())
+        .unwrap()
+        .commit_id();
+
+    let commit_blob = store
+        .kv
+        .get(Tree::Resources, genesis_id.as_bytes())
+        .unwrap()
+        .expect("a genesis commit keeps its Tree::Resources row");
+    assert!(
+        matches!(
+            decode_propvals(&commit_blob).unwrap().get(urls::LORO_UPDATE),
+            Some(Value::LoroDoc(bytes)) if !bytes.is_empty()
+        ),
+        "the commit row keeps its signed loroUpdate"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, genesis_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "a commit has no CRDT snapshot of its own"
+    );
+
+    let resource_blob = store
+        .kv
+        .get(Tree::Resources, subject.pure_id().as_bytes())
+        .unwrap()
+        .unwrap();
+    assert!(
+        !decode_propvals(&resource_blob)
+            .unwrap()
+            .contains_key(urls::LORO_UPDATE),
+        "an ordinary row is a projection without loroUpdate"
+    );
+
+    let found = store
+        .query(&Query::new_prop_val(urls::SUBJECT, subject.as_str()))
+        .await
+        .unwrap();
+    assert!(
+        found
+            .subjects
+            .iter()
+            .any(|s| s.as_str() == genesis_id.as_str()),
+        "the commit row is indexed by the subject it is about: {:?}",
+        found.subjects
+    );
 }

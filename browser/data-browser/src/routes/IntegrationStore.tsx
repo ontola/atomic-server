@@ -1,12 +1,14 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
-import { LocalThoughtCatalog } from '../chunks/PluginRuns/LocalThoughtCatalog';
-import { LocalThoughtCallback } from '../chunks/PluginRuns/localThoughtCallback';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
-import {
-  IntegrationDiscovery,
-  visibleBundledIntegrations,
-} from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
+import {
+  CatalogApps,
+  visibleCatalogApps,
+} from '../chunks/PluginRuns/CatalogApps';
+import {
+  hasExperimentalEntries,
+  useIntegrationCatalog,
+} from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -15,12 +17,23 @@ import { FaPlug } from 'react-icons/fa6';
 import {
   useStore,
   core,
+  server,
   findSchema,
   pluginSchema,
   readConnectionSubjects,
-  type PluginRelease,
+  installRelease,
+  installationIdentifier,
+  readInstallationReview,
+  DEFAULT_INSTALLATION_NAMESPACE,
+  RUNTIME_JS,
+  type JSONValue,
+  type PublishedRelease,
 } from '@tomic/react';
 import { ResourceInline } from '../views/ResourceInline/ResourceInline';
+import {
+  InstallationReviewDialog,
+  type PendingInstallation,
+} from '../chunks/Plugins/InstallationReviewDialog';
 import toast from 'react-hot-toast';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
@@ -34,19 +47,22 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import type { IntegrationVisibilityKey } from '@helpers/integrationVisibility';
 
+/** One entry of `/plugin-catalog`: a public Listing resource on this server. */
 interface Listing {
-  metadata: {
-    release: string;
-    emoji?: string;
-    name: string;
-    description: string;
-    publisher: string;
-    domains: string[];
-    standards: string[];
-  };
-  verification: 'unverified';
+  subject: string;
+  name: string;
+  emoji: string | null;
+  description: string;
+  publisher: string | null;
+  domains: string[];
+  standards: string[];
+  /** The Release resource URL an Installation pins. */
+  release: string;
+  /** The `blake3:` id, which `/plugin-package/{id}` takes. */
+  releaseId: string;
+  runtime: string | null;
+  world: string | null;
 }
 
 export const IntegrationStoreRoute = createRoute({
@@ -60,21 +76,23 @@ export const IntegrationStoreRoute = createRoute({
 });
 
 function IntegrationStore(): React.JSX.Element {
-  const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
+  // Opened from a workspace: new automations can belong to it.
+  const { workspace } = IntegrationStoreRoute.useSearch();
+  const { showExperimentalPlugins, showApiPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
-    showApiPlugins,
-    showExperimentalPlugins,
-    ready: visibilityReady,
-    saving: visibilitySaving,
-    setVisibility,
-  } = useIntegrationVisibility();
+    entries: catalogEntries,
+    ready: catalogReady,
+    error: catalogEntriesError,
+  } = useIntegrationCatalog();
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
   const [listings, setListings] = useState<Listing[]>();
   const [installed, setInstalled] = useState<string[]>([]);
+  const [installations, setInstallations] = useState<string[]>([]);
   const [automations, setAutomations] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [catalogError, setCatalogError] = useState<string>();
@@ -123,9 +141,40 @@ function IntegrationStore(): React.JSX.Element {
       active = false;
     };
   }, [store, drive, pluginClass]);
+  useEffect(() => {
+    let active = true;
+
+    if (!drive) {
+      setInstallations([]);
+
+      return;
+    }
+
+    // Installations are the installed form for both runtimes; connections
+    // above are the drafts and the legacy plugin-script installs.
+    void readConnectionSubjects(
+      store,
+      drive,
+      core.properties.isA,
+      server.classes.installation,
+    )
+      .then(subjects => {
+        if (active) setInstallations(subjects);
+      })
+      .catch(reason => {
+        if (active) setError(String(reason));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [store, drive]);
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState<string>();
-  const server = store.getServerUrl();
+  const [pending, setPending] = useState<
+    PendingInstallation & { entry: Listing }
+  >();
+  const serverUrl = store.getServerUrl();
   useEffect(() => {
     setCatalogError(undefined);
 
@@ -136,7 +185,7 @@ function IntegrationStore(): React.JSX.Element {
     }
 
     const controller = new AbortController();
-    void fetch(`${server}/plugin-catalog`, { signal: controller.signal })
+    void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
         const entries = await response.json();
@@ -147,37 +196,32 @@ function IntegrationStore(): React.JSX.Element {
       });
 
     return () => controller.abort();
-  }, [server, showExperimentalPlugins]);
+  }, [serverUrl, showExperimentalPlugins]);
 
-  const createDraft = async (entry: Listing['metadata']) => {
+  const fetchRelease = async (id: string): Promise<PublishedRelease> => {
+    const response = await fetch(
+      `${serverUrl}/plugin-package/${encodeURIComponent(id)}`,
+    );
+    if (!response.ok) throw new Error(await response.text());
+
+    return (await response.json()) as PublishedRelease;
+  };
+
+  /** Opening a Listing: fetch its release and review it before installing. */
+  const openReview = async (entry: Listing) => {
     if (!drive) return;
-    setCreating(entry.release);
+    setCreating(entry.releaseId);
 
     try {
-      const response = await fetch(
-        `${server}/plugin-package/${encodeURIComponent(entry.release)}`,
-      );
-      if (!response.ok) throw new Error(await response.text());
-      const release = (await response.json()) as PluginRelease;
-      const { createPlugin } = await import('../chunks/PluginRuns/runScript');
-      const subject = await createPlugin(
-        store,
-        { drive, parent: drive },
-        entry.name,
-        release.source,
-        release.schemas,
-      );
-
-      if (entry.emoji) {
-        const resource = await store.getResource(subject);
-        await resource.set(
-          'https://atomicdata.dev/properties/emoji',
-          entry.emoji,
-        );
-        await resource.save();
-      }
-
-      navigate(constructOpenURL(subject));
+      const release = await fetchRelease(entry.releaseId);
+      setPending({
+        entry,
+        review: readInstallationReview({ ...release, id: entry.releaseId }),
+        release: { url: entry.release, id: entry.releaseId },
+        title: entry.name,
+        description: entry.description,
+        emoji: entry.emoji ?? undefined,
+      });
     } catch (reason) {
       toast.error(String(reason));
     } finally {
@@ -185,22 +229,71 @@ function IntegrationStore(): React.JSX.Element {
     }
   };
 
+  const install = async (
+    p: PendingInstallation,
+    config: JSONValue | undefined,
+    grants: string[],
+  ) => {
+    if (!drive) return;
+    const subject = await installRelease(store, {
+      drive,
+      release: p.release,
+      name: p.review.name ?? installationIdentifier(p.title ?? 'plugin'),
+      namespace: p.review.namespace ?? DEFAULT_INSTALLATION_NAMESPACE,
+      description: p.review.description ?? p.description,
+      version: p.review.version,
+      config,
+      grants,
+    });
+    navigate(constructOpenURL(subject));
+  };
+
+  /** Drafts remain the authoring form: a copy of the source you can edit. */
+  const createDraft = async (entry: Listing) => {
+    if (!drive) return;
+    const release = await fetchRelease(entry.releaseId);
+
+    if (!release.source) {
+      throw new Error('Only JS releases can be opened as an editable draft');
+    }
+
+    const { createPlugin } = await import('../chunks/PluginRuns/runScript');
+    const subject = await createPlugin(
+      store,
+      { drive, parent: drive },
+      entry.name,
+      release.source,
+      release.schemas ?? {},
+    );
+
+    if (entry.emoji) {
+      const resource = await store.getResource(subject);
+      await resource.set(
+        'https://atomicdata.dev/properties/emoji',
+        entry.emoji,
+      );
+      await resource.save();
+    }
+
+    navigate(constructOpenURL(subject));
+  };
+
   const query = search.trim().toLocaleLowerCase();
-  const bundled = visibleBundledIntegrations(
-    showExperimentalPlugins,
-    showApiPlugins,
-  ).filter(entry =>
-    `${entry.name} ${entry.description} ${entry.capabilities} ${entry.events} ${entry.keywords}`
+  // Only offer the toggle when the catalog has something behind it: a checkbox
+  // that reveals nothing reads as broken.
+  const hasExperimentalPlugins = hasExperimentalEntries(catalogEntries);
+  const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
+    [entry.name, entry.description, ...entry.domains, ...entry.standards]
+      .join(' ')
       .toLocaleLowerCase()
       .includes(query),
   );
-  const visible = (showExperimentalPlugins ? listings : [])?.filter(
-    ({ metadata: entry }) =>
-      [entry.name, entry.description, ...entry.domains, ...entry.standards]
-        .join(' ')
-        .toLocaleLowerCase()
-        .includes(query),
-  );
+  const appsShown = visibleCatalogApps(catalogEntries, {
+    query,
+    showExperimental: showExperimentalPlugins,
+    showApi: showApiPlugins,
+  }).length;
+  const nothingToDiscover = catalogReady && !visible?.length && !appsShown;
 
   return (
     <Main>
@@ -216,7 +309,7 @@ function IntegrationStore(): React.JSX.Element {
               you need them.
             </p>
           </Header>
-          {installed.length > 0 && (
+          {(installed.length > 0 || installations.length > 0) && (
             <section aria-label='Your integrations'>
               <h2>Your connections</h2>
               <Grid>
@@ -227,6 +320,11 @@ function IntegrationStore(): React.JSX.Element {
                     drive={drive!}
                   />
                 ))}
+                {installations.map(subject => (
+                  <Card key={subject} data-installation={subject}>
+                    <ResourceInline subject={subject} />
+                  </Card>
+                ))}
               </Grid>
             </section>
           )}
@@ -234,7 +332,11 @@ function IntegrationStore(): React.JSX.Element {
             <section aria-label='Your automations'>
               <Row center justify='space-between'>
                 <h2>Your automations</h2>
-                <NewAutomation drive={drive} connections={installed} />
+                <NewAutomation
+                  drive={drive}
+                  connections={installed}
+                  workspace={workspace}
+                />
               </Row>
               {automations.length === 0 && <AutomationEmptyState />}
               <Grid>
@@ -247,7 +349,6 @@ function IntegrationStore(): React.JSX.Element {
             </section>
           )}
           <h2>Discover integrations</h2>
-          <LocalThoughtCallback drive={drive} />
           <Input
             aria-label='Search integrations'
             placeholder='Search integrations, domains or standards'
@@ -255,60 +356,54 @@ function IntegrationStore(): React.JSX.Element {
             onChange={event => setSearch(event.target.value)}
           />
           {error && <Card role='alert'>{error}</Card>}
+          {catalogEntriesError && (
+            <Card role='alert'>{catalogEntriesError}</Card>
+          )}
+          {!catalogReady && !catalogEntriesError && (
+            <p>Loading integrations…</p>
+          )}
           {showExperimentalPlugins && catalogError && (
             <Card role='alert'>{catalogError}</Card>
           )}
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {!showApiPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-api-plugins'
-              label='Show API plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
-          {!showExperimentalPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-experimental-plugins'
-              label='Show experimental plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
-          <Grid>
-            {showApiPlugins && (
-              <LocalThoughtCatalog drive={drive} search={search} />
-            )}
-            {bundled.map(entry => (
-              <IntegrationDiscovery
-                key={entry.id}
-                entry={entry}
-                workspace={workspace}
-                drive={drive}
+          {hasExperimentalPlugins && (
+            <CheckboxLabel>
+              <Checkbox
+                checked={showExperimentalPlugins}
+                onChange={value =>
+                  setVisibility('show-experimental-plugins', value)
+                }
               />
-            ))}
-          </Grid>
+              Show experimental plugins
+            </CheckboxLabel>
+          )}
+          {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
+          {drive && (
+            <CatalogApps
+              entries={catalogEntries}
+              drive={drive}
+              query={query}
+              showExperimental={showExperimentalPlugins}
+              showApi={showApiPlugins}
+            />
+          )}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
                 <h2>Community plugins</h2>
                 <p>
-                  Published code you can adapt. Creating a draft does not
-                  connect an app or enable sync.
+                  Published releases. Open one to review what it can do before
+                  installing it into this drive, or create a draft to adapt its
+                  code.
                 </p>
               </>
             )}
           </Column>
           <Grid>
-            {visible?.map(({ metadata: entry }) => (
-              <Card
-                key={`${entry.release}:${entry.publisher}`}
-                data-release={entry.release}
-              >
+            {visible?.map(entry => (
+              <Card key={entry.subject} data-release={entry.releaseId}>
                 <Column gap='1rem'>
                   <Row justify='space-between' center>
                     <Avatar aria-hidden>{entry.emoji || <FaPlug />}</Avatar>
@@ -353,11 +448,9 @@ function IntegrationStore(): React.JSX.Element {
                   </details>
                   <Button
                     disabled={!drive || creating !== undefined}
-                    onClick={() => createDraft(entry)}
+                    onClick={() => openReview(entry)}
                   >
-                    {creating === entry.release
-                      ? 'Creating draft…'
-                      : 'Create draft'}
+                    {creating === entry.releaseId ? 'Opening…' : 'Open'}
                   </Button>
                 </Column>
               </Card>
@@ -365,6 +458,19 @@ function IntegrationStore(): React.JSX.Element {
           </Grid>
         </Column>
       </ContainerWide>
+      <InstallationReviewDialog
+        pending={pending}
+        onClose={() => setPending(undefined)}
+        onInstall={install}
+        secondary={
+          pending && pending.review.runtime === RUNTIME_JS
+            ? {
+                label: 'Create draft',
+                onClick: () => createDraft(pending.entry),
+              }
+            : undefined
+        }
+      />
     </Main>
   );
 }
@@ -428,32 +534,12 @@ function AutomationEmptyState() {
   );
 }
 
-interface PluginVisibilityToggleProps {
-  pluginKey: IntegrationVisibilityKey;
-  label: string;
-  ready: boolean;
-  saving: boolean;
-  setVisibility: (
-    key: IntegrationVisibilityKey,
-    value: boolean,
-  ) => Promise<void>;
-}
-
-function PluginVisibilityToggle({
-  pluginKey,
-  label,
-  ready,
-  saving,
-  setVisibility,
-}: PluginVisibilityToggleProps) {
+function DiscoverEmptyState({ searching }: { searching: boolean }) {
   return (
-    <CheckboxLabel>
-      <Checkbox
-        checked={false}
-        disabled={!ready || saving}
-        onChange={value => void setVisibility(pluginKey, value)}
-      />
-      {label}
-    </CheckboxLabel>
+    <p>
+      {searching
+        ? 'No integrations match your search.'
+        : 'No plugins to show here.'}
+    </p>
   );
 }

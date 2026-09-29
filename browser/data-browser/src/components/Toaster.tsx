@@ -10,6 +10,7 @@ import styled, { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
 import { Row } from './Row';
 import { IconButton } from './IconButton/IconButton';
+import { useSettings } from '../helpers/AppSettings';
 
 import { useRef, type JSX } from 'react';
 
@@ -19,10 +20,20 @@ import { useRef, type JSX } from 'react';
  */
 export function Toaster(): JSX.Element {
   const theme = useTheme();
+  const { navbarTop } = useSettings();
 
   return (
     <ReactHotToast
       position='bottom-right'
+      // Toasts stack up from the bottom right, which is where the navbar is
+      // when it sits at the bottom: they covered the search button and the
+      // context menu. Lift the whole container by the navbar's height so a
+      // toast never blocks a button you need to reach.
+      containerStyle={
+        navbarTop
+          ? undefined
+          : { bottom: `calc(${theme.heights.breadCrumbBar} + 1rem)` }
+      }
       toastOptions={{
         style: {
           zIndex: zIndex.toast,

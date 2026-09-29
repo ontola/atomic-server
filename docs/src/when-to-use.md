@@ -7,7 +7,8 @@
 - **Open data**. Atomic Data is a bit harder to create than plain JSON, for example, but it is easier to re-use and understand. It's use of URLs for properties makes data self-documenting.
 - **High interoperability requirements**. When multiple groups of people have to use the same schema, Atomic Data provides easy ways to constrain and validate the data and ensure type safety.
 - **Connected / decentralized data**. With Atomic Data, you use URLs to point to things on other computers. This makes it possible to connect datasets very explicitly, without creating copies. Very useful for decentralized social networks, for example.
-- **Auditability & Versioning**. Using Atomic Commits, we can store all changes to data as transactions that can be replayed. This creates a complete audit log and history.
+- **Auditability & Versioning**. Every Resource is a CRDT document with a full oplog, and every write is a signed Commit. That gives you history, time travel and an attributable audit trail without extra tables.
+- **Offline and multi-device**. Data lives on each device and [syncs](sync.md) when devices meet, so an app keeps working on a train and merges cleanly afterwards.
 - **JSON or RDF as Output**. Atomic Data serializes to idiomatic, clean JSON as well as various RDF formats (Turtle / JSON-LD / n-triples / RDF/XML).
 
 ## When not to use Atomic Data

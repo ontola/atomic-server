@@ -8,33 +8,35 @@ import {
   verifyGenesisCert,
   genesisSignerDid,
 } from './genesis.js';
+import { canonicalizeScheme } from './subject.js';
 import type { Resource } from './resource.js';
 
 const GENESIS = 'https://atomicdata.dev/properties/genesis';
 const DRIVE = 'https://atomicdata.dev/properties/drive';
-const DID_PREFIX = 'did:ad:';
+const ATOMIC_PREFIX = 'atomic:';
 
-/** Every DID resource is born with a `did:ad:<cert-signature>` — never a
+/** Every Atomic resource is born with a canonical `atomic:<cert-signature>` — never a
  * `_new:` placeholder — and carries the inline cert that verifies against it. */
 async function assertCertMinted(resource: Resource, agentDID: string) {
-  expect(resource.subject.startsWith(DID_PREFIX)).toBe(true);
+  expect(resource.subject.startsWith(ATOMIC_PREFIX)).toBe(true);
   expect(resource.subject.startsWith('_new:')).toBe(false);
 
   const b64 = resource.get(GENESIS) as string | undefined;
   expect(typeof b64).toBe('string');
 
   const cert = decodeGenesisCert(decodeB64(b64!));
-  const signature = resource.subject.slice(DID_PREFIX.length);
-  // The cert must sign to THIS subject — i.e. the DID is this cert's signature.
+  const signature = resource.subject.slice(ATOMIC_PREFIX.length);
+  // The cert must sign to THIS subject — i.e. the identifier is this cert's signature.
   expect(await verifyGenesisCert(cert, signature)).toBe(true);
-  // ...and its signer is the creating agent.
-  expect(genesisSignerDid(cert)).toBe(agentDID);
+  // ...and its signer is the creating agent. The test agent is configured
+  // with the legacy `did:ad:agent:` spelling; the cert names it canonically.
+  expect(genesisSignerDid(cert)).toBe(canonicalizeScheme(agentDID));
 
   return cert;
 }
 
 describe('newResource mints a genesis-certificate DID at creation', () => {
-  it('a drive is born with a cert-verified did:ad:, no placeholder or rename', async () => {
+  it('a drive is born with a cert-verified atomic:, no placeholder or rename', async () => {
     const { store, agentDID } = await testStore();
 
     const drive = await store.newResource({

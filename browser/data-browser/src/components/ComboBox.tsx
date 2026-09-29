@@ -37,6 +37,7 @@ type ComboBoxProps = {
   selectedItem: string | undefined;
   onSelect: (value: string | undefined) => void;
   subtle?: boolean;
+  ariaLabel?: string;
 };
 
 export const ComboBox: React.FC<ComboBoxProps> = ({
@@ -44,6 +45,7 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
   selectedItem,
   onSelect,
   subtle = false,
+  ariaLabel,
 }) => {
   // Use Combobox does not work with the compiler.
   'use no memo';
@@ -115,6 +117,13 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
     if (!inputWrapperRef.current) return;
     const inputWrapperPosition =
       inputWrapperRef.current.getBoundingClientRect();
+
+    // A top-layer popover's percentages resolve against the viewport.
+    // Measure the input instead; this also works with the anchor polyfill.
+    if (menuRef.current) {
+      menuRef.current.style.width = `${inputWrapperPosition.width}px`;
+    }
+
     const isNearBottom = inputWrapperPosition.bottom > window.innerHeight - 320;
     setMenuAboveInput(isNearBottom);
 
@@ -133,6 +142,15 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
         : inputWrapperPosition.width,
     );
   }, []);
+
+  useEffect(() => {
+    const input = inputWrapperRef.current;
+    if (!input) return;
+    const observer = new ResizeObserver(checkMenuPosition);
+    observer.observe(input);
+
+    return () => observer.disconnect();
+  }, [checkMenuPosition]);
 
   useEffect(() => {
     if (!menuRef || !menuRef.current) return;
@@ -179,6 +197,8 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
       >
         <InputStyled
           {...getInputProps({
+            'aria-label': ariaLabel,
+            ...(ariaLabel ? { 'aria-labelledby': undefined } : {}),
             onFocus: () => {
               setIsFocused(true);
 
@@ -313,7 +333,10 @@ const List = styled.ul<{
   left: anchor(left);
   bottom: unset;
   width: ${p => (p.$width ? `${p.$width}px` : 'max-content')};
-  max-width: 95vw;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100vw - 16px);
+  overflow-wrap: anywhere;
   background-color: ${p => p.theme.colors.bg};
   scrollbar-color: ${p => p.theme.colors.bg2} transparent;
   border: solid 1px ${p => p.theme.colors.main};

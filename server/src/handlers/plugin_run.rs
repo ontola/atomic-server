@@ -11,7 +11,10 @@ use actix_web::{web, HttpResponse};
 use atomic_lib::{hierarchy::check_write, Storelike};
 
 use crate::{
-    appstate::AppState, errors::AtomicServerResult, helpers::get_client_agent, plugins::js_runtime,
+    appstate::AppState,
+    errors::{AtomicServerError, AtomicServerResult},
+    helpers::get_client_agent,
+    plugins::js_runtime,
 };
 
 #[derive(serde::Deserialize, Debug)]
@@ -63,13 +66,15 @@ pub async fn handle_plugin_run(
     check_write(store, &resource, &agent).await?;
 
     let runtime = js_runtime::embedded_runtime()?;
+    let manifest = js_runtime::describe_manifest(&body.source).await?;
+    check_upload(manifest.as_ref(), &body.input)?;
 
     let host = js_runtime::StoreHost {
         db: std::sync::Arc::new(store.clone()),
         plugin: body.plugin.clone(),
         drive: body.drive.clone(),
         for_agent: agent,
-        manifest: js_runtime::describe_manifest(&body.source).await?,
+        manifest,
     };
 
     host.validate_binding().await?;
@@ -88,4 +93,74 @@ pub async fn handle_plugin_run(
             error: Some(error),
         },
     }))
+}
+
+/// The JSON limit for `/plugin-run`: an uploaded file travels inside `input`,
+/// a JSON string inside the JSON body, so escaping can grow it severalfold
+/// (every quote in XML gains two backslashes). The declared `maxBytes` is what
+/// actually bounds the file; see [`check_upload`].
+pub const RUN_JSON_LIMIT: usize = crate::serve::PAYLOAD_MAX;
+
+/// A file handed to the plugin (`input.upload`) must be one it declared it
+/// accepts, and no larger than it said. The browser checks this too, before
+/// reading the file; this is the check that holds.
+fn check_upload(
+    manifest: Option<&crate::plugins::manifest::Manifest>,
+    input: &str,
+) -> AtomicServerResult<()> {
+    let input: serde_json::Value = serde_json::from_str(input)
+        .map_err(|e| AtomicServerError::bad_request(format!("input is not JSON: {e}")))?;
+    let Some(upload) = input.get("upload") else {
+        return Ok(());
+    };
+    let accepts = manifest.map(|m| m.accepts.as_slice()).unwrap_or_default();
+    if accepts.is_empty() {
+        return Err(AtomicServerError::bad_request(
+            "This plugin does not accept files",
+        ));
+    }
+    let Some(text) = upload.get("text").and_then(|t| t.as_str()) else {
+        return Err(AtomicServerError::bad_request(
+            "input.upload needs the file as text",
+        ));
+    };
+    let max = accepts.iter().map(|a| a.max_bytes()).max().unwrap_or(0);
+    if text.len() as u64 > max {
+        return Err(AtomicServerError::bad_request(format!(
+            "This file is {} bytes; this plugin accepts at most {max}",
+            text.len()
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_upload;
+    use crate::plugins::manifest::Manifest;
+
+    fn manifest(raw: serde_json::Value) -> Manifest {
+        Manifest::parse(raw).unwrap().unwrap()
+    }
+
+    #[test]
+    fn uploads_need_a_declaration_and_respect_its_size() {
+        let accepting = manifest(serde_json::json!({
+            "schemaVersion": 2,
+            "accepts": [{"as": "text", "maxBytes": 4}],
+        }));
+        let plain = manifest(serde_json::json!({"schemaVersion": 2}));
+        let upload = |text: &str| serde_json::json!({"upload": {"text": text}}).to_string();
+
+        assert!(check_upload(Some(&accepting), &upload("1234")).is_ok());
+        assert!(check_upload(Some(&accepting), &upload("12345"))
+            .unwrap_err()
+            .message
+            .contains("at most 4"));
+        assert!(check_upload(Some(&plain), &upload("1")).is_err());
+        assert!(check_upload(None, &upload("1")).is_err());
+        assert!(check_upload(Some(&accepting), r#"{"upload":{}}"#).is_err());
+        // A run without a file is not affected.
+        assert!(check_upload(None, r#"{"trigger":{"kind":"manual"}}"#).is_ok());
+    }
 }

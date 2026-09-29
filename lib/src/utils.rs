@@ -21,7 +21,10 @@ pub fn server_url(url: &str) -> AtomicResult<String> {
 
 /// Throws an error if the URL is not a valid URL
 pub fn check_valid_url(url: &str) -> AtomicResult<()> {
-    if url.starts_with("http") || url.starts_with("did:") || url.starts_with('/') {
+    if url.starts_with("http")
+        || crate::identifiers::is_atomic_identifier(url)
+        || url.starts_with('/')
+    {
         return Ok(());
     }
     if url.starts_with("internal:") {

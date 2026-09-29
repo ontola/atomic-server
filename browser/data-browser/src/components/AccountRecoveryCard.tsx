@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaKey } from 'react-icons/fa6';
-import { Agent, useStore } from '@tomic/react';
+import { Agent, useStore, isAtomicIdentifier } from '@tomic/react';
 import { Button } from './Button';
 import { hasPasskeyApi } from '../helpers/passkeySupport';
 import { Column, Row } from './Row';
@@ -30,6 +30,7 @@ import {
   PrfUnsupportedError,
   readCachedBackups,
   revealSecretFromBackup,
+  sameAgent,
   saveRecoverySecret,
   storeCachedRecoverySecret,
   type RecoverySecret,
@@ -172,7 +173,7 @@ export function AccountRecoveryCard({
 
       if (
         fromServer &&
-        (!agentSubject || fromServer.agent_subject === agentSubject)
+        (!agentSubject || sameAgent(fromServer.agent_subject, agentSubject))
       ) {
         setBackup({ phase: 'ready', secret: fromServer, onServer: true });
 
@@ -181,7 +182,7 @@ export function AccountRecoveryCard({
 
       const cached = readCachedBackups();
       const mine = agentSubject
-        ? cached.find(entry => entry.agent_subject === agentSubject)
+        ? cached.find(entry => sameAgent(entry.agent_subject, agentSubject))
         : cached[cached.length - 1];
 
       setBackup(
@@ -317,7 +318,7 @@ export function AccountRecoveryCard({
       // URL. Sending that was rejected outright; the field is optional, and a
       // backup with no drive named still restores the agent, which is the part
       // that cannot be regenerated.
-      const driveSubject = drive?.startsWith('did:ad:') ? drive : null;
+      const driveSubject = drive && isAtomicIdentifier(drive) ? drive : null;
 
       let request;
 

@@ -14,7 +14,10 @@ const PROPERTIES_CONTAINER = 'https://atomicdata.dev/properties';
  */
 describe('bootstrap', () => {
   it('marks a bare container as incomplete so it does not shadow the real one', () => {
-    const store = new Store({ serverUrl: 'https://example.com' });
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
     bootstrap(store);
 
     const container = store.resources.get(PROPERTIES_CONTAINER);
@@ -24,7 +27,10 @@ describe('bootstrap', () => {
   });
 
   it('makes website language properties available before network access', () => {
-    const store = new Store({ serverUrl: 'https://example.com' });
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
     bootstrap(store);
 
     for (const name of [
@@ -43,7 +49,10 @@ describe('bootstrap', () => {
   });
 
   it('leaves the public agent usable without a fetch', () => {
-    const store = new Store({ serverUrl: 'https://example.com' });
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
     bootstrap(store);
 
     const publicAgent = store.resources.get(PUBLIC_AGENT);

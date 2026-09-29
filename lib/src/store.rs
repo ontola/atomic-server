@@ -179,18 +179,21 @@ impl Storelike for Store {
         if check_required_props {
             resource.check_required_props(self).await?;
         }
+        // Keyed by the canonical spelling, like `Db`: a resource added as
+        // `did:ad:x` and looked up as `atomic:x` is one resource.
+        let key = canonical_key(resource.get_subject());
         if !overwrite_existing {
-            let subject = resource.get_subject();
-            if let Some(_r) = self.hashmap.lock().unwrap().get(&subject.to_string()) {
-                return Err(format!("{} already present, will not overwrite.", subject).into());
+            if let Some(_r) = self.hashmap.lock().unwrap().get(&key) {
+                return Err(format!(
+                    "{} already present, will not overwrite.",
+                    resource.get_subject()
+                )
+                .into());
             }
         }
         let _ = update_index;
         // This store has no index, so we don't need to update it.
-        self.hashmap
-            .lock()
-            .unwrap()
-            .insert(resource.get_subject().to_string(), resource.clone());
+        self.hashmap.lock().unwrap().insert(key, resource.clone());
         Ok(())
     }
 
@@ -209,7 +212,12 @@ impl Storelike for Store {
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.to_string();
-        if let Some(resource) = self.hashmap.lock().unwrap().get(&subject_str) {
+        if let Some(resource) = self
+            .hashmap
+            .lock()
+            .unwrap()
+            .get(&canonical_key(&normalized))
+        {
             return Ok(resource.clone());
         }
 
@@ -233,11 +241,11 @@ impl Storelike for Store {
         self.hashmap
             .lock()
             .unwrap()
-            .contains_key(&normalized.to_string())
+            .contains_key(&canonical_key(&normalized))
     }
 
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
-        let subject_str = subject.to_string();
+        let key = canonical_key(subject);
         let resource = self.get_resource(subject).await?;
         for child in resource.get_children(self).await? {
             Box::pin(self.remove_resource(child.get_subject())).await?;
@@ -245,7 +253,7 @@ impl Storelike for Store {
         self.hashmap
             .lock()
             .unwrap()
-            .remove_entry(&subject_str)
+            .remove_entry(&key)
             .ok_or(format!(
                 "Resource {} could not be deleted, because it is not found",
                 subject
@@ -318,6 +326,12 @@ impl Storelike for Store {
             resources,
         })
     }
+}
+
+/// The map key of a subject: its canonical spelling, so both accepted
+/// schemes address one entry.
+fn canonical_key(subject: &Subject) -> String {
+    crate::identifiers::canonicalize_scheme(&subject.to_string())
 }
 
 #[cfg(test)]

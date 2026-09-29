@@ -1,43 +1,35 @@
 on:
   push:
+    branches: [develop]
+    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      e2e_mode:
-        description: Playwright suite. auto = light on feature branches, full on develop and v* tags.
-        type: choice
-        options:
-          - auto
-          - light
-          - full
-        default: auto
 
-# Superseded feature-branch runs can stop immediately. Keep develop and tag
-# validation running to completion because deployments consume their results.
-# Per-ref groups keep a feature push from replacing develop validation.
+# Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
+# on a temporary branch containing the exact PR heads to test together.
+# Keep develop and tag validation running to completion because deployments
+# consume their results. Per-ref groups isolate integration batches.
 concurrency:
   group: main-pipeline-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type == 'branch' && github.ref_name != 'develop' }}
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
-# GitHub-hosted runs ONLY when Mancave is unavailable — never as a retry
-# after a red test suite.
+# Heavy CI runs on GitHub-hosted only when explicitly selected, never as a
+# retry after a red test suite.
 #
 # Flow:
-#   1. Pick runner — online self-hosted? (optional CI_RUNNER_STATUS_TOKEN)
+#   1. Pick runner — hosted control job selects the heavy CI runner
 #   2. Main (Mancave) XOR Main (GitHub) — one path, not failure-failover
-#   3. Main — aggregator for the required status check
+#   3. Main — hosted aggregator for the required status check
 #
-# Availability check needs a PAT that can list repo runners (GITHUB_TOKEN
-# cannot). Store it as Actions secret CI_RUNNER_STATUS_TOKEN. Without that
-# secret we assume Mancave is up (same as before) and will not fall back
-# when tests fail.
+# Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
+# selector and result jobs use hosted runners to avoid queueing a few seconds
+# of control work behind long Mancave builds. If Mancave is offline, heavy CI
+# queues; set CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
+# Deployments retain their existing runners.
 #
-# Escape hatch (force hosted, skip Mancave):
-#   Settings -> Secrets and variables -> Actions -> Variables
-#   CI_RUNNER = ["ubuntu-latest"]
-#
-# Only this workflow uses the self-hosted runner. Releasing/deploying stay
-# on ubuntu-latest — a release must not depend on one PC being awake.
+# The old variable name, CI_RUNNER, is set to ["ubuntu-latest"] on purpose.
+# Branches cut before #1661 carry a main.yml that runs on every push and reads
+# CI_RUNNER, so that setting sends their runs to hosted runners, not Mancave.
 #
 # SECURITY: pull_request / pull_request_target are forced onto hosted
 # runners (never Mancave).
@@ -50,15 +42,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     outputs:
       host: ${{ steps.pick.outputs.host }}
-      e2e-mode: ${{ steps.e2e.outputs.mode }}
     steps:
       - id: pick
         env:
-          GH_TOKEN: ${{ secrets.CI_RUNNER_STATUS_TOKEN }}
-          FORCE_RUNNER: ${{ vars.CI_RUNNER }}
+          FORCE_RUNNER: ${{ vars.CI_RUNNER_OVERRIDE }}
           EVENT_NAME: ${{ github.event_name }}
           REPO: ${{ github.repository }}
         run: |
@@ -71,75 +60,13 @@ jobs:
           fi
 
           if [ "$FORCE_RUNNER" = '["ubuntu-latest"]' ]; then
-            echo "CI_RUNNER escape hatch — forcing GitHub-hosted"
+            echo "CI_RUNNER_OVERRIDE escape hatch — forcing GitHub-hosted"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "No CI_RUNNER_STATUS_TOKEN — assuming Mancave online"
-            echo "host=mancave" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Any online runner carrying the self-hosted label counts as
-          # available (busy is fine — the job will wait its turn).
-          # On API errors (bad/insufficient PAT), prefer Mancave — do NOT
-          # treat a 403 as "offline" or we skip the warm box forever.
-          set +e
-          body=$(gh api "repos/$REPO/actions/runners" 2>/tmp/runner-api.err)
-          api_status=$?
-          set -e
-          if [ "$api_status" -ne 0 ]; then
-            echo "Runner API failed (is CI_RUNNER_STATUS_TOKEN a fine-grained PAT with Repository Administration: Read?):"
-            cat /tmp/runner-api.err || true
-            echo "Assuming Mancave online"
-            echo "host=mancave" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if printf '%s' "$body" | jq -e \
-            'any(.runners[]; .status == "online" and any(.labels[]; .name == "self-hosted"))' \
-            >/dev/null; then
-            echo "Self-hosted runner online — using Mancave"
-            echo "host=mancave" >> "$GITHUB_OUTPUT"
-          else
-            echo "No online self-hosted runner — falling back to GitHub-hosted"
-            echo "host=hosted" >> "$GITHUB_OUTPUT"
-          fi
-
-      - id: e2e
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-          DISPATCH_MODE: ${{ github.event.inputs.e2e_mode }}
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          # Light = @smoke Playwright. Full = every spec.
-          # Default full on develop/tags so staging/production never ship on
-          # a subset. Feature-branch pushes are light unless opted in.
-          mode=light
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${DISPATCH_MODE:-auto}" = "full" ]; then
-            mode=full
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${DISPATCH_MODE:-auto}" = "light" ]; then
-            mode=light
-          elif [ "$REF" = "refs/heads/develop" ]; then
-            mode=full
-          elif [[ "$REF" == refs/tags/v* ]]; then
-            mode=full
-          elif printf '%s' "${COMMIT_MSG:-}" | grep -q '\[full-e2e\]'; then
-            mode=full
-          elif prs=$(gh api "repos/$REPO/commits/$SHA/pulls" -H "Accept: application/vnd.github+json" 2>/dev/null); then
-            if printf '%s' "$prs" | jq -e 'any(.[]; any(.labels[]; .name == "full-e2e"))' >/dev/null; then
-              mode=full
-            fi
-          fi
-          echo "e2e-mode=$mode (ref=$REF dispatch=${DISPATCH_MODE:-} event=$EVENT_NAME)"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Defaulting heavy CI to Mancave"
+          echo "host=mancave" >> "$GITHUB_OUTPUT"
 
   mancave:
     name: Main (Mancave)
@@ -153,10 +80,9 @@ jobs:
       contents: read
       packages: write
     with:
-      runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
-      artifact-name: build-artifacts-mancave
+      runner: ${{ vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]' }}
       host-profile: mancave
-      e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
+      e2e-mode: full
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -177,8 +103,8 @@ jobs:
   # reverse.
   #
   # Mancave only. The token can read a private repo, and fork PRs never run
-  # here; PR events are routed to GitHub-hosted by `pick`, which also keeps
-  # this job off them. `clean: false` keeps both target/ dirs warm, the same
+  # here; PR events are routed to GitHub-hosted heavy CI by `pick`, which also
+  # keeps this job off them. `clean: false` keeps both target/ dirs warm, the same
   # measured reason atomic-saas's own CI gives.
   downstream-saas:
     name: Downstream (atomic-saas builds against this commit)
@@ -187,7 +113,7 @@ jobs:
       needs.pick.outputs.host == 'mancave' &&
       github.event_name != 'pull_request' &&
       github.event_name != 'pull_request_target'
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]') }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -206,7 +132,7 @@ jobs:
         id: saas
         env:
           GH_TOKEN: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -215,9 +141,17 @@ jobs:
           fi
           ref=main
           source="main"
+          # Pair only with a namesake that still has an open PR. atomic-saas keeps
+          # old claude/project-thread-* branches after their PRs merge, and building
+          # one of those fails on its stale Cargo.lock rather than on this commit.
           if [ "$BRANCH" != "develop" ] && gh api "repos/ontola/atomic-saas/branches/$BRANCH" >/dev/null 2>&1; then
-            ref="$BRANCH"
-            source="paired branch '$BRANCH'"
+            open=$(gh api "repos/ontola/atomic-saas/pulls?state=open&head=ontola:$BRANCH" -q length 2>/dev/null || echo 0)
+            if [ "${open:-0}" -gt 0 ]; then
+              ref="$BRANCH"
+              source="paired branch '$BRANCH'"
+            else
+              source="main (namesake '$BRANCH' has no open PR)"
+            fi
           fi
           sha=$(gh api "repos/ontola/atomic-saas/commits/$ref" -q .sha)
           echo "atomic-saas $sha ($source)"
@@ -238,6 +172,13 @@ jobs:
           # (where `clean: false` keeps the checkout around between runs).
           persist-credentials: false
 
+      - name: Set up Python for Rust alignment checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify paired Rust toolchains and dependencies
+        run: python3 atomic-server/scripts/check-rust-alignment.py --server atomic-server --saas atomic-saas
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.98.1
         with:
@@ -247,6 +188,8 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10.15.1
+          # Per-runner, not the shared ~/setup-pnpm; see main-ci.yml.
+          dest: ${{ runner.temp }}/setup-pnpm
 
       - name: Install Node
         uses: actions/setup-node@v4
@@ -267,28 +210,23 @@ jobs:
           npm ci
           npm run build
 
-      # Not `--locked`: this commit may have changed atomic_lib's own
-      # dependencies, which legitimately moves atomic-saas's lockfile. What is
-      # being checked is that the code still builds and passes; a lock update
-      # is reported so the saas side commits it on its next touch.
+      # Both lockfiles must describe the tested pair; update them in paired PRs.
       - name: cargo check, clippy and test atomic-saas against this commit
         working-directory: atomic-saas
         run: |
           set -euo pipefail
-          cargo check --all-targets
-          cargo clippy --all-targets -- -D warnings
-          cargo test --all-targets
+          cargo check --locked --all-targets
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
           # The managed node embeds this repo's server crate and is not a
           # default workspace member, so the root build does not touch it.
           # Its own CI runs check, clippy and test; the same here.
-          cargo clippy -p atomic-managed-node --all-targets -- -D warnings
-          cargo test -p atomic-managed-node
-          if ! git diff --quiet -- Cargo.lock; then
-            git diff --stat -- Cargo.lock
-            echo "::warning::atomic-saas's Cargo.lock drifted against this commit; run cargo check there and commit Cargo.lock."
-          fi
+          cargo clippy --locked -p atomic-managed-node --all-targets -- -D warnings
+          cargo test --locked -p atomic-managed-node
+          git diff --exit-code -- Cargo.lock
 
-  # Hosted only when pick said Mancave is unavailable (or escape/PR).
+  # Hosted only when explicitly selected. A PR event would also be hosted if
+  # that trigger is ever restored.
   # Deliberately does NOT run when Mancave finished with test failures.
   github:
     name: Main (GitHub)
@@ -300,9 +238,8 @@ jobs:
       packages: write
     with:
       runner: '["ubuntu-latest"]'
-      artifact-name: build-artifacts-github
       host-profile: hosted
-      e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
+      e2e-mode: full
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

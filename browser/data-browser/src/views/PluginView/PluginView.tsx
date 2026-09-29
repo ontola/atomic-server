@@ -83,7 +83,11 @@ const PluginViewSession: React.FC<PluginViewProps> = ({ plugin }) => {
       const url = `${pluginUrl}&format=${format}`;
       const agent = store.getAgent();
       const headers = agent ? await signRequest(url, agent, {}) : {};
-      const response = await fetch(url, { headers, credentials: 'include' });
+      // Same-origin only, for the reason given in `fetchPluginList`.
+      const response = await fetch(url, {
+        headers,
+        credentials: 'same-origin',
+      });
       if (!response.ok)
         throw new Error(
           /* @wc-ignore */ `Plugin asset request failed (${response.status})`,

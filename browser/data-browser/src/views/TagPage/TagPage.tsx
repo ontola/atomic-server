@@ -3,6 +3,7 @@ import {
   dataBrowser,
   useCanWrite,
   useProperty,
+  useResource,
   useString,
   type DataBrowser,
 } from '@tomic/react';
@@ -28,6 +29,19 @@ export function TagPage({ resource }: ResourcePageProps<DataBrowser.Tag>) {
   });
   const shortnameProp = useProperty(core.properties.shortname);
   const canWrite = useCanWrite(resource);
+
+  // A select column's tags are children of its property, and rows point at them
+  // through that property (a task's Status), not through `tags`. Counting only
+  // `tags` references showed "0 resources reference Doing" for every task in
+  // Doing. Drive and ontology tags have a non-property parent and keep `tags`.
+  const parentSubject = resource.get(core.properties.parent) as
+    | string
+    | undefined;
+  const parent = useResource(parentSubject);
+  const referencingProperty =
+    parentSubject && parent.hasClasses(core.classes.property)
+      ? parentSubject
+      : dataBrowser.properties.tags;
 
   return (
     <ContainerNarrow>
@@ -57,7 +71,7 @@ export function TagPage({ resource }: ResourcePageProps<DataBrowser.Tag>) {
         <TagPropertyCard resource={resource} />
         <ReferenceUsage
           resource={resource}
-          property={dataBrowser.properties.tags}
+          property={referencingProperty}
           initialOpenState={true}
         />
       </Column>

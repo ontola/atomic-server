@@ -65,6 +65,13 @@ export interface TableEditorContext {
   listRef: React.RefObject<ListImperativeAPI | null>;
   cursorMode: CursorMode;
   setCursorMode: React.Dispatch<React.SetStateAction<CursorMode>>;
+  /**
+   * Leave Edit mode and hand keyboard control back to the grid. Every close
+   * path of an editor that owns its own surface (a popover, a dialog) ends
+   * here, so "the editor is gone" and "the grid is navigable again" can never
+   * disagree — the bug that made arrow keys need a second Escape.
+   */
+  exitEditMode: () => void;
   clearCell: () => void;
   clearRow: (index: number) => void;
   enterEditModeWithCharacter: (key: string) => void;
@@ -101,6 +108,7 @@ const initial: TableEditorContext = {
   listRef: { current: null },
   cursorMode: CursorMode.Visual,
   setCursorMode: emptySetState,
+  exitEditMode: () => undefined,
   clearCell: () => undefined,
   clearRow: (_: number) => undefined,
   enterEditModeWithCharacter: (_: string) => undefined,
@@ -177,6 +185,10 @@ export function TableEditorContextProvider({
     [],
   );
 
+  const exitEditMode = useCallback(() => {
+    setCursorMode(CursorMode.Visual);
+  }, []);
+
   const clearCell = useCallback(() => {
     eventManager.emit(TableEvent.ClearCell);
   }, [eventManager]);
@@ -227,6 +239,7 @@ export function TableEditorContextProvider({
       listRef,
       cursorMode,
       setCursorMode,
+      exitEditMode,
       registerEventListener: eventManager.register.bind(eventManager),
       clearCell,
       clearRow,
@@ -252,6 +265,7 @@ export function TableEditorContextProvider({
       updateMultiSelectCornerCellRef,
       isDragging,
       cursorMode,
+      exitEditMode,
       emitInteractionsFired,
       readOnly,
       mouseDown,

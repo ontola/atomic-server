@@ -202,7 +202,8 @@
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/tableColumnWidths",
       "https://atomicdata.dev/properties/table-views",
-      "https://atomicdata.dev/properties/table-default-view"
+      "https://atomicdata.dev/properties/table-default-view",
+      "https://atomicdata.dev/properties/table-row-defaults"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/classtype",
@@ -499,5 +500,15 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "table-default-view"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/table-row-defaults",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The values a new row of a Table starts with, as a JSON object of property subject to value, e.g. a Status column's Todo tag. Every way of adding a row (a board lane, a calendar day, the grid, a quick-add button) fills these in for the properties it does not set itself.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-row-defaults"
   }
 ]

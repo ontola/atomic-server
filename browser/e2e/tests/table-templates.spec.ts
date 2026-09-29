@@ -99,7 +99,7 @@ test.describe('table templates', () => {
     // The template's own column order, with the column it doesn't place (Notes)
     // following the ones it does.
     expect(await headings(page)).toEqual([
-      'name',
+      'Name',
       'Date',
       'Category',
       'Amount',
@@ -155,7 +155,7 @@ test.describe('table templates', () => {
 
     // The template's own column order, then the button it puts on each row.
     expect(await headings(page)).toEqual([
-      'name',
+      'Name',
       'Species',
       'Last watered',
       'Thirsty for',
@@ -199,7 +199,7 @@ test.describe('table templates', () => {
 
     // The template's own column order, then the buttons it puts on each row.
     expect(await headings(page)).toEqual([
-      'name',
+      'Name',
       'SKU',
       'Quantity',
       'Unit price',

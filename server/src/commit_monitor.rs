@@ -31,6 +31,9 @@ pub struct Subscriber {
     /// string. Kept so [`Handler<RebindAgent>`] can re-evaluate the
     /// registration when the connection's `AUTH` changes it.
     agent: String,
+    /// Whether this connection listed `canonical-scheme` in HELLO. Fan-out
+    /// encodes `atomic:` for those peers and `did:ad:` for everyone else.
+    canonical_scheme: bool,
 }
 
 type Subscribers = HashMap<Addr<WebSocketConnection>, Subscriber>;
@@ -86,6 +89,16 @@ pub struct CommitMonitor {
     /// to late joiners at subscribe time.
     #[allow(clippy::mutable_key_type)]
     presence:
+        HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<CachedPresence>>>,
+    /// Presence subscribes whose read check is still running, with the
+    /// latest update each such connection sent meanwhile. The check awaits a
+    /// store read, and the actor keeps handling messages while it does, so a
+    /// client's first update (sent right behind its `PRESENCE_SUBSCRIBE`, as
+    /// every reconnect does) routinely arrives before the connection is in
+    /// `presence`. It is held here and delivered once the check passes, or
+    /// dropped if it fails (#1800).
+    #[allow(clippy::mutable_key_type)]
+    pending_presence:
         HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<CachedPresence>>>,
     store: Db,
     vector_search_state: VectorSearchState,
@@ -281,6 +294,7 @@ impl Handler<Subscribe> for CommitMonitor {
                     let subscriber = Subscriber {
                         source_id: msg.source_id,
                         agent: msg.agent,
+                        canonical_scheme: msg.canonical_scheme,
                     };
                     if is_drive {
                         actor
@@ -373,6 +387,12 @@ impl Handler<UnsubscribeAll> for CommitMonitor {
         }
         self.presence
             .retain(|_, subscribers| !subscribers.is_empty());
+
+        for pending in self.pending_presence.values_mut() {
+            pending.remove(&msg.addr);
+        }
+        self.pending_presence
+            .retain(|_, pending| !pending.is_empty());
     }
 }
 
@@ -439,19 +459,19 @@ impl Handler<ExternalChange> for CommitMonitor {
                 commit_id: msg.commit_id.as_deref(),
             }
         };
-        let frame = ws_v2::encode_change_frame(&self.store, &subject, change);
+        let store = &self.store;
+        let subject_ref = &subject;
+        let frames = SchemeFrames::new(
+            ws_v2::encode_change_frame(store, subject_ref, change),
+            move || ws_v2::encode_change_frame_for_caps(store, subject_ref, change, &[] as &[&str]),
+        );
 
         let source = msg.source_id.as_deref();
 
         if let Some(subscribers) = self.subscriptions.get(&subject) {
-            for (connection, subscriber) in subscribers {
-                if skip_same_source(source, &subscriber.source_id) {
-                    continue;
-                }
-                connection.do_send(SendFrame {
-                    frame: frame.clone(),
-                });
-            }
+            send_scheme_frames(subscribers, &frames, |s| {
+                skip_same_source(source, &s.source_id)
+            });
         }
 
         // A resource belongs to exactly one drive; a change must only reach
@@ -466,14 +486,9 @@ impl Handler<ExternalChange> for CommitMonitor {
             if !owner.is_within_drive(&drive_subject) {
                 continue;
             }
-            for (connection, subscriber) in subscribers {
-                if skip_same_source(source, &subscriber.source_id) {
-                    continue;
-                }
-                connection.do_send(SendFrame {
-                    frame: frame.clone(),
-                });
-            }
+            send_scheme_frames(subscribers, &frames, |s| {
+                skip_same_source(source, &s.source_id)
+            });
         }
     }
 }
@@ -613,9 +628,9 @@ impl Handler<CommitMessage> for CommitMonitor {
         // subscriber `do_send` then clones only the Arc pointer (O(1))
         // instead of cloning the full `CommitMessage` and re-encoding
         // per-connection.
-        let frame = encode_commit_frame(&self.store, &msg);
+        let frames = encode_commit_frames(&self.store, &msg);
 
-        if let Some(frame) = frame.as_ref() {
+        if let Some(frames) = frames.as_ref() {
             // Per-resource subscribers
             if let Some(subscribers) = self.subscriptions.get(&target_subject) {
                 tracing::debug!(
@@ -625,11 +640,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                 );
                 // The author's own connection is included on purpose: see
                 // `skip_same_source`.
-                for connection in subscribers.keys() {
-                    connection.do_send(SendFrame {
-                        frame: frame.clone(),
-                    });
-                }
+                send_scheme_frames(subscribers, frames, |_| false);
             } else {
                 tracing::debug!("No subscribers for {}", target_subject);
             }
@@ -659,11 +670,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                 if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }
-                for connection in subscribers.keys() {
-                    connection.do_send(SendFrame {
-                        frame: frame.clone(),
-                    });
-                }
+                send_scheme_frames(subscribers, frames, |_| false);
             }
         }
 
@@ -735,16 +742,57 @@ impl Handler<CommitMessage> for CommitMonitor {
     }
 }
 
+/// The UPDATE/DESTROY frame a subscriber should receive, per identifier
+/// scheme. The canonical frame is encoded up front, once per change. The
+/// `did:ad:` frame for a subscriber that predates the rename is encoded on
+/// first use and cached: most fan-outs never need it, and for a snapshot it
+/// is a second full copy of the state.
+struct SchemeFrames<'a> {
+    canonical: Arc<[u8]>,
+    legacy: std::cell::OnceCell<Arc<[u8]>>,
+    build_legacy: Box<dyn Fn() -> Arc<[u8]> + 'a>,
+}
+
+impl<'a> SchemeFrames<'a> {
+    fn new(canonical: Arc<[u8]>, build_legacy: impl Fn() -> Arc<[u8]> + 'a) -> Self {
+        Self {
+            canonical,
+            legacy: std::cell::OnceCell::new(),
+            build_legacy: Box::new(build_legacy),
+        }
+    }
+
+    fn for_subscriber(&self, subscriber: &Subscriber) -> Arc<[u8]> {
+        if subscriber.canonical_scheme {
+            self.canonical.clone()
+        } else {
+            self.legacy.get_or_init(|| (self.build_legacy)()).clone()
+        }
+    }
+}
+
+/// Send each subscriber the frame in the scheme it listed: `canonical_scheme`
+/// peers get `atomic:`, everyone else `did:ad:`.
+#[allow(clippy::mutable_key_type)]
+fn send_scheme_frames(
+    subscribers: &Subscribers,
+    frames: &SchemeFrames<'_>,
+    skip: impl Fn(&Subscriber) -> bool,
+) {
+    for (connection, subscriber) in subscribers {
+        if skip(subscriber) {
+            continue;
+        }
+        connection.do_send(SendFrame {
+            frame: frames.for_subscriber(subscriber),
+        });
+    }
+}
+
 /// Encode the wire frame (`UPDATE` or `DESTROY`) for a `CommitMessage`,
-/// wrapped in `Arc<[u8]>` for cheap fanout. Returns `None` when the
-/// commit produces no frame (neither a Loro update nor a destroy flag).
-///
-/// Mirrors the per-connection encoding that
-/// `WebSocketConnection::Handler<SendFrame>` used to do before this was
-/// hoisted up to the fanout site. Origin resolution uses the shared
-/// store's base domain — all connections on this server resolve
-/// `internal:/…` subjects the same way, so encoding once is correct.
-fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
+/// wrapped in `Arc<[u8]>` for cheap fanout, with the legacy-scheme frame
+/// built lazily. Returns `None` when the commit produces no frame.
+fn encode_commit_frames<'a>(store: &'a Db, msg: &'a CommitMessage) -> Option<SchemeFrames<'a>> {
     let commit = &msg.commit_response.commit;
 
     if let Some(loro_update) = msg.commit_response.fanout_delta() {
@@ -752,10 +800,7 @@ fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
         // propval and, on its next commit, its `previousCommit`. The
         // latter is parsed as an AtomicURL by the server's JSON-AD
         // parser — a raw base64 signature isn't a URL and gets
-        // rejected. Always emit the full `did:ad:commit:{signature}`
-        // DID. (`commit.url` is never populated in practice, so the
-        // previous `or(signature)` fallback was always taken —
-        // silently dropping the prefix.)
+        // rejected. Always emit the full identifier DID.
         let commit_id = commit
             .url
             .clone()
@@ -763,23 +808,34 @@ fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
                 commit
                     .signature
                     .as_ref()
-                    .map(|s| format!("did:ad:commit:{}", s))
+                    .map(|s| atomic_lib::identifiers::commit_subject(s))
             })
             .unwrap_or_default();
-        Some(ws_v2::encode_change_frame(
-            store,
-            &commit.subject,
-            ws_v2::Change::Delta {
+        let change = ws_v2::Change::Delta {
+            bytes: loro_update,
+            commit_id: &commit_id,
+        };
+        let canonical = ws_v2::encode_change_frame(store, &commit.subject, change);
+        Some(SchemeFrames::new(canonical, move || {
+            // Rebuilt from `msg`, which outlives the fan-out: the commit id
+            // is recomputed rather than borrowed from this call's local.
+            let change = ws_v2::Change::Delta {
                 bytes: loro_update,
                 commit_id: &commit_id,
-            },
-        ))
+            };
+            ws_v2::encode_change_frame_for_caps(store, &commit.subject, change, &[] as &[&str])
+        }))
     } else if commit.destroy.unwrap_or(false) {
-        Some(ws_v2::encode_change_frame(
-            store,
-            &commit.subject,
-            ws_v2::Change::Destroyed,
-        ))
+        let change = ws_v2::Change::Destroyed;
+        let canonical = ws_v2::encode_change_frame(store, &commit.subject, change);
+        Some(SchemeFrames::new(canonical, move || {
+            ws_v2::encode_change_frame_for_caps(
+                store,
+                &commit.subject,
+                ws_v2::Change::Destroyed,
+                &[] as &[&str],
+            )
+        }))
     } else {
         None
     }
@@ -986,6 +1042,17 @@ impl Handler<SubscribePresence> for CommitMonitor {
     #[allow(clippy::mutable_key_type)]
     fn handle(&mut self, msg: SubscribePresence, _ctx: &mut Context<Self>) -> Self::Result {
         let store = self.store.clone();
+
+        // Note the subscribe before the read check yields, so an update that
+        // overtakes the check is held rather than refused.
+        self.pending_presence
+            .entry(msg.drive.clone())
+            .or_default()
+            .entry(msg.addr.clone())
+            .or_insert(None);
+        let pending_drive = msg.drive.clone();
+        let pending_addr = msg.addr.clone();
+
         Box::pin(
             async move {
                 if !msg.drive.is_local() {
@@ -1034,8 +1101,12 @@ impl Handler<SubscribePresence> for CommitMonitor {
                 Some((msg.drive, msg.addr))
             }
             .into_actor(self)
-            .map(|res, actor, _ctx| {
-                if let Some((drive, addr)) = res {
+            .map(move |res, actor, _ctx| {
+                // `None` when the connection closed or unsubscribed while the
+                // check ran: it must not be added back.
+                let held = actor.take_pending_presence(&pending_drive, &pending_addr);
+
+                if let (Some((drive, addr)), Some(held)) = (res, held) {
                     let subscribers = actor.presence.entry(drive.clone()).or_default();
 
                     // Bring the newcomer up to date: replay every other
@@ -1055,8 +1126,12 @@ impl Handler<SubscribePresence> for CommitMonitor {
                         });
                     }
 
-                    subscribers.entry(addr).or_insert(None);
+                    subscribers.entry(addr.clone()).or_insert(None);
                     tracing::debug!("Presence subscribed to {}", drive);
+
+                    if let Some(update) = held {
+                        actor.accept_presence(&drive, &addr, update);
+                    }
                 }
             }),
         )
@@ -1067,6 +1142,8 @@ impl Handler<UnsubscribePresence> for CommitMonitor {
     type Result = ();
 
     fn handle(&mut self, msg: UnsubscribePresence, _ctx: &mut Context<Self>) {
+        self.take_pending_presence(&msg.drive, &msg.addr);
+
         if let Some(subscribers) = self.presence.get_mut(&msg.drive) {
             subscribers.remove(&msg.addr);
 
@@ -1081,37 +1158,93 @@ impl Handler<PresenceUpdate> for CommitMonitor {
     type Result = ();
 
     fn handle(&mut self, msg: PresenceUpdate, _ctx: &mut Context<Self>) {
-        let Some(subscribers) = self.presence.get_mut(&msg.subject) else {
-            return;
-        };
-
-        let Some(sender) = msg.addr.as_ref() else {
+        let Some(sender) = msg.addr.clone() else {
             tracing::warn!("no addr in presence update for {}", msg.subject);
             return;
+        };
+        let update = CachedPresence {
+            agent: msg.agent,
+            update: msg.update,
         };
 
         // Only subscribers may broadcast — subscribing is where the drive
         // read-access check happens, so this is the auth gate.
-        let Some(cached) = subscribers.get_mut(sender) else {
-            tracing::warn!("presence update from non-subscriber for {}", msg.subject);
+        let subscribed = self
+            .presence
+            .get(&msg.subject)
+            .is_some_and(|subscribers| subscribers.contains_key(&sender));
+        if subscribed {
+            self.accept_presence(&msg.subject, &sender, update);
+            return;
+        }
+
+        // Subscribed, but the read check has not finished: hold the latest
+        // update until it does.
+        if let Some(held) = self
+            .pending_presence
+            .get_mut(&msg.subject)
+            .and_then(|pending| pending.get_mut(&sender))
+        {
+            *held = Some(update);
+            return;
+        }
+
+        tracing::warn!("presence update from non-subscriber for {}", msg.subject);
+    }
+}
+
+impl CommitMonitor {
+    /// Remove a connection's in-flight presence subscribe. The outer `Option`
+    /// is whether one was in flight; the inner one the update it sent
+    /// meanwhile, if any.
+    #[allow(clippy::mutable_key_type)]
+    fn take_pending_presence(
+        &mut self,
+        drive: &atomic_lib::Subject,
+        addr: &Addr<WebSocketConnection>,
+    ) -> Option<Option<CachedPresence>> {
+        let pending = self.pending_presence.get_mut(drive)?;
+        let held = pending.remove(addr);
+        if pending.is_empty() {
+            self.pending_presence.remove(drive);
+        }
+        held
+    }
+
+    /// Cache a subscriber's presence and fan it out to the drive's other
+    /// subscribers and to peers. The caller has checked `sender` subscribes.
+    fn accept_presence(
+        &mut self,
+        drive: &atomic_lib::Subject,
+        sender: &Addr<WebSocketConnection>,
+        update: CachedPresence,
+    ) {
+        let Some(subscribers) = self.presence.get_mut(drive) else {
             return;
         };
-        *cached = Some(CachedPresence {
-            agent: msg.agent.clone(),
-            update: msg.update.clone(),
-        });
+        let Some(cached) = subscribers.get_mut(sender) else {
+            return;
+        };
+        *cached = Some(update.clone());
 
-        // Relay to peers. Only local presence reaches here (the handler above
-        // requires a sender address), so there is no echo to guard against.
+        // Relay to peers. Only local presence reaches here (it always has a
+        // sender address), so there is no echo to guard against.
         if let Ok(agent) = self.store.get_default_agent() {
             atomic_lib::sync::peer::broadcast_ephemeral(
                 atomic_lib::sync::protocol::ephemeral_kind::PRESENCE,
-                msg.subject.as_str(),
+                drive.as_str(),
                 &agent.subject.to_string(),
-                &msg.update,
+                &update.update,
                 None,
             );
         }
+
+        let msg = PresenceUpdate {
+            subject: drive.clone(),
+            agent: update.agent,
+            update: update.update,
+            addr: Some(sender.clone()),
+        };
 
         for subscriber in subscribers.keys() {
             if subscriber == sender {
@@ -1161,6 +1294,7 @@ pub fn create_commit_monitor(
             drive_subscriptions: HashMap::new(),
             loro_subscriptions: HashMap::new(),
             presence: HashMap::new(),
+            pending_presence: HashMap::new(),
             store,
             vector_search_state,
             pending_commit: Arc::new(AtomicBool::new(false)),

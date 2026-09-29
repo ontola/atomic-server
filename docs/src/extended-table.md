@@ -1,9 +1,10 @@
-- [Commits](commits/intro.md) communicate state changes. These Commits are signed using cryptographic keys, which ensures that every change can be audited. Commits are also used to construct a history of versions.
-- [Agents](agents.md) are Users that enable [authentication](authentication.md). They are Resources with their own Public and Private keys, which they use to identify themselves.
+- [Decentralized Identifiers](did.md): `did:ad:` identifiers name Resources, Agents, Commits, blobs and nodes independently of where they are hosted. See also [URLs and identifiers](urls.md).
+- [Agents](agents.md) are Users that enable [authentication](authentication.md). An Agent is an Ed25519 keypair; its identifier is derived from the public key, so nobody has to issue it.
+- [Hierarchies](hierarchy.md) used for authorization and keeping data organized. Similar to folder structures on file-systems. Rights are checked on every device and every transport.
+- [Invites](invitations.md): create new users and provide them with rights.
+- [Atomic Sync](sync.md): how devices reconcile their copies of a Drive, offline edits included, over WebSocket, Iroh or WebRTC.
+- [Commits](commits/intro.md): the signed envelope around every write. They prove who changed what; current state and history live in each Resource's CRDT document.
 - [Collections](schema/collections.md): querying, filtering, sorting and pagination.
 - [Paths](core/paths.md): traverse graphs.
-- [Hierarchies](hierarchy.md) used for authorization and keeping data organized. Similar to folder structures on file-systems.
-- [Invites](invitations.md): create new users and provide them with rights.
-- [WebSockets](websockets.md): real-time updates.
 - [Endpoints](endpoints.md): provide machine-readable descriptions of web services.
 - [Files](files.md): upload, download and metadata for files.

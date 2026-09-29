@@ -1,4 +1,12 @@
-import { Property, unknownSubject, useResource, useTitle } from '@tomic/react';
+import {
+  Property,
+  core,
+  isAtomicIdentifier,
+  unknownSubject,
+  useResource,
+  useString,
+} from '@tomic/react';
+import { columnLabel } from './helpers/columnLabel';
 import { useContext, useState, type JSX } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { styled } from 'styled-components';
@@ -41,12 +49,12 @@ export function TableFilterChip({
     useContext(TablePageContext);
   // A computed column has no property resource to read a title from.
   const propResource = useResource(column?.subject ?? unknownSubject);
-  const [title] = useTitle(propResource);
+  const [name] = useString(propResource, core.properties.name);
   // Newly added filters (no value yet) open their editor straight away.
   const [open, setOpen] = useState(filter.value === '');
   const key = filterKey(filter);
 
-  const label = derived ? derived.label : title || column!.shortname;
+  const label = derived ? derived.label : columnLabel(name, column!.shortname);
   const operators = derived
     ? DERIVED_FILTER_OPERATORS
     : operatorsForDatatype(column!.datatype);
@@ -132,7 +140,7 @@ function FilterValueSummary({
   value: string;
   suffix?: string;
 }): JSX.Element {
-  if (value.startsWith('http') || value.startsWith('did:')) {
+  if (value.startsWith('http') || isAtomicIdentifier(value)) {
     return <ResourceInline subject={value} untabbable />;
   }
 

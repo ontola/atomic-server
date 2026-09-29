@@ -20,7 +20,7 @@ import {
  * a desktop harness.
  */
 
-const PAIRING_CODE = /^atomic:\/\/pair\?/;
+const PAIRING_CODE = /^atomic:node:[0-9a-f]{64}\?/i;
 
 async function gotoSync(page: Page) {
   await page.goto(`${FRONTEND_URL}/app/sync`);
@@ -94,17 +94,16 @@ test.describe('sync page devices', () => {
   }) => {
     await gotoSync(page);
 
-    // Rendered only once the server has reported a node DID.
+    // Rendered only once the server has reported a node identifier.
     const code = page.locator('code', { hasText: PAIRING_CODE });
     await expect(code).toBeVisible();
 
     const uri = (await code.textContent())?.trim() ?? '';
-    const params = new URL(uri.replace('atomic://', 'https://')).searchParams;
+    const params = new URLSearchParams(uri.split('?')[1]);
 
-    // A second device parses exactly these three fields. A code that renders
-    // but does not carry them is a QR that scans and then does nothing.
+    // The node is the URI subject. The query supplies its routing hints.
     expect(params.get('v')).toBe('1');
-    expect(params.get('node')).toMatch(/^did:ad:node:[0-9a-f]{64}$/i);
+    expect(uri.split('?')[0]).toMatch(/^atomic:node:[0-9a-f]{64}$/i);
     expect(params.getAll('drives').length).toBeGreaterThan(0);
   });
 
@@ -122,13 +121,9 @@ test.describe('sync page devices', () => {
     // Only the documented fields; `drives` may repeat. `url` is an optional
     // LAN/WS fast-path hint — present when the server isn't localhost (e.g.
     // dagger's `atomic.localhost`), absent for a loopback server.
-    const keys = new Set([
-      ...new URL(uri.replace('atomic://', 'https://')).searchParams.keys(),
-    ]);
+    const keys = new Set([...new URLSearchParams(uri.split('?')[1]).keys()]);
     expect([...keys].sort()).toEqual(
-      keys.has('url')
-        ? ['drives', 'node', 'url', 'v']
-        : ['drives', 'node', 'v'],
+      keys.has('url') ? ['drives', 'url', 'v'] : ['drives', 'v'],
     );
   });
 

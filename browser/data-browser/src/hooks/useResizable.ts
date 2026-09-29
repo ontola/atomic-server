@@ -1,18 +1,14 @@
 import { transparentize } from 'polished';
-import {
-  MouseEventHandler,
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 
 interface UseResizeResult {
   size: string;
   dragAreaRef: React.RefObject<HTMLDivElement | null>;
-  dragAreaListeners: Pick<React.DOMAttributes<HTMLDivElement>, 'onMouseDown'>;
+  dragAreaListeners: Pick<
+    React.DOMAttributes<HTMLElement>,
+    'onPointerDown' | 'onClickCapture'
+  >;
   isDragging: boolean;
 }
 
@@ -20,7 +16,6 @@ const dragRule = (cursor: string) => `
  * {
   cursor: ${cursor};
   user-select: none;
-  pointer-events: none;
  }
 `;
 
@@ -47,14 +42,9 @@ function cleanup(id: string) {
   }
 }
 
-function setDragStyling(id: string, enable: boolean, cursor = 'col-resize') {
+function setDragStyling(id: string, cursor: string) {
   const node = createStyleElement(id);
-
-  if (enable) {
-    node.innerHTML = dragRule(cursor);
-  } else {
-    node.innerHTML = '';
-  }
+  node.textContent = dragRule(cursor);
 }
 
 /**
@@ -90,6 +80,10 @@ export type UseResizableProps<E extends HTMLElement> = {
   /** Which edge of the target element the size is measured from. `top` /
    * `bottom` resize the height instead of the width. Default `left`. */
   edge?: ResizeEdge;
+  /** Delta mode lets a header resize from anywhere without jumping to the pointer. */
+  mode?: 'edge' | 'delta';
+  /** Movement before a press becomes a drag, preserving taps on header buttons. */
+  threshold?: number;
 };
 
 export function useResizable<E extends HTMLElement>({
@@ -99,96 +93,121 @@ export function useResizable<E extends HTMLElement>({
   maxSize = Infinity,
   targetRef,
   edge = 'left',
+  mode = 'edge',
+  threshold = 0,
 }: UseResizableProps<E>): UseResizeResult {
   const dragAreaRef = useRef<HTMLDivElement>(null);
-
   const [dragging, setDragging] = useState(false);
-
   const [size, setSize] = useState(`${initialSize}px`);
   const styleId = useId();
-
-  // Needed because mouseMove requires a stable reference
+  const stopDragRef = useRef<(() => void) | undefined>(undefined);
+  const suppressClick = useRef(false);
   const onResizeRef = useRef(onResize);
   useEffect(() => {
     onResizeRef.current = onResize;
   }, [onResize]);
 
-  const edgeRef = useRef(edge);
-  useEffect(() => {
-    edgeRef.current = edge;
-  }, [edge]);
+  useEffect(
+    () => () => {
+      stopDragRef.current?.();
+      cleanup(styleId);
+    },
+    [styleId],
+  );
 
-  const mouseMove = useRef((e: MouseEvent) => {
-    const targetRect = targetRef.current?.getBoundingClientRect();
-    if (!targetRect) return;
+  const onPointerDown: React.PointerEventHandler<HTMLElement> = event => {
+    if (event.button !== 0 || event.isPrimary === false || !targetRef.current)
+      return;
+    event.stopPropagation();
+    stopDragRef.current?.();
+    suppressClick.current = false;
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const vertical = isVertical(edge);
+    const start = vertical ? event.clientY : event.clientX;
+    const rect = targetRef.current.getBoundingClientRect();
+    const startSize = vertical ? rect.height : rect.width;
+    const direction = edge === 'right' || edge === 'bottom' ? -1 : 1;
+    let started = false;
 
-    const relativePosition =
-      edgeRef.current === 'right'
-        ? targetRect.right - e.clientX
-        : edgeRef.current === 'bottom'
-          ? targetRect.bottom - e.clientY
-          : edgeRef.current === 'top'
-            ? e.clientY - targetRect.y
-            : e.clientX - targetRect.x;
-    const newSize = Math.min(maxSize, Math.max(minSize, relativePosition));
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return;
+      const position = vertical ? e.clientY : e.clientX;
+      const delta = position - start;
+      if (!started && Math.abs(delta) < threshold) return;
 
-    requestAnimationFrame(() => {
+      if (!started) {
+        started = true;
+        handle.setPointerCapture?.(pointerId);
+        suppressClick.current = true;
+        setDragging(true);
+        setDragStyling(styleId, vertical ? 'row-resize' : 'col-resize');
+      }
+
+      const targetRect = targetRef.current?.getBoundingClientRect();
+      if (!targetRect) return;
+      const origin =
+        edge === 'right'
+          ? targetRect.right
+          : edge === 'bottom'
+            ? targetRect.bottom
+            : edge === 'top'
+              ? targetRect.top
+              : targetRect.left;
+      const requested =
+        mode === 'delta'
+          ? startSize + direction * delta
+          : direction * (position - origin);
+      const newSize = Math.min(maxSize, Math.max(minSize, requested));
       setSize(`${newSize}px`);
       onResizeRef.current?.(newSize);
-    });
-  });
-
-  const onMouseDown: MouseEventHandler<HTMLDivElement> = useCallback(e => {
-    e.stopPropagation();
-
-    if (e.target !== dragAreaRef.current) return;
-
-    setDragging(true);
-  }, []);
-
-  useEffect(() => {
-    if (!targetRef.current || !dragAreaRef.current) {
-      return () => {
-        cleanup(styleId);
-      };
-    }
-
-    const mouseUp = () => {
-      setDragging(false);
     };
 
-    window.addEventListener('mouseup', mouseUp);
-
-    return () => {
-      window.removeEventListener('mouseup', mouseUp);
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('blur', stop);
+      handle.removeEventListener('lostpointercapture', lostCapture);
+      if (started && handle.hasPointerCapture?.(pointerId))
+        handle.releasePointerCapture(pointerId);
       cleanup(styleId);
+      setDragging(false);
+      stopDragRef.current = undefined;
     };
-  }, []);
 
-  useEffect(() => {
-    if (dragging) {
-      window.addEventListener('mousemove', mouseMove.current);
-      setDragStyling(
-        styleId,
-        true,
-        isVertical(edgeRef.current) ? 'row-resize' : 'col-resize',
-      );
-    } else {
-      window.removeEventListener('mousemove', mouseMove.current);
-      setDragStyling(styleId, false);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', mouseMove.current);
+    const finish = (e: PointerEvent) => {
+      if (e.pointerId === pointerId) stop();
     };
-  }, [dragging]);
+
+    const lostCapture = (e: PointerEvent) => {
+      // Transferring a touch's implicit capture from a title span to its
+      // header also bubbles this event. Only losing our own capture ends it.
+      if (e.target === handle) finish(e);
+    };
+
+    stopDragRef.current = stop;
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('blur', stop);
+    handle.addEventListener('lostpointercapture', lostCapture);
+  };
 
   return {
     size,
     dragAreaRef,
     isDragging: dragging,
     dragAreaListeners: {
-      onMouseDown,
+      onPointerDown,
+      onClickCapture: event => {
+        if (suppressClick.current && event.detail !== 0) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+
+        suppressClick.current = false;
+      },
     },
   };
 }
@@ -201,6 +220,7 @@ export const DragAreaBase = styled.div<DragAreaBaseProps>`
   --drag-color: ${p => transparentize(0.7, p.theme.colors.main)};
   position: absolute;
   cursor: col-resize;
+  touch-action: none;
 
   background-color: ${({ isDragging }) =>
     isDragging ? 'var(--drag-color)' : 'transparent'};

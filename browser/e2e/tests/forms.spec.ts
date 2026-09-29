@@ -367,7 +367,7 @@ test.describe('forms', async () => {
     // --- 6. Reload and confirm everything persisted ---
     // NOTE: the checks below are the end-to-end regression signal for the
     // (fixed) outbox drain/sync races documented in
-    // planning/outbox-drain-data-loss-race.md — drain re-entrancy, the
+    // planning/completed/outbox-drain-data-loss-race.md — drain re-entrancy, the
     // debounce window being invisible to sync status, and reload-stranded
     // cold outbox entries. Kept strict deliberately: if this flakes again,
     // suspect a regression there first.

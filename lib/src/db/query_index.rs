@@ -261,21 +261,32 @@ pub async fn query_sorted_indexed(
     let mut subjects: Vec<Subject> = vec![];
     let mut resources: Vec<Resource> = vec![];
     let mut count = 0;
+    // Old peers could index the same resource under both identifier schemes.
+    // Count and page by resource identity, not by raw QueryMembers rows.
+    let mut seen = std::collections::HashSet::new();
 
     let base_domain = store.get_base_domain();
     let rights_cache = std::sync::Mutex::new(crate::hierarchy::RightsCache::default());
 
     let limit = q.limit.unwrap_or(usize::MAX);
 
-    for (i, kv) in iter.enumerate() {
+    for kv in iter {
         let kv = kv?;
+        let (k, _v) = &kv;
+        let (_id, _sort, subject_str) = parse_members_key(k)?;
+        let canonical_subject = crate::identifiers::canonicalize_scheme(subject_str);
+        let subject = Subject::from_raw(&canonical_subject, base_domain.as_deref());
+        if !seen.insert(subject.pure_id()) {
+            continue;
+        }
+        let index = seen.len() - 1;
         // The user's maximum amount of results has not yet been reached
         // and
         // The users minimum starting distance (offset) has been reached.
         // Denied members do not grow `subjects`, so we keep resolving until
         // the page is full of *authorized* hits — a private streak must not
         // hide a later readable row.
-        let in_selection = subjects.len() < limit && i >= q.offset;
+        let in_selection = subjects.len() < limit && index >= q.offset;
         // Tracks whether this iter step should bump the visible count.
         // Defaults to true so entries past the page limit still count
         // (preserving the cheap-pagination behavior). Flipped to false
@@ -285,11 +296,6 @@ pub async fn query_sorted_indexed(
         // `totalMembers: N, members: []` drift (issue #286).
         let mut should_count = true;
         if in_selection {
-            let (k, _v) = &kv;
-            let (_id, _sort, subject_str) = parse_members_key(k)?;
-
-            let subject = Subject::from_raw(subject_str, base_domain.as_deref());
-
             if !q.include_external && !subject.is_local() {
                 should_count = false;
             } else if q.for_agent != crate::agents::ForAgent::Sudo || q.include_nested {
@@ -410,15 +416,16 @@ pub(crate) fn index_key_property<'a>(
     q_filter: &'a QueryFilter,
     index_atom: &'a IndexAtom,
 ) -> &'a String {
+    filter_key_property(q_filter).unwrap_or(&index_atom.property)
+}
+
+/// [`index_key_property`] without an atom: `sort_by`, else the first
+/// constraint property; `None` only for an all-value-only filter.
+pub(crate) fn filter_key_property(q_filter: &QueryFilter) -> Option<&String> {
     if let Some(sort_by) = &q_filter.sort_by {
-        return sort_by;
+        return Some(sort_by);
     }
-    for c in &q_filter.filters {
-        if let Some(property) = &c.property {
-            return property;
-        }
-    }
-    &index_atom.property
+    q_filter.filters.iter().find_map(|c| c.property.as_ref())
 }
 
 /// Checks if a new IndexAtom should be updated for a specific [QueryFilter]
@@ -480,7 +487,7 @@ pub fn check_if_atom_matches_watched_query_filters(
 ) -> AtomicResult<()> {
     let subject_str = index_atom.subject.as_str();
 
-    let filters: Vec<Arc<QueryFilter>> = if subject_str.starts_with("did:") {
+    let filters: Vec<Arc<QueryFilter>> = if crate::identifiers::is_atomic_identifier(subject_str) {
         store.all_watched_queries_for_property(&index_atom.property)
     } else {
         let drive_prefix = drive_prefix_from_subject(&index_atom.subject);
@@ -495,6 +502,11 @@ pub fn check_if_atom_matches_watched_query_filters(
     );
 
     for q_filter in &filters {
+        // A DID atom reaches every drive's filters (no prefix to route by);
+        // the resource's `drive` stamp is what keeps it out of the others.
+        if !store.filter_accepts_resource_drive(q_filter, resource) {
+            continue;
+        }
         if let Some(prop) = should_update_property(q_filter, index_atom, resource) {
             let sort_key = sort_key_for(resource, prop);
             update_indexed_member(
@@ -525,14 +537,16 @@ pub fn update_indexed_member(
         delete,
         collection
     );
-    let key = create_query_index_key(collection, Some(sort_key), Some(subject))?;
+    let canonical = crate::identifiers::canonicalize_scheme(subject);
+    let key = create_query_index_key(collection, Some(sort_key), Some(&canonical))?;
     if delete {
         transaction.push(Operation {
             tree: Tree::QueryMembers,
             method: trees::Method::Delete,
             key,
             val: None,
-        })
+        });
+        return Ok(());
     } else {
         transaction.push(Operation {
             tree: Tree::QueryMembers,

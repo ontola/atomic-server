@@ -83,7 +83,7 @@ function withheldCommit(): { seed: Uint8Array; orphaned: Uint8Array[] } {
 }
 
 describe('a delta that cannot apply triggers a catch-up fetch', () => {
-  const subject = 'did:ad:gapRecoveryReproAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+  const subject = 'atomic:gapRecoveryReproAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
 
   /** Seed a resource with real, usable content — the case the old code let
    *  through silently, because a resource with an `isA` was assumed healthy. */
@@ -242,7 +242,7 @@ describe('a delta that cannot apply triggers a catch-up fetch', () => {
 });
 
 describe("the echo of a client's own commit", () => {
-  const subject = 'did:ad:ownCommitEchoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+  const subject = 'atomic:ownCommitEchoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
 
   /** What the server does with a commit: import it, then stamp `lastCommit`
    *  under its own peer. The echo it fans out is both. A peer that boots

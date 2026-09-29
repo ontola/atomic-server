@@ -7,15 +7,17 @@
 and `/app/shortcuts` page, and simple AI tools. Fork verbs from
 [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) already land there.
 
-Remaining: a future MCP server can reuse `deriveActionTools`; specialized
-`destroy()` call sites (table rows, views, tags) stay local — they are not
-the resource-delete verb.
+Remaining: a future MCP server can reuse `deriveActionTools` (plan:
+[`mcp-endpoint.md`](./mcp-endpoint.md)); specialized `destroy()` call sites
+(table rows, views, tags) stay local — they are not the resource-delete verb.
 
 ## Problem
 
 Resource actions (view, edit, delete, share, history, favorite, …) are invocable
 from many surfaces — context menus, keyboard shortcuts, the ⌘K overlay, AI tools,
 the JS API — but each surface used to enumerate and implement them independently.
+There is still no MCP server; when one exists it would otherwise have been a
+fifth enumeration. Plan: [`mcp-endpoint.md`](./mcp-endpoint.md).
 
 ## Design
 

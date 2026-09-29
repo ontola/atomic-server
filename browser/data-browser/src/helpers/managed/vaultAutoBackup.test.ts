@@ -116,6 +116,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  // A test that stubs `window` and then throws before its own cleanup used to
+  // leave the stub in place for the whole file. `new Store()` reads
+  // `localStorage` whenever a `window` exists, so eleven later tests died on
+  // `localStorage is not defined` with nothing wrong in them.
+  vi.unstubAllGlobals();
 });
 
 describe('ensureVaultBackup', () => {
@@ -424,6 +429,34 @@ describe('restoreFromVault', () => {
     },
   );
 
+  it('reloads the restored drive, so a lookup from before the restore stops answering', async () => {
+    const store = await signedInStore();
+    const reopenDrive = vi.fn(async () => undefined);
+
+    await restoreFromVault(store, DRIVE, fakeDeps({ reopenDrive }));
+
+    expect(reopenDrive).toHaveBeenCalledWith(store, DRIVE);
+  });
+
+  it('reloads nothing when the vault restored nothing', async () => {
+    const store = await signedInStore();
+    const reopenDrive = vi.fn(async () => undefined);
+    const deps = fakeDeps({
+      reopenDrive,
+      restoreDrive: vi.fn(async () => ({
+        packsRead: 1,
+        objectsSkipped: 0,
+        objectsUnreadable: 0,
+        resourcesRestored: 0,
+        tombstonesApplied: 0,
+      })),
+    });
+
+    await restoreFromVault(store, DRIVE, deps);
+
+    expect(reopenDrive).not.toHaveBeenCalled();
+  });
+
   /** The device now holds the key: later edits back up without re-enrolling. */
   it('remembers the key so the next backup skips enrollment', async () => {
     const store = await signedInStore();
@@ -488,9 +521,43 @@ describe('restoreFromVault', () => {
         throw new Error('403');
       }),
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     expect((await restoreFromVault(store, DRIVE, deps)).status).toBe('failed');
     expect(store.isLocalOnlyDrive(DRIVE)).toBe(false);
+    // A real failure on a live page is still worth saying out loud.
+    expect(warn).toHaveBeenCalledWith(
+      '[cloud-vault] restore failed',
+      expect.anything(),
+    );
+    warn.mockRestore();
+  });
+
+  /**
+   * Navigating away cancels the restore's own requests, which reject as
+   * `TypeError: Failed to fetch`. Warning about that paints every interrupted
+   * restore as broken — and in a suite that fails on unexpected console output,
+   * as a red test.
+   */
+  it('stays quiet when the document is discarded mid-restore', async () => {
+    // Build the store before the stub: a stubbed `window` has no
+    // `localStorage`, and the Store constructor reads it.
+    const store = await signedInStore();
+    const page = new EventTarget();
+    vi.stubGlobal('window', page);
+    const deps = fakeDeps({
+      restoreDrive: vi.fn(async () => {
+        page.dispatchEvent(new Event('pagehide'));
+        throw new TypeError('Failed to fetch');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect((await restoreFromVault(store, DRIVE, deps)).status).toBe('failed');
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+    vi.unstubAllGlobals();
   });
 });
 

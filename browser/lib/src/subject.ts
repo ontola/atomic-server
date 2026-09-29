@@ -1,7 +1,8 @@
 /**
  * Branded subject identifier. A valid `Subject` is either:
  *
- * - a DID, currently of the form `did:ad:<base64-signing-key>`
+ * - an Atomic identifier: `atomic:{genesis}` (canonical) or `did:ad:{genesis}`
+ *   (legacy alias), including `agent` / `commit` / `blob` / `node` kinds
  * - or an absolute HTTP(S) URL
  *
  * The brand makes `Subject` source-incompatible with `string` so the type
@@ -19,24 +20,244 @@
  *    `asSubject(...)` validation or an `as Subject` assertion (only for
  *    values already known to be well-formed).
  *
- * See `planning/subject-types-end-to-end.md` for the migration plan.
+ * See `planning/subject-types-end-to-end.md` and `planning/atomic-scheme.md`.
  */
 declare const SubjectBrand: unique symbol;
 
 export type Subject = string & { readonly [SubjectBrand]: true };
 
-const DID_PREFIX = 'did:ad:';
+export const ATOMIC_PREFIX = 'atomic:';
+export const ATOMIC_AGENT_PREFIX = 'atomic:agent:';
+export const ATOMIC_COMMIT_PREFIX = 'atomic:commit:';
+export const ATOMIC_BLOB_PREFIX = 'atomic:blob:';
+export const ATOMIC_NODE_PREFIX = 'atomic:node:';
+
+/** Legacy scheme, accepted forever. New code emits {@link ATOMIC_PREFIX}. */
+export const DID_AD_PREFIX = 'did:ad:';
+export const DID_AD_AGENT_PREFIX = 'did:ad:agent:';
+export const DID_AD_COMMIT_PREFIX = 'did:ad:commit:';
+export const DID_AD_BLOB_PREFIX = 'did:ad:blob:';
+export const DID_AD_NODE_PREFIX = 'did:ad:node:';
+
 const HTTP_RE = /^https?:\/\//;
+
+export type IdentifierKind =
+  | 'resource'
+  | 'agent'
+  | 'commit'
+  | 'blob'
+  | 'node'
+  | 'other';
+
+export function isLegacyAtomicLink(raw: string): boolean {
+  return raw.startsWith('atomic://');
+}
+
+const IDENTIFIER_HTTP_ENDPOINTS = new Set(['/did', '/resource', '/atomic']);
+
+/** `/did`, `/resource`, `/atomic` — resolve via `?subject=`. */
+export function isIdentifierHttpEndpoint(path: string): boolean {
+  return IDENTIFIER_HTTP_ENDPOINTS.has(path);
+}
+
+/** Path-form identifier: `/atomic:{genesis}` or `/did:ad:{genesis}`. */
+export function isIdentifierPathForm(path: string): boolean {
+  if (!path.startsWith('/')) {
+    return false;
+  }
+
+  return isAtomicIdentifier(path.slice(1));
+}
+
+/** Request path that resolves an Atomic identifier rather than an HTTP resource. */
+export function isIdentifierResolutionPath(path: string): boolean {
+  const bare = path.split(/[?#]/)[0];
+
+  return isIdentifierHttpEndpoint(bare) || isIdentifierPathForm(bare);
+}
+
+export function startsWithAtomicScheme(raw: string): boolean {
+  return raw.startsWith(ATOMIC_PREFIX) && !isLegacyAtomicLink(raw);
+}
+
+export function isAtomicIdentifier(raw: string): boolean {
+  return startsWithAtomicScheme(raw) || raw.startsWith(DID_AD_PREFIX);
+}
+
+function identifierRest(raw: string): string | undefined {
+  if (startsWithAtomicScheme(raw)) {
+    return raw.slice(ATOMIC_PREFIX.length);
+  }
+
+  if (raw.startsWith(DID_AD_PREFIX)) {
+    return raw.slice(DID_AD_PREFIX.length);
+  }
+
+  return undefined;
+}
+
+export function identifierBody(raw: string): string | undefined {
+  const rest = identifierRest(raw);
+
+  return rest?.split(/[?#]/)[0];
+}
+
+/** Rewrite `did:ad:` → `atomic:`. Other strings are unchanged. */
+export function canonicalizeScheme(raw: string): string {
+  if (raw.startsWith(DID_AD_PREFIX)) {
+    return ATOMIC_PREFIX + raw.slice(DID_AD_PREFIX.length);
+  }
+
+  return raw;
+}
+
+export const CAP_CANONICAL_SCHEME = 'canonical-scheme';
+
+/** Rewrite `atomic:` → `did:ad:` for a peer that predates the rename. */
+export function toLegacyScheme(raw: string): string {
+  if (startsWithAtomicScheme(raw)) {
+    return DID_AD_PREFIX + raw.slice(ATOMIC_PREFIX.length);
+  }
+
+  return raw;
+}
+
+/** Emit `atomic:` when the peer listed {@link CAP_CANONICAL_SCHEME}, else `did:ad:`. */
+export function emitSubjectForCaps(
+  subject: string,
+  caps: readonly string[],
+): string {
+  return caps.includes(CAP_CANONICAL_SCHEME)
+    ? canonicalizeScheme(subject)
+    : toLegacyScheme(subject);
+}
+
+export function schemeAlias(raw: string): string | undefined {
+  const rest = identifierRest(raw);
+
+  if (rest === undefined) {
+    return undefined;
+  }
+
+  return startsWithAtomicScheme(raw)
+    ? DID_AD_PREFIX + rest
+    : ATOMIC_PREFIX + rest;
+}
+
+export function identifierKind(raw: string): IdentifierKind | undefined {
+  const body = identifierBody(raw);
+
+  if (body === undefined) {
+    return undefined;
+  }
+
+  if (body.startsWith('agent:')) {
+    return body.length > 'agent:'.length ? 'agent' : 'other';
+  }
+
+  if (body.startsWith('commit:')) {
+    return body.length > 'commit:'.length ? 'commit' : 'other';
+  }
+
+  if (body.startsWith('blob:')) {
+    return body.length > 'blob:'.length ? 'blob' : 'other';
+  }
+
+  if (body.startsWith('node:')) {
+    return body.length > 'node:'.length ? 'node' : 'other';
+  }
+
+  if (body.length > 0 && !body.includes(':')) {
+    return 'resource';
+  }
+
+  return 'other';
+}
+
+export function isAgentSubject(raw: string): boolean {
+  return identifierKind(raw) === 'agent';
+}
+
+export function isBlobSubject(raw: string): boolean {
+  return identifierKind(raw) === 'blob';
+}
+
+export function isNodeSubject(raw: string): boolean {
+  return identifierKind(raw) === 'node';
+}
+
+export function isResourceSubject(raw: string): boolean {
+  return identifierKind(raw) === 'resource';
+}
+
+export function agentPublicKey(raw: string): string | undefined {
+  const body = identifierBody(raw);
+
+  return body?.startsWith('agent:') && body.length > 'agent:'.length
+    ? body.slice('agent:'.length)
+    : undefined;
+}
+
+export function commitSignature(raw: string): string | undefined {
+  const body = identifierBody(raw);
+
+  return body?.startsWith('commit:') && body.length > 'commit:'.length
+    ? body.slice('commit:'.length)
+    : undefined;
+}
+
+export function blobHashHex(raw: string): string | undefined {
+  const body = identifierBody(raw);
+
+  return body?.startsWith('blob:') && body.length > 'blob:'.length
+    ? body.slice('blob:'.length)
+    : undefined;
+}
+
+export function nodeId(raw: string): string | undefined {
+  const body = identifierBody(raw);
+
+  return body?.startsWith('node:') && body.length > 'node:'.length
+    ? body.slice('node:'.length)
+    : undefined;
+}
+
+export function agentSubject(pubkey: string): string {
+  return ATOMIC_AGENT_PREFIX + pubkey;
+}
+
+export function resourceSubject(genesisSig: string): string {
+  return ATOMIC_PREFIX + genesisSig;
+}
+
+export function commitSubject(signature: string): string {
+  return ATOMIC_COMMIT_PREFIX + signature;
+}
+
+export function blobSubject(hashHex: string): string {
+  return ATOMIC_BLOB_PREFIX + hashHex;
+}
+
+export function nodeSubject(id: string): string {
+  return ATOMIC_NODE_PREFIX + id;
+}
+
+/**
+ * Strip query/fragment and rewrite `did:ad:` → `atomic:`. Other strings are
+ * unchanged. Use this instead of `startsWith('did:')` / `startsWith('atomic:')`
+ * when comparing identity.
+ */
+export function canonicalIdentifier(raw: string): string {
+  if (!isAtomicIdentifier(raw)) {
+    return raw;
+  }
+
+  return canonicalizeScheme(raw.split(/[?#]/)[0]);
+}
 
 /**
  * Validate a raw string and brand it as a `Subject`. Throws if the
- * input is not a DID or HTTP(S) URL. Use at system boundaries.
- *
- * @example
- * ```ts
- * const s = asSubject('https://atomicdata.dev/things/42');
- * // s: Subject — type-compatible with `string`, but enforces shape.
- * ```
+ * input is not an Atomic identifier or HTTP(S) URL. Use at system boundaries.
  */
 export function asSubject(raw: string): Subject {
   if (!isValidSubject(raw)) {
@@ -56,40 +277,35 @@ export function tryAsSubject(raw: string): Subject | undefined {
 }
 
 /**
- * True iff `raw` is shaped like a subject (DID or HTTP(S) URL). Does
- * not perform deeper structural validation — that's the parser's job.
+ * True iff `raw` is shaped like a subject (Atomic identifier or HTTP(S) URL).
+ * Does not perform deeper structural validation — that's the parser's job.
  */
 export function isValidSubject(raw: string): boolean {
   if (typeof raw !== 'string' || raw.length === 0) return false;
 
-  return raw.startsWith(DID_PREFIX) || HTTP_RE.test(raw);
+  return isAtomicIdentifier(raw) || HTTP_RE.test(raw);
 }
 
-/** True iff this subject is a DID (vs an HTTP URL). */
-export function isDidSubject(subject: Subject): boolean {
-  return subject.startsWith(DID_PREFIX);
+/** True iff this subject is an Atomic identifier (vs an HTTP URL). */
+export function isDidSubject(subject: Subject | string): boolean {
+  return isAtomicIdentifier(subject);
 }
 
-/** True iff this subject is an HTTP(S) URL (vs a DID). */
-export function isHttpSubject(subject: Subject): boolean {
+/** True iff this subject is an HTTP(S) URL (vs an Atomic identifier). */
+export function isHttpSubject(subject: Subject | string): boolean {
   return HTTP_RE.test(subject);
 }
 
 /**
- * If `raw` is a `did:ad:` subject, return it with query/fragment stripped.
- * If it is an HTTP(S) URL that *names* a DID resource — the path form
- * `https://host/did:ad:…` (an address-bar / copy-paste URL) or the
- * `/did` endpoint `https://host/did?subject=did:ad:…` — return that DID.
+ * If `raw` is an Atomic identifier, return it with query/fragment stripped
+ * (canonical `atomic:` form). If it is an HTTP(S) URL that *names* a
+ * resource — the path form `https://host/did:ad:…` / `https://host/atomic:…`
+ * or the `/did` / `/resource` / `/atomic` endpoint — return that identifier.
  * Otherwise `undefined`.
- *
- * The server always serialises a DID resource's `@id` as the DID itself,
- * even when the resource was fetched through one of these HTTP aliases.
- * Callers comparing a requested subject against `@id` should use
- * {@link subjectsReferToSameResource} rather than string equality.
  */
 export function extractDidSubject(raw: string): string | undefined {
-  if (raw.startsWith(DID_PREFIX)) {
-    return raw.split(/[?#]/)[0];
+  if (isAtomicIdentifier(raw)) {
+    return canonicalizeScheme(raw.split(/[?#]/)[0]);
   }
 
   if (!HTTP_RE.test(raw)) {
@@ -100,17 +316,15 @@ export function extractDidSubject(raw: string): string | undefined {
     const url = new URL(raw);
     const path = url.pathname.replace(/\/$/, '') || '/';
 
-    // Path form: https://host/did:ad:…
-    if (path.startsWith(`/${DID_PREFIX}`) && !path.slice(1).includes('/')) {
-      return path.slice(1);
+    if (isIdentifierPathForm(path)) {
+      return canonicalizeScheme(path.slice(1));
     }
 
-    // Endpoint form: https://host/did?subject=did:ad:…
-    if (path === '/did') {
+    if (isIdentifierHttpEndpoint(path)) {
       const subject = url.searchParams.get('subject');
 
-      if (subject?.startsWith(DID_PREFIX)) {
-        return subject.split(/[?#]/)[0];
+      if (subject && isAtomicIdentifier(subject)) {
+        return canonicalizeScheme(subject.split(/[?#]/)[0]);
       }
     }
   } catch {
@@ -123,7 +337,7 @@ export function extractDidSubject(raw: string): string | undefined {
 /**
  * True when `requested` and `received` name the same resource: exact
  * match, same URL ignoring query params, or one is an HTTP alias of
- * the other's DID (`https://host/did:ad:x` vs `did:ad:x`).
+ * the other's identifier (`https://host/did:ad:x` vs `atomic:x`).
  */
 export function subjectsReferToSameResource(
   requested: string,
@@ -138,6 +352,16 @@ export function subjectsReferToSameResource(
 
   if (requestedNoParams === receivedNoParams) {
     return true;
+  }
+
+  if (
+    canonicalizeScheme(requestedNoParams) ===
+    canonicalizeScheme(receivedNoParams)
+  ) {
+    return (
+      isAtomicIdentifier(requestedNoParams) &&
+      isAtomicIdentifier(receivedNoParams)
+    );
   }
 
   const requestedDid = extractDidSubject(requested);

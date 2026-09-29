@@ -102,7 +102,8 @@ pub async fn parse_json_ad_resource(
     store: &impl crate::Storelike,
     parse_opts: &ParseOpts,
 ) -> AtomicResult<Resource> {
-    let json: Map<String, serde_json::Value> = serde_json::from_str(string)?;
+    let json: Map<String, serde_json::Value> = serde_json::from_str(string)
+        .map_err(|e| AtomicError::parse_error(&format!("Invalid JSON: {}", e), None, None))?;
     parse_json_ad_map_to_resource(json, store, None, parse_opts).await
 }
 
@@ -334,23 +335,30 @@ pub async fn parse_json_ad_commit_resource(
     string: &str,
     store: &impl crate::Storelike,
 ) -> AtomicResult<Resource> {
-    let mut json: Map<String, serde_json::Value> = serde_json::from_str(string)?;
+    // A body that is not a commit is the client's mistake, so these are parse
+    // errors (a server answers 400), not internal ones.
+    let mut json: Map<String, serde_json::Value> = serde_json::from_str(string)
+        .map_err(|e| AtomicError::parse_error(&format!("Invalid JSON: {}", e), None, None))?;
+    let malformed = |message: &str| AtomicError::parse_error(message, None, None);
 
     // Get the signature - this is required for all commits
     let signature = json
         .get(urls::SIGNATURE)
-        .ok_or("No signature field in Commit.")?
+        .ok_or_else(|| malformed("No signature field in Commit."))?
         .as_str()
-        .ok_or("Signature must be a string")?
+        .ok_or_else(|| malformed("Signature must be a string"))?
         .to_string();
 
     // Get or derive the subject.
     // For genesis commits the client omits the subject; it is always derived
     // from the signature as `did:ad:<signature>`.
     let _target_subject = match json.get(urls::SUBJECT) {
-        Some(subj) => subj.as_str().ok_or("Subject must be a string")?.to_string(),
+        Some(subj) => subj
+            .as_str()
+            .ok_or_else(|| malformed("Subject must be a string"))?
+            .to_string(),
         None => {
-            let derived_subject = format!("did:ad:{}", signature);
+            let derived_subject = crate::identifiers::resource_subject(&signature);
 
             // Insert the derived subject into the JSON so it gets parsed correctly
             json.insert(
@@ -371,7 +379,7 @@ pub async fn parse_json_ad_commit_resource(
     // subject wins, body's `@id` is informational only.
     json.remove("@id");
     json.remove(urls::LOCAL_ID);
-    let commit_subject = format!("did:ad:commit:{}", signature);
+    let commit_subject = crate::identifiers::commit_subject(&signature);
 
     // Parse only. `Db::apply_commit` stores the commit resource once the
     // commit is accepted; persisting it here would leave every rejected
@@ -842,7 +850,10 @@ async fn parse_json_ad_map_to_resource(
                     .signature
                     .as_ref()
                     .ok_or("No signature generated for genesis commit")?;
-                let did_subject = crate::Subject::from_raw(&format!("did:ad:{}", signature), None);
+                let did_subject = crate::Subject::from_raw(
+                    &crate::identifiers::resource_subject(signature),
+                    None,
+                );
                 r.set_subject(did_subject.to_string());
                 let mut final_commit = commit;
                 final_commit.subject = did_subject;

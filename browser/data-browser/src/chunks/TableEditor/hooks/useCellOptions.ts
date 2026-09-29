@@ -14,6 +14,11 @@ export interface CellOptions {
 // one Set ref makes the dispatch a no-op once the context already holds it.
 const EMPTY_DISABLED_INTERACTIONS: Set<KeyboardInteraction> = new Set();
 
+const sameInteractions = (
+  a: Set<KeyboardInteraction>,
+  b: Set<KeyboardInteraction>,
+) => a.size === b.size && [...a].every(interaction => b.has(interaction));
+
 export function useCellOptions(options: CellOptions) {
   const { setIndicatorHidden, setDisabledKeyboardInteractions } =
     useTableEditorContext();
@@ -41,11 +46,23 @@ export function useCellOptions(options: CellOptions) {
 
   useEffect(() => {
     if (options.disabledKeyboardInteractions) {
-      setDisabledKeyboardInteractions(options.disabledKeyboardInteractions);
+      // Keep the *existing* Set when it already says the same thing. Cells
+      // build these inline (`new Set([...])`), so publishing one unconditionally
+      // hands the context a new reference — and if the cell is ever remounted
+      // by its parent, that new reference re-renders the table, which remounts
+      // the cell, which publishes again: a loop with no state actually
+      // changing. Comparing contents makes a repeat publish a no-op.
+      setDisabledKeyboardInteractions(previous =>
+        sameInteractions(previous, options.disabledKeyboardInteractions!)
+          ? previous
+          : options.disabledKeyboardInteractions!,
+      );
     }
 
     return () => {
-      setDisabledKeyboardInteractions(EMPTY_DISABLED_INTERACTIONS);
+      setDisabledKeyboardInteractions(previous =>
+        previous.size === 0 ? previous : EMPTY_DISABLED_INTERACTIONS,
+      );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabledSignature, setDisabledKeyboardInteractions]);

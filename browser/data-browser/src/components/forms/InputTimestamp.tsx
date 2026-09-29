@@ -1,9 +1,6 @@
 import { useNumber } from '@tomic/react';
 import { InputProps } from './ResourceField';
-import {
-  checkForInitialRequiredValue,
-  useValidation,
-} from './formValidation/useValidation';
+import { useValidatedInput } from './formValidation/useValidatedInput';
 import { styled } from 'styled-components';
 import { ErrorChipInput } from './ErrorChip';
 import { InputStyled, InputWrapper } from './InputStyles';
@@ -13,30 +10,24 @@ export function InputTimestamp({
   resource,
   property,
   commit,
+  commitDebounceInterval,
   required,
   ...props
 }: InputProps): React.JSX.Element {
   const [value, setValue] = useNumber(resource, property.subject, {
     commit,
+    commitDebounce: commitDebounceInterval,
     validate: false,
   });
 
-  const { error, setError, setTouched } = useValidation(
-    checkForInitialRequiredValue(value, required),
-  );
+  const { error, setTouched, update } = useValidatedInput(value, setValue, {
+    datatype: property.datatype,
+    required,
+  });
 
-  const [localDate, handleChange] = useDateTimeInput(
-    value,
-    (time: number | undefined) => {
-      if (required && time === undefined) {
-        setError('Required');
-        setValue(undefined);
-      } else {
-        setError(undefined);
-        setValue(time);
-      }
-    },
-  );
+  // `useDateTimeInput` parses the `datetime-local` string into a timestamp (or
+  // `undefined` when cleared) before it reaches the validated setter.
+  const [localDate, handleChange] = useDateTimeInput(value, update);
 
   return (
     <Wrapper>

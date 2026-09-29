@@ -1,12 +1,16 @@
 import type { ClientDbWorker } from './client-db.js';
-import type { Item } from './rbsr.js';
+import { blobHashHex, isBlobSubject } from './subject.js';
+
+/** One drive inventory entry: a subject and its version vector (peer id →
+ *  counter), as the server's `RBSR_ITEMS` answer lists them. */
+export type DriveItem = { subject: string; vv: Record<string, number> };
 
 /** Verify every readable remote resource and its content-addressed attachment.
  * A root snapshot or matching resource count is not proof of a complete copy. */
 export async function verifyLocalDriveCopy(
   db: ClientDbWorker,
   drive: string,
-  remote: Item[],
+  remote: DriveItem[],
 ): Promise<void> {
   if (!remote.some(item => item.subject === drive))
     throw new Error('The server did not provide a complete drive inventory.');
@@ -34,13 +38,17 @@ export async function verifyLocalDriveCopy(
       );
     const blob = JSON.parse(jsonAd)['https://atomicdata.dev/properties/blob'];
     if (blob === undefined || blob === null) continue;
-    if (typeof blob !== 'string' || !/^did:ad:blob:[0-9a-f]{64}$/.test(blob))
+    if (typeof blob !== 'string' || !isBlobSubject(blob))
       throw new Error(
         'An attachment is not stored as a portable blob. Keep the server connected.',
       );
-    const hash = Uint8Array.from(
-      blob.slice('did:ad:blob:'.length).match(/../g)!,
-      part => parseInt(part, 16),
+    const hashHex = blobHashHex(blob);
+    if (!hashHex || !/^[0-9a-f]{64}$/i.test(hashHex))
+      throw new Error(
+        'An attachment is not stored as a portable blob. Keep the server connected.',
+      );
+    const hash = Uint8Array.from(hashHex.match(/../g)!, part =>
+      parseInt(part, 16),
     );
     const bytes = await db.getBlob(hash);
     if (!bytes)

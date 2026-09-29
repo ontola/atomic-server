@@ -21,7 +21,10 @@ export type VaultProofSigner = {
   signBytes(data: Uint8Array): Promise<string>;
   /** The proof computed from the raw key at sign-in, if the agent carries it. */
   vaultProof?: string;
-  /** Whether `signBytes` is reproducible. Absent means unknown. */
+  /**
+   * Whether `signBytes` is reproducible. Absent means unknown, which is
+   * treated as "prove it" rather than as a promise — see {@link agentVaultProof}.
+   */
   signsDeterministically?: boolean;
 };
 
@@ -62,7 +65,12 @@ export async function agentVaultProof(
 
   const first = await signer.signBytes(proofMessage);
 
-  if (signer.signsDeterministically === false) {
+  // Only a signer that positively declares itself deterministic is taken at
+  // its word. `false` and "didn't say" both have to reproduce the signature
+  // before it is allowed to become a key: an unknown signer that turns out to
+  // randomize is exactly the case this guard exists for, and trusting silence
+  // is how one would get past it.
+  if (signer.signsDeterministically !== true) {
     const second = await signer.signBytes(proofMessage);
 
     if (second !== first) {

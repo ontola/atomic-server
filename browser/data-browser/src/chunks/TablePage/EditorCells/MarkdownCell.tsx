@@ -1,6 +1,7 @@
 import { JSONValue, useProperty } from '@tomic/react';
 
 import { CellContainer, DisplayCellProps, EditCellProps } from './Type';
+import { TruncatedText } from './TruncatedText';
 
 import { useMemo, type JSX } from 'react';
 import styled from 'styled-components';
@@ -11,6 +12,7 @@ import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
 import { addIf } from '@helpers/addIf';
 import InputMarkdown from '@components/forms/InputMarkdown';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
+import { useColumnLabel } from '../helpers/useColumnLabel';
 
 function MarkdownCellEdit({
   value,
@@ -18,16 +20,20 @@ function MarkdownCellEdit({
   resource,
 }: EditCellProps<JSONValue>): JSX.Element {
   const [dialogProps, show, _close, isOpen] = useDialog({
+    // Closing the dialog — confirmed or cancelled — ends edit mode. That
+    // both restores focus to the grid (TableEditor's Edit -> Visual layout
+    // effect) and makes the arrow keys work again on the first Escape.
     onSuccess: () => {
-      tableRef.current?.focus();
+      exitEditMode();
     },
     onCancel: () => {
-      tableRef.current?.focus();
+      exitEditMode();
     },
   });
   const prop = useProperty(property);
+  const label = useColumnLabel(prop);
 
-  const { tableRef } = useTableEditorContext();
+  const { exitEditMode } = useTableEditorContext();
 
   const options = useMemo(
     () => ({
@@ -54,7 +60,7 @@ function MarkdownCellEdit({
         {isOpen && (
           <>
             <Dialog.Title>
-              <h1>Edit {prop.shortname}</h1>
+              <h1>Edit {label}</h1>
             </Dialog.Title>
             <StyledDialogContent>
               <InputMarkdown
@@ -74,7 +80,7 @@ function MarkdownCellEdit({
 function MarkdownCellDisplay({
   value,
 }: DisplayCellProps<JSONValue>): JSX.Element {
-  return <>{value}</>;
+  return <TruncatedText value={value} />;
 }
 
 export const MarkdownCell: CellContainer<JSONValue> = {

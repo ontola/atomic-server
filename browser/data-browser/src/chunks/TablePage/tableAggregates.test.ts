@@ -8,6 +8,7 @@ import {
   parseAggregates,
   propertiesForFunction,
   toAggregation,
+  BREAKDOWN_ROWS_ID,
 } from './tableAggregates';
 
 const property = (datatype: Datatype, shortname = 'x'): Property =>
@@ -79,6 +80,18 @@ describe('toAggregation', () => {
       aggregates: [{ id: 'sum', property: AMOUNT.subject, function: 'sum' }],
       group_by: undefined,
     });
+  });
+
+  it('counts every row alongside a breakdown, for its row counts', () => {
+    // A sum's per-group count is only the rows that had a number, so a
+    // breakdown of tasks without an Estimate read "0 rows" under each status.
+    const aggregation = toAggregation([sumAmount], STATUS.subject, 'exact');
+
+    expect(aggregation?.aggregates).toEqual([
+      { id: 'sum', property: AMOUNT.subject, function: 'sum' },
+      { id: BREAKDOWN_ROWS_ID, function: 'count' },
+    ]);
+    expect(aggregation?.group_by?.property).toBe(STATUS.subject);
   });
 
   describe('over a computed column', () => {

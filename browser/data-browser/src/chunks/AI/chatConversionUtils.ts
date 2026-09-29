@@ -177,6 +177,27 @@ export const uiMessageToResource = async (
 // Serialize checkpoints per chat so an older partial reply cannot overwrite
 // its completed version, and concurrent saves cannot append duplicate messages.
 const chatWrites = new WeakMap<Resource, Promise<unknown>>();
+
+/**
+ * Run `work` on the chat's write queue, after everything already queued.
+ *
+ * For work that has to be ordered against the message writes but is not one
+ * itself — pushing a draft chat to the server, which decides for every write
+ * after it whether that write is persisted or left local. Run beside the
+ * queue rather than on it, that decision is read by writes already in
+ * flight, and whichever of them lands in the gap is never sent at all.
+ */
+export const queueChatWrite = <T>(
+  chatResource: Resource,
+  work: () => Promise<T>,
+): Promise<T> => {
+  const previous = chatWrites.get(chatResource) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(work);
+  chatWrites.set(chatResource, next);
+
+  return next;
+};
+
 const chatMessageResources = new WeakMap<
   Resource,
   Map<string, Resource<Ai.AiMessage>>
@@ -192,40 +213,35 @@ export const addMessageToChatResource = async (
   }: { saveChat?: boolean; persistToServer?: boolean } = {},
 ): Promise<Resource<Ai.AiMessage>> => {
   const snapshot = structuredClone(message);
-  const previous = chatWrites.get(chatResource) ?? Promise.resolve();
-  const work = previous
-    .catch(() => {})
-    .then(async () => {
-      let known = chatMessageResources.get(chatResource);
 
-      if (!known) {
-        known = new Map();
-        chatMessageResources.set(chatResource, known);
-      }
+  return queueChatWrite(chatResource, async () => {
+    let known = chatMessageResources.get(chatResource);
 
-      const existingResource = known.get(snapshot.id);
-      const messageResource = await uiMessageToResource(
-        snapshot,
-        chatResource,
-        store,
-        {
-          persistToServer,
-          existingResource,
-        },
-      );
-      known.set(snapshot.id, messageResource);
+    if (!known) {
+      known = new Map();
+      chatMessageResources.set(chatResource, known);
+    }
 
-      if (!chatResource.props.messages?.includes(messageResource.subject)) {
-        chatResource.push(ai.properties.messages, [messageResource.subject]);
-      }
+    const existingResource = known.get(snapshot.id);
+    const messageResource = await uiMessageToResource(
+      snapshot,
+      chatResource,
+      store,
+      {
+        persistToServer,
+        existingResource,
+      },
+    );
+    known.set(snapshot.id, messageResource);
 
-      if (saveChat) await chatResource.save();
+    if (!chatResource.props.messages?.includes(messageResource.subject)) {
+      chatResource.push(ai.properties.messages, [messageResource.subject]);
+    }
 
-      return messageResource;
-    });
-  chatWrites.set(chatResource, work);
+    if (saveChat) await chatResource.save();
 
-  return work;
+    return messageResource;
+  });
 };
 
 export const removeMessageFromChatResource = async (

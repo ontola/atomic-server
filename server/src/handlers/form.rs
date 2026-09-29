@@ -501,6 +501,7 @@ pub async fn form_image(
         .map_err(|_| not_found())?;
 
     let mut response = download_file_handler_partial(&file, &req, &params, &appstate)
+        .await
         .map_err(|e| internal_error(e.to_string()))?;
     // Same-URL responses are stable while published; let browsers cache them
     // for a bit instead of re-fetching per page view.

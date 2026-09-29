@@ -1,7 +1,9 @@
 import {
+  canonicalizeScheme,
   commits,
   core,
   dataBrowser,
+  isCommitSubject,
   orderChildren,
   StoreEvents,
 } from '@tomic/lib';
@@ -39,16 +41,6 @@ export function useChildren(parentSubject: string | undefined): {
   // re-sort (which would race the optimistic re-render).
   const subjectsRef = useRef<string[]>([]);
   subjectsRef.current = subjects;
-
-  /**
-   * Subjects this client has seen destroyed.
-   *
-   * A destroyed child can still come back in an answer to the `parent=` query
-   * — the server's index takes a moment — and rendering it again is not
-   * cosmetic: the row asks the store for the resource, which re-creates the
-   * entry the destroy had just removed. Keep it out of the list instead.
-   */
-  const removedRef = useRef<Set<string>>(new Set());
 
   const { collection, ready } = useCollection(
     {
@@ -162,12 +154,20 @@ export function useChildren(parentSubject: string | undefined): {
       for (const member of resolved) {
         if (
           member &&
-          !member.startsWith('did:ad:commit:') &&
-          !seen.has(member) &&
-          !removedRef.current.has(member)
+          !isCommitSubject(member) &&
+          !seen.has(canonicalizeScheme(member)) &&
+          // A destroyed child can still come back in an answer to the
+          // `parent=` query — the answer may have been computed before the
+          // destroy landed — and rendering it again is not cosmetic: the row
+          // asks the store for the resource. The store knows what it
+          // destroyed, so this hook does not have to keep its own list (which
+          // a freshly mounted hook, e.g. a folder re-expanded, would not
+          // have).
+          !store.isDestroyed(member)
         ) {
-          seen.add(member);
-          candidates.push(member);
+          const subject = canonicalizeScheme(member);
+          seen.add(subject);
+          candidates.push(subject);
         }
       }
 
@@ -181,7 +181,7 @@ export function useChildren(parentSubject: string | undefined): {
     return () => {
       cancelled = true;
     };
-  }, [collection, disabled, sortMembers]);
+  }, [collection, disabled, sortMembers, store]);
 
   /**
    * Re-sort when any current child's `sortOrder` (or `createdAt`)
@@ -202,16 +202,17 @@ export function useChildren(parentSubject: string | undefined): {
     let cancelled = false;
 
     const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
-      removedRef.current.add(subject);
+      const removed = canonicalizeScheme(subject);
       setSubjects(prev =>
-        prev.includes(subject) ? prev.filter(s2 => s2 !== subject) : prev,
+        prev.includes(removed) ? prev.filter(s2 => s2 !== removed) : prev,
       );
     });
 
     const unsub = store.on(StoreEvents.ResourceUpdated, async resource => {
       const current = subjectsRef.current;
+      const subject = canonicalizeScheme(resource.subject);
 
-      if (!current.includes(resource.subject)) {
+      if (!current.includes(subject)) {
         // A resource that names this parent but is not in the list means the
         // query was answered before it existed — a child created moments ago,
         // or a device that loaded the drive while the commit was still
@@ -225,9 +226,16 @@ export function useChildren(parentSubject: string | undefined): {
         // shown.
         if (
           parentSubject &&
-          resource.get(core.properties.parent) === parentSubject
+          canonicalizeScheme(
+            String(resource.get(core.properties.parent) ?? ''),
+          ) === canonicalizeScheme(parentSubject) &&
+          // Same reason as the candidate filter above. This branch had no
+          // such check, so a destroyed child that a stale answer hydrated
+          // back into the store was re-added here even while the candidate
+          // filter was dropping it.
+          !store.isDestroyed(resource.subject)
         ) {
-          const sorted = await sortMembers([...current, resource.subject]);
+          const sorted = await sortMembers([...current, subject]);
           if (cancelled) return;
 
           setSubjects(prev =>

@@ -8,6 +8,7 @@ import { EditRoute } from './EditRoute';
 import { DataRoute } from './DataRoute';
 import { ShortcutsRoute } from './ShortcutsRoute';
 import { AboutRoute } from './AboutRoute';
+import { NotificationsRoute } from './NotificationsRoute';
 import { AgentSettingsRoute } from './SettingsAgent';
 import { SyncRoute } from './SyncRoute';
 import { ServerSettingsRoute } from './SettingsServer';
@@ -41,13 +42,6 @@ const DemoRoute = createRoute({
   getParentRoute: () => appRoute,
   path: pathNames.demo,
 }).lazy(() => import('./DemoRoute').then(mod => mod.demoRouteLazy));
-
-const DevonianDemoRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/devonian-demo',
-}).lazy(() =>
-  import('./DevonianDemoRoute').then(mod => mod.devonianDemoRouteLazy),
-);
 
 const PruneTestsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -90,6 +84,7 @@ const routeTree = rootRoute.addChildren({
     OnboardingRoute,
     ShareRoute,
     AboutRoute,
+    NotificationsRoute,
     TokenRoute,
     HistoryRoute,
     NewRoute,
@@ -98,7 +93,6 @@ const routeTree = rootRoute.addChildren({
     SandboxRoute,
     DevDriveRoute,
     DemoRoute,
-    DevonianDemoRoute,
     InviteRoute,
     LinkOpenRouter,
   }),

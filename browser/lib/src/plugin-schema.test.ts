@@ -144,4 +144,154 @@ describe('ensureSchema', () => {
     const second = await ensureSchema(store, DRIVE, pluginLikeSpec);
     expect(second).toEqual(first);
   });
+
+  it('saves the terms it has to create at the same time', async () => {
+    // One save per term, awaited one after the other, is the whole wait
+    // between asking for a plugin and seeing its page: on a drive with no
+    // schema that was sixteen round trips before anything appeared, which the
+    // e2e suite saw as a page that never arrived. The terms are independent,
+    // so a slow save must not hold up the next one.
+    const store = makeStore();
+    let openSaves = 0;
+    let mostAtOnce = 0;
+    const releases: Array<() => void> = [];
+
+    const inner = store.newResource;
+    store.newResource = vi.fn(async opts => {
+      const resource = await inner(opts);
+
+      return {
+        ...resource,
+        save: async () => {
+          openSaves += 1;
+          mostAtOnce = Math.max(mostAtOnce, openSaves);
+          // Hold every save open until they have all arrived. Sequential code
+          // deadlocks here rather than passing slowly, so this cannot regress
+          // into a test that merely takes longer.
+          await new Promise<void>(resolve => releases.push(resolve));
+          openSaves -= 1;
+        },
+      };
+    });
+
+    const spec: SchemaSpec = {
+      properties: ['one', 'two', 'three'].map(shortname => ({
+        shortname,
+        name: shortname,
+        description: shortname,
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const pending = ensureSchema(store, DRIVE, spec);
+    await vi.waitFor(() => expect(releases.length).toBe(3));
+    for (const release of releases) release();
+
+    const schema = await pending;
+    expect(Object.keys(schema.properties)).toEqual(['one', 'two', 'three']);
+    expect(mostAtOnce).toBe(3);
+  });
+
+  it('refuses an incompatible shared term before creating any sibling', async () => {
+    const shared = 'https://x/drive/shared-count';
+    const store = makeStore({
+      [shared]: {
+        subject: shared,
+        isA: [],
+        props: {
+          [core.properties.isA]: [core.classes.property],
+          [core.properties.datatype]: Datatype.STRING,
+        },
+      },
+    });
+
+    const spec: SchemaSpec = {
+      properties: [
+        ...['one', 'two', 'three'].map(shortname => ({
+          shortname,
+          name: shortname,
+          description: shortname,
+          datatype: Datatype.STRING,
+        })),
+        {
+          shortname: 'count',
+          name: 'Count',
+          description: 'Bound to a term of the wrong datatype.',
+          datatype: Datatype.INTEGER,
+          subject: shared,
+        },
+      ],
+      classes: [],
+    };
+
+    await expect(ensureSchema(store, DRIVE, spec)).rejects.toThrow(
+      /incompatible property datatype/,
+    );
+    expect(store.newResource).not.toHaveBeenCalled();
+  });
+
+  it('keeps the ontology list in spec order however the creates finish', async () => {
+    const store = makeStore();
+    const create = store.newResource;
+    store.newResource = vi.fn(async opts => {
+      // Later specs finish first: the last one waits the least.
+      const shortname = String(opts.propVals[core.properties.shortname]);
+      const delay = 20 - Number(shortname.split('-')[1]) * 5;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      return create(opts);
+    });
+
+    const spec: SchemaSpec = {
+      properties: Array.from({ length: 4 }, (_, i) => ({
+        shortname: `field-${i}`,
+        name: `Field ${i}`,
+        description: 'A field.',
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const terms = await ensureSchema(store, DRIVE, spec);
+    const listed = store.world[ONTOLOGY].props[core.properties.properties];
+
+    expect(listed).toEqual([
+      terms.properties['field-0'],
+      terms.properties['field-1'],
+      terms.properties['field-2'],
+      terms.properties['field-3'],
+    ]);
+  });
+
+  it('keeps the ontology in spec order when only some terms are new', async () => {
+    // The created terms are awaited together, so their order is whatever the
+    // server answers first. What an ontology lists is read by people, so it
+    // follows the spec regardless.
+    const spec: SchemaSpec = {
+      properties: ['alpha', 'beta', 'gamma'].map(shortname => ({
+        shortname,
+        name: shortname,
+        description: shortname,
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const store = makeStore();
+    await ensureSchema(store, DRIVE, {
+      properties: [spec.properties[1]],
+      classes: [],
+    });
+    const beta = store.world[ONTOLOGY].props[core.properties.properties];
+    expect(beta).toHaveLength(1);
+
+    await ensureSchema(store, DRIVE, spec);
+    const listed = store.world[ONTOLOGY].props[
+      core.properties.properties
+    ] as string[];
+    const shortnameOf = (subject: string) =>
+      store.world[subject].props[core.properties.shortname];
+    expect(listed.map(shortnameOf)).toEqual(['beta', 'alpha', 'gamma']);
+  });
 });

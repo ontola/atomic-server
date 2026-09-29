@@ -78,6 +78,28 @@ describe('table templates', () => {
           } else {
             expect(column.options).toBeUndefined();
           }
+
+          // A select default is one of its options, or the table can't be built.
+          if (column.type === 'select' && column.default !== undefined) {
+            expect(column.options).toContain(column.default);
+          }
+        }
+      });
+
+      it('starts new rows in the first lane of a status board', () => {
+        // A task added from the calendar or the grid should land in the board's
+        // Todo lane, not in "No status". Boards over a workflow (a Status or
+        // Stage column) say where new rows start.
+        for (const view of spec.views ?? []) {
+          const column = spec.columns.find(c => c.name === view.groupByColumn);
+
+          if (
+            view.kind === 'kanban' &&
+            column &&
+            /^(status|stage|rsvp)$/i.test(column.name)
+          ) {
+            expect(column.default).toBe(column.options?.[0]);
+          }
         }
       });
 
@@ -103,6 +125,13 @@ describe('table templates', () => {
             if (view.kind === 'kanban') {
               // The board's columns are the tags of a select column.
               expect(typeOf(view.groupByColumn ?? '')).toBe('select');
+            }
+
+            if (view.kind === 'issues') {
+              // Open vs closed is read from a select's tags or a checkbox.
+              expect(['select', 'checkbox']).toContain(
+                typeOf(view.groupByColumn ?? ''),
+              );
             }
 
             if (view.kind === 'calendar') {

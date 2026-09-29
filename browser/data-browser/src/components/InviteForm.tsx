@@ -1,46 +1,45 @@
 import { TeamProfileStep } from './TeamProfileStep';
 import {
-  useResource,
   useResourceSnapshot,
   useString,
   useStore,
   Resource,
-  urls,
   useCurrentAgent,
-  core,
   server,
   dataBrowser,
 } from '@tomic/react';
-import { generateInviteToken } from '@tomic/lib';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog';
-import { prepareDriveSharing } from '../helpers/managed/prepareDriveSharing';
 import { managedFetch } from '../helpers/managed/api';
-import {
-  automaticPeerRoom,
-  defaultPeerSignalingUrl,
-  savePeerLink,
-  resumePeerLinks,
-} from '../helpers/browserPeerSync';
+import { useCreateInviteLink } from './Share/useCreateInviteLink';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import toast from 'react-hot-toast';
 import { ErrorLook } from './ErrorLook';
 import { Button } from './Button';
 import { Column, Row } from './Row';
 import { CodeBlock } from './CodeBlock';
-import ResourceField from './forms/ResourceField';
+import { Checkbox, CheckboxLabel } from './forms/Checkbox';
 
 interface InviteFormProps {
   /** The resource that becomes accessible on opening the invite */
   target: Resource;
   inDialog?: boolean;
+  /** Shown above the form, e.g. a warning about what is being shared */
+  notice?: ReactNode;
+  /** Rendered next to the Create button */
+  secondaryAction?: ReactNode;
 }
 
 /**
  * Allows the user to create a new Invite for some resource. Outputs the
  * generated Subject after saving.
  */
-export function InviteForm({ target, inDialog }: InviteFormProps) {
+export function InviteForm({
+  target,
+  inDialog,
+  notice,
+  secondaryAction,
+}: InviteFormProps) {
   const [agent] = useCurrentAgent();
   const {
     resource: profile,
@@ -60,7 +59,9 @@ export function InviteForm({ target, inDialog }: InviteFormProps) {
       key={agent?.subject}
       target={target}
       inDialog={inDialog}
-      skipProfile={!!icon}
+      notice={notice}
+      secondaryAction={secondaryAction}
+      skipProfile={!!icon || profileReviewedBefore(agent?.subject)}
     />
   );
 }
@@ -69,15 +70,15 @@ function InviteFormContent({
   target,
   skipProfile,
   inDialog,
+  notice,
+  secondaryAction,
 }: InviteFormProps & { skipProfile: boolean }) {
   const store = useStore();
-  const [subject] = useState(() => store.createSubject());
-  const invite = useResource(subject, {
-    newResource: true,
-  });
+  const [write, setWrite] = useState(false);
   const isSaas = !!getManagedPortalUrl();
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [agent] = useCurrentAgent();
+  const createInviteLink = useCreateInviteLink(target);
   const [profileReviewed, setProfileReviewed] = useState(skipProfile);
   const [saved, setSaved] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | undefined>(undefined);
@@ -126,72 +127,12 @@ function InviteFormContent({
   }, [isSaas, target, store]);
 
   /** Generates the signed token and constructs the invite URL */
-  const createInvite = useCallback(async () => {
+  const createInvite = async () => {
     setCreating(true);
     setErr(undefined);
 
     try {
-      if (!agent) {
-        throw new Error('No agent found');
-      }
-
-      const write = (await invite.get(server.properties.write)) as boolean;
-      const expiresAt = (await invite.get(
-        urls.properties.invite.expiresAt,
-      )) as number;
-
-      const isDrive = target.hasClasses(server.classes.drive);
-      let browserPeer = isDrive && store.isLocalOnlyDrive(target.subject);
-
-      if (isDrive && isSaas && !browserPeer) {
-        const response = await managedFetch('/sync-enrollments', {});
-        if (!response.ok || response.status === 204)
-          throw new Error(
-            'Sign in to your portal account to check this drive before sharing.',
-          );
-        const body = await response.json();
-        const enrollments = Array.isArray(body) ? body : body.enrollments;
-        if (!Array.isArray(enrollments))
-          throw new Error('Could not check Cloud Server status. Try again.');
-        browserPeer = await prepareDriveSharing(
-          store,
-          target.subject,
-          enrollments,
-        );
-      }
-
-      if (
-        browserPeer &&
-        !(await store.getClientDb()?.getResourceWithSnapshot(target.subject))
-          ?.snapshot
-      )
-        throw new Error(
-          'Wait for this drive to be saved on this device before sharing.',
-        );
-      const tokenBase64 = await generateInviteToken(
-        target.subject,
-        agent,
-        !!write,
-        expiresAt,
-        invite.get(core.properties.description) as string | undefined,
-        browserPeer,
-      );
-
-      if (browserPeer) {
-        savePeerLink(store, {
-          drive: target.subject,
-          room: await automaticPeerRoom(target.subject),
-          signalingUrl: defaultPeerSignalingUrl(),
-        });
-        resumePeerLinks(store);
-      }
-
-      const baseUrl = browserPeer
-        ? window.location.origin
-        : store.getServerUrl();
-      const finalUrl = `${baseUrl}/app/invite?token=${encodeURIComponent(
-        tokenBase64,
-      )}`;
+      const finalUrl = await createInviteLink({ write });
 
       setInviteUrl(finalUrl);
       setSaved(true);
@@ -202,25 +143,19 @@ function InviteFormContent({
     } finally {
       setCreating(false);
     }
-  }, [invite, agent, target, store, isSaas]);
+  };
 
   if (agent?.subject && !profileReviewed) {
+    const agentSubject = agent.subject;
+
     return (
       <InviteFormLayout inDialog={inDialog}>
         <TeamProfileStep
-          subject={agent.subject}
-          onContinue={() => setProfileReviewed(true)}
-        />
-      </InviteFormLayout>
-    );
-  }
-
-  if (agent?.subject && !profileReviewed) {
-    return (
-      <InviteFormLayout inDialog={inDialog}>
-        <TeamProfileStep
-          subject={agent.subject}
-          onContinue={() => setProfileReviewed(true)}
+          subject={agentSubject}
+          onContinue={() => {
+            rememberProfileReviewed(agentSubject);
+            setProfileReviewed(true);
+          }}
         />
       </InviteFormLayout>
     );
@@ -231,17 +166,20 @@ function InviteFormContent({
       <InviteFormLayout
         inDialog={inDialog}
         actions={
-          <Button disabled={creating} onClick={createInvite}>
-            {creating ? 'Preparing invite…' : 'Create'}
-          </Button>
+          <>
+            {secondaryAction}
+            <Button disabled={creating} onClick={createInvite}>
+              {creating ? 'Preparing invite…' : 'Create'}
+            </Button>
+          </>
         }
       >
         <Column gap='1rem'>
-          <ResourceField
-            label={'Allow edits'}
-            propertyURL={server.properties.write}
-            resource={invite}
-          />
+          {notice}
+          <CheckboxLabel>
+            <Checkbox checked={write} onChange={setWrite} />
+            <span>Allow edits</span>
+          </CheckboxLabel>
           {seats &&
             seats.drive ===
               (target.hasClasses(server.classes.drive)
@@ -255,11 +193,6 @@ function InviteFormContent({
                 Viewers are free.
               </p>
             )}
-          <ResourceField
-            label={'Invite text (optional)'}
-            propertyURL={core.properties.description}
-            resource={invite}
-          />
           {err && (
             <p>
               <ErrorLook>{err.message}</ErrorLook>
@@ -275,6 +208,31 @@ function InviteFormContent({
         <CodeBlock content={inviteUrl!} data-test='invite-code' />
       </InviteFormLayout>
     );
+}
+
+const PROFILE_REVIEWED_KEY = 'inviteProfileReviewed';
+
+/**
+ * Share opens on the invite, so without this someone who skips the optional
+ * picture would get the profile step on every Share click. Once per agent on
+ * this device is enough of a nudge.
+ */
+export function profileReviewedBefore(agent: string | undefined): boolean {
+  if (!agent) return false;
+
+  try {
+    return localStorage.getItem(PROFILE_REVIEWED_KEY) === agent;
+  } catch {
+    return false;
+  }
+}
+
+export function rememberProfileReviewed(agent: string): void {
+  try {
+    localStorage.setItem(PROFILE_REVIEWED_KEY, agent);
+  } catch {
+    /* Without storage the step simply shows again next time. */
+  }
 }
 
 function InviteFormLayout({

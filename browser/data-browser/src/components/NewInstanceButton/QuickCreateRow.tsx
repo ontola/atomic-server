@@ -7,12 +7,14 @@ import {
   FaVideo,
 } from 'react-icons/fa6';
 import type { CSSProperties, JSX } from 'react';
-import { styled } from 'styled-components';
+import { css, keyframes, styled } from 'styled-components';
+import { transparentize } from 'polished';
 import { Row } from '../Row';
 import { IconButton } from '../IconButton/IconButton';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { dataBrowser } from '@tomic/react';
 import { useNewRoute } from '../../helpers/useNewRoute';
+import { useNewActionDiscovered } from '../../hooks/useNewActionDiscovered';
 
 interface QuickCreateRowProps {
   parent: string;
@@ -21,6 +23,12 @@ interface QuickCreateRowProps {
   newResourceButtonTestId?: string;
   /** e.g. close sidebar on narrow viewports (same callback as sidebar resource links). */
   onItemClick?: () => unknown;
+  /**
+   * Make "New" stand out until this browser has opened the New page once.
+   * Only the drive's sidebar row sets this, so there's one highlighted
+   * button on screen, not one per folder.
+   */
+  highlightUntilUsed?: boolean;
 }
 
 /** Leading column width matches sidebar tree class / caret slot (see SidebarItemTitle). */
@@ -32,8 +40,11 @@ export function QuickCreateRow({
   className,
   newResourceButtonTestId,
   onItemClick,
+  highlightUntilUsed,
 }: QuickCreateRowProps): JSX.Element {
   const createNewResource = useNewResourceUI();
+  const [newActionDiscovered] = useNewActionDiscovered();
+  const highlight = !!highlightUntilUsed && !newActionDiscovered;
   // The "New" button needs to land on /app/new with `parent` preserved as
   // `parentSubject` — otherwise NewRoute falls back to drive and any upload
   // there gets reparented to the drive instead of this row's container.
@@ -41,11 +52,13 @@ export function QuickCreateRow({
 
   return (
     <QuickRow gap='0.15rem' center align='center' className={className}>
-      <NewResourceOpacity>
+      <NewResourceOpacity $highlight={highlight}>
         <NewResourceTrigger
           type='button'
           title='New resource'
           data-testid={newResourceButtonTestId}
+          data-highlighted={highlight || undefined}
+          $highlight={highlight}
           onClick={() => {
             onItemClick?.();
             navigateToNewRoute();
@@ -121,9 +134,9 @@ export function QuickCreateRow({
   );
 }
 
-const NewResourceOpacity = styled.span`
+const NewResourceOpacity = styled.span<{ $highlight: boolean }>`
   display: inline-flex;
-  opacity: 0.55;
+  opacity: ${p => (p.$highlight ? 1 : 0.55)};
   transition: opacity 0.2s;
 
   &:hover {
@@ -131,7 +144,16 @@ const NewResourceOpacity = styled.span`
   }
 `;
 
-const NewResourceTrigger = styled.button`
+/** Delay before the pulse, so it greets someone who's looking around rather
+ *  than competing with the page they just landed on. */
+const HIGHLIGHT_PULSE_DELAY = '20s';
+
+const pulseRing = (color: string) => keyframes`
+  0% { box-shadow: 0 0 0 0 ${transparentize(0.4, color)}; }
+  70%, 100% { box-shadow: 0 0 0 0.45rem ${transparentize(1, color)}; }
+`;
+
+const NewResourceTrigger = styled.button<{ $highlight: boolean }>`
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -157,6 +179,29 @@ const NewResourceTrigger = styled.button`
     outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: 1px;
   }
+
+  /* First-time users: an accent "New" with a soft tint, and after a while a
+     few gentle pulses. box-shadow rather than a scale, so the box never
+     moves under the pointer. Once the New page has been opened this falls
+     back to the quiet grey row. */
+  ${p =>
+    p.$highlight &&
+    css`
+      padding-inline-end: 0.6rem;
+      color: ${p.theme.colors.main};
+      background-color: ${p.theme.colors.mainSelectedBg};
+      font-weight: 500;
+      animation: ${pulseRing(p.theme.colors.main)} 1.8s ease-out
+        ${HIGHLIGHT_PULSE_DELAY} 4;
+
+      &:hover {
+        background-color: ${transparentize(0.85, p.theme.colors.main)};
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    `}
 `;
 
 const PlusSlot = styled.span`

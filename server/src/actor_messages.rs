@@ -145,6 +145,8 @@ pub struct Subscribe {
     /// to subscribers whose `source_id` matches an event's `source_id`,
     /// so a client never receives its own commit back.
     pub source_id: String,
+    /// Whether the connection listed `canonical-scheme` in its HELLO.
+    pub canonical_scheme: bool,
 }
 
 /// The `UNSUB <subject>` frame: cancel a [`Subscribe`]. Removes this

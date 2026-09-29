@@ -16,6 +16,9 @@ export const server = {
     invite: 'https://atomicdata.dev/classes/Invite',
     redirect: 'https://atomicdata.dev/classes/Redirect',
     plugin: 'https://atomicdata.dev/classes/Plugin',
+    release: 'https://atomicdata.dev/classes/Release',
+    installation: 'https://atomicdata.dev/classes/Installation',
+    listing: 'https://atomicdata.dev/classes/Listing',
   },
   properties: {
     agent: 'https://atomicdata.dev/properties/invite/agent',
@@ -59,6 +62,22 @@ export const server = {
     pluginPermissions: 'https://atomicdata.dev/properties/pluginPermissions',
     searchChunks: 'https://atomicdata.dev/properties/search/chunks',
     llmTxt: 'https://atomicdata.dev/properties/llm-txt',
+    runtime: 'https://atomicdata.dev/properties/runtime',
+    world: 'https://atomicdata.dev/properties/world',
+    manifest: 'https://atomicdata.dev/properties/manifest',
+    source: 'https://atomicdata.dev/properties/source',
+    package: 'https://atomicdata.dev/properties/package',
+    schemas: 'https://atomicdata.dev/properties/schemas',
+    releaseId: 'https://atomicdata.dev/properties/releaseId',
+    previousRelease: 'https://atomicdata.dev/properties/previousRelease',
+    publisher: 'https://atomicdata.dev/properties/publisher',
+    release: 'https://atomicdata.dev/properties/release',
+    grants: 'https://atomicdata.dev/properties/grants',
+    installationStatus: 'https://atomicdata.dev/properties/installationStatus',
+    domains: 'https://atomicdata.dev/properties/domains',
+    standards: 'https://atomicdata.dev/properties/standards',
+    evidence: 'https://atomicdata.dev/properties/evidence',
+    supportTier: 'https://atomicdata.dev/properties/supportTier',
   },
   __classDefs: {
     ['https://atomicdata.dev/classes/Drive']: [
@@ -117,6 +136,45 @@ export const server = {
       'https://atomicdata.dev/properties/pluginAgent',
       'https://atomicdata.dev/properties/pluginPermissions',
     ],
+    ['https://atomicdata.dev/classes/Release']: [
+      'https://atomicdata.dev/properties/runtime',
+      'https://atomicdata.dev/properties/manifest',
+      'https://atomicdata.dev/properties/releaseId',
+      'https://atomicdata.dev/properties/world',
+      'https://atomicdata.dev/properties/source',
+      'https://atomicdata.dev/properties/package',
+      'https://atomicdata.dev/properties/schemas',
+      'https://atomicdata.dev/properties/version',
+      'https://atomicdata.dev/properties/previousRelease',
+      'https://atomicdata.dev/properties/publisher',
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/description',
+    ],
+    ['https://atomicdata.dev/classes/Installation']: [
+      'https://atomicdata.dev/properties/release',
+      'https://atomicdata.dev/properties/releaseId',
+      'https://atomicdata.dev/properties/installationStatus',
+      'https://atomicdata.dev/properties/config',
+      'https://atomicdata.dev/properties/grants',
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/namespace',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/pluginAgent',
+      'https://atomicdata.dev/properties/pluginPermissions',
+      'https://atomicdata.dev/properties/jsonSchema',
+      'https://atomicdata.dev/properties/version',
+    ],
+    ['https://atomicdata.dev/classes/Listing']: [
+      'https://atomicdata.dev/properties/name',
+      'https://atomicdata.dev/properties/release',
+      'https://atomicdata.dev/properties/emoji',
+      'https://atomicdata.dev/properties/description',
+      'https://atomicdata.dev/properties/publisher',
+      'https://atomicdata.dev/properties/domains',
+      'https://atomicdata.dev/properties/standards',
+      'https://atomicdata.dev/properties/evidence',
+      'https://atomicdata.dev/properties/supportTier',
+    ],
   },
 } as const satisfies OntologyBaseObject;
 
@@ -130,6 +188,9 @@ export namespace Server {
   export type Invite = typeof server.classes.invite;
   export type Redirect = typeof server.classes.redirect;
   export type Plugin = typeof server.classes.plugin;
+  export type Release = typeof server.classes.release;
+  export type Installation = typeof server.classes.installation;
+  export type Listing = typeof server.classes.listing;
 }
 
 declare module '../index.js' {
@@ -204,6 +265,54 @@ declare module '../index.js' {
         | typeof server.properties.pluginAgent
         | typeof server.properties.pluginPermissions;
     };
+    [server.classes.release]: {
+      requires:
+        | BaseProps
+        | typeof server.properties.runtime
+        | typeof server.properties.manifest
+        | typeof server.properties.releaseId;
+      recommends:
+        | typeof server.properties.world
+        | typeof server.properties.source
+        | typeof server.properties.package
+        | typeof server.properties.schemas
+        | typeof server.properties.version
+        | typeof server.properties.previousRelease
+        | typeof server.properties.publisher
+        | 'https://atomicdata.dev/properties/name'
+        | 'https://atomicdata.dev/properties/description';
+    };
+    [server.classes.installation]: {
+      requires:
+        | BaseProps
+        | typeof server.properties.release
+        | typeof server.properties.releaseId
+        | typeof server.properties.installationStatus;
+      recommends:
+        | typeof server.properties.config
+        | typeof server.properties.grants
+        | 'https://atomicdata.dev/properties/name'
+        | typeof server.properties.namespace
+        | 'https://atomicdata.dev/properties/description'
+        | typeof server.properties.pluginAgent
+        | typeof server.properties.pluginPermissions
+        | typeof server.properties.jsonSchema
+        | typeof server.properties.version;
+    };
+    [server.classes.listing]: {
+      requires:
+        | BaseProps
+        | 'https://atomicdata.dev/properties/name'
+        | typeof server.properties.release;
+      recommends:
+        | 'https://atomicdata.dev/properties/emoji'
+        | 'https://atomicdata.dev/properties/description'
+        | typeof server.properties.publisher
+        | typeof server.properties.domains
+        | typeof server.properties.standards
+        | typeof server.properties.evidence
+        | typeof server.properties.supportTier;
+    };
   }
 
   interface PropTypeMapping {
@@ -245,6 +354,22 @@ declare module '../index.js' {
     [server.properties.pluginPermissions]: JSONValue;
     [server.properties.searchChunks]: JSONValue;
     [server.properties.llmTxt]: string;
+    [server.properties.runtime]: string;
+    [server.properties.world]: string;
+    [server.properties.manifest]: JSONValue;
+    [server.properties.source]: string;
+    [server.properties.package]: string;
+    [server.properties.schemas]: JSONValue;
+    [server.properties.releaseId]: string;
+    [server.properties.previousRelease]: string;
+    [server.properties.publisher]: string;
+    [server.properties.release]: string;
+    [server.properties.grants]: JSONValue;
+    [server.properties.installationStatus]: string;
+    [server.properties.domains]: JSONValue;
+    [server.properties.standards]: string[];
+    [server.properties.evidence]: JSONValue;
+    [server.properties.supportTier]: string;
   }
 
   interface PropSubjectToNameMapping {
@@ -286,5 +411,21 @@ declare module '../index.js' {
     [server.properties.pluginPermissions]: 'pluginPermissions';
     [server.properties.searchChunks]: 'searchChunks';
     [server.properties.llmTxt]: 'llmTxt';
+    [server.properties.runtime]: 'runtime';
+    [server.properties.world]: 'world';
+    [server.properties.manifest]: 'manifest';
+    [server.properties.source]: 'source';
+    [server.properties.package]: 'package';
+    [server.properties.schemas]: 'schemas';
+    [server.properties.releaseId]: 'releaseId';
+    [server.properties.previousRelease]: 'previousRelease';
+    [server.properties.publisher]: 'publisher';
+    [server.properties.release]: 'release';
+    [server.properties.grants]: 'grants';
+    [server.properties.installationStatus]: 'installationStatus';
+    [server.properties.domains]: 'domains';
+    [server.properties.standards]: 'standards';
+    [server.properties.evidence]: 'evidence';
+    [server.properties.supportTier]: 'supportTier';
   }
 }

@@ -1,18 +1,12 @@
-import { styled } from 'styled-components';
 import {
   ai,
   commits,
   core,
   unknownSubject,
-  useArray,
-  useChildren,
   useCollection,
   useResource,
-  useString,
 } from '@tomic/react';
-import { useEffect, useRef, useState, type JSX } from 'react';
-import { DragAreaBase, useResizable } from '@hooks/useResizable';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useEffect, useState, type JSX } from 'react';
 import { FaPlus, FaRegComment } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { useAISidebar } from '@components/AI/AISidebarContext';
@@ -24,69 +18,44 @@ import {
   SideBarMenuRowIcon,
   SideBarMenuItemLink,
 } from './SideBarMenuItem';
+import { SideBarPanel } from './SideBarPanel';
 
-/**
- * Lists the user's AI chats: the children of the personal drive's "AI Chats"
- * folder (a standard location), newest first, plus any legacy chats that still
- * live directly under the drive root. Rows match the Favorites / Shared-with-me
- * panels. Listing children directly (instead of full-text search) means the
- * panel is populated as soon as the resources are, with no index lag.
- */
+/** Discover chats throughout the private drive, including legacy duplicate folders. */
 export function AIChatsPanel(): JSX.Element | null {
   const { privateDrive } = usePrivateDrive();
-  const driveResource = useResource(privateDrive);
-  const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
-  const folderChats = useNewestFirstChildren(aiChatsFolder);
-  const { subjects: rootChildren } = useChildren(
-    privateDrive ?? unknownSubject,
-  );
-  const chats = folderChats;
-  // The list height is the user's to set: drag the bar under it. Remembered per device.
-  const listRef = useRef<HTMLDivElement>(null);
-  const [storedHeight, setStoredHeight] = useLocalStorage(
-    'aiChatsPanelHeight',
-    320,
-  );
-  const { size, dragAreaRef, dragAreaListeners, isDragging } = useResizable({
-    initialSize: storedHeight,
-    minSize: 60,
-    maxSize: 1200,
-    targetRef: listRef,
-    edge: 'top',
-    onResize: setStoredHeight,
-  });
+  const chats = useDriveChats(privateDrive);
+
+  if (chats.length === 0) return null;
 
   return (
-    <>
-      <Wrapper ref={listRef} style={{ maxHeight: size }}>
-        {chats.map(subject => (
-          <ChatLink key={subject} subject={subject} />
-        ))}
-        {rootChildren.map(subject => (
-          <LegacyRootChat key={subject} subject={subject} />
-        ))}
-      </Wrapper>
-      <HeightHandle
-        ref={dragAreaRef}
-        isDragging={isDragging}
-        title='Drag to resize'
-        {...dragAreaListeners}
-      />
-    </>
+    <SideBarPanel
+      title='AI Chats'
+      heightStorageKey='aiChatsPanelHeight'
+      data-testid='ai-chats-panel'
+      actions={<NewSidebarChatButton />}
+    >
+      {chats.map(subject => (
+        <ChatLink key={subject} subject={subject} />
+      ))}
+    </SideBarPanel>
   );
 }
 
-/**
- * Children of the given folder, newest first. Live: the collection updates
- * membership from store events without refetching.
- */
-function useNewestFirstChildren(folder: string | undefined): string[] {
+/** Live class query, independent of the drive's storage-folder pointer. */
+function useDriveChats(drive: string | undefined): string[] {
   const [subjects, setSubjects] = useState<string[]>([]);
 
   const { collection, ready } = useCollection(
     {
-      property: core.properties.parent,
-      value: folder ?? unknownSubject,
+      property: core.properties.isA,
+      value: ai.classes.aiChat,
+      filters: [
+        {
+          property: 'https://atomicdata.dev/properties/drive',
+          value: drive ?? unknownSubject,
+        },
+      ],
+      drive: drive ?? unknownSubject,
       sort_by: commits.properties.createdAt,
       sort_desc: true,
     },
@@ -94,7 +63,7 @@ function useNewestFirstChildren(folder: string | undefined): string[] {
   );
 
   useEffect(() => {
-    if (!ready || !folder) {
+    if (!ready || !drive) {
       setSubjects([]);
 
       return;
@@ -123,34 +92,10 @@ function useNewestFirstChildren(folder: string | undefined): string[] {
     return () => {
       cancelled = true;
     };
-  }, [collection, ready, folder]);
+  }, [collection, ready, drive]);
 
   return subjects;
 }
-
-/** Chats from before the AI Chats folder existed sit directly under the drive root. */
-function LegacyRootChat({ subject }: { subject: string }): JSX.Element | null {
-  const resource = useResource(subject);
-  const [isA] = useArray(resource, core.properties.isA);
-
-  if (!isA.includes(ai.classes.aiChat)) {
-    return null;
-  }
-
-  return <ChatLink subject={subject} />;
-}
-
-const Wrapper = styled.div`
-  overflow-y: auto;
-`;
-
-const HeightHandle = styled(DragAreaBase)`
-  position: relative;
-  height: 6px;
-  width: 100%;
-  margin-top: 2px;
-  cursor: row-resize;
-`;
 
 export function NewSidebarChatButton() {
   const { openChat } = useAISidebar();

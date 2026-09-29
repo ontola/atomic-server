@@ -31,26 +31,53 @@ now live in [`completed/`](./completed/):
 - [`trust-model-decision.md`](./completed/trust-model-decision.md) — the node that owns the URL is trusted with plaintext; anything that only stores is blind.
 - [`schema-routes-decision.md`](./completed/schema-routes-decision.md) — `did:ad:frozen` is the on-ramp, optional schema is the write-path policy.
 
-## Biggest gaps (reconciled against code 2026-09-15)
+## Biggest gaps (reconciled against code 2026-09-18)
 
-Ranked by impact. Each links to the plan that owns the work.
+Ranked by impact. Each links to the plan that owns the work. Gaps closed since
+the 2026-09-15 pass (durable Flutter writes, write-endpoint rate limits,
+envelope replication, the Rust outbox, desktop CSP, dashboard entry point and
+fork review diff) are recorded in their owning plans, not here.
 
-1. ~~**Flutter writes are not durable.**~~ Fixed 2026-09-15: `Db::init_redb_file` owns the durable-flush tick, so every file-backed binding has the same 100ms loss bound. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
-2. ~~**No rate limiting on any write endpoint**~~ (fixed 2026-09-15, `server/src/rate_limit.rs`); the managed-node bootstrap grace still has no reaper. [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3, [`security-audit-2026-09.md`](./security-audit-2026-09.md) D, [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md).
-3. ~~**Signed envelopes do not replicate**~~ Fixed 2026-09-15: envelopes ride in `SYNC_PUSH` and vault packs, verified on receipt. [`auditability-loro-history.md`](./auditability-loro-history.md).
-4. **Flutter and desktop bypass the runtime boundary**: both hold a raw `Db` instead of `AtomicNode`, which is how gap 1 happened. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
-5. **`SYNC_PUSH` is an unsigned cross-trust import** gated by one drive-level ACL verdict; no grant-chain proof exists. [`authorization-sync.md`](./authorization-sync.md).
-6. **npm is seven betas behind**: `@tomic/*` still serves `0.41.0-beta.0`. The `npm` release job exists since 2026-09-15; the next tag publishes once `plugin` and `edit-mode` have trusted-publisher entries. [`production-readiness.md`](./production-readiness.md).
-7. ~~**No Rust outbox**~~ Ported 2026-09-16 (`lib/src/sync/outbox.rs`), drained over WS and over live Iroh links. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
-8. ~~**Desktop CSP is disabled**~~ Set 2026-09-15, pending a packaged-build smoke test. [`security-audit-2026-09.md`](./security-audit-2026-09.md).
-9. **Plugins and code-first schemas live only in unmergeable PRs** (#1307 at 532 files with conflicts, #1262 a stale draft). [`plugins.md`](./plugins.md), [`json-schema-code-first.md`](./json-schema-code-first.md).
-10. ~~**Dashboards have no entry point and fork review shows only a count.**~~ Both closed 2026-09-16: a table's dashboard is a view tab, and the fork bar shows the per-property diff. Still open there: suggest-for-non-writers, per-property revert, Canvas forks. [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
+1. **The query index silently drops rows.** A drive-scoped, sorted,
+   class-filtered query returns fewer members than exist: the ignored test
+   `is_a_encodings_all_match_the_class_constraint` in `lib/src/db/test.rs`
+   reproduces `query_sorted_indexed` returning 2 of 3 matching rows, and
+   [`silent-failures.md`](./silent-failures.md) carries two open entries for
+   the same shape (5 of 22 Houseplants rows). PR in flight.
+2. **Flutter and desktop bypass the runtime boundary.** Flutter keeps a
+   `static DB: OnceLock<Arc<Db>>` and wraps it in `AtomicNode::from_db` per
+   call (`flutter/rust/src/api/simple/state.rs`); the desktop app holds a raw
+   `atomic_lib::Db` (`desktop/src/lib.rs`). [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
+3. **`SYNC_PUSH` is an unsigned cross-trust import** gated by one drive-level
+   verdict (`admit_drive_write` / write rights in `lib/src/sync/engine.rs`);
+   no `AuthorizationProof` type exists in `lib/src`. [`authorization-sync.md`](./authorization-sync.md).
+4. **The store grows with every write and is never compacted.** `sign_at`
+   (`lib/src/commit.rs`) exports a full Loro snapshot per commit although its
+   docstring promises an incremental update, and compaction exists only as the
+   `atomic-server compact` subcommand (`server/src/bin.rs`). PR in flight.
+   [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md).
+5. **npm is seven betas behind**: the workspace is at `0.41.0-beta.7`, the
+   registry serves `0.41.0-beta.0`. The `npm` job in `release.yml` exists
+   since 2026-09-15 and #1355 (merged 2026-09-18) fixed its build order and
+   publish step; the next `v*` tag publishes once the remaining
+   trusted-publisher entries are in place. [`production-readiness.md`](./production-readiness.md).
+6. **The managed-node bootstrap grace has no reaper.** `SyncPolicy` admits
+   any drive for ten minutes after first sight (`lib/src/commit.rs`,
+   `lib/src/sync/policy.rs`) and nothing reaps drives that never enroll.
+   [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) item 4,
+   [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3.
+7. **Code-first schemas live only in an unmergeable PR.** `defineSchema` and
+   frozen `did:ad:` schemas are in #1262, a draft with conflicts last touched
+   2026-09-01; nothing of it is on `develop`. The plugin model itself is no
+   longer in this position: #1500 (merged 2026-09-17) carried it onto
+   `develop`, and #1307 is now behind `develop`. [`json-schema-code-first.md`](./json-schema-code-first.md),
+   [`plugins.md`](./plugins.md).
 
 ## Active
+- [`atomic:` identifier scheme](atomic-scheme.md) — #1584: canonical `atomic:` scheme, dual-accept `did:ad:`, genesis v2.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
-- [Website publishing](./website-publishing.md) — FOSS publication adapter and shared contract for managed SaaS hosting.
-
-- [Assistant-authored websites](./assistant-websites.md) — first local prototype validated; plugin abstraction audit and remaining SaaS deployment work.
+- [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.
+- [Assistant-authored websites](./assistant-websites.md) — prototype merged with #1500; plugin abstraction audit and remaining SaaS deployment work.
 
 Remaining work, not "this file exists."
 
@@ -63,30 +90,27 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
-| [`production-readiness.md`](./production-readiness.md) | **Gate list.** What stands between `develop` and production: npm publishing, rate limiting, library-owned durability, desktop CSP, managed-node abuse gate, source maps, SaaS billing checks. |
+| [`production-readiness.md`](./production-readiness.md) | **Gate list.** Still open between `develop` and production: the first npm publish on a `v*` tag (job landed, #1355 merged 2026-09-18), green paired server/SaaS CI, the managed-node abuse gate, private source maps, backend synthetic error reporting, SaaS billing checks. Rate limiting, library-owned durability and desktop CSP shipped 2026-09-15. |
 | [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6, plus B7 CSP, C18 and rate limits on 2026-09-15). Open: C16 process-global import flags, C17 DID watched-query leak, C20, C24 loopback NFS, permissive CORS, client errors as 500, section F, transitive advisories via actix-http and iroh 0.35. |
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |
 | [`cloud-subscription-panel.md`](./cloud-subscription-panel.md) | **Partial.** Profile and link-invite steps shipped. Remaining: SaaS email invitation to drive authorization in one journey, invitation usage limits, paid-seat approval, real seat counts, 50 GB pool. |
 | [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461. Shard isolation and harness simplification landed (#1463, #1465, #1472); worker matrix, repeated zero-retry acceptance and budgets remain. |
-| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** `@smoke` tag, `test-e2e:light` and the Dagger mode exist; the light suite is about 15 tests against a 25 to 35 target. |
+| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** Automatic PR and feature-branch CI is paused; full Main runs on selected integration batches, `develop`, and tags. `@smoke` and Dagger light mode remain available locally. |
 | [`e2e-diagnostic-hygiene.md`](./e2e-diagnostic-hygiene.md) | **Mostly done.** Collector lifecycles shipped. Remaining: pre-release noise pass, pending-upload placeholder, full strict rerun, catalog flows. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Feedback and React error capture verified on staging. Remaining: independent email receipt check, private source-map upload, backend synthetic reporting. |
 | [`passkey-local-drive-unlock.md`](./passkey-local-drive-unlock.md) | **Fix shipped.** Remaining: original-tab NotFound after sign-out, physical passkey verification, deploy. |
 | [`desktop-pkarr-restore.md`](./desktop-pkarr-restore.md) | **Discovery shipped** (beta.6). Remaining: private-drive enrollment policy (product decision), signed-in private fetch, packaged-build missing text. |
 | [`google-calendar-import-gaps.md`](./google-calendar-import-gaps.md) | **Active audit.** All-day ranges implemented; remaining Google import fidelity work, formats and recurrence integration checklist. |
 | [`extension-architecture.md`](./extension-architecture.md) | **Migration in progress.** Shared view protocol, scope policy and installation identity resolution are implemented; package activation and legacy UI signing remain. Apps contain data/views, connections synchronize sources, automations act; one extension lifecycle and host API, with phased convergence of packaged views, source-as-data apps, JS integrations and Reflector, retaining a separate privileged server-extension boundary. |
-| [`mt940.md`](./mt940.md) | **Pilot implemented.** Sandboxed MT940 import, exact amounts, balance checks, nested table and repeat detection; real bunq sample validated locally; exact-decimal aggregation remains. |
-| [`notion-sync.md`](./notion-sync.md) | **Pilot implemented.** Sandboxed Notion rows, property renames and table/board view mappings; OAuth and named database selection implemented; live OAuth verification and broader parity remain. |
-| [`github-issues-pilot.md`](./github-issues-pilot.md) | **In progress.** Sandboxed GitHub issues ↔ kanban, background sync and code-first automations; live Ontola sandbox flow verified; generated-query snapshot bug fixed. |
+| [`github-issues-pilot.md`](./github-issues-pilot.md) | **Moved to atomic-plugins (PR #1549).** Pilot record: sandboxed GitHub issues ↔ kanban, background sync and code-first automations. The provider and its tests now live in [atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps the runtime, catalog discovery and install. |
 | [`plugin-model-review.md`](./plugin-model-review.md) | **In progress.** Implemented authority/manifest checks, immutable releases, recovery journals and store UI; remaining connection lifecycle and provider certification. |
-| [`connector-scale.md`](./connector-scale.md) | **Active.** GitHub/Notion sync, searchable discovery, optional assistant-led automations, offline evidence and compatible upgrade coverage are implemented; Notion OAuth picker implemented. Shared FOSS authorization transport and host retrieval implemented; SaaS deployment, live OAuth/canaries, migrations and third-party evidence remain open. |
-| [`clockify.md`](./clockify.md) | **Import pilot implemented; live validation pending.** Personal completed entries into Time Tracker through the sandbox; shared per-drive time/project/person schema, reviewed proposals, then two-way sync. |
+| [`connector-scale.md`](./connector-scale.md) | **Partly moved (PR #1549).** Discovery, install, authorization transport and host retrieval stay here; the GitHub and other providers, offline evidence and certification moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). SaaS deployment, live OAuth/canaries, migrations and third-party evidence remain open. |
 | [`schema-catalog.md`](./schema-catalog.md) | **Pilot in progress; catalog proposed.** Shared task properties in templates and GitHub table selection; schema discovery, contribution and evolution; connects frozen releases, templates, import mappings, and JSON Schema compatibility. |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` (`Tree::Envelopes` exists; nothing blocks it). `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05 with only `ChannelTransport`; outbox port and the four `sync_drive_with_peer*` variants are open. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Partial.** Phase 1–2 built; OQ5 library path closed 2026-09-05 (`admit_unknown_drive`: Public never creates, Owner enrolls only the owner). Phase 3 (rate limits, Iroh stream refusal) is untouched. |
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** P1 done, P2 partial (`classify_auth_impact` exists). P3 open: no `AuthorizationProof`, signer still auto-inserted into `write`, `genesis_signer()` has no non-test caller. P4 open: `SYNC_PUSH` imports raw Loro on a drive-level verdict. |
-| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes, outbox, ingress entry points and immutable read/save subscriptions shipped. Remaining: consumer migration (38 `addResource` call sites, 42 `CommitBuilder` refs) and boundary extraction. |
+| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes, outbox, ingress entry points and immutable read/save subscriptions shipped. Remaining: boundary extraction and the `CommitBuilder` review (31 non-test references, all in `browser/lib/src`; `addResource(` has no non-test call site left in `browser/data-browser/src`, counted 2026-09-18). |
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic and the 3-way `build_state_doc` fallback, snapshot backfill (Phase 4), Phase 1.6 `Value` reshape (~966 sites), Flutter undo. |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter. Flutter and desktop still hold a raw `Db`; the node has no blob API; `NodeConfig` was cut. Library-owned durable flush is the first slice. Local KV FTS landed in [`local-search.md`](./local-search.md). |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability, cert-signed `drive` in `check_rights`. |
@@ -102,20 +126,21 @@ browser flow; standalone recovery remains self-managed.
 | [`unified-templates.md`](./unified-templates.md) | **Initial slice shipped** (#1428: catalogue, editable previews, template chat). Remaining: portable format, website adapter, demo-lifecycle extraction, provenance and resume, live-AI acceptance. |
 | [`dashboards.md`](./dashboards.md) | **First slice shipped**, reachable from its table as a `dashboard` view tab since 2026-09-16. Open: the set-level action verb, parameters, templates shipping a dashboard. |
 | [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Nothing in the app resolves translation siblings. Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
-| [`website-templates.md`](./website-templates.md) | Template repair complete (DID), two-locale E2E exists. Its CMS list is the website view of `drafts-and-suggestions.md` and `content-i18n.md`. Open: publication visibility, CMS origin, in-page edit affordance, canonical paths. PRs #1498 and #1500 (assistant-designed and self-hosted sites) are in flight. |
+| [`website-templates.md`](./website-templates.md) | Template repair complete (DID), two-locale E2E exists. Its CMS list is the website view of `drafts-and-suggestions.md` and `content-i18n.md`. Open: publication visibility, CMS origin, in-page edit affordance, canonical paths. Self-hosted publishing (#1500) merged 2026-09-17; the assistant-designed-sites prototype PR #1498 is still an open draft against `feat/plugin-model`. |
 | [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** React subscription audit is partial; save-state APIs shipped with two consumers. Browser metadata cleanup and subject-brand consumers remain; server subscription work is complete. |
 | [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Partial.** Immutable read/save status hooks and the data-inspector subscription shipped; about 13% of property reads are still render-time getters, migrating one regression at a time. |
 | [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Phase A + C landed (browser). Phase B (Flutter action-stack removal, `replace_list_items`) open and unstarted. |
 | [`index-performance.md`](./index-performance.md) | First tranche shipped. Remaining: exact counts, typed sort keys, batched reads, watched-filter LRU, re-profiling. Structural permission-check fix is `zones.md`, not built. |
-| [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes per commit, no auto-compaction, O(file) open fsync, SIGTERM path. Fresh e2e data dirs are done. |
+| [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Partial.** Startup size/reclaimable-space diagnostics and automatic compaction shipped (fix 2); fresh e2e data dirs done. Open: incremental Loro updates per commit (fix 1), history pruning (fix 3), SIGTERM path (fix 4). |
 | [`virtual-drive.md`](./virtual-drive.md) | **Shipped** as a local NFS mount in the Tauri desktop app (`desktop/src/vfs.rs`, unauthenticated loopback, audit C24). Still proposal: headless-server mount, FUSE/WinFSP, native cloud-sync APIs, mobile providers. |
 | [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Superseded.** Envelope-on-resource replaced the retention design; Phase 1 and 2.5 shipped. Only the `stateHash` certificate and per-resource `retention` propval remain from this document. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | **Partial.** Server-wide S3, verified migration and SaaS enforcement implemented. The backend trait is `get/put/size` only: streaming, delete/GC, per-tenant configuration and encrypted Vault attachments remain. |
-| [`plugins.md`](./plugins.md) | **Partial, off `develop`** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307, 532 files, conflicts with `develop`) and #1482. On `develop` the plugin RPC still answers "not implemented". |
+| [`plugins.md`](./plugins.md) | **Partial, on `develop` since #1500** (2026-09-17) — one plugin model (`run` end to end, per-app agents, unattended runs): `browser/plugin`, `browser/lib/src/plugin-run.ts`, `integrations/`, the `wasm-plugins` server routes. PR #1307 is still open but behind `develop` (one file only on that branch). Remaining work is the list in #1307 and `extension-architecture.md`. |
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; nothing on `develop`. `defineSchema` + frozen `did:ad:` schemas are in PR #1262, a draft last touched 2026-09-01. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
-| [`api-plugins.md`](./api-plugins.md) | **Exploratory, off `develop`** — rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. LocalThought catalog/connect and Syncables typed imports are implemented on `codex/localthought-api-plugins`; live verification awaits proxy #25. |
+| [`api-plugins.md`](./api-plugins.md) | **Exploratory; providers moved to atomic-plugins (PR #1549).** Rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. The WASM Syncables path is removed (#1618), so LocalThought connect/sync is broken until its proxy calls move into the plugin iframe. |
+| [`mcp-endpoint.md`](./mcp-endpoint.md) | **Proposal.** Atomic as an MCP server. Local stdio signs as the user; remote HTTP is read-only until issued-agent writes. Does not wait on #1310; remote auth is the #1275 AS shape. |
 
 ### Explorations with no code
 
@@ -130,7 +155,6 @@ Design intent, kept for direction. None has a line of code behind it.
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |
 | [`atomic-forms.md`](./atomic-forms.md) | **Planned.** Forms/Survey feature — schema, builder UI, agent-less submission endpoint, `/form/:id` runtime, results in Tables. Research: [`atomic-forms-research.md`](./atomic-forms-research.md). |
-| [`outbox-drain-data-loss-race.md`](./outbox-drain-data-loss-race.md) | **Confirmed bug, not yet root-caused.** A resource save can report success while the outbox drain silently drops the write — reproduced independent of React/Forms. `forms.spec.ts`'s reload-persistence assertions are deliberately kept strict as regression signal. |
 
 ## Slices and companions
 
@@ -145,8 +169,16 @@ Not top-level plans. Indexed so they do not go missing.
 | [`arc-actor-message-payloads.md`](./arc-actor-message-payloads.md) | **Stretch shipped.** `SendFrame { Arc<[u8]> }` encode-once is in; only the `atomic_lib` `loro_update: Vec<u8>` question remains and is low value now. |
 | [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) | Reference. Cross-client copy for what can reach what. Companion to [`device-pairing.md`](./device-pairing.md). |
 | [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. Phases 1–3 unstarted. |
-| [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists (PR #1347 is the plan). |
-| [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries M8 from the pairing field test and the unreproduced Safari fork query. |
+| [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists ([`mcp-endpoint.md`](./mcp-endpoint.md), #1347 merged 2026-09-18). |
+| [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries the two open query-index entries (gap 1), M8 from the pairing field test, the unreproduced Safari fork query and the e2e harness traps from the #1500 pass. |
+| [`app-setup.md`](./app-setup.md) | Typed app setup checklist: shared JSON Schema input contract, generic setup form, assistant handoff. |
+| [`plugin-secrets.md`](./plugin-secrets.md) | **Built** (2026-08-21, encrypted at rest 2026-08-22). Host-side `secret:<name>` substitution for plugin fetch. |
+| [`plugin-runtime-convergence.md`](./plugin-runtime-convergence.md) | **Proposal** (2026-09-18, #1546). One plugin host across JS and WASM worlds. |
+| [`devonian-reconnect.md`](./devonian-reconnect.md) | Task note: concurrent route resumes consuming one PKCE verifier. The Devonian demo it touched has been removed. |
+| [`account-ai-credits.md`](./account-ai-credits.md) | Included AI for SaaS accounts; contract lives in atomic-saas. |
+| [`ai-chat-draft-persistence.md`](./ai-chat-draft-persistence.md) | **Diagnosed, not fixed** (2026-08-24). AI chats are lost while the model is still generating. |
+| [`live-conversations.md`](./live-conversations.md) | Push-to-talk voice chat with OpenRouter and SaaS credits. |
+| [`dart-sdk-package.md`](./dart-sdk-package.md) | **Proposal** (2026-09-18). Publish `flutter/lib/atomic/` as a Dart SDK package. |
 
 Closed decisions, as-built records, closed explorations and fixed notes live
 in [`completed/`](./completed/): the five decisions above, the 2026-07 sync

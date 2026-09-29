@@ -196,7 +196,9 @@ impl FormBlock {
 pub struct FormVisibility {
     /// `mapsTo` of every visible input field, in document order.
     pub fields: Vec<String>,
-    /// Indices of pages whose own conditions match.
+    /// Indices of pages whose own conditions match. Only the golden-case
+    /// tests read it; submit validation goes by `fields`.
+    #[allow(dead_code)]
     pub page_indices: Vec<usize>,
     /// Per page, which block indices are visible (page-hidden → empty).
     /// Used by the TS renderer; kept here so the two visibility structs match.
@@ -3271,7 +3273,7 @@ mod tests {
     }
 
     fn err_message(result: Result<Value, String>) -> String {
-        result.err().expect("expected a validation error")
+        result.expect_err("expected a validation error")
     }
 
     #[test]

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    {
+      "id": "a",
+      "method": "GET",
+      "url": "https://a.test",
+      "effect": "read"
+    },
+    {
+      "id": "a",
+      "method": "GET",
+      "url": "https://a.test",
+      "effect": "read"
+    }
+  ]
+}

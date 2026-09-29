@@ -1,9 +1,17 @@
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Agent, JSCryptoProvider, core, useStore } from '@tomic/react';
+import {
+  Agent,
+  JSCryptoProvider,
+  agentPublicKey,
+  agentSubject,
+  core,
+  useStore,
+} from '@tomic/react';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { isOriginWithoutNode } from '../helpers/originNode';
+import { isRunningInTauri } from '../helpers/tauri';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { reopenRestoredDrive } from '../helpers/driveData';
@@ -140,7 +148,7 @@ export function NewIdentitySection({
 
     try {
       const agentKeys = await Agent.generateKeyPair();
-      const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+      const agentDID = agentSubject(agentKeys.publicKey);
       const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
       const newAgent = new Agent(agentProvider, agentDID);
 
@@ -154,7 +162,10 @@ export function NewIdentitySection({
       // guest uses; `enableCloudSyncForDrive` lifts it when a node is
       // assigned. Registered right after `setAgent` and before anything
       // async, so no consumer can mount `useResource(agent)` and fetch first.
-      if (getManagedPortalUrl() || isOriginWithoutNode(store.getServerUrl())) {
+      if (
+        !isRunningInTauri() &&
+        (getManagedPortalUrl() || isOriginWithoutNode(store.getServerUrl()))
+      ) {
         store.registerLocalOnlyDrive(agentDID);
         store.registerLocalOnlyDrive(await newAgent.privateDriveSubject());
       }
@@ -203,7 +214,7 @@ export function NewIdentitySection({
       const agentResource = store.getResourceLoading(identity.agentSubject, {
         newResource: true,
       });
-      const publicKey = identity.agentSubject.replace('did:ad:agent:', '');
+      const publicKey = agentPublicKey(identity.agentSubject) ?? '';
 
       await agentResource.set(core.properties.publicKey, publicKey);
       await agentResource.set(core.properties.isA, [core.classes.agent]);

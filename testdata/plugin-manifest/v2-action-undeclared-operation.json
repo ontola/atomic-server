@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "actions": [
+    {
+      "name": "get",
+      "title": "Get",
+      "description": "",
+      "operation": "missing",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ]
+}

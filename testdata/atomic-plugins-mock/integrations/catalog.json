@@ -1,0 +1,31 @@
+[
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/fixture-experimental",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "fixture-experimental",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Fixture (experimental)",
+    "https://atomicdata.dev/properties/emoji": "🧪",
+    "https://atomicdata.dev/properties/description": "An enabled, experimental entry with no API requirement.",
+    "https://atomicdata.dev/integrations/properties/platform": "fixture-experimental",
+    "https://atomicdata.dev/integrations/properties/pluginUrl": "plugin-for-testing/plugin.js"
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/fixture-api",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "fixture-api",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/properties/name": "Fixture (API plugin)",
+    "https://atomicdata.dev/properties/emoji": "🔌",
+    "https://atomicdata.dev/properties/description": "A disabled entry that requires API plugins; specs enable it per test.",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/platform": "fixture-api",
+    "https://atomicdata.dev/integrations/properties/pluginUrl": "plugin-sync/plugin.js"
+  }
+]

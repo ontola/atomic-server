@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as Sentry from '@sentry/react';
-import { submitFeedback } from './feedback';
+import { errorFeedbackMessage, submitFeedback } from './feedback';
 vi.mock('@sentry/react', () => ({ isEnabled: vi.fn(), sendFeedback: vi.fn() }));
 describe('feedback delivery', () => {
   it('rejects disabled reporting', async () => {
@@ -31,5 +31,24 @@ describe('feedback delivery', () => {
   });
   it('rejects blank feedback', async () => {
     await expect(submitFeedback(' ', '')).rejects.toThrow();
+  });
+  it('labels an error report separately and keeps the visible error editable', async () => {
+    vi.mocked(Sentry.isEnabled).mockReturnValue(true);
+    vi.mocked(Sentry.sendFeedback).mockResolvedValue('receipt');
+    const message = errorFeedbackMessage(
+      new Error('Drive did:ad:example is not enrolled for sync on this node.'),
+    );
+    expect(message).toContain('is not enrolled for sync on this node');
+    expect(message).not.toContain('http');
+    await submitFeedback(message, '', 'error');
+    expect(Sentry.sendFeedback).toHaveBeenLastCalledWith(
+      {
+        message,
+        email: undefined,
+        url: '',
+        source: 'error',
+      },
+      { includeReplay: false },
+    );
   });
 });

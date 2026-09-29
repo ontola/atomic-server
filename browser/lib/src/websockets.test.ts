@@ -8,18 +8,20 @@ import {
   ErrorCode,
   CLIENT_CAPABILITIES,
   decodeCommit,
+  encodeEphemeral,
+  decodeEphemeral,
+  EphemeralKind,
+  Flags,
+} from './ws-v2.js';
+import {
   decodeHelloCaps,
   encodeChallenge,
   encodeCommitOkSlim,
   encodeSyncResend,
-  encodeEphemeral,
-  decodeEphemeral,
-  EphemeralKind,
   encodeCommitOk,
   encodeError,
   encodeAuthOk,
-  Flags,
-} from './ws-v2.js';
+} from './test-ws-v2-server.js';
 import { LoroLoader } from './loro-loader.js';
 import type { Commit } from './commit.js';
 import { serializeDeterministically } from './commit.js';
@@ -389,7 +391,7 @@ describe('WSClient drive sync probe', () => {
   });
 
   it.each(['identity change', 'disconnect'])(
-    'stops range reconciliation after %s between replies',
+    'does not answer SYNC_RESEND after %s',
     async reason => {
       const expect = assert;
       const { client, socket, store } = await connectedClient();
@@ -407,29 +409,19 @@ describe('WSClient drive sync probe', () => {
         resources: {},
       } as never);
       const internal = client as unknown as {
-        sendReducedSyncState: (drive: string) => Promise<void>;
+        sendFullSyncState: (drive: string) => void;
         startVVSync: (drive: string) => Promise<void>;
-        rbsrFingerprints: () => Promise<string[]>;
-        rbsrItems: () => Promise<never[]>;
       };
-      vi.spyOn(internal, 'rbsrFingerprints').mockImplementation(async () => {
-        if (reason === 'disconnect') client.close();
-        else store.setAgent(undefined);
-
-        return ['ff'.repeat(32)];
-      });
-      const items = vi.spyOn(internal, 'rbsrItems').mockResolvedValue([]);
-      const warning = vi.spyOn(console, 'warn');
       await internal.startVVSync('did:ad:drive');
-      await internal.sendReducedSyncState('did:ad:drive');
-      expect(items).not.toHaveBeenCalled();
+      if (reason === 'disconnect') client.close();
+      else store.setAgent(undefined);
+      internal.sendFullSyncState('did:ad:drive');
       expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
-      expect(warning).not.toHaveBeenCalled();
       client.close();
     },
   );
 
-  it('probes with a binary SYNC and reconciles on SYNC_RESEND', async ({
+  it('probes with a binary SYNC and sends the full state on SYNC_RESEND', async ({
     expect,
   }) => {
     const { client, socket, store } = await connectedClient();
@@ -439,14 +431,14 @@ describe('WSClient drive sync probe', () => {
       peers: [],
       resources: {},
     } as unknown as Awaited<ReturnType<typeof store.computeDriveSyncState>>);
-    const reduced = vi
+    const full = vi
       .spyOn(
         client as unknown as {
-          sendReducedSyncState: (d: string) => Promise<void>;
+          sendFullSyncState: (d: string) => void;
         },
-        'sendReducedSyncState',
+        'sendFullSyncState',
       )
-      .mockResolvedValue(undefined);
+      .mockReturnValue(undefined);
 
     await (
       client as unknown as { startVVSync: (d: string) => Promise<void> }
@@ -469,7 +461,60 @@ describe('WSClient drive sync probe', () => {
     ).toEqual({ peers: [], resources: {}, probe: true });
 
     socket.receive(encodeSyncResend('did:ad:drive'));
-    expect(reduced).toHaveBeenCalledWith('did:ad:drive');
+    expect(full).toHaveBeenCalledWith('did:ad:drive');
+    client.close();
+  });
+});
+
+describe('WSClient legacy scheme sync', () => {
+  const original = globalThis.WebSocket;
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  it('uses legacy nested subjects in the full sync', async () => {
+    const { client, socket } = await connectedClient();
+    const internal = client as unknown as {
+      _pendingSyncState: Map<string, unknown>;
+      sendFullSyncState: (drive: string) => void;
+    };
+    internal._pendingSyncState.set('atomic:drive', {
+      state: {
+        drive: 'atomic:drive',
+        driveHash: 'hash',
+        peers: ['1'],
+        resources: { 'atomic:doc': [1] },
+      },
+      current: () => true,
+    });
+    internal.sendFullSyncState('did:ad:drive');
+    const frame = framesWithTag(socket, Tag.SYNC).at(-1)!;
+    const dl = (frame[1] << 8) | frame[2];
+    const ho = 3 + dl;
+    const hl = (frame[ho] << 8) | frame[ho + 1];
+    const body = JSON.parse(
+      new TextDecoder().decode(frame.subarray(ho + 2 + hl)),
+    );
+    assert(body).toEqual({ peers: ['1'], resources: { 'did:ad:doc': [1] } });
+    client.close();
+  });
+
+  it('exports canonical in-memory snapshots when a legacy peer requests them', async () => {
+    const { client, socket, store } = await connectedClient();
+    const resource = store.getResourceLoading('atomic:doc');
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'offline edit',
+    );
+    await (
+      client as unknown as { handleSyncDiff: (diff: unknown) => Promise<void> }
+    ).handleSyncDiff({
+      drive: 'did:ad:drive',
+      pull: ['did:ad:doc'],
+      push: [],
+    });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
     client.close();
   });
 });
@@ -660,6 +705,45 @@ describe('WSClient drive subscription', () => {
     await vi.waitFor(() =>
       expect(framesWithTag(socket, Tag.SYNC).length).toBeGreaterThan(0),
     );
+    client.close();
+  });
+
+  it('waits for a new drive genesis acknowledgement before subscribing', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    socket.receive(encodeChallenge('new-drive'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    socket.sent.length = 0;
+    const drive = new Resource('did:ad:new-drive');
+    store.resources.set(drive.subject, drive);
+    store.outbox.setGenesisCommit(drive.subject, signedCommit());
+    // Locally stamped metadata does not prove the server has the genesis.
+    drive.setLastCommitValue('did:ad:commit:local');
+    vi.mocked(store.getDrive).mockReturnValue(drive.subject);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive: drive.subject,
+      driveHash: 'hash',
+      resources: {},
+      peers: [],
+    });
+    store.setDrive(drive.subject);
+    await Promise.resolve();
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(0);
+    expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+    store.outbox.clearGenesis(drive.subject);
+    drive.setLastCommitValue('did:ad:commit:ack');
+    await store.notifyResourceSaved(drive);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(1),
+    );
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(1);
     client.close();
   });
 
@@ -859,7 +943,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
       push: [],
     });
 
-    expect(exported).toEqual(['did:ad:clean']);
+    expect(exported).toEqual(['atomic:clean']);
     expect(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
     client.close();
   });
@@ -965,11 +1049,12 @@ describe('WSClient.fetchMany', () => {
 
     const [found, missing, unauthorized] = await results;
     expect(found).toBeInstanceOf(Resource);
-    expect((found as Resource).subject).toBe('did:ad:found');
+    // Asked and answered in the legacy spelling; the store keys canonically.
+    expect((found as Resource).subject).toBe('atomic:found');
     expect(
       (found as Resource).get('https://atomicdata.dev/properties/name'),
     ).toBe('Batched');
-    expect(store.resources.get('did:ad:found')).toBe(found);
+    expect(store.resources.get('atomic:found')).toBe(found);
     expect(missing).toMatchObject({ type: ErrorType.NotFound });
     expect(unauthorized).toMatchObject({ type: ErrorType.Unauthorized });
     client.close();

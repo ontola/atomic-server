@@ -1,4 +1,4 @@
-import { Agent, JSCryptoProvider, useStore } from '@tomic/react';
+import { Agent, JSCryptoProvider, agentSubject, useStore } from '@tomic/react';
 import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useSettings } from '../helpers/AppSettings';
@@ -57,7 +57,7 @@ export function useDevDrive() {
       setServer(resolveDevServer());
 
       const agentKeys = await Agent.generateKeyPair();
-      const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+      const agentDID = agentSubject(agentKeys.publicKey);
       const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
       const newAgent = new Agent(agentProvider, agentDID);
 

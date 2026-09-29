@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
+import { readableColor } from 'polished';
 import { useClickAwayListener } from '../../hooks/useClickAwayListener';
 import { Button } from '../Button';
 import { DropdownTriggerComponent as DropdownTriggerComponent } from './DropdownTrigger';
@@ -71,9 +72,24 @@ interface DropdownMenuProps {
   isMainMenu?: boolean;
   /**
    * Renders a filter input at the top of the menu that narrows the items by
-   * label/keywords while keeping arrow+enter keyboard navigation.
+   * label/keywords while keeping arrow+enter keyboard navigation. On by default.
    */
   searchable?: boolean;
+  /**
+   * Placeholder and accessible name of the filter input. Defaults to "Filter
+   * actions"; name what the menu lists when it isn't actions (columns, say),
+   * so the input doesn't read as a general search box.
+   */
+  searchPlaceholder?: string;
+  searchLabel?: string;
+  /** Shown when the filter query matches nothing. */
+  noMatchText?: string;
+  /**
+   * An item to offer when the filter query matches nothing — for example
+   * "Search the drive for …" when someone typed a page name into a menu that
+   * can't find pages. Selectable with Enter like any other item.
+   */
+  noMatchItem?: (query: string) => MenuItemMinimial;
   bindActive?: (active: boolean) => void;
   /**
    * When set, positions the menu at this viewport point (a right-click / context
@@ -161,7 +177,11 @@ export function DropdownMenu({
   items,
   Trigger,
   isMainMenu,
-  searchable,
+  searchable = true,
+  searchPlaceholder,
+  searchLabel,
+  noMatchText,
+  noMatchItem,
   bindActive = () => undefined,
   anchorPoint,
 }: DropdownMenuProps): JSX.Element {
@@ -206,9 +226,18 @@ export function DropdownMenu({
     return items.filter(item => isItem(item) && matchesQuery(item, search));
   }, [items, searchable, search]);
 
+  // A matching section header alone isn't a match: nothing to pick under it.
+  const noMatch =
+    searchable &&
+    !!search &&
+    !filteredItems.some(item => isItem(item) && !item.disabled && !item.header);
+
   const normalizedItems = useMemo(
-    () => normalizeItems(filteredItems),
-    [filteredItems],
+    () =>
+      noMatch && noMatchItem
+        ? [noMatchItem(query.trim())]
+        : normalizeItems(filteredItems),
+    [filteredItems, noMatch, noMatchItem, query],
   );
   const hasSelectable = normalizedItems.some(item => !shouldSkip(item));
 
@@ -243,6 +272,13 @@ export function DropdownMenu({
       // "fits" and the cap gets cleared, leaving the menu overflowing again.
       dropdownRef.current.style.maxHeight = '';
       const menuRect = dropdownRef.current.getBoundingClientRect();
+
+      // Typing in the filter changes which items show. Keep the width the menu
+      // was positioned with, so a longer item (the no-match fallback, say)
+      // wraps instead of pushing the menu past the viewport edge.
+      if (searchable) {
+        dropdownRef.current.style.width = `${menuRect.width}px`;
+      }
 
       // The menu is positioned while visibility:hidden, so the entrance
       // transition must start AFTER it becomes visible — one frame later —
@@ -500,8 +536,8 @@ export function DropdownMenu({
                 <SearchInput
                   ref={searchInputRef}
                   type='text'
-                  placeholder='Filter actions…'
-                  aria-label='Filter actions'
+                  placeholder={searchPlaceholder ?? 'Filter actions…'}
+                  aria-label={searchLabel ?? 'Filter actions'}
                   value={query}
                   onChange={e => {
                     setQuery(e.target.value);
@@ -511,8 +547,8 @@ export function DropdownMenu({
                 />
               </SearchInputWrapper>
             )}
-            {searchable && search && !hasSelectable && (
-              <NoResults>No matching actions</NoResults>
+            {noMatch && (
+              <NoResults>{noMatchText ?? 'No matching actions'}</NoResults>
             )}
             {normalizedItems.map((props, i) => {
               if (!isItem(props)) {
@@ -684,11 +720,17 @@ interface MenuItemStyledProps {
 }
 
 const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
+  --menu-highlight-bg: ${p =>
+    p.theme.colorful ? p.theme.colors.main : p.theme.colors.mainSelectedBg};
+  --menu-highlight-fg: ${p =>
+    p.theme.colorful
+      ? readableColor(p.theme.colors.main)
+      : p.theme.colors.mainSelectedFg};
   /* Transparent so the menu's frosted surface shows through. */
   --menu-item-bg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedBg : 'transparent'};
+    p.selected ? 'var(--menu-highlight-bg)' : 'transparent'};
   --menu-item-fg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
+    p.selected ? 'var(--menu-highlight-fg)' : p.theme.colors.text};
   align-items: center;
   display: flex;
   gap: 0.5rem;
@@ -704,9 +746,10 @@ const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
     color: var(--menu-item-fg);
   }
 
-  &:hover {
-    --menu-item-bg: ${p => p.theme.colors.mainSelectedBg};
-    --menu-item-fg: ${p => p.theme.colors.mainSelectedFg};
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    --menu-item-bg: var(--menu-highlight-bg);
+    --menu-item-fg: var(--menu-highlight-fg);
 
     @media (prefers-contrast: more) {
       --menu-item-bg: ${p => (p.theme.darkMode ? 'white' : 'black')};

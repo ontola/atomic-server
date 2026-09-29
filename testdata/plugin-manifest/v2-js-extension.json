@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "runtime": "atomic-js/1",
+  "world": "extension",
+  "entrypoints": {
+    "run": true
+  },
+  "capabilities": [
+    "storage",
+    {
+      "name": "extended-fuel",
+      "reason": "Syncs whole calendars"
+    }
+  ],
+  "secrets": [
+    {
+      "name": "google",
+      "origin": "https://www.googleapis.com",
+      "description": "Calendar token"
+    }
+  ],
+  "operations": [
+    {
+      "id": "events",
+      "method": "GET",
+      "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+      "effect": "read"
+    }
+  ],
+  "actions": [],
+  "network": {
+    "origins": [
+      "https://www.googleapis.com"
+    ],
+    "reason": "Reads calendars"
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "calendar": {
+        "type": "string"
+      }
+    }
+  },
+  "defaultConfig": {
+    "calendar": "primary"
+  },
+  "name": "google-calendar",
+  "namespace": "atomic",
+  "version": "1.0.0",
+  "description": "Mirrors a calendar",
+  "author": "Ontola"
+}

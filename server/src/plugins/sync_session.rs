@@ -142,7 +142,14 @@ pub async fn preview<H: PluginHost>(
         error: None,
         checkpointed: false,
     };
-    match invoke(&package.source, &session, "preview", host).await? {
+    match invoke(
+        package.source.as_deref().unwrap_or_default(),
+        &session,
+        "preview",
+        host,
+    )
+    .await?
+    {
         Output::Preview { proposal, problems } => {
             session.proposal = proposal;
             session.problems = problems;
@@ -284,7 +291,14 @@ where
                 session.pending = None;
                 save(db, drive, plugin, &session)?;
             } else {
-                match invoke(&package.source, &session, "step", host.clone()).await? {
+                match invoke(
+                    package.source.as_deref().unwrap_or_default(),
+                    &session,
+                    "step",
+                    host.clone(),
+                )
+                .await?
+                {
                     Output::Effect { effect, cursor } => {
                         if session.checkpointed
                             || effect.id().is_empty()

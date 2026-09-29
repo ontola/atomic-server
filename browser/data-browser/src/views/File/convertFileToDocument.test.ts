@@ -2,6 +2,14 @@
 import { core, dataBrowser, Resource, server, Store } from '@tomic/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// `fileContentsToTiptapJson` and `convertFileToDocument` reach the Markdown
+// parser and the collaborative editor schema through `await import`, so under
+// vitest the cost of transforming those chunks lands inside a test's own
+// budget rather than in module setup. On a loaded runner that is far past the
+// 5 s default: one CI run here spent 273 s importing across the suite, and the
+// first test below timed out at 5 s with nothing wrong with the work itself.
+vi.setConfig({ testTimeout: 30_000 });
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -110,6 +118,11 @@ describe('plainTextToTiptapJson', () => {
   });
 });
 
+// Both tests below await the same lazily imported collaborative Markdown
+// schema, so whichever runs first pays its import cost. That import is far
+// slower than the 5s default when the test threads are oversubscribed, as they
+// are on the shared runner, so this suite gets the same budget as the other
+// slow ones.
 describe('fileContentsToTiptapJson', () => {
   it('uses the collaborative Markdown schema so Markdown formatting becomes document nodes', async () => {
     const json = await fileContentsToTiptapJson(
@@ -152,7 +165,7 @@ describe('fileContentsToTiptapJson', () => {
       content: [{ type: 'paragraph', content: [{ text: '**' }] }],
     });
   });
-});
+}, 60000);
 
 describe('convertFileToDocument', () => {
   async function uploadedFile() {

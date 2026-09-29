@@ -6,6 +6,7 @@ import {
   core,
   dataBrowser,
   perfSpan,
+  isAtomicIdentifier,
 } from '@tomic/react';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 import { stringToSlug } from '@helpers/stringToSlug';
@@ -38,6 +39,15 @@ export interface CreatedSelectProperty {
 export type PropertyNaming =
   | { name: string; shortname?: string }
   | { name?: undefined; shortname: string };
+
+/** The shortname a new Property asks for, before collision handling. */
+function namingShortname(naming: PropertyNaming): string {
+  if (naming.name === undefined) {
+    return naming.shortname;
+  }
+
+  return naming.shortname ?? stringToSlug(naming.name);
+}
 
 function namingPropVals(naming: PropertyNaming): Record<string, JSONValue> {
   if (naming.name === undefined) {
@@ -215,7 +225,7 @@ export async function createPropertyOnClass(
   },
 ): Promise<string> {
   const parent = await resolvePropertyParent(store, tableClass);
-  let shortname = stringToSlug(opts.name);
+  let shortname = namingShortname(opts);
 
   if (parent.isOntology) {
     const taken = await loadOntologyPropertiesByShortname(
@@ -242,6 +252,8 @@ export async function createPropertyOnClass(
 
   const propVals: Record<string, JSONValue> = {
     ...namingPropVals(opts),
+    // May differ from the requested one: see the collision handling above.
+    [core.properties.shortname]: shortname,
     [core.properties.description]: opts.description ?? '',
     [core.properties.datatype]: opts.datatype,
     ...opts.propVals,
@@ -279,13 +291,13 @@ async function reuseSelectProperty(
   store: Store,
   tableClass: Resource,
   existing: Resource,
-  opts: { name: string; tags: TagSeed[]; deferAttach?: boolean },
+  opts: { tags: TagSeed[]; deferAttach?: boolean },
 ): Promise<CreatedSelectProperty | undefined> {
   const optionSubjects = (existing.get(core.properties.allowsOnly) ??
     []) as string[];
-  // Tags are created with only a shortname (see below) — no `core:name` — so
-  // match the caller's option names against that, the same slug they were
-  // minted with.
+  // Tags always carry a shortname (older ones carry nothing else), so match
+  // the caller's option names against that, the same slug they were minted
+  // with.
   const subjectByShortname: Record<string, string> = {};
 
   for (const subject of optionSubjects) {
@@ -343,7 +355,7 @@ export async function createSelectPropertyOnClass(
   },
 ): Promise<CreatedSelectProperty> {
   const parent = await resolvePropertyParent(store, tableClass);
-  let shortname = stringToSlug(opts.name);
+  let shortname = namingShortname(opts);
 
   if (parent.isOntology) {
     const taken = await loadOntologyPropertiesByShortname(
@@ -375,6 +387,7 @@ export async function createSelectPropertyOnClass(
     isA: [core.classes.property, dataBrowser.classes.selectProperty],
     propVals: {
       ...namingPropVals(opts),
+      [core.properties.shortname]: shortname,
       [core.properties.description]: '',
       [core.properties.datatype]: Datatype.RESOURCEARRAY,
       [core.properties.classtype]: dataBrowser.classes.tag,
@@ -392,7 +405,7 @@ export async function createSelectPropertyOnClass(
   for (const seed of opts.tags) {
     const closeTag = perfSpan('table.tag');
     const closeSubject = perfSpan('table.tagUniqueSubject');
-    const subject = property.subject.startsWith('did:')
+    const subject = isAtomicIdentifier(property.subject)
       ? undefined
       : await store.buildUniqueSubjectFromParts(
           ['tag', seed.name],

@@ -17,6 +17,7 @@ export const CREATE_APP_DESCRIPTION =
   "  - cards in columns by status -> configure_view kind:'kanban' with groupByColumn\n" +
   "  - a grid of rows -> kind:'table'. A table can have BOTH, as two views, so the user gets both tabs.\n" +
   "  - anything laid out on dates -> kind:'calendar'. Anything being timed -> kind:'timer'.\n" +
+  "  - a GitHub-style list of open and closed issues -> kind:'issues' with groupByColumn on the status column\n" +
   '  - a search box or a status dropdown -> filters\n' +
   '  - a sort control -> sortByColumn and sortDesc\n' +
   "  - a total, a count, an average, a 'win rate' tile -> aggregates, per group with breakdownColumn\n" +

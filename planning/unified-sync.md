@@ -49,7 +49,7 @@ protocol). Encoding lives in `lib/src/sync/protocol.rs`; semantics in
 | Piece | Browser | Flutter native |
 | --- | --- | --- |
 | Local store | OPFS (`ClientDb`) | redb (`Db` in FRB) |
-| Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; identity-scoped localStorage | **Ported (2026-09-16)**: `lib/src/sync/outbox.rs`, durable in `Tree::Outbox`, per agent, with backoff and blocked states; Flutter drains it over the WS client. Sequential per subject; no Iroh drain yet |
+| Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; stored per agent in the client DB (`Tree::Outbox`, written with the snapshot on offline saves), localStorage only without a client DB | **Ported (2026-09-16)**: `lib/src/sync/outbox.rs`, durable in `Tree::Outbox`, per agent, with backoff and blocked states; Flutter drains it over the WS client. Sequential per subject; no Iroh drain yet |
 | Persist commits | **WS `COMMIT` preferred**, HTTP `/commit` fallback (`Store.sendCommit`) ✅ | WS `COMMIT` when session open; else local only |
 | Live updates | WS `SUB` → `UPDATE`/`DESTROY` (QUERY_UPDATE retired) | WS session + `pollDbEvent` |
 | Bulk reconcile | binary `SYNC` on reconnect (hash-first probe, then filtered to the differing subjects), after outbox drain, narrowed by an RBSR range exchange (`RBSR_FP`/`RBSR_ITEMS`, full-VV fallback); `SYNC_DIFF.remove` applied ✅ | Iroh `SYNC`/`SYNC_PUSH` (peer.rs) |
@@ -80,7 +80,7 @@ is the shape around that call — see [Outbox modernization](#outbox-modernizati
 Issue: https://github.com/ontola/atomic-server/issues/1396.
 
 The product requirement is sync and collaboration without a Cloud subscription.
-The Sync page creates an eight-browser room invitation. The subscription-independent Atomic SaaS signaling
+The Sync page creates an eight-browser room invitation. The subscription-independent managed signaling
 endpoint introduces peers; WebRTC carries drive data directly or through optional
 TURN. Operator setup and product limits are in `docs/src/browser-peer-sync.md`.
 

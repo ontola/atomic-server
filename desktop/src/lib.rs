@@ -63,7 +63,10 @@ struct PairLinks {
 fn queue_pair_links(state: &PairLinks, urls: impl IntoIterator<Item = String>) {
   let mut pending = state.pending.lock().unwrap();
   for url in urls {
-    if url.starts_with("atomic://") && !pending.contains(&url) {
+    if (atomic_lib::identifiers::is_atomic_identifier(&url)
+      || atomic_lib::identifiers::is_legacy_atomic_link(&url))
+      && !pending.contains(&url)
+    {
       println!("[pairing] queued deep link");
       pending.push(url);
     }
@@ -532,16 +535,17 @@ pub fn run() {
   let builder = tauri::Builder::default()
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_opener::init());
 
   // Lets an agent drive this window over a WebSocket — open a document, type,
   // read back the DOM — so collaborative editing can be tested end to end
-  // without a person at the keyboard. Debug builds only.
+  // without a person at the keyboard. Debug and local acceptance builds only.
   //
   // Bound to loopback rather than the plugin's default `0.0.0.0`: this is an
   // unauthenticated channel that can execute JS in the webview, and on a café
   // network the default would offer that to everyone on the subnet.
-  #[cfg(debug_assertions)]
+  #[cfg(any(debug_assertions, feature = "account-acceptance"))]
   let builder = builder.plugin(
     tauri_plugin_mcp_bridge::Builder::new()
       .bind_address("127.0.0.1")

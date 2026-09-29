@@ -29,6 +29,10 @@ serde_json = "1.0"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-process = "2"
+# OS notifications for new messages and comments. Its init script replaces
+# `window.Notification` in the webview with one backed by the OS, so the
+# data-browser uses the same Notification API in the app as on the web.
+tauri-plugin-notification = "2"
 # Opening a URL in the system browser: the tray menu, and what an <a
 # target="_blank"> ultimately needs in a webview with nowhere to put a tab.
 # Deliberately the only plugin here that opens things — `tauri-plugin-shell`
@@ -40,7 +44,7 @@ tauri-plugin-opener = "2"
 # type, and read the DOM — used to test collaborative editing end to end
 # without a human at the keyboard. Registered only under `debug_assertions`
 # (see `lib.rs`), so it is compiled but inert in release builds.
-tauri-plugin-mcp-bridge = "0.12"
+tauri-plugin-mcp-bridge = "0.13"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 
 # Mobile-only: the in-app QR scanner for device pairing. The Android WebView
@@ -112,3 +116,6 @@ default = ["custom-protocol"]
 # Web inspector in a release build: `cargo tauri build --features devtools`.
 # Debug builds (`cargo tauri dev`) have it without this.
 devtools = ["tauri/devtools"]
+# Enables the loopback-only WebView diagnostic bridge in the local acceptance
+# package. Shipping release builds do not enable this feature.
+account-acceptance = []

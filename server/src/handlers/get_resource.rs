@@ -40,7 +40,7 @@ pub async fn handle_get_resource(
                 format!("?{}", req.query_string())
             };
             // DID subjects should be used as-is, not prefixed with /
-            if subj_end_string.starts_with("did:") {
+            if atomic_lib::identifiers::is_atomic_identifier(subj_end_string) {
                 format!("{}{}", subj_end_string, querystring)
             } else {
                 format!("/{}{}", subj_end_string, querystring)

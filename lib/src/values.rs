@@ -98,15 +98,62 @@ impl Value {
             _ => {}
         }
     }
-    /// Check if the value `q_val` is present in `val`
-    pub fn contains_value(&self, q_val: &Value) -> bool {
-        let query_value = q_val.to_string();
+
+    /// Rewrite `did:ad:` → `atomic:` on identifier-shaped values. Returns
+    /// whether anything changed. Used at the store boundary so indexes and
+    /// parent/drive queries key one spelling; signed bytes are never rewritten.
+    pub fn canonicalize_identifier_refs(&mut self) -> bool {
         match self {
-            Value::ResourceArray(_vec) => {
-                let subs = self.to_subjects(None).unwrap_or_default();
-                subs.iter().any(|v| v == &query_value)
+            Value::AtomicUrl(sub) => {
+                let canonical = crate::identifiers::canonicalize_scheme(&sub.to_string());
+                if canonical != *sub {
+                    *sub = canonical.into();
+                    true
+                } else {
+                    false
+                }
             }
-            other => other.to_string() == query_value,
+            Value::ResourceArray(arr) => {
+                let mut changed = false;
+                for item in arr.iter_mut() {
+                    if let SubResource::Subject(sub) = item {
+                        let canonical = crate::identifiers::canonicalize_scheme(&sub.to_string());
+                        if canonical != *sub {
+                            *sub = canonical.into();
+                            changed = true;
+                        }
+                    }
+                }
+                changed
+            }
+            Value::String(s) if crate::identifiers::is_atomic_identifier(s) => {
+                let canonical = crate::identifiers::canonicalize_scheme(s);
+                if canonical != *s {
+                    *s = canonical;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+    /// Check if the value `q_val` is present in `val`
+    ///
+    /// Uses the same reference strings the index is keyed by
+    /// ([`Self::to_reference_index_strings`]), so a query's matcher and its
+    /// candidate index can never disagree about which values name `q_val`.
+    /// A `String` holding a JSON array of subjects (`["did:…"]`, the legacy
+    /// Loro encoding of a `ResourceArray`) names each of its elements.
+    pub fn contains_value(&self, q_val: &Value) -> bool {
+        let query_value = crate::identifiers::canonicalize_scheme(&q_val.to_string());
+        match self {
+            Value::ResourceArray(_) | Value::String(_) => self
+                .to_reference_index_strings()
+                .unwrap_or_default()
+                .iter()
+                .any(|v| v == &query_value),
+            other => crate::identifiers::canonicalize_scheme(&other.to_string()) == query_value,
         }
     }
 
@@ -332,6 +379,8 @@ impl Value {
                 .or_else(|| map.values().next())
                 .cloned()
                 .unwrap_or_default(),
+            Value::AtomicUrl(s) => crate::identifiers::canonicalize_scheme(&s.to_string()),
+            Value::String(s) => crate::identifiers::canonicalize_scheme(s),
             other => other.to_string(),
         }
     }
@@ -355,17 +404,38 @@ impl Value {
 
     /// Converts one Value to a bunch of indexable items.
     /// Returns None for unsupported types.
+    ///
+    /// A `String` that holds a JSON array of strings is the legacy Loro
+    /// encoding of a `ResourceArray` (see `loro_value_to_atomic_value`); it
+    /// is indexed under every element, exactly as the array it stands for,
+    /// so a row whose `isA` reads back in that shape is still found by its
+    /// class. [`Self::contains_value`] uses the same strings.
     pub fn to_reference_index_strings(&self) -> Option<Vec<ReferenceString>> {
         let vals = match self {
             // TODO: This results in wrong indexing, as some subjects will be numbers.
             Value::ResourceArray(_v) => self.to_subjects(None).unwrap_or_else(|_| vec![]),
             Value::AtomicUrl(v) => vec![v.to_string()],
+            Value::String(s) => json_string_array(s).unwrap_or_else(|| vec![s.clone()]),
             Value::NestedResource(_) | Value::LoroDoc(_) => return None,
             // This might result in unnecessarily long strings, sometimes. We may want to shorten them later.
             val => vec![val.to_string()],
         };
-        Some(vals)
+        Some(
+            vals.into_iter()
+                .map(|s| crate::identifiers::canonicalize_scheme(&s))
+                .collect(),
+        )
     }
+}
+
+/// The elements of `s` when it is a JSON array of strings (`["a","b"]`),
+/// which is how older Loro docs serialized `ResourceArray`s. Anything else,
+/// including an array holding non-strings, is `None`.
+fn json_string_array(s: &str) -> Option<Vec<String>> {
+    if !s.starts_with('[') {
+        return None;
+    }
+    serde_json::from_str::<Vec<String>>(s).ok()
 }
 
 /// A value that is meant for checking reference indexes.

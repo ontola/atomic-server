@@ -18,7 +18,7 @@ export const AISidebarContainer: React.FC = () => {
   }, [isOpen]);
 
   return (
-    <RightPanel isOpen={isOpen} testId='ai-sidebar'>
+    <RightPanel isOpen={isOpen} testId='ai-sidebar' fullWidthOnMobile>
       <Suspense fallback={<ChatLoadingIndicator />}>
         {everOpened && <AISidebar />}
       </Suspense>

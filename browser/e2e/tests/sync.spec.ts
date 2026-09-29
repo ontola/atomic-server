@@ -380,10 +380,15 @@ test.describe('sync', () => {
     const page2 = await context2.newPage();
     await page2.goto(`${FRONTEND_URL}/app/agent`);
 
-    // Sign in with the same agent
-    await page2.getByRole('button', { name: 'Sign in', exact: true }).click();
-    // No confirm button: the flow signs in as soon as the secret parses.
+    // /app/agent redirects signed-out users to the canonical sign-in form.
+    // The flow signs in as soon as the secret parses.
     const secretField = page2.getByLabel('Agent secret');
+    // This is the first thing asked of a brand new context, so it is really
+    // waiting for a cold boot: wasm, store init, the ClientDb worker and the
+    // redirect. `fill` alone would guard all of that with the 10s
+    // actionTimeout, and this test failed there 2 of 8 four-worker rounds.
+    // Wait for the field explicitly, and name it when it does not come.
+    await expect(secretField).toBeVisible({ timeout: 20_000 });
     await secretField.fill(secret);
     // No blur: the field disables itself the moment the secret parses (it
     // shows "Signing in…"), and `blur()` on a disabled input waits for an
@@ -408,19 +413,5 @@ test.describe('sync', () => {
       .toBe('Synced From Offline');
 
     await context2.close();
-  });
-
-  test('sync page shows correct status', async ({ page }) => {
-    await page.goto(`${FRONTEND_URL}/app/sync`);
-
-    await expect(page.getByText('This device', { exact: true })).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(
-      page.getByRole('heading', { name: 'Sync', exact: true }),
-    ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Developer', { exact: true })).toBeVisible({
-      timeout: 10000,
-    });
   });
 });

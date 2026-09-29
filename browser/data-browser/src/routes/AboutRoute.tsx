@@ -18,7 +18,7 @@ export const AboutRoute = createRoute({
 /**
  * Kept deliberately close to the feature table in the repo's README, which
  * carries a comment naming itself the source for every copy of this list, and
- * to the wording on atomicserver.eu so the product reads the same everywhere.
+ * to the wording on atomic.place so the product reads the same everywhere.
  * When the README's table changes, change this too.
  */
 const features: [title: string, description: string][] = [
@@ -83,8 +83,8 @@ const links: {
   {
     icon: <FaGlobe />,
     label: 'Site',
-    description: 'AtomicServer.eu: hosted workspaces and pricing.',
-    href: 'https://atomicserver.eu',
+    description: 'Atomic Place: hosted workspaces and pricing.',
+    href: 'https://atomic.place',
   },
 ];
 

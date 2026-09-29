@@ -10,6 +10,7 @@ import { Dialog, useDialog } from '@components/Dialog';
 import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
 import { addIf } from '@helpers/addIf';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
+import { useColumnLabel } from '../helpers/useColumnLabel';
 import { InputJSON } from '@components/forms/InputJSON';
 
 function JSONCellEdit({
@@ -18,16 +19,20 @@ function JSONCellEdit({
   resource,
 }: EditCellProps<JSONValue>): JSX.Element {
   const [dialogProps, show, close, isOpen] = useDialog({
+    // Closing the dialog — confirmed or cancelled — ends edit mode. That
+    // both restores focus to the grid (TableEditor's Edit -> Visual layout
+    // effect) and makes the arrow keys work again on the first Escape.
     onSuccess: () => {
-      tableRef.current?.focus();
+      exitEditMode();
     },
     onCancel: () => {
-      tableRef.current?.focus();
+      exitEditMode();
     },
   });
   const prop = useProperty(property);
+  const label = useColumnLabel(prop);
 
-  const { tableRef } = useTableEditorContext();
+  const { exitEditMode } = useTableEditorContext();
 
   const options = useMemo(
     () => ({
@@ -56,7 +61,7 @@ function JSONCellEdit({
         {isOpen && (
           <>
             <Dialog.Title>
-              <h1>Edit {prop.shortname}</h1>
+              <h1>Edit {label}</h1>
             </Dialog.Title>
             <StyledDialogContent
               onKeyDown={e => {

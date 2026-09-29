@@ -37,6 +37,34 @@ pub struct Opts {
     #[clap(long, default_value = "latest", env = "ATOMIC_ENVELOPE_RETENTION")]
     pub envelope_retention: String,
 
+    /// Compact the store file at startup when it is at least
+    /// `--auto-compact-min-mb` and at least `--auto-compact-min-reclaimable-percent`
+    /// of it is dead space (pages freed by overwrites and deletes that redb
+    /// never returns to the filesystem). The server listens only when the
+    /// compaction is done: expect seconds per GB. `false` skips the check;
+    /// `atomic-server compact` does the same by hand while the server is stopped.
+    #[clap(
+        long,
+        default_value_t = true,
+        action = clap::ArgAction::Set,
+        env = "ATOMIC_AUTO_COMPACT"
+    )]
+    pub auto_compact: bool,
+
+    /// Store files smaller than this many MiB are never compacted at
+    /// startup: they open fast whatever their layout.
+    #[clap(long, default_value_t = 256, env = "ATOMIC_AUTO_COMPACT_MIN_MB")]
+    pub auto_compact_min_mb: u64,
+
+    /// Startup compaction runs only when at least this percentage of the
+    /// store file is reclaimable (0-100).
+    #[clap(
+        long,
+        default_value_t = 30,
+        env = "ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT"
+    )]
+    pub auto_compact_min_reclaimable_percent: u8,
+
     /// How many write requests per minute one signed agent may make (commits
     /// over HTTP or WebSocket, uploads, blob puts, peer sync pushes, resource
     /// posts) before the server answers `429 Too Many Requests`. The budget
@@ -143,8 +171,34 @@ pub struct Opts {
 
     /// The base domain for multi-tenant hosting.
     /// If set, the server will allow serving subdomains of this domain (e.g. *.atomicserver.eu).
+    ///
+    /// Note that this does two things at once: it accepts subdomain `Host`
+    /// headers *and* it becomes the store's base domain, which is what
+    /// `Subject::from_raw` normalizes absolute URLs against. If you only need
+    /// the former — answering for names a control plane routes to you, without
+    /// changing how subjects are stored — use `--served-domain-suffix`.
     #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
     pub base_domain: Option<String>,
+
+    /// An extra domain whose subdomains this server answers for, e.g.
+    /// `atomicserver.eu` so that `acme.atomicserver.eu` is treated as one of
+    /// this server's own names.
+    ///
+    /// Deliberately separate from `--base-domain`. Only the set of `Host`
+    /// headers the server trusts is affected: the request origin (what signed
+    /// auth proofs bind to, and what served subjects are localized to) follows
+    /// the hostname the request actually arrived on, instead of falling back to
+    /// the configured origin and handing a visitor links to a different
+    /// hostname than the one they typed. The store's own base domain is
+    /// untouched, so nothing about how subjects are normalized or migrated
+    /// changes — which is what makes this safe to switch on for a node that
+    /// already holds data.
+    ///
+    /// This is what a managed node is given for hosted vanity subdomains; the
+    /// mapping from such a hostname to a Drive is separate, and lives in
+    /// `Tree::DriveMapping`.
+    #[clap(long, env = "ATOMIC_SERVED_DOMAIN_SUFFIX")]
+    pub served_domain_suffix: Option<String>,
 
     /// Serve one Drive as this server's front page.
     ///
@@ -351,6 +405,10 @@ pub struct Config {
     /// Who may enroll a new Drive here. Resolved once at boot from explicit
     /// configuration; see [`crate::host_mode`] for why it is never guessed.
     pub host_mode: crate::host_mode::HostModeConfig,
+    /// When the store file is compacted before the server opens it for
+    /// serving. Built from `--auto-compact*`; see
+    /// [`atomic_lib::db::compaction::CompactionPolicy`].
+    pub compaction: atomic_lib::db::compaction::CompactionPolicy,
 }
 
 impl Config {
@@ -541,8 +599,24 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         || cfg!(test)
         || store_path_looks_like_test_harness(&store_path);
 
+    if opts.auto_compact_min_reclaimable_percent > 100 {
+        return Err(format!(
+            "ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT is a percentage (0-100), got {}",
+            opts.auto_compact_min_reclaimable_percent
+        )
+        .into());
+    }
+    let compaction = atomic_lib::db::compaction::CompactionPolicy {
+        enabled: opts.auto_compact,
+        min_file_bytes: opts
+            .auto_compact_min_mb
+            .saturating_mul(atomic_lib::db::compaction::MIB),
+        min_reclaimable_fraction: f64::from(opts.auto_compact_min_reclaimable_percent) / 100.0,
+    };
+
     Ok(Config {
         host_mode,
+        compaction,
         initialize,
         repopulate_defaults,
         gpu_indexing,
@@ -565,4 +639,48 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         uploads_path,
         base_domain,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atomic_lib::db::compaction::MIB;
+
+    fn config_from(args: &[&str]) -> AtomicServerResult<Config> {
+        let mut argv = vec!["atomic-server", "--data-dir", "./.temp/config-test/db"];
+        argv.extend_from_slice(args);
+        build_config(Opts::parse_from(argv))
+    }
+
+    #[test]
+    fn auto_compact_defaults_match_the_library_policy() {
+        let config = config_from(&[]).unwrap();
+        assert_eq!(
+            config.compaction,
+            atomic_lib::db::compaction::CompactionPolicy::default()
+        );
+    }
+
+    #[test]
+    fn auto_compact_flags_build_the_policy() {
+        let config = config_from(&[
+            "--auto-compact",
+            "false",
+            "--auto-compact-min-mb",
+            "64",
+            "--auto-compact-min-reclaimable-percent",
+            "50",
+        ])
+        .unwrap();
+        assert!(!config.compaction.enabled);
+        assert_eq!(config.compaction.min_file_bytes, 64 * MIB);
+        assert!((config.compaction.min_reclaimable_fraction - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn auto_compact_percent_over_100_is_refused() {
+        let err = config_from(&["--auto-compact-min-reclaimable-percent", "101"])
+            .expect_err("101% must not build a config");
+        assert!(err.to_string().contains("0-100"), "{err}");
+    }
 }

@@ -391,21 +391,20 @@ describe('Store', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
-  it('gives an unsaved form a permanent subject before minting its attachment', async ({
+  it('attaches a file to an unsaved form under the subject the form is saved as', async ({
     expect,
   }) => {
     const { store, posted } = await testStore();
     const drive = await store.createDrive('Home');
     store.setDrive(drive.subject);
-    const parent = new Resource('_new:attachment-form', true);
-    parent.setStore(store);
-    store.addResource(parent);
-    await parent.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/Folder'],
-      false,
-    );
-    await parent.set(core.properties.parent, drive.subject, false);
+    // The new-resource form's draft: its subject is final from creation, and
+    // its genesis is signed on save.
+    const parent = await store.newResource({
+      parent: drive.subject,
+      isA: 'https://atomicdata.dev/classes/Folder',
+      deferGenesis: true,
+    });
+    const formSubject = parent.subject;
     (store as unknown as { clientDb: unknown }).clientDb = {
       isReady: true,
       blake3Hash: async () => new Uint8Array(32),
@@ -418,7 +417,8 @@ describe('Store', () => {
       parent.subject,
     );
     const file = store.resources.get(subject)!;
-    expect(parent.subject).toMatch(/^did:ad:/);
+    expect(parent.subject).toMatch(/^atomic:/);
+    expect(parent.subject).toBe(formSubject);
     expect(file.get(core.properties.parent)).toBe(parent.subject);
     expect(parent.new).toBe(true);
     expect(store.outbox.getEntry(file.subject)).toBeUndefined();
@@ -584,7 +584,103 @@ describe('Store', () => {
       resource.subject,
       expect.any(String),
       undefined,
+      undefined,
     );
+  });
+
+  it('writes the same client-DB row from addResource and persistToClientDb', async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+    store.setClientDb({
+      isReady: true,
+      flush: async () => undefined,
+      putResourceWithSnapshot,
+    } as unknown as Parameters<Store['setClientDb']>[0]);
+
+    const binaryProp = 'https://example.com/properties/bytes';
+    const loroUpdate = 'https://atomicdata.dev/properties/loroUpdate';
+    const resource = new Resource('did:ad:same-row-both-paths');
+    resource.setStore(store);
+    await resource.set(
+      core.properties.isA,
+      ['https://atomicdata.dev/classes/Folder'],
+      false,
+    );
+    await resource.set(core.properties.name, 'Same row', false);
+    // A binary propval and a Loro snapshot are the two entry kinds a row
+    // must leave out: the first is a Uint8Array aux value, the second is the
+    // doc itself and travels next to the row.
+    resource.applyHydratedValues([
+      [binaryProp, new Uint8Array([1, 2, 3])],
+      [loroUpdate, resource.getLoroDoc()!.export({ mode: 'snapshot' })],
+    ]);
+    resource.loading = false;
+    resource.new = false;
+    expect(resource.getEntries().map(([k]) => k)).toContain(binaryProp);
+
+    store.addResource(resource);
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    await resource.persistToClientDb();
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(2);
+
+    const [, rowFromAddResource, snapshotFromAddResource] =
+      putResourceWithSnapshot.mock.calls[0];
+    const [, rowFromPersist, snapshotFromPersist] =
+      putResourceWithSnapshot.mock.calls[1];
+    expect(rowFromPersist).toBe(rowFromAddResource);
+    expect(rowFromPersist).toBe(resource.toClientDbJsonAd());
+    expect(snapshotFromAddResource).toBeInstanceOf(Uint8Array);
+    expect(snapshotFromPersist).toBeInstanceOf(Uint8Array);
+
+    const row = JSON.parse(rowFromPersist);
+    expect(row['@id']).toBe(resource.subject);
+    expect(row[core.properties.name]).toBe('Same row');
+    expect(row[core.properties.isA]).toEqual([
+      'https://atomicdata.dev/classes/Folder',
+    ]);
+    expect(row).not.toHaveProperty(binaryProp);
+    expect(row).not.toHaveProperty(loroUpdate);
+  });
+
+  it('does not rewrite a row that persistToClientDb already wrote', async ({
+    expect,
+  }) => {
+    await enableLoro();
+
+    const build = async () => {
+      const store = new Store({ serverUrl: 'https://example.com' });
+      const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+      store.setClientDb({
+        isReady: true,
+        flush: async () => undefined,
+        putResourceWithSnapshot,
+      } as unknown as Parameters<Store['setClientDb']>[0]);
+      // Canonical spelling: `persistToClientDb` keys the row by the
+      // resource's own subject, which `addResource` would otherwise rewrite.
+      const resource = new Resource('atomic:persisted-then-added');
+      resource.setStore(store);
+      await resource.set(core.properties.name, 'Persisted first', false);
+      resource.loading = false;
+      resource.new = false;
+
+      return { store, resource, putResourceWithSnapshot };
+    };
+
+    // Control: the ingress path writes a resource the store has not seen.
+    const control = await build();
+    control.store.addResource(control.resource);
+    expect(control.putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+
+    // The durable save path wrote the row; the ingress that follows (a WS
+    // echo, a notify) finds the same state on disk and skips its write.
+    const { store, resource, putResourceWithSnapshot } = await build();
+    await resource.persistToClientDb();
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    store.addResource(resource);
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it('clears the previous identity drive before sign-out authentication changes', async ({
@@ -880,7 +976,9 @@ describe('Store', () => {
   it('resolves aliases correctly', async ({ expect }) => {
     const store = new Store();
     const alias = 'https://atomicdata.dev/alias';
+    // Legacy `did:ad:` in; the store canonicalizes the subject to `atomic:`.
     const did = 'did:ad:123';
+    const canonicalDid = 'atomic:123';
 
     const resource = new Resource(did);
     await resource.set(core.properties.description, 'Identity verified', false);
@@ -892,15 +990,18 @@ describe('Store', () => {
     const gotByAlias = store.getResourceLoading(alias);
     const gotByDID = store.getResourceLoading(did);
 
-    expect(gotByAlias.subject).toBe(did);
-    expect(gotByDID.subject).toBe(did);
+    expect(gotByAlias.subject).toBe(canonicalDid);
+    expect(gotByDID.subject).toBe(canonicalDid);
     expect(gotByAlias).toBe(gotByDID);
   });
 
   it('returns a DID resource fetched by its HTTP path alias', async ({
     expect,
   }) => {
+    // The server still answers with the legacy `did:ad:` spelling; the
+    // store canonicalizes the fetched resource to `atomic:`.
     const did = 'did:ad:ontology123';
+    const canonicalDid = 'atomic:ontology123';
     const httpAlias = `https://example.com/${did}`;
     const store = new Store({ serverUrl: 'https://example.com' });
     store.setServerConnected(true);
@@ -921,9 +1022,9 @@ describe('Store', () => {
 
     expect(resource).toBeDefined();
     expect(resource.error).toBeUndefined();
-    expect(resource.subject).toBe(did);
+    expect(resource.subject).toBe(canonicalDid);
     expect(resource.get(core.properties.name)).toBe('My ontology');
-    expect(store.getResourceLoading(httpAlias).subject).toBe(did);
+    expect(store.getResourceLoading(httpAlias).subject).toBe(canonicalDid);
   });
 
   it('normalizes relative subjects to full URLs', async ({ expect }) => {
@@ -939,9 +1040,12 @@ describe('Store', () => {
     );
     expect(normalizedFull).toBe('https://myserver.dev/classes?page_size=10');
 
-    // DID should remain unchanged
+    // Canonical Atomic identifiers remain unchanged
+    expect(store.normalizeSubject('atomic:123')).toBe('atomic:123');
+
+    // Legacy `did:ad:` is canonicalized to `atomic:`
     const normalizedDID = store.normalizeSubject('did:ad:123');
-    expect(normalizedDID).toBe('did:ad:123');
+    expect(normalizedDID).toBe('atomic:123');
   });
 
   it('uses ClientDb.search for offline local hits', async ({ expect }) => {

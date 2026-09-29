@@ -149,7 +149,8 @@ export const SkillsConfigTab = ({
           </SkillsList>
 
           <CreateButton onClick={handleCreateNewSkill}>
-            <FaPlus title='' /> Create New Skill
+            <FaPlus title='' />
+            <span>Create New Skill</span>
           </CreateButton>
         </Column>
       )}
@@ -298,7 +299,8 @@ const SkillForm = ({ skill, onChange }: SkillFormProps) => {
             onChange({ ...skill, references: newRefs });
           }}
         >
-          <FaPlus /> Add Reference
+          <FaPlus />
+          <span>Add Reference</span>
         </Button>
       </Field>
     </Column>

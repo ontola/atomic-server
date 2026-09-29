@@ -6,6 +6,7 @@
  * Try not to rely on hardcoded timeouts, as this is likely to lead to race conditions and flakiness in CI (slower hardware).
  */
 
+import { isAtomicIdentifier } from '@tomic/lib';
 import { test, expect, type Page } from './fixtures';
 import {
   FRONTEND_URL,
@@ -78,6 +79,13 @@ test.describe('data-browser', async () => {
 
       await openAgentPage(page);
       await page.click('[data-test="sign-out"]');
+      await expect(page).toHaveURL(
+        url =>
+          url.pathname === '/app/welcome' && !url.searchParams.has('return_to'),
+      );
+      expect(
+        await page.evaluate(() => window.store.getAgent()),
+      ).toBeUndefined();
       await expect(
         page.getByRole('button', { name: 'Create account' }),
       ).toBeVisible();
@@ -270,18 +278,18 @@ test.describe('data-browser', async () => {
       await expect(
         page.getByRole('heading', { name: 'How your colleagues see you' }),
       ).toHaveCount(0);
+      // Share opens straight on the invite form.
       await topBarShareButton(page).click();
-      await page
-        .getByRole('button', { name: 'Create Invite', exact: true })
-        .click();
-      await expect(page.getByLabel('Allow edits')).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Copy invite link' }),
+      ).toBeVisible();
       await expect(
         page.getByRole('heading', { name: 'How your colleagues see you' }),
       ).toHaveCount(0);
 
       const createAction = page
-        .locator('dialog[open] footer')
-        .getByRole('button', { name: 'Create', exact: true });
+        .locator('dialog[open]')
+        .getByRole('button', { name: 'Copy invite link', exact: true });
       await expect(createAction).toBeVisible();
       await createAction.hover();
       await page.screenshot({ path: 'test-results/invite-footer-hover.png' });
@@ -379,27 +387,25 @@ test.describe('data-browser', async () => {
     const chatRoomHref = showFallback.href;
 
     // Owner: Share → invite. Guest: open invite URL only (new agent via acceptInvite).
-    await topBarShareButton(page).click();
-    await expect(
-      page.getByRole('button', { name: 'Create Invite' }),
-    ).toBeVisible({ timeout: 10000 });
-
     context.grantPermissions(['clipboard-read', 'clipboard-write'], {
       origin: new URL(FRONTEND_URL).origin,
     });
-    await page.getByRole('button', { name: 'Create Invite' }).click();
+    // Share opens straight on the invite, starting with the profile step.
+    await topBarShareButton(page).click();
+    await expect(page.getByLabel('Full name', { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
     await page.getByLabel('Full name', { exact: true }).fill('Chat Owner');
     await page
       .getByRole('button', { name: 'Save and continue', exact: true })
       .click();
-    await page.getByLabel('Allow edits').check();
-    await page.getByRole('button', { name: 'Create' }).click();
-    await expect(page.locator('text=Invite created and copied ')).toBeVisible();
-    const inviteUrl = await page.evaluate(() =>
-      document
-        .querySelector('[data-code-content]')
-        ?.getAttribute('data-code-content'),
-    );
+    await page
+      .getByLabel('Role for people who join with the link')
+      .selectOption('write');
+    await page.getByRole('button', { name: 'Copy invite link' }).click();
+    const inviteUrl = await page
+      .locator('[data-invite-link]')
+      .getAttribute('data-invite-link');
     expect(inviteUrl).toBeTruthy();
     await waitForSynced(page);
 
@@ -624,10 +630,21 @@ test.describe('data-browser', async () => {
     page,
     browser,
   }) => {
-    // This is independent of creating/switching our own drives above. Keeping
-    // both journeys in one case spent the timeout on two identity bootstraps.
-    // Opening a drive that is neither personal nor saved lands it in
-    // Recently visited, which makes the section appear.
+    // Two identity bootstraps: the fixture's own for `page`, and `devDrive`'s
+    // for `otherPage`. That is what the invite and chatroom tests above are
+    // slow for, and splitting this case out of the drive journey was not enough
+    // on its own. Measured here, four workers on a four-core box: the whole
+    // body is 17.5 to 18.6s, of which `devDrive` alone is 11.5s, against 7.4s
+    // when the box is idle. Run 4714 on CI spent the 60s default before the
+    // `/app/agent` render at the end, and the wall then named that page's
+    // heading assertion, which had 10s of its own and never got to use it, plus
+    // a `Protocol error ... session closed` as the page was torn down. Same
+    // trap as run 4686's two calendar reds.
+    test.slow();
+
+    // This is independent of creating/switching our own drives above. Opening a
+    // drive that is neither personal nor saved lands it in Recently visited,
+    // which makes the section appear.
     const otherContext = await browser.newContext();
     const otherPage = await otherContext.newPage();
     await devDrive(otherPage);
@@ -842,7 +859,7 @@ test.describe('data-browser', async () => {
     // DID-parent imports get fresh DIDs (signed genesis commits), not a
     // path-derived subject. Navigate to the parent and click through to the
     // imported child; HTTP-parent imports still produce `<parent>/<id>`.
-    if (parentSubject.startsWith('did:')) {
+    if (isAtomicIdentifier(parentSubject)) {
       await openSubject(page, parentSubject);
       const childLink = page
         .getByRole('main')

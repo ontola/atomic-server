@@ -1,4 +1,12 @@
-import { useId, useMemo, useState, lazy, Suspense, type JSX } from 'react';
+import {
+  useCallback,
+  useId,
+  useMemo,
+  useState,
+  lazy,
+  Suspense,
+  type JSX,
+} from 'react';
 import { core, useString, useResource, useCanWrite } from '@tomic/react';
 import { useNavigate } from '@tanstack/react-router';
 import { ShowRoute } from '../../routes/ShowRoute';
@@ -10,12 +18,14 @@ import { EditableTitle } from '@components/EditableTitle';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { Row as FlexRow, Column } from '@components/Row';
-import { FaFileCsv } from 'react-icons/fa6';
+import { FaFileCsv, FaPlug, FaWandMagicSparkles } from 'react-icons/fa6';
 import { TableForms } from './TableForms';
 import { TableExportDialog } from './TableExportDialog';
 import { TableResource } from './TableResource';
 import { useCustomContextItems } from '@components/ResourceContextMenu/CustomContextItemsContext';
 import { DIVIDER } from '@components/Dropdown';
+import { useSettings } from '@helpers/AppSettings';
+import type { WorkspaceSection } from '../PluginRuns/WorkspaceControls';
 
 const WorkspaceControls = lazy(() =>
   import('../PluginRuns/WorkspaceControls').then(m => ({
@@ -36,11 +46,34 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
     canWrite &&
     columns.some(p => p.subject === search.editColumn);
 
+  const { drive } = useSettings();
+
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>();
+  const closeWorkspaceControls = useCallback(
+    () => setWorkspaceSection(undefined),
+    [],
+  );
 
   const customMenuItems = useMemo(
     () => [
       DIVIDER,
+      ...(drive
+        ? [
+            {
+              id: 'connections',
+              label: 'Connections',
+              onClick: () => setWorkspaceSection('connections'),
+              icon: <FaPlug />,
+            },
+            {
+              id: 'automations',
+              label: 'Automations',
+              onClick: () => setWorkspaceSection('automations'),
+              icon: <FaWandMagicSparkles />,
+            },
+          ]
+        : []),
       {
         id: 'export-csv',
         label: 'Export to CSV',
@@ -48,7 +81,7 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
         icon: <FaFileCsv />,
       },
     ],
-    [],
+    [drive],
   );
 
   useCustomContextItems(customMenuItems);
@@ -96,12 +129,18 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
               withDecorations
             />
           </FlexRow>
-          <Suspense fallback={null}>
-            <WorkspaceControls workspace={resource.subject} />
-          </Suspense>
           <TableResource resource={resource} />
           <TableForms table={resource} />
         </Column>
+        {workspaceSection && (
+          <Suspense fallback={null}>
+            <WorkspaceControls
+              workspace={resource.subject}
+              section={workspaceSection}
+              onClosed={closeWorkspaceControls}
+            />
+          </Suspense>
+        )}
         <TableExportDialog
           subject={resource.subject}
           show={showExportDialog}

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
@@ -15,6 +15,7 @@ import { appRoute } from './RootRoutes';
 import { IntegrationSettings } from '@components/Settings/IntegrationSettings';
 import AISettings from '@components/AI/AISettings';
 import { VirtualDriveSettings } from '@components/Settings/VirtualDriveSettings';
+import { NotificationSettings } from '@components/Settings/NotificationSettings';
 import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
 import { SUPPORTED_LOCALES, useLocale } from '@components/LocaleContext';
 import { BasicSelect } from '@components/forms/BasicSelect';
@@ -30,6 +31,12 @@ import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { q?: string; section?: string } => ({
+    q: typeof search.q === 'string' ? search.q : undefined,
+    section: typeof search.section === 'string' ? search.section : undefined,
+  }),
   component: () => <AppSettings />,
   getParentRoute: () => appRoute,
 });
@@ -46,8 +53,8 @@ const AppSettings: React.FunctionComponent = () => {
     setDarkMode,
     colorfulMode,
     setColorfulMode,
-    viewTransitionsDisabled,
-    setViewTransitionsDisabled,
+    viewTransitionsEnabled,
+    setViewTransitionsEnabled,
     sidebarKeyboardDndEnabled,
     setSidebarKeyboardDndEnabled,
     hideTemplates,
@@ -57,7 +64,14 @@ const AppSettings: React.FunctionComponent = () => {
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { q, section } = AppSettingsRoute.useSearch();
+  const [searchQuery, setSearchQuery] = useState(
+    q ?? (section === 'ai' ? 'ai' : ''),
+  );
+  useEffect(
+    () => setSearchQuery(q ?? (section === 'ai' ? 'ai' : '')),
+    [q, section],
+  );
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
 
@@ -98,19 +112,10 @@ const AppSettings: React.FunctionComponent = () => {
         </SettingsSearchWrapper>
         <SettingsSearchProvider value={searchContext}>
           <SettingsGroup>
-            <SettingsSection label='Language'>
-              <BasicSelect
-                value={locale}
-                onChange={e => setLocale(e.target.value)}
-              >
-                {SUPPORTED_LOCALES.map(locale_code => (
-                  <option key={locale_code} value={locale_code}>
-                    {getLocaleName(locale_code)}
-                  </option>
-                ))}
-              </BasicSelect>
-            </SettingsSection>
-            <SettingsSection label='Appearance'>
+            <SettingsSection
+              label='Appearance'
+              childSearchKeywords='language locale panels templates ontology aichats hide templates'
+            >
               <Column gap='1rem'>
                 <Column gap='0.5rem'>
                   <SubLabel>Theme</SubLabel>
@@ -161,44 +166,61 @@ const AppSettings: React.FunctionComponent = () => {
                   <Checkbox checked={colorfulMode} onChange={setColorfulMode} />{' '}
                   <span>Colorful mode</span>
                 </CheckboxLabel>
-              </Column>
-            </SettingsSection>
-            <SettingsSection label='Panels & Templates'>
-              <Column gap='0.5rem'>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={enabledPanels.has(Panel.Ontologies)}
-                    onChange={changePanelPref(Panel.Ontologies)}
-                  />{' '}
-                  <span>Enable Ontology panel</span>
-                </CheckboxLabel>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={enabledPanels.has(Panel.AIChats)}
-                    onChange={changePanelPref(Panel.AIChats)}
-                  />{' '}
-                  <span>Enable AIChats panel</span>
-                </CheckboxLabel>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={hideTemplates}
-                    onChange={setHideTemplates}
-                  />{' '}
-                  <span>Hide templates on new resource page</span>
-                </CheckboxLabel>
+                <Column gap='0.5rem'>
+                  <label htmlFor='settings-language'>Language</label>
+                  <BasicSelect
+                    id='settings-language'
+                    value={locale}
+                    onChange={e => setLocale(e.target.value)}
+                  >
+                    {SUPPORTED_LOCALES.map(locale_code => (
+                      <option key={locale_code} value={locale_code}>
+                        {getLocaleName(locale_code)}
+                      </option>
+                    ))}
+                  </BasicSelect>
+                </Column>
+                <SettingsSection label='Panels & Templates'>
+                  <Column gap='0.5rem'>
+                    <CheckboxLabel>
+                      <Checkbox
+                        checked={enabledPanels.has(Panel.Ontologies)}
+                        onChange={changePanelPref(Panel.Ontologies)}
+                      />{' '}
+                      <span>Enable Ontology panel</span>
+                    </CheckboxLabel>
+                    <CheckboxLabel>
+                      <Checkbox
+                        checked={enabledPanels.has(Panel.AIChats)}
+                        onChange={changePanelPref(Panel.AIChats)}
+                      />{' '}
+                      <span>Enable AI Chats panel</span>
+                    </CheckboxLabel>
+                    <CheckboxLabel>
+                      <Checkbox
+                        checked={hideTemplates}
+                        onChange={setHideTemplates}
+                      />{' '}
+                      <span>Hide templates on new resource page</span>
+                    </CheckboxLabel>
+                  </Column>
+                </SettingsSection>
               </Column>
             </SettingsSection>
             <SettingsSection
               label='Accessibility'
-              childSearchKeywords='disable page transition animations view transitions motion'
+              childSearchKeywords='enable disable page transition animations view transitions motion'
             >
               <Column gap='0.5rem'>
                 <CheckboxLabel>
                   <Checkbox
-                    checked={viewTransitionsDisabled}
-                    onChange={checked => setViewTransitionsDisabled(checked)}
+                    checked={viewTransitionsEnabled}
+                    onChange={checked => setViewTransitionsEnabled(checked)}
                   />{' '}
-                  <span>Disable page transition animations</span>
+                  <span>
+                    Enable page transition animations (experimental, known to
+                    misbehave outside Chromium on desktop)
+                  </span>
                 </CheckboxLabel>
                 <CheckboxLabel>
                   <Checkbox
@@ -208,6 +230,12 @@ const AppSettings: React.FunctionComponent = () => {
                   <span>Enable keyboard drag & drop in sidebar</span>
                 </CheckboxLabel>
               </Column>
+            </SettingsSection>
+            <SettingsSection
+              label='Notifications'
+              childSearchKeywords='notify notifications alerts messages comments replies push'
+            >
+              <NotificationSettings />
             </SettingsSection>
             {isVirtualDriveAvailable() && (
               <SettingsSection label='Virtual drive'>

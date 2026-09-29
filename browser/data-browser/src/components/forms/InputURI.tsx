@@ -1,12 +1,9 @@
-import { useString, validateDatatype } from '@tomic/react';
+import { useString } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { InputStyled, InputWrapper } from './InputStyles';
 import { styled } from 'styled-components';
 import { ErrorChipInput } from './ErrorChip';
-import {
-  checkForInitialRequiredValue,
-  useValidation,
-} from './formValidation/useValidation';
+import { useValidatedInput } from './formValidation/useValidatedInput';
 
 import type { JSX } from 'react';
 
@@ -15,6 +12,7 @@ export default function InputURI({
   property,
   commit,
   commitDebounceInterval,
+  required,
   ...props
 }: InputProps): JSX.Element {
   const [value, setValue] = useString(resource, property.subject, {
@@ -23,24 +21,13 @@ export default function InputURI({
     validate: false,
   });
 
-  const { error, setError, setTouched } = useValidation(
-    checkForInitialRequiredValue(value, props.required),
-  );
+  const { error, setTouched, update } = useValidatedInput(value, setValue, {
+    datatype: property.datatype,
+    required,
+  });
 
   function handleUpdate(event: React.ChangeEvent<HTMLInputElement>): void {
-    const newval = event.target.value ?? undefined;
-    setValue(newval);
-
-    try {
-      validateDatatype(newval, property.datatype);
-      setError(undefined);
-    } catch (e) {
-      setError('Invalid URI');
-    }
-
-    if (props.required && newval === '') {
-      setError('Required');
-    }
+    update(event.target.value);
   }
 
   return (
@@ -54,6 +41,7 @@ export default function InputURI({
           spellCheck={false}
           value={value === undefined ? '' : value}
           onChange={handleUpdate}
+          required={required}
           {...props}
           onBlur={setTouched}
         />

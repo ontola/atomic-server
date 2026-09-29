@@ -1,3 +1,13 @@
+/// Whether `sentry_actix` already reports the failures logged under this
+/// tracing target, so the Sentry tracing layer must not report them again.
+///
+/// `tracing_actix_web` logs every failed request (its `emit_event_on_error`
+/// feature, on by default) and `sentry_actix` captures the same 5xx failures
+/// with the request attached. Only the latter should reach Sentry.
+fn reported_by_sentry_actix(target: &str) -> bool {
+    target.starts_with("tracing_actix_web")
+}
+
 /// Start logging / tracing. Creates a subscribers that logs to stdout.
 /// Also optionally creates a Chrome trace file. Starts OpenTelemetry if configured.
 /// Returns a [tracing_chrome::FlushGuard] that should be dropped when the server is no longer needed.
@@ -27,9 +37,23 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
     // Sentry layer: `error!` events become Sentry issues, `warn!`/`info!`
     // become breadcrumbs attached to the next issue. A no-op when no Sentry
     // client is bound (see `init_sentry`), so it is always safe to install.
-    let tracing_registry = tracing_subscriber::registry()
-        .with(filter)
-        .with(sentry::integrations::tracing::layer());
+    //
+    // Except for `tracing_actix_web`, which logs every failed request itself
+    // ("Error encountered while processing the incoming HTTP request", at
+    // `error!` for a 5xx and `warn!` for a 4xx). `sentry_actix` already
+    // reports those same 5xx failures, with the request attached, so letting
+    // both through files every server error in Sentry twice. It did: the
+    // staging floods of September 2026 arrived as paired issue groups of
+    // 6313 and 6312 events. Keep the log line, drop the second report.
+    let tracing_registry = tracing_subscriber::registry().with(filter).with(
+        sentry::integrations::tracing::layer().event_filter(|metadata| {
+            if reported_by_sentry_actix(metadata.target()) {
+                sentry::integrations::tracing::EventFilter::Ignore
+            } else {
+                sentry::integrations::tracing::default_event_filter(metadata)
+            }
+        }),
+    );
 
     match config.opts.trace {
         crate::config::Tracing::Stdout => {
@@ -171,4 +195,30 @@ pub fn init_sentry(config: &crate::config::Config) -> Option<sentry::ClientInitG
         eprintln!("SENTRY_DSN is set but invalid; Sentry error reporting is disabled");
     }
     Some(guard)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reported_by_sentry_actix;
+
+    #[test]
+    fn request_failures_are_left_to_sentry_actix() {
+        // The target `tracing_actix_web`'s own `emit_error_event` logs under.
+        assert!(reported_by_sentry_actix("tracing_actix_web::middleware"));
+        assert!(reported_by_sentry_actix("tracing_actix_web"));
+    }
+
+    #[test]
+    fn everything_else_still_reaches_sentry() {
+        // Background work has no actix middleware around it, so the tracing
+        // layer is the only thing that would ever report these.
+        for target in [
+            "atomic_server::handlers::commit",
+            "atomic_lib::sync::engine",
+            "atomic_server",
+            "",
+        ] {
+            assert!(!reported_by_sentry_actix(target), "{target}");
+        }
+    }
 }

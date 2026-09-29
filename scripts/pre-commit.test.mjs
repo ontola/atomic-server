@@ -158,6 +158,8 @@ test(`pnpm ${version}: Git commits lint the index, preserve local edits, and fai
 test "$1" = clippy || exit 90
 test "$PWD" != "$HOOK_TEST_ROOT" || exit 91
 test "$(cat Cargo.toml)" = staged-manifest || exit 92
+test -f server/assets_tmp/index.html || exit 93
+test "$ATOMICSERVER_SKIP_JS_BUILD" = true || exit 94
 printf '%s\\n' "$@" > "$HOOK_TEST_ROOT/clippy-args"
 exit "$HOOK_TEST_CARGO_STATUS"
 `,

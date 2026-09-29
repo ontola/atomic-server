@@ -1,9 +1,10 @@
+import { canonicalIdentifier } from '@tomic/lib';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
 import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
-import { managedFetch } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
 
 export type RecoveryWrapperInput = {
@@ -54,6 +55,42 @@ export type RecoverySecret = {
   created_at: number;
   updated_at: number;
 };
+
+/**
+ * Backups saved before the `did:ad:` → `atomic:` rename carry the legacy
+ * spelling of the same agent, and so do secrets exported before it, so
+ * compare identities, not strings. Every check of "is this the account's
+ * agent" goes through here: a strict comparison makes one agent look like
+ * two, and the reconcile gate then switches identities and signs out.
+ */
+export function sameAgent(a: string, b: string): boolean {
+  return canonicalIdentifier(a) === canonicalIdentifier(b);
+}
+
+/** A pasted secret that opens a different agent than the signed-in account's. */
+export type SecretAccountConflict = {
+  email: string;
+  accountAgent: string;
+  secretAgent: string;
+};
+
+/**
+ * Whether signing in with `secretAgent` would replace the account that is
+ * signed in here. Using it means ending that account's session, which also
+ * signs the user out of the portal, so the caller has to ask first.
+ */
+export function secretAccountConflict(
+  stored: Pick<RecoverySecret, 'owner_email' | 'agent_subject'> | null,
+  secretAgent: string,
+): SecretAccountConflict | null {
+  if (!stored || sameAgent(stored.agent_subject, secretAgent)) return null;
+
+  return {
+    email: stored.owner_email,
+    accountAgent: stored.agent_subject,
+    secretAgent,
+  };
+}
 
 const RECOVERY_FORMAT_VERSION = 1;
 const ENVELOPE_V2_FORMAT_VERSION = 2;
@@ -192,45 +229,9 @@ async function deriveRecoveryKey(
   );
 }
 
-export async function buildEncryptedRecoverySecret({
-  secret,
-  password,
-  agentSubject,
-  driveSubject,
-}: {
-  secret: string;
-  password: string;
-  agentSubject: string;
-  driveSubject?: string | null;
-}): Promise<RecoverySecretInput> {
-  const salt = randomBytes(SALT_BYTES);
-  const nonce = randomBytes(NONCE_BYTES);
-  const key = await deriveRecoveryKey(password, salt, ['encrypt']);
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce },
-    key,
-    new TextEncoder().encode(secret),
-  );
-
-  return {
-    agent_subject: agentSubject,
-    drive_subject: driveSubject ?? null,
-    encrypted_secret: bytesToBase64(new Uint8Array(ciphertext)),
-    encryption_algorithm: 'AES-GCM',
-    kdf_algorithm: 'PBKDF2',
-    kdf_params: {
-      hash: KDF_HASH,
-      iterations: KDF_ITERATIONS,
-    },
-    salt: bytesToBase64(salt),
-    nonce: bytesToBase64(nonce),
-    format_version: RECOVERY_FORMAT_VERSION,
-  };
-}
-
 /**
- * Reverse of {@link buildEncryptedRecoverySecret}: derive the AES-GCM key from
- * the recovery password + stored salt, then decrypt the agent secret. Throws a
+ * Decrypt a legacy v1 envelope: derive the AES-GCM key from the recovery
+ * password + stored salt, then decrypt the agent secret. Throws a
  * friendly error on a wrong password (AES-GCM auth-tag failure).
  */
 export async function decryptRecoverySecret(
@@ -1115,7 +1116,7 @@ export async function unifyAccountPasskey(
 
   if (
     !recovery ||
-    recovery.agent_subject !== agentSubject ||
+    !sameAgent(recovery.agent_subject, agentSubject) ||
     recovery.format_version !== 2
   ) {
     throw new Error(
@@ -1206,7 +1207,7 @@ export async function addPasskeyWrapper(
   // rather than overwriting a newer envelope with a cached version.
   const recovery = await getRecoverySecret();
 
-  if (!recovery || recovery.agent_subject !== agentSubject) {
+  if (!recovery || !sameAgent(recovery.agent_subject, agentSubject)) {
     throw new Error(
       'Sign in to the account holding this backup before adding a passkey.',
     );
@@ -1386,12 +1387,61 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
   return saved;
 }
 
+const pendingRecoveryReads = new Map<string, Promise<RecoverySecret | null>>();
+const recoveryReadCooldowns = new Map<string, number>();
+
 export async function getRecoverySecret(): Promise<RecoverySecret | null> {
-  if (!(await getManagedAccount())) return null;
+  const account = await getManagedAccount();
+  if (!account) return null;
+  // Reconciliation, the drive catalog and Vault can all ask during one render.
+  // Share only an in-flight read: a later call must see newly saved wrappers.
+  const key = JSON.stringify([getManagedApiBase(), account.email]);
+  const now = Date.now();
+
+  for (const [readKey, until] of recoveryReadCooldowns) {
+    if (until <= now) recoveryReadCooldowns.delete(readKey);
+  }
+
+  if (recoveryReadCooldowns.has(key)) {
+    throw new Error('Could not load encrypted recovery backup.');
+  }
+
+  const pending = pendingRecoveryReads.get(key);
+  if (pending) return pending;
+  const request = fetchRecoverySecret(key);
+  pendingRecoveryReads.set(key, request);
+
+  try {
+    return await request;
+  } finally {
+    if (pendingRecoveryReads.get(key) === request)
+      pendingRecoveryReads.delete(key);
+  }
+}
+
+async function fetchRecoverySecret(
+  key: string,
+): Promise<RecoverySecret | null> {
   // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
   // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
   // (PUT) above; 204/401/404 all mean "no recovery secret stored".
   const response = await managedFetch(`/recovery-secret`, {});
+
+  if (response.status === 429) {
+    // A failed read is unknown, never "no backup". Stop callers from hammering
+    // the endpoint between renders, while keeping successful reads fresh.
+    const retryAfter = response.headers.get(/* @wc-ignore */ 'Retry-After');
+    const seconds = retryAfter ? Number(retryAfter) : NaN;
+    const deadline = Number.isFinite(seconds)
+      ? Date.now() + seconds * 1000
+      : Date.parse(retryAfter ?? '');
+    recoveryReadCooldowns.set(
+      key,
+      Number.isFinite(deadline) && deadline > Date.now()
+        ? deadline
+        : Date.now() + 60_000,
+    );
+  }
 
   if (
     response.status === 204 ||
@@ -1434,7 +1484,7 @@ function cacheRecoverySecret(secret: RecoverySecret): void {
     // Keyed by agent, so a shared machine accumulates one entry per account
     // rather than each sign-in evicting the last.
     const others = readCachedBackups().filter(
-      entry => entry.agent_subject !== secret.agent_subject,
+      entry => !sameAgent(entry.agent_subject, secret.agent_subject),
     );
     localStorage.setItem(
       RECOVERY_CACHE_KEY,
@@ -1464,7 +1514,9 @@ export function readCachedBackups(): RecoverySecret[] {
     if (legacy) {
       const parsed = JSON.parse(legacy) as RecoverySecret;
 
-      if (!entries.some(e => e.agent_subject === parsed.agent_subject)) {
+      if (
+        !entries.some(e => sameAgent(e.agent_subject, parsed.agent_subject))
+      ) {
         entries.push(parsed);
       }
 
@@ -1499,7 +1551,7 @@ export function forgetCachedRecoverySecret(agentSubject?: string): void {
     }
 
     const remaining = readCachedBackups().filter(
-      entry => entry.agent_subject !== agentSubject,
+      entry => !sameAgent(entry.agent_subject, agentSubject),
     );
     localStorage.setItem(RECOVERY_CACHE_KEY, JSON.stringify(remaining));
   } catch {
@@ -1523,7 +1575,7 @@ export async function getUnlockableRecoverySecret(
 
     if (
       fromServer &&
-      (!agentSubject || fromServer.agent_subject === agentSubject)
+      (!agentSubject || sameAgent(fromServer.agent_subject, agentSubject))
     ) {
       return fromServer;
     }
@@ -1535,7 +1587,7 @@ export async function getUnlockableRecoverySecret(
 
   return (
     (agentSubject
-      ? cached.find(entry => entry.agent_subject === agentSubject)
+      ? cached.find(entry => sameAgent(entry.agent_subject, agentSubject))
       : cached.at(-1)) ?? null
   );
 }

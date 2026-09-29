@@ -6,18 +6,23 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import { useStore } from '@tomic/react';
 import { checkOnboardingStorage } from '../../helpers/onboardingStorage';
+import { getLocalServerOrigin, isRunningInTauri } from '../../helpers/tauri';
 import { styled, css } from 'styled-components';
 import { Button } from '../../components/Button';
 import '@tomic/service-ui/background.css';
 
 export function Shell({ children, ...props }: ComponentProps<'div'>) {
   const store = useStore();
+  const native = isRunningInTauri();
   const [state, setState] = useState<'checking' | 'ready' | 'failed'>(
     'checking',
   );
   useEffect(() => {
     let active = true;
-    void checkOnboardingStorage(store).then(
+    void checkOnboardingStorage(
+      store,
+      native ? getLocalServerOrigin() : undefined,
+    ).then(
       () => {
         if (active) setState('ready');
       },
@@ -29,7 +34,7 @@ export function Shell({ children, ...props }: ComponentProps<'div'>) {
     return () => {
       active = false;
     };
-  }, [store]);
+  }, [native, store]);
 
   return (
     <ShellSurface {...props}>
@@ -41,12 +46,27 @@ export function Shell({ children, ...props }: ComponentProps<'div'>) {
             <p role='status'>Checking local storage…</p>
           ) : (
             <>
-              <CardTitle>This browser could not open local storage</CardTitle>
-              <p>
-                Open this link in a non-private browser window and allow this
-                site to store data. If you are already in a regular window,
-                close other tabs for this site and try again.
-              </p>
+              {native ? (
+                <>
+                  <CardTitle>The local node could not start</CardTitle>
+                  <p>
+                    AtomicServer stores this app’s data in its embedded node.
+                    Quit other AtomicServer processes using the same data
+                    directory or port 9883, then reopen the app.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <CardTitle>
+                    This browser could not open local storage
+                  </CardTitle>
+                  <p>
+                    Open this link in a non-private browser window and allow
+                    this site to store data. If you are already in a regular
+                    window, close other tabs for this site and try again.
+                  </p>
+                </>
+              )}
               <Button onClick={() => window.location.reload()}>
                 Reload and try again
               </Button>

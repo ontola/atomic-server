@@ -48,4 +48,7 @@ interface CalendarFixture {
 }
 export function mockProxy(options?: {
   frontendOrigin?: string;
-}): Server & { github: GitHubTracker; calendar: CalendarFixture };
+}): Server & {
+  github: GitHubTracker;
+  calendar: CalendarFixture;
+};

@@ -1,5 +1,6 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
+import type { ProxyHost } from '@helpers/proxyConnections';
 import {
   CollectionBuilder,
   core,
@@ -32,6 +33,13 @@ export interface HostRequest {
   parent?: string;
   isA?: string[];
   propVals?: Record<string, unknown>;
+  /** `save`: properties the view removed, sent apart from `propVals`. */
+  remove?: string[];
+  // `proxyCapability` / `proxyConnections`
+  platform?: string;
+  connectionId?: string;
+  /** The frame's own Ed25519 public key, base64url. */
+  publicKey?: string;
 }
 
 export interface HostReply {
@@ -72,6 +80,11 @@ export async function handleRequest(
   request: HostRequest,
   /** The table this app is a view of, when it is being used as one. */
   table?: string,
+  /**
+   * This app's integration-proxy access, as the signed-in user grants it.
+   * Absent where the host cannot (no signed-in agent, or a host without it).
+   */
+  proxy?: ProxyHost,
 ): Promise<unknown> {
   switch (request.op) {
     case 'app':
@@ -154,11 +167,30 @@ export async function handleRequest(
       const subject = required(request.subject, 'subject');
 
       await refuseOutsideApp(store, subject, app);
+
+      // `save` on the server only sets, so a property the view removed goes
+      // as its own write. Without this, `resource.remove(p).save()` left `p`
+      // in place while the view believed it gone. Removed first: if the
+      // save then fails, a retry sees the property already gone rather than
+      // a value the view thinks it no longer owns.
+      const removed = (request.remove ?? []).filter(
+        (p): p is string => typeof p === 'string' && p !== '',
+      );
+
+      if (removed.length) {
+        await writeAsApp(store, drive, app, {
+          op: 'remove',
+          subject,
+          properties: removed,
+        });
+      }
+
       await writeAsApp(store, drive, app, {
         op: 'save',
         subject,
         propVals: request.propVals ?? {},
       });
+      await refresh(store, subject);
 
       return { subject };
     }
@@ -171,6 +203,27 @@ export async function handleRequest(
 
       return { subject };
     }
+
+    // The frame names a connection and brings its own public key; the user
+    // signs a capability bound to that key, for that connection only, after
+    // the page has checked the connection is delegated to this app. The frame
+    // then calls the proxy itself. Nothing here is a credential on its own:
+    // every request must also be signed with the frame's key.
+    case 'proxyCapability': {
+      if (!proxy)
+        throw new Error('This host cannot reach the integration proxy.');
+
+      return await proxy.capability({
+        platform: required(request.platform, 'platform'),
+        connectionId: required(request.connectionId, 'connectionId'),
+        publicKey: required(request.publicKey, 'publicKey'),
+      });
+    }
+
+    case 'proxyConnections':
+      return proxy
+        ? await proxy.connections(required(request.platform, 'platform'))
+        : [];
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.
@@ -224,6 +277,24 @@ async function writeAsApp(
   }
 
   return (await response.json()) as { subject: string };
+}
+
+/**
+ * Pulls the server's copy of a resource the app just wrote into this page's
+ * store.
+ *
+ * The write went through `/app-write`, not through this store, so the copy
+ * cached here is the one from before it. The next `get` from the view read
+ * that stale copy: an app that compares what it imports with what is stored
+ * saw its own last write as missing and wrote it again. Best effort: the
+ * write already succeeded, so a failed refresh is not the view's error.
+ */
+async function refresh(store: Store, subject: string): Promise<void> {
+  // Replace rather than merge: a merge keeps properties the write removed.
+  // `applyIncoming` still refuses to clobber unsaved local edits.
+  await store
+    .fetchResourceFromServer?.(subject, { forceOverride: true })
+    .catch(() => undefined);
 }
 
 /**

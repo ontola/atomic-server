@@ -3,9 +3,11 @@
 > Status: **Phase 1–2 shipped** (resolver, tool I/O, table/context providers).
 > Remaining: rebase `create_table.rows` on `fromCompact`; server
 > `format=compact`. First consumer: the data-browser AI assistant tools
-> (`useAtomicTools.ts`). Related: [[SDK-API-design]] (agent DX), the
-> `create_table` spec vocabulary in `createTableFromSpec.ts`, and the
-> drive-structure / custom-classes system-prompt inventories.
+> (`useAtomicTools.ts`). Related: [[SDK-API-design]] (agent DX),
+> [`mcp-endpoint.md`](./mcp-endpoint.md) (Atomic as MCP server; phase 4 is
+> its Rust path), the `create_table` spec vocabulary in
+> `createTableFromSpec.ts`, and the drive-structure / custom-classes
+> system-prompt inventories.
 
 ## Problem
 
@@ -112,7 +114,7 @@ section); tool descriptions just say "compact form".
 | 1 | Short subject refs (`#xxxxxxxx`) at the tool boundary + drive-tree/custom-classes seeding + markdown-link and tool-bubble expansion | **done** |
 | 2 | Context items (`processAtomicResources`) emit compact; per-class context providers (table → row-class schema + tag map + first N rows + count in transient context) | **done** |
 | 3 | `create_table.rows` / `rowToPropVals` re-based on `fromCompact` | remaining |
-| 4 | Server-side `format=compact` so MCP server & other clients share it instead of reimplementing resolution | remaining |
+| 4 | Server-side `format=compact` so MCP server & other clients share it instead of reimplementing resolution | remaining; consumer: [`mcp-endpoint.md`](./mcp-endpoint.md) |
 
 ## Decisions record
 

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    {
+      "id": "a",
+      "method": "GET",
+      "url": "https://a.test",
+      "effect": "maybe"
+    }
+  ]
+}

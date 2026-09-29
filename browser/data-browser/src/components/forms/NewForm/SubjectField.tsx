@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isAtomicIdentifier } from '@tomic/react';
 import Field from '../Field';
 import { InputStyled, InputWrapper } from '../InputStyles';
 import { styled } from 'styled-components';
@@ -35,7 +36,7 @@ export function SubjectField({
 }: SubjectFieldProps) {
   // DID subjects can't be parsed as URLs and are deterministic — show them
   // as plain read-only text.
-  const isDID = value.startsWith('did:') || value.startsWith('_');
+  const isDID = isAtomicIdentifier(value) || value.startsWith('_');
   const isReadOnly = isDID || readOnly;
 
   const [origin, path] = isReadOnly ? ['', ''] : getPath(value);

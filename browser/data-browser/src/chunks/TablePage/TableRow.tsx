@@ -8,7 +8,6 @@ import {
 } from 'react';
 import {
   Collection,
-  core,
   dataBrowser,
   DataBrowser,
   Resource,
@@ -22,6 +21,7 @@ import { styled, keyframes } from 'styled-components';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { useMaterializeWhenDeselected } from './useMaterializeWhenDeselected';
+import { withRowDefaults } from './rowDefaults';
 
 interface TableRowProps {
   collection: Collection;
@@ -144,9 +144,9 @@ export function TableRow({
 
 type TableNewRowProps = Omit<TableRowProps, 'collection'> & {
   parent: Resource<DataBrowser.Table>;
-  /** Stable `_new:` subject owned by the parent (also this row's react-window
-   * key). Passed in — NOT minted here — so a remount reuses the same virtual
-   * resource instead of orphaning typed data on a discarded subject. */
+  /** The draft row's subject, minted by the parent with `store.newResource`
+   * (also this row's react-window key). Passed in — NOT minted here — so a
+   * remount reuses the same draft instead of orphaning typed data. */
   subject: string;
   /** True for the bottom-most new row — the only one that spawns a fresh
    * trailing placeholder when it first gains content. */
@@ -171,17 +171,13 @@ export function TableNewRow({
   addNewRow,
   sortOrder,
 }: TableNewRowProps): JSX.Element {
-  // A synchronous, *virtual* new-row resource: a stable local `_new:`
-  // placeholder, editable on first paint. The old code awaited
-  // `store.newResource()` (genesis sign) on mount — a loading spinner per
-  // row plus a signed commit for every empty placeholder — then persisted
-  // each keystroke, so rapid entry churned saves → re-fetches → remounts that
-  // stole focus from the cell. This row instead stays purely local (the Loro
-  // dirty subscriber skips `_new:` subjects, so it never auto-drains) and is
-  // materialized when the user moves off it (`useMaterializeWhenDeselected`).
-  // Cells are keyed by the *stable* `_new:` subject — after materialization
-  // the store aliases it to the real `did:ad:` subject, so the cell resolves
-  // the same resource without remounting.
+  // A draft row: the parent minted it ahead of time with
+  // `store.newResource({ deferGenesis: true })`, so it has its final subject
+  // and is editable on first paint. Its genesis is not signed yet, so it stays
+  // purely local (the Loro dirty subscriber skips resources that are still
+  // `new`) and is saved when the user moves off it
+  // (`useMaterializeWhenDeselected`). Saving keeps the subject, so the cells
+  // never remount.
   const resource = useResource(subject, resourceOpts);
 
   useMarkings(resource, index);
@@ -203,12 +199,25 @@ export function TableNewRow({
   const seededOrderRef = useRef(false);
   const handleFirstContent = useCallback(() => {
     // Stamp the minted `sortOrder` the moment the row gains content — NOT at
-    // mount: an empty placeholder must keep exactly the seeded `isA` +
-    // `parent` entries, because "more than 2 entries" is what the
-    // materialize/rebase/advance heuristics treat as "has user content".
-    if (!seededOrderRef.current && sortOrder !== undefined) {
+    // mount: an empty draft must hold only what creating it wrote, because
+    // anything more is what the materialize/rebase/advance heuristics treat
+    // as user content (`hasUserContent`).
+    if (!seededOrderRef.current) {
       seededOrderRef.current = true;
-      void resource.set(dataBrowser.properties.sortOrder, sortOrder, false);
+
+      if (sortOrder !== undefined) {
+        void resource.set(dataBrowser.properties.sortOrder, sortOrder, false);
+      }
+
+      // The table's row defaults (a Status of Todo, say), for whatever the
+      // user has not filled in themselves.
+      for (const [property, value] of Object.entries(
+        withRowDefaults(parent, {}),
+      )) {
+        if (resource.get(property) === undefined) {
+          void resource.set(property, value, false);
+        }
+      }
     }
 
     if (spawnedRef.current || !isLastRef.current) {
@@ -217,21 +226,7 @@ export function TableNewRow({
 
     spawnedRef.current = true;
     addNewRow();
-  }, [addNewRow, resource, sortOrder]);
-
-  // Seed class + parent locally (validate:false → no fetch, no commit) so the
-  // genesis sign at materialization builds a valid row of the table's class.
-  // Runs once, keyed on the stable `_new:` subject.
-  useEffect(() => {
-    const classtype = parent.props.classtype;
-
-    if (classtype) {
-      void resource.set(core.properties.isA, [classtype], false);
-    }
-
-    void resource.set(core.properties.parent, parent.subject, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject]);
+  }, [addNewRow, resource, sortOrder, parent]);
 
   return (
     <>

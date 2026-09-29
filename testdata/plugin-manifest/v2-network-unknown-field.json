@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "network": {
+    "origins": [],
+    "hosts": [
+      "*"
+    ]
+  }
+}

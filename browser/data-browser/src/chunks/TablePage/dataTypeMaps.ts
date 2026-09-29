@@ -11,6 +11,8 @@ import { SlugCell } from './EditorCells/SlugCell';
 import { StringCell } from './EditorCells/StringCell';
 import { CellContainer } from './EditorCells/Type';
 import { URICell } from './EditorCells/URICell';
+import { parseFloatText, parseInteger } from './EditorCells/numberInput';
+import { UNPARSED } from './EditorCells/useCommittedText';
 import { MarkdownCell } from './EditorCells/MarkdownCell';
 import { JSONCell } from './EditorCells/JSONCell';
 import { LocalizedTextCell } from './EditorCells/LocalizedTextCell';
@@ -55,19 +57,27 @@ export function appendStringToType<T extends JSONValue>(
   const val = value ?? '';
 
   switch (dataType) {
-    case Datatype.STRING:
     case Datatype.SLUG:
+      // As the slug editor stores it: lower case, no whitespace.
+      return `${val}${append}`.toLowerCase().replace(/\s/g, '-') as T;
+    case Datatype.STRING:
     case Datatype.MARKDOWN:
     case Datatype.URI:
       return `${val}${append}` as T;
-    case Datatype.INTEGER:
-      return Number.parseInt(
-        `${val}${Number.isNaN(Number.parseInt(append)) ? '' : append}`,
-      ) as T;
-    case Datatype.FLOAT:
-      return Number.parseFloat(
-        `${val}${Number.isNaN(Number.parseFloat(append)) ? '' : append}`,
-      ) as T;
+
+    // Text that is not a number keeps the value, never NaN (#1825).
+    case Datatype.INTEGER: {
+      const parsed = parseInteger(`${val}${append}`);
+
+      return (parsed === UNPARSED ? value : parsed) as T;
+    }
+
+    case Datatype.FLOAT: {
+      const parsed = parseFloatText(`${val}${append}`);
+
+      return (parsed === UNPARSED ? value : parsed) as T;
+    }
+
     case Datatype.ATOMIC_URL:
       if (isURL(append)) {
         return append as T;

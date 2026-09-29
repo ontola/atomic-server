@@ -10,7 +10,7 @@ In many ways, it has **similar goals** to Atomic Data:
 
 Technically, both are also similar:
 
-- Usage of **personal servers**, or PODs (Personal Online Datastores). Both Atomic Data and Solid aim to provide users with a highly personal server where all sorts of data can be stored.
+- Usage of **personal data stores**. Solid gives every user a POD (Personal Online Datastore), a server they control. Atomic Data started from the same idea and has since moved the store onto the device itself: data lives [local-first](../local-first.md) on your phone or laptop, and a personal server is one replica among your devices rather than the place the data has to be.
 - Usage of **linked data**. All Atomic Data is valid RDF, which means that **all Atomic Data is compatible with Solid**. However, the other way around is more difficult. In other words, if you choose to use Atomic Data, you can always put it in your Solid Pod.
 
 But there are some important **differences**, too, which will be explained in more detail below.
@@ -19,6 +19,8 @@ But there are some important **differences**, too, which will be explained in mo
 - Atomic Data standardizes state changes (which also provides version control / history, audit trails)
 - Atomic Data is more easily serializable to other formats (like JSON)
 - Atomic Data has different models for authentication, authorization and hierarchies
+- Atomic Data identifies users and resources by `did:ad:` identifiers derived from keys and signatures, where Solid uses WebIDs (HTTP URLs) that depend on a host
+- Atomic Data syncs signed CRDT updates between devices; Solid reads and writes documents on a server
 - Atomic Data does not depend on existing semantic web specifications
 - Atomic Data is a smaller and younger project, and as of now a one-man show
 

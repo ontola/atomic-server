@@ -5,6 +5,7 @@ Note that your code changes will be distributed under the MIT license of this re
 Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to learn more about our plans and the history of the project.
 Talk with other devs on our [Discord][discord-url]!
 
+[discord-badge]: https://img.shields.io/discord/723588174747533393.svg?logo=discord
 [discord-url]: https://discord.gg/a72Rv2P
 
 ## Publishing
@@ -18,8 +19,11 @@ CI publishes `@tomic/*` to npm when a `v*` tag is pushed (`release.yml`
 - make sure `atomic-server` is running on `localhost`.
 - `pnpm test`
 - `pnpm test-e2e`
-- Update the `package.json` files for all published `@tomic/*` packages with the same version number as the Rust release. This includes beta versions such as `0.41.0-beta.0`.
-- Update starter template dependencies that point to `@tomic/*`.
+- Bump versions with `node scripts/bump-version.mjs` from the repo root — do
+  not edit `package.json` files by hand. Versions must match the Rust release,
+  including beta versions such as `0.41.0-beta.0`.
+- Update starter template dependencies that point to `@tomic/*` (the bump
+  script does this).
 - Run `pnpm install --lockfile-only` from `/browser` after version changes.
 - Check the [changelog](changelog.md), make sure the headers are correct
 - Now do the rust libraries
@@ -46,6 +50,6 @@ If you run `pnpm start` from the root, these will be run automatically.
 Atomic Data Browser uses [Wuchale](https://wuchale.dev/) for localization.
 When adding new text to the app wuchale will automatically extract it and add it to the locale files (When running the vite dev server).
 Make sure you provide translations for the any new text you add.
-To help with this you can provide an OpenRouter API key, Wuchale will then use this to generate translations for you automatically.
-To do so export the key in your terminal or use something like direnv to set the key: `export OPENROUTER_API_KEY=your_api_key`
-More info: [AI live translation](https://wuchale.dev/guides/ai/)
+To help with this you can provide a Google Gemini API key, Wuchale will then use this to generate translations for you automatically.
+To do so export the key in your terminal or use something like direnv to set the key: `export GEMINI_API_KEY=your_api_key`
+More info: [How to use Gemini live translation](https://wuchale.dev/guides/gemini/)

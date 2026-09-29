@@ -37,6 +37,7 @@ export * from './ontologies/server.js';
 export * from './ontologies/ai.js';
 export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
+export * from './ontologies/notifications.js';
 export * from './ontologies/i18n.js';
 export * from './ontologies/forms.js';
 export * from './canvas-strokes.js';
@@ -70,6 +71,7 @@ export * from './ontology.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
+export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
@@ -79,13 +81,18 @@ export {
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
-export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+export type {
+  ClientDbOutboxWrite,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
 export {
   LocalOutbox,
   isTerminalCommitErrorMessage,
   isUnrecoverableCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
+  isBenignTerminalCommitError,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';
@@ -192,14 +199,48 @@ export {
   type CreatedApp,
 } from './plugin-app.js';
 export {
+  catalogAppProperties,
+  catalogAppSchema,
+  catalogAppState,
+  compareVersions,
+  fetchCatalogAppModule,
+  installCatalogApp,
+  parseCatalogApp,
+  readInstalledCatalogApps,
+  resolveModuleUrl,
+  subresourceIntegrity,
+  updateCatalogApp,
+  type CatalogApp,
+  type InstalledCatalogApp,
+} from './catalog-app.js';
+export {
   parseManifest,
   validateManifest,
+  type CapabilityName,
+  type DeclaredAction,
+  type DeclaredCapability,
+  type DeclaredEntrypoints,
+  type DeclaredNetwork,
   type DeclaredOperation,
   secretsMentionedIn,
   originsMentionedIn,
   type DeclaredSecret,
+  type DeclaredConfig,
+  type DeclaredConfigField,
+  type DeclaredAccept,
+  type DeclaredDestination,
+  DEFAULT_ACCEPT_MAX_BYTES,
+  ACCEPT_MAX_BYTES_CEILING,
+  type ManifestRuntime,
+  type ManifestWorld,
   type PluginManifest,
+  type PluginManifestV2,
 } from './plugin-manifest.js';
+export {
+  pluginConfigFor,
+  pluginConfigProblems,
+  type StoredPluginConfig,
+} from './plugin-config.js';
 export { describePlugin } from './plugin-runner.js';
 
 export {
@@ -239,6 +280,23 @@ export {
   pluginSyncSchedule,
   type PluginSyncSchedule,
 } from './plugin-connection.js';
+export {
+  installRelease,
+  updateInstallationRelease,
+  publishZipRelease,
+  readInstallationReview,
+  grantsFor,
+  installationIdentifier,
+  DEFAULT_INSTALLATION_NAMESPACE,
+  RUNTIME_JS,
+  type InstallationStatus,
+  type InstallationReview,
+  type InstallReleaseOptions,
+  type UpdateReleaseOptions,
+  type PublishedRelease,
+  type ReleaseReference,
+  type ReviewCapability,
+} from './plugin-install.js';
 export * from './integration-actions.js';
 
 export { taskSchema } from './task-schema.js';

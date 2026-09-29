@@ -152,3 +152,36 @@ Fixed statement spacing, shadowed test variables and the database-handoff mock's
 Validation after cleanup: 381 library tests, nine diagnostic-fixture self-tests,
 the database-handoff regression and the app typecheck pass. Generated local
 `dist-hosted` output was moved outside the source tree before linting.
+
+## Open after the #1500 pass (2026-09-17)
+
+Carried from that PR's e2e handoff when it was deleted. Fixed on the way and
+worth knowing about: a spec can declare a diagnostic that only some topologies
+produce (`expect(..., { optional: true })` in `diagnostic-collector.ts`,
+because `recovery-option`'s service-worker warning exists only in a production
+build); the app no longer fetches the server root for an empty subject
+(`normalizeSubject('')` resolved to `http://host/`, which 404s on a DID-drive
+server and logged two console errors per render — that was the whole
+"diagnostics group" of failures); `useChildren` re-reads a page older than its
+own count and a query whose answer predates a new child.
+
+- [ ] `website-inline-rte` / `website-inline-content` flake: see
+      [`website-publishing.md`](./website-publishing.md) Remaining work 1.
+- [ ] `table-create-perf` (3) and `opfs-init-perf` fail against a Vite dev
+      server because the `clientdb.*` perf marks are absent from the dev module
+      graph; a production build made locally failed them differently
+      (`/app/dev-drive` never reached a drive), so they are unexplained rather
+      than explained. `recovery-option` is dev-topology only and now declares
+      its diagnostic as optional.
+- [ ] `vault-backup-restore` skips without the atomic-saas control plane on
+      :3030 (`vault-stack.sh`); it has not been run green against this
+      branch's own portal.
+- [ ] `useDriveClass` (`chunks/PluginRuns/runScript.ts`) subscribes to the
+      drive's `defaultOntology` only if it exists when the hook mounts; a drive
+      that gains its first plugin schema in this tab does not re-resolve, so a
+      freshly created app renders the generic resource page until a reload. A
+      fix (also subscribe to the drive resource) was written and reverted
+      because it needs a test that proves it; the `apps` specs pass since the
+      schema-term lookup was batched, so the gap is no longer test-visible.
+- [ ] `second-device-load @smoke` went from about 1 pass in 3 to 6 in 7 after
+      the `useChildren` fix; the remaining miss is not diagnosed.

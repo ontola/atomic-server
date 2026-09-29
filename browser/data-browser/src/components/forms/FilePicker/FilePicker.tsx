@@ -22,13 +22,15 @@ export function FilePicker({
   disabled,
   required,
   commit,
+  commitDebounceInterval,
   allowedMimes,
 }: InputProps & { allowedMimes?: Set<string> }): React.JSX.Element {
   const store = useStore();
   const { upload } = useUpload(resource);
   const [value, setValue] = useSubject(resource, property.subject, {
     validate: false,
-    commit: commit,
+    commit,
+    commitDebounce: commitDebounceInterval,
   });
   const { error, setError, setTouched } = useValidation(
     checkForInitialRequiredValue(value, required),

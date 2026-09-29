@@ -18,7 +18,10 @@ vi.mock('./accountPasskey', () => ({
   accountPasskey: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('./session', () => ({ getManagedAccount: vi.fn() }));
-vi.mock('./api', () => ({ managedFetch: vi.fn() }));
+vi.mock('./api', () => ({
+  managedFetch: vi.fn(),
+  getManagedApiBase: () => 'https://portal.example/api',
+}));
 vi.mock('../wasmUrls', () => ({
   wasmJsUrl: () => './test-fixtures/recovery-wasm.ts',
   wasmBinaryUrl: () => '',

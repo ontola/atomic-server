@@ -1,5 +1,17 @@
 # Atomic-Server Desktop (powered by Tauri)
 
+For the packaged macOS account and Cloud Vault acceptance setup, see
+[ACCOUNT_ACCEPTANCE.md](./ACCOUNT_ACCEPTANCE.md).
+
+The packaged WebView uses styled-components at runtime. Tauri's asset CSP
+rewriting adds a `style-src` nonce that blocks those new style tags in WebKit,
+leaving the app unstyled (and CSSOM injection can raise styled-components error
+17). `tauri.conf.json` therefore leaves only `style-src` under the explicit
+`'self' 'unsafe-inline'` policy already configured there. Tauri still rewrites
+the script directive. Check the visible packaged window after changing this.
+The native WebView can also hold entry animations at their initial opacity
+while backgrounded, so onboarding and its app wrapper skip those fades in Tauri.
+
 Desktop release for Atomic-Server.
 [Tauri] takes care of native installers, app icons, system tray icons, menu items, self-update ([issue](https://github.com/atomicdata-dev/atomic-server/issues/158)) and more.
 

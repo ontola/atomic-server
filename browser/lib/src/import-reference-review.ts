@@ -1,4 +1,6 @@
 import { Datatype } from './datatypes.js';
+import { isCommitSubject } from './commit.js';
+import { canonicalIdentifier } from './subject.js';
 import {
   equalImportValue,
   IMPORT_REFERENCE_REVIEW,
@@ -20,7 +22,7 @@ export function reviewImportReferences(
   retained: string[],
   primary: string,
 ): ImportReferenceChange[] {
-  const pure = (s: string) => (s.startsWith('did:') ? s.split('?')[0] : s);
+  const pure = (s: string) => canonicalIdentifier(s);
   const copies = new Set(retained.map(pure));
   if (copies.has(pure(primary)))
     throw new Error('Primary cannot be a retained copy');
@@ -30,7 +32,7 @@ export function reviewImportReferences(
   for (const [subject, row] of Object.entries(rows)) {
     // Decisions retain exact snapshots of all copies. Never rewrite those records.
     if (
-      subject.startsWith('did:ad:commit:') ||
+      isCommitSubject(subject) ||
       copies.has(pure(subject)) ||
       pure(subject) === pure(primary)
     )

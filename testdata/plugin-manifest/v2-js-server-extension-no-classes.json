@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 2,
+  "runtime": "atomic-js/1",
+  "world": "server-extension"
+}

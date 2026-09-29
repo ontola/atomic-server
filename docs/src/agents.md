@@ -29,7 +29,7 @@ The `publicKey` is used to verify commit signatures by that Agent, to check if t
 
 ## Creating an Agent
 
-An Agent is identified by a DID (Decentralized Identifier) derived from its public key: `did:ad:agent:{publicKey}`.
+An Agent is identified by an `atomic:agent:{publicKey}` identifier derived from its public key. The legacy `did:ad:agent:{publicKey}` spelling is accepted forever and names the same agent.
 When a client generates a keypair, the public key immediately determines the Agent's subject, without needing to register it on a server first.
 See the [DID specification](did.md) for details on how agent DIDs work and are resolved.
 

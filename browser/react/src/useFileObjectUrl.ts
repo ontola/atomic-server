@@ -1,9 +1,14 @@
-import { hexToBytes, server, type Resource } from '@tomic/lib';
+import {
+  hexToBytes,
+  isBlobSubject,
+  blobHashHex,
+  server,
+  type Resource,
+} from '@tomic/lib';
 import { useEffect, useState } from 'react';
 import { useStore } from './hooks.js';
 
 const BLOB = 'https://atomicdata.dev/properties/blob';
-const BLOB_DID_PREFIX = 'did:ad:blob:';
 
 /**
  * Returns a `blob:` object URL for the file's bytes when they are available
@@ -34,14 +39,16 @@ export function useFileObjectUrl(
     typeof mimetypeValue === 'string' ? mimetypeValue : undefined;
 
   useEffect(() => {
-    if (!blobDid?.startsWith(BLOB_DID_PREFIX) || !clientDb) return;
+    if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return;
 
     let revoked: string | undefined;
     let cancelled = false;
 
     (async () => {
       try {
-        const hash = hexToBytes(blobDid.slice(BLOB_DID_PREFIX.length));
+        const hashHex = blobHashHex(blobDid);
+        if (!hashHex) return;
+        const hash = hexToBytes(hashHex);
         const bytes = await clientDb.getBlob(hash);
         if (cancelled) return;
 
@@ -66,7 +73,7 @@ export function useFileObjectUrl(
     };
   }, [blobDid, clientDb, mimetype]);
 
-  if (!blobDid?.startsWith(BLOB_DID_PREFIX) || !clientDb) return fallbackUrl;
+  if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return fallbackUrl;
 
   // A result for the previous resource/database must never leak into this render.
   if (resolved?.blobDid !== blobDid || resolved.clientDb !== clientDb) {

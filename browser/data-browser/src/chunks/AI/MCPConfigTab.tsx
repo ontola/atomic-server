@@ -181,7 +181,8 @@ export const MCPConfigTab = ({
           </ServerList>
 
           <CreateButton onClick={handleCreateNewServer}>
-            <FaPlus title='' /> Add New Server
+            <FaPlus title='' />
+            <span>Add New Server</span>
           </CreateButton>
         </Column>
       )}
@@ -357,7 +358,8 @@ const ServerForm = ({ server, onChange }: ServerFormProps) => {
           )}
         </HeaderRows>
         <Button subtle onClick={handleAddHeader}>
-          <FaPlus title='' /> Add header
+          <FaPlus title='' />
+          <span>Add header</span>
         </Button>
       </Field>
     </Column>

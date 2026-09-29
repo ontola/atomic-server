@@ -466,24 +466,22 @@ fn ensure_cache_listener() {
             // our own commit — a stroke merged in from a peer — is NOT in the
             // cached doc, so we must drop it: otherwise the next local
             // `push_stroke` appends to a stale doc and its save overwrites the
-            // just-merged remote stroke, silently reverting it. `is_importing`
-            // alone missed this: it is only set around the agent-resource apply,
-            // never around a remote canvas UPDATE, so canvas edits raced and
-            // lost. `from_commit == false` is the reliable signal (remote sync
+            // just-merged remote stroke, silently reverting it.
+            // `from_commit == false` is the reliable signal (remote sync
             // applies via `add_resource_opts`; local strokes via a signed
-            // commit), and over-invalidating only ever costs a reload.
+            // commit), and a commit a peer sent carries its `source_id`. The
+            // import flag is per task now (`ws_apply::import_scope`), so it is
+            // never visible from this listener; the event itself says where
+            // the change came from. Over-invalidating only ever costs a
+            // reload, so a destroyed subject always drops its cached session.
             let (subject, from_remote) = match rx.recv().await {
                 Ok(atomic_lib::DbEvent::Changed {
                     subject,
                     from_commit,
+                    source_id,
                     ..
-                }) => (
-                    subject,
-                    !from_commit || atomic_lib::sync::ws_apply::is_importing(),
-                ),
-                Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => {
-                    (subject, atomic_lib::sync::ws_apply::is_importing())
-                }
+                }) => (subject, !from_commit || source_id.is_some()),
+                Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => (subject, true),
                 Ok(atomic_lib::DbEvent::QueryMembershipChanged { .. }) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => {

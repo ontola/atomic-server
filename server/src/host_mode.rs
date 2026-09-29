@@ -27,10 +27,12 @@
 
 use crate::errors::AtomicServerResult;
 
-/// The DID method for an agent. The owner is named by a public key, never by a
-/// URL: an agent DID needs no server to exist, which is what lets the operator
-/// create their identity on a laptop before this node has ever booted.
-const AGENT_DID_PREFIX: &str = "did:ad:agent:";
+/// The identifier prefixes an owner agent may use. Canonical is `atomic:agent:`;
+/// `did:ad:agent:` is accepted forever. The owner is named by a public key,
+/// never by a URL: an agent identifier needs no server to exist, which is what
+/// lets the operator create their identity on a laptop before this node has
+/// ever booted.
+const AGENT_ID_HINT: &str = "atomic:agent: (or did:ad:agent:)";
 
 /// Whether this node lets a stranger store a workspace here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -80,7 +82,10 @@ impl HostModeConfig {
     /// Whether `agent` is the owner. `false` in Open mode: nothing is gated
     /// there, so nothing needs to be the owner.
     pub fn is_owner(&self, agent: &str) -> bool {
-        self.owner_agent.as_deref() == Some(agent)
+        self.owner_agent.as_deref().is_some_and(|owner| {
+            atomic_lib::identifiers::canonicalize_scheme(owner)
+                == atomic_lib::identifiers::canonicalize_scheme(agent)
+        })
     }
 }
 
@@ -218,7 +223,7 @@ fn validate_owner_agent(raw: &str) -> AtomicServerResult<String> {
              \n\
              The secret is the private key — this node never needs it, and it \
              must not sit in the environment.\n\
-             Use the public ID instead: it starts with `{AGENT_DID_PREFIX}` and \
+             Use the public ID instead: it starts with `{AGENT_ID_HINT}` and \
              is the `subject` field inside that secret."
         )
         .into());
@@ -227,7 +232,7 @@ fn validate_owner_agent(raw: &str) -> AtomicServerResult<String> {
     if raw.starts_with("http://") || raw.starts_with("https://") {
         return Err(format!(
             "ATOMIC_OWNER_AGENT must be an Agent ID starting with \
-             `{AGENT_DID_PREFIX}`, not a URL.\n\
+             `{AGENT_ID_HINT}`, not a URL.\n\
              \n\
              A `https://` agent lives on whichever server issued it, so it \
              cannot say who owns *this* one. Open Settings in any Atomic client \
@@ -236,9 +241,18 @@ fn validate_owner_agent(raw: &str) -> AtomicServerResult<String> {
         .into());
     }
 
-    let Some(public_key) = raw.strip_prefix(AGENT_DID_PREFIX) else {
+    let Some(public_key) = atomic_lib::identifiers::agent_public_key(raw) else {
+        if raw == "did:ad:agent:" || raw == "atomic:agent:" {
+            return Err(format!(
+                "ATOMIC_OWNER_AGENT is `{raw}` with no public key after it.\n\
+                 \n\
+                 {}",
+                where_to_find_the_id()
+            )
+            .into());
+        }
         return Err(format!(
-            "ATOMIC_OWNER_AGENT must start with `{AGENT_DID_PREFIX}` \
+            "ATOMIC_OWNER_AGENT must start with `{AGENT_ID_HINT}` \
              (got `{raw}`).\n\
              \n\
              {}",
@@ -249,7 +263,7 @@ fn validate_owner_agent(raw: &str) -> AtomicServerResult<String> {
 
     if public_key.trim().is_empty() {
         return Err(format!(
-            "ATOMIC_OWNER_AGENT is `{AGENT_DID_PREFIX}` with no public key after it.\n\
+            "ATOMIC_OWNER_AGENT is `{AGENT_ID_HINT}` with no public key after it.\n\
              \n\
              {}",
             where_to_find_the_id()
@@ -283,7 +297,7 @@ fn where_to_find_the_id() -> String {
     format!(
         "Where to find it: open Settings in any Atomic client (browser, desktop, \
          or phone) and copy the Agent ID, or read the `subject` field of your \
-         saved secret. It starts with `{AGENT_DID_PREFIX}`."
+         saved secret. It starts with `{AGENT_ID_HINT}`."
     )
 }
 
@@ -297,7 +311,7 @@ fn missing_owner_agent_message() -> String {
          Owner mode means only one Agent may create new Drives here, so this \
          node has to be told which one:\n\
          \n\
-             ATOMIC_OWNER_AGENT={AGENT_DID_PREFIX}...\n\
+             ATOMIC_OWNER_AGENT={AGENT_ID_HINT}...\n\
          \n\
          {}\n\
          \n\
@@ -336,7 +350,7 @@ pub fn exposure_warning(reachability: Reachability) -> String {
          \n\
          If this node is only for you, name yourself as its owner:\n\
          \n\
-             ATOMIC_OWNER_AGENT={AGENT_DID_PREFIX}...   (copy your Agent ID from Settings)\n\
+             ATOMIC_OWNER_AGENT={AGENT_ID_HINT}...   (copy your Agent ID from Settings)\n\
          \n\
          Visitors keep reading whatever you shared, and people you invited keep their access.\n\
          Only creating a *new* Drive here becomes yours alone.\n\
@@ -392,7 +406,9 @@ mod tests {
         assert_eq!(resolved.mode, HostMode::Owner);
         assert_eq!(resolved.owner_agent.as_deref(), Some(OWNER));
         assert!(resolved.is_owner(OWNER));
+        assert!(resolved.is_owner("atomic:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="));
         assert!(!resolved.is_owner("did:ad:agent:someoneelse"));
+        assert!(!resolved.is_owner("atomic:agent:someoneelse"));
     }
 
     #[test]
@@ -444,6 +460,7 @@ mod tests {
         let err = resolve(None, Some("https://example.com/agents/abc"))
             .unwrap_err()
             .to_string();
+        assert!(err.contains("atomic:agent:"), "{err}");
         assert!(err.contains("did:ad:agent:"), "{err}");
     }
 

@@ -1,6 +1,6 @@
 //! Integration tests for sync between two Db instances.
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod peer_sync_tests {
     use crate::{agents::ForAgent, storelike::Query, Db, Storelike};
 
@@ -941,16 +941,20 @@ mod peer_sync_tests {
         println!("TEST PASSED: Iroh sync authenticates and syncs private drives");
     }
 
-    /// Full end-to-end test: pkarr discovery + Iroh sync.
-    /// Device A creates a drive with data, publishes its NodeID via pkarr relay.
-    /// Device B discovers Device A via pkarr, connects via Iroh, syncs the drive.
+    /// Device A creates a drive with data and starts Iroh; Device B connects and
+    /// syncs it. `via_pkarr` decides how Device B learns Device A's NodeID:
+    /// through the live pkarr relay, or from the value the test already holds.
+    ///
+    /// The two are split because only the relay path leaves the machine. See
+    /// the two callers below.
     #[cfg(feature = "discovery")]
-    #[tokio::test]
-    async fn pkarr_discovery_and_iroh_sync() {
+    async fn discovery_and_iroh_sync(via_pkarr: bool) {
         use crate::sync::peer;
 
+        let suffix = if via_pkarr { "pkarr" } else { "direct" };
+
         // === Device A: create drive + resource ===
-        let db_a = Db::init_temp("pkarr_sync_a").await.unwrap();
+        let db_a = Db::init_temp(&format!("sync_a_{suffix}")).await.unwrap();
         let (agent, drive_a) = db_a.setup("Alice").await.unwrap();
         let secret = agent.build_secret().unwrap();
 
@@ -973,14 +977,16 @@ mod peer_sync_tests {
         let (node_id_a, _router_a) = peer::start(db_a.clone()).await.unwrap();
         println!("Device A NodeID: {node_id_a}");
 
-        // Publish Device A's NodeID via pkarr relay
-        crate::discovery::publish_node_id(&drive_a, &node_id_a.to_string())
-            .await
-            .expect("pkarr publish should succeed");
-        println!("Device A: published NodeID to pkarr relay");
+        if via_pkarr {
+            // Publish Device A's NodeID via pkarr relay
+            crate::discovery::publish_node_id(&drive_a, &node_id_a.to_string())
+                .await
+                .expect("pkarr publish should succeed");
+            println!("Device A: published NodeID to pkarr relay");
+        }
 
         // === Device B: restore agent, discover, sync ===
-        let db_b = Db::init_temp("pkarr_sync_b").await.unwrap();
+        let db_b = Db::init_temp(&format!("sync_b_{suffix}")).await.unwrap();
         let agent_b = crate::agents::Agent::from_secret(&secret).unwrap();
         db_b.set_default_agent(agent_b.clone());
 
@@ -995,23 +1001,28 @@ mod peer_sync_tests {
         let node_addr_a = _router_a.endpoint().node_addr().await.unwrap();
         ep_b.add_node_addr(node_addr_a).unwrap();
 
-        // Discover Device A's NodeID via pkarr relay
-        // Filter out Device B's own NodeID (in tests, the global ENDPOINT is Device A's)
-        let my_node_id_b = ep_b.node_id().to_string();
-        let discovered_node_id =
-            crate::discovery::resolve_node_id_filtered(&drive_a, Some(my_node_id_b.as_str()))
-                .await
-                .expect("pkarr resolve should find Device A");
-        println!("Device B discovered: {discovered_node_id}");
-        assert_eq!(
-            discovered_node_id,
-            node_id_a.to_string(),
-            "Discovered NodeID should match Device A's"
-        );
+        let node_id_for_sync = if via_pkarr {
+            // Discover Device A's NodeID via pkarr relay
+            // Filter out Device B's own NodeID (in tests, the global ENDPOINT is Device A's)
+            let my_node_id_b = ep_b.node_id().to_string();
+            let discovered_node_id =
+                crate::discovery::resolve_node_id_filtered(&drive_a, Some(my_node_id_b.as_str()))
+                    .await
+                    .expect("pkarr resolve should find Device A");
+            println!("Device B discovered: {discovered_node_id}");
+            assert_eq!(
+                discovered_node_id,
+                node_id_a.to_string(),
+                "Discovered NodeID should match Device A's"
+            );
+            discovered_node_id
+        } else {
+            node_id_a.to_string()
+        };
 
-        // Sync via Iroh using the discovered NodeID
+        // Sync via Iroh using that NodeID
         let count =
-            peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b, true)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_for_sync, &drive_a, &db_b, true)
                 .await
                 .expect("Iroh sync should succeed");
 
@@ -1031,7 +1042,34 @@ mod peer_sync_tests {
             "Synced Doc"
         );
 
-        println!("TEST PASSED: pkarr discovery → Iroh sync works end-to-end");
+        println!("TEST PASSED: Iroh sync works end-to-end (via_pkarr = {via_pkarr})");
+    }
+
+    /// The half of the flow that stays on this machine: Iroh sync against a
+    /// NodeID the caller already has. This is what CI runs.
+    #[cfg(feature = "discovery")]
+    #[tokio::test]
+    async fn iroh_sync_with_known_node_id() {
+        discovery_and_iroh_sync(false).await;
+    }
+
+    /// Full end-to-end test: pkarr discovery + Iroh sync.
+    /// Device A publishes its NodeID to the pkarr relay, Device B resolves it
+    /// back and syncs with it.
+    ///
+    /// Network test — requires outbound HTTPS to the pkarr relay
+    /// (`dns.iroh.link`, see `discovery::RELAY_URL`). Ignored by default; run
+    /// explicitly with `cargo test -- --ignored`, the same way
+    /// `discovery::tests::publish_and_resolve_via_pkarr_relay` is. It was not
+    /// ignored until 2026-09-21, when the relay answered a publish and then
+    /// returned no peers for the same key seconds later, twice, and took
+    /// develop's whole pipeline down with it before the e2e suite ran. A live
+    /// third-party relay is not something to gate a merge on.
+    #[cfg(feature = "discovery")]
+    #[tokio::test]
+    #[ignore]
+    async fn pkarr_discovery_and_iroh_sync() {
+        discovery_and_iroh_sync(true).await;
     }
 
     /// QR pairing flow: two devices each start Iroh, exchange NodeIDs
@@ -1697,7 +1735,7 @@ mod peer_sync_tests {
         );
         for s in &a_subjects {
             assert!(
-                !s.starts_with("did:ad:commit:"),
+                !crate::identifiers::is_commit_id(s),
                 "commit subject leaked into drive A: {s}"
             );
         }
@@ -1969,43 +2007,134 @@ mod peer_sync_tests {
         );
     }
 
-    /// The legacy `set`/`push`/`remove`-field rejection is a naive
-    /// string-contains check on the raw commit body, applied before parsing.
-    /// It must run identically under hub policy (server) and peer policy
-    /// (P2P) — `ingest_commit_json` is a single implementation, so there's no
+    /// Hub (server) and peer (P2P) ingest policies, as `ingest_commit` sees
+    /// them. The legacy-field rejection below must behave identically under
+    /// both — `ingest_commit_json` is a single implementation, so there's no
     /// second place this could silently be skipped.
+    fn legacy_field_policies() -> [crate::sync::engine::CommitIngestOpts; 2] {
+        use crate::sync::engine::CommitIngestOpts;
+        [
+            CommitIngestOpts {
+                source_id: None,
+                validate_loro_causality: true,
+                enforce_subject_ownership: true,
+                response_origin: None,
+            },
+            CommitIngestOpts {
+                source_id: None,
+                validate_loro_causality: false,
+                enforce_subject_ownership: false,
+                response_origin: None,
+            },
+        ]
+    }
+
+    /// A signed Loro commit by `agent` that sets `description` on `subject`,
+    /// as the wire JSON a client would POST.
+    async fn signed_description_commit_json(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        subject: &str,
+        description: &str,
+    ) -> String {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::CommitBuilder;
+
+        let current = db.get_resource(&subject.into()).await.unwrap();
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            crate::Value::String(description.into()),
+        );
+        let commit = builder.sign(agent, db, &current).await.unwrap();
+        commit_to_wire_json(&commit, db).await.unwrap()
+    }
+
+    const LEGACY_FIELDS_ERR: &str = "no longer accepted";
+
+    /// A commit resource that actually carries the deprecated `set` property
+    /// is refused with the legacy-fields message, under every policy, even
+    /// though it is otherwise a well-formed signed commit.
     #[tokio::test]
     async fn ingest_commit_rejects_legacy_field_commits() {
-        use crate::sync::engine::{ingest_commit_json, CommitIngestOpts};
+        use crate::sync::engine::ingest_commit_json;
 
         let db = Db::init_temp("ingest_commit_legacy_fields").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let doc = db
+            .create_resource(crate::urls::FOLDER, &drive, "Doc", None)
+            .await
+            .unwrap();
 
-        let commit_json = r#"{"https://atomicdata.dev/properties/set": {"https://atomicdata.dev/properties/name": "x"}}"#;
+        for opts in legacy_field_policies() {
+            let valid = signed_description_commit_json(&db, &alice, &doc, "plain").await;
+            let mut json: serde_json::Value = serde_json::from_str(&valid).unwrap();
+            json.as_object_mut().unwrap().insert(
+                crate::urls::SET.to_string(),
+                serde_json::json!({ crate::urls::NAME: "x" }),
+            );
+            let commit_json = serde_json::to_string(&json).unwrap();
 
-        let hub_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: true,
-            enforce_subject_ownership: true,
-            suppress_live_echo: false,
-            response_origin: None,
-        };
-        let peer_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: false,
-            enforce_subject_ownership: false,
-            suppress_live_echo: true,
-            response_origin: None,
-        };
-
-        for opts in [&hub_opts, &peer_opts] {
-            let err = ingest_commit_json(&db, commit_json, opts)
+            let err = ingest_commit_json(&db, &commit_json, &opts)
                 .await
                 .expect_err("legacy `set`-field commits must be rejected under every policy");
             assert!(
-                err.to_string().contains("no longer accepted"),
+                err.to_string().contains(LEGACY_FIELDS_ERR),
                 "expected the legacy-fields rejection message, got: {err}"
             );
         }
+    }
+
+    /// The legacy-field check inspects the parsed commit's properties, not
+    /// the raw body. A value that merely quotes one of the deprecated
+    /// Property URLs is applied like any other, and a commit whose *subject*
+    /// is one of those Property resources (editing `set`'s own description
+    /// on atomicdata.dev, say) gets past the check to the regular gates.
+    #[tokio::test]
+    async fn ingest_commit_accepts_values_that_mention_legacy_fields() {
+        use crate::sync::engine::ingest_commit_json;
+
+        let db = Db::init_temp("ingest_commit_legacy_mention").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let doc = db
+            .create_resource(crate::urls::FOLDER, &drive, "Doc", None)
+            .await
+            .unwrap();
+
+        let mention = format!(
+            "Deprecated: \"{}\", \"{}\" and \"{}\".",
+            crate::urls::SET,
+            crate::urls::PUSH,
+            crate::urls::REMOVE
+        );
+        for opts in legacy_field_policies() {
+            let commit_json = signed_description_commit_json(&db, &alice, &doc, &mention).await;
+            ingest_commit_json(&db, &commit_json, &opts)
+                .await
+                .expect("a value quoting the deprecated Property URLs is an ordinary value");
+            let stored = db.get_resource(&doc.as_str().into()).await.unwrap();
+            assert_eq!(
+                stored.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+                mention
+            );
+        }
+
+        // The `set` Property resource itself, seeded from `lib/defaults`.
+        // Under hub policy this node does not own atomicdata.dev, so the
+        // commit is refused by the ownership gate that follows the legacy
+        // check — proving the legacy check let it through.
+        let hub_opts = legacy_field_policies().into_iter().next().unwrap();
+        assert!(hub_opts.enforce_subject_ownership);
+        let commit_json =
+            signed_description_commit_json(&db, &alice, crate::urls::SET, "edited").await;
+        let err = ingest_commit_json(&db, &commit_json, &hub_opts)
+            .await
+            .expect_err("this node does not own atomicdata.dev");
+        assert_eq!(
+            err.to_string(),
+            "Subject of commit should be sent to other domain - this store can not own this resource.",
+            "a commit *on* the `set` Property must reach the ownership gate, not trip the legacy-fields check"
+        );
     }
 
     /// `enforce_subject_ownership` is the only thing standing between "hub
@@ -2040,7 +2169,6 @@ mod peer_sync_tests {
             source_id: None,
             validate_loro_causality: true,
             enforce_subject_ownership: true,
-            suppress_live_echo: false,
             response_origin: None,
         };
         let hub_err = ingest_commit_json(&db, &commit_json, &hub_opts)
@@ -2056,7 +2184,6 @@ mod peer_sync_tests {
             source_id: None,
             validate_loro_causality: false,
             enforce_subject_ownership: false,
-            suppress_live_echo: true,
             response_origin: None,
         };
         // With the gate off, the outcome must differ from the hub case above:
@@ -2156,21 +2283,19 @@ mod peer_sync_tests {
         );
     }
 
-    /// The safety gate for the RBSR live wire: reconciling only the
-    /// RBSR-differing subject set (`handle_sync_vv_filtered(Some(D))`, fed the
-    /// client's VVs for just those subjects) must produce the IDENTICAL
-    /// pull/push/remove sets as reconciling the whole drive
+    /// A filtered `SYNC` (`handle_sync_vv_filtered(Some(D))`, fed the
+    /// client's VVs for just the differing subjects D) must produce the
+    /// IDENTICAL pull/push/remove sets as reconciling the whole drive
     /// (`handle_sync_vv`, fed the client's full VV) — for version-vector
-    /// divergence. If these ever diverge, the wire would sync differently than
-    /// the baseline, which is the failure mode the whole design guards against.
+    /// divergence. The server still honours `subjects` for clients that send
+    /// it, so the two paths must not drift.
     #[tokio::test]
-    async fn rbsr_reduced_matches_full_sync_vv() {
+    async fn filtered_sync_matches_full_sync_vv() {
         use crate::sync::engine::{drive_items_for, handle_sync_vv, handle_sync_vv_filtered};
-        use crate::sync::rbsr::{reconcile, Item, RemoteRange};
         use std::collections::{HashMap, HashSet};
 
         // Server has a drive with three resources.
-        let db = Db::init_temp("rbsr_differential").await.unwrap();
+        let db = Db::init_temp("filtered_sync_differential").await.unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
         const CANVAS: &str = "https://atomicdata.dev/ontology/canvas/Canvas";
         let _r1 = db
@@ -2207,35 +2332,16 @@ mod peer_sync_tests {
         // Compact (peers array + per-subject counter arrays) form the wire uses.
         let (peers, resources) = to_compact(&client_vvs);
 
-        // D = the differing set RBSR would find (client vs server).
-        let client_items: Vec<Item> = client_vvs
-            .iter()
-            .map(|(s, v)| (s.clone(), v.clone()))
-            .collect();
-        let mut client_sorted = client_items.clone();
-        client_sorted.sort_by(|a, b| a.0.cmp(&b.0));
-        struct Mem(Vec<Item>);
-        impl RemoteRange for Mem {
-            fn fingerprint(&mut self, lo: &str, hi: Option<&str>) -> [u8; 32] {
-                crate::sync::rbsr::range_fingerprint(&self.0, lo, hi)
-            }
-            fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
-                self.0
-                    .iter()
-                    .filter(|(s, _)| s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true))
-                    .cloned()
-                    .collect()
-            }
-        }
-        let mut server_remote = Mem(server_items.clone());
-        let diff = reconcile(&client_sorted, &mut server_remote, 4, 2);
-        let d: HashSet<String> = diff
-            .only_local
-            .iter()
-            .chain(diff.only_remote.iter())
-            .chain(diff.differ.iter())
+        // D = the subjects whose version vectors differ (client vs server).
+        let server_vvs: HashMap<String, std::collections::BTreeMap<String, i32>> =
+            server_items.iter().cloned().collect();
+        let d: HashSet<String> = client_vvs
+            .keys()
+            .chain(server_vvs.keys())
+            .filter(|s| client_vvs.get(*s) != server_vvs.get(*s))
             .cloned()
             .collect();
+        assert_eq!(d.len(), 3, "R2, R3 and R4 differ: {d:?}");
 
         // Full reconcile over the whole drive.
         let full = handle_sync_vv(&drive, "", &peers, &resources, &db, &ForAgent::Sudo).await;
@@ -2255,13 +2361,15 @@ mod peer_sync_tests {
             Some(&d),
             &db,
             &ForAgent::Sudo,
+            crate::sync::engine::WireScheme::CANONICAL,
+            false,
         )
         .await;
 
         assert_eq!(
             decode_diff_sets(&full),
             decode_diff_sets(&reduced),
-            "RBSR-reduced reconcile must yield the same pull/push/remove as the full reconcile"
+            "filtered reconcile must yield the same pull/push/remove as the full reconcile"
         );
     }
 
@@ -2312,96 +2420,6 @@ mod peer_sync_tests {
             }
         }
         (vec![], vec![], vec![])
-    }
-
-    /// Bridge from the pure RBSR algorithm (`sync::rbsr`) to real store data:
-    /// `drive_items` must turn a Db's drive into the sorted `(subject, VV)`
-    /// items the reconcile runs over, and reconciling a store's items against a
-    /// peer that's behind on exactly one resource must find exactly that
-    /// resource — over VVs derived from a real store, not hand-built maps.
-    #[tokio::test]
-    async fn reconcile_over_real_store_finds_the_lagging_resource() {
-        use crate::sync::engine::drive_items_for;
-        use crate::sync::rbsr::{
-            item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange,
-        };
-
-        let db = Db::init_temp("rbsr_real_store").await.unwrap();
-        let (_alice, drive) = db.setup("Alice").await.unwrap();
-        db.create_resource(
-            "https://atomicdata.dev/ontology/canvas/Canvas",
-            &drive,
-            "Canvas One",
-            None,
-        )
-        .await
-        .unwrap();
-        let target = db
-            .create_resource(
-                "https://atomicdata.dev/ontology/canvas/Canvas",
-                &drive,
-                "Canvas Two",
-                None,
-            )
-            .await
-            .unwrap();
-
-        // Local: the store's real drive items (drive root + two canvases).
-        let local = drive_items_for(&db, &drive, &ForAgent::Sudo).await.unwrap();
-        assert!(
-            local.len() >= 3,
-            "expected drive root + 2 canvases, got {}",
-            local.len()
-        );
-
-        // Remote: the same set, but behind on `target` (drop a peer counter so
-        // its VV differs) — models a peer that hasn't received the last edit.
-        let mut remote_items: Vec<Item> = local.clone();
-        remote_items.sort_by(|a, b| a.0.cmp(&b.0));
-        let target_pure =
-            crate::Subject::from_raw(&target, db.get_base_domain().as_deref()).pure_id();
-        let mut mutated = false;
-        for (subject, vv) in remote_items.iter_mut() {
-            if *subject == target_pure {
-                // Roll the VV back to empty — guaranteed different fingerprint.
-                let before = item_fingerprint(subject, vv);
-                vv.clear();
-                assert_ne!(before, item_fingerprint(subject, vv));
-                mutated = true;
-            }
-        }
-        assert!(mutated, "target {target_pure} not found in drive items");
-
-        struct MemRemote {
-            items: Vec<Item>,
-        }
-        impl RemoteRange for MemRemote {
-            fn fingerprint(&mut self, lo: &str, hi: Option<&str>) -> [u8; 32] {
-                range_fingerprint(&self.items, lo, hi)
-            }
-            fn items(&mut self, lo: &str, hi: Option<&str>) -> Vec<Item> {
-                self.items
-                    .iter()
-                    .filter(|(s, _)| s.as_str() >= lo && hi.map(|h| s.as_str() < h).unwrap_or(true))
-                    .cloned()
-                    .collect()
-            }
-        }
-
-        let mut remote = MemRemote {
-            items: remote_items,
-        };
-        let diff = reconcile(&local, &mut remote, 4, 2);
-
-        assert_eq!(
-            diff.differ,
-            vec![target_pure],
-            "reconcile must flag exactly the lagging resource"
-        );
-        assert!(
-            diff.only_local.is_empty() && diff.only_remote.is_empty(),
-            "no subjects should be only-local or only-remote: {diff:?}"
-        );
     }
 
     /// Golden cross-implementation vector for the canonical drive hash

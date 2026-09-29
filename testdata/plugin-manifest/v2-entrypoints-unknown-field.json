@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "entrypoints": {
+    "run": true,
+    "action": "x"
+  }
+}

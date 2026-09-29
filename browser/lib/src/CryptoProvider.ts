@@ -222,7 +222,7 @@ export const decodeSecret = (secret: string): DecodedSecret => {
   const httpAgentMatch = subject.match(/^https?:\/\/[^/]+\/agents\/(.+)$/);
 
   if (httpAgentMatch) {
-    subject = `did:ad:agent:${httpAgentMatch[1]}`;
+    subject = `atomic:agent:${httpAgentMatch[1]}`;
   }
 
   return { privateKey, subject, initialDrive: parsed.initialDrive };
