@@ -28,7 +28,7 @@ use wasmtime::{Engine, Store, StoreLimits, StoreLimitsBuilder};
 
 use super::{
     egress,
-    manifest::{CapabilityName, Manifest, ProxyRelative},
+    manifest::{CapabilityName, Manifest, ProxyRelative, SidecarRelative},
 };
 
 // ---------------------------------------------------------------------------
@@ -797,6 +797,9 @@ impl HostCore {
         request: FetchRequest,
         effect: &str,
     ) -> Result<FetchResponse, String> {
+        if let Some(relative) = SidecarRelative::parse(&request.url) {
+            return self.fetch_sidecar(request, relative?, effect).await;
+        }
         let proxy = self.integration_proxy()?;
         self.refuse_class_extender_at_proxy(&request.url, proxy.as_ref())?;
         let (request, relative) = self.resolve_proxy_relative(request, proxy.as_ref()).await?;
@@ -875,6 +878,106 @@ impl HostCore {
         )
         .await?;
 
+        Ok(FetchResponse {
+            status,
+            headers,
+            body: String::from_utf8_lossy(&bytes).into_owned(),
+        })
+    }
+
+    /// A declared operation on an operator sidecar:
+    /// `atomic-sidecar:/<name>/<path>` (atomic-plugins#167, section 7).
+    ///
+    /// The operator configured the sidecar's loopback URL
+    /// (`ATOMIC_PLUGIN_SIDECARS`, only at `--plugin-routes read-write`); the
+    /// plugin names it only by the name its manifest declares in
+    /// `http.sidecars`, and only through an operation with this id, method,
+    /// effect and path. That configured URL is the one loopback destination
+    /// this path may reach, so it is connected to without the egress guard's
+    /// public-address check, and redirects are not followed.
+    ///
+    /// The sidecar gets no secrets and no plugin-chosen identity: only the
+    /// `content-type` and `accept` headers pass, and the host adds
+    /// `x-atomic-installation` (this installation's subject) and
+    /// `x-atomic-drive`, which the sidecar binds its own grants to.
+    async fn fetch_sidecar(
+        &self,
+        request: FetchRequest,
+        relative: SidecarRelative,
+        effect: &str,
+    ) -> Result<FetchResponse, String> {
+        let (Some(plugin), FetchPolicy::Operations(manifest)) = (&self.plugin, &self.fetch_policy)
+        else {
+            return Err(
+                "only a versioned manifest's declared operations can reach a sidecar".into(),
+            );
+        };
+        if !manifest.allows_sidecar_effect(
+            request.operation.as_deref(),
+            &request.method,
+            &relative,
+            effect,
+        ) {
+            return Err("sidecar fetch requires a declared operation on an atomic-sidecar: URL; external writes need an approved intent".into());
+        }
+        if let Some(refusal) =
+            egress::refuse_misplaced_handles(&request.url, request.body.as_deref())
+        {
+            return Err(refusal);
+        }
+        let base = self.db.plugin_sidecar(&relative.name).ok_or_else(|| {
+            format!(
+                "no sidecar named '{}' is configured on this node (ATOMIC_PLUGIN_SIDECARS, with --plugin-routes read-write)",
+                relative.name
+            )
+        })?;
+        let url = url::Url::parse(&format!(
+            "{base}{}{}",
+            relative.path,
+            relative
+                .query
+                .as_deref()
+                .map(|q| format!("?{q}"))
+                .unwrap_or_default()
+        ))
+        .map_err(|e| format!("sidecar URL: {e}"))?;
+        let method = reqwest::Method::from_bytes(request.method.as_bytes())
+            .map_err(|e| format!("not an HTTP method: {e}"))?;
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(std::time::Duration::from_secs(egress::FETCH_TIMEOUT_SECS))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| format!("could not build an HTTP client: {e}"))?;
+        let mut outgoing = client.request(method, url);
+        for (name, value) in sidecar_headers(request.headers, plugin, self.drive.as_deref()) {
+            outgoing = outgoing.header(name, value);
+        }
+        if let Some(body) = request.body {
+            outgoing = outgoing.body(body);
+        }
+        let label = format!("sidecar {}", relative.name);
+        let response = outgoing
+            .send()
+            .await
+            .map_err(|e| format!("request to {label} failed: {e}"))?;
+        let status = response.status().as_u16();
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect();
+        let bytes = read_capped(
+            response.bytes_stream(),
+            egress::FETCH_MAX_RESPONSE_BYTES,
+            &label,
+        )
+        .await?;
         Ok(FetchResponse {
             status,
             headers,
@@ -1155,6 +1258,30 @@ impl HostCore {
 /// A response that streams past the cap is abandoned there rather than
 /// buffered to completion and measured afterwards: the cap bounds memory,
 /// so it has to be enforced while memory is being used.
+/// The headers a sidecar request carries: the plugin's `content-type` and
+/// `accept`, and nothing else it set, then the host-asserted installation and
+/// drive.
+fn sidecar_headers(
+    plugin_headers: Vec<(String, String)>,
+    installation: &str,
+    drive: Option<&str>,
+) -> Vec<(String, String)> {
+    let mut headers: Vec<(String, String)> = plugin_headers
+        .into_iter()
+        .filter(|(name, _)| {
+            matches!(
+                name.to_ascii_lowercase().as_str(),
+                "content-type" | "accept"
+            )
+        })
+        .collect();
+    headers.push(("x-atomic-installation".into(), installation.to_string()));
+    if let Some(drive) = drive {
+        headers.push(("x-atomic-drive".into(), drive.to_string()));
+    }
+    headers
+}
+
 pub async fn read_capped<S, B, E>(stream: S, cap: usize, origin: &str) -> Result<Vec<u8>, String>
 where
     S: Stream<Item = Result<B, E>>,
@@ -1922,5 +2049,218 @@ mod tests {
                 .unwrap_err();
             assert!(err.contains(expected), "{name}: {err}");
         }
+    }
+
+    fn sidecar_manifest() -> Manifest {
+        Manifest::parse(serde_json::json!({
+            "schemaVersion": 3,
+            "operations": [
+                {"id": "query", "method": "POST", "url": "atomic-sidecar:/nextgraph/v1/query", "effect": "read"},
+                {"id": "update", "method": "POST", "url": "atomic-sidecar:/nextgraph/v1/update", "effect": "write"},
+            ],
+            "http": {"sidecars": [{"name": "nextgraph", "reason": "NextGraph wallet and verifier"}]},
+        }))
+        .unwrap()
+        .unwrap()
+    }
+
+    fn sidecar_request(id: &str, url: &str) -> FetchRequest {
+        FetchRequest {
+            operation: Some(id.into()),
+            method: "POST".into(),
+            url: url.into(),
+            headers: vec![
+                ("content-type".into(), "application/json".into()),
+                // A plugin must not be able to choose whom the sidecar sees.
+                (
+                    "x-atomic-installation".into(),
+                    "https://forged.example/i".into(),
+                ),
+                ("X-Atomic-Drive".into(), "https://forged.example/d".into()),
+                ("cookie".into(), "session=forged".into()),
+                ("authorization".into(), "Bearer forged".into()),
+            ],
+            body: Some(r#"{"document":"did:ng:o:x"}"#.into()),
+        }
+    }
+
+    /// A JS run host with [sidecar_manifest], on a node whose operator
+    /// configured `sidecars` (name to loopback base URL).
+    async fn sidecar_host(
+        name: &str,
+        sidecars: &[(&str, &str)],
+    ) -> (crate::plugins::test_fixture::Fixture, HostCore) {
+        let mut fixture = crate::plugins::test_fixture::fixture(name).await;
+        crate::plugins::test_fixture::write_plugin(&mut fixture, "probe").await;
+        let db = Arc::new(fixture.appstate.store.clone());
+        db.set_plugin_sidecars(
+            sidecars
+                .iter()
+                .map(|(n, u)| (n.to_string(), u.to_string()))
+                .collect(),
+        );
+        let host = HostCore::for_run(
+            db.clone(),
+            &fixture.drive,
+            &fixture.plugin,
+            ForAgent::AgentSubject(db.get_default_agent().unwrap().subject),
+            Some(sidecar_manifest()),
+        )
+        .await
+        .unwrap();
+        (fixture, host)
+    }
+
+    #[actix_rt::test]
+    async fn a_declared_sidecar_operation_reaches_the_configured_sidecar_as_this_installation() {
+        let (origin, served) = one_shot_proxy().await;
+        let (fixture, host) =
+            sidecar_host("host_core_sidecar_reaches", &[("nextgraph", &origin)]).await;
+        let response = host
+            .fetch(
+                sidecar_request("query", "atomic-sidecar:/nextgraph/v1/query"),
+                "read",
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body, "ok");
+        let raw = served.await.unwrap();
+        assert!(raw.starts_with("POST /v1/query HTTP/1.1\r\n"), "{raw}");
+        assert!(raw.ends_with(r#"{"document":"did:ng:o:x"}"#), "{raw}");
+        // Exactly the host's identity, and nothing else the plugin set.
+        assert_eq!(
+            header(&raw, "x-atomic-installation"),
+            vec![fixture.plugin.as_str()]
+        );
+        assert_eq!(header(&raw, "x-atomic-drive"), vec![fixture.drive.as_str()]);
+        assert_eq!(header(&raw, "content-type"), vec!["application/json"]);
+        assert!(header(&raw, "cookie").is_empty(), "{raw}");
+        assert!(header(&raw, "authorization").is_empty(), "{raw}");
+    }
+
+    #[actix_rt::test]
+    async fn a_sidecar_request_is_refused_without_what_it_needs() {
+        // Nothing listens here: every refusal must come before a connection.
+        let configured = [("nextgraph", "http://127.0.0.1:9")];
+        /// Name, configured sidecars, operation id, URL, effect, expected error.
+        type Case<'a> = (
+            &'a str,
+            &'a [(&'a str, &'a str)],
+            &'a str,
+            &'a str,
+            &'a str,
+            &'a str,
+        );
+        let cases: [Case; 6] = [
+            (
+                "not_configured",
+                &[],
+                "query",
+                "atomic-sidecar:/nextgraph/v1/query",
+                "read",
+                "ATOMIC_PLUGIN_SIDECARS",
+            ),
+            (
+                "undeclared_operation",
+                &configured,
+                "other",
+                "atomic-sidecar:/nextgraph/v1/query",
+                "read",
+                "declared operation on an atomic-sidecar: URL",
+            ),
+            (
+                "undeclared_path",
+                &configured,
+                "query",
+                "atomic-sidecar:/nextgraph/v1/admin",
+                "read",
+                "declared operation on an atomic-sidecar: URL",
+            ),
+            (
+                // A write operation is not reachable from a run's `ctx.http`,
+                // which asks for `read`; it needs an approved intent.
+                "write_from_a_run",
+                &configured,
+                "update",
+                "atomic-sidecar:/nextgraph/v1/update",
+                "read",
+                "external writes need an approved intent",
+            ),
+            (
+                "undeclared_sidecar",
+                &[("pds", "http://127.0.0.1:9")],
+                "query",
+                "atomic-sidecar:/pds/v1/query",
+                "read",
+                "declared operation on an atomic-sidecar: URL",
+            ),
+            (
+                "traversal",
+                &configured,
+                "query",
+                "atomic-sidecar:/nextgraph/v1/../admin",
+                "read",
+                "atomic-sidecar: URLs",
+            ),
+        ];
+        for (name, sidecars, id, url, effect, expected) in cases {
+            let (_fixture, host) =
+                sidecar_host(&format!("host_core_sidecar_{name}"), sidecars).await;
+            let err = host
+                .fetch(sidecar_request(id, url), effect)
+                .await
+                .unwrap_err();
+            assert!(err.contains(expected), "{name}: {err}");
+        }
+    }
+
+    #[actix_rt::test]
+    async fn an_approved_sidecar_write_reaches_the_sidecar() {
+        let (origin, served) = one_shot_proxy().await;
+        let (_fixture, host) =
+            sidecar_host("host_core_sidecar_write", &[("nextgraph", &origin)]).await;
+        let response = host
+            .fetch(
+                sidecar_request("update", "atomic-sidecar:/nextgraph/v1/update"),
+                "write",
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status, 200);
+        assert!(served
+            .await
+            .unwrap()
+            .starts_with("POST /v1/update HTTP/1.1\r\n"));
+    }
+
+    #[test]
+    fn only_declared_operations_admit_a_sidecar_request() {
+        let manifest = sidecar_manifest();
+        let query = "atomic-sidecar:/nextgraph/v1/query";
+        assert!(manifest.allows_request(Some("query"), "POST", query, "read"));
+        assert!(!manifest.allows_request(Some("query"), "GET", query, "read"));
+        assert!(!manifest.allows_request(Some("query"), "POST", query, "write"));
+        assert!(!manifest.allows_request(
+            Some("update"),
+            "POST",
+            "atomic-sidecar:/nextgraph/v1/update",
+            "read"
+        ));
+        assert!(manifest.allows_request(
+            Some("update"),
+            "POST",
+            "atomic-sidecar:/nextgraph/v1/update",
+            "write"
+        ));
+        // A class extender's policy is origins, which never name one.
+        assert!(
+            !class_extender_manifest(&["https://api.test"]).allows_request(
+                Some("query"),
+                "POST",
+                query,
+                "read"
+            )
+        );
     }
 }

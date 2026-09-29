@@ -271,10 +271,10 @@ async fn invoke_consumed(
     let mut intent: ExternalIntent = serde_json::from_str(&output).map_err(|e| e.to_string())?;
     intent.id = "action".into();
     if intent.operation != a.operation
-        || !manifest.allows_effect(
+        || !manifest.allows_request(
             Some(&intent.operation),
             &intent.method,
-            &url::Url::parse(&intent.url).map_err(|e| e.to_string())?,
+            &intent.url,
             &operation.effect,
         )
     {
