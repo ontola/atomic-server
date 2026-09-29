@@ -21,7 +21,7 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
-import { DropdownMenu } from './Dropdown';
+import { DIVIDER, DropdownMenu } from './Dropdown';
 import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
 import { useAppMenuItems } from '../actions/appMenuItems';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
@@ -441,7 +441,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         {!contextResource && (
           <DropdownMenu
             isMainMenu
-            items={[...appMenu.create, ...appMenu.find]}
+            items={[...appMenu.create, DIVIDER, ...appMenu.find]}
             Trigger={ParentContextMenuTrigger}
           />
         )}

@@ -154,7 +154,7 @@ function normalizeItems(items: DropdownItem[]) {
  * clicking outside. Use arrow keys to select items, and open items on Enter.
  * Renders the Dropdown on a place where there is room on screen.
  */
-const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
+export const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
   item.label.toLowerCase().includes(query) ||
   (item.keywords ?? []).some(keyword => keyword.toLowerCase().includes(query));
 
@@ -745,10 +745,17 @@ const ItemDivider = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
 `;
 
+/* Pinned while the list under it scrolls. */
 const SearchInputWrapper = styled.div`
-  padding: 0 0.5rem 0.4rem 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.4rem 0.5rem;
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   margin-bottom: 0.4rem;
+  /* Opaque: the menu's own surface is translucent, and the rows scrolling
+     under the filter must not show through it. */
+  background: ${p => p.theme.colors.bgBody};
 `;
 
 const SearchInput = styled.input`
@@ -777,9 +784,13 @@ const Menu = styled.div<{
   visibility: hidden;
   font-size: 0.9rem;
   overflow: auto;
-  max-height: 80vh;
+  /* A searchable menu lists everything (the resource's actions and the app's
+     places), so it scrolls within a height that leaves the page visible. */
+  max-height: ${p => (p.searchable ? 'min(60vh, 32rem)' : '80vh')};
   ${floatingSurface}
-  padding-top: 0.4rem;
+  /* A searchable menu's pinned filter supplies the top spacing itself, so
+     rows scrolling up disappear under it instead of into a gap above it. */
+  padding-top: ${p => (p.searchable ? '0' : '0.4rem')};
   padding-bottom: 0.4rem;
   /* Focused programmatically on open for keyboard nav; items show selection. */
   outline: none;

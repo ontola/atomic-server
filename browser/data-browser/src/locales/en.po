@@ -316,6 +316,7 @@ msgstr "Ollama URL"
 msgid "Ollama"
 msgstr "Ollama"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -2313,6 +2314,7 @@ msgstr "Rearange {0}"
 msgid "<0/> Note"
 msgstr "<0/> Note"
 
+#: src/actions/appMenuItems.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/SettingsAgent.tsx
@@ -12652,3 +12654,7 @@ msgstr "Click or drag to open"
 #: src/actions/appMenuItems.tsx
 msgid "Open sync settings"
 msgstr "Open sync settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Go to"
+msgstr "Go to"

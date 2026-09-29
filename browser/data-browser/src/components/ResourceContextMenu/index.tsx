@@ -245,9 +245,9 @@ export function ResourceContextMenu({
     }),
   ];
 
-  // The navbar's More menu also finds places in the app (settings, drives,
-  // feedback), listed only when its filter matches them.
-  if (isMainMenu && !showOnly) allItems.push(...appMenu.find);
+  // The navbar's More menu ends with places in the app (settings, drives,
+  // feedback), below this page's own actions.
+  if (isMainMenu && !showOnly) allItems.push(DIVIDER, ...appMenu.find);
 
   const filteredItems = showOnly
     ? allItems.filter(

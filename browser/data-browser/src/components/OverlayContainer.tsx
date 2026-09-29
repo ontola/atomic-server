@@ -3,7 +3,12 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { displayShortcut, shortcuts } from '../actions/shortcuts';
 import { listShortcutHelp } from '../actions/catalog';
-import { matchActionsForPalette } from '../actions/matchActions';
+import {
+  matchActionsForPalette,
+  PALETTE_MIN_QUERY_LENGTH,
+} from '../actions/matchActions';
+import { useAppMenuItems } from '../actions/appMenuItems';
+import { isItem, matchesQuery, type MenuItemMinimial } from './Dropdown';
 import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
@@ -326,6 +331,7 @@ function parseSearchTags(
 
 type PaletteRow =
   | { kind: 'action'; action: ActionDefinition }
+  | { kind: 'place'; item: MenuItemMinimial }
   | { kind: 'result'; subject: string }
   | { kind: 'aiChat' };
 
@@ -415,9 +421,25 @@ function SearchOverlay(): JSX.Element {
   const actionHits = currentSubject
     ? matchActionsForPalette(query, resourceActions, actionCtx)
     : [];
+  // The app's own places and starts (Settings, Switch drive, New resource…),
+  // the same ones the More menu lists, so Cmd+K reaches them from any page.
+  const appMenu = useAppMenuItems();
+  const placeNeedle = query.trim().toLowerCase();
+  const placeHits =
+    placeNeedle.length >= PALETTE_MIN_QUERY_LENGTH
+      ? [...appMenu.create, ...appMenu.find].filter(
+          (item): item is MenuItemMinimial =>
+            isItem(item) &&
+            !item.header &&
+            !item.disabled &&
+            matchesQuery(item, placeNeedle),
+        )
+      : [];
+  const commandCount = actionHits.length + placeHits.length;
   const showAIChatRow = !!privateDrive && query && results.length === 0;
   const rows: PaletteRow[] = [
     ...actionHits.map(action => ({ kind: 'action' as const, action })),
+    ...placeHits.map(item => ({ kind: 'place' as const, item })),
     ...listed.map(subject => ({ kind: 'result' as const, subject })),
     ...(showAIChatRow ? [{ kind: 'aiChat' as const }] : []),
   ];
@@ -448,6 +470,13 @@ function SearchOverlay(): JSX.Element {
 
       runAction(row.action, actionCtx);
       closeOverlay();
+
+      return;
+    }
+
+    if (row.kind === 'place') {
+      closeOverlay();
+      row.item.onClick();
 
       return;
     }
@@ -517,14 +546,13 @@ function SearchOverlay(): JSX.Element {
   // Sync results + index to module state for the preview. Actions are not
   // previewed — an action at selectedIndex 0 must not show results[0].
   useEffect(() => {
-    const actionCount = actionHits.length;
     const resultIndex =
-      selectedIndex >= actionCount &&
-      selectedIndex < actionCount + listed.length
-        ? selectedIndex - actionCount
+      selectedIndex >= commandCount &&
+      selectedIndex < commandCount + listed.length
+        ? selectedIndex - commandCount
         : -1;
     setSearchResults(listed, resultIndex);
-  }, [listed, selectedIndex, actionHits.length]);
+  }, [listed, selectedIndex, commandCount]);
 
   return (
     <ErrorBoundary>
@@ -583,9 +611,7 @@ function SearchOverlay(): JSX.Element {
             <ResultsList>
               <ResultsArea ref={resultsRef}>
                 <Column gap='0'>
-                  {actionHits.length > 0 && (
-                    <SectionHeading>Actions</SectionHeading>
-                  )}
+                  {commandCount > 0 && <SectionHeading>Actions</SectionHeading>}
                   {actionHits.map((action, index) => (
                     <ActionRow
                       key={action.id}
@@ -606,16 +632,33 @@ function SearchOverlay(): JSX.Element {
                       )}
                     </ActionRow>
                   ))}
+                  {placeHits.map((item, placeIndex) => {
+                    const index = actionHits.length + placeIndex;
+
+                    return (
+                      <ActionRow
+                        key={item.id}
+                        data-index={index}
+                        data-testid={`palette-action-${item.id}`}
+                        $selected={index === selectedIndex}
+                        onClick={() => {
+                          setSelected(index);
+                          void activateRow({ kind: 'place', item });
+                        }}
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </ActionRow>
+                    );
+                  })}
                   {showRecent && listed.length > 0 && (
                     <SectionHeading>Recently opened</SectionHeading>
                   )}
-                  {!showRecent &&
-                    listed.length > 0 &&
-                    actionHits.length > 0 && (
-                      <SectionHeading>Resources</SectionHeading>
-                    )}
+                  {!showRecent && listed.length > 0 && commandCount > 0 && (
+                    <SectionHeading>Resources</SectionHeading>
+                  )}
                   {listed.map((subject, resultIndex) => {
-                    const index = actionHits.length + resultIndex;
+                    const index = commandCount + resultIndex;
 
                     return (
                       <ResultCard
@@ -635,10 +678,8 @@ function SearchOverlay(): JSX.Element {
                   })}
                   {showAIChatRow && (
                     <AIChatRow
-                      data-index={actionHits.length + listed.length}
-                      $selected={
-                        selectedIndex === actionHits.length + listed.length
-                      }
+                      data-index={commandCount + listed.length}
+                      $selected={selectedIndex === commandCount + listed.length}
                       onClick={async () => {
                         if (!privateDrive) {
                           return;
