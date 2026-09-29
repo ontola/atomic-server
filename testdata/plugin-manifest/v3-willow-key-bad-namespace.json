@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "drop",
+        "path": "/willow.drop",
+        "methods": [
+          "GET"
+        ]
+      }
+    ],
+    "keys": [
+      {
+        "name": "willow",
+        "alg": "ed25519",
+        "willow": {
+          "namespace": "abc",
+          "pathPrefix": "config:pathPrefix"
+        },
+        "reason": "Signs Willow entries of the selected resources"
+      }
+    ]
+  }
+}

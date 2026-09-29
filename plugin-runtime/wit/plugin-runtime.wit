@@ -22,6 +22,7 @@ interface host {
   /**
   Host-held crypto for plugin routes: `keys.publicKey`, `keys.sign`,
   `tokens.issue`, `tokens.verify`, `tokens.revoke`, `tokens.requestConsent`,
+  `willow.subspace`, `willow.source`, `willow.authorise`, `willow.list`,
   and `blobs.fetch` (a remote file into the blob store).
   `request` and the result are JSON. Private keys and token hashes stay in
   the host; other runs get an error.

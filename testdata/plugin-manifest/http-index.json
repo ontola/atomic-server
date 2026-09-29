@@ -634,5 +634,40 @@
     "name": "fetches naming a POST operation",
     "file": "v3-fetches-post.json",
     "error": "fetches must name declared GET operations with effect read"
+  },
+  {
+    "name": "v3 willow key",
+    "file": "v3-willow-key.json",
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET /willow.drop`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "Willow signing key `willow`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
+    "name": "willow key must be ed25519",
+    "file": "v3-willow-key-rsa.json",
+    "error": "must be ed25519"
+  },
+  {
+    "name": "willow key bad namespace",
+    "file": "v3-willow-key-bad-namespace.json",
+    "error": "willow.namespace must be"
   }
 ]
