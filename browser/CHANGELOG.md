@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The sidebar's App panel is gone. Its entries (your user page, Notifications,
+  Integrations, Sync, Feedback, About and Install App) now live in a dropdown
+  that opens from the user row at the bottom of the sidebar, with Settings as a
+  gear button beside it. A dot on the row shows unread notifications.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
