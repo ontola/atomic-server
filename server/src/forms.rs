@@ -2074,7 +2074,7 @@ fn save_slug_map(store: &Db, map: &HashMap<String, String>) {
 
 /// Resolves a `{id}` path segment to a Form resource: first as a known
 /// publish slug, falling back to treating `id` as a DID `pure_id()` (which
-/// already includes the `did:ad:` scheme — only prefixed when missing) — a
+/// already includes its scheme — only prefixed when missing) — a
 /// bootstrap path for forms that haven't had a slug minted yet (see
 /// `planning/atomic-forms.md` Phase 3, "slug bootstrapping decision"). DIDs
 /// aren't secret here: form resources need no public read rights (decision
@@ -2083,8 +2083,10 @@ pub async fn resolve_form(store: &Db, id: &str) -> AtomicResult<Resource> {
     let map = get_slug_map(store);
     let subject: Subject = match map.get(id) {
         Some(subject) => subject.clone().into(),
-        None if id.starts_with("did:ad:") => id.to_string().into(),
-        None => format!("did:ad:{id}").into(),
+        // A full identifier (`atomic:…`, or the legacy `did:ad:…`) as-is; a
+        // bare genesis id under the canonical scheme.
+        None if atomic_lib::identifiers::is_atomic_identifier(id) => id.to_string().into(),
+        None => format!("{}{id}", atomic_lib::identifiers::ATOMIC_PREFIX).into(),
     };
     store.get_resource(&subject).await
 }
