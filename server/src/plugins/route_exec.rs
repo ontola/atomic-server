@@ -1726,6 +1726,14 @@ async fn run(
             }
             let mut response = HttpResponse::build(built.status);
             for (name, value) in built.headers {
+                // The CORS headers a handler may add (`build_response` only
+                // lets them through under `any-origin-no-credentials`) go
+                // with the declared ones: `credentials_gate` replaces every
+                // `access-control-*` header with those.
+                if name.as_str().starts_with("access-control-") {
+                    cors.0.push((name, value));
+                    continue;
+                }
                 response.append_header((name, value));
             }
             if !built.dropped.is_empty() {
@@ -2190,6 +2198,7 @@ mod tests {
               'Set-Cookie': 'atomic_session=stolen',
               'Access-Control-Allow-Origin': 'https://evil.example',
               'Access-Control-Allow-Credentials': 'true',
+              'Access-Control-Expose-Headers': 'ETag',
               'X-Custom': 'nope',
               'Server': 'plugin',
               'Location': 'https://evil.example/elsewhere',
@@ -2245,6 +2254,7 @@ mod tests {
             "location",
             "access-control-allow-origin",
             "access-control-allow-credentials",
+            "access-control-expose-headers",
         ] {
             assert!(!headers.contains_key(dropped), "{dropped}: {headers:?}");
         }
@@ -2318,6 +2328,14 @@ mod tests {
         assert!(!resp
             .headers()
             .contains_key(header::ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        // What the handler may add under this declaration survives the
+        // CORS layers, so a browser can read the `ETag`.
+        assert_eq!(
+            resp.headers()
+                .get(header::ACCESS_CONTROL_EXPOSE_HEADERS)
+                .unwrap(),
+            "ETag"
+        );
     }
 
     #[test]
