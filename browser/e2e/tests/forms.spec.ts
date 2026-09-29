@@ -404,10 +404,10 @@ test.describe('forms', async () => {
 
     await openSubject(page, tableSubject as string);
     await expect(
-      page.getByRole('button', { name: 'visitor-name', exact: true }),
+      page.getByRole('button', { name: 'Visitor name', exact: true }),
     ).toBeAttached();
     await expect(
-      page.getByRole('button', { name: 'number', exact: true }),
+      page.getByRole('button', { name: 'Number', exact: true }),
     ).toBeAttached();
   });
 
