@@ -37,8 +37,7 @@ export function VaultPanel({
   vault,
   onRestored,
   embedded = false,
-  offerUrl,
-  onOfferClick,
+  hideHeading = false,
 }: {
   vault: UseVaultBackup;
   /** Called after a successful restore, so the host can refresh its view. */
@@ -50,17 +49,16 @@ export function VaultPanel({
    */
   embedded?: boolean;
   /**
-   * Where to read what this tier costs. Shown only while the vault is off:
-   * once it is on, the price is a question for the account page, not for a
-   * panel whose job is the state of one drive's backup.
+   * Leave out the glyph, the title and the off-state pitch. For a host that
+   * already names and explains Cloud Vault around this panel — the Sync
+   * page's plan card — so only this drive's backup state and its controls
+   * remain. Saying "Cloud Vault" twice in one card reads as two things.
+   *
+   * Hidden with the `hidden` attribute rather than left out with `&&`: wuchale
+   * drops the strings of an element's siblings when one of them is a guarded
+   * element, which here silently untranslated the whole on-state panel.
    */
-  offerUrl?: string | null;
-  /**
-   * Opening the link is the host's business. A plain anchor is wrong in the
-   * desktop app, where Tauri intercepts a new window natively and the shell
-   * refuses it; the host already knows how to open one properly.
-   */
-  onOfferClick?: (url: string) => void;
+  hideHeading?: boolean;
 }) {
   const { status, busy, error, restoreProgress } = vault;
 
@@ -75,9 +73,11 @@ export function VaultPanel({
         data-vault-state='loading'
         $embedded={embedded}
       >
-        <ServiceIcon kind='vault' />
+        <span hidden={hideHeading}>
+          <ServiceIcon kind='vault' />
+        </span>
         <Body>
-          <Title>Cloud Vault</Title>
+          <Title hidden={hideHeading}>Cloud Vault</Title>
           <Sub>Checking this workspace’s backup…</Sub>
         </Body>
       </Panel>
@@ -98,9 +98,11 @@ export function VaultPanel({
         data-vault-state='unavailable'
         $embedded={embedded}
       >
-        <ServiceIcon kind='vault' />
+        <span hidden={hideHeading}>
+          <ServiceIcon kind='vault' />
+        </span>
         <Body>
-          <Title>Cloud Vault</Title>
+          <Title hidden={hideHeading}>Cloud Vault</Title>
           <Sub data-testid='vault-unavailable-reason'>{status.reason}</Sub>
         </Body>
       </Panel>
@@ -123,10 +125,16 @@ export function VaultPanel({
         {/* Neutral: an offer is not a service. Blue on this page means "on",
             so a vault that is off must not wear it, or the row's own answer
             contradicts its glyph. */}
-        <ServiceIcon kind='vault' />
+        <span hidden={hideHeading}>
+          <ServiceIcon kind='vault' />
+        </span>
         <Body>
-          <Title>Cloud Vault</Title>
-          <Sub>{CLOUD_VAULT_DESCRIPTION}</Sub>
+          <Title hidden={hideHeading}>Cloud Vault</Title>
+          <Sub>
+            {hideHeading
+              ? 'Not turned on for this workspace yet.'
+              : CLOUD_VAULT_DESCRIPTION}
+          </Sub>
           {error && <ErrorText data-testid='vault-error'>{error}</ErrorText>}
           <Actions>
             <Button
@@ -136,21 +144,6 @@ export function VaultPanel({
             >
               {busy ? 'Setting up…' : 'Turn on Cloud Vault'}
             </Button>
-            {offerUrl && (
-              <OfferLink
-                data-testid='vault-offer'
-                href={offerUrl}
-                rel='noreferrer'
-                onClick={e => {
-                  if (!onOfferClick) return;
-
-                  e.preventDefault();
-                  onOfferClick(offerUrl);
-                }}
-              >
-                See plans
-              </OfferLink>
-            )}
           </Actions>
         </Body>
       </Panel>
@@ -167,9 +160,11 @@ export function VaultPanel({
       $accent={!embedded}
       $embedded={embedded}
     >
-      <ServiceIcon kind='vault' active={!suspended} />
+      <span hidden={hideHeading}>
+        <ServiceIcon kind='vault' active={!suspended} />
+      </span>
       <Body>
-        <Title>{CLOUD_VAULT_ON}</Title>
+        <Title hidden={hideHeading}>{CLOUD_VAULT_ON}</Title>
         {/* The object count is an attribute as well as prose: a test asserting
             that a second backup actually stored something should read the
             number, not parse a sentence that is free to be reworded. */}
@@ -318,18 +313,6 @@ const ErrorText = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
   font-size: ${CARD_SUB_FONT};
-`;
-
-const OfferLink = styled.a`
-  align-self: center;
-  color: ${p => p.theme.colors.main};
-  font-size: ${CARD_SUB_FONT};
-  text-decoration: underline;
-
-  &:hover,
-  &:focus-visible {
-    color: ${p => p.theme.colors.mainDark};
-  }
 `;
 
 const Actions = styled.div`

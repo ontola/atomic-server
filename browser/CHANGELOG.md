@@ -4,6 +4,16 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The Sync page's Atomic Place section is reorganised. It is now a heading
+  with the account settings link on the right, followed by Cloud Vault and
+  Cloud Server as two plan cards side by side (stacked on narrow screens).
+  Each card says in plain words what the plan is, what it costs and what you
+  get. The plan this workspace is on has a "Current plan" badge and a
+  highlighted border, and the other card has the next action (set up, manage,
+  see pricing). A hosted Cloud Server node is listed under Devices like any
+  other always-on device. Email recovery moved from the Sync page to the user
+  page, above the account recovery controls.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
