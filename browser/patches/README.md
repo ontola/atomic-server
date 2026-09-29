@@ -37,3 +37,23 @@ Added in #1463. Disables the Chromium `PreventCrossWorldServiceWorkerResourceReu
 feature, which confuses `null` and `MainWorld()` in service-worker preload
 matching on Chromium 153 and breaks E2E runs. Remove once the browser Playwright
 bundles includes `chromium/chromium@4df9ee2790a4`.
+
+## wuchale@0.25.6.patch
+
+Fixes message extraction for JSX that sits inside an expression rather than
+directly in its parent's children (`{cond && <X/>}`, a ternary, `.map(...)`,
+an attribute such as `title={<span>...</span>}`). Wuchale visited those trees
+against the enclosing level's pending state. A text-less element there, as in
+`{a && <p>{x}</p>}`, applied and reset that state early, so the messages of
+every later sibling were silently dropped: they rendered untranslated and
+never reached the `.po` files, and `pnpm clean-translations` removed their
+entries (for example "Fetch workspace", "Restore version"). Other trees had
+their text folded into the enclosing level and were extracted as sentence
+fragments ("Searching for", "for"). The patch gives each such tree its own
+state and applies it when the tree ends. It applies to the CLI and the vite
+plugin alike, since both use `MixedVisitor`.
+
+Upstream: not yet reported; the same code shape is still in wuchale 0.26.7.
+Remove when an upstream release isolates expression children in
+`adapter-utils/mixed-visitor.js`, then re-run `pnpm clean-translations` and
+check that no entries move.
