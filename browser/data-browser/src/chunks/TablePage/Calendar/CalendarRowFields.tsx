@@ -87,8 +87,9 @@ export function CalendarRowFields({
 }
 
 /** The row's series as the Repeat field shows it. An imported series repeats
- * from its own start; a native one from the row's day. */
-function readRowRepeat(
+ * from its own start; a native one from the row's day. Without an `anchor`
+ * the row has nothing to repeat from, and no Repeat field. */
+export function readRowRepeat(
   subject: string,
   get: (prop: string) => unknown,
   calendar: CalendarRowContext,

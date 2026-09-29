@@ -35,6 +35,8 @@ import { useResourceContextMenu } from '@components/ResourceContextMenu/Resource
 import { RemoteCellPresence, TablePresenceContext } from './TablePresence';
 import { useSettings } from '../../helpers/AppSettings';
 import { hasUserContent, isUnsavedDraft } from './draftRow';
+import { TableCalendarRowContext } from './Calendar/useTableCalendarRow';
+import { RepeatSummaryCell } from './Calendar/RepeatSummaryCell';
 
 interface TableCellProps {
   columnIndex: number;
@@ -102,6 +104,7 @@ export function TableCell({
   const { contentLanguage } = useSettings();
   const { setActiveCell } = useTableEditorContext();
   const { addItemsToHistoryStack } = useContext(TablePageContext);
+  const calendarRow = useContext(TableCalendarRowContext);
   const { openResourceMenu } = useResourceContextMenu();
   // We give an empty error handler to debouncedSave so it doesn't spam the user with error popups when the value is invalid.
   const [save] = useDebouncedSave(resource, SAVE_DEBOUNCE_TIME, emptyFunc);
@@ -287,6 +290,15 @@ export function TableCell({
     }
   }, [setActiveCell, rowIndex, columnIndex, resource]);
 
+  const display = (
+    <Editor.Display
+      value={value}
+      onChange={onChange}
+      property={property.subject}
+      languageTag={languageTag}
+    />
+  );
+
   return (
     <Cell
       rowIndex={rowIndex}
@@ -306,13 +318,16 @@ export function TableCell({
           languageTag={languageTag}
           seed={seed}
         />
-      ) : (
-        <Editor.Display
-          value={value}
-          onChange={onChange}
-          property={property.subject}
-          languageTag={languageTag}
+      ) : calendarRow?.recurrenceProp?.subject === property.subject ? (
+        // The recurrence column reads as the Repeat field's summary, not as
+        // JSON. Editing it still opens the JSON editor.
+        <RepeatSummaryCell
+          resource={resource}
+          calendar={calendarRow}
+          fallback={display}
         />
+      ) : (
+        display
       )}
       {remoteAgents && remoteAgents.length > 0 && (
         <RemoteCellPresence agents={remoteAgents} />

@@ -11,6 +11,7 @@ import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 import { Title } from '@components/Title';
 import {
   CalendarRowFields,
+  readRowRepeat,
   type CalendarRowContext,
 } from './Calendar/CalendarRowFields';
 
@@ -18,8 +19,8 @@ interface ExpandedRowDialogProps {
   subject: string;
   open: boolean;
   bindOpen: (open: boolean) => void;
-  /** Opened from a calendar view: show the row's calendar fields (Repeat)
-   * instead of their raw values. */
+  /** The row's calendar fields (Repeat), shown instead of their raw values.
+   * Both the calendar and the table view pass them. */
   calendar?: CalendarRowContext;
 }
 
@@ -43,6 +44,14 @@ export function ExpandedRowDialog({
     triggerRef: tableRef,
   });
 
+  // The Repeat field stands in for the recurrence property's JSON editor,
+  // unless the row has no day to repeat from: then the JSON stays.
+  const repeatProp =
+    calendar?.recurrenceProp &&
+    readRowRepeat(subject, prop => resource.get(prop), calendar).anchor
+      ? calendar.recurrenceProp.subject
+      : undefined;
+
   useEffect(() => {
     if (open) {
       show();
@@ -63,11 +72,7 @@ export function ExpandedRowDialog({
           columns
           labelByName
           resource={resource}
-          except={
-            calendar?.recurrenceProp
-              ? [...EXCLUDED_PROPS, calendar.recurrenceProp.subject]
-              : EXCLUDED_PROPS
-          }
+          except={repeatProp ? [...EXCLUDED_PROPS, repeatProp] : EXCLUDED_PROPS}
         />
       </DialogContent>
     </Dialog>
