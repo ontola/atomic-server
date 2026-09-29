@@ -3662,3 +3662,77 @@ async fn canonical_scheme_resumes_index_rebuild_after_rows_moved() {
         "restart must rebuild even when no rows remain to rename"
     );
 }
+
+/// An `after_commit` extender runs after the commit is persisted, so its
+/// failure must not turn into a failed commit: the client would retry or show
+/// an error for a change that was saved. The error is logged instead, and the
+/// extenders registered after the failing one still run. (#1848)
+#[tokio::test]
+#[timeout(120000)]
+async fn failing_after_commit_does_not_fail_a_saved_commit() {
+    use crate::class_extender::ClassExtender;
+    use crate::commit::{CommitBuilder, CommitOpts};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    const CLASS: &str = "did:ad:afterCommitFailureTestClass";
+
+    let store = Db::init_temp("after_commit_failure").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+
+    store
+        .add_class_extender(
+            ClassExtender::builder()
+                .id("failing")
+                .class(CLASS)
+                .after_commit_fn(|_ctx| Box::pin(async { Err("after_commit exploded".into()) }))
+                .build(),
+        )
+        .unwrap();
+
+    let later_ran = Arc::new(AtomicBool::new(false));
+    let flag = later_ran.clone();
+    store
+        .add_class_extender(
+            ClassExtender::builder()
+                .id("later")
+                .class(CLASS)
+                .after_commit_fn(move |_ctx| {
+                    let flag = flag.clone();
+                    Box::pin(async move {
+                        flag.store(true, Ordering::SeqCst);
+                        Ok(())
+                    })
+                })
+                .build(),
+        )
+        .unwrap();
+
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![Subject::from(CLASS).into()]),
+    );
+    builder.set(urls::NAME.into(), Value::String("saved anyway".into()));
+    let commit = crate::commit::Commit::create_did(builder, &agent, &store)
+        .await
+        .unwrap();
+    let subject = commit.subject.clone();
+
+    let result = store
+        .apply_commit(commit, &CommitOpts::no_validations_no_index())
+        .await;
+    assert!(
+        result.is_ok(),
+        "a failing after_commit must not fail a persisted commit: {:?}",
+        result.err()
+    );
+
+    let stored = store.get_resource(&subject).await.unwrap();
+    assert_eq!(stored.get(urls::NAME).unwrap().to_string(), "saved anyway");
+    assert!(
+        later_ran.load(Ordering::SeqCst),
+        "the extender after the failing one should still run"
+    );
+}
