@@ -310,12 +310,13 @@ test.describe('forms', async () => {
     // `toBeAttached`, not `toBeVisible`: one column per question means the
     // grid scrolls sideways, so a column this far right is in the DOM but
     // outside the viewport. Presence is what's under test here — the deleted
-    // field's Property (and its column) must survive the delete.
+    // field's Property (and its column) must survive the delete. A column
+    // without a `name` is headed by its shortname, humanized.
     await expect(
-      page.getByRole('button', { name: 'visitor-name', exact: true }),
+      page.getByRole('button', { name: 'Visitor name', exact: true }),
     ).toBeAttached();
     await expect(
-      page.getByRole('button', { name: 'number', exact: true }),
+      page.getByRole('button', { name: 'Number', exact: true }),
     ).toBeAttached();
 
     // Back to the Form to keep building.

@@ -1,6 +1,7 @@
 import {
   core,
   dataBrowser,
+  isAtomicIdentifier,
   Resource,
   useArray,
   useResource,
@@ -164,9 +165,10 @@ export async function createOptionTag(
   parent: string,
   label: string,
 ): Promise<string> {
-  // A DID parent derives subjects from the genesis signature, so no path is
-  // pre-computed for it (same branch as `CreateTagRow`).
-  const subject = parent.startsWith('did:')
+  // An Atomic-identifier parent (`atomic:` or legacy `did:ad:`) derives
+  // subjects from the genesis signature, so no path is pre-computed for it
+  // (same branch as `CreateTagRow`).
+  const subject = isAtomicIdentifier(parent)
     ? undefined
     : await store.buildUniqueSubjectFromParts(['tag', label], parent);
 
