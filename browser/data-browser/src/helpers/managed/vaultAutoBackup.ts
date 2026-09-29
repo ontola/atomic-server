@@ -457,7 +457,9 @@ export async function restoreFromVault(
   // while this document is still the live one. The catch reads it.
   const pageSignal = pageRequestSignal();
 
-  const absentFromNode = isNotFound(store.resources.get(driveSubject)?.error);
+  const absentFromNode = isNotFound(
+    store.resources.get(store.normalizeSubject(driveSubject))?.error,
+  );
 
   try {
     // Session first: one quick request, against a database wait of up to

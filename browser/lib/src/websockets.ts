@@ -1570,9 +1570,7 @@ export class WSClient {
       this.authenticatedWith !== this.store.getAgent()?.subject
     )
       return;
-    const knownError = drive
-      ? this.store.resources.get(drive)?.error
-      : undefined;
+    const knownError = drive ? this.hydratedResource(drive)?.error : undefined;
     // Onboarding can name a key-derived home whose data has not arrived yet.
     // A prior read already established that this server cannot subscribe it.
     if (isNotFound(knownError) || isUnauthorized(knownError)) return;
@@ -1798,7 +1796,18 @@ export class WSClient {
     return !!this.store.outbox.getEntry(drive)?.signedGenesis;
   }
 
-  private async startVVSync(drive: string): Promise<void> {
+  private canAutomaticallySyncDrive(drive: string): boolean {
+    const error = this.hydratedResource(drive)?.error;
+
+    return (
+      this.store.isLiveSyncedDrive(drive) &&
+      !isNotFound(error) &&
+      !isUnauthorized(error)
+    );
+  }
+
+  private async startVVSync(drive: string, explicit = false): Promise<void> {
+    if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
 
@@ -1824,7 +1833,8 @@ export class WSClient {
           : localState.driveHash,
       };
       close({ resourceCount: Object.keys(syncState.resources).length });
-      if (!current()) return;
+      if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
+        return;
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
@@ -1848,7 +1858,7 @@ export class WSClient {
   public async resyncDrive(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
-    await this.startVVSync(drive);
+    await this.startVVSync(drive, true);
   }
 
   /** Respond to SYNC_RESEND: the probe's hash missed, so send the drive's
