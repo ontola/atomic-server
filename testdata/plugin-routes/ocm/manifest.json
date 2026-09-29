@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 3,
+  "name": "ocm",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "operations": [
+    {
+      "id": "fetch-file",
+      "method": "GET",
+      "url": "http://*/{*rest}",
+      "effect": "write"
+    },
+    {
+      "id": "notify",
+      "method": "POST",
+      "url": "http://*/{*rest}",
+      "effect": "write"
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "jwks",
+        "path": "/ocm/jwks",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "shares",
+        "path": "/ocm/shares",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "http-signature",
+        "body": "json",
+        "maxBodyBytes": 16384,
+        "writes": ["received"],
+        "enqueues": ["fetch-file", "notify"]
+      }
+    ],
+    "writeTargets": [
+      {
+        "id": "received",
+        "parent": "config:folder",
+        "classes": ["https://atomicdata.dev/classes/File"]
+      }
+    ],
+    "keys": [
+      {
+        "name": "ocm-key",
+        "alg": "ed25519",
+        "reason": "Signs the OCM notifications this fixture sends."
+      }
+    ]
+  }
+}

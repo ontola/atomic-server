@@ -236,6 +236,18 @@ pub fn files_release() -> atomic_lib::db::plugin_release::PluginRelease {
     js_release_with_source(FILES_SOURCE, serde_json::from_str(FILES_MANIFEST).unwrap())
 }
 
+/// `testdata/plugin-routes/ocm/`: a minimal Open Cloud Mesh receiver whose
+/// OCM-signed `POST /ocm/shares` fetches the shared file into the blob store,
+/// stores a File under `config.folder` and enqueues a signed notification.
+/// Needs `--plugin-routes read-write` and a route grant.
+pub const OCM_SOURCE: &str = include_str!("../../../testdata/plugin-routes/ocm/plugin.js");
+pub const OCM_MANIFEST: &str = include_str!("../../../testdata/plugin-routes/ocm/manifest.json");
+
+/// The OCM fixture as a release.
+pub fn ocm_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(OCM_SOURCE, serde_json::from_str(OCM_MANIFEST).unwrap())
+}
+
 /// A JS `extension` release of the trivial source with this manifest.
 pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
     js_release_with_source(HELLO_ROUTE_SOURCE, manifest)

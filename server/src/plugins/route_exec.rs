@@ -26,6 +26,9 @@
 //! A `body: blob` request is stored by the host before the sandbox runs, and
 //! a handler may answer with a blob instead of a body; conditional requests
 //! against either are answered by the host ([`super::route_blobs`], #1720).
+//! At `read-write` a handler may also have the host fetch a remote file
+//! straight into the blob store (`blobs.fetch`, [`BlobFetch`]): the bytes
+//! never enter the sandbox, only their reference does.
 //!
 //! Runs happen on their own small runtime ([`pool`]), apart from the HTTP
 //! workers and the job scheduler, so a flood of route requests cannot starve
@@ -294,8 +297,13 @@ pub struct RouteExecutor {
     pub keys: super::route_auth::KeyResolver,
     /// Consent requests and codes for route tokens (AS-08).
     pub consents: Arc<super::route_tokens::Consents>,
-    /// The operator's cap on a `body: blob` request (#1720).
+    /// The operator's cap on a `body: blob` request (#1720), and on a
+    /// `blobs.fetch` answer.
     pub max_blob_bytes: u64,
+    /// The loopback test seams for `blobs.fetch`
+    /// ([`crate::config::Config::plugin_delivery_loopback`] and
+    /// [`crate::config::Config::plugin_e2e_peer_ca`]).
+    pub egress_seams: (bool, Option<std::path::PathBuf>),
 }
 
 impl Default for RouteExecutor {
@@ -315,7 +323,18 @@ impl RouteExecutor {
             keys: Default::default(),
             consents: Default::default(),
             max_blob_bytes: super::route_blobs::DEFAULT_MAX_BLOB_BYTES,
+            egress_seams: (false, None),
         }
+    }
+
+    /// This executor with the loopback test seams for `blobs.fetch`.
+    pub fn with_egress_seams(
+        mut self,
+        loopback: bool,
+        peer_ca: Option<std::path::PathBuf>,
+    ) -> Self {
+        self.egress_seams = (loopback, peer_ca);
+        self
     }
 
     /// This executor with another way to fetch remote keys (tests).
@@ -770,6 +789,148 @@ struct RouteHost {
     /// `ctx.keys.*` and `ctx.tokens.*`: only at `read-write`, where a
     /// release that declares keys or tokens can be installed at all.
     crypto: Option<super::route_auth::CryptoHost>,
+    /// `blobs.fetch`: only at `read-write`.
+    blob_fetch: Option<BlobFetch>,
+}
+
+/// Headers a `blobs.fetch` request may not set: the client owns them.
+const FETCH_FORBIDDEN_HEADERS: [&str; 10] = [
+    "connection",
+    "content-length",
+    "expect",
+    "host",
+    "keep-alive",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+];
+
+/// `blobs.fetch({ operation, url, headers })`: a `GET` of a remote file whose
+/// answer the host stores in the blob store, as a `body: blob` request is
+/// stored (#167 "remote-content fetch into staged blobs"). The destination
+/// comes from data (an OCM share's WebDAV URI), so the rules are those of a
+/// delivery, not of an inline read:
+///
+/// - `operation` is one of the route's `enqueues`, declared with method
+///   `GET`; its URL may have a wildcard host (`https://*/{*rest}`) and a
+///   trailing `{*rest}` path.
+/// - Through the egress guard, the checked address pinned, no proxy, no
+///   redirects, [`super::egress::FETCH_TIMEOUT_SECS`].
+/// - At most the operator's `--plugin-route-max-blob-bytes`, counted toward
+///   the installation's bytes-per-day quota; it counts as one of the
+///   request's `ctx.http` calls.
+///
+/// Answers `{ status, blob }` for a `2xx` (the blob as `request.blob` has
+/// it, stored by this installation, so it may serve and link it), and
+/// `{ status }` otherwise. The bytes stay in the store when the route then
+/// fails, like a blob body's.
+struct BlobFetch {
+    executor: Arc<RouteExecutor>,
+    db: Db,
+    installation: String,
+    manifest: Manifest,
+    enqueues: Vec<String>,
+    at: i64,
+}
+
+impl BlobFetch {
+    async fn fetch(&self, request: &str) -> Result<String, String> {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            operation: String,
+            url: String,
+            #[serde(default)]
+            headers: std::collections::BTreeMap<String, String>,
+        }
+        let request: Request =
+            serde_json::from_str(request).map_err(|e| format!("not a blobs.fetch request: {e}"))?;
+        if !self.enqueues.contains(&request.operation) {
+            return Err(format!(
+                "operation `{}` is not in this route's `enqueues`",
+                request.operation
+            ));
+        }
+        let url = url::Url::parse(&request.url).map_err(|e| format!("not a URL: {e}"))?;
+        if !matches!(url.scheme(), "http" | "https")
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
+        {
+            return Err("the URL must be HTTP(S), without credentials or a fragment".into());
+        }
+        if !self.manifest.allows_fetch(&request.operation, &url) {
+            return Err(format!(
+                "GET {url} is not what operation `{}` declares",
+                request.operation
+            ));
+        }
+        let mut headers = reqwest::header::HeaderMap::new();
+        for (name, value) in &request.headers {
+            let name = name.to_ascii_lowercase();
+            if FETCH_FORBIDDEN_HEADERS.contains(&name.as_str()) {
+                return Err(format!("header `{name}` is set by the host"));
+            }
+            if atomic_lib::db::plugin_secret::mentions_handle(value) {
+                return Err("secret handles are not substituted in blobs.fetch".into());
+            }
+            let (Ok(name), Ok(value)) = (
+                reqwest::header::HeaderName::from_bytes(name.as_bytes()),
+                reqwest::header::HeaderValue::from_str(value),
+            ) else {
+                return Err(format!("header `{name}` is not a valid header"));
+            };
+            headers.insert(name, value);
+        }
+        let (loopback, peer_ca) = &self.executor.egress_seams;
+        let addresses = super::route_delivery::guarded_addresses(&url, *loopback).await?;
+        let host = url.host_str().ok_or("URL has no host")?.to_string();
+        let builder = reqwest::Client::builder()
+            .no_proxy()
+            .resolve_to_addrs(&host, &addresses)
+            .timeout(Duration::from_secs(super::egress::FETCH_TIMEOUT_SECS))
+            .redirect(reqwest::redirect::Policy::none());
+        let client =
+            super::route_delivery::with_seam_roots(builder, peer_ca.as_deref(), &addresses)?
+                .build()
+                .map_err(|e| format!("could not build an HTTP client: {e}"))?;
+        let origin = super::egress::origin_of(&url)?;
+        let response = client
+            .get(url.clone())
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| format!("request to {origin} failed: {e}"))?;
+        let status = response.status().as_u16();
+        if !response.status().is_success() {
+            return Ok(json!({ "status": status }).to_string());
+        }
+        let media_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::trim)
+            .filter(|v| !v.is_empty() && v.len() <= 255)
+            .unwrap_or("application/octet-stream")
+            .to_string();
+        let cap = self.executor.max_blob_bytes.min(usize::MAX as u64) as usize;
+        let bytes = host_core::read_capped(response.bytes_stream(), cap, &origin).await?;
+        let hash = blake3::hash(&bytes).to_hex().to_string();
+        let blob = super::route_blobs::store(
+            &self.db,
+            &self.executor.quotas,
+            &self.installation,
+            &bytes,
+            &hash,
+            media_type,
+            self.at,
+        )
+        .await
+        .map_err(|refused| format!("the fetched file was not stored: {refused:?}"))?;
+        Ok(json!({ "status": status, "blob": blob.to_json() }).to_string())
+    }
 }
 
 #[async_trait::async_trait]
@@ -802,6 +963,20 @@ impl PluginHost for RouteHost {
     }
 
     async fn host_call(&mut self, name: String, request: String) -> Result<String, String> {
+        if name == "blobs.fetch" {
+            let Some(fetch) = &self.blob_fetch else {
+                return Err(
+                    "at `--plugin-routes read-only` a route cannot make outbound requests".into(),
+                );
+            };
+            if self.reads_left == 0 {
+                return Err(
+                    "this route already made as many ctx.http calls as a request allows".into(),
+                );
+            }
+            self.reads_left -= 1;
+            return fetch.fetch(&request).await;
+        }
         match &self.crypto {
             Some(crypto) => crypto.call(&name, &request).await,
             None => Err(
@@ -1361,6 +1536,14 @@ async fn run(
             log: signed.clone(),
             approved_clients: approved_clients.clone(),
             now: at,
+        }),
+        blob_fetch: (level >= PluginRoutesLevel::ReadWrite).then(|| BlobFetch {
+            executor: appstate.route_exec.clone(),
+            db: store.clone(),
+            installation: installation.to_string(),
+            manifest: loaded.manifest.clone(),
+            enqueues: route.enqueues.clone(),
+            at,
         }),
     };
     let deadline = route

@@ -92,6 +92,11 @@ globalThis.__atomic = (function () {
     publicKey: (key, options) => call('keys.publicKey', { ...(options || {}), key }),
     sign: (request) => call('keys.sign', request),
   };
+  // A remote file straight into the blob store (plugin routes only): the
+  // plugin gets its reference, never its bytes.
+  input.blobs = {
+    fetch: (request) => call('blobs.fetch', request),
+  };
   input.tokens = {
     issue: (request) => call('tokens.issue', request),
     verify: (token) => call('tokens.verify', { token }),

@@ -228,6 +228,10 @@ pub struct Sign {
     pub key_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    /// An RFC 9421 `tag` (`ocm` for Open Cloud Mesh); see
+    /// [`route_keys::SignRequest::tag`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 /// What one attempt ended as.
@@ -525,6 +529,23 @@ fn prepare_one(
             None | Some("draft-cavage-12") | Some("rfc9421")
         ) {
             return Err("sign.format must be `draft-cavage-12` or `rfc9421`".into());
+        }
+        if let Some(tag) = &sign.tag {
+            let rfc9421 = match sign.format.as_deref() {
+                Some(format) => format == "rfc9421",
+                // The default follows the key: RFC 9421 for Ed25519.
+                None => manifest.http.as_ref().is_some_and(|h| {
+                    h.keys.iter().any(|k| {
+                        k.name == sign.key && k.alg == super::manifest_http::KeyAlg::Ed25519
+                    })
+                }),
+            };
+            if !rfc9421 || !route_keys::valid_tag(tag) {
+                return Err(
+                    "sign.tag needs an RFC 9421 signature and is 1 to 64 characters: a-z, 0-9, -, _ or ."
+                        .into(),
+                );
+            }
         }
     }
     let idempotency_key = match requested.idempotency_key {
@@ -1355,6 +1376,7 @@ impl Attempt {
                     body: job.body.clone(),
                 },
                 format: sign.format.clone(),
+                tag: sign.tag.clone(),
             };
             match route_keys::sign(
                 &self.db,
@@ -1365,6 +1387,12 @@ impl Attempt {
             ) {
                 Ok((signed, _log)) => {
                     for (name, value) in signed["headers"].as_object().into_iter().flatten() {
+                        // The HTTP client sets `content-length` from the
+                        // body itself; a tagged signature covers the same
+                        // value.
+                        if name == "content-length" {
+                            continue;
+                        }
                         if let Some(value) = value.as_str() {
                             headers.retain(|(n, _)| n != name);
                             headers.push((name.clone(), value.to_string()));
