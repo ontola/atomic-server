@@ -5,6 +5,7 @@ import {
   expandSubject,
   listDriveClasses,
   queryResources,
+  resolveClass,
   readResourceCompact,
   semanticSearch,
   server as serverOntology,
@@ -14,9 +15,11 @@ import {
   textSearch,
   toClassObject,
   type JSONValue,
+  type Resource,
   type Store,
 } from '@tomic/lib';
 import { z } from 'zod';
+import { writeDocumentText } from './document-body.js';
 import { documentText } from './document-text.js';
 
 /** What the signed-in agent may reach. */
@@ -60,7 +63,8 @@ const fail = (error: unknown): ToolResult => ({
   content: [
     {
       type: 'text',
-      text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+      // Full subjects are long; the model knows them as #refs.
+      text: `Error: ${(error instanceof Error ? error.message : String(error)).replace(/did:ad:[\w:-]+/g, shortenSubject)}`,
     },
   ],
   isError: true,
@@ -80,6 +84,53 @@ const run =
 const hasDocumentBody = (classes: string[]) =>
   classes.includes(dataBrowser.classes.documentV2) ||
   classes.includes(dataBrowser.classes.meeting);
+
+/** Keys that carry a document's text instead of an ordinary property. */
+const BODY_KEYS = ['_documentText', 'document-content', 'documentContent'];
+
+function takeBody(data: Record<string, unknown>): {
+  body: string | undefined;
+  rest: Record<string, unknown>;
+} {
+  const rest = { ...data };
+  let body: string | undefined;
+
+  for (const key of BODY_KEYS) {
+    if (key in rest) {
+      const value = rest[key];
+      delete rest[key];
+
+      if (typeof value !== 'string') {
+        throw new Error(`${key} takes Markdown or plain text as a string.`);
+      }
+
+      body = value;
+    }
+  }
+
+  return { body, rest };
+}
+
+/** Replaces the text body of `resource` and saves it. */
+async function saveDocumentText(resource: Resource, text: string) {
+  if (!hasDocumentBody(resource.getClasses())) {
+    throw new Error(
+      `${shortenSubject(resource.subject)} is not a document or meeting, so it has no text body.`,
+    );
+  }
+
+  const loro = resource.getLoroDoc();
+
+  if (!loro) {
+    throw new Error(
+      'Loro is not loaded, so the document text cannot be written.',
+    );
+  }
+
+  writeDocumentText(loro, text);
+  resource.markDirty();
+  await resource.save();
+}
 
 /**
  * Builds an MCP server whose tools read and edit Atomic Data through `store`,
@@ -288,11 +339,17 @@ export function createAtomicMcpServer({
       description:
         'The required and recommended properties of a class, with their shortnames and datatypes.',
       inputSchema: {
-        subject: z.string().describe('The class subject or #ref.'),
+        subject: z
+          .string()
+          .describe(
+            'The class: a name such as "document" or "task", a subject or a #ref.',
+          ),
       },
       annotations: { readOnlyHint: true },
     },
-    withAccess(({ subject }) => toClassObject(expandSubject(subject), store)),
+    withAccess(async ({ subject }, { drive }) =>
+      toClassObject(await resolveClass(store, drive, subject), store),
+    ),
   );
 
   if (!allowWrites) {
@@ -304,7 +361,7 @@ export function createAtomicMcpServer({
     {
       title: 'Edit a property',
       description:
-        'Set one property on a resource and save it. `property` is a shortname from the resource\'s schema (e.g. "status") or a full property URL; select values take tag names, dates take ISO strings.',
+        'Set one property on a resource and save it. `property` is a shortname from the resource\'s schema (e.g. "status") or a full property URL; select values take tag names, dates take ISO strings. To replace the text of a document or meeting, use property "_documentText" with Markdown or plain text (headings, lists, task lists, code blocks, **bold**, *italic*, `code`, links); it overwrites the whole body, so read `_documentText` with get_resource first when keeping parts of it.',
       inputSchema: {
         subject: z.string(),
         property: z.string(),
@@ -317,9 +374,25 @@ export function createAtomicMcpServer({
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    withAccess(({ subject, property, value }) =>
-      setResourceProperty(store, subject, property, value),
-    ),
+    withAccess(async ({ subject, property, value }) => {
+      if (BODY_KEYS.includes(property)) {
+        if (typeof value !== 'string') {
+          throw new Error(
+            `${property} takes Markdown or plain text as a string.`,
+          );
+        }
+
+        const resource = await store.getResource(expandSubject(subject));
+
+        if (resource.error) throw new Error(resource.error.message);
+
+        await saveDocumentText(resource, value);
+
+        return { subject: resource.subject, property: '_documentText' };
+      }
+
+      return setResourceProperty(store, subject, property, value);
+    }),
   );
 
   mcp.registerTool(
@@ -327,7 +400,7 @@ export function createAtomicMcpServer({
     {
       title: 'Create resources',
       description:
-        'Create one or more resources from compact JSON-AD. Each object needs "@class" (a shortname like "folder", "document", "table", a class from get_user_classes, or a full URL) and "@parent" (a drive, folder or table subject), plus property shortnames as keys, e.g. {"@class": "task", "@parent": "#AbCd1234", "name": "Call Anna", "status": "todo"}. Never pass "@id". Pass an array to create many at once.',
+        'Create one or more resources from compact JSON-AD. For a document or meeting, "_documentText" sets its text from Markdown or plain text. Each object needs "@class" (a shortname like "folder", "document", "table", a class from get_user_classes, or a full URL) and "@parent" (a drive, folder or table subject), plus property shortnames as keys, e.g. {"@class": "task", "@parent": "#AbCd1234", "name": "Call Anna", "status": "todo"}. Never pass "@id". Pass an array to create many at once.',
       inputSchema: {
         resources: z.array(z.record(z.string(), z.unknown())).min(1).max(200),
       },
@@ -340,11 +413,35 @@ export function createAtomicMcpServer({
 
       for (const [index, data] of resources.entries()) {
         try {
+          const { body, rest } = takeBody(data);
+
+          if (body !== undefined) {
+            const cls = await resolveClass(
+              store,
+              drive,
+              String(rest['@class']),
+            );
+
+            if (!hasDocumentBody([cls])) {
+              throw new Error(
+                '_documentText only applies to documents and meetings.',
+              );
+            }
+          }
+
           const result = await createResourceFromCompact(
             store,
             drive,
-            data as Record<string, JSONValue>,
+            rest as Record<string, JSONValue>,
           );
+
+          if (body !== undefined) {
+            await saveDocumentText(
+              await store.getResource(result.subject),
+              body,
+            );
+          }
+
           created.push(result.subject);
           Object.assign(resolved, result.resolved);
         } catch (error) {

@@ -17,6 +17,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   `@tomic/lib/node` has `loadOrCreateLocalAgent` for the key file. `@tomic/cli`
   gets `ad-generate connect`, so private ontologies no longer need an agent
   secret in `atomic.config.json`.
+  The MCP server can write a document's or meeting's text from Markdown
+  (`_documentText` on `create_resource` and `edit_resource`), and `get_schema`
+  accepts class names like `document`.
   `@tomic/lib` now also exports the
   data verbs behind it and behind the in-app assistant (`readResourceCompact`,
   `queryResources`, `textSearch`, `semanticSearch`, `listDriveClasses`,

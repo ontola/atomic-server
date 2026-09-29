@@ -72,8 +72,8 @@ The key is stored in `~/.config/atomic-mcp/<server>.json` (or under
 | `query`            | Finds resources by property values, e.g. all tasks with status "done".         |
 | `get_user_classes` | The custom classes on the drive.                                               |
 | `get_schema`       | The properties of a class.                                                     |
-| `create_resource`  | Creates one or many resources.                                                 |
-| `edit_resource`    | Sets one property.                                                             |
+| `create_resource`  | Creates one or many resources; documents take their text as `_documentText`.   |
+| `edit_resource`    | Sets one property, or replaces a document's text (`_documentText`).            |
 | `delete_resource`  | Deletes a resource (never a whole drive).                                      |
 
 These are the same verbs the in-app assistant uses; both call the
@@ -81,6 +81,14 @@ implementations in `@tomic/lib` (`assistant-tools.ts`). Results use
 JSON-AD-Compact (property shortnames, `#ref` short subjects), see
 `planning/json-ad-compact.md`.
 
-Not yet: editing a document's text, and a hosted (remote) MCP endpoint that
+A document's or meeting's text is written as Markdown or plain text through
+`_documentText`, on `create_resource` and on `edit_resource`: headings,
+paragraphs, bullet, numbered and task lists (nested by indentation), block
+quotes, fenced code, rules, and inline **bold**, *italic*, ~~strike~~, `code`
+and links. Every non-blank line outside a list or code block is its own
+paragraph. Writing replaces the whole body, so read `_documentText` first when
+keeping parts of it.
+
+Not yet: a hosted (remote) MCP endpoint that
 claude.ai can connect to without a local process. See
 `planning/mcp-endpoint.md`.
