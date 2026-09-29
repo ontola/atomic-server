@@ -9828,5 +9828,25 @@ msgstr ""
 msgid "Account and app menu"
 msgstr ""
 
+#: src/actions/resourceActions.tsx
+msgid "Add child"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this resource."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Scope search to resource"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description"
+msgstr ""
+
 #~ msgid "Enter your recovery code to show your secret or add a passkey on this device. Your existing recovery code will keep working."
 #~ msgstr "Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger Wiederherstellungscode bleibt gültig."

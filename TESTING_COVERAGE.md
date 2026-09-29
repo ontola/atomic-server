@@ -22,6 +22,8 @@ Collection alias indexing: `sorted_parent_query_deduplicates_legacy_and_canonica
 
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
+Document images: `document-image.spec.ts` uploads a freshly generated PNG through the editor's image picker in a browser-only drive, whose bytes never reach a server, and verifies the image renders from the local blob store before and after a reload instead of showing "Failed to load image". `subject.test.ts` covers mapping a content-addressed `/download/files/<hash>` URL back to its blob. An image in a server-synced drive on a device that has not got the bytes still loads from the server URL; that path is not separately covered.
+
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
 
 Template visibility: `settings-templates.spec.ts` toggles Hide templates through Settings, verifies the loaded New page hides templates across reload, and restores them when unchecked.

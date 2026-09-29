@@ -9844,6 +9844,14 @@ msgstr "Report a bug or suggest an improvement"
 msgid "Account and app menu"
 msgstr "Account and app menu"
 
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image"
+msgstr "Choose an image"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description"
+msgstr "Textual Description"
+
 #~ msgid "<0/> Create New Agent"
 #~ msgstr "<0/> Create New Agent"
 
