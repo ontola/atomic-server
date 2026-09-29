@@ -1,5 +1,5 @@
+import { expandCalendar } from '@tomic/lib/calendar-recurrence.js';
 import {
-  expandCalendar,
   isAllDayOnDate,
   nextCalendarDate,
   type CalendarRecord,

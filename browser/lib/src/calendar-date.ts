@@ -64,3 +64,6 @@ export function matchesCalendarField(
 ): boolean {
   return actual === field || actual === `lt-google-calendar-property-${field}`;
 }
+
+/** Shortname of the property that holds a calendar record's recurrence. */
+export const calendarRecurrenceShortname = 'atomic-calendar-recurrence';
