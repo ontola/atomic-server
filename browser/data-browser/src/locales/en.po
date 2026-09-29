@@ -3718,9 +3718,8 @@ msgstr "Click to add a value"
 msgid "Rename"
 msgstr "Rename"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "View type"
-msgstr "View type"
+#~ msgid "View type"
+#~ msgstr "View type"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
@@ -12550,3 +12549,15 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "The last table view stays, so the rows can always be seen as a table."
+msgstr "The last table view stays, so the rows can always be seen as a table."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a view"
+msgstr "Add a view"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Change this view to"
+msgstr "Change this view to"

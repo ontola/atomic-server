@@ -3718,9 +3718,8 @@ msgstr ""
 msgid "Rename"
 msgstr ""
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "View type"
-msgstr ""
+#~ msgid "View type"
+#~ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
@@ -12504,3 +12503,15 @@ msgstr "No se pudo traer tu espacio de trabajo a tu cuenta. Inténtalo de nuevo 
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cambia a esa identidad. Todo sigue siendo editable y se respalda con tu cuenta."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "The last table view stays, so the rows can always be seen as a table."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a view"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Change this view to"
+msgstr ""
