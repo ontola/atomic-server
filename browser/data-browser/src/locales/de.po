@@ -12575,3 +12575,7 @@ msgstr ""
 #: src/components/Vault/VaultPanel.tsx
 msgid "Not turned on for this workspace yet."
 msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "A Server plan covers one workspace. Checkout shows the price before you pay; connecting your account is free."
+msgstr ""

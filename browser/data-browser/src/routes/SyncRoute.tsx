@@ -1,6 +1,5 @@
 import {
   CLOUD_SERVER,
-  CLOUD_SERVER_PLAN_DESCRIPTION,
   CLOUD_SERVER_SETUP,
   CLOUD_VAULT,
 } from '@tomic/service-ui';
@@ -1597,7 +1596,7 @@ function SyncPage() {
                     <ConnMeta>
                       {serverPlanActive
                         ? 'This workspace already has a Server plan. Setting it up uses that plan; you do not need to buy it again.'
-                        : CLOUD_SERVER_PLAN_DESCRIPTION}
+                        : 'A Server plan covers one workspace. Checkout shows the price before you pay; connecting your account is free.'}
                     </ConnMeta>
                     {hostedCopyOrigin && (
                       <ConnMeta>
