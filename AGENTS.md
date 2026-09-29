@@ -153,6 +153,17 @@ second writer on tracked files. Four ways that has cost real time:
   `browser/data-browser` and commit the `.po` files. A component whose strings
   never made it into the catalogs renders them blank in a production build,
   and only e2e notices. Check the diff doesn't drop real translations.
+  With large removals `git diff` can show a kept entry (say "AI chat") as
+  removed in one place and added in another, so compare msgids, not lines,
+  before concluding a live string was lost. The dev server only marks unused
+  entries obsolete (`#~`) and never removes them, so `--clean` also drops the
+  obsolete entries that piled up since the last settle; that part is expected.
+- **Extraction bugs are fixed in `browser/patches/wuchale@*.patch`.** Wuchale
+  0.25 dropped markup inside JSX expressions, such as `{a && <p>{x}</p>}`
+  followed by more markup: the text rendered but never reached the catalogs.
+  If a visible string is missing from `en.po` after `pnpm clean-translations`
+  and has no `@wc-ignore`, suspect the extractor before adding entries by
+  hand; hand-added entries are removed by the next clean.
 
 Strings a model reads — tool descriptions, prompts, instructions — must be
 `@wc-ignore`d. A translated tool name is not a tool name. See
