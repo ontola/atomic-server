@@ -1,4 +1,5 @@
 import {
+  FaArrowsRotate,
   FaBell,
   FaCommentDots,
   FaGear,
@@ -87,6 +88,14 @@ export function useAppMenuItems(): {
             ?.click(),
         );
       },
+    },
+    {
+      id: 'app-sync-settings',
+      label: 'Open sync settings',
+      icon: <FaArrowsRotate />,
+      keywords: ['sync', 'devices', 'backup', 'cloud', 'server'],
+      searchOnly: true,
+      onClick: () => navigate(paths.sync),
     },
     {
       id: 'app-user-settings',

@@ -12648,3 +12648,7 @@ msgstr "Search settings"
 #: src/components/SideBar/SideBarPanel.tsx
 msgid "Click or drag to open"
 msgstr "Click or drag to open"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open sync settings"
+msgstr "Open sync settings"

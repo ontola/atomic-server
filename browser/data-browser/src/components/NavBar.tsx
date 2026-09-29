@@ -46,7 +46,12 @@ import {
 } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
-import { ButtonArea, LabelButton } from './NavBarButton';
+import {
+  ButtonArea,
+  LabelButton,
+  NAV_BUTTON_HEIGHT,
+  NAV_BUTTON_RADIUS,
+} from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -491,6 +496,9 @@ const NavBarWrapper = styled.nav`
  * hover like {@link LabelButton} so left and right feel like one set.
  */
 const NavIconButton = styled(IconButton)`
+  height: ${NAV_BUTTON_HEIGHT};
+  border-radius: ${NAV_BUTTON_RADIUS};
+
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
