@@ -16,7 +16,10 @@ import {
 } from './history-attribution.js';
 import { ulid } from 'ulidx';
 import type { Agent } from './agent.js';
-import { canonicalDriveHash } from './canonical-drive-hash.js';
+import {
+  canonicalDriveHash,
+  canonicalDriveHashV2,
+} from './canonical-drive-hash.js';
 import {
   removeCookieAuthentication,
   setCookieAuthentication,
@@ -222,8 +225,13 @@ export interface DriveSyncState {
   driveHash: string;
   /** Unique peer IDs across all resources, sorted. Counter arrays are indexed by this. */
   peers: string[];
-  /** subject → counter array (indexed by `peers`). */
+  /** subject → counter array (indexed by `peers`). Empty for a sparse state. */
   resources: Record<string, number[]>;
+  /** Sparse form (`hashVersion` 2): subject → peer → counter, non-zero
+   *  counters only. Set instead of `peers` and `resources`. */
+  vvs?: Record<string, Record<string, number>>;
+  /** Which drive hash `driveHash` is: 1 (dense) or 2 (sparse). */
+  hashVersion?: 1 | 2;
 }
 
 export interface CommitLogPropertySummary {
@@ -1882,7 +1890,10 @@ export class Store {
    * version vectors, plus the individual VV data for diff computation.
    * Used by the sync protocol to determine what needs syncing.
    */
-  public async computeDriveSyncState(drive: string): Promise<DriveSyncState> {
+  public async computeDriveSyncState(
+    drive: string,
+    { sparse = false }: { sparse?: boolean } = {},
+  ): Promise<DriveSyncState> {
     // Collect VVs from WASM DB (persisted snapshots)
     let allVVs: Record<string, Record<string, number>> = {};
 
@@ -1959,6 +1970,29 @@ export class Store {
       if (this.outbox.hasPending(subject)) {
         delete allVVs[subject];
       }
+    }
+
+    if (sparse) {
+      // Per-resource counters as they are: no peer table, no matrix. Each
+      // resource has a peer of its own, so the dense form below is resources
+      // times peers, and the hash and frame built from it dominated opening a
+      // large drive.
+      const vvs: Record<string, Record<string, number>> = {};
+
+      for (const [subject, vv] of Object.entries(allVVs)) {
+        vvs[subject] = Object.fromEntries(
+          Object.entries(vv).filter(([, counter]) => counter !== 0),
+        );
+      }
+
+      return {
+        drive,
+        driveHash: await canonicalDriveHashV2(vvs),
+        peers: [],
+        resources: {},
+        vvs,
+        hashVersion: 2,
+      };
     }
 
     // Collect unique peer IDs across all resources

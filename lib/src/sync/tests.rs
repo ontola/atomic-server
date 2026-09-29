@@ -2446,4 +2446,127 @@ mod peer_sync_tests {
             "de5fa2ae25000adf0d47d40b795e133c763328398301079ab56971d11862fbac",
         );
     }
+
+    /// The hash a drive with many peers is compared by must not depend on how
+    /// the peers are numbered, and must match the browser's
+    /// `canonicalDriveHashV2` byte for byte (its test pins the same vectors).
+    #[test]
+    fn compute_drive_hash_v2_matches_golden_vectors() {
+        use crate::sync::engine::compute_drive_hash_v2;
+        use std::collections::HashMap;
+
+        let mut vvs: HashMap<String, HashMap<String, i32>> = HashMap::new();
+        vvs.insert("s1".into(), HashMap::from([("p1".to_string(), 2)]));
+        vvs.insert("s2".into(), HashMap::from([("p2".to_string(), 3)]));
+        assert_eq!(
+            compute_drive_hash_v2(&vvs),
+            "f528a0cda4ba67df7ca7907ddee66b9535f0bf3719516a3ec9877b5b6ee4ea2a",
+        );
+
+        // Two peers on one resource (sorted by peer), a resource with no
+        // counters at all, and a zero counter that must not count.
+        let mut vvs: HashMap<String, HashMap<String, i32>> = HashMap::new();
+        vvs.insert(
+            "a".into(),
+            HashMap::from([("p2".to_string(), 4), ("p1".to_string(), 1)]),
+        );
+        vvs.insert("b".into(), HashMap::new());
+        vvs.insert(
+            "c".into(),
+            HashMap::from([("p1".to_string(), 7), ("p9".to_string(), 0)]),
+        );
+        assert_eq!(
+            compute_drive_hash_v2(&vvs),
+            "dd7b446967391a32dde347a6c1d24b8549e85362a19e44f4b0c1e48ea5137237",
+        );
+    }
+
+    /// A version 2 probe is answered against the version 2 hash, and a
+    /// version 1 hash sent as version 2 (or the reverse) is a miss, so a client
+    /// and server that disagree on the version fall back to a full sync rather
+    /// than believing they are in sync.
+    #[tokio::test]
+    async fn sync_probe_v2_compares_the_v2_hash() {
+        use crate::sync::engine::{
+            drive_sync_hash_for, drive_sync_hash_for_wire_version, handle_frame, WireScheme,
+        };
+        use crate::sync::protocol::{encode_sync_probe_v2, tag};
+
+        let db = Db::init_temp("sync_probe_v2_frame").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mut sudo = ForAgent::Sudo;
+        let v2 = drive_sync_hash_for_wire_version(&db, &drive, &sudo, WireScheme::CANONICAL, 2)
+            .await
+            .unwrap();
+        let v1 = drive_sync_hash_for(&db, &drive, &sudo).await.unwrap();
+        assert_ne!(v1, v2);
+
+        let hit = handle_frame(&encode_sync_probe_v2(&drive, &v2), &db, &mut sudo).await;
+        assert_eq!(hit[0][0], tag::SYNC_OK, "a matching v2 hash is SYNC_OK");
+
+        let wrong_version = handle_frame(&encode_sync_probe_v2(&drive, &v1), &db, &mut sudo).await;
+        assert_eq!(wrong_version[0][0], tag::SYNC_RESEND);
+    }
+
+    /// A sparse `SYNC` reconciles exactly like the dense one: a client that
+    /// holds nothing is told to pull everything, and one that holds exactly
+    /// the server's vectors gets `SYNC_OK`.
+    #[tokio::test]
+    async fn sparse_sync_reconciles_like_the_dense_one() {
+        use crate::sync::engine::{
+            drive_items_for, drive_sync_hash_for_wire_version, handle_frame, WireScheme,
+        };
+        use crate::sync::protocol::{encode_sync, encode_sync_sparse, tag};
+        use std::collections::HashMap;
+
+        let db = Db::init_temp("sparse_sync").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mut sudo = ForAgent::Sudo;
+
+        let items = drive_items_for(&db, &drive, &sudo).await.unwrap();
+        let server_vvs: HashMap<String, HashMap<String, i32>> = items
+            .into_iter()
+            .map(|(subject, vv)| (subject, vv.into_iter().collect()))
+            .collect();
+        let v2 = drive_sync_hash_for_wire_version(&db, &drive, &sudo, WireScheme::CANONICAL, 2)
+            .await
+            .unwrap();
+
+        let same = handle_frame(
+            &encode_sync_sparse(&drive, &v2, &server_vvs),
+            &db,
+            &mut sudo,
+        )
+        .await;
+        assert_eq!(same[0][0], tag::SYNC_OK, "identical vectors are in sync");
+
+        // Same vectors but a stale hash: the vectors decide, and they agree,
+        // so the diff is empty.
+        let by_vectors = handle_frame(
+            &encode_sync_sparse(&drive, "stale", &server_vvs),
+            &db,
+            &mut sudo,
+        )
+        .await;
+        assert_eq!(by_vectors.len(), 1);
+        assert_eq!(by_vectors[0][0], tag::SYNC_DIFF);
+        let diff = crate::sync::protocol::decode_sync_diff(&by_vectors[0][1..]).unwrap();
+        assert!(diff.pull.is_empty() && diff.push.is_empty() && diff.remove.is_empty());
+
+        // The dense encoding of an empty client is the reference answer.
+        let dense = handle_frame(
+            &encode_sync(&drive, "stale", &[], &HashMap::new()),
+            &db,
+            &mut sudo,
+        )
+        .await;
+        let sparse = handle_frame(
+            &encode_sync_sparse(&drive, "stale", &HashMap::new()),
+            &db,
+            &mut sudo,
+        )
+        .await;
+        assert_eq!(dense, sparse, "an empty client is answered identically");
+        assert_ne!(dense[0][0], tag::SYNC_OK, "and it has something to pull");
+    }
 }

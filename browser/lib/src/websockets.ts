@@ -5,7 +5,10 @@
  * Server counterpart: `server/src/handlers/web_sockets.rs`.
  */
 
-import { canonicalDriveHash } from './canonical-drive-hash.js';
+import {
+  canonicalDriveHash,
+  canonicalDriveHashV2,
+} from './canonical-drive-hash.js';
 import { createAuthentication } from './authentication.js';
 import {
   isAgentSubject,
@@ -39,6 +42,7 @@ import {
   encodeGetMany,
   decodeGetManyResult,
   CAP_GET_MANY,
+  CAP_SPARSE_SYNC,
   encodeHello,
   encodeSub,
   encodeUnsub,
@@ -1811,19 +1815,36 @@ export class WSClient {
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
       // On a mismatch the server replies `SYNC_RESEND` and
       // `sendFullSyncState` sends the state stashed here.
-      const localState = await this.store.computeDriveSyncState(drive);
-      const resources = this.wireSubjectMap(localState.resources);
-      const renamed = Object.keys(localState.resources).some(
+      // A server that speaks `sparse-sync` gets per-resource counters and the
+      // version 2 hash; the dense matrix (resources x peers) is only built for
+      // one that does not.
+      const sparse = this._serverCaps.includes(CAP_SPARSE_SYNC);
+      const localState = await this.store.computeDriveSyncState(drive, {
+        sparse,
+      });
+      const renamed = Object.keys(localState.vvs ?? localState.resources).some(
         s => this.wireSubject(s) !== s,
       );
-      const syncState = {
-        ...localState,
-        resources,
-        driveHash: renamed
-          ? await canonicalDriveHash(resources)
-          : localState.driveHash,
-      };
-      close({ resourceCount: Object.keys(syncState.resources).length });
+      const syncState = localState.vvs
+        ? (() => {
+            const vvs = this.wireSubjectMap(localState.vvs!);
+
+            return { ...localState, vvs };
+          })()
+        : {
+            ...localState,
+            resources: this.wireSubjectMap(localState.resources),
+          };
+
+      if (renamed) {
+        syncState.driveHash = syncState.vvs
+          ? await canonicalDriveHashV2(syncState.vvs)
+          : await canonicalDriveHash(syncState.resources);
+      }
+
+      close({
+        resourceCount: Object.keys(syncState.vvs ?? syncState.resources).length,
+      });
       if (!current()) return;
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
@@ -1831,7 +1852,12 @@ export class WSClient {
         encodeSync(
           this.wireSubject(drive),
           syncState.driveHash,
-          JSON.stringify({ peers: [], resources: {}, probe: true }),
+          JSON.stringify({
+            peers: [],
+            resources: {},
+            probe: true,
+            ...(sparse ? { hv: 2 } : {}),
+          }),
         ),
       );
       perfMark('ws.SYNC.probe.sent');
@@ -1872,10 +1898,14 @@ export class WSClient {
       encodeSync(
         this.wireSubject(drive),
         pendingState.driveHash,
-        JSON.stringify({
-          peers: pendingState.peers,
-          resources: this.wireSubjectMap(pendingState.resources),
-        }),
+        JSON.stringify(
+          pendingState.vvs
+            ? { hv: 2, vvs: this.wireSubjectMap(pendingState.vvs) }
+            : {
+                peers: pendingState.peers,
+                resources: this.wireSubjectMap(pendingState.resources),
+              },
+        ),
       ),
     );
   }
