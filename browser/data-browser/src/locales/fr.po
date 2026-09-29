@@ -1911,6 +1911,7 @@ msgid "Copied error to clipboard"
 msgstr "Erreur copiée dans le presse-papier"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/QuickFilterField.tsx
 #: src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
@@ -12504,3 +12505,20 @@ msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Rée
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows containing text"
+msgstr ""
+
+#. 0: quickFilterQuery
+#: src/chunks/TablePage/TableResource.tsx
+msgid "No rows show “{0}”."
+msgstr ""
