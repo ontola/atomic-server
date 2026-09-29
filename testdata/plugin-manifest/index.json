@@ -791,5 +791,23 @@
     "name": "v2 destination class requiring an undeclared property",
     "file": "v2-destination-schema-unknown-property.json",
     "error": "class bank-statement names an undeclared property"
+  },
+  {
+    "name": "v2 extension exporting afterCommit",
+    "file": "v2-extension-after-commit.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "entrypoints": {
+        "run": true,
+        "afterCommit": true
+      },
+      "secrets": [],
+      "operations": []
+    }
+  },
+  {
+    "name": "v2 server extension may not declare afterCommit",
+    "file": "v2-server-extension-after-commit.json",
+    "error": "entrypoints.afterCommit is for world extension"
   }
 ]

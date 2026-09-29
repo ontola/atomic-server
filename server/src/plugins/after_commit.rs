@@ -361,9 +361,30 @@ pub async fn package_of(db: &Db, drive: &str, app: &str) -> Result<Package, Stri
             _ => break,
         }
     }
-    let source = super::scheduler::plugin_source(db, drive, app)
-        .await
-        .ok_or("the app has no source")?;
+    // An app made with `createApp` keeps its code on the plugin it opens to
+    // (its `entrypoint`), not on itself.
+    let source = match super::scheduler::plugin_source(db, drive, app).await {
+        Some(source) => source,
+        None => {
+            let entrypoint = match super::scheduler::drive_terms(db, drive).await {
+                Some(terms) => match terms.property("entrypoint") {
+                    Some(property) => db
+                        .get_resource(&app.into())
+                        .await
+                        .ok()
+                        .and_then(|r| r.get(property).ok().map(|v| v.to_string())),
+                    None => None,
+                },
+                None => None,
+            };
+            match entrypoint {
+                Some(entrypoint) => super::scheduler::plugin_source(db, drive, &entrypoint)
+                    .await
+                    .ok_or("the app's entrypoint has no source")?,
+                None => return Err("the app has no source".into()),
+            }
+        }
+    };
     let manifest = js_runtime::describe_manifest(&source)
         .await?
         .ok_or("the app's source exports no manifest")?;
