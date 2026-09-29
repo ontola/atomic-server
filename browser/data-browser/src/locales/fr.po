@@ -8961,7 +8961,6 @@ msgstr ""
 #~ msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Reset to default"
 msgstr ""
 
@@ -12504,3 +12503,7 @@ msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Rée
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Reset"
+msgstr "<0/> Réinitialiser"

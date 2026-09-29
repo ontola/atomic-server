@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Settings → Integrations: the proxy and plugin catalog URL fields only show
+  a Save button below them. Resetting to the default is now a small Reset
+  button at the end of the field, shown only while the value differs from the
+  default.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or

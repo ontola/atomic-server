@@ -8972,7 +8972,6 @@ msgstr "Integration proxy"
 #~ msgstr "Connect accounts and import records using a LocalThought integration-proxy server. This setting is saved in this browser."
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Reset to default"
 msgstr "Reset to default"
 
@@ -12550,3 +12549,7 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Reset"
+msgstr "<0/> Reset"
