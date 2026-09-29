@@ -24,6 +24,7 @@
         "methods": ["GET", "HEAD", "PUT"],
         "principal": "installation",
         "auth": "dpop",
+        "authOptional": true,
         "body": "text",
         "cors": "any-origin-no-credentials",
         "writes": ["notes"]

@@ -836,7 +836,7 @@ async fn an_optional_bearer_route_runs_anonymous_requests_too() {
 }
 
 #[test]
-fn auth_optional_needs_auth_bearer() {
+fn auth_optional_needs_an_auth_that_can_be_absent() {
     use crate::plugins::manifest_http::{Context, Http};
     let http = |route: Json| -> Result<(), String> {
         let http: Http = serde_json::from_value(json!({
@@ -849,13 +849,21 @@ fn auth_optional_needs_auth_bearer() {
             operations: vec![],
         })
     };
-    http(json!({"id": "a", "path": "/a", "methods": ["GET"], "auth": "bearer", "authOptional": true}))
-        .unwrap();
-    assert_eq!(
-        http(json!({"id": "a", "path": "/a", "methods": ["GET"], "authOptional": true}))
-            .unwrap_err(),
-        "authOptional requires auth bearer"
-    );
+    for auth in ["bearer", "dpop", "atomic"] {
+        http(json!({"id": "a", "path": "/a", "methods": ["GET"], "auth": auth, "authOptional": true}))
+            .unwrap();
+    }
+    for auth in [None, Some("none"), Some("http-signature")] {
+        let mut route = json!({"id": "a", "path": "/a", "methods": ["GET"], "authOptional": true});
+        if let Some(auth) = auth {
+            route["auth"] = json!(auth);
+        }
+        assert_eq!(
+            http(route).unwrap_err(),
+            "authOptional requires auth bearer, dpop or atomic",
+            "{auth:?}"
+        );
+    }
 }
 
 #[actix_rt::test]
@@ -1094,5 +1102,99 @@ async fn auth_atomic_takes_a_fresh_version_2_signature_over_method_url_and_body(
         assert_eq!(resp.status(), 401, "{name}");
         let problem = json_of(resp).await;
         assert_eq!(problem["type"], "route-unauthorized", "{name}");
+    }
+}
+
+/// `authOptional` on `auth: atomic`: a request without any Atomic signature
+/// runs as the public (`caller: null`) and cannot write; a signature that is
+/// there is verified; without `authOptional` no signature is a `401`.
+#[actix_rt::test]
+async fn auth_atomic_with_auth_optional_answers_anonymous_requests_as_the_public() {
+    let f = fixture_with_args(
+        "route_auth_atomic_optional",
+        &["--plugin-routes", "read-write"],
+    )
+    .await;
+    let release = crate::plugins::test_fixture::js_release_with_source(
+        WHOAMI,
+        json!({
+            "schemaVersion": 3,
+            "name": "whoami",
+            "namespace": "acme",
+            "capabilities": [{"name": "storage", "reason": "a test"}],
+            "http": {
+                "mount": "drive-prefix",
+                "routes": [
+                    {"id": "open", "path": "/open", "methods": ["POST"],
+                        "principal": "installation", "auth": "atomic", "authOptional": true,
+                        "body": "json"},
+                    {"id": "closed", "path": "/closed", "methods": ["POST"],
+                        "principal": "installation", "auth": "atomic", "body": "json"},
+                    {"id": "pod", "path": "/pod", "methods": ["POST"],
+                        "principal": "anonymous", "auth": "dpop", "body": "json"},
+                ],
+            },
+        }),
+    );
+    let installation = crate::plugins::test_fixture::install_release(&f, &release)
+        .await
+        .unwrap();
+    let app = app!(f.appstate);
+    let agent = f.appstate.store.get_default_agent().unwrap();
+    let body = r#"{"note":"hi"}"#;
+    let send = |route: &str, headers: Vec<(String, String)>| {
+        let path = format!("/_routes/{}/{route}", slug(&installation));
+        let mut request = actix_test::TestRequest::post()
+            .uri(&path)
+            .insert_header((header::HOST, "localhost"))
+            .insert_header((header::CONTENT_TYPE, "application/json"))
+            .set_payload(body.to_string());
+        for (name, value) in headers {
+            request = request.insert_header((name, value));
+        }
+        request.to_request()
+    };
+    let url = |route: &str| format!("http://localhost/_routes/{}/{route}", slug(&installation));
+
+    let resp = actix_test::call_service(&app, send("open", vec![])).await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(json_of(resp).await["caller"], Json::Null);
+
+    let v2 = atomic_lib::client::get_authentication_headers_v2(
+        "POST",
+        &url("open"),
+        body.as_bytes(),
+        &agent,
+    )
+    .unwrap();
+    let resp = actix_test::call_service(&app, send("open", v2)).await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(
+        json_of(resp).await["caller"],
+        json!({ "agent": agent.subject })
+    );
+
+    // A signature that is there must hold: one over another URL is refused.
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    let elsewhere = atomic_lib::client::get_authentication_headers_v2(
+        "POST",
+        &url("closed"),
+        body.as_bytes(),
+        &agent,
+    )
+    .unwrap();
+    let resp = actix_test::call_service(&app, send("open", elsewhere)).await;
+    assert_eq!(resp.status(), 401);
+
+    // Without `authOptional`, no credentials is a `401` before the handler,
+    // for `atomic` and for `dpop`.
+    for (route, challenge) in [("closed", "AtomicRequestV2"), ("pod", "DPoP")] {
+        let resp = actix_test::call_service(&app, send(route, vec![])).await;
+        assert_eq!(resp.status(), 401, "{route}");
+        let www = resp.headers().get(header::WWW_AUTHENTICATE).unwrap();
+        assert!(
+            www.to_str().unwrap().starts_with(challenge),
+            "{route}: {www:?}"
+        );
     }
 }

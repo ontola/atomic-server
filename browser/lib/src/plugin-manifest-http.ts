@@ -31,8 +31,10 @@ export interface DeclaredRoute {
   /** Defaults to `none`. */
   auth?: RouteAuth;
   /**
-   * With `auth: bearer`: a request without an `Authorization` header runs
-   * with `caller: null` instead of being refused. Defaults to `false`.
+   * With `auth: bearer`, `dpop` or `atomic`: a request that presents no
+   * credentials runs with `caller: null` instead of being refused. On `dpop`
+   * and `atomic` it runs as the public principal and cannot write. Defaults
+   * to `false`.
    */
   authOptional?: boolean;
   accept?: string[];
@@ -518,8 +520,11 @@ export function validateHttp(
       );
     if (route.auth === 'bearer' && tokens.length === 0)
       throw new Error('auth bearer requires http.tokens');
-    if (route.authOptional && route.auth !== 'bearer')
-      throw new Error('authOptional requires auth bearer');
+    if (
+      route.authOptional &&
+      !['bearer', 'dpop', 'atomic'].includes(route.auth)
+    )
+      throw new Error('authOptional requires auth bearer, dpop or atomic');
     if (route.accept.some(a => !a.includes('/')))
       throw new Error('route accept entries must be media types');
 

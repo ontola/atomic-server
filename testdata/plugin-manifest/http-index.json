@@ -267,6 +267,46 @@
     ]
   },
   {
+    "name": "v3 optional dpop",
+    "file": "v3-optional-dpop.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "routes": [
+          {
+            "id": "pod",
+            "path": "/pod/{*rest}",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "auth": "dpop",
+            "authOptional": true
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /pod/{*rest}`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
     "name": "v3 listener",
     "file": "v3-listener.json",
     "gate": {
@@ -431,7 +471,12 @@
   {
     "name": "authOptional without auth bearer",
     "file": "v3-auth-optional-without-bearer.json",
-    "error": "authOptional requires auth bearer"
+    "error": "authOptional requires auth bearer, dpop or atomic"
+  },
+  {
+    "name": "authOptional on http-signature",
+    "file": "v3-auth-optional-http-signature.json",
+    "error": "authOptional requires auth bearer, dpop or atomic"
   },
   {
     "name": "body too large",

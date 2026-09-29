@@ -1202,11 +1202,16 @@ async fn run(
             Err(refused) => return unauthorized(route.auth, &slug, refused),
         }
     }
+    // `authOptional` on `atomic` and `dpop`: a request that presents no
+    // credentials at all runs as the public principal, whatever the route
+    // declares, and may not write or enqueue (below). Without
+    // `authOptional` it is a `401` before the handler runs. Credentials that
+    // are there are always verified.
+    let mut anonymous = route.auth == Auth::Atomic
+        && route.auth_optional
+        && !presents_credentials(req, Auth::Atomic);
     // Solid-OIDC (atomic-plugins#167, section 3): a DPoP-bound access token,
-    // checked against the URL this node names the request by. Without any
-    // token the request is anonymous: it reads as the public and may not
-    // write (below).
-    let mut anonymous = false;
+    // checked against the URL this node names the request by.
     if route.auth == Auth::Dpop {
         let Some(url) = canonical_url(appstate, mount, &slug, &loaded.drive, req) else {
             return unauthorized(
@@ -1232,7 +1237,16 @@ async fn run(
             .await
         {
             Ok(Some(verified)) => caller = verified,
-            Ok(None) => anonymous = true,
+            Ok(None) if route.auth_optional => anonymous = true,
+            Ok(None) => {
+                return unauthorized(
+                    route.auth,
+                    &slug,
+                    super::http_signatures::Refused(
+                        "this route needs a DPoP-bound access token".into(),
+                    ),
+                )
+            }
             Err(refused) => return unauthorized(route.auth, &slug, refused),
         }
     }
@@ -1273,6 +1287,15 @@ async fn run(
             .into()
         }
         None => None,
+        Some(Body::Blob) if anonymous => {
+            return unauthorized(
+                route.auth,
+                &slug,
+                super::http_signatures::Refused(
+                    "an unauthenticated request cannot store a body".into(),
+                ),
+            )
+        }
         Some(Body::Blob) => {
             // Read-only routes may serve blobs, never store them.
             if level < PluginRoutesLevel::ReadWrite {
@@ -1410,7 +1433,7 @@ async fn run(
     // the server's own state-changing endpoints. Cookies and version 1
     // signatures are not accepted. The URL is built from the `Host` header
     // the registry routed on, never from `X-Forwarded-Host`.
-    if route.auth == Auth::Atomic {
+    if route.auth == Auth::Atomic && !anonymous {
         let signed_url = format!(
             "{}://{}{}",
             req.connection_info().scheme(),
@@ -1775,7 +1798,7 @@ async fn run(
                 StatusCode::BAD_GATEWAY,
                 "route-write-refused",
                 "This plugin route tried to write",
-                "an unauthenticated request to an `auth: dpop` route cannot write or enqueue; nothing was applied",
+                "an unauthenticated request (`authOptional`) runs as the public and cannot write or enqueue; nothing was applied",
             ))
         } else if waits {
             Some((
@@ -2112,6 +2135,20 @@ fn canonical_url(
         }
     };
     Some(format!("{origin}{}", req.uri().path()))
+}
+
+/// Whether a request carries any credentials for `auth`: an
+/// `Authorization` header, a `DPoP` proof, or an Atomic signature
+/// (`x-atomic-*`). A request without any is anonymous; one with some is
+/// verified, and refused if they don't hold.
+fn presents_credentials(req: &HttpRequest, auth: Auth) -> bool {
+    let headers = req.headers();
+    headers.contains_key(header::AUTHORIZATION)
+        || match auth {
+            Auth::Dpop => headers.contains_key("dpop"),
+            Auth::Atomic => headers.keys().any(|n| n.as_str().starts_with("x-atomic-")),
+            _ => false,
+        }
 }
 
 /// `401` from the host: the caller could not be verified, and the sandbox
