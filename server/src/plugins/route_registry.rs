@@ -408,9 +408,9 @@ fn reserved(host: &Host, segments: &[Segment], slug: &str) -> Option<String> {
 pub fn matches(pattern: &[Segment], request: &[&str]) -> bool {
     match (pattern.first(), request.first()) {
         (None, None) => true,
-        (Some(Segment::Rest), Some(_)) => request[..request.len() - 1]
-            .iter()
-            .all(|s| !s.is_empty()),
+        (Some(Segment::Rest), Some(_)) => {
+            request[..request.len() - 1].iter().all(|s| !s.is_empty())
+        }
         (Some(Segment::Literal(l)), Some(r)) if l == r => matches(&pattern[1..], &request[1..]),
         (Some(Segment::Param), Some(r)) if !r.is_empty() => matches(&pattern[1..], &request[1..]),
         _ => false,

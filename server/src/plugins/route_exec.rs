@@ -554,9 +554,8 @@ pub fn build_response(response: &Json, rules: &ResponseRules) -> Result<Built, S
                         .consent_page
                         .as_deref()
                         .is_some_and(|page| value.starts_with(page))
-                    || origin_of(&value).is_some_and(|origin| {
-                        rules.approved_clients.iter().any(|c| *c == origin)
-                    });
+                    || origin_of(&value)
+                        .is_some_and(|origin| rules.approved_clients.contains(&origin));
                 if !allowed || (lower == "location" && !location_ok) {
                     dropped.push(lower);
                     continue;

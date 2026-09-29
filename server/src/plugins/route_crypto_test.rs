@@ -803,7 +803,10 @@ async fn an_optional_bearer_route_runs_anonymous_requests_too() {
     )
     .await;
     assert_eq!(resp.status(), 200);
-    assert_eq!(json_of(resp).await["caller"]["token"]["scopes"], json!(["notes:r"]));
+    assert_eq!(
+        json_of(resp).await["caller"]["token"]["scopes"],
+        json!(["notes:r"])
+    );
 
     for bad in ["Bearer atr_not-a-token", "Basic abc", ""] {
         let resp = actix_test::call_service(
@@ -816,9 +819,11 @@ async fn an_optional_bearer_route_runs_anonymous_requests_too() {
         assert_eq!(resp.status(), 401, "{bad}");
     }
     // A folder: the trailing slash reaches the handler.
-    let resp =
-        actix_test::call_service(&app, get(&format!("{}/public/notes/", i.prefix)).to_request())
-            .await;
+    let resp = actix_test::call_service(
+        &app,
+        get(&format!("{}/public/notes/", i.prefix)).to_request(),
+    )
+    .await;
     assert_eq!(resp.status(), 200);
     assert_eq!(json_of(resp).await["path"], "notes/");
     // The same route without `authOptional` still refuses a missing token.
@@ -847,7 +852,8 @@ fn auth_optional_needs_auth_bearer() {
     http(json!({"id": "a", "path": "/a", "methods": ["GET"], "auth": "bearer", "authOptional": true}))
         .unwrap();
     assert_eq!(
-        http(json!({"id": "a", "path": "/a", "methods": ["GET"], "authOptional": true})).unwrap_err(),
+        http(json!({"id": "a", "path": "/a", "methods": ["GET"], "authOptional": true}))
+            .unwrap_err(),
         "authOptional requires auth bearer"
     );
 }
