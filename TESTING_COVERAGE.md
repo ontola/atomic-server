@@ -2356,3 +2356,21 @@ out. It does not drive a real browser's throttling.
 right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
 reaches the other subscriber without a retry, and that an update held for a
 refused subscribe is dropped.
+
+## Onboarding audit regressions
+
+- `websockets.test.ts`: missing and unauthorized drives cannot SUB or automatically
+  reconcile via a legacy DID when the read error is cached under its canonical ID.
+- `helpers/readableDrive.test.ts`: explicit portal selection waits for a readable
+  resource and discards results after navigation or identity changes.
+- `helpers/managed/vaultAutoBackup.test.ts`: a confirmed missing canonical drive
+  stays local-only after recovery through its legacy alias; transport failures
+  do not change routing.
+- `helpers/managed/readCache.test.ts`: short metadata read sharing, expiry,
+  independent response bodies, provider/token isolation, mutation invalidation,
+  cancellation/cache-control bypass, and retryable error/anonymous responses.
+- `oxc-react-compiler.test.ts`: the full app must avoid internal compiler invariants,
+  including identity creation and the connect-device polling loop.
+- The paired SaaS `portal/e2e/onboarding.spec.ts` closes the original context,
+  downloads the vault into a fresh browser, verifies the saved document and
+  profile, requires a clean console, and budgets metadata reads after reload.

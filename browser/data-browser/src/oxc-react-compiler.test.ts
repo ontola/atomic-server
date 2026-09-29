@@ -29,6 +29,18 @@ function walkTsx(dir: string, acc: string[] = []): string[] {
 }
 
 describe('oxc-transform-react', () => {
+  it.each([
+    'components/NewIdentitySection.tsx',
+    'views/getting-started/ConnectDeviceStep.tsx',
+  ])('does not hit a compiler invariant in %s', name => {
+    const filename = join(srcDir, name);
+    const result = compile(filename, readFileSync(filename, 'utf8'));
+    expect(result.fatal).toBe(false);
+    expect(
+      result.errors.filter(error => error.codeframe?.includes('Invariant')),
+    ).toEqual([]);
+  });
+
   it('does not evaluate TipTap command getters while rendering the node menu', () => {
     const filename = join(srcDir, 'chunks/RTE/NodeSelectMenu.tsx');
     const result = compile(filename, readFileSync(filename, 'utf8'));
@@ -126,7 +138,10 @@ describe('oxc-transform-react', () => {
     for (const file of walkTsx(srcDir)) {
       const result = compile(file, readFileSync(file, 'utf8'));
 
-      if (result.fatal) {
+      if (
+        result.fatal ||
+        result.errors.some(error => error.codeframe?.includes('Invariant'))
+      ) {
         fatals.push(
           `${file}: ${result.errors.map(error => error.message).join('; ')}`,
         );

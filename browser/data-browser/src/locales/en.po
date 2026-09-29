@@ -5326,9 +5326,8 @@ msgstr "Use your fingerprint, face, or screen lock."
 msgid "or sign in another way"
 msgstr "or sign in another way"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Sign out. You can get back in on this device with your passkey."
-msgstr "Sign out. You can get back in on this device with your passkey."
+#~ msgid "Sign out. You can get back in on this device with your passkey."
+#~ msgstr "Sign out. You can get back in on this device with your passkey."
 
 #: src/routes/SettingsAgent.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
@@ -12658,3 +12657,7 @@ msgstr "Open sync settings"
 #: src/actions/appMenuItems.tsx
 msgid "Go to"
 msgstr "Go to"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out of this device."
+msgstr "Sign out of this device."

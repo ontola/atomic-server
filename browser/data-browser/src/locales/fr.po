@@ -5315,9 +5315,8 @@ msgstr ""
 msgid "or sign in another way"
 msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Sign out. You can get back in on this device with your passkey."
-msgstr ""
+#~ msgid "Sign out. You can get back in on this device with your passkey."
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
@@ -12611,4 +12610,8 @@ msgstr ""
 
 #: src/actions/appMenuItems.tsx
 msgid "Go to"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out of this device."
 msgstr ""
