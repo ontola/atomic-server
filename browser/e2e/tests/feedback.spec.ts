@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { before } from './test-utils';
+import { before, clickAccountMenuItem } from './test-utils';
 
 // The SDK uses a fake project and intercepted transport: no real reports in CI.
 test.beforeEach(async ({ page }) => {
@@ -38,8 +38,7 @@ test('sidebar feedback retains a failed report and retries successfully', async 
       headers: { 'access-control-allow-origin': '*' },
     });
   });
-  await page.getByTestId('sidebar').hover();
-  await page.getByRole('button', { name: 'Feedback', exact: true }).click();
+  await clickAccountMenuItem(page, 'Feedback');
   const dialog = page.getByRole('dialog');
   const message = dialog.getByRole('textbox', {
     name: 'Feedback',
@@ -72,8 +71,7 @@ test('disabled feedback explains availability without claiming a failed send', a
     };
   });
   await page.reload();
-  await page.getByTestId('sidebar').hover();
-  await page.getByRole('button', { name: 'Feedback', exact: true }).click();
+  await clickAccountMenuItem(page, 'Feedback');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Feedback reporting is unavailable');
   await expect(dialog).not.toContainText('could not be sent');

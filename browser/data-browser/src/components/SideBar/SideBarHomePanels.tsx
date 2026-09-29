@@ -12,7 +12,7 @@ interface SideBarHomePanelsProps {
 /**
  * The per-user "home index" panels — Favorites and Shared-with-me — read from
  * the user's PRIVATE DRIVE (see {@link usePrivateDriveList}). Rendered in the
- * sidebar's bottom-pinned area (above App settings) rather than scrolling with
+ * sidebar's bottom-pinned area (above the account menu) rather than scrolling with
  * the active drive's tree, since they are cross-drive and not part of the
  * current drive's contents.
  */

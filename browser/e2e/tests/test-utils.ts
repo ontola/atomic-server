@@ -531,8 +531,8 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
  * Handles three entry states:
  *   1. Already signed in (e.g. post-`before()`/`devDrive()`): no-op.
  *   2. Welcome gate visible: click its "Sign in" button → paste secret.
- *   3. On a drive page with a "Login / New User" sidebar link: click it, then
- *      follow the welcome-gate flow, then navigate back.
+ *   3. On a drive page with a "Login / New User" sidebar row: go to the
+ *      welcome gate and follow its flow.
  *
  * There is no button to confirm the secret, by design: a secret either parses
  * or it doesn't, so GettingStartedFlow signs in the moment the value is valid
@@ -565,10 +565,15 @@ export async function signIn(page: Page, secret?: string) {
     name: 'Sign in',
     exact: true,
   });
-  const settings = page
-    .locator('a[href$="/app/agent"]')
-    .filter({ hasNotText: 'Login / New User' });
-  const login = page.getByRole('link', { name: 'Login / New User' });
+  // The sidebar's user row, which opens the account menu. It carries
+  // `data-signed-in` once there is an agent, and reads "Login / New User"
+  // before that.
+  const settings = page.locator(
+    '[data-testid="account-menu-trigger"][data-signed-in="true"]',
+  );
+  const login = page
+    .getByTestId('account-menu-trigger')
+    .filter({ hasText: 'Login / New User' });
   // The first thing this helper waits for is a cold app boot in whatever
   // context it was handed: wasm, store init and the route all have to land
   // before any of these four appear. It was on the 10s default while the two
@@ -1970,6 +1975,30 @@ export async function editTitle(title: string, page: Page) {
   await titleEl.type(title);
   await page.keyboard.press('Enter');
   await waiter;
+}
+
+/**
+ * Opens the account menu behind the user row at the bottom of the sidebar
+ * (Profile, Notifications, Integrations, Sync, Feedback, About) and returns
+ * it. Settings is not in it: that is the gear button beside the user row,
+ * `sidebar-settings-button`.
+ */
+export async function openAccountMenu(page: Page): Promise<Locator> {
+  const sidebar = page.getByTestId('sidebar');
+  await sidebar.hover();
+  await sidebar.getByTestId('account-menu-trigger').click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+
+  return menu;
+}
+
+/** Picks an item from the sidebar's account menu. */
+export async function clickAccountMenuItem(page: Page, name: string) {
+  const menu = await openAccountMenu(page);
+  // Not `exact`: an item's trailing badge (Notifications' unread count) is
+  // part of its accessible name.
+  await menu.getByRole('menuitem', { name: new RegExp(`^${name}\\b`) }).click();
 }
 
 export async function clickSidebarItem(text: string, page: Page) {

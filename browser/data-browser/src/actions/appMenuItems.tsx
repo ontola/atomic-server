@@ -15,7 +15,7 @@ import { useAISettings } from '../components/AI/AISettingsContext';
 import { AIIcon } from '../components/AI/AIIcon';
 import type { DropdownItem } from '../components/Dropdown';
 
-/** Opens the sidebar's feedback dialog (FeedbackMenuItem listens). */
+/** Opens the sidebar's feedback dialog (the sidebar's AccountMenu listens). */
 export const OPEN_FEEDBACK_EVENT = 'atomic-open-feedback';
 
 /**
