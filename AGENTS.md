@@ -31,6 +31,29 @@ The pre-commit hook lints and clippies a snapshot of the staged files. It
 borrows this worktree's `node_modules` (so `pnpm install` must have run) and
 skips the frontend build, so it needs nothing else.
 
+## Claude Code Cloud Sessions
+
+`.claude/hooks/session-start.sh` (registered in `.claude/settings.json`) sets
+up Claude Code on the web sessions: the Rust toolchain and WASM targets,
+wasm-pack, wasm-opt, `pnpm install`, the `@tomic/*` package builds, the
+Playwright browsers for `@tomic/e2e`, and a debug build of `atomic-server`
+(which also builds data-browser and the WASM). Cloud containers have no IPv6,
+so it also exports `ATOMIC_IP=0.0.0.0` for the session; without it the server
+fails with "Address family not supported by protocol". It only runs when
+`CLAUDE_CODE_REMOTE=true`, so local sessions are unaffected.
+
+The hook pins versions and works around the cloud sandbox (for example, the proxy
+blocks Playwright's CDN, so browsers come from the Chrome for Testing mirror).
+When environment requirements change — `rust-toolchain.toml`, a new Rust
+target, the wasm-pack or binaryen version, the Playwright version, a new
+workspace package or build step — update the hook in the same PR, and test it
+with `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`.
+
+`pnpm test-e2e:local` builds the `e2e` cargo profile by default, a second cold
+server build. In a cloud session, `ATOMIC_E2E_CARGO_PROFILE=dev pnpm
+test-e2e:local <spec>` reuses the hook's debug build instead (a green is still
+trustworthy; see `browser/e2e/scripts/e2e-server.sh` on reading reds).
+
 ## Planning
 
 Use the `./planning` folder to write plans and keep track of progress.
