@@ -7,6 +7,17 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Hosted MCP endpoint: `POST /mcp` (Streamable HTTP) lets clients that cannot
+  run a local process, such as claude.ai, read a person's data. It is an OAuth
+  2.1 resource server (RFC 9728 metadata at `/.well-known/oauth-protected-resource`)
+  with the node as authorization server (`/oauth/register`, `/oauth/authorize`,
+  `/oauth/token`, PKCE S256, dynamic client registration). The person approves
+  in the app (`/app/authorize-mcp`), which gives a fresh issued agent read
+  rights on the drives they pick; revoking is removing it under Connected
+  apps. Read-only for now (`list_drives`, `get_resource`, `search`), and the
+  node never signs as the person. `--app-url` / `ATOMIC_APP_URL` says where the
+  approval page lives when the app is not served by this node.
+
 - `atomic-cli connect`: connect the CLI with a key made on this machine,
   approved in the app (`/app/connect-agent`), instead of pasting your agent
   secret. Without a config file, the CLI now points you to it rather than

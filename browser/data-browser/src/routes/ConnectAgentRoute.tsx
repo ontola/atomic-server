@@ -1,19 +1,14 @@
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import {
-  agentSubjectFromPublicKey,
-  grantAgent,
-  useResource,
-  useStore,
-} from '@tomic/react';
+import { agentSubjectFromPublicKey, grantAgent, useStore } from '@tomic/react';
 import { styled } from 'styled-components';
 import { Button } from '../components/Button';
-import { Card, Margin } from '../components/Card';
+import { Margin } from '../components/Card';
+import { ConnectDrivePicker } from '../components/ConnectDrivePicker';
 import { ContainerNarrow } from '../components/Containers';
 import { ErrorLook } from '../components/ErrorLook';
 import { Main } from '../components/Main';
 import { Column, Row } from '../components/Row';
-import { Checkbox } from '../components/forms/Checkbox';
 import { RadioInput } from '../components/forms/RadioInput';
 import { useSettings } from '../helpers/AppSettings';
 import { rememberConnectedApp } from '../helpers/connectedApps';
@@ -178,18 +173,11 @@ function ConnectAgentPage() {
 
       <Column>
         <Heading>What it can reach</Heading>
-        <Card>
-          <List>
-            {catalog.subjects.map(subject => (
-              <DriveOption
-                key={subject}
-                subject={subject}
-                checked={selected.includes(subject)}
-                onChange={on => toggle(subject, on)}
-              />
-            ))}
-          </List>
-        </Card>
+        <ConnectDrivePicker
+          subjects={catalog.subjects}
+          selected={selected}
+          onToggle={toggle}
+        />
 
         <Heading>What it can do</Heading>
         <Column gap='0.75rem'>
@@ -230,26 +218,6 @@ function ConnectAgentPage() {
   );
 }
 
-function DriveOption({
-  subject,
-  checked,
-  onChange,
-}: {
-  subject: string;
-  checked: boolean;
-  onChange: (on: boolean) => void;
-}) {
-  const resource = useResource(subject);
-  const id = useId();
-
-  return (
-    <Option>
-      <Checkbox id={id} checked={checked} onChange={onChange} />
-      <label htmlFor={id}>{resource.loading ? '…' : resource.title}</label>
-    </Option>
-  );
-}
-
 function Page({ children }: React.PropsWithChildren) {
   return (
     <Main>
@@ -261,20 +229,4 @@ function Page({ children }: React.PropsWithChildren) {
 const Heading = styled.h2`
   margin: 0;
   font-size: 1.1rem;
-`;
-
-const List = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`;
-
-const Option = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-
-  label {
-    cursor: pointer;
-  }
 `;

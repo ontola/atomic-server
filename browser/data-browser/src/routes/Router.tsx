@@ -21,6 +21,7 @@ import { unavailableLazyRoute } from './UnavailableLazyRoute';
 import { ImportRoute } from './ImportRoute';
 import { HistoryRoute } from './History/HistoryRoute';
 import { InviteRoute } from './InviteRoute';
+import { AuthorizeMcpRoute } from './AuthorizeMcpRoute';
 import { ConnectAgentRoute } from './ConnectAgentRoute';
 import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
@@ -96,6 +97,7 @@ const routeTree = rootRoute.addChildren({
     DemoRoute,
     InviteRoute,
     ConnectAgentRoute,
+    AuthorizeMcpRoute,
     LinkOpenRouter,
   }),
   topRoute,

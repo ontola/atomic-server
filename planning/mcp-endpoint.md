@@ -7,8 +7,9 @@
 > server. It signs with its own key, which the person approves in the app
 > (`/app/connect-agent`) for chosen drives, read or read and edit, and can
 > revoke under Connected apps; the grant is the ACL on those drives, since
-> only an agent may edit its own Agent resource. Steps 3 to 5 (hosted,
-> OAuth) are not started.
+> only an agent may edit its own Agent resource. Step 4 (hosted, read-only,
+> `server/src/mcp/`) is built: see "Hosted endpoint" below. Steps 3 and 5 are
+> not started.
 > Companion to [`actions.md`](./actions.md) (one verb list, many surfaces),
 > [`json-ad-compact.md`](./json-ad-compact.md) (the wire dialect),
 > [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) (`AtomicNode`),
@@ -162,13 +163,50 @@ module. Long-term the graph verbs belong on `AtomicNode`; UI verbs do not.
    Cursor/Claude Desktop config people actually add. Highest ROI; no AS.
 3. [ ] **Server `format=compact`.** json-ad-compact phase 4. Needed before a
    Rust remote handler is worth writing.
-4. [ ] **Remote Streamable HTTP, read-only.** RFC 9728 metadata, OAuth 2.1
+4. [x] **Remote Streamable HTTP, read-only.** RFC 9728 metadata, OAuth 2.1
    against Atomic-as-AS (#1275 reopened) *or* the operator IdP if #1310
    has already advertised one. Writes return a clear "use local MCP /
    issued agent not yet" error, not a silent server-side save.
 5. [ ] **Remote writes as issued agent.** Same key-on-node pattern as plugin
    unattended runs. Consent scopes: at least drive + read/write. `signer`
    is the issued DID. The user's root never touches the commit.
+
+## Hosted endpoint (step 4, built)
+
+`server/src/mcp/`. No state to store: client ids, authorization codes and
+tokens are signed with a key derived from the node key for this purpose
+(`Db::derive_node_key`), so nothing here can open a stored secret.
+
+```text
+POST /mcp                  401 + WWW-Authenticate: resource_metadata=…
+GET  /.well-known/oauth-protected-resource      (RFC 9728) names this node
+GET  /.well-known/oauth-authorization-server    (RFC 8414)
+POST /oauth/register       dynamic client registration; client_id = signed registration
+GET  /oauth/authorize      validates client + redirect_uri, redirects to <app>/app/authorize-mcp
+POST /oauth/agent          (signed by the person) a fresh issued agent for this client
+     …the app grants that agent `read` on the drives picked, as the person…
+POST /oauth/approve        (signed by the person) returns the redirect_url carrying the code
+POST /oauth/token          code + PKCE verifier -> access (1 h) + refresh (90 d) tokens
+```
+
+- **The issued agent** is an Ed25519 identity derived from the node key, the
+  approving person, the client and a nonce. Reads need no private key, so
+  nobody holds it; the node can re-derive it if hosted writes (step 5) come,
+  without storing a key. The node names its Agent resource after the client,
+  so Connected apps shows a name rather than a key.
+- **Rights are the ACLs**, as for the local MCP. A token is only "who am I":
+  what it can read is what the agent is listed on. Revoking (Connected apps)
+  removes the agent from the drives; the token keeps working and sees nothing.
+- **Nothing signs as the person.** `/oauth/agent` and `/oauth/approve` are
+  ordinary signed requests (version 2, method and body covered). A bearer
+  token is accepted on `/mcp` only, never on `/commit` or the WebSocket.
+- **Redirects** are exact-match against the registered URIs (https, http on
+  localhost, or an app scheme), and an unregistered one is answered, never
+  redirected to.
+- Known limits: codes are single-use per process (a restart forgets spent
+  codes, which are valid for two minutes and PKCE-bound); refresh tokens are
+  not rotated server-side; the compact `#ref` form and `query`/`get_schema`
+  tools are not in the hosted tool list yet (step 3 makes them cheap).
 
 ## Allowed and forbidden
 

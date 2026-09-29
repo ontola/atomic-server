@@ -138,6 +138,7 @@ msgstr "Agentes de IA"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
@@ -2051,6 +2052,7 @@ msgstr "Editar valor"
 
 #: src/components/SignInButton.tsx
 #: src/helpers/managed/cloudSync.ts
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -2414,6 +2416,7 @@ msgstr "Permitir todas las escrituras realizadas por este complemento"
 msgid "Deny"
 msgstr "Denegar"
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
@@ -12484,10 +12487,14 @@ msgstr "No se pudo traer tu espacio de trabajo a tu cuenta. Inténtalo de nuevo 
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cambia a esa identidad. Todo sigue siendo editable y se respalda con tu cuenta."
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "An app"
 msgstr ""
 
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
@@ -12498,6 +12505,7 @@ msgstr ""
 msgid "This link is missing the app's key. Start again from the app that sent you here."
 msgstr ""
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "Sign in first, then open this link again."
 msgstr ""
@@ -12527,6 +12535,7 @@ msgstr ""
 msgid "What it can do"
 msgstr ""
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "Connecting"
 msgstr ""
@@ -12563,4 +12572,21 @@ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Connected apps"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "What it can read"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "It can read only. It cannot change or delete anything."
+msgstr ""
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "<0/> asks to read your Atomic data. After you allow it, you go back to {0}. It gets its own access, so your secret stays with you, and you can revoke it at any time."
 msgstr ""
