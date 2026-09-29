@@ -4,11 +4,20 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- A second tab no longer leaves the local database locked. When a tab takes
+  over the database from a tab that stopped answering (in Firefox, a throttled
+  background tab), the old tab now closes its worker and carries on through the
+  new one. It used to keep the file open, so the new tab failed with
+  "OPFS unavailable: … NoModificationAllowedError" and ran without its local
+  cache, and anything needing that cache, such as creating a drive, failed with
+  "Open this drive with local storage available before disconnecting". Firefox's
+  locked-file error now reads as one plain sentence, and those actions name the
+  database's own reason instead of a disconnect the reader never started.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
   use the secret and sign out.
-
 - Turning workspace sync off says what is actually in the way. All three of its
   preconditions used to answer with "Open this drive with local storage
   available before disconnecting", so someone signed out, or on a server this
