@@ -51,6 +51,7 @@ import {
 } from './viewTypeChoice';
 import { QuickAddDialog } from './QuickAddDialog';
 import type { QuickAddSpec } from './quickAdd';
+import { QuickFilterField } from './QuickFilterField';
 
 interface TableViewTabsProps {
   /** The class of this table's rows, which decides what apps can show it. */
@@ -87,6 +88,11 @@ interface TableViewTabsProps {
   quickAdd: QuickAddSpec | undefined;
   /** Persist the active view's create button (undefined removes it). */
   setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  /**
+   * The quick filter over the rows the view shows. Absent for views that show
+   * no rows (a dashboard, an app).
+   */
+  quickFilter?: { value: string; onChange: (value: string) => void };
 }
 
 /**
@@ -115,6 +121,7 @@ export function TableViewTabs({
   canWrite,
   quickAdd,
   setQuickAdd,
+  quickFilter,
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
   const tabs = views.length > 0 ? views : [undefined];
@@ -158,6 +165,12 @@ export function TableViewTabs({
         )}
       </Tabs>
       <Actions>
+        {quickFilter && (
+          <QuickFilterField
+            value={quickFilter.value}
+            onChange={quickFilter.onChange}
+          />
+        )}
         <FilterMenu columns={columns} derivedColumns={derivedColumns} />
         <ColumnsMenu
           allColumns={allColumns}

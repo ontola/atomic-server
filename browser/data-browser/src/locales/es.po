@@ -1867,6 +1867,7 @@ msgid "Copied error to clipboard"
 msgstr "Error copiado al portapapeles"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/QuickFilterField.tsx
 #: src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
@@ -10694,4 +10695,21 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows containing text"
+msgstr ""
+
+#. 0: quickFilterQuery
+#: src/chunks/TablePage/TableResource.tsx
+msgid "No rows show “{0}”."
 msgstr ""

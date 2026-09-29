@@ -27,6 +27,11 @@ interface TableRowProps {
   collection: Collection;
   index: number;
   columns: TableColumn[];
+  /**
+   * The row's subject when the caller already knows it (the quick filter's
+   * matches), so the row draws at once instead of resolving its index first.
+   */
+  subject?: string;
 }
 
 const WarningIcon = styled(FaTriangleExclamation)`
@@ -76,6 +81,7 @@ export function TableRow({
   collection,
   index,
   columns,
+  subject,
 }: TableRowProps): JSX.Element {
   const resource = useMemberFromCollection(collection, index);
 
@@ -102,9 +108,10 @@ export function TableRow({
   }
 
   const displaySubject =
-    lastKnownRef.current?.index === index
+    subject ??
+    (lastKnownRef.current?.index === index
       ? lastKnownRef.current.subject
-      : undefined;
+      : undefined);
 
   if (!displaySubject) {
     return (
