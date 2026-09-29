@@ -13,7 +13,7 @@
       "id": "fetch-file",
       "method": "GET",
       "url": "http://*/{*rest}",
-      "effect": "write"
+      "effect": "read"
     },
     {
       "id": "notify",
@@ -41,7 +41,8 @@
         "body": "json",
         "maxBodyBytes": 16384,
         "writes": ["received"],
-        "enqueues": ["fetch-file", "notify"]
+        "enqueues": ["notify"],
+        "fetches": ["fetch-file"]
       }
     ],
     "writeTargets": [

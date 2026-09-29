@@ -379,6 +379,73 @@
     ]
   },
   {
+    "name": "v3 fetches",
+    "file": "v3-fetches.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [
+        {
+          "id": "fetch-file",
+          "method": "GET",
+          "url": "https://*/{*rest}",
+          "effect": "read"
+        },
+        {
+          "id": "notify",
+          "method": "POST",
+          "url": "https://*/ocm/notifications",
+          "effect": "write"
+        }
+      ],
+      "http": {
+        "mount": "drive-prefix",
+        "routes": [
+          {
+            "id": "shares",
+            "path": "/ocm/shares",
+            "methods": [
+              "POST"
+            ],
+            "auth": "http-signature",
+            "body": "json",
+            "enqueues": [
+              "notify"
+            ],
+            "fetches": [
+              "fetch-file"
+            ]
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `POST /ocm/shares`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "delivery `notify`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "fetch `fetch-file`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
     "name": "v2 with an http block",
     "file": "v3-http-in-v2.json",
     "error": "the http block needs schemaVersion 3"
@@ -506,7 +573,7 @@
   {
     "name": "wildcard operation that no route enqueues",
     "file": "v3-wildcard-not-enqueued.json",
-    "error": "wildcard-host operations must be listed in a route's enqueues"
+    "error": "wildcard-host operations must be listed in a route's enqueues or fetches"
   },
   {
     "name": "well-known name off the allowlist",
@@ -557,5 +624,15 @@
     "name": "rels on an exclusive claim",
     "file": "v3-rels-not-webfinger.json",
     "error": "match.rels"
+  },
+  {
+    "name": "fetches naming a write operation",
+    "file": "v3-fetches-write-operation.json",
+    "error": "fetches must name declared GET operations with effect read"
+  },
+  {
+    "name": "fetches naming a POST operation",
+    "file": "v3-fetches-post.json",
+    "error": "fetches must name declared GET operations with effect read"
   }
 ]

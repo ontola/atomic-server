@@ -838,6 +838,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           serverExtension: world === 'server-extension',
           operations: operations.map(o => ({
             id: o.id,
+            method: o.method,
             effect: o.effect,
             url: o.url,
           })),

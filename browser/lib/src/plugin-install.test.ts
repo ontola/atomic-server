@@ -149,6 +149,67 @@ describe('readInstallationReview', () => {
     expect(grantsFor(review)).toEqual(['custom-view', 'storage']);
   });
 
+  it('says which hosts a route may download files from (fetches)', () => {
+    const review = readInstallationReview({
+      manifest: {
+        schemaVersion: 3,
+        operations: [
+          {
+            id: 'fetch-file',
+            method: 'GET',
+            url: 'https://*/{*rest}',
+            effect: 'read',
+          },
+          {
+            id: 'dav',
+            method: 'GET',
+            url: 'https://Dav.example/files/{*rest}',
+            effect: 'read',
+          },
+          {
+            id: 'unused',
+            method: 'GET',
+            url: 'https://other.example/x',
+            effect: 'read',
+          },
+          {
+            id: 'notify',
+            method: 'POST',
+            url: 'https://*/ocm',
+            effect: 'write',
+          },
+        ],
+        http: {
+          routes: [
+            {
+              id: 'a',
+              path: '/a',
+              methods: ['POST'],
+              enqueues: ['notify'],
+              fetches: ['fetch-file'],
+            },
+            {
+              id: 'b',
+              path: '/b',
+              methods: ['POST'],
+              fetches: ['dav', 'fetch-file'],
+            },
+          ],
+        },
+      },
+    });
+
+    expect(review.capabilities).toContainEqual({
+      kind: 'network',
+      title: 'May download files from any server, dav.example into your drive',
+    });
+    expect(
+      readInstallationReview({
+        manifest: { operations: [], http: { routes: [] } },
+      }).capabilities.filter(c => c.title.startsWith('May download')),
+    ).toEqual([]);
+  });
+
   it('tolerates a manifest that is not an object', () => {
     const review = readInstallationReview({
       runtime: 'atomic-js/1',

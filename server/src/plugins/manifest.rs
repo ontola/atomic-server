@@ -664,7 +664,7 @@ impl Manifest {
     /// Whether `blobs.fetch` of operation `id` may `GET` `url`: a declared
     /// `GET` operation whose URL is this origin, or a wildcard host with this
     /// scheme, and whose path matches. Which operations a route may use at
-    /// all is its `enqueues` list; the egress guard still checks the address.
+    /// all is its `fetches` list; the egress guard still checks the address.
     pub fn allows_fetch(&self, id: &str, url: &url::Url) -> bool {
         self.operations.iter().any(|operation| {
             if operation.id != id || !operation.method.eq_ignore_ascii_case("GET") {
@@ -724,7 +724,14 @@ impl Manifest {
             operations: self
                 .operations
                 .iter()
-                .map(|o| (o.id.as_str(), o.effect.as_str(), o.url.as_str()))
+                .map(|o| {
+                    (
+                        o.id.as_str(),
+                        o.method.as_str(),
+                        o.effect.as_str(),
+                        o.url.as_str(),
+                    )
+                })
                 .collect(),
         })
     }

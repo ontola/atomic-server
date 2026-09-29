@@ -1198,3 +1198,100 @@ async fn auth_atomic_with_auth_optional_answers_anonymous_requests_as_the_public
         );
     }
 }
+
+/// Tries `ctx.blobs.fetch` with the operation the request names.
+const FETCHER: &str = r#"
+    export function handle(ctx, request) {
+      try {
+        const answer = ctx.blobs.fetch({ operation: request.query.op, url: 'https://files.example/a' });
+        return { status: 200, body: JSON.stringify(answer) };
+      } catch (e) {
+        return { status: 200, headers: { 'content-type': 'text/plain' }, body: String(e) };
+      }
+    }"#;
+
+/// `ctx.blobs.fetch` only takes an operation the route lists in `fetches`:
+/// one it may deliver to (`enqueues`) is refused, even with method `GET`.
+#[actix_rt::test]
+async fn blobs_fetch_takes_only_the_routes_fetches() {
+    let f = fixture_with_args("route_blobs_fetch_list", &["--plugin-routes", "read-write"]).await;
+    let release = crate::plugins::test_fixture::js_release_with_source(
+        FETCHER,
+        json!({
+            "schemaVersion": 3,
+            "name": "fetcher",
+            "namespace": "acme",
+            "capabilities": [{"name": "storage", "reason": "a test"}],
+            "operations": [
+                {"id": "ping", "method": "GET", "url": "https://files.example/{*rest}", "effect": "write"},
+            ],
+            "http": {
+                "mount": "drive-prefix",
+                "routes": [{"id": "try", "path": "/try", "methods": ["GET"],
+                    "principal": "anonymous", "auth": "none", "enqueues": ["ping"]}],
+            },
+        }),
+    );
+    let installation = crate::plugins::test_fixture::install_release(&f, &release)
+        .await
+        .unwrap();
+    let app = app!(f.appstate);
+    let resp = actix_test::call_service(
+        &app,
+        get(&format!("/_routes/{}/try?op=ping", slug(&installation))).to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), 200);
+    let body = String::from_utf8(actix_test::read_body(resp).await.to_vec()).unwrap();
+    assert!(
+        body.contains("operation `ping` is not in this route's `fetches`"),
+        "{body}"
+    );
+}
+
+#[test]
+fn fetches_name_read_gets_and_need_read_write() {
+    use crate::plugin_routes::PluginRoutesLevel;
+    use crate::plugins::manifest_http::{Context, Http, FETCHES_UNDECLARED, WILDCARD_UNLISTED};
+    let http = |fetches: Json, enqueues: Json| -> Http {
+        serde_json::from_value(json!({
+            "mount": "drive-prefix",
+            "routes": [{"id": "r", "path": "/r", "methods": ["POST"],
+                "auth": "http-signature", "body": "json",
+                "fetches": fetches, "enqueues": enqueues}],
+        }))
+        .unwrap()
+    };
+    let context = Context {
+        server_extension: false,
+        operations: vec![
+            ("get", "GET", "read", "https://*/{*rest}"),
+            ("get-write", "GET", "write", "https://files.example/{*rest}"),
+            ("post", "POST", "read", "https://files.example/x"),
+        ],
+    };
+    let ok = http(json!(["get"]), json!(["get-write"]));
+    ok.validate(&context).unwrap();
+    let gate = ok.gate();
+    assert_eq!(gate.needed, PluginRoutesLevel::ReadWrite);
+    assert!(gate
+        .surfaces
+        .iter()
+        .any(|s| s.surface == "fetch `get`" && s.needs == PluginRoutesLevel::ReadWrite));
+    for bad in ["get-write", "post", "missing"] {
+        assert_eq!(
+            http(json!([bad, "get"]), json!([]))
+                .validate(&context)
+                .unwrap_err(),
+            FETCHES_UNDECLARED,
+            "{bad}"
+        );
+    }
+    // A wildcard GET listed nowhere.
+    assert_eq!(
+        http(json!([]), json!(["get-write"]))
+            .validate(&context)
+            .unwrap_err(),
+        WILDCARD_UNLISTED
+    );
+}

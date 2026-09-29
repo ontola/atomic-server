@@ -848,7 +848,7 @@ const FETCH_FORBIDDEN_HEADERS: [&str; 10] = [
 /// comes from data (an OCM share's WebDAV URI), so the rules are those of a
 /// delivery, not of an inline read:
 ///
-/// - `operation` is one of the route's `enqueues`, declared with method
+/// - `operation` is one of the route's `fetches`, declared with method
 ///   `GET`; its URL may have a wildcard host (`https://*/{*rest}`) and a
 ///   trailing `{*rest}` path.
 /// - Through the egress guard, the checked address pinned, no proxy, no
@@ -866,7 +866,9 @@ struct BlobFetch {
     db: Db,
     installation: String,
     manifest: Manifest,
-    enqueues: Vec<String>,
+    fetches: Vec<String>,
+    /// An `authOptional` request without credentials: it may not store.
+    anonymous: bool,
     at: i64,
 }
 
@@ -882,9 +884,12 @@ impl BlobFetch {
         }
         let request: Request =
             serde_json::from_str(request).map_err(|e| format!("not a blobs.fetch request: {e}"))?;
-        if !self.enqueues.contains(&request.operation) {
+        if self.anonymous {
+            return Err("an unauthenticated request cannot fetch into the blob store".into());
+        }
+        if !self.fetches.contains(&request.operation) {
             return Err(format!(
-                "operation `{}` is not in this route's `enqueues`",
+                "operation `{}` is not in this route's `fetches`",
                 request.operation
             ));
         }
@@ -1644,7 +1649,8 @@ async fn run(
             db: store.clone(),
             installation: installation.to_string(),
             manifest: loaded.manifest.clone(),
-            enqueues: route.enqueues.clone(),
+            fetches: route.fetches.clone(),
+            anonymous,
             at,
         }),
     };

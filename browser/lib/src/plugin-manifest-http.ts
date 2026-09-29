@@ -46,6 +46,11 @@ export interface DeclaredRoute {
   writes?: string[];
   /** Ids of declared write operations this route may schedule. */
   enqueues?: string[];
+  /**
+   * Ids of declared `GET` operations with `effect: read` whose answers the
+   * host may download into the blob store (`ctx.blobs.fetch`).
+   */
+  fetches?: string[];
   timeoutMs?: number;
 }
 
@@ -297,6 +302,13 @@ function overlaps(a: Segment[], b: Segment[]): boolean {
   return overlaps(a.slice(1), b.slice(1));
 }
 
+/** A route's `fetches` names something other than a declared read `GET`. */
+export const FETCHES_UNDECLARED =
+  'fetches must name declared GET operations with effect read';
+/** A wildcard-host operation no route may use. */
+export const WILDCARD_UNLISTED =
+  "wildcard-host operations must be listed in a route's enqueues or fetches";
+
 /** An operation whose destination comes from data: `https://*\/inbox`. */
 export function isWildcardHost(url: string): boolean {
   try {
@@ -308,7 +320,7 @@ export function isWildcardHost(url: string): boolean {
 
 export interface HttpContext {
   serverExtension: boolean;
-  operations: { id: string; effect: string; url: string }[];
+  operations: { id: string; method: string; effect: string; url: string }[];
 }
 
 /**
@@ -353,6 +365,7 @@ export function validateHttp(
       'body',
       'writes',
       'enqueues',
+      'fetches',
       'timeoutMs',
     ]);
 
@@ -396,6 +409,7 @@ export function validateHttp(
           : variant(route.body, ['json', 'text', 'blob'] as const),
       writes: texts(route.writes, 'route writes'),
       enqueues: texts(route.enqueues, 'route enqueues'),
+      fetches: texts(route.fetches, 'route fetches'),
       timeoutMs: number('timeoutMs'),
     };
   });
@@ -550,6 +564,18 @@ export function validateHttp(
       )
     )
       throw new Error('enqueues must name declared write operations');
+    if (
+      route.fetches.some(
+        id =>
+          !context.operations.some(
+            o =>
+              o.id === id &&
+              o.method.toUpperCase() === 'GET' &&
+              o.effect === 'read',
+          ),
+      )
+    )
+      throw new Error(FETCHES_UNDECLARED);
 
     for (const other of patterns) {
       const shared = route.methods.some(m => other.methods.includes(m));
@@ -623,11 +649,12 @@ export function validateHttp(
   for (const operation of context.operations) {
     if (
       isWildcardHost(operation.url) &&
-      !routes.some(r => r.enqueues.includes(operation.id))
+      !routes.some(
+        r =>
+          r.enqueues.includes(operation.id) || r.fetches.includes(operation.id),
+      )
     )
-      throw new Error(
-        "wildcard-host operations must be listed in a route's enqueues",
-      );
+      throw new Error(WILDCARD_UNLISTED);
   }
 
   const withReason = <T extends { reason?: string }>(item: T) => {
@@ -655,6 +682,7 @@ export function validateHttp(
             ...(r.body !== undefined ? { body: r.body } : {}),
             ...(r.writes.length ? { writes: r.writes } : {}),
             ...(r.enqueues.length ? { enqueues: r.enqueues } : {}),
+            ...(r.fetches.length ? { fetches: r.fetches } : {}),
             ...(r.timeoutMs !== undefined ? { timeoutMs: r.timeoutMs } : {}),
           })),
         }
@@ -683,6 +711,7 @@ const isReadOnlyRoute = (route: DeclaredRoute) =>
   (route.auth ?? 'none') === 'none' &&
   !route.writes?.length &&
   !route.enqueues?.length &&
+  !route.fetches?.length &&
   route.body === undefined;
 
 /** What a release needs from the node's plugin-routes gates (design 0.1). */
@@ -707,6 +736,10 @@ export function httpGate(http: DeclaredHttp | undefined): ReleaseGate {
     ...new Set((http?.routes ?? []).flatMap(r => r.enqueues ?? [])),
   ];
   for (const id of deliveries) add(`delivery \`${id}\``, 'read-write');
+  const fetches = [
+    ...new Set((http?.routes ?? []).flatMap(r => r.fetches ?? [])),
+  ];
+  for (const id of fetches) add(`fetch \`${id}\``, 'read-write');
   for (const listener of http?.listeners ?? [])
     add(`listener \`${listener.name}\``, 'read-write');
   for (const sidecar of http?.sidecars ?? [])

@@ -482,8 +482,8 @@ fn fetch_operations_may_end_in_a_rest_segment() {
     let manifest = super::manifest::Manifest::parse(json!({
         "schemaVersion": 3,
         "operations": [
-            { "id": "fetch", "method": "GET", "url": "https://*/{*rest}", "effect": "write" },
-            { "id": "dav", "method": "GET", "url": "https://dav.example/files/{*rest}", "effect": "write" },
+            { "id": "fetch", "method": "GET", "url": "https://*/{*rest}", "effect": "read" },
+            { "id": "dav", "method": "GET", "url": "https://dav.example/files/{*rest}", "effect": "read" },
             { "id": "post", "method": "POST", "url": "https://*/{*rest}", "effect": "write" }
         ],
         "http": {
@@ -491,7 +491,8 @@ fn fetch_operations_may_end_in_a_rest_segment() {
             "routes": [{
                 "id": "r", "path": "/r", "methods": ["POST"],
                 "principal": "anonymous", "auth": "none", "body": "json",
-                "enqueues": ["fetch", "dav", "post"]
+                "enqueues": ["post"],
+                "fetches": ["fetch", "dav"]
             }]
         }
     }))

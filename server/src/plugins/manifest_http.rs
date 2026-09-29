@@ -158,6 +158,11 @@ pub struct Route {
     /// Ids of declared write operations this route may schedule.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enqueues: Vec<String>,
+    /// Ids of declared `GET` operations with `effect: read` whose answers
+    /// this route may have the host download into the blob store
+    /// (`ctx.blobs.fetch`). A wildcard host is allowed, as in `enqueues`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fetches: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
 }
@@ -171,6 +176,7 @@ impl Route {
             && self.auth == Auth::None
             && self.writes.is_empty()
             && self.enqueues.is_empty()
+            && self.fetches.is_empty()
             && self.body.is_none()
     }
 }
@@ -194,6 +200,12 @@ pub struct WellKnownMatch {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rels: Vec<String>,
 }
+
+/// A route's `fetches` names something other than a declared read `GET`.
+pub const FETCHES_UNDECLARED: &str = "fetches must name declared GET operations with effect read";
+/// A wildcard-host operation no route may use.
+pub const WILDCARD_UNLISTED: &str =
+    "wildcard-host operations must be listed in a route's enqueues or fetches";
 
 /// Link relations one claim may list.
 pub const MAX_WELL_KNOWN_RELS: usize = 16;
@@ -357,7 +369,8 @@ pub fn is_wildcard_host(url: &str) -> bool {
 pub struct Context<'a> {
     pub server_extension: bool,
     /// `(id, effect, url)` of each declared operation.
-    pub operations: Vec<(&'a str, &'a str, &'a str)>,
+    /// `(id, method, effect, url)` of each declared operation.
+    pub operations: Vec<(&'a str, &'a str, &'a str, &'a str)>,
 }
 
 impl Http {
@@ -447,9 +460,16 @@ impl Http {
                 !context
                     .operations
                     .iter()
-                    .any(|(op, effect, _)| op == id && *effect == "write")
+                    .any(|(op, _, effect, _)| op == id && *effect == "write")
             }) {
                 return Err("enqueues must name declared write operations".into());
+            }
+            if route.fetches.iter().any(|id| {
+                !context.operations.iter().any(|(op, method, effect, _)| {
+                    op == id && method.eq_ignore_ascii_case("GET") && *effect == "read"
+                })
+            }) {
+                return Err(FETCHES_UNDECLARED.into());
             }
             // Keyed like the host's registry: (method, pattern).
             for (other, other_methods, other_segments) in &patterns {
@@ -538,14 +558,14 @@ impl Http {
             return Err("http.listeners requires world server-extension".into());
         }
 
-        for (id, _, url) in &context.operations {
+        for (id, _, _, url) in &context.operations {
             if is_wildcard_host(url)
                 && !self
                     .routes
                     .iter()
-                    .any(|r| r.enqueues.iter().any(|e| e == id))
+                    .any(|r| r.enqueues.iter().chain(&r.fetches).any(|e| e == id))
             {
-                return Err("wildcard-host operations must be listed in a route's enqueues".into());
+                return Err(WILDCARD_UNLISTED.into());
             }
         }
         Ok(())
@@ -587,6 +607,15 @@ impl Http {
         }
         for id in deliveries {
             add(format!("delivery `{id}`"), ReadWrite);
+        }
+        let mut fetches = Vec::new();
+        for id in self.routes.iter().flat_map(|r| &r.fetches) {
+            if !fetches.contains(&id) {
+                fetches.push(id);
+            }
+        }
+        for id in fetches {
+            add(format!("fetch `{id}`"), ReadWrite);
         }
         for listener in &self.listeners {
             add(format!("listener `{}`", listener.name), ReadWrite);

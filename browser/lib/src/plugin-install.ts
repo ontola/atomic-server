@@ -178,6 +178,17 @@ export function readInstallationReview(
     });
   }
 
+  // `http.routes[].fetches`: the host downloads files from these operations'
+  // hosts into the drive's blob store.
+  const downloads = downloadHosts(manifest);
+
+  if (downloads.length > 0) {
+    capabilities.push({
+      kind: 'network',
+      title: downloadsText(downloads),
+    });
+  }
+
   // `DeclaredCapability`: a bare name or `{ name, reason }`. These are what
   // `Installation.grants` records.
   for (const entry of asArray(manifest.capabilities)) {
@@ -220,6 +231,45 @@ export function readInstallationReview(
       ? { http: manifest.http as unknown as DeclaredHttp }
       : {}),
   };
+}
+
+/** What a wildcard host (`https://*\/...`) reads as in the review. */
+export const ANY_SERVER = 'any server';
+
+/**
+ * The install review line for a release whose routes have the host
+ * download files (`http.routes[].fetches`).
+ */
+export function downloadsText(hosts: string[]): string {
+  return `May download files from ${hosts.join(', ')} into your drive`;
+}
+
+/**
+ * The hosts of the operations a manifest's routes list in `fetches`, in
+ * declaration order, without repeats. A wildcard host is {@link ANY_SERVER}.
+ */
+export function downloadHosts(manifest: Record<string, unknown>): string[] {
+  const routes = asArray(asObject(manifest.http)?.routes);
+  const ids = new Set(
+    routes.flatMap(route =>
+      asArray(asObject(route)?.fetches).flatMap(id => asString(id) ?? []),
+    ),
+  );
+  const hosts: string[] = [];
+
+  for (const entry of asArray(manifest.operations)) {
+    const operation = asObject(entry);
+    const id = asString(operation?.id);
+    const url = asString(operation?.url);
+    if (!id || !url || !ids.has(id)) continue;
+    // `new URL` refuses a `*` host, so the authority is read by hand.
+    const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(url)?.[1];
+    if (!authority) continue;
+    const host = authority === '*' ? ANY_SERVER : authority.toLowerCase();
+    if (!hosts.includes(host)) hosts.push(host);
+  }
+
+  return hosts;
 }
 
 /** The grant names an installer approves when accepting the whole review. */
