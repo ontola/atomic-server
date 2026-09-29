@@ -134,6 +134,7 @@ async fn serve(
         .unwrap_or(Dispatch::Answer(Answer::NotFound));
     let mut response = match dispatched {
         Dispatch::Run(target) => route_exec::execute(&state, &req, payload, &target).await,
+        Dispatch::RunAll(targets) => webfinger_merged(&state, &req, &targets).await,
         Dispatch::HostMeta { json } => host_meta(&req, json),
         Dispatch::MissingResource => problem_response(
             actix_web::HttpResponse::BadRequest(),
@@ -305,6 +306,106 @@ fn problem_response(
         .content_type("application/problem+json")
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .body(body.to_string())
+}
+
+/// A WebFinger request more than one installation answers (shared claims
+/// with disjoint `rels`): each runs as if it were the only one, and the host
+/// merges their `200` JRDs (RFC 7033 section 4.4): the first `subject`,
+/// the union of `aliases`, every `links` entry in claim order, and
+/// `properties` with the first value winning. Nothing any of them answered
+/// otherwise is shown; when none answered `200`, `404`.
+async fn webfinger_merged(
+    state: &web::Data<AppState>,
+    req: &HttpRequest,
+    targets: &[crate::plugins::route_registry::Target],
+) -> HttpResponse {
+    use actix_web::FromRequest;
+    let mut answers = Vec::new();
+    for target in targets {
+        // A GET or HEAD: no body to hand on.
+        let Ok(payload) = web::Payload::extract(req).await else {
+            continue;
+        };
+        let response = route_exec::execute(state, req, payload, target).await;
+        if response.status() != actix_web::http::StatusCode::OK {
+            continue;
+        }
+        if let Ok(bytes) = actix_web::body::to_bytes(response.into_body()).await {
+            answers.push(bytes);
+        }
+    }
+    // A HEAD answer has no body to merge; its status and headers are all
+    // HEAD returns.
+    let head = req.method() == actix_web::http::Method::HEAD;
+    let merged = if head && !answers.is_empty() {
+        Some(serde_json::json!({}))
+    } else {
+        merge_jrd(answers.iter().map(|b| b.as_ref()))
+    };
+    let Some(merged) = merged else {
+        return crate::routes::not_found_problem(req.path());
+    };
+    let mut response = HttpResponse::Ok()
+        .content_type("application/jrd+json")
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .insert_header((header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
+        .body(if head {
+            String::new()
+        } else {
+            merged.to_string()
+        });
+    response
+        .extensions_mut()
+        .insert(RouteCors::declared(Cors::AnyOriginNoCredentials));
+    response
+}
+
+/// Merges WebFinger JRDs (see [`webfinger_merged`]); `None` when none of
+/// `answers` is a JSON object.
+pub fn merge_jrd<'a>(answers: impl IntoIterator<Item = &'a [u8]>) -> Option<serde_json::Value> {
+    use serde_json::{Map, Value};
+    let mut merged: Option<Map<String, Value>> = None;
+    for answer in answers {
+        let Ok(Value::Object(jrd)) = serde_json::from_slice::<Value>(answer) else {
+            continue;
+        };
+        let Some(out) = merged.as_mut() else {
+            merged = Some(jrd);
+            continue;
+        };
+        if !out.contains_key("subject") {
+            if let Some(subject) = jrd.get("subject") {
+                out.insert("subject".into(), subject.clone());
+            }
+        }
+        for key in ["aliases", "links"] {
+            let Some(Value::Array(more)) = jrd.get(key) else {
+                continue;
+            };
+            let entry = out
+                .entry(key.to_string())
+                .or_insert_with(|| Value::Array(Vec::new()));
+            if let Value::Array(list) = entry {
+                for item in more {
+                    // Aliases are a set; links are kept as each gave them.
+                    if key == "links" || !list.contains(item) {
+                        list.push(item.clone());
+                    }
+                }
+            }
+        }
+        if let Some(Value::Object(more)) = jrd.get("properties") {
+            let entry = out
+                .entry("properties".to_string())
+                .or_insert_with(|| Value::Object(Map::new()));
+            if let Value::Object(props) = entry {
+                for (k, v) in more {
+                    props.entry(k.clone()).or_insert_with(|| v.clone());
+                }
+            }
+        }
+    }
+    merged.map(Value::Object)
 }
 
 /// `/.well-known/host-meta` (RFC 6415), generated from the host's
@@ -952,6 +1053,148 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains(id(&alice)), "{err}");
+    }
+
+    /// Answers WebFinger with one link of the relation it is named after.
+    const JRD: &str = r#"
+        export function handle(ctx, request) {
+          const rel = ctx.trigger.route === 'storage'
+            ? 'http://tools.ietf.org/id/draft-dejong-remotestorage'
+            : 'self';
+          return {
+            status: 200,
+            headers: { 'content-type': 'application/jrd+json' },
+            body: JSON.stringify({
+              subject: request.query.resource,
+              aliases: ['https://alice.example/' + ctx.trigger.route],
+              properties: { 'https://example.org/by': ctx.trigger.route },
+              links: [{ rel, href: 'https://alice.example/' + ctx.trigger.route }],
+            }),
+          };
+        }"#;
+
+    async fn install_rels(f: &Fixture, name: &str, rels: &[&str]) -> Result<String, String> {
+        let release = js_release_with_source(
+            JRD,
+            json!({
+                "schemaVersion": 3,
+                "name": name,
+                "namespace": "acme",
+                "capabilities": [{"name": "storage", "reason": "keeps a cursor"}],
+                "http": {
+                    "mount": "drive-host",
+                    "routes": [{"id": name, "path": format!("/{name}/webfinger"), "methods": ["GET", "HEAD"]}],
+                    "wellKnown": [{"name": "webfinger", "kind": "shared",
+                        "match": {"resourcePrefix": "acct:", "rels": rels}, "route": name}],
+                },
+            }),
+        );
+        install_release(f, &release).await
+    }
+
+    #[actix_rt::test]
+    async fn claims_with_disjoint_rels_share_an_account_and_their_answers_are_merged() {
+        const STORAGE: &str = "http://tools.ietf.org/id/draft-dejong-remotestorage";
+        let f = fixture_with_args("wk_rels", &ROUTES).await;
+        let actor = install_rels(&f, "actor", &["self"]).await.unwrap();
+        install_rels(&f, "storage", &[STORAGE]).await.unwrap();
+        bind(&f, ALICE);
+        let app = app!(f.appstate);
+        let finger = |query: &str| {
+            on!(
+                ALICE,
+                &format!("/.well-known/webfinger?resource=acct%3Aalice%40alice.example{query}")
+            )
+        };
+
+        // Without `rel`: both answer, merged in claim order.
+        let resp = test::call_service(&app, finger("")).await;
+        assert_eq!(resp.status(), 200);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/jrd+json"
+        );
+        assert!(
+            resp.response()
+                .extensions()
+                .get::<RouteCors>()
+                .is_some_and(|c| c.0.iter().any(|(name, value)| {
+                    name == header::ACCESS_CONTROL_ALLOW_ORIGIN && value == "*"
+                })),
+            "WebFinger is readable from any origin"
+        );
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["subject"], "acct:alice@alice.example");
+        let mut rels: Vec<&str> = body["links"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l["rel"].as_str().unwrap())
+            .collect();
+        rels.sort();
+        assert_eq!(rels, [STORAGE, "self"]);
+        assert_eq!(body["aliases"].as_array().unwrap().len(), 2);
+        assert_eq!(body["properties"].as_object().unwrap().len(), 1);
+
+        // With a `rel`: only the claim that answers for it runs, as usual.
+        let resp = test::call_service(&app, finger("&rel=self")).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["links"][0]["rel"], "self");
+        assert_eq!(body["links"].as_array().unwrap().len(), 1);
+        let resp = test::call_service(
+            &app,
+            finger("&rel=http%3A%2F%2Ftools.ietf.org%2Fid%2Fdraft-dejong-remotestorage"),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["links"][0]["rel"], STORAGE);
+
+        // HEAD of a merged answer: its status and headers, no body.
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::default()
+                .method(actix_web::http::Method::HEAD)
+                .uri("/.well-known/webfinger?resource=acct%3Aalice%40alice.example")
+                .insert_header((header::HOST, ALICE))
+                .insert_header((header::ACCEPT, "application/json"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 200);
+        assert!(test::read_body(resp).await.is_empty());
+
+        // A third claim whose rels overlap one of theirs is refused.
+        let err = install_rels(&f, "again", &["self", "other"])
+            .await
+            .unwrap_err();
+        assert!(
+            err.contains("webfinger") && err.contains(id(&actor)),
+            "{err}"
+        );
+        // As is one that lists no rels (it would answer every relation).
+        let err = install_webfinger(&f, "every", "acct:").await.unwrap_err();
+        assert!(err.contains("webfinger"), "{err}");
+    }
+
+    #[actix_rt::test]
+    async fn merged_jrds_keep_the_first_subject_and_every_link() {
+        let a = br#"{"subject":"acct:a@x","aliases":["https://x/a"],"properties":{"p":"1"},"links":[{"rel":"self","href":"https://x/a"}]}"#;
+        let b = br#"{"subject":"acct:other@x","aliases":["https://x/a","https://x/b"],"properties":{"p":"2","q":"3"},"links":[{"rel":"self","href":"https://x/b"}]}"#;
+        let merged = merge_jrd([&a[..], &b"not json"[..], &b[..]]).unwrap();
+        assert_eq!(
+            merged,
+            serde_json::json!({
+                "subject": "acct:a@x",
+                "aliases": ["https://x/a", "https://x/b"],
+                "properties": {"p": "1", "q": "3"},
+                "links": [
+                    {"rel": "self", "href": "https://x/a"},
+                    {"rel": "self", "href": "https://x/b"}
+                ]
+            })
+        );
+        assert_eq!(merge_jrd([&b"[]"[..]]), None);
     }
 
     #[actix_rt::test]

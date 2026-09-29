@@ -130,6 +130,8 @@ pub struct Claim {
     pub host: Host,
     /// `match.resourcePrefix` of a shared (`webfinger`) claim.
     pub prefix: Option<String>,
+    /// `match.rels`: the link relations it answers for; empty for all.
+    pub rels: Vec<String>,
     /// The route that answers it, and its methods.
     pub route: String,
     pub methods: Vec<String>,
@@ -435,6 +437,11 @@ pub fn host_name(host: &str) -> String {
     name.trim_end_matches('.').to_ascii_lowercase()
 }
 
+/// Whether two claims' `rels` are both listed and share none.
+fn disjoint_rels(a: &[String], b: &[String]) -> bool {
+    !a.is_empty() && !b.is_empty() && !a.iter().any(|rel| b.contains(rel))
+}
+
 /// The in-memory table. Keyed by installation subject.
 #[derive(Default)]
 struct Table {
@@ -454,10 +461,13 @@ impl Table {
                         continue;
                     }
                     // Shared names clash when one prefix could match what
-                    // the other does; exclusive names always.
+                    // the other does, unless both say which link relations
+                    // they answer for and none is in both (their answers are
+                    // merged); exclusive names always.
                     let clash = match (&ours.prefix, &theirs.prefix) {
                         (Some(a), Some(b)) => {
-                            a.starts_with(b.as_str()) || b.starts_with(a.as_str())
+                            (a.starts_with(b.as_str()) || b.starts_with(a.as_str()))
+                                && !disjoint_rels(&ours.rels, &theirs.rels)
                         }
                         _ => true,
                     };
@@ -567,6 +577,9 @@ pub struct Target {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Dispatch {
     Run(Target),
+    /// `/.well-known/webfinger` that more than one claim answers (their
+    /// `rels` are disjoint): run each, and merge their JRDs.
+    RunAll(Vec<Target>),
     /// `/.well-known/host-meta` (XRD) or `host-meta.json` (JRD), generated
     /// from the host's `webfinger` claims.
     HostMeta {
@@ -754,6 +767,11 @@ impl RouteRegistry {
                     name: name.into(),
                     host,
                     prefix: claim.matches.as_ref().map(|m| m.resource_prefix.clone()),
+                    rels: claim
+                        .matches
+                        .as_ref()
+                        .map(|m| m.rels.clone())
+                        .unwrap_or_default(),
                     route: claim.route.clone(),
                     methods: methods.clone(),
                 });
@@ -1077,20 +1095,75 @@ impl RouteRegistry {
                 return None;
             }
             // `webfinger`: the `resource` parameter picks the installation.
-            // Nobody else sees the query.
-            let Some(resource) = url::form_urlencoded::parse(request.query.as_bytes())
+            // Nobody else sees the query. Claims for the same resource with
+            // disjoint `rels` are narrowed by the request's `rel`s, and
+            // answered together when more than one is left.
+            let params: Vec<(String, String)> =
+                url::form_urlencoded::parse(request.query.as_bytes())
+                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                    .collect();
+            let Some(resource) = params
+                .iter()
                 .find(|(k, _)| k == "resource")
-                .map(|(_, v)| v.into_owned())
+                .map(|(_, v)| v.clone())
             else {
                 return Some(Dispatch::MissingResource);
             };
-            match named
+            let matching: Vec<&(&Registered, &Claim)> = named
                 .iter()
-                .find(|(_, c)| c.prefix.as_deref().is_some_and(|p| resource.starts_with(p)))
-            {
-                Some(found) => **found,
-                None => return Some(Dispatch::Answer(Answer::NotFound)),
+                .copied()
+                .filter(|(_, c)| c.prefix.as_deref().is_some_and(|p| resource.starts_with(p)))
+                .collect();
+            let wanted: Vec<&str> = params
+                .iter()
+                .filter(|(k, _)| k == "rel")
+                .map(|(_, v)| v.as_str())
+                .collect();
+            let asked: Vec<&(&Registered, &Claim)> = matching
+                .iter()
+                .copied()
+                .filter(|(_, c)| {
+                    wanted.is_empty()
+                        || c.rels.is_empty()
+                        || c.rels.iter().any(|r| wanted.contains(&r.as_str()))
+                })
+                .collect();
+            // Nobody answers for the requested relations: the first claim
+            // answers the resource, with no links of those relations.
+            let chosen = if asked.is_empty() {
+                matching.into_iter().take(1).collect()
+            } else {
+                asked
+            };
+            if chosen.is_empty() {
+                return Some(Dispatch::Answer(Answer::NotFound));
             }
+            if chosen.len() > 1 {
+                if !matches!(request.method, "GET" | "HEAD") {
+                    return Some(Dispatch::Answer(Answer::MethodNotAllowed {
+                        allow: vec!["GET".into(), "HEAD".into()],
+                    }));
+                }
+                let mount = match host {
+                    Host::Named(_) => Mount::InstallationOrigin,
+                    Host::Drive(_) => Mount::DriveHost,
+                    Host::Api => Mount::DrivePrefix,
+                };
+                return Some(Dispatch::RunAll(
+                    chosen
+                        .into_iter()
+                        .filter(|(_, c)| c.methods.iter().any(|m| m == request.method))
+                        .map(|(registered, claim)| Target {
+                            installation: registered.subject.clone(),
+                            mount,
+                            path: request.path.to_string(),
+                            route: claim.route.clone(),
+                            well_known: Some(name.to_string()),
+                        })
+                        .collect(),
+                ));
+            }
+            *chosen[0]
         } else {
             **named.first()?
         };

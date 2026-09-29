@@ -831,3 +831,119 @@ async fn keys_and_tokens_are_made_on_activation_and_erased_on_revocation() {
         "already erased"
     );
 }
+
+#[actix_rt::test]
+async fn a_signers_actor_document_gives_the_caller_its_inbox() {
+    let i = setup("route_crypto_actor").await;
+    let app = app!(i.f.appstate);
+    let bob = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+    let mut document: Json = serde_json::from_slice(&bob_document(&bob)).unwrap();
+    document["inbox"] = json!(format!("{BOB}/inbox"));
+    document["endpoints"] = json!({"sharedInbox": "https://remote.example/inbox"});
+    i.documents
+        .docs
+        .lock()
+        .unwrap()
+        .insert(BOB.into(), document.to_string().into_bytes());
+    let path = format!("{}/signed-inbox", i.prefix);
+    let body = r#"{"name":"with inbox","type":"Follow"}"#;
+    let now = std::time::SystemTime::now();
+    for rfc in [false, true] {
+        // The second request is answered from the key cache: same caller.
+        let resp = actix_test::call_service(
+            &app,
+            post(&path, body, &sign_as(&bob, rfc, &path, body, now)).to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 202);
+        assert_eq!(
+            json_of(resp).await["caller"]["actor"],
+            json!({
+                "id": BOB,
+                "inbox": format!("{BOB}/inbox"),
+                "sharedInbox": "https://remote.example/inbox"
+            })
+        );
+    }
+    assert_eq!(i.documents.fetches.load(Ordering::SeqCst), 1);
+}
+
+/// Answers with the caller the host verified.
+const WHOAMI: &str = r#"
+    export function handle(ctx, request) {
+      return {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ caller: request.caller, body: request.body }),
+      };
+    }"#;
+
+#[actix_rt::test]
+async fn auth_atomic_takes_a_fresh_version_2_signature_over_method_url_and_body() {
+    let f = fixture_with_args("route_auth_atomic", &["--plugin-routes", "read-write"]).await;
+    let release = crate::plugins::test_fixture::js_release_with_source(
+        WHOAMI,
+        json!({
+            "schemaVersion": 3,
+            "name": "whoami",
+            "namespace": "acme",
+            "capabilities": [{"name": "storage", "reason": "a test"}],
+            "http": {
+                "mount": "drive-prefix",
+                "routes": [{"id": "whoami", "path": "/whoami", "methods": ["POST"],
+                    "principal": "installation", "auth": "atomic", "body": "json"}],
+            },
+        }),
+    );
+    let installation = crate::plugins::test_fixture::install_release(&f, &release)
+        .await
+        .unwrap();
+    let app = app!(f.appstate);
+    let path = format!("/_routes/{}/whoami", slug(&installation));
+    let url = format!("http://localhost{path}");
+    let agent = f.appstate.store.get_default_agent().unwrap();
+    let body = r#"{"note":"hi"}"#;
+    let send = |headers: Vec<(String, String)>, sent: &str| {
+        let mut request = actix_test::TestRequest::post()
+            .uri(&path)
+            .insert_header((header::HOST, "localhost"))
+            .insert_header((header::CONTENT_TYPE, "application/json"))
+            .set_payload(sent.to_string());
+        for (name, value) in headers {
+            request = request.insert_header((name, value));
+        }
+        request.to_request()
+    };
+
+    let v2 =
+        atomic_lib::client::get_authentication_headers_v2("POST", &url, body.as_bytes(), &agent)
+            .unwrap();
+    let resp = actix_test::call_service(&app, send(v2.clone(), body)).await;
+    assert_eq!(resp.status(), 200);
+    let answer = json_of(resp).await;
+    assert_eq!(answer["caller"], json!({ "agent": agent.subject }));
+    assert_eq!(answer["body"], body);
+
+    // Refused before the handler runs: the same proof again, a proof over
+    // another body, a version 1 proof, and none.
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    let other = atomic_lib::client::get_authentication_headers_v2(
+        "POST",
+        &url,
+        br#"{"note":"other"}"#,
+        &agent,
+    )
+    .unwrap();
+    let v1 = atomic_lib::client::get_authentication_headers(&url, &agent).unwrap();
+    for (name, headers) in [
+        ("a replay", v2),
+        ("another body", other),
+        ("version 1", v1),
+        ("unsigned", vec![]),
+    ] {
+        let resp = actix_test::call_service(&app, send(headers, body)).await;
+        assert_eq!(resp.status(), 401, "{name}");
+        let problem = json_of(resp).await;
+        assert_eq!(problem["type"], "route-unauthorized", "{name}");
+    }
+}

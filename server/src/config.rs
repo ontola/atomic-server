@@ -519,10 +519,38 @@ pub struct Config {
     /// The plugin-routes gates, resolved once at boot. See
     /// [`crate::plugin_routes`].
     pub plugin_routes: crate::plugin_routes::PluginRoutesConfig,
-    /// A test seam, not an option: lets plugin deliveries reach loopback
-    /// addresses, which the egress guard otherwise refuses, so tests can
-    /// deliver to a stub on this machine. No flag or env var sets it.
+    /// A test seam, not an option: lets plugin deliveries and route key
+    /// fetches reach loopback addresses, which the egress guard otherwise
+    /// refuses, so tests can talk to a stub on this machine. No flag sets
+    /// it; only a debug build (the `e2e` profile keeps debug assertions)
+    /// reads `ATOMIC_PLUGIN_E2E_LOOPBACK_PEERS=true` ([`E2E_LOOPBACK_PEERS`]).
     pub plugin_delivery_loopback: bool,
+    /// A test seam like [`Self::plugin_delivery_loopback`]: a PEM CA
+    /// certificate that is the only root trusted for a loopback destination,
+    /// so an e2e peer can serve HTTPS with a certificate it issued. Read from
+    /// `ATOMIC_PLUGIN_E2E_PEER_CA` in debug builds only, and only together
+    /// with the loopback seam. The file is read at each connection, so a
+    /// test can write it after the server started.
+    pub plugin_e2e_peer_ca: Option<std::path::PathBuf>,
+}
+
+/// The environment variable that turns [`Config::plugin_delivery_loopback`]
+/// on in a debug build.
+pub const E2E_LOOPBACK_PEERS: &str = "ATOMIC_PLUGIN_E2E_LOOPBACK_PEERS";
+/// The environment variable naming [`Config::plugin_e2e_peer_ca`].
+pub const E2E_PEER_CA: &str = "ATOMIC_PLUGIN_E2E_PEER_CA";
+
+/// The loopback test seams from the environment: `(loopback, peer CA)`.
+/// Always off in a release build, whatever the environment says.
+pub fn e2e_peer_seams(var: impl Fn(&str) -> Option<String>) -> (bool, Option<std::path::PathBuf>) {
+    if !cfg!(debug_assertions) {
+        return (false, None);
+    }
+    let loopback = var(E2E_LOOPBACK_PEERS).is_some_and(|v| v == "true");
+    let ca = var(E2E_PEER_CA)
+        .filter(|path| loopback && !path.is_empty())
+        .map(std::path::PathBuf::from);
+    (loopback, ca)
 }
 
 impl Config {
@@ -734,9 +762,17 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         min_reclaimable_fraction: f64::from(opts.auto_compact_min_reclaimable_percent) / 100.0,
     };
 
+    let (plugin_delivery_loopback, plugin_e2e_peer_ca) =
+        e2e_peer_seams(|name| std::env::var(name).ok());
+    if plugin_delivery_loopback {
+        tracing::warn!(
+            "{E2E_LOOPBACK_PEERS} is set: plugin deliveries and route key fetches may reach loopback (a debug-build test seam)"
+        );
+    }
     let mut config = Config {
         plugin_routes: Default::default(),
-        plugin_delivery_loopback: false,
+        plugin_delivery_loopback,
+        plugin_e2e_peer_ca,
         host_mode,
         compaction,
         initialize,
@@ -786,6 +822,35 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_e2e_peer_seams_are_read_only_together_and_only_when_asked() {
+        use super::{e2e_peer_seams, E2E_LOOPBACK_PEERS, E2E_PEER_CA};
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(k, _)| *k == name)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        // Tests are debug builds; a release build returns (false, None).
+        assert_eq!(e2e_peer_seams(env(&[])), (false, None));
+        assert_eq!(
+            e2e_peer_seams(env(&[
+                (E2E_LOOPBACK_PEERS, "true"),
+                (E2E_PEER_CA, "ca.pem")
+            ])),
+            (true, Some("ca.pem".into()))
+        );
+        assert_eq!(
+            e2e_peer_seams(env(&[(E2E_LOOPBACK_PEERS, "1"), (E2E_PEER_CA, "ca.pem")])),
+            (false, None)
+        );
+        assert_eq!(
+            e2e_peer_seams(env(&[(E2E_LOOPBACK_PEERS, "true")])),
+            (true, None)
+        );
+    }
     use super::*;
     use atomic_lib::db::compaction::MIB;
 

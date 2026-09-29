@@ -74,8 +74,19 @@ pub async fn require_v2<B: MessageBody + 'static>(
 }
 
 async fn verify(req: &mut ServiceRequest, appstate: &AppState) -> AtomicServerResult<ForAgent> {
-    let asks_for_v2 = req
-        .headers()
+    check_v2_headers(req.headers())?;
+    let body = read_body(req).await?;
+    req.set_payload(Payload::from(body.clone()));
+
+    let origin = crate::context::RequestContext::new(req.request(), appstate).origin;
+    let url = format!("{origin}{}", req.uri());
+    verify_v2_request(appstate, req.headers(), &url, req.method().as_str(), &body).await
+}
+
+/// Whether the headers ask for a version 2 signature over an unencoded
+/// body; checked before the body is read.
+fn check_v2_headers(headers: &header::HeaderMap) -> AtomicServerResult<()> {
+    let asks_for_v2 = headers
         .get(SIGNATURE_VERSION_HEADER)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.trim() == atomic_lib::authentication::SIGNATURE_VERSION_2);
@@ -84,8 +95,7 @@ async fn verify(req: &mut ServiceRequest, appstate: &AppState) -> AtomicServerRe
     }
     // The signature covers the bytes on the wire, and the handler parses what
     // it is given back; a compressed body would be decompressed in between.
-    if req
-        .headers()
+    if headers
         .get(header::CONTENT_ENCODING)
         .is_some_and(|v| v.as_bytes() != b"identity")
     {
@@ -93,17 +103,23 @@ async fn verify(req: &mut ServiceRequest, appstate: &AppState) -> AtomicServerRe
             "A request with a version 2 signature is sent without Content-Encoding",
         ));
     }
+    Ok(())
+}
 
-    let body = read_body(req).await?;
-    req.set_payload(Payload::from(body.clone()));
-
-    let origin = crate::context::RequestContext::new(req.request(), appstate).origin;
-    let url = format!("{origin}{}", req.uri());
-    let signed = SignedRequest {
-        method: req.method().as_str(),
-        body: &body,
-    };
-    let auth = crate::helpers::get_auth_headers_for_request(req.headers(), &url, Some(signed))
+/// The agent a version 2 request signature over `method`, `url` (the full
+/// URL the request was sent to) and `body` proves, if it is fresh and has
+/// not been used before: what [`require_v2`] checks, for a caller that has
+/// already read the body. Plugin routes with `auth: atomic` use it.
+pub async fn verify_v2_request(
+    appstate: &AppState,
+    headers: &header::HeaderMap,
+    url: &str,
+    method: &str,
+    body: &[u8],
+) -> AtomicServerResult<ForAgent> {
+    check_v2_headers(headers)?;
+    let signed = SignedRequest { method, body };
+    let auth = crate::helpers::get_auth_headers_for_request(headers, url, Some(signed))
         .map_err(as_unauthorized)?
         .ok_or_else(|| AtomicServerError::from(AtomicError::unauthorized(REQUIRES_V2.into())))?;
     let signature = atomic_lib::agents::decode_base64(&auth.signature)

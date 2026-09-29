@@ -833,34 +833,70 @@ pub struct EgressTransport {
     /// A test seam ([`crate::config::Config::plugin_delivery_loopback`]):
     /// loopback addresses pass. Every other refusal stays.
     pub loopback: bool,
+    /// A test seam ([`crate::config::Config::plugin_e2e_peer_ca`]): the
+    /// only root trusted for a destination on loopback.
+    pub peer_ca: Option<std::path::PathBuf>,
 }
 
 impl EgressTransport {
     async fn addresses(&self, url: &url::Url) -> Result<Vec<std::net::SocketAddr>, String> {
-        if !self.loopback {
-            return egress::checked_addresses(url).await;
-        }
-        let host = url.host_str().ok_or("URL has no host")?;
-        let port = url.port_or_known_default().ok_or("URL has no port")?;
-        let addresses: Vec<_> = tokio::net::lookup_host((host.trim_matches(['[', ']']), port))
-            .await
-            .map_err(|e| format!("could not resolve {host}: {e}"))?
-            .collect();
-        if addresses.is_empty() {
-            return Err("host resolved to no addresses".into());
-        }
-        for address in &addresses {
-            match egress::refuse_address(address.ip()) {
-                None | Some(egress::Refusal::Loopback) => {}
-                Some(refusal) => {
-                    return Err(format!(
-                        "{host} resolves to a refused address ({refusal:?})"
-                    ))
-                }
+        guarded_addresses(url, self.loopback).await
+    }
+}
+
+/// The addresses a delivery or a key fetch may connect to: the egress guard's
+/// ([`egress::checked_addresses`]), or with the loopback test seam
+/// ([`crate::config::Config::plugin_delivery_loopback`]) loopback ones too.
+/// Every other refusal stays either way.
+pub(crate) async fn guarded_addresses(
+    url: &url::Url,
+    loopback: bool,
+) -> Result<Vec<std::net::SocketAddr>, String> {
+    if !loopback {
+        return egress::checked_addresses(url).await;
+    }
+    let host = url.host_str().ok_or("URL has no host")?;
+    let port = url.port_or_known_default().ok_or("URL has no port")?;
+    let addresses: Vec<_> = tokio::net::lookup_host((host.trim_matches(['[', ']']), port))
+        .await
+        .map_err(|e| format!("could not resolve {host}: {e}"))?
+        .collect();
+    if addresses.is_empty() {
+        return Err("host resolved to no addresses".into());
+    }
+    for address in &addresses {
+        match egress::refuse_address(address.ip()) {
+            None | Some(egress::Refusal::Loopback) => {}
+            Some(refusal) => {
+                return Err(format!(
+                    "{host} resolves to a refused address ({refusal:?})"
+                ))
             }
         }
-        Ok(addresses)
     }
+    Ok(addresses)
+}
+
+/// The roots to verify a destination's certificate against: the platform's,
+/// unless the peer-CA test seam is set and every address is loopback, when
+/// only that CA is trusted (the e2e peer's certificate is issued by it).
+/// Verification, hostname included, stays on either way.
+pub(crate) fn with_seam_roots(
+    builder: reqwest::ClientBuilder,
+    peer_ca: Option<&std::path::Path>,
+    addresses: &[std::net::SocketAddr],
+) -> Result<reqwest::ClientBuilder, String> {
+    let Some(path) = peer_ca else {
+        return Ok(builder);
+    };
+    if addresses.is_empty() || !addresses.iter().all(|a| a.ip().is_loopback()) {
+        return Ok(builder);
+    }
+    let pem = std::fs::read(path)
+        .map_err(|e| format!("could not read the test peer CA {}: {e}", path.display()))?;
+    let ca = reqwest::Certificate::from_pem(&pem)
+        .map_err(|e| format!("the test peer CA is not a PEM certificate: {e}"))?;
+    Ok(builder.tls_certs_only([ca]))
 }
 
 fn retry_after_ms(value: Option<&reqwest::header::HeaderValue>) -> Option<i64> {
@@ -900,13 +936,16 @@ impl Transport for EgressTransport {
             }
             Err(e) => return refused(format!("the egress guard refused it: {e}")),
         };
-        let client = match reqwest::Client::builder()
+        let builder = reqwest::Client::builder()
             .no_proxy()
             .resolve_to_addrs(&host, &addresses)
             .timeout(std::time::Duration::from_secs(SEND_TIMEOUT_SECS))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-        {
+            .redirect(reqwest::redirect::Policy::none());
+        let builder = match with_seam_roots(builder, self.peer_ca.as_deref(), &addresses) {
+            Ok(builder) => builder,
+            Err(e) => return refused(e),
+        };
+        let client = match builder.build() {
             Ok(client) => client,
             Err(e) => return refused(format!("could not build an HTTP client: {e}")),
         };
@@ -1588,4 +1627,27 @@ pub fn spawn(queue: Arc<DeliveryQueue>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod seam_tests {
+    use super::*;
+
+    #[test]
+    fn the_peer_ca_is_only_consulted_for_loopback_destinations() {
+        let missing = std::path::Path::new("/nonexistent/peer-ca.pem");
+        let public: Vec<std::net::SocketAddr> = vec!["93.184.215.14:443".parse().unwrap()];
+        let loopback: Vec<std::net::SocketAddr> = vec!["127.0.0.1:8443".parse().unwrap()];
+        // A public destination keeps the platform's roots: the file is not read.
+        assert!(with_seam_roots(reqwest::Client::builder(), Some(missing), &public).is_ok());
+        assert!(with_seam_roots(reqwest::Client::builder(), None, &loopback).is_ok());
+        // On loopback it is the only root, so a missing one refuses.
+        let err = with_seam_roots(reqwest::Client::builder(), Some(missing), &loopback)
+            .err()
+            .unwrap();
+        assert!(err.contains("test peer CA"), "{err}");
+        // A mixed answer is not loopback.
+        let mixed = [loopback[0], public[0]];
+        assert!(with_seam_roots(reqwest::Client::builder(), Some(missing), &mixed).is_ok());
+    }
 }

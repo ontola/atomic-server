@@ -45,9 +45,17 @@ export interface DeclaredRoute {
 export interface DeclaredWellKnown {
   name: string;
   kind: 'shared' | 'exclusive';
-  match?: { resourcePrefix: string };
+  /**
+   * `rels`: the link relations a `webfinger` claim answers for. Claims with
+   * overlapping prefixes on one host coexist when their `rels` are disjoint;
+   * the host merges their answers. Omitted when empty.
+   */
+  match?: { resourcePrefix: string; rels?: string[] };
   route: string;
 }
+
+/** Link relations one well-known claim may list. */
+export const MAX_WELL_KNOWN_RELS = 16;
 
 export interface DeclaredWriteTarget {
   id: string;
@@ -379,12 +387,16 @@ export function validateHttp(
   const wellKnown = list(entry.wellKnown, 'http.wellKnown').map(value => {
     const claim = object(value, 'well-known claim');
     known(claim, ['name', 'kind', 'match', 'route']);
-    let match: { resourcePrefix: string } | undefined;
+    let match: { resourcePrefix: string; rels?: string[] } | undefined;
 
     if (claim.match !== undefined) {
       const m = object(claim.match, 'match');
-      known(m, ['resourcePrefix']);
-      match = { resourcePrefix: text(m.resourcePrefix, 'resourcePrefix') };
+      known(m, ['resourcePrefix', 'rels']);
+      const rels = texts(m.rels, 'match rels');
+      match = {
+        resourcePrefix: text(m.resourcePrefix, 'resourcePrefix'),
+        ...(rels && rels.length > 0 ? { rels } : {}),
+      };
     }
 
     return {
@@ -542,6 +554,19 @@ export function validateHttp(
     if (hasMatch !== (claim.kind === 'shared'))
       throw new Error(
         'shared well-known claims need match.resourcePrefix; exclusive ones take none',
+      );
+    const rels = claim.match?.rels ?? [];
+    if (
+      rels.length > MAX_WELL_KNOWN_RELS ||
+      new Set(rels).size !== rels.length ||
+      rels.some(
+        rel =>
+          rel.length === 0 || rel.length > 512 || !/^[\x21-\x7e]+$/.test(rel),
+      ) ||
+      (rels.length > 0 && claim.name !== 'webfinger')
+    )
+      throw new Error(
+        `match.rels must be at most ${MAX_WELL_KNOWN_RELS} unique link relations without spaces, on a webfinger claim`,
       );
     if (!routes.some(r => r.id === claim.route))
       throw new Error('well-known claims must name a declared route');

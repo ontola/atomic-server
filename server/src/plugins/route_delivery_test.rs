@@ -299,7 +299,10 @@ async fn a_delivery_goes_through_the_egress_guard_to_a_local_stub() {
         &db,
         10,
         FakeHost::new(),
-        Arc::new(EgressTransport { loopback: true }),
+        Arc::new(EgressTransport {
+            loopback: true,
+            peer_ca: None,
+        }),
     );
     let jobs = delivery(&format!("{origin}/inbox"), "create-1");
     let enqueued = route_delivery::enqueue(&db, jobs, NOW).unwrap();
@@ -340,7 +343,10 @@ async fn the_egress_guard_refuses_loopback_and_private_addresses() {
         &db,
         0,
         FakeHost::new(),
-        Arc::new(EgressTransport { loopback: false }),
+        Arc::new(EgressTransport {
+            loopback: false,
+            peer_ca: None,
+        }),
     );
     route_delivery::enqueue(&db, delivery(&format!("{origin}/inbox"), "a"), NOW).unwrap();
     // A wildcard delivery to a private address: refused even with the seam.
@@ -348,7 +354,10 @@ async fn the_egress_guard_refuses_loopback_and_private_addresses() {
         &db,
         0,
         FakeHost::new(),
-        Arc::new(EgressTransport { loopback: true }),
+        Arc::new(EgressTransport {
+            loopback: true,
+            peer_ca: None,
+        }),
     );
     tick(&q, NOW).await;
     route_delivery::enqueue(&db, delivery("https://10.0.0.7/inbox", "b"), NOW).unwrap();
@@ -718,7 +727,10 @@ async fn a_signed_delivery_verifies_against_the_installations_public_key() {
         &db,
         0,
         FakeHost::new(),
-        Arc::new(EgressTransport { loopback: true }),
+        Arc::new(EgressTransport {
+            loopback: true,
+            peer_ca: None,
+        }),
     );
     let activity = r#"{"type":"Follow","id":"https://a.example/follow/1"}"#;
     for (key, key_id) in [
@@ -908,7 +920,10 @@ async fn setup(name: &str) -> Installed {
             registry: f.appstate.route_registry.clone(),
             db: f.appstate.store.clone(),
         }),
-        Arc::new(EgressTransport { loopback: true }),
+        Arc::new(EgressTransport {
+            loopback: true,
+            peer_ca: None,
+        }),
     ));
     let store = &f.appstate.store;
     let inbox = genesis(
@@ -1242,7 +1257,10 @@ async fn a_restart_with_the_gate_closed_pauses_deliveries_until_it_reopens() {
                 registry: registry.clone(),
                 db: store.clone(),
             }),
-            Arc::new(EgressTransport { loopback: true }),
+            Arc::new(EgressTransport {
+                loopback: true,
+                peer_ca: None,
+            }),
         );
         queue.recover(atomic_lib::utils::now());
         (registry, queue)

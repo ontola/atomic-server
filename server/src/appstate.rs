@@ -313,6 +313,10 @@ impl AppState {
         #[cfg(feature = "plugin-routes")]
         let route_exec = Arc::new(
             plugins::route_exec::RouteExecutor::default()
+                .with_key_fetch(Arc::new(plugins::route_auth::EgressFetch {
+                    loopback: config.plugin_delivery_loopback,
+                    peer_ca: config.plugin_e2e_peer_ca.clone(),
+                }))
                 .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts))
                 .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes),
         );
@@ -326,6 +330,7 @@ impl AppState {
             }),
             Arc::new(plugins::route_delivery::EgressTransport {
                 loopback: config.plugin_delivery_loopback,
+                peer_ca: config.plugin_e2e_peer_ca.clone(),
             }),
         ));
         Ok(AppState {
