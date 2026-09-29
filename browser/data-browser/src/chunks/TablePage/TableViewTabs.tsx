@@ -123,7 +123,8 @@ export function TableViewTabs({
   const tabs = views.length > 0 ? views : [undefined];
   const store = useStore();
   const drive = store.getDrive();
-  const apps = appsForClass(useDriveApps(drive), rowClass);
+  const driveApps = useDriveApps(drive);
+  const apps = appsForClass(driveApps.apps, rowClass);
   // An app about to become a view, waiting on the person's answer to "may
   // it edit rows?" (#1740). `view` is set when an existing tab is switched.
   const [pendingApp, setPendingApp] = useState<{
@@ -168,6 +169,7 @@ export function TableViewTabs({
             chooseApp={(view, app) => setPendingApp({ app, view })}
             table={table}
             apps={apps}
+            refreshApps={driveApps.refresh}
             duplicateView={duplicateView}
             deleteView={deleteView}
             classProperties={allColumns}
@@ -180,6 +182,7 @@ export function TableViewTabs({
             createView={createView}
             chooseApp={app => setPendingApp({ app })}
             apps={apps}
+            refreshApps={driveApps.refresh}
           />
         )}
       </Tabs>
@@ -216,11 +219,14 @@ function AddViewMenu({
   createView,
   chooseApp,
   apps,
+  refreshApps,
 }: {
   createView: (kind?: ViewKind | string, label?: string) => unknown;
   /** An app is added only after the person answers whether it may edit. */
   chooseApp: (app: DriveApp) => void;
   apps: DriveApp[];
+  /** Asks the drive for its apps again; called as the menu opens. */
+  refreshApps: () => void;
 }): JSX.Element {
   const items = useMemo(
     (): DropdownItem[] => [
@@ -246,7 +252,13 @@ function AddViewMenu({
     [createView, chooseApp, apps],
   );
 
-  return <DropdownMenu Trigger={AddViewTrigger} items={items} />;
+  return (
+    <DropdownMenu
+      Trigger={AddViewTrigger}
+      items={items}
+      bindActive={active => active && refreshApps()}
+    />
+  );
 }
 
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
@@ -320,6 +332,7 @@ function ViewTab({
   chooseApp,
   table,
   apps,
+  refreshApps,
   duplicateView,
   deleteView,
   classProperties,
@@ -338,6 +351,8 @@ function ViewTab({
   table: string;
   /** Resolved once by the tab bar rather than once per tab. */
   apps: DriveApp[];
+  /** Asks the drive for its apps again; called as the menu opens. */
+  refreshApps: () => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
   classProperties: Property[];
@@ -528,7 +543,7 @@ function ViewTab({
           items={menuItems}
           Trigger={AutoOpenTrigger}
           anchorPoint={menuPoint}
-          bindActive={a => !a && setMenuPoint(undefined)}
+          bindActive={a => (a ? refreshApps() : setMenuPoint(undefined))}
         />
       )}
       {showQuickAdd && (
