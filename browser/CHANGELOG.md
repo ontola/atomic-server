@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The role picker next to the email field in the share dialog opens again. A
+  click on it also focused the email field, which closed its option list right
+  after it opened. The email field also asks password managers (Bitwarden,
+  1Password, LastPass, Dashlane) not to fill it, since it holds other people's
+  addresses.
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or

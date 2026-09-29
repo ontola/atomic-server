@@ -79,8 +79,20 @@ export function EmailInviteInput({
     inputRef.current?.focus();
   };
 
+  /**
+   * Clicking the empty part of the field focuses the input, like a textbox.
+   * Clicks on the controls inside it (the role select, the chip buttons, the
+   * input itself) are left alone: moving focus away from a native select right
+   * after it opened blurs it, which closes its option list again.
+   */
+  const handleFieldClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as Element).closest('select, button, input')) return;
+
+    inputRef.current?.focus();
+  };
+
   return (
-    <Field onClick={() => inputRef.current?.focus()}>
+    <Field onClick={handleFieldClick}>
       <Chips>
         {emails.map(email => (
           <Chip key={email}>
@@ -101,7 +113,13 @@ export function EmailInviteInput({
           ref={inputRef}
           type='email'
           multiple
-          autoComplete='email'
+          // These are other people's addresses, not the user's own, so
+          // neither the browser nor a password manager should fill them in.
+          autoComplete='off'
+          data-bwignore
+          data-1p-ignore
+          data-lpignore='true'
+          data-form-type='other'
           disabled={disabled}
           aria-label='Add people by email'
           placeholder={emails.length === 0 ? 'Add people by email' : undefined}
