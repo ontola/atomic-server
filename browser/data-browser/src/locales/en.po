@@ -8938,6 +8938,7 @@ msgstr "Recurring meeting"
 #~ msgstr "Connect another tracker"
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
 msgid "All day"
 msgstr "All day"
 
@@ -12550,3 +12551,267 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the repeat: {0}"
+msgstr "Could not save the repeat: {0}"
+
+#: src/chunks/TablePage/Calendar/useCalendarRecurrenceProp.ts
+msgid "Recurrence"
+msgstr "Recurrence"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Repeat"
+msgstr "Repeat"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Custom"
+msgstr "Custom"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Does not repeat"
+msgstr "Does not repeat"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Daily"
+msgstr "Daily"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Weekly"
+msgstr "Weekly"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Monthly"
+msgstr "Monthly"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Yearly"
+msgstr "Yearly"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Every"
+msgstr "Every"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On"
+msgstr "On"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Never"
+msgstr "Never"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On a date"
+msgstr "On a date"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "After a number of times"
+msgstr "After a number of times"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Last day"
+msgstr "Last day"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Number of times"
+msgstr "Number of times"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "times"
+msgstr "times"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Ends"
+msgstr "Ends"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Hide JSON"
+msgstr "Hide JSON"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Show JSON"
+msgstr "Show JSON"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "days"
+msgstr "days"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "weeks"
+msgstr "weeks"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "months"
+msgstr "months"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "years"
+msgstr "years"
+
+#. 0: day
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On day {0}"
+msgstr "On day {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the first {0}"
+msgstr "On the first {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the second {0}"
+msgstr "On the second {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the third {0}"
+msgstr "On the third {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the fourth {0}"
+msgstr "On the fourth {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the last {0}"
+msgstr "On the last {0}"
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every weekday"
+msgstr "Every weekday"
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every day of the week"
+msgstr "Every day of the week"
+
+#. 0: rule.interval
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} weeks, every day"
+msgstr "Every {0} weeks, every day"
+
+#. 0: names
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0}"
+msgstr "Every {0}"
+
+#. 0: rule.interval; 1: names
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} weeks on {1}"
+msgstr "Every {0} weeks on {1}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the first {0}"
+msgstr "Monthly on the first {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the second {0}"
+msgstr "Monthly on the second {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the third {0}"
+msgstr "Monthly on the third {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the fourth {0}"
+msgstr "Monthly on the fourth {0}"
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the last {0}"
+msgstr "Monthly on the last {0}"
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the first {1}"
+msgstr "Every {0} months on the first {1}"
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the second {1}"
+msgstr "Every {0} months on the second {1}"
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the third {1}"
+msgstr "Every {0} months on the third {1}"
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the fourth {1}"
+msgstr "Every {0} months on the fourth {1}"
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the last {1}"
+msgstr "Every {0} months on the last {1}"
+
+#. 0: day
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on day {0}"
+msgstr "Monthly on day {0}"
+
+#. 0: rule.interval; 1: day
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on day {1}"
+msgstr "Every {0} months on day {1}"
+
+#. 0: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every year on {0}"
+msgstr "Every year on {0}"
+
+#. 0: rule.interval; 1: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} years on {1}"
+msgstr "Every {0} years on {1}"
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every day"
+msgstr "Every day"
+
+#. 0: rule.interval
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} days"
+msgstr "Every {0} days"
+
+#. 0: text; 1: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0} until {1}"
+msgstr "{0} until {1}"
+
+#. 0: text
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0}, once"
+msgstr "{0}, once"
+
+#. 0: text; 1: rule.end.count
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0}, {1} times"
+msgstr "{0}, {1} times"
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "This repeat rule has options the Repeat field cannot show. Edit its JSON, or pick a repeat above to replace it."
+msgstr "This repeat rule has options the Repeat field cannot show. Edit its JSON, or pick a repeat above to replace it."
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the time: {0}"
+msgstr "Could not save the time: {0}"
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "Start time"
+msgstr "Start time"
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "End time"
+msgstr "End time"

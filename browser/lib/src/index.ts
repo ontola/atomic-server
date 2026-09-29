@@ -332,6 +332,10 @@ export {
 
 export * from './calendar-recurrence.js';
 
+export * from './calendar-repeat.js';
+
+export * from './calendar-time.js';
+
 export {
   parseSetupDeclaration,
   validateSetupArguments,
