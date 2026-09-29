@@ -1,7 +1,6 @@
-import { calendarRecurrenceShortname, type CalendarRecord } from '@tomic/lib';
+import { type CalendarRecord } from '@tomic/lib';
 import {
   calendarOccurrenceBuckets,
-  calendarPropertyMatches,
   type CalendarDayOccurrence,
   type InvalidCalendarRecord,
 } from './calendarOccurrences';
@@ -29,7 +28,19 @@ import { useCalendarDateProp } from './useCalendarDateProp';
 import { CalendarDay } from './CalendarDay';
 import { CalendarDayList } from './CalendarDayList';
 import { withTableRowDefaults } from '../rowDefaults';
-import { calendarFields, isAllDayOnDate, nextCalendarDate } from '@tomic/lib';
+import { useCalendarRecurrenceProp } from './useCalendarRecurrenceProp';
+import {
+  calendarRowTime,
+  isNativePayload,
+  localDayKey as toDayKey,
+  readRecurrencePayload,
+  rowRecord,
+  valueToDayKey,
+  type CalendarColumns,
+} from './calendarRows';
+import type { CalendarRowContext } from './CalendarRowFields';
+import { calendarRangeColumns } from './useTableCalendarRow';
+import { isAllDayOnDate, nextCalendarDate } from '@tomic/lib';
 
 interface CalendarViewProps {
   /** The Table resource; new items are created as its children. */
@@ -42,32 +53,6 @@ interface CalendarViewProps {
   viewGroupBy: string | undefined;
   setViewGroupBy: (property: string) => void;
   readOnly: boolean;
-}
-
-/** Local YYYY-MM-DD key for a Date (NOT toISOString — that shifts timezones). */
-function toDayKey(d: Date): string {
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-
-  return `${d.getFullYear()}-${month}-${day}`;
-}
-
-const DATE_PREFIX_REGEX = /^\d{4}-\d{2}-\d{2}/;
-
-/** Buckets a stored date/timestamp value into its (local) day key. */
-function valueToDayKey(
-  value: JSONValue | undefined,
-  datatype: Datatype | undefined,
-): string | undefined {
-  if (datatype === Datatype.TIMESTAMP && typeof value === 'number') {
-    return toDayKey(new Date(value));
-  }
-
-  if (typeof value === 'string' && DATE_PREFIX_REGEX.test(value)) {
-    return value.slice(0, 10);
-  }
-
-  return undefined;
 }
 
 /** Monday-first weekday headers, localized (2024-01-01 was a Monday). */
@@ -181,15 +166,9 @@ export function CalendarView({
   }, [cursor]);
 
   // Imported ranges are opt-in: unrelated table date columns stay single-day.
-  const calendarDate = calendarPropertyMatches(
-    dateProp?.shortname,
-    calendarFields.day,
-  );
-  const allDayProp = allColumns.find(p =>
-    calendarPropertyMatches(p.shortname, calendarFields.allDay),
-  );
-  const endDayProp = allColumns.find(p =>
-    calendarPropertyMatches(p.shortname, calendarFields.endDay),
+  const { calendarDate, allDayProp, endDayProp } = calendarRangeColumns(
+    allColumns,
+    dateProp,
   );
   const allDaySubjects = new Set(
     memberSubjects.filter(
@@ -200,38 +179,64 @@ export function CalendarView({
     ),
   );
 
-  const recurrenceProp = allColumns.find(p =>
-    calendarPropertyMatches(p.shortname, calendarRecurrenceShortname),
+  const { recurrenceProp, ensureRecurrenceProp } = useCalendarRecurrenceProp(
+    tableClass,
+    allColumns,
   );
+  const columns: CalendarColumns | undefined = dateProp && {
+    dateProp,
+    allDayProp,
+    endDayProp,
+    calendarDate,
+    recurrenceProp,
+  };
   const recurringRows = new Set<string>();
+  const nativeRows = new Set<string>();
   const recurrenceRecords: CalendarRecord[] = [];
 
-  if (calendarDate && recurrenceProp) {
+  if (columns && recurrenceProp) {
     for (const subject of memberSubjects) {
-      const payload = rows.get(subject)?.get(recurrenceProp.subject);
+      const row = rows.get(subject);
+      const payload = readRecurrencePayload(row?.get(recurrenceProp.subject));
 
-      if (
-        payload &&
-        typeof payload === 'object' &&
-        !Array.isArray(payload) &&
-        'event' in payload
-      ) {
+      if (!payload) continue;
+
+      // A row's own series (the Repeat field) works on any date column; an
+      // imported one only where the view is placed by the calendar's Day.
+      if (isNativePayload(payload)) {
+        const time = calendarRowTime(prop => row?.get(prop), columns);
+        if (!time) continue;
+        nativeRows.add(subject);
         recurringRows.add(subject);
-        recurrenceRecords.push({
-          ...payload,
-          subject,
-        } as unknown as CalendarRecord);
+        recurrenceRecords.push(rowRecord(subject, payload, time));
+      } else if (calendarDate) {
+        recurringRows.add(subject);
+        recurrenceRecords.push({ ...payload, subject });
       }
     }
   }
 
   const {
-    buckets: occurrenceBuckets,
+    buckets: expandedBuckets,
     invalid: invalidRecurrences,
     error: recurrenceError,
   } = expandRecurrences(
     recurrenceRecords,
     gridDays.map(day => day.dayKey),
+  );
+
+  // A row's own series is placed as an all-day range, but only labelled "All
+  // day" when the row is, like the row itself would be.
+  const occurrenceBuckets = new Map(
+    [...expandedBuckets].map(([day, occurrences]) => [
+      day,
+      occurrences.map(occurrence =>
+        nativeRows.has(occurrence.subject) &&
+        !allDaySubjects.has(occurrence.subject)
+          ? { ...occurrence, allDay: false }
+          : occurrence,
+      ),
+    ]),
   );
 
   // Bucket each row onto its day. Reactive: `useResources` re-snapshots when a
@@ -246,7 +251,7 @@ export function CalendarView({
     for (const subject of memberSubjects) {
       if (recurringRows.has(subject)) continue;
       const resource = rows.get(subject);
-      const value = resource?.get(dateProp.subject) as JSONValue | undefined;
+      const value = resource?.get(dateProp.subject);
       const key = valueToDayKey(value, dateProp.datatype);
 
       const isAllDay =
@@ -270,6 +275,11 @@ export function CalendarView({
   })();
 
   const todayKey = toDayKey(new Date());
+
+  const rowContext: CalendarRowContext | undefined = columns && {
+    ...columns,
+    ensureRecurrenceProp,
+  };
 
   const monthLabel = new Date(cursor.year, cursor.month, 1).toLocaleDateString(
     undefined,
@@ -419,6 +429,7 @@ export function CalendarView({
         subject={expandedSubject ?? unknownSubject}
         open={showExpanded}
         bindOpen={setShowExpanded}
+        calendar={rowContext}
       />
     </>
   );
