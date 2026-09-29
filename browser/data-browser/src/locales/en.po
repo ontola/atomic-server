@@ -1045,6 +1045,7 @@ msgstr "Resources"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr "Tags"
@@ -4397,6 +4398,7 @@ msgstr "Only stored on this device. Star a drive to keep it in My drives."
 msgid "Recently visited"
 msgstr "Recently visited"
 
+#: src/routes/DemoRoute.tsx
 #: src/routes/DemoRoute.tsx
 msgid "Setting up your demo…"
 msgstr "Setting up your demo…"
@@ -10137,6 +10139,7 @@ msgid "{0} purchased credits · carries over"
 msgstr "{0} purchased credits · carries over"
 
 #: src/chunks/AI/HostedAICredits.tsx
+#: src/components/Vault/AICreditsService.tsx
 msgid "AI credits"
 msgstr "AI credits"
 
@@ -12550,3 +12553,37 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#: src/components/NavBar.tsx
+msgid "Add or remove tags"
+msgstr "Add or remove tags"
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
+msgstr "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Could not open checkout. Try again."
+msgstr "Could not open checkout. Try again."
+
+#. 0: usedPct; 1: credits(allowance); 2: resets
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0}% of this month’s {1} credits used. Resets {2}."
+msgstr "{0}% of this month’s {1} credits used. Resets {2}."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "AI credits used this month"
+msgstr "AI credits used this month"
+
+#. 0: credits(purchased)
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0} purchased credits left. These carry over."
+msgstr "{0} purchased credits left. These carry over."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Opening checkout…"
+msgstr "Opening checkout…"
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Buy more credits"
+msgstr "Buy more credits"

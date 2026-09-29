@@ -1045,6 +1045,7 @@ msgstr "Ressources"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr "Tags"
@@ -4386,6 +4387,7 @@ msgstr ""
 msgid "Recently visited"
 msgstr ""
 
+#: src/routes/DemoRoute.tsx
 #: src/routes/DemoRoute.tsx
 msgid "Setting up your demo…"
 msgstr ""
@@ -10126,6 +10128,7 @@ msgid "{0} purchased credits · carries over"
 msgstr ""
 
 #: src/chunks/AI/HostedAICredits.tsx
+#: src/components/Vault/AICreditsService.tsx
 msgid "AI credits"
 msgstr ""
 
@@ -12504,3 +12507,37 @@ msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Rée
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."
+
+#: src/components/NavBar.tsx
+msgid "Add or remove tags"
+msgstr ""
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
+msgstr ""
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Could not open checkout. Try again."
+msgstr ""
+
+#. 0: usedPct; 1: credits(allowance); 2: resets
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0}% of this month’s {1} credits used. Resets {2}."
+msgstr ""
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "AI credits used this month"
+msgstr ""
+
+#. 0: credits(purchased)
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0} purchased credits left. These carry over."
+msgstr ""
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Opening checkout…"
+msgstr ""
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Buy more credits"
+msgstr ""
