@@ -3,6 +3,7 @@ import {
   dataBrowser,
   unknownSubject,
   type AggregateFunction,
+  type Aggregation,
   useCanWrite,
   useStore,
   type DataBrowser,
@@ -82,7 +83,7 @@ import type { AggregateTarget } from './tablePageContext';
 import type { DerivedColumnSpec } from './derivedColumns';
 import { TablePresenceContext, useTablePresence } from './TablePresence';
 import { withRowDefaults } from './rowDefaults';
-import { useQuickFilter } from './useQuickFilter';
+import { useQuickFilter, useQuickFilterAggregates } from './useQuickFilter';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
@@ -534,24 +535,41 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [gridColumns, setViewColumnOrder, setViewColumns],
   );
 
-  // Totals ride their own query so they can be re-read on every edit without
-  // clearing the grid's pages. See `useTableAggregates`.
-  const aggregateOutcomes = useTableAggregates({
-    property: core.properties.parent,
-    value: resource.subject,
-    filters: queryFilters,
-    expressionFilters: queryExpressionFilters,
-    aggregation: toAggregation(
+  // Rebuilt every render (it carries a quantized `now`), so keyed on content.
+  const aggregationKey = JSON.stringify(
+    toAggregation(
       viewAggregates,
       viewGroupByColumn,
       viewGroupGranularity,
       derivedSpecs,
-    ),
+    ) ?? null,
+  );
+  const aggregation = useMemo(
+    () => (JSON.parse(aggregationKey) as Aggregation | null) ?? undefined,
+    [aggregationKey],
+  );
+
+  // Totals ride their own query so they can be re-read on every edit without
+  // clearing the grid's pages. See `useTableAggregates`.
+  const viewAggregateOutcomes = useTableAggregates({
+    property: core.properties.parent,
+    value: resource.subject,
+    filters: queryFilters,
+    expressionFilters: queryExpressionFilters,
+    aggregation,
     drive: store.getDrive(),
     server: resource.subject.startsWith('http')
       ? new URL(resource.subject).origin
       : undefined,
   });
+
+  // Under the quick filter, the totals cover the rows that match — the rows on
+  // screen, and the ones the footer counts.
+  const aggregateOutcomes = useQuickFilterAggregates(
+    quickFilter,
+    aggregation,
+    viewAggregateOutcomes,
+  );
 
   const [columnSizes, handleColumnResize] = useHandleColumnResize(resource);
 
@@ -1323,7 +1341,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
           {quickFilter.active &&
             !quickFilter.loading &&
             quickFilter.matches.length === 0 && (
-              <NoMatches role=status>
+              <NoMatches role='status'>
                 {`No rows show “${quickFilterQuery}”.`}
               </NoMatches>
             )}
@@ -1442,7 +1460,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 {Row}
               </FancyTable>
               {/* Under the grid, where a spreadsheet's totals live. The numbers
-               *  come from the store, over every row the view matches. Not
+               *  come from the store, over every row the view matches (under
+               *  a quick filter, over the rows that match it). Not
                *  mounted at all without totals: it resolves a title per column,
                *  and a table with no totals should pay nothing for that. */}
               {viewAggregates.length > 0 && viewGroupByColumn && (

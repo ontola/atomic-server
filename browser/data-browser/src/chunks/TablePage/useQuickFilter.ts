@@ -4,13 +4,17 @@ import {
   urls,
   dataBrowser,
   useResources,
+  type AggregateOutcome,
+  type Aggregation,
   type Collection,
   type Datatype,
+  type JSONValue,
   type Property,
 } from '@tomic/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
 import { usePropertyTitles } from './helpers/usePropertyTitles';
+import { aggregateRows } from './tableAggregates';
 import {
   filterSubjectsBySearchText,
   normalizeQuickFilter,
@@ -207,6 +211,39 @@ export function useQuickFilter(
     matches: active ? matches : EMPTY,
     loading: active && members?.from !== collection,
   };
+}
+
+/**
+ * The totals to show under a quick-filtered view: over the rows that match,
+ * computed here since the store only knows the view's own query. While the
+ * field is empty, the store's `outcomes` (over every row the view matches)
+ * pass through unchanged — so the footer's row count and its totals always
+ * describe the same rows.
+ */
+export function useQuickFilterAggregates(
+  quickFilter: Pick<QuickFilterResult, 'active' | 'matches'>,
+  aggregation: Aggregation | undefined,
+  outcomes: AggregateOutcome[],
+): AggregateOutcome[] {
+  const rows = useResources(
+    quickFilter.active && aggregation ? quickFilter.matches : EMPTY,
+  );
+
+  return useMemo(() => {
+    if (!quickFilter.active || !aggregation) {
+      return outcomes;
+    }
+
+    const readers = quickFilter.matches.flatMap(subject => {
+      const row = rows.get(subject);
+
+      return row && !row.error
+        ? [(property: string) => row.get(property) as JSONValue | undefined]
+        : [];
+    });
+
+    return aggregateRows(readers, aggregation);
+  }, [quickFilter.active, quickFilter.matches, aggregation, outcomes, rows]);
 }
 
 /**
