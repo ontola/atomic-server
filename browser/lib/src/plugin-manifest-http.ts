@@ -30,6 +30,11 @@ export interface DeclaredRoute {
   principal?: RoutePrincipal;
   /** Defaults to `none`. */
   auth?: RouteAuth;
+  /**
+   * With `auth: bearer`: a request without an `Authorization` header runs
+   * with `caller: null` instead of being refused. Defaults to `false`.
+   */
+  authOptional?: boolean;
   accept?: string[];
   /** Defaults to `none`. */
   cors?: 'none' | 'any-origin-no-credentials';
@@ -331,6 +336,7 @@ export function validateHttp(
       'methods',
       'principal',
       'auth',
+      'authOptional',
       'accept',
       'cors',
       'maxBodyBytes',
@@ -363,6 +369,14 @@ export function validateHttp(
         ['none', 'atomic', 'http-signature', 'bearer', 'dpop'],
         'none',
       ),
+      authOptional: (() => {
+        const v = route.authOptional;
+        if (v === undefined) return false;
+        if (typeof v !== 'boolean')
+          throw new Error('authOptional: invalid type, expected a boolean');
+
+        return v;
+      })(),
       accept: texts(route.accept, 'route accept'),
       cors: variant(route.cors, ['none', 'any-origin-no-credentials'], 'none'),
       maxBodyBytes: number('maxBodyBytes'),
@@ -492,6 +506,8 @@ export function validateHttp(
       );
     if (route.auth === 'bearer' && tokens.length === 0)
       throw new Error('auth bearer requires http.tokens');
+    if (route.authOptional && route.auth !== 'bearer')
+      throw new Error('authOptional requires auth bearer');
     if (route.accept.some(a => !a.includes('/')))
       throw new Error('route accept entries must be media types');
 
@@ -600,6 +616,7 @@ export function validateHttp(
             methods: r.methods,
             ...(r.principal !== 'anonymous' ? { principal: r.principal } : {}),
             ...(r.auth !== 'none' ? { auth: r.auth } : {}),
+            ...(r.authOptional ? { authOptional: true } : {}),
             ...(r.accept.length ? { accept: r.accept } : {}),
             ...(r.cors !== 'none' ? { cors: r.cors } : {}),
             ...(r.maxBodyBytes !== undefined

@@ -134,6 +134,13 @@ pub struct Route {
     pub principal: Principal,
     #[serde(default, skip_serializing_if = "is_default")]
     pub auth: Auth,
+    /// With `auth: bearer`: a request without an `Authorization` header
+    /// runs with `caller: null` instead of being refused. A request that
+    /// does carry a token is still verified, and refused if the token is not
+    /// valid. For protocols that serve one URL to anonymous and to
+    /// authenticated clients (remoteStorage's `/public/` documents).
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub auth_optional: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub accept: Vec<String>,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -393,6 +400,9 @@ impl Http {
             }
             if route.auth == Auth::Bearer && self.tokens.is_empty() {
                 return Err("auth bearer requires http.tokens".into());
+            }
+            if route.auth_optional && route.auth != Auth::Bearer {
+                return Err("authOptional requires auth bearer".into());
             }
             if route.accept.iter().any(|a| !a.contains('/')) {
                 return Err("route accept entries must be media types".into());

@@ -401,11 +401,16 @@ fn reserved(host: &Host, segments: &[Segment], slug: &str) -> Option<String> {
 }
 
 /// Whether a request path (split on `/`, without the leading one) matches a
-/// pattern. `{param}` is one non-empty segment; `{*rest}` one or more.
+/// pattern. `{param}` is one non-empty segment; `{*rest}` one or more, of
+/// which only the last may be empty: a trailing slash, so `/files/{*rest}`
+/// matches the folder `/files/notes/` (`rest` is `notes/`) and `/files/`
+/// (`rest` is empty). Empty segments elsewhere (`//`) never match.
 pub fn matches(pattern: &[Segment], request: &[&str]) -> bool {
     match (pattern.first(), request.first()) {
         (None, None) => true,
-        (Some(Segment::Rest), Some(_)) => request.iter().all(|s| !s.is_empty()),
+        (Some(Segment::Rest), Some(_)) => request[..request.len() - 1]
+            .iter()
+            .all(|s| !s.is_empty()),
         (Some(Segment::Literal(l)), Some(r)) if l == r => matches(&pattern[1..], &request[1..]),
         (Some(Segment::Param), Some(r)) if !r.is_empty() => matches(&pattern[1..], &request[1..]),
         _ => false,
@@ -1561,6 +1566,13 @@ mod tests {
             ("/files/{*rest}", "/files/a/b/c", true),
             ("/files/{*rest}", "/files", false),
             ("/files/{*rest}", "/files/a//b", false),
+            // A trailing slash is a folder: `rest` ends in `/`, or is empty.
+            ("/files/{*rest}", "/files/a/", true),
+            ("/files/{*rest}", "/files/a/b/", true),
+            ("/files/{*rest}", "/files/", true),
+            ("/files/{*rest}", "/files//", false),
+            ("/files/{*rest}", "/files//a/", false),
+            ("/users/{name}", "/users/alice/", false),
             ("/{*rest}", "/anything/at/all", true),
             ("/{*rest}", "/", false),
         ];

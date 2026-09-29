@@ -157,6 +157,57 @@
     ]
   },
   {
+    "name": "v3 optional bearer",
+    "file": "v3-optional-bearer.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "routes": [
+          {
+            "id": "read",
+            "path": "/storage/{*rest}",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "principal": "installation",
+            "auth": "bearer",
+            "authOptional": true,
+            "cors": "any-origin-no-credentials"
+          }
+        ],
+        "tokens": [
+          {
+            "name": "storage"
+          }
+        ]
+      }
+    },
+    "gate": {
+      "needed": "read-write",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /storage/{*rest}`",
+          "needs": "read-write"
+        },
+        {
+          "surface": "token store `storage`",
+          "needs": "read-write"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-write",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
     "name": "v3 listener",
     "file": "v3-listener.json",
     "gate": {
@@ -317,6 +368,11 @@
     "name": "bearer without a token store",
     "file": "v3-bearer-without-tokens.json",
     "error": "auth bearer requires http.tokens"
+  },
+  {
+    "name": "authOptional without auth bearer",
+    "file": "v3-auth-optional-without-bearer.json",
+    "error": "authOptional requires auth bearer"
   },
   {
     "name": "body too large",
