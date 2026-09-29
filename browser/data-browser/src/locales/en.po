@@ -12579,3 +12579,7 @@ msgstr "{0} replied to you in {1}"
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} replies to you in {2}"
 msgstr "{0}: {1} replies to you in {2}"
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Loading notifications"
+msgstr "Loading notifications"

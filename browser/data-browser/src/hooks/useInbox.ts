@@ -20,6 +20,8 @@ export function useInbox(): {
   items: Resource[];
   unread: number;
   ready: boolean;
+  /** True until the list is known: the query ran and every member loaded. */
+  loading: boolean;
   privateDrive: string | undefined;
 } {
   const { privateDrive } = usePrivateDrive();
@@ -43,11 +45,13 @@ export function useInbox(): {
       r.hasClasses(notifications.classes.notification),
   );
   const items = dedupeBySource(loaded);
+  const isReady = ready && !!privateDrive;
 
   return {
     items,
     unread: items.filter(isUnread).length,
-    ready: ready && !!privateDrive,
+    ready: isReady,
+    loading: !isReady || [...resources.values()].some(r => r.loading),
     privateDrive,
   };
 }

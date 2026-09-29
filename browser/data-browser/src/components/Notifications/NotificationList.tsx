@@ -21,6 +21,7 @@ import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { AgentAvatar } from '../Presence/AgentAvatar';
 import { Button } from '../Button';
 import { Row } from '../Row';
+import { LoaderBlock } from '../Loader';
 
 /**
  * Everything in your Inbox, newest first: who said what where, one row per
@@ -29,7 +30,7 @@ import { Row } from '../Row';
  */
 export function NotificationList(): React.JSX.Element {
   const store = useStore();
-  const { items, unread, ready } = useInbox();
+  const { items, unread, loading } = useInbox();
   const navigate = useNavigateWithTransition();
   const { setPanelOpen } = useRightPanel();
 
@@ -62,7 +63,8 @@ export function NotificationList(): React.JSX.Element {
           </Button>
         )}
       </Row>
-      {ready && items.length === 0 && (
+      {loading && items.length === 0 && <LoadingRows />}
+      {!loading && items.length === 0 && (
         <Empty>
           Nothing yet. New messages in your chats, comments on your things and
           replies to you show up here.
@@ -96,6 +98,19 @@ export function NotificationList(): React.JSX.Element {
         })}
       </List>
     </Column>
+  );
+}
+
+/** Placeholder rows until the list is known, so "Nothing yet" never flashes. */
+function LoadingRows(): React.JSX.Element {
+  return (
+    <List aria-label='Loading notifications' aria-busy='true'>
+      {[0, 1, 2].map(i => (
+        <li key={i}>
+          <SkeletonRow />
+        </li>
+      ))}
+    </List>
   );
 }
 
@@ -153,6 +168,10 @@ const Column = styled.div`
 
 const Empty = styled.p`
   color: ${p => p.theme.colors.textLight};
+`;
+
+const SkeletonRow = styled(LoaderBlock)`
+  height: 3.25rem;
 `;
 
 const List = styled.ul`

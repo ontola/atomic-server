@@ -12533,3 +12533,7 @@ msgstr ""
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} replies to you in {2}"
 msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Loading notifications"
+msgstr ""
