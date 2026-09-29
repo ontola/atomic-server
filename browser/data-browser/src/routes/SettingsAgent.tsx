@@ -25,6 +25,7 @@ import {
 import { ErrorLook } from '../components/ErrorLook';
 import { DrivesCard } from '../components/Drives/DrivesCard';
 import { AccountRecoveryCard } from '../components/AccountRecoveryCard';
+import { EmailRecoveryStatus } from '../components/EmailRecoveryStatus';
 import { AgentProfileHeader } from '../components/AgentProfileHeader';
 import { DeviceLockCard } from '../components/DeviceLockCard';
 import { NewInstanceButton } from '../components/NewInstanceButton';
@@ -309,7 +310,10 @@ const SettingsAgent: React.FunctionComponent = () => {
                 <Heading as='h2'>Account recovery</Heading>
                 <InfoHint title='How you get back in on a new device — and where to find your agent secret.' />
               </Row>
-              <AccountRecoveryCard agentSubject={effectiveAgent.subject} />
+              <Column gap='0.75rem'>
+                <EmailRecoveryStatus agentSubject={effectiveAgent.subject} />
+                <AccountRecoveryCard agentSubject={effectiveAgent.subject} />
+              </Column>
 
               <Margin />
 

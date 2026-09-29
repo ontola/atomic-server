@@ -5927,7 +5927,6 @@ msgid "Bearer {0}"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Cloud Server"
 msgstr ""
 
@@ -6052,9 +6051,8 @@ msgstr ""
 #~ msgid "Internal Server Error"
 #~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Manage account →"
-msgstr ""
+#~ msgid "Manage account →"
+#~ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
@@ -6088,20 +6086,20 @@ msgstr ""
 msgid "Switch"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your cloud services"
-msgstr ""
+#~ msgid "Your cloud services"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Cloud services for this workspace"
-msgstr ""
+#~ msgid "Cloud services for this workspace"
+#~ msgstr ""
 
+#. 0: account.email
 #. 0: managedAccount.email
+#: src/components/EmailRecoveryStatus.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
+#: src/components/EmailRecoveryStatus.tsx
 msgid "Email recovery"
 msgstr ""
 
@@ -6187,19 +6185,18 @@ msgstr ""
 msgid "Sign in →"
 msgstr ""
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: account.email
+#: src/components/EmailRecoveryStatus.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr ""
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: account.email
+#: src/components/EmailRecoveryStatus.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this workspace."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Set up email recovery"
-msgstr ""
+#~ msgid "Set up email recovery"
+#~ msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
 msgid "That does not look like an agent secret."
@@ -6251,9 +6248,8 @@ msgstr ""
 msgid ", so it needs you signed in there first."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Store it with "
-msgstr ""
+#~ msgid "Store it with "
+#~ msgstr ""
 
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
@@ -6271,8 +6267,8 @@ msgstr ""
 msgid "Store it with {0}"
 msgstr ""
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: account.email
+#: src/components/EmailRecoveryStatus.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr ""
 
@@ -6357,13 +6353,12 @@ msgstr ""
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr ""
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
+#. 0: account.email
+#: src/components/EmailRecoveryStatus.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Add a recovery code"
 msgstr ""
 
@@ -6602,9 +6597,8 @@ msgstr ""
 msgid "Keep this workspace available when your devices are offline, with shareable links, search, and API access."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server is on"
-msgstr ""
+#~ msgid "Cloud Server is on"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Sync again"
@@ -6622,9 +6616,8 @@ msgstr ""
 msgid "Use Cloud Server"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "See plans"
-msgstr ""
+#~ msgid "See plans"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "<0>Local:</0> data stays on your devices unless you connect a service or share it."
@@ -6934,13 +6927,11 @@ msgstr ""
 msgid "You can add or change your picture later in your profile."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr ""
+#~ msgid "Your Cloud Server subscription is active"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr ""
+#~ msgid "Your Cloud Server trial is active"
+#~ msgstr ""
 
 #: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
@@ -7083,17 +7074,16 @@ msgid "Error: Sign in before syncing with another device"
 msgstr ""
 
 #. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
+#: src/components/EmailRecoveryStatus.tsx
 msgid "Sign in to your {0} account to check email recovery. Signing in to this workspace with a passkey or secret does not by itself connect your cloud account."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
+#: src/components/EmailRecoveryStatus.tsx
 msgid "Sign in to check recovery"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "This drive already has a Server plan. Connecting it uses that plan; you do not need to buy it again."
-msgstr ""
+#~ msgid "This drive already has a Server plan. Connecting it uses that plan; you do not need to buy it again."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
@@ -7140,13 +7130,11 @@ msgstr ""
 msgid "Accepting your invitation…"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "This status describes data synchronization. View this drive’s subscription and price in billing."
-msgstr ""
+#~ msgid "This status describes data synchronization. View this drive’s subscription and price in billing."
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Manage this drive’s plan →"
-msgstr ""
+#~ msgid "Manage this drive’s plan →"
+#~ msgstr ""
 
 #: src/helpers/managed/recovery.ts
 msgid "This sign-in passkey cannot unlock backups. Create a compatible account passkey to use for both."
@@ -8672,6 +8660,7 @@ msgid "Find links to these copies"
 msgstr ""
 
 #: src/chunks/PluginRuns/ImportReferences.tsx
+#: src/components/PlanCard.tsx
 msgid "Included"
 msgstr ""
 
@@ -12504,3 +12493,85 @@ msgstr "Votre espace de travail n’a pas pu être ajouté à votre compte. Rée
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permet à {0} de modifier les drives créés dans ce navigateur, puis bascule vers cette identité. Tout reste modifiable et est sauvegardé avec votre compte."
+
+#: src/components/PlanCard.tsx
+msgid "Current plan"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Account settings →"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Sign in to your {0} account to use these plans for this workspace. Signing in to this workspace with a passkey or secret does not by itself connect your account."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Create a free account"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Free with an account"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "An encrypted backup of this workspace, kept in our cloud."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Sealed on your device, so we cannot read it"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Restore everything if a device is lost"
+msgstr ""
+
+#. 0: serverLabel(managedServer)
+#: src/routes/SyncRoute.tsx
+msgid "Hosting this workspace on {0}. Its connection is listed under Devices."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage plan →"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace already has a Server plan. Setting it up uses that plan; you do not need to buy it again."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage plan"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "See pricing"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Paid plan per workspace · trial active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Paid plan per workspace"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace hosted online, so it is there even when your devices are off."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Shareable links, search across everything, and API access"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Unlike Cloud Vault, our servers store and process a readable copy"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Not turned on for this workspace yet."
+msgstr ""

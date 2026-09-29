@@ -219,3 +219,16 @@ Rust inspection is available for a future matching confirmation step there.
 ### Account recovery after code sign-in
 
 The browser/Tauri Account recovery card offers recovery-code unlock independently of passkeys, including after a WebAuthn failure. A portal session plus the existing recovery code can add a passkey without replacing the code or older passkeys. Each passkey uses its own PRF salt. Flutter has no corresponding envelope-management card yet.
+
+## Atomic Place plans on the Sync page (2026-09-29)
+
+The browser Sync page shows an "Atomic Place" heading with the account link on
+the right, then Cloud Vault and Cloud Server as two plan cards side by side
+(stacked when narrow). The workspace's plan carries a "Current plan" badge and
+a highlighted border: Cloud Server when the drive is hosted or has an active or
+trialing Server plan, otherwise Cloud Vault for any signed-in account. Nothing
+is marked while signed out. Cloud Vault shows "Included" under Cloud Server.
+The hosted node itself is listed under Devices like any always-on device; its
+billing link lives only on the plan card. Email recovery moved to the user page
+(`EmailRecoveryStatus`, above `AccountRecoveryCard`). Flutter has no plan or
+recovery UI on its sync screen, so there is no twin to change.
