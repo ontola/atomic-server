@@ -103,6 +103,7 @@ pub async fn fixture(name: &str) -> Fixture {
         ("run-problems", urls::JSON),
         ("run-outcomes", urls::JSON),
         ("run-cursor", urls::STRING),
+        ("row-extras", urls::RESOURCE_ARRAY),
     ] {
         let subject = genesis(
             &store,
@@ -127,7 +128,7 @@ pub async fn fixture(name: &str) -> Fixture {
 
     let mut classes = Vec::new();
 
-    for shortname in ["plugin-script", "plugin-run"] {
+    for shortname in ["plugin-script", "plugin-run", "app"] {
         let subject = genesis(
             &store,
             vec![

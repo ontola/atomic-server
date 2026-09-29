@@ -701,6 +701,19 @@ So `view` moves onto that substrate, and the work is:
   losing write, and the app being re-keyed; revoked grants stay in the record
   for #1785.
 
+  **Provider extras on granted rows (#1849, 2026-09-25).** Two-way sync keeps
+  its bookkeeping (provider id, ETag or version, baseline) on the row, not in
+  side storage (atomic-plugins#177). An app declares those properties on its
+  App resource as `row-extras`, beside `renders`; a grant records the list as
+  it was when given (`extras`) and covers it while the app still declares it.
+  Widening the list needs a new grant (the old one is kept as `superseded`);
+  narrowing applies at once. Refused as extras: parent, isA, rights, table
+  and view properties, and any property defined under another app. Extras
+  are never table columns (those come from the row class); the row dialog
+  lists them in a collapsed, read-only "Kept by apps" section. Chosen over
+  one JSON property per plugin because separate properties keep datatypes,
+  merge per field and can be queried, and are what the sync parts write.
+
   **Unattended runs sign as the app (2026-08-23).** The key lives on the node,
   in a tree of its own and wrapped by the node key. It has to live there
   rather than with the person: an app importing at 3am has nobody to ask for

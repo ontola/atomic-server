@@ -117,11 +117,16 @@ export const store = {
    * Showing an app as a table's view lets it read the rows, not change them.
    * Someone who can edit the table allows that, when they add the app as a
    * view or when the app asks with `requestRowAccess()`. Resolves to
-   * `{ status: 'granted', grantedBy, grantedAt, via }`, `{ status: 'none' }`,
-   * or `{ status: 'unavailable' }` when the app is not shown as a table's view.
+   * `{ status: 'granted', grantedBy, grantedAt, via, extras }`,
+   * `{ status: 'none' }`, or `{ status: 'unavailable' }` when the app is not
+   * shown as a table's view.
    * With a grant, `resource.save()` on a row of that table may set the
    * table's columns (the row class's properties), and `newResource` may add a
-   * row of that class. Deleting rows is never included.
+   * row of that class. Deleting rows is never included. `extras` lists the
+   * properties the app declared on its App resource as `row-extras` (a sync's
+   * provider id, ETag, baseline) that this grant also lets it write on those
+   * rows. When the app declares more than the grant covers,
+   * `requestRowAccess()` asks the person again.
    */
   async rowAccess() {
     return send('rowAccess', {});

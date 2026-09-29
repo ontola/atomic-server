@@ -261,6 +261,7 @@ function AppFrameSession({
             const ask: RowAsk = {
               id: data.id,
               appName: outcome.appName,
+              keepsExtras: outcome.extras.length > 0,
               reply: session.post,
             };
             rowAskRef.current = ask;
@@ -492,7 +493,10 @@ function AppFrameSession({
       {rowAsk && (
         <ProxyConsentBar aria-label='Let this app edit rows'>
           <ProxyConsentText>
-            <RowGrantText appName={rowAsk.appName} />
+            <RowGrantText
+              appName={rowAsk.appName}
+              keepsExtras={rowAsk.keepsExtras}
+            />
           </ProxyConsentText>
           <Row gap='0.5rem'>
             <Button onClick={allowRows}>Allow editing</Button>
@@ -630,6 +634,8 @@ async function appLabel(
 interface RowAsk {
   id: number | string;
   appName: string;
+  /** Whether the app declares row extras the grant would cover (#1849). */
+  keepsExtras: boolean;
   reply: (reply: HostReply) => void;
 }
 

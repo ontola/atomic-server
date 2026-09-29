@@ -33,6 +33,26 @@
 //! requires or recommends, and `create` of a row of exactly that class. Never
 //! `destroy`, never `parent`, `isA` or rights, never the table or its views.
 //!
+//! **Provider extras (#1849).** A plugin that syncs rows two ways keeps its
+//! bookkeeping on the row itself: the provider's id, an ETag or version, and
+//! the baseline it last agreed with the provider. Those are not the shared
+//! class's columns, so the scope above would refuse them. An app declares them
+//! on its App resource, as `row-extras`: a list of property subjects, beside
+//! `renders`. A grant covers the extras the app declared *when it was given*
+//! ([`RowGrant::extras`]), and only while the app still declares them. So an
+//! app cannot widen a grant by editing its own declaration (it may write its
+//! own subtree, App resource included): a longer list needs a new grant, and
+//! only a person's gesture makes one. A property defined under another app is
+//! refused as an extra, so one plugin cannot claim another's bookkeeping. The
+//! never-list applies to extras too.
+//!
+//! Why a list of properties rather than one JSON property per plugin: each
+//! extra keeps its datatype, merges field by field in Loro instead of being
+//! overwritten whole, can be queried (the row with this provider id), and is
+//! what the atomic-plugins sync parts already write (`google-etag`,
+//! `sync-baseline`, ...). The cost is a declaration to keep in step with the
+//! code that writes them.
+//!
 //! **Lifetime.** A grant lapses, and is recorded as revoked, when its View is
 //! destroyed or leaves the table's `table-views`, when the View's kind stops
 //! naming the app, when the person who granted it can no longer write the
@@ -43,7 +63,10 @@
 use atomic_lib::{
     agents::ForAgent,
     class_extender::{ClassExtender, CommitExtenderContext},
-    db::trees::Tree,
+    db::{
+        app_agent::{AppAgentKey, AppAgentState},
+        trees::Tree,
+    },
     errors::AtomicResult,
     hierarchy::check_write,
     urls, Db, Resource, Storelike, Subject, Value,
@@ -70,6 +93,14 @@ pub const VIA_VIEW_KIND_CHANGED: &str = "view-kind-changed";
 pub const VIA_GRANTER_LOST_WRITE: &str = "granter-lost-write";
 /// Lapsed because the app's key is not the one it was granted to.
 pub const VIA_APP_KEY_CHANGED: &str = "app-key-changed";
+/// Replaced by a new grant, given for a changed `row-extras` declaration.
+pub const VIA_SUPERSEDED: &str = "superseded";
+
+/// The App property, by shortname in the drive's plugin vocabulary, listing
+/// the properties an app keeps on rows of tables it may edit (#1849).
+pub const ROW_EXTRAS: &str = "row-extras";
+/// The App class, by shortname in the drive's plugin vocabulary.
+const APP_CLASS: &str = "app";
 
 const GRANT_VIAS: [&str; 4] = [VIA_ADD_VIEW, VIA_VIEW_TYPE, VIA_REQUEST, VIA_MENU];
 
@@ -82,6 +113,10 @@ const NEVER: [&str; 6] = [
     urls::APPEND,
     urls::LAST_COMMIT,
 ];
+
+/// Also refused as a declared extra: they describe tables and views, and have
+/// no business on a row.
+const NEVER_EXTRA: [&str; 3] = [urls::CLASSTYPE_PROP, VIEW_KIND, TABLE_VIEWS];
 
 /// One grant, live or revoked. Serialized as the record and as the API answer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -102,6 +137,11 @@ pub struct RowGrant {
     pub granted_at: i64,
     /// `add-view`, `view-type`, `request` or `menu`.
     pub via: String,
+    /// The app's `row-extras` when this was granted, sorted: the properties
+    /// besides the row class's own that it may write on rows. Absent on
+    /// grants recorded before #1849, which cover none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extras: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revoked_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -238,6 +278,79 @@ async fn app_agent_of(db: &Db, drive: &str, app: &str) -> Result<String, String>
         .agent)
 }
 
+/// The properties `app` declares in `row-extras` now, sorted and without
+/// duplicates. Not checked: [`checked_extras`] does that.
+pub async fn declared_extras(db: &Db, drive: &str, app: &str) -> Vec<String> {
+    let Some(terms) = super::scheduler::drive_terms(db, drive).await else {
+        return Vec::new();
+    };
+    let Some(property) = terms.property(ROW_EXTRAS) else {
+        return Vec::new();
+    };
+    let Ok(app_resource) = db.get_resource(&app.into()).await else {
+        return Vec::new();
+    };
+    let mut extras = subjects_of(&app_resource, property);
+    extras.sort();
+    extras.dedup();
+    extras
+}
+
+/// Whether `resource` is an app: of the drive's App class, or holding a key
+/// of its own on this drive.
+fn is_app(db: &Db, drive: &str, resource: &Resource, app_class: Option<&str>) -> bool {
+    if app_class.is_some_and(|class| subjects_of(resource, urls::IS_A).contains(&pure(class))) {
+        return true;
+    }
+    let key = AppAgentKey::new(drive, &resource.get_subject().to_string());
+    matches!(db.get_app_agent_state(&key), Ok(AppAgentState::Active(_)))
+}
+
+/// `app`'s declared extras, refused as a whole when any of them is one the
+/// app may not claim: not a property, on a never-list, or defined under
+/// another app.
+pub async fn checked_extras(db: &Db, drive: &str, app: &str) -> Result<Vec<String>, String> {
+    let extras = declared_extras(db, drive, app).await;
+    if extras.is_empty() {
+        return Ok(extras);
+    }
+    let app_class = super::scheduler::drive_terms(db, drive)
+        .await
+        .and_then(|terms| terms.class(APP_CLASS).map(pure));
+    let app = pure(app);
+    for extra in &extras {
+        let refused =
+            |why: &str| format!("This app declares {extra} as data it keeps on rows, {why}");
+        if NEVER.contains(&extra.as_str()) || NEVER_EXTRA.contains(&extra.as_str()) {
+            return Err(refused("which no app may write through a grant"));
+        }
+        let property = db
+            .get_resource(&extra.as_str().into())
+            .await
+            .map_err(|e| refused(&format!("but it could not be read: {e}")))?;
+        if !subjects_of(&property, urls::IS_A).contains(&pure(urls::PROPERTY)) {
+            return Err(refused("but it is not a property"));
+        }
+        // Up the property's parents: one defined under a different app is
+        // that app's bookkeeping, not this one's.
+        let mut seen = std::collections::HashSet::new();
+        let mut current = parent_of(&property);
+        while let Some(parent) = current {
+            if parent == app || seen.len() >= 64 || !seen.insert(parent.clone()) {
+                break;
+            }
+            let Ok(resource) = db.get_resource(&parent.as_str().into()).await else {
+                break;
+            };
+            if is_app(db, drive, &resource, app_class.as_deref()) {
+                return Err(refused("but that property belongs to another app"));
+            }
+            current = parent_of(&resource);
+        }
+    }
+    Ok(extras)
+}
+
 /// Why `view` does not (or no longer) show `app` on `table`, if it does not.
 async fn view_problem(db: &Db, table: &str, app: &str, view: &str) -> Option<&'static str> {
     let Ok(view_resource) = db.get_resource(&view.into()).await else {
@@ -332,8 +445,15 @@ pub async fn grant(
     if view_problem(db, table, app, view).await.is_some() {
         return Err("That view is not a view of this table showing this app".into());
     }
+    let extras = checked_extras(db, drive, app).await?;
     if let Some(existing) = live(db, drive, table, app).await? {
-        return Ok(existing);
+        if existing.extras == extras {
+            return Ok(existing);
+        }
+        // The app declares other extras than it was granted. This gesture is
+        // consent to the list as it is now, so it replaces the old grant
+        // rather than stretching it.
+        revoke_record(db, existing, granted_by, VIA_SUPERSEDED)?;
     }
     let grant = RowGrant {
         id: ulid::Ulid::new().to_string().to_lowercase(),
@@ -345,6 +465,7 @@ pub async fn grant(
         granted_by: granted_by.to_string(),
         granted_at: atomic_lib::utils::now(),
         via: via.to_string(),
+        extras,
         revoked_at: None,
         revoked_by: None,
         revoked_via: None,
@@ -401,18 +522,32 @@ pub async fn check_scope(db: &Db, grant: &RowGrant, write: &RowWrite<'_>) -> Res
         .get_class(&row_class)
         .await
         .map_err(|e| format!("The row class could not be read: {e}"))?;
-    let allowed: Vec<String> = class
+    let mut allowed: Vec<String> = class
         .requires
         .iter()
         .chain(class.recommends.iter())
         .map(|p| p.to_string())
         .collect();
+    // Its extras: what it was granted, while it still declares them. Taking
+    // one out of the declaration narrows the grant at once; adding one needs
+    // a new grant.
+    if !grant.extras.is_empty() {
+        let declared = declared_extras(db, &grant.drive, &grant.app).await;
+        allowed.extend(
+            grant
+                .extras
+                .iter()
+                .filter(|extra| declared.contains(extra))
+                .filter(|extra| !NEVER_EXTRA.contains(&extra.as_str()))
+                .cloned(),
+        );
+    }
 
     let check_properties = |properties: &[&str]| -> Result<(), String> {
         for property in properties {
             if NEVER.contains(property) || !allowed.iter().any(|a| a == property) {
                 return Err(format!(
-                    "This app may edit this table's columns only, not {property}"
+                    "This app may edit this table's columns and the row data it was allowed to keep, not {property}"
                 ));
             }
         }

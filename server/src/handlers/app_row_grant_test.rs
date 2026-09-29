@@ -589,3 +589,293 @@ async fn switching_the_view_away_revokes_and_switching_back_does_not_restore() {
     assert!(grants["grant"].is_null());
     assert_eq!(grants["history"][0]["revokedVia"], "view-kind-changed");
 }
+
+// Provider extras (#1849): what a two-way sync keeps on the row itself.
+
+/// A string property defined under `parent`: the app's own vocabulary, when
+/// `parent` is the app.
+async fn extra_property(fixture: &Fixture, parent: &str, shortname: &str) -> String {
+    genesis(
+        &fixture.appstate.store,
+        vec![
+            (
+                urls::IS_A,
+                Value::ResourceArray(vec![urls::PROPERTY.into()]),
+            ),
+            (urls::PARENT, Value::AtomicUrl(parent.into())),
+            (urls::SHORTNAME, Value::Slug(shortname.into())),
+            (urls::DESCRIPTION, Value::Markdown(shortname.into())),
+            (urls::DATATYPE_PROP, Value::AtomicUrl(urls::STRING.into())),
+        ],
+    )
+    .await
+}
+
+/// Sets the app's `row-extras`, as its author (or the app itself) would.
+async fn declare_extras(fixture: &Fixture, app: &str, extras: &[&str]) {
+    let store = &fixture.appstate.store;
+    let mut resource = store.get_resource(&app.into()).await.unwrap();
+    resource
+        .set_unsafe(
+            fixture.terms.property("row-extras").unwrap().into(),
+            Value::ResourceArray(extras.iter().map(|e| (*e).into()).collect()),
+        )
+        .unwrap();
+    resource.save(store).await.unwrap();
+}
+
+/// A second app on the drive, of the App class and with a key of its own.
+async fn other_app(fixture: &Fixture) -> String {
+    let store = &fixture.appstate.store;
+    let app = genesis(
+        store,
+        vec![
+            (
+                urls::IS_A,
+                Value::ResourceArray(vec![fixture.terms.class("app").unwrap().into()]),
+            ),
+            (
+                urls::PARENT,
+                Value::AtomicUrl(fixture.drive.as_str().into()),
+            ),
+            (urls::NAME, Value::String("Other app".into())),
+        ],
+    )
+    .await;
+    let agent = Agent::new(Some("other app")).unwrap();
+    store
+        .set_app_agent(
+            &AppAgentKey::new(&fixture.drive, &app),
+            &atomic_lib::db::app_agent::AppAgent::new(
+                agent.subject.to_string(),
+                agent.build_secret().unwrap(),
+                0,
+            ),
+        )
+        .unwrap();
+    app
+}
+
+async fn value_of(fixture: &Fixture, subject: &str, property: &str) -> Option<String> {
+    fixture
+        .appstate
+        .store
+        .get_resource(&subject.into())
+        .await
+        .unwrap()
+        .get(property)
+        .ok()
+        .map(|v| v.to_string())
+}
+
+#[actix_rt::test]
+async fn a_granted_app_writes_the_extras_it_declared_and_nothing_else() {
+    let (fixture, app) = app_fixture("row_grant_extras").await;
+    let table = table(&fixture, &app, "events").await;
+    let etag = extra_property(&fixture, &app, "google-etag").await;
+    let baseline = extra_property(&fixture, &app, "sync-baseline").await;
+    let undeclared = extra_property(&fixture, &app, "scratch").await;
+    declare_extras(&fixture, &app, &[&etag, &baseline]).await;
+    let service = service!(fixture);
+
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-row-grant",
+        grant_body(&fixture, &app, &table, "add-view")
+    );
+    assert_eq!(code, 200, "{body}");
+    let grant: Json = serde_json::from_str(&body).unwrap();
+    let mut expected = vec![etag.clone(), baseline.clone()];
+    expected.sort();
+    assert_eq!(grant["extras"], json!(expected), "the grant records them");
+
+    for extra in [&etag, &baseline] {
+        let (code, body) = post!(
+            service,
+            fixture,
+            "/app-write",
+            save_body(&fixture, &app, &table.row, extra, "v1")
+        );
+        assert_eq!(code, 200, "{body}");
+        assert_eq!(
+            value_of(&fixture, &table.row, extra).await.as_deref(),
+            Some("v1")
+        );
+    }
+
+    // Removing one goes through the same scope.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        json!({"drive": fixture.drive, "app": app, "op": "remove", "subject": table.row, "properties": [baseline]})
+    );
+    assert_eq!(code, 200, "{body}");
+
+    // A new row can carry them.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        json!({"drive": fixture.drive, "app": app, "op": "create", "parent": table.subject, "isA": [table.row_class], "propVals": { urls::NAME: "Standup", etag.as_str(): "v9" }})
+    );
+    assert_eq!(code, 200, "{body}");
+
+    // Its own property, but not declared.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table.row, &undeclared, "x")
+    );
+    assert_eq!(code, 400, "{body}");
+    assert_eq!(value_of(&fixture, &table.row, &undeclared).await, None);
+
+    // Parent, isA and rights stay out of reach.
+    for (property, value) in [
+        (urls::PARENT, json!(fixture.drive)),
+        (urls::IS_A, json!([urls::TABLE])),
+        (urls::WRITE, json!([app])),
+    ] {
+        let (code, body) = post!(
+            service,
+            fixture,
+            "/app-write",
+            json!({"drive": fixture.drive, "app": app, "op": "save", "subject": table.row, "propVals": { property: value }})
+        );
+        assert_eq!(code, 400, "{property}: {body}");
+    }
+}
+
+#[actix_rt::test]
+async fn extras_reach_neither_another_apps_properties_nor_another_table() {
+    let (fixture, app) = app_fixture("row_grant_extras_scope").await;
+    let table_a = table(&fixture, &app, "events").await;
+    let table_b = table_elsewhere(&fixture, &app).await;
+    let etag = extra_property(&fixture, &app, "google-etag").await;
+    let other = other_app(&fixture).await;
+    let theirs = extra_property(&fixture, &other, "github-number").await;
+    declare_extras(&fixture, &app, &[&etag]).await;
+    declare_extras(&fixture, &other, &[&theirs]).await;
+    let service = service!(fixture);
+
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-row-grant",
+        grant_body(&fixture, &app, &table_a, "add-view")
+    );
+    assert_eq!(code, 200, "{body}");
+
+    // Another plugin's extras, declared by that plugin.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table_a.row, &theirs, "7")
+    );
+    assert_eq!(code, 400, "{body}");
+    assert_eq!(value_of(&fixture, &table_a.row, &theirs).await, None);
+
+    // Its own extras on a table it was not granted, though it is a view of it.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table_b.row, &etag, "v1")
+    );
+    assert_eq!(code, 400, "{body}");
+    assert_eq!(value_of(&fixture, &table_b.row, &etag).await, None);
+
+    // Or on the granted table itself, which is not a row.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table_a.subject, &etag, "v1")
+    );
+    assert_eq!(code, 400, "{body}");
+}
+
+#[actix_rt::test]
+async fn an_app_cannot_claim_another_apps_or_forbidden_properties_as_extras() {
+    let (fixture, app) = app_fixture("row_grant_extras_claim").await;
+    let table = table(&fixture, &app, "events").await;
+    let other = other_app(&fixture).await;
+    let theirs = extra_property(&fixture, &other, "github-number").await;
+    let service = service!(fixture);
+
+    for claimed in [theirs.as_str(), urls::PARENT, urls::IS_A, urls::WRITE] {
+        declare_extras(&fixture, &app, &[claimed]).await;
+        let (code, body) = post!(
+            service,
+            fixture,
+            "/app-row-grant",
+            grant_body(&fixture, &app, &table, "add-view")
+        );
+        assert_eq!(code, 400, "{claimed}: {body}");
+        assert!(body.contains("keeps on rows"), "{body}");
+    }
+    let grants = status!(service, fixture, &app, table);
+    assert!(grants["grant"].is_null());
+}
+
+#[actix_rt::test]
+async fn a_wider_declaration_needs_a_new_grant_and_a_narrower_one_applies_at_once() {
+    let (fixture, app) = app_fixture("row_grant_extras_change").await;
+    let table = table(&fixture, &app, "events").await;
+    let etag = extra_property(&fixture, &app, "google-etag").await;
+    let baseline = extra_property(&fixture, &app, "sync-baseline").await;
+    declare_extras(&fixture, &app, &[&etag]).await;
+    let service = service!(fixture);
+
+    let (_, body) = post!(
+        service,
+        fixture,
+        "/app-row-grant",
+        grant_body(&fixture, &app, &table, "add-view")
+    );
+    let first: Json = serde_json::from_str(&body).unwrap();
+
+    // The app adds to its own declaration (its App resource is its own to
+    // write). The grant does not follow.
+    declare_extras(&fixture, &app, &[&etag, &baseline]).await;
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table.row, &baseline, "{}")
+    );
+    assert_eq!(code, 400, "{body}");
+
+    // A person grants again: a new grant, the old one kept as superseded.
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-row-grant",
+        grant_body(&fixture, &app, &table, "request")
+    );
+    assert_eq!(code, 200, "{body}");
+    let second: Json = serde_json::from_str(&body).unwrap();
+    assert_ne!(second["id"], first["id"]);
+    let grants = status!(service, fixture, &app, table);
+    assert_eq!(grants["history"][0]["revokedVia"], "superseded");
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table.row, &baseline, "{}")
+    );
+    assert_eq!(code, 200, "{body}");
+
+    // Dropping one from the declaration takes it out of the grant at once.
+    declare_extras(&fixture, &app, &[&baseline]).await;
+    let (code, body) = post!(
+        service,
+        fixture,
+        "/app-write",
+        save_body(&fixture, &app, &table.row, &etag, "v2")
+    );
+    assert_eq!(code, 400, "{body}");
+}
