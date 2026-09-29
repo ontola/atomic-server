@@ -191,6 +191,43 @@ export default defineConfig(({ mode }) => {
         },
       },
       {
+        // `prefetch.json`: what a first visit downloads before the app can
+        // start, for another page to warm the HTTP cache with ahead of time.
+        // atomic.place's homepage reads it while a visitor looks at the "Try
+        // Atomic" button, so the click no longer waits on ~3 MB of
+        // WebAssembly (measured: 4.0 s to 2.4 s from click to workspace).
+        // Hashed names change every build, which is why this is generated
+        // rather than written down anywhere.
+        name: 'atomic-prefetch-manifest',
+        apply: 'build',
+        generateBundle(_options, bundle) {
+          const files = new Set<string>();
+          const add = (name: string) => files.add(`/${name}`);
+          const entry = Object.values(bundle).find(
+            item => item.type === 'chunk' && item.isEntry,
+          );
+
+          if (entry?.type === 'chunk') {
+            add(entry.fileName);
+            entry.imports.forEach(add);
+            entry.viteMetadata?.importedCss.forEach(add);
+          }
+
+          for (const item of Object.values(bundle)) {
+            if (
+              item.type === 'asset' &&
+              /loro_wasm_bg.*\.wasm$/.test(item.fileName)
+            )
+              add(item.fileName);
+          }
+
+          files.add(`/wasm/atomic_wasm_bg.wasm?v=${wasmVersionHash}`);
+
+          this.emitFile({
+            type: 'asset',
+            fileName: 'prefetch.json',
+            source: JSON.stringify({ files: [...files] }, null, 2),
+      {
         // index.html preloads the wasm pair to warm the worker's fetch, so those
         // hrefs have to carry the same `?v=` the app requests — a preload for a
         // url nobody asks for is a wasted download plus a console warning.

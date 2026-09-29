@@ -1,4 +1,4 @@
-import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
+import { atomicWasmSource, wasmJsUrl } from '../wasmUrls';
 import type { VaultKeyOps } from './vault';
 
 /**
@@ -13,7 +13,9 @@ import type { VaultKeyOps } from './vault';
  * store has exactly one writer.
  */
 type VaultWasmModule = {
-  default: (init?: { module_or_path: string }) => Promise<unknown>;
+  default: (init?: {
+    module_or_path: string | WebAssembly.Module;
+  }) => Promise<unknown>;
   vaultGenerateKey: () => Uint8Array;
   vaultProofMessage: () => Uint8Array;
   vaultWrapKey: (driveKey: Uint8Array, agentSecret: Uint8Array) => string;
@@ -31,7 +33,7 @@ async function loadVaultWasm(): Promise<VaultWasmModule> {
       const wasmModule = (await import(
         /* @vite-ignore */ wasmJsUrl()
       )) as VaultWasmModule;
-      await wasmModule.default({ module_or_path: wasmBinaryUrl() });
+      await wasmModule.default({ module_or_path: await atomicWasmSource() });
 
       return wasmModule;
     })().catch(error => {

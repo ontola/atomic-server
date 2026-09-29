@@ -21,6 +21,7 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
+import { useCustomContextItems } from './ResourceContextMenu/CustomContextItemsContext';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
@@ -81,10 +82,31 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
     commit: true,
   });
   const canCreateTags = useCanWrite(drive);
+  // Tags sit in the More menu until a resource has some: most never do, and a
+  // Tags button on every page was one more thing in a crowded bar. Choosing it
+  // there shows the button with its picker open.
+  const [open, setOpen] = useState(false);
+
+  // Stable, or the registration would re-run on every render.
+  const menuItems = useMemo(
+    () => [
+      {
+        id: 'tags',
+        label: 'Tags',
+        helper: 'Add or remove tags',
+        icon: <FaTags />,
+        onClick: () => setOpen(true),
+      },
+    ],
+    [],
+  );
+  useCustomContextItems(menuItems);
 
   useEffect(() => {
     getResourcesDrive(resource, store).then(setDriveSubject);
   }, [resource, store]);
+
+  if (tags.length === 0 && !open) return null;
 
   const handleNewTag = (newTag: string) => {
     // Tag creation finishes asynchronously; append to the live resource
@@ -104,6 +126,8 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   return (
     <>
       <TagSelectPopover
+        open={open}
+        onOpenChange={setOpen}
         tags={driveTags}
         selectedTags={tags}
         setSelectedTags={setTags}

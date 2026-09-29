@@ -23,14 +23,19 @@ import {
 import { colorForAgent } from '../../components/Presence/AgentAvatar';
 import { getOrCreateMeetingsFolder } from '../../helpers/standardLocations';
 import { simulatePropEdit } from './simulatedEdits';
+import { DEMO_SPEAKER } from './messageSpeaker';
 import { SimulatedTypist } from './SimulatedTypist';
 import { YUSUF_LIVE_STROKES } from './moodboardStrokes';
 
 /** Presence entries expire after 30s; refresh well inside that. */
 const HEARTBEAT_MS = 10_000;
 /** Base delay between typed characters; jittered per character, with an
- *  extra beat at word boundaries so the rhythm reads as human typing. */
-const LETTER_MS = 35;
+ *  extra beat at word boundaries so the rhythm reads as human typing. Slow
+ *  enough to read along: at 35 ms the first lines raced past before a new
+ *  visitor had found them. */
+const LETTER_MS = 50;
+/** A breath between tour stops, so a page change never lands mid-sentence. */
+const STEP_PAUSE_MS = 2_500;
 /** How often Yusuf's canvas cursor moves while he's idling on the
  *  moodboard. Short enough that the dot glides instead of hopping. */
 const WANDER_TICK_MS = 120;
@@ -102,6 +107,7 @@ export class DemoDirector {
   private unsubscribePresence?: () => void;
   private unsubscribeSaved?: () => void;
   private personas: Record<PersonaKey, PersonaState>;
+  private startWhen: Promise<void> = Promise.resolve();
 
   public constructor(
     private store: Store,
@@ -114,9 +120,11 @@ export class DemoDirector {
     };
   }
 
-  public start(): void {
+  /** @param when Resolves when the scenario may begin; immediately if absent. */
+  public start(when: Promise<void> = Promise.resolve()): void {
     if (this.started) return;
     this.started = true;
+    this.startWhen = when;
 
     // Keep the presence manager alive for the whole scenario, even
     // while no presence-consuming UI is mounted — and watch for the
@@ -135,10 +143,18 @@ export class DemoDirector {
         // meeting chat ("say something"). An open editor re-saving
         // imported persona ops can't reach this — those aren't Messages
         // parented to the meeting.
+        // Only something the user typed counts. Joining the meeting and
+        // following Mara also post messages here, as the user: the "Demo
+        // User joined the meeting" and "Viewing …" trail entries. Those
+        // ticked off "Say hi" the moment the user joined, before they had
+        // typed anything. A persona's line carries its speaker, which also
+        // covers overlapping saves the shared `selfSaving` flag misses.
         if (
           this.meeting &&
           resource.get(core.properties.parent) === this.meeting &&
-          resource.hasClasses(dataBrowser.classes.message)
+          resource.hasClasses(dataBrowser.classes.message) &&
+          !resource.hasClasses(dataBrowser.classes.followEvent) &&
+          !resource.get(DEMO_SPEAKER)
         ) {
           this.userChatted = true;
           this.userChatWaiters.forEach(resolve => resolve());
@@ -190,6 +206,9 @@ export class DemoDirector {
   private async run(): Promise<void> {
     const { manifest } = this;
 
+    await this.startWhen;
+    if (this.stopped) return;
+
     // Mara and Yusuf are already here when the user lands.
     this.announceMara(manifest.welcomeDoc);
     this.announce('yusuf', { resource: manifest.moodboard });
@@ -200,39 +219,47 @@ export class DemoDirector {
     await this.type('mara', manifest.welcomeDoc, [
       'This workspace is a demo of AtomicServer.',
       'Feel free to edit, remove or create anything you like!',
-      'I’m about to start a tour to show you around.',
     ]);
 
-    // Mara starts a meeting: the top-bar Join banner lights up, and the
-    // welcome doc closes with a link into it. Nothing is said in the
-    // meeting yet — the greeting waits until the user actually opens it.
-    await this.startTourMeeting();
-    await this.narrate('Welcome to your onboarding meeting! 👋');
-    await this.appendMeetingLink();
+    // Mara starts a meeting while she types the line that invites the user
+    // into it: the top-bar Join banner lights up mid-sentence, and the
+    // sentence ends in a link to it. No pause between the two.
+    await this.appendMeetingLink(this.startTourMeeting());
 
     // Wait for the user to Join (open the meeting). If they don't within
-    // ~25s, greet + play anyway so the log exists for whenever they do.
+    // ~25s, carry on anyway so the log exists for whenever they do.
     await this.waitForJoin(25_000);
-    // Now that they've (probably) opened the meeting, greet them.
 
     if (this.stopped) return;
 
-    await this.sleep(100);
+    // Joining takes them straight to the board, where their first task is
+    // waiting, and that task is to say hi. The tour only moves on once they
+    // have (or after a while), so nothing changes page while they are still
+    // finding the chat.
+    this.announceMara(manifest.checklist.table, {
+      row: manifest.checklist.rows[ROW_SAY_HI],
+      column: manifest.checklist.statusColumn,
+    });
+    await this.narrate('Welcome to your onboarding meeting! 👋');
+    await this.narrate(
+      'First things first: say hi in this chat. That ticks off “Say hi in the meeting chat” on the board.',
+    );
+
+    if (await this.waitForUserChat(45_000)) {
+      await this.completeSayHi();
+    }
+
+    if (this.stopped) return;
+
+    await this.sleep(STEP_PAUSE_MS);
     // Call out the Meeting feature itself while we're in one.
     await this.narrate(
-      'This is a Meeting 🎥 — anyone on the team can start one to chat with colleagues and focus on the same thing at the same time.',
+      'This is a Meeting 🎥. Anyone on the team can start one to chat with colleagues and look at the same thing at the same time.',
     );
-    await this.sleep(100);
     await this.narrate(
-      'I’ll walk you through everything right here. Just follow along.',
+      'You’re following me right now, so we’re looking at the same thing. I’ll walk you through the rest.',
     );
-    await this.sleep(100);
-    await this.narrate(
-      'You’re following me right now, so we’re looking at the same thing.',
-    );
-    await this.sleep(100);
-    await this.narrate("I'll open the issue tracker first!");
-    await this.sleep(100);
+    await this.sleep(STEP_PAUSE_MS);
 
     // ── Tour stop 1: the board (the long, lively, meta stop) ──
     this.announceMara(manifest.checklist.table, {
@@ -270,7 +297,7 @@ export class DemoDirector {
     await this.postChat('pip', "ooh a new teammate, I'll add a card👋");
     await this.addChecklistCard('Invite the rest of your team', 'Todo');
     await this.narrate("Next: the moodboard, Yusuf's mid-doodle 🎨");
-    await this.sleep(1_000);
+    await this.sleep(STEP_PAUSE_MS);
 
     // ── Tour stop 2: the moodboard, Yusuf drawing live ──
     this.announceMara(manifest.moodboard, { x: 340, y: 220 });
@@ -278,14 +305,13 @@ export class DemoDirector {
     await this.sleep(7_000);
     await this.moveCard('mara', manifest.checklist.rows[ROW_DOODLE], 'Done');
     await this.narrate('And that ticks off “Doodle on the moodboard” ✅');
-    await this.sleep(3_000);
+    await this.narrate('One more stop: the Team table.');
+    await this.sleep(STEP_PAUSE_MS);
 
     // ── Tour stop 3: the team table — the user becomes a row in it ──
     this.announceMara(manifest.team.table);
     this.startTableWander();
-    await this.narrate(
-      'One more stop: the Team table. This is where we keep track of our members!',
-    );
+    await this.narrate('This is where we keep track of our members!');
     await this.narrate(
       'Tables in AtomicServer are pretty powerful, you can define custom columns, filters and views.',
     );
@@ -314,8 +340,13 @@ export class DemoDirector {
           this.store,
           rowResource,
           manifest.personas.mara,
-          properties =>
-            properties.set(manifest.team.roleColumn, 'Newest teammate 🎉'),
+          properties => {
+            properties.set(manifest.team.roleColumn, 'Newest teammate 🎉');
+            // They said hi at the start, before this row existed, so the
+            // say-hi payoff could not tick it then.
+            if (this.userChatted)
+              properties.set(manifest.team.onboardingColumn, true);
+          },
         );
       }
 
@@ -325,22 +356,21 @@ export class DemoDirector {
     await this.sleep(3_000);
     this.stopTableWander();
 
-    // ── The ask ──
+    // ── The ask, only if they skipped it at the start ──
     this.announceMara(manifest.checklist.table);
-    await this.narrate(
-      'Last step 👇 say hi in this chat — that’ll tick off “Say hi in the meeting chat” for you.',
-    );
 
-    // Don't wind down until the user has actually said hi — ending the
-    // meeting first leaves them chatting into a dead room and the "Say hi"
-    // card never ticks. Wait generously (they may explore first); the
-    // reactive listener also fires `completeSayHi` the moment they chat.
-    const chatted = await this.waitForUserChat(4 * 60_000);
+    if (!this.userChatted) {
+      await this.narrate(
+        'Last step 👇 say hi in this chat. That’ll tick off “Say hi in the meeting chat” for you.',
+      );
 
-    if (this.stopped) return;
+      // Don't wind down until the user has actually said hi: ending the
+      // meeting first leaves them chatting into a dead room. The reactive
+      // listener also fires `completeSayHi` the moment they chat.
+      const chatted = await this.waitForUserChat(4 * 60_000);
 
-    if (chatted) {
-      await this.completeSayHi();
+      if (this.stopped) return;
+      if (chatted) await this.completeSayHi();
     }
 
     await this.sleep(6_000);
@@ -364,14 +394,14 @@ export class DemoDirector {
 
   /** Close the welcome doc with a link to the tour meeting — the single
    *  most important thing to point a new teammate at. */
-  private async appendMeetingLink(): Promise<void> {
-    if (!this.meeting) return;
+  private async appendMeetingLink(
+    meetingStarted: Promise<void>,
+  ): Promise<void> {
     const resource = await this.getBeatResource(this.manifest.welcomeDoc);
 
     if (!resource || this.stopped) return;
 
     const doc = this.manifest.welcomeDoc;
-    const meeting = this.meeting;
     const typist = new SimulatedTypist(
       this.store,
       resource,
@@ -387,10 +417,13 @@ export class DemoDirector {
       await this.typeText(
         typist,
         doc,
-        'Your tour is starting — join it here: ',
+        'I’m about to start a tour to show you around. Join it here: ',
       );
 
-      if (this.stopped) return;
+      await meetingStarted;
+      const meeting = this.meeting;
+
+      if (this.stopped || !meeting) return;
 
       this.touch(doc);
       typist.appendInline({
@@ -689,7 +722,10 @@ export class DemoDirector {
 
         if (this.stopped) return;
 
-        await this.sleep(500);
+        // A beat between paragraphs, not after the last: whatever comes next
+        // (the meeting invite) should follow without a gap.
+        if (paragraph !== paragraphs[paragraphs.length - 1])
+          await this.sleep(500);
       }
     } finally {
       typist.stop();

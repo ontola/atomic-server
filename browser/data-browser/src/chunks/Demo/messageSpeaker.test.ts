@@ -19,4 +19,17 @@ describe('scripted demo speakers', () => {
       resolveDemoSpeaker('real-user', 'stranger', 'demo', true, manifest),
     ).toBe('real-user');
   });
+
+  it('shows Mara for speech signed here even when the manifest names another run', () => {
+    expect(
+      resolveDemoSpeaker('guest', 'mara', 'old-demo', true, manifest, 'guest'),
+    ).toBe('mara');
+    // Someone else's message never takes a speaker it claims.
+    expect(
+      resolveDemoSpeaker('other', 'mara', 'old-demo', true, manifest, 'guest'),
+    ).toBe('other');
+    expect(
+      resolveDemoSpeaker('guest', 'mara', 'old-demo', false, manifest, 'guest'),
+    ).toBe('guest');
+  });
 });

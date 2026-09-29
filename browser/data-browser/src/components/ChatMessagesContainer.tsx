@@ -32,6 +32,10 @@ export const ChatMessagesContainer: React.FC<
   // Read inside the (mount-only) observer without re-subscribing each render.
   const enableAutoScrollRef = useRef(enableAutoScroll);
   enableAutoScrollRef.current = enableAutoScroll;
+  // Last observed scrollHeight: an upward move while the content shrank is
+  // the browser clamping, not the reader.
+  const lastScrollHeightRef = useRef(0);
+  const lastClientHeightRef = useRef(0);
   // Last observed scrollTop, used to detect scroll direction.
   const lastScrollTopRef = useRef(0);
 
@@ -39,6 +43,20 @@ export const ChatMessagesContainer: React.FC<
     const scroller = scrollRef.current;
 
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  };
+
+  // New messages glide the list down instead of jumping, unless the reader
+  // asked for less motion.
+  const glideToBottom = () => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const reduced = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    scroller.scrollTo({
+      top: scroller.scrollHeight,
+      behavior: reduced ? 'auto' : 'smooth',
+    });
   };
 
   const isNearBottom = () => {
@@ -100,14 +118,26 @@ export const ChatMessagesContainer: React.FC<
       if (!el) return;
 
       const top = el.scrollTop;
+      const height = el.scrollHeight;
+      const viewport = el.clientHeight;
+      // The browser also lowers scrollTop by itself when the content gets
+      // shorter, or the viewport taller: the "Mara is typing…" line under
+      // the list comes and goes with every message. That is not the reader
+      // scrolling up, and treating it as one detached the chat for good: it
+      // stopped following new messages although nobody had touched it.
+      const clamped =
+        height < lastScrollHeightRef.current ||
+        viewport > lastClientHeightRef.current;
 
-      if (top < lastScrollTopRef.current - 1) {
+      if (top < lastScrollTopRef.current - 1 && !clamped) {
         stuckToBottomRef.current = false;
       } else if (isNearBottom()) {
         stuckToBottomRef.current = true;
       }
 
       lastScrollTopRef.current = top;
+      lastScrollHeightRef.current = height;
+      lastClientHeightRef.current = viewport;
     };
 
     scroller?.addEventListener('scroll', handleScroll, { passive: true });
@@ -115,10 +145,20 @@ export const ChatMessagesContainer: React.FC<
     // Opening the keyboard shrinks the message viewport without adding any
     // messages. Keep the last line visible when already following the bottom;
     // leave the reading position alone when the user has scrolled up.
+    // The content growing without a DOM change in this list (a message whose
+    // preview or image finishes loading) is observed here too.
     const resizeObserver = new ResizeObserver(() => {
       if (stuckToBottomRef.current) scrollToBottom();
+      const el = scrollRef.current;
+
+      // A shrinking viewport fires no scroll event, so note it here; the
+      // scroll event of a later growth then compares against this size.
+      if (el && el.clientHeight < lastClientHeightRef.current) {
+        lastClientHeightRef.current = el.clientHeight;
+      }
     });
     if (scroller) resizeObserver.observe(scroller);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
 
     let observer: MutationObserver | undefined;
 
@@ -135,7 +175,7 @@ export const ChatMessagesContainer: React.FC<
         );
 
         if (hasContentChanges) {
-          scrollToBottom();
+          glideToBottom();
         }
       });
 
