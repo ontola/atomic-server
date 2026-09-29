@@ -8,6 +8,7 @@ import {
 } from '@components/Dialog';
 import { Button } from '@components/Button';
 import { RowGrantText } from '@chunks/AppPage/RowGrantText';
+import { useAppRowExtras } from '@chunks/AppPage/useRowExtras';
 
 /**
  * The confirmation shown when someone makes an app a view of a table (#1740):
@@ -18,12 +19,15 @@ import { RowGrantText } from '@chunks/AppPage/RowGrantText';
  * there is nothing to add read-only (the tab already shows the app).
  */
 export function RowGrantDialog({
+  app,
   appName,
   show,
   bindShow,
   onChoose,
   readOnlyLabel,
 }: {
+  /** The app's subject, to say whether it keeps extras on rows (#1849). */
+  app: string;
   appName: string;
   show: boolean;
   bindShow: (show: boolean) => void;
@@ -33,6 +37,7 @@ export function RowGrantDialog({
 }): JSX.Element {
   // Which button closed it. `useDialog` reports only success or not.
   const choice = useRef<boolean | undefined>(undefined);
+  const extras = useAppRowExtras(app);
   const [dialogProps, showDialog, hideDialog] = useDialog({
     bindShow,
     onSuccess: () => {
@@ -61,7 +66,7 @@ export function RowGrantDialog({
       </DialogTitle>
       <DialogContent>
         <p>
-          <RowGrantText appName={appName} />
+          <RowGrantText appName={appName} keepsExtras={extras.length > 0} />
         </p>
       </DialogContent>
       <DialogActions>

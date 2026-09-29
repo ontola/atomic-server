@@ -2671,3 +2671,18 @@ out. It does not drive a real browser's throttling.
 right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
 reaches the other subscriber without a retry, and that an update held for a
 refused subscribe is dropped.
+
+Row extras (#1849): the `app_row_grant` tests in
+`server/src/handlers/app_row_grant_test.rs` (13 in all) add four for extras —
+a granted app writes the extras it declared in `row-extras` and nothing else;
+extras reach neither another app's properties nor another table; an app cannot
+claim another app's or forbidden properties as extras; and a wider declaration
+needs a new grant (the old one kept as `superseded`) while a narrower one
+applies at once. `browser/lib/src/plugin-app.test.ts` checks the App declares
+the extras it was given and none by default; `useRowExtras.test.ts` reads an app's declaration
+(none when absent or without the plugin vocabulary) and collects the extras of
+every app shown as one of a table's views; `rowGrant.test.ts` covers the request
+naming the extras, an answer at once when the grant covers them, a new request
+when the declaration widened, and a pre-extras grant covering none. Gap:
+nothing automated checks the row dialog's read-only "Kept by apps" fold or that
+the table shows no extra columns.

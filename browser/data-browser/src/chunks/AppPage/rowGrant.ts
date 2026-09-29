@@ -4,6 +4,7 @@ import {
   signedRequestInit,
   type Store,
 } from '@tomic/react';
+import { findSchema, pluginSchema } from '@tomic/lib';
 
 /**
  * An app's grant to edit the rows of a table it is a view of (#1740).
@@ -25,6 +26,12 @@ export interface RowGrant {
   /** Milliseconds since the epoch, by the server's clock. */
   grantedAt: number;
   via: RowGrantVia;
+  /**
+   * The app's `row-extras` when this was granted (#1849): properties besides
+   * the table's columns it may write on rows, such as a sync's provider id,
+   * ETag and baseline. Absent when it declared none.
+   */
+  extras?: string[];
   revokedAt?: number;
   revokedBy?: string;
   revokedVia?: RowRevokeVia;
@@ -36,13 +43,55 @@ export interface RowGrant {
  */
 export type RowGrantVia = 'add-view' | 'view-type' | 'request' | 'menu';
 
-/** What ended one. The last two are recorded by the server itself. */
+/**
+ * What ended one. `granter-lost-write` and `app-key-changed` are recorded by
+ * the server itself; `superseded` when a new grant replaced it because the
+ * app's `row-extras` changed.
+ */
 export type RowRevokeVia =
   | 'menu'
   | 'view-removed'
   | 'view-kind-changed'
   | 'granter-lost-write'
-  | 'app-key-changed';
+  | 'app-key-changed'
+  | 'superseded';
+
+/**
+ * The properties `app` declares in `row-extras` (#1849), or none when it
+ * declares none or they cannot be read. The server decides what a grant
+ * covers; this is for saying so before someone agrees, and for keeping them
+ * out of the row's normal fields.
+ */
+export async function appRowExtras(
+  store: Store,
+  drive: string,
+  app: string,
+): Promise<string[]> {
+  try {
+    const schema = await findSchema(store, drive, pluginSchema());
+    const property = schema.properties?.['row-extras'];
+
+    if (!property) return [];
+
+    const value = (await store.getResource(app)).get(property);
+
+    return Array.isArray(value)
+      ? [...new Set(value.filter((v): v is string => typeof v === 'string'))]
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Declared extras a grant does not cover: a reason to ask again. */
+export function uncoveredExtras(
+  grant: Pick<RowGrant, 'extras'>,
+  declared: string[],
+): string[] {
+  const covered = new Set(grant.extras ?? []);
+
+  return declared.filter(extra => !covered.has(extra));
+}
 
 export interface RowGrantTarget {
   drive: string;
@@ -178,8 +227,9 @@ export type RowAccessAnswer =
 /**
  * Whether an app's `requestRowAccess()` needs the person at all. It does not
  * when the app is not a table's view here, when they could not grant it
- * anyway, or when it is already granted; those are answered straight away.
- * Otherwise the host shows the confirmation, naming the app.
+ * anyway, or when it is already granted, including every row extra it now
+ * declares; those are answered straight away. Otherwise the host shows the
+ * confirmation, naming the app and saying whether it keeps extras on rows.
  */
 export async function rowAccessQuestion(
   store: Store,
@@ -190,8 +240,11 @@ export async function rowAccessQuestion(
     view,
   }: { app: string; drive: string; table?: string; view?: string },
   appName: () => Promise<string>,
+  declaredExtras: () => Promise<string[]> = () =>
+    appRowExtras(store, drive, app),
 ): Promise<
-  { ask: false; result: RowAccessAnswer } | { ask: true; appName: string }
+  | { ask: false; result: RowAccessAnswer }
+  | { ask: true; appName: string; extras: string[] }
 > {
   if (!table || !view)
     return {
@@ -212,9 +265,15 @@ export async function rowAccessQuestion(
       },
     };
 
-  const { grant } = await fetchRowGrant(store, { drive, table, app });
+  const [{ grant }, extras] = await Promise.all([
+    fetchRowGrant(store, { drive, table, app }),
+    declaredExtras(),
+  ]);
 
-  if (grant) return { ask: false, result: { status: 'granted' } };
+  // An app that now declares more than it was granted is asked about again:
+  // the grant never stretches to cover a longer list by itself.
+  if (grant && uncoveredExtras(grant, extras).length === 0)
+    return { ask: false, result: { status: 'granted' } };
 
-  return { ask: true, appName: await appName() };
+  return { ask: true, appName: await appName(), extras };
 }

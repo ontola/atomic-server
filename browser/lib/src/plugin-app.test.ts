@@ -258,6 +258,33 @@ describe('createApp', () => {
     ]);
   });
 
+  it('declares the row extras it was given, and none by default', async () => {
+    const { store, resources } = fakeStore();
+    const extras = [
+      'https://example.com/google-etag',
+      'https://example.com/sync-baseline',
+    ];
+
+    const plain = await createApp(store, {
+      drive: 'drive',
+      name: 'Plain',
+      source: SOURCE,
+    });
+    const syncing = await createApp(store, {
+      drive: 'drive',
+      name: 'Calendar',
+      source: SOURCE,
+      rowExtras: extras,
+    });
+
+    expect(Object.values(resources.get(syncing.app) ?? {})).toContainEqual(
+      extras,
+    );
+    expect(Object.values(resources.get(plain.app) ?? {})).not.toContainEqual(
+      extras,
+    );
+  });
+
   it('carries the source it was given', async () => {
     const { store, resources } = fakeStore();
 
