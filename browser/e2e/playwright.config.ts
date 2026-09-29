@@ -151,6 +151,17 @@ const config: PlaywrightTestConfig = {
         open: 'never',
       },
     ],
+    // Set by the Dagger shard script, which prints a per-file timing table
+    // from it at the end of the shard so the shard sizes can be set from
+    // measurements.
+    ...(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME
+      ? [
+          [
+            'json',
+            { outputFile: process.env.PLAYWRIGHT_JSON_OUTPUT_NAME },
+          ] as const,
+        ]
+      : []),
   ],
   // CI retries: default 1 (was 2 — triple runtime on flakes dominated the
   // ~50 min e2e budget). Override with PLAYWRIGHT_RETRIES. Dagger Main sets

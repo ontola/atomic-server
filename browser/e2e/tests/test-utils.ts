@@ -12,6 +12,7 @@ import {
   envCpuThrottle,
   registerPerfPage,
 } from './perf-attach';
+import { installEmptyDiscoveryRoom } from './fixtures';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
 export const smoke = { tag: '@smoke' } as const;
@@ -23,6 +24,37 @@ export const PROPERTIES = {
   push: 'https://atomicdata.dev/properties/push',
   loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
+
+/**
+ * Click "Page edit" on a website resource, waiting as long as the draft build
+ * behind it can take.
+ *
+ * That button is `disabled={!draft || busy || refreshing || !!problem}`
+ * (`WebsitePage.tsx`), and `refreshing` stays true until the page's effect has
+ * read the website config and run `buildWebsiteArtifact`. So the click is not a
+ * click, it is a wait on that build, and it was sitting on Playwright's 10 s
+ * ACTION default rather than on any assertion budget.
+ *
+ * Measured on this container (4 cores, so a four-worker round is oversubscribed),
+ * over the website specs at four workers:
+ *
+ *     website-inline-content.spec.ts   3708 to 9170 ms   (n=8)
+ *     website-inline-fixture.ts        1235 to 7629 ms   (n=11)
+ *
+ * 9170 ms is 91% of the old budget, and a further round blew past it outright:
+ * `locator.click: Timeout 10000ms exceeded`, the element `disabled` for all
+ * fifteen retries. A CI shard runs ~71 tests against one server with three other
+ * shards alongside, so 91% locally is not a budget at all.
+ *
+ * 30 s is ~3x the worst sample, matching the wait in `waitForSynced` below.
+ * `website.spec.ts`'s own "Page edit" click needs none of this and is left alone:
+ * it happens after a release round-trip, by which time the draft is long settled,
+ * and it measures 109 to 203 ms (2%) over the same eight rounds.
+ */
+export const clickPageEdit = (page: Page) =>
+  page
+    .getByRole('button', { name: 'Page edit', exact: true })
+    .click({ timeout: 30_000 });
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
@@ -249,6 +281,15 @@ export const before = async (
   if (throttle) await applyCpuThrottle(page, throttle);
 
   if (testInfo) registerPerfPage(testInfo, page);
+
+  // Peer discovery never reaches a real signalling service from a test,
+  // whichever `test` the spec imported. `fixtures.ts` installs this for the
+  // specs that take their `test` from there; twenty-two spec files import it
+  // straight from `@playwright/test`, and nineteen of those call this function,
+  // which is why it goes here. The app contacts no service unless one is
+  // configured, so this is a guard for the day a build or a stored setting
+  // names one; registering it a second time is harmless.
+  await installEmptyDiscoveryRoom(page.context());
 
   await installCommitWatcher(page);
   await test.step('Initialize fresh agent and drive', () => devDrive(page));

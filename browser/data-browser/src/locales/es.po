@@ -5268,9 +5268,8 @@ msgstr ""
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Signed out of your account here — that secret belongs to a different one."
-msgstr ""
+#~ msgid "Signed out of your account here — that secret belongs to a different one."
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "More profile fields"
@@ -12440,3 +12439,110 @@ msgstr ""
 #: src/components/AccountRecoveryCard.tsx
 msgid "Only your passkey or recovery code opens your identity. {0} cannot."
 msgstr ""
+
+#. 0: conflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signed out of {0}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret"
+msgstr ""
+
+#. 0: secretConflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Stay signed in as {0}"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret is for a different account"
+msgstr ""
+
+#. 0: secretConflict.email; 1: secretConflict.email; 2: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use this secret and sign out"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+#: src/components/Notifications/NotificationList.tsx
+#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/routes/AppSettings.tsx
+msgid "Notifications"
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "This browser can't show system notifications."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "Notifications are blocked for this site. Allow them in your browser or system settings, then come back here."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "You get a notification for new chat messages, comments on things you made, and replies to you. While you're in the app it shows in the corner; otherwise it comes from your system."
+msgstr ""
+
+#: src/components/Settings/NotificationSettings.tsx
+msgid "Show system notifications on this device"
+msgstr ""
+
+#. 0: author
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} replied to you"
+msgstr ""
+
+#. 0: author; 1: on
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} commented on {1}"
+msgstr ""
+
+#. 0: author; 1: on
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "{0} in {1}"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Someone"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Unread"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Nothing yet. New messages in your chats, comments on your things and replies to you show up here."
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Mark all as read"
+msgstr ""
+
+#. 0: unread
+#: src/components/SideBar/NotificationsMenuItem.tsx
+msgid "Notifications, {0} unread"
+msgstr ""
+
+#: src/components/SideBar/NotificationsMenuItem.tsx
+msgid "Messages, comments and replies for you"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bringing your workspace…"
+msgstr "Trayendo tu espacio de trabajo…"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Bring this workspace into my account"
+msgstr "Traer este espacio de trabajo a mi cuenta"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Your workspace could not be brought into your account. Try again, or choose one of the options below."
+msgstr "No se pudo traer tu espacio de trabajo a tu cuenta. Inténtalo de nuevo o elige una de las opciones de abajo."
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cambia a esa identidad. Todo sigue siendo editable y se respalda con tu cuenta."

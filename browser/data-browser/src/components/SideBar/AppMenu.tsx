@@ -13,6 +13,7 @@ import {
 } from '@tomic/react';
 import { FeedbackMenuItem } from './FeedbackMenuItem';
 import { SyncMenuItem } from './SyncMenuItem';
+import { NotificationsMenuItem } from './NotificationsMenuItem';
 import { ResourceGlyph } from '../ResourceGlyph';
 
 // Non standard event type so we have to type it ourselfs for now.
@@ -79,6 +80,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.agentSettings}
         onClick={onItemClick}
       />
+      {agent && <NotificationsMenuItem onClick={onItemClick} />}
       <SideBarMenuItem
         icon={<FaGear />}
         label='Settings'

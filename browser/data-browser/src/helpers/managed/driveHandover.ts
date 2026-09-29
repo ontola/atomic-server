@@ -1,6 +1,7 @@
 // @wc-ignore-file
 // (Wuchale: storage keys and log strings only, nothing user-facing.)
 import { core, server } from '@tomic/react';
+import { sameAgent } from './recovery';
 
 /**
  * Handing a local identity's drives to the account identity that replaces it.
@@ -181,7 +182,7 @@ async function runHandover(
 ): Promise<PendingDriveHandover> {
   const drives = [
     ...new Set(await drivesOf(store, from, personalDrive)),
-  ].filter(drive => drive !== to && !skip.includes(drive));
+  ].filter(drive => !sameAgent(drive, to) && !skip.includes(drive));
   const synced: string[] = [];
   const localOnly: string[] = [];
 
@@ -192,9 +193,7 @@ async function runHandover(
     // for reading, is not `from`'s to give.
     if (drive.error || !(await drive.canWrite(from))[0]) continue;
 
-    const writers = drive.get(core.properties.write);
-
-    if (!Array.isArray(writers) || !writers.includes(to)) {
+    if (!grantsWrite(drive, to)) {
       drive.push(core.properties.write, [to], true);
       await drive.save();
     }
@@ -215,6 +214,25 @@ async function runHandover(
   return recordPending(to, synced);
 }
 
+/**
+ * Whether `drive`'s own `write` already names `agent`. Rights on a drive are
+ * its `write` list; an agent in either spelling (`did:ad:` or `atomic:`) is
+ * the same agent, and granting it again would only add a duplicate commit.
+ */
+export function grantsWrite(
+  drive: Pick<HandoverResource, 'get'>,
+  agent: string,
+): boolean {
+  const writers = drive.get(core.properties.write);
+
+  return (
+    Array.isArray(writers) &&
+    writers.some(
+      writer => typeof writer === 'string' && sameAgent(writer, agent),
+    )
+  );
+}
+
 /** Add `drives` to what `agent`'s home should list. */
 function recordPending(agent: string, drives: string[]): PendingDriveHandover {
   const previous = readPendingDriveHandover();
@@ -222,7 +240,9 @@ function recordPending(agent: string, drives: string[]): PendingDriveHandover {
     agent,
     drives: [
       ...new Set([
-        ...(previous?.agent === agent ? previous.drives : []),
+        ...(previous && sameAgent(previous.agent, agent)
+          ? previous.drives
+          : []),
         ...drives,
       ]),
     ],
@@ -254,7 +274,7 @@ export async function applyPendingDriveHandover(
 
   const pending = readPendingDriveHandover();
 
-  if (!pending || pending.agent !== agent) return false;
+  if (!pending || !sameAgent(pending.agent, agent)) return false;
 
   try {
     const agentResource = await store.getResource(agent);

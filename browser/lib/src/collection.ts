@@ -23,6 +23,26 @@ function filterIndexLeakage(subjects: string[]): string[] {
 }
 
 /**
+ * How long a query waits for the local database to finish becoming ready
+ * before asking the server instead.
+ *
+ * `waitForReady` waits for the WASM worker AND for the bootstrap seed, and the
+ * seed is the whole bundled ontology: seventy-odd properties first, so later
+ * resources parse with the right datatypes, then everything else. Measured on
+ * a four-core box running four Playwright workers, that wait was 0.3 to 16s
+ * routinely and **91 seconds** in the round that failed, with the worker
+ * already initialized the whole time. An app's view asked its table for its
+ * rows, the answer arrived 98 seconds later, and the page sat empty: the row
+ * was on the server and in the local index all along.
+ *
+ * So the wait is bounded and the server answers when it runs out — which is
+ * what a client with no local database does anyway, and the server is
+ * authoritative. Three seconds is what {@link Collection.fetchPage} already
+ * gives the socket a few lines down.
+ */
+const LOCAL_DB_READY_GRACE_MS = 3000;
+
+/**
  * How a {@link PropVal} compares the resource's value to the filter value.
  * `eq` (default) is equality / array membership; the rest are value-comparison
  * predicates. Mirrors the Rust `FilterOperator`.
@@ -984,11 +1004,33 @@ export class Collection {
       return 'no-db';
     }
 
-    // Wait for WASM DB to be ready (important on initial page load).
+    // Wait for WASM DB to be ready (important on initial page load), but only
+    // for so long: see {@link LOCAL_DB_READY_GRACE_MS}. Running out is not an
+    // error, it just means this query is answered by the server, which the
+    // `'no-db'` below already arranges.
     const clientDb = this.store.getClientDb();
 
     if (clientDb && !clientDb.isReady) {
-      await clientDb.waitForReady();
+      let ranOut: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        await Promise.race([
+          clientDb.waitForReady(),
+          new Promise<void>(resolve => {
+            ranOut = setTimeout(resolve, LOCAL_DB_READY_GRACE_MS);
+          }),
+        ]);
+      } finally {
+        clearTimeout(ranOut);
+      }
+
+      // Running out of patience only helps because the server can answer
+      // instead. With no server to ask, this database is the only source this
+      // query has, so it is worth every second it takes — an offline page that
+      // asked nobody would render as if the drive were empty.
+      if (!clientDb.isReady && !this.store.serverConnected) {
+        await clientDb.waitForReady();
+      }
     }
 
     if (!clientDb || !clientDb.isReady) {

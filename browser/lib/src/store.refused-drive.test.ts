@@ -12,7 +12,8 @@ function storeWithLocalCopy() {
   vi.spyOn(store, 'getAgent').mockReturnValue({} as Agent);
   vi.spyOn(store, 'getClientDb').mockReturnValue({
     isReady: true,
-  } as ClientDbWorker);
+    waitForInit: async () => true,
+  } as unknown as ClientDbWorker);
 
   return store;
 }
@@ -63,8 +64,9 @@ describe('a drive the server refuses as not enrolled', () => {
     const store = storeWithLocalCopy();
     vi.spyOn(store, 'getDefaultWebSocket').mockReturnValue(undefined);
 
+    // Verifying needs the server's inventory, so without a socket it stops.
     await expect(store.makeDriveLocal(DRIVE)).rejects.toThrow(
-      'Open this drive with local storage available before disconnecting.',
+      'Connect to a server before disconnecting this workspace.',
     );
     expect(store.isLocalOnlyDrive(DRIVE)).toBe(false);
   });

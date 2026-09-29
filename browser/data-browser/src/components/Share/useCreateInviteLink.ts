@@ -4,7 +4,7 @@ import { prepareDriveSharing } from '../../helpers/managed/prepareDriveSharing';
 import { managedFetch } from '../../helpers/managed/api';
 import {
   automaticPeerRoom,
-  defaultPeerSignalingUrl,
+  requirePeerSignalingUrl,
   savePeerLink,
   resumePeerLinks,
 } from '../../helpers/browserPeerSync';
@@ -63,6 +63,7 @@ export function useCreateInviteLink(
       throw new Error(
         'Wait for this drive to be saved on this device before sharing.',
       );
+    const signalingUrl = browserPeer ? requirePeerSignalingUrl() : undefined;
     const tokenBase64 = await generateInviteToken(
       target.subject,
       agent,
@@ -76,18 +77,50 @@ export function useCreateInviteLink(
       savePeerLink(store, {
         drive: target.subject,
         room: await automaticPeerRoom(target.subject),
-        signalingUrl: defaultPeerSignalingUrl(),
+        signalingUrl: signalingUrl!,
       });
       resumePeerLinks(store);
     }
 
-    const baseUrl = browserPeer ? window.location.origin : store.getServerUrl();
+    const serverUrl = store.getServerUrl();
 
-    return `${baseUrl}/app/invite?token=${encodeURIComponent(tokenBase64)}`;
+    if (browserPeer) {
+      return `${window.location.origin}/app/invite?token=${encodeURIComponent(tokenBase64)}`;
+    }
+
+    return `${inviteLinkPrefix(serverUrl)}${encodeURIComponent(tokenBase64)}${inviteLinkSuffix(serverUrl)}`;
   };
+}
+
+/**
+ * Whether the app is served by a different origin than the server it talks to:
+ * only the Vite dev server, which serves the app on its own port. There the
+ * server has no frontend of its own, so a link to it lands on a page that
+ * cannot load.
+ */
+function servedByDevServer(serverUrl: string): boolean {
+  return (
+    import.meta.env.DEV &&
+    new URL(serverUrl, window.location.origin).origin !== window.location.origin
+  );
 }
 
 /** Where invite links for this store point, before one has been made. */
 export function inviteLinkPrefix(serverUrl: string): string {
-  return `${serverUrl.replace(/\/$/, '')}/app/invite?token=`;
+  const base = servedByDevServer(serverUrl)
+    ? window.location.origin
+    : serverUrl.replace(/\/$/, '');
+
+  return `${base}/app/invite?token=`;
+}
+
+/**
+ * The server to open the link against, when the link points at the app rather
+ * than the server: a browser that has another server saved from earlier
+ * (`localhost:9883` from another checkout) would otherwise use that one.
+ */
+function inviteLinkSuffix(serverUrl: string): string {
+  return servedByDevServer(serverUrl)
+    ? `&server=${encodeURIComponent(new URL(serverUrl).origin)}`
+    : '';
 }

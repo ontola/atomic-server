@@ -30,6 +30,16 @@ import { WebsiteHosting } from './WebsiteHosting';
 import { WebsitePreview } from './WebsitePreview';
 import { WebsiteInlinePreview } from './WebsiteInlinePreview';
 
+/**
+ * A failed read backs off to at most this while recovery is still likely, and
+ * to {@link SLOW_RETRY_MS} once it is not. The same shape as `useWebsiteClass`
+ * next door, for the same reason: a page that gave up on one read stays wrong
+ * until someone reloads it.
+ */
+const RETRY_CEILING_MS = 5_000;
+const SLOW_RETRY_MS = 60_000;
+const SLOW_AFTER_ATTEMPTS = 10;
+
 export function WebsitePage({ resource }: { resource: Resource }) {
   const store = useStore();
   const drive = store.getDrive()!;
@@ -47,6 +57,19 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   const reportedProblem = useRef('');
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  /**
+   * True while the draft is being rebuilt, which every remote edit starts and
+   * which takes a second or two on a loaded machine. It shows the "Updating
+   * preview…" toolbar, and it withholds the draft from publishing, which is
+   * the one thing that must not go out a version behind.
+   *
+   * It deliberately does not disable the buttons that open the draft, because
+   * a control that goes disabled and back under the pointer loses the click
+   * that was already on its way: the browser drops a click whose target turned
+   * disabled in between, silently. Opening a draft one rebuild old costs
+   * nothing, since inline editing freezes a snapshot anyway and refreshes when
+   * it ends.
+   */
   const [refreshing, setRefreshing] = useState(true);
   const [document, setDocument] = useState<string>();
   const [addingContent, setAddingContent] = useState(false);
@@ -77,10 +100,17 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   useEffect(() => {
     let previous: string | undefined;
     let active = true;
+    let attempts = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     let unsubscribe = () => {};
-    void readWebsite(store, drive, resource)
-      .then(({ property }) => {
+
+    const watch = async () => {
+      try {
+        const { property } = await readWebsite(store, drive, resource);
+
         if (!active) return;
+
+        attempts = 0;
         previous = String(resource.get(property));
         unsubscribe = store.subscribe(resource.subject, () => {
           const next = String(resource.get(property));
@@ -90,24 +120,44 @@ export function WebsitePage({ resource }: { resource: Resource }) {
             setRefresh(n => n + 1);
           }
         });
-      })
-      .catch(() => {
-        /* The preview effect reports schema errors. */
-      });
+      } catch {
+        if (!active) return;
+
+        // The preview effect reports schema errors, so this one stays quiet.
+        // It does have to ask again though: without this subscription an edit
+        // to the website never rebuilds the preview, and one failed read used
+        // to cost it for as long as the page stayed open.
+        attempts += 1;
+        retry = setTimeout(
+          () => void watch(),
+          Math.min(
+            150 * 2 ** (attempts - 1),
+            attempts > SLOW_AFTER_ATTEMPTS ? SLOW_RETRY_MS : RETRY_CEILING_MS,
+          ),
+        );
+      }
+    };
+
+    void watch();
 
     return () => {
       active = false;
+      clearTimeout(retry);
       unsubscribe();
     };
   }, [store, drive, resource]);
 
   useEffect(() => {
     let active = true;
-    setRefreshing(true);
-    setProblem('');
-    readWebsite(store, drive, resource)
-      .then(async result => {
+    let attempts = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const build = async () => {
+      try {
+        const result = await readWebsite(store, drive, resource);
+
         if (!active) return;
+
         setConfig(result.config);
         const next = await buildWebsiteArtifact(
           store,
@@ -115,19 +165,21 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           result.config,
         );
 
-        if (active) {
-          reportedProblem.current = '';
-          setDraft(previous =>
-            previous?.digest === next.digest &&
-            JSON.stringify(previous.config) === JSON.stringify(next.config)
-              ? previous
-              : next,
-          );
-          setRefreshing(false);
-        }
-      })
-      .catch(error => {
         if (!active) return;
+
+        attempts = 0;
+        reportedProblem.current = '';
+        setProblem('');
+        setDraft(previous =>
+          previous?.digest === next.digest &&
+          JSON.stringify(previous.config) === JSON.stringify(next.config)
+            ? previous
+            : next,
+        );
+        setRefreshing(false);
+      } catch (error) {
+        if (!active) return;
+
         setRefreshing(false);
         const failure = new Error(
           `Website preview failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -139,10 +191,34 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           reportedProblem.current = failure.message;
           store.notifyError(failure);
         }
-      });
+
+        // And ask again. A read that failed is not the same answer as a
+        // website that cannot be built: `store.getResource` gives up after its
+        // own 10s settle timeout, which a loaded machine reaches, and the page
+        // then sat on "Publishing is unavailable" until someone noticed the
+        // button. Nothing else was going to ask, either: the subscription that
+        // bumps `refresh` is registered by the effect above, which needs the
+        // same read to succeed. The ceiling keeps a genuinely unbuildable site
+        // from polling the server for as long as its page is open, and the
+        // manual Retry stays for the impatient.
+        attempts += 1;
+        retry = setTimeout(
+          () => void build(),
+          Math.min(
+            150 * 2 ** (attempts - 1),
+            attempts > SLOW_AFTER_ATTEMPTS ? SLOW_RETRY_MS : RETRY_CEILING_MS,
+          ),
+        );
+      }
+    };
+
+    setRefreshing(true);
+    setProblem('');
+    void build();
 
     return () => {
       active = false;
+      clearTimeout(retry);
     };
   }, [store, drive, resource, refresh]);
   const subjects = config ? JSON.stringify(selectedSubjects(config)) : '[]';
@@ -223,7 +299,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       {
         id: 'website-prepare',
         label: 'Prepare release',
-        disabled: !draft || !canWrite || busy || refreshing || !!problem,
+        disabled: !draft || !canWrite || busy || !!problem,
         onClick: () => setReview(draft),
       },
       {
@@ -246,7 +322,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       draft,
       canWrite,
       busy,
-      refreshing,
       problem,
       release,
       showRelease,
@@ -281,7 +356,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
               </Button>
               <Button
                 subtle
-                disabled={!draft || busy || refreshing || !!problem}
+                disabled={!draft || busy || !!problem}
                 onClick={() =>
                   setInlineArtifact(inlineArtifact ? undefined : draft)
                 }

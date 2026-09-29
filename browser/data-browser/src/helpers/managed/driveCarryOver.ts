@@ -3,6 +3,7 @@
 import { del, get, set } from 'idb-keyval';
 import { blobHashHex, isBlobSubject } from '@tomic/react';
 import type { VaultCapableDb } from './vault';
+import { sameAgent } from './recovery';
 
 /**
  * Carrying local-only drives from a replaced identity into the account's.
@@ -150,7 +151,7 @@ export async function stageDriveCarryOver(
 
   // An attached database while `from` is active is `from`'s: the store
   // detaches it synchronously on every identity change.
-  if (!db || store.getAgent()?.subject !== from || !(await db.waitForReady()))
+  if (!db || !isActive(store, from) || !(await db.waitForReady()))
     throw new Error(`the local database of ${from} is not open`);
 
   const staged: StagedDrive[] = [];
@@ -194,7 +195,7 @@ export async function stageDriveCarryOver(
     });
   }
 
-  if (store.getAgent()?.subject !== from)
+  if (!isActive(store, from))
     throw new Error('the identity changed while its drives were exported');
 
   const previous = await readDriveCarryOver();
@@ -203,7 +204,7 @@ export async function stageDriveCarryOver(
     to,
     savedAt: Date.now(),
     drives: [
-      ...(previous?.to === to
+      ...(previous && sameAgent(previous.to, to)
         ? previous.drives.filter(entry => !carried.has(entry.drive))
         : []),
       ...staged,
@@ -211,6 +212,13 @@ export async function stageDriveCarryOver(
   } satisfies DriveCarryOver);
 
   return [...carried];
+}
+
+/** Whether `agent` is the store's active identity, in either spelling. */
+function isActive(store: CarryOverStore, agent: string): boolean {
+  const active = store.getAgent()?.subject;
+
+  return active !== undefined && sameAgent(active, agent);
 }
 
 const importing = new Map<string, Promise<string[]>>();
@@ -248,7 +256,9 @@ async function runImport(
 ): Promise<string[]> {
   const carryOver = await readDriveCarryOver();
 
-  if (!carryOver || carryOver.to !== agent) return [];
+  // The account's backup may spell its agent the legacy `did:ad:` way while
+  // the signed-in agent uses `atomic:`, or the other way around.
+  if (!carryOver || !sameAgent(carryOver.to, agent)) return [];
 
   if (Date.now() - carryOver.savedAt > CARRY_OVER_TTL_MS) {
     await del(DRIVE_CARRY_OVER_KEY);
@@ -259,12 +269,10 @@ async function runImport(
   await store.waitForClientDb();
   const db = store.getClientDb();
 
-  if (!db || store.getAgent()?.subject !== agent || !(await db.waitForReady()))
-    return [];
+  if (!db || !isActive(store, agent) || !(await db.waitForReady())) return [];
 
   // Same test as staging: attached while `agent` is active means `agent`'s.
-  if (store.getAgent()?.subject !== agent || store.getClientDb() !== db)
-    return [];
+  if (!isActive(store, agent) || store.getClientDb() !== db) return [];
 
   for (const entry of carryOver.drives) {
     // Before the import, so nothing about the drive is routed to a server.

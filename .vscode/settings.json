@@ -30,7 +30,7 @@
     "ATOMICSERVER_SKIP_JS_BUILD": "true"
   },
   // The check command runs build scripts: without this, atomic-server's
-  // build.rs shells out to `cargo bin wasm-pack build`, whose nested cargo
+  // build.rs shells out to wasm-pack (via the `tools/cargo-bin` shim), whose nested cargo
   // builds into the shared `target/` and grabs its lock — blocking terminal
   // `cargo build/test`. `cargo.extraEnv` does not reliably reach the check
   // command, so set it on the check too.
