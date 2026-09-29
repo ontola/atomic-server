@@ -131,7 +131,14 @@ async function saveRepeat(
   value: RecurrencePayload | undefined,
 ) {
   const property = await calendar.ensureRecurrenceProp();
-  await resource.set(property, value as JSONValue);
+
+  // `set` validates, and undefined is not a JSON value.
+  if (value === undefined) {
+    resource.remove(property);
+  } else {
+    await resource.set(property, value as JSONValue);
+  }
+
   await resource.save();
 }
 

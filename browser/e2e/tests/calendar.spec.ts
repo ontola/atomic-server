@@ -341,5 +341,15 @@ test.describe('calendar repeat', () => {
 
     // Only on its own weekday.
     await expect(retro(addDays(first, 1))).toHaveCount(0);
+
+    // "Does not repeat" takes the series away again.
+    await retro(first).click();
+    await dialog.getByLabel('Repeat').selectOption('none');
+    await expect(dialog.getByTestId('repeat-summary')).toHaveText(
+      'Does not repeat',
+    );
+    await page.keyboard.press('Escape');
+    await expect(retro(addDays(first, 7))).toHaveCount(0);
+    await expect(retro(first)).toBeVisible();
   });
 });
