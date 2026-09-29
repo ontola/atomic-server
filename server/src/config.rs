@@ -37,6 +37,12 @@ pub struct Opts {
     #[clap(long, default_value = "latest", env = "ATOMIC_ENVELOPE_RETENTION")]
     pub envelope_retention: String,
 
+    /// How many days the per-table change list (`GET /changes`) keeps the
+    /// tombstones of rows that left a table. A client whose cursor is older
+    /// than this is told to resync.
+    #[clap(long, default_value_t = 30, env = "ATOMIC_TABLE_CHANGE_RETENTION_DAYS")]
+    pub table_change_retention_days: u64,
+
     /// Compact the store file at startup when it is at least
     /// `--auto-compact-min-mb` and at least `--auto-compact-min-reclaimable-percent`
     /// of it is dead space (pages freed by overwrites and deletes that redb

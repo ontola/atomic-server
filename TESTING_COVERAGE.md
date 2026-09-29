@@ -837,6 +837,9 @@ Two things worth knowing about the runners:
 | Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold | `lib/src/envelopes.rs` |
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
+| Per-table change list (#1850): created/updated/deleted kinds for create, edit, move out, move in, destroy; one entry per row; per-row Loro version; bounded pages and a row edited between pages; tombstone pruning expires older cursors (410); classtype change rebuilds; backfill of pre-existing rows; replicated (`persist_replicated_resource`) and sync-removed rows; table destroy drops its log; readers without table read learn nothing; restart durability | `lib/src/change_log_test.rs` |
+| `GET /changes`: row listed with version, stranger refused, typed `INVALID_CURSOR` / `CURSOR_EXPIRED` | `server/src/tests.rs` (`table_changes_endpoint`) |
+| Change list client: parse, request shape, 410 → `TableChangesCursorExpiredError` | `browser/lib/src/table-changes.test.ts`. **Gap:** no `browser/lib` integration test against a real server, and no plugin host call yet (#1851) |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |

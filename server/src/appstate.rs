@@ -257,6 +257,13 @@ impl AppState {
         // no request can slip in under the default open policy.
         crate::host_mode::install_policy(&store, &config.host_mode).await;
 
+        store.set_table_change_retention(std::time::Duration::from_secs(
+            config
+                .opts
+                .table_change_retention_days
+                .saturating_mul(24 * 60 * 60),
+        ));
+
         match atomic_lib::envelopes::EnvelopeRetention::parse(&config.opts.envelope_retention) {
             Some(retention) => store.set_envelope_retention(retention),
             None => {

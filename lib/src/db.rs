@@ -459,6 +459,9 @@ pub struct Db {
     /// (`crate::envelopes`). `Latest` by default; a node that wants a signed
     /// audit log runs `All`.
     envelope_retention: Arc<RwLock<crate::envelopes::EnvelopeRetention>>,
+    /// Writer lock and tombstone retention of the per-table change list
+    /// (`crate::change_log`).
+    pub(crate) change_log: Arc<crate::change_log::ChangeLog>,
     /// Short-lived hash → (drive-subject, requested-at) map for blob hashes
     /// the server has asked a peer for (via `BLOB_REQUEST`, emitted from
     /// `import_sync_push` for an already-admitted drive). Consulted when
@@ -554,7 +557,7 @@ impl Db {
                 });
             }
 
-            if let Some(pv) = existing {
+            if let Some(pv) = &existing {
                 let subject = resource.get_subject();
                 // Evict against the state that is going away, not the one
                 // replacing it. Whether an entry belongs in a watched query's
@@ -592,10 +595,19 @@ impl Db {
         // the CRDT state. Commits are native (immutable, not CRDT) — they get
         // no snapshot and keep their `loroUpdate` payload in the blob.
         let mut propvals = resource.get_propvals().clone();
+        let mut log_ops = Vec::new();
         canonical_scheme::canonicalize_propvals(&mut propvals);
         if !subject.is_commit_did() {
             let snapshot = resource.build_state_doc()?.export_snapshot();
             propvals.remove(crate::urls::LORO_UPDATE);
+            // A replicated row counts for its table's change list like a
+            // committed one (#1850).
+            log_ops = self.change_log_ops(
+                existing.as_ref(),
+                Some(resource.get_propvals()),
+                &subject_str,
+                crate::change_log::version_of_snapshot(&snapshot),
+            );
             transaction.push(Operation {
                 tree: Tree::LoroSnapshots,
                 method: Method::Insert,
@@ -613,7 +625,7 @@ impl Db {
             val: Some(resource_bin),
         });
         self.queue_delete_identifier_aliases(&subject_str, &mut transaction);
-        self.apply_transaction(&mut transaction)?;
+        self.apply_with_change_log(&log_ops, &mut transaction, None)?;
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
         }
@@ -727,6 +739,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
+            change_log: Default::default(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -772,6 +785,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
+            change_log: Default::default(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -813,6 +827,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
+            change_log: Default::default(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -941,6 +956,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
+            change_log: Default::default(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -1160,6 +1176,7 @@ impl Db {
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
+            change_log: Default::default(),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -2463,7 +2480,8 @@ impl Db {
         let mut removed = Vec::new();
         self.recursive_remove(subject, &mut transaction, &mut removed, None)
             .await?;
-        self.apply_transaction(&mut transaction)?;
+        let log_ops = self.change_log_ops_for_removed(removed.iter().map(|r| &r.subject));
+        self.apply_with_change_log(&log_ops, &mut transaction, None)?;
         // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
         // does not resurrect them from a peer that still holds a stale copy.
         // Only after the apply succeeded: a tombstone for a resource that is
@@ -2513,7 +2531,7 @@ impl Db {
             .find(|key| self.get_propvals(key).is_ok())
     }
 
-    fn get_propvals_aliased(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+    pub(crate) fn get_propvals_aliased(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
         let mut last_err = None;
         for key in crate::identifiers::storage_lookup_keys(subject) {
             match self.get_propvals(&key) {
@@ -2523,6 +2541,11 @@ impl Db {
         }
         Err(last_err
             .unwrap_or_else(|| AtomicError::not_found(format!("Resource {} not found", subject))))
+    }
+
+    /// The stored row of `subject`, and the key it is stored under (#1850).
+    pub(crate) fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+        self.get_propvals_aliased(subject)
     }
 
     /// A resource built only from its last-committed materialized propvals,
@@ -3397,7 +3420,7 @@ impl Db {
         self.apply_transaction_with_source(transaction, None)
     }
 
-    fn apply_transaction_with_source(
+    pub(crate) fn apply_transaction_with_source(
         &self,
         transaction: &mut Transaction,
         source_id: Option<&str>,
@@ -4579,7 +4602,34 @@ impl Storelike for Db {
             }
         }
 
-        store.apply_transaction_with_source(
+        // The per-table change list (#1850), in the same transaction as the
+        // state it describes. A destroy logs every removed row; anything
+        // else logs the one resource's move between tables.
+        let log_ops = if removal_queued {
+            store.change_log_ops_for_removed(removed.iter().map(|r| &r.subject))
+        } else {
+            let row = store.canonical_id(commit_response.commit.subject.as_str());
+            let version = commit_response
+                .resource_new
+                .as_ref()
+                .and_then(|r| r.loro_version())
+                .map(|vv| crate::change_log::version_map(&vv))
+                .or_else(|| store.stored_version(&row));
+            store.change_log_ops(
+                commit_response
+                    .resource_old
+                    .as_ref()
+                    .map(|r| r.get_propvals()),
+                commit_response
+                    .resource_new
+                    .as_ref()
+                    .map(|r| r.get_propvals()),
+                &row,
+                version,
+            )
+        };
+        store.apply_with_change_log(
+            &log_ops,
             &mut transaction,
             commit_response.source_id.as_deref(),
         )?;

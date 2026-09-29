@@ -15,6 +15,7 @@ mod app_row_grant_test;
 #[cfg(feature = "wasm-plugins")]
 pub mod app_write;
 pub mod blob;
+pub mod changes;
 pub mod commit;
 pub mod download;
 pub mod drive_usage;

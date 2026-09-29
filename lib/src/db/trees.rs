@@ -50,6 +50,10 @@ pub enum Tree {
     /// subject_pure_id`, value a JSON [`crate::sync::outbox::OutboxEntry`].
     /// See `crate::sync::outbox`.
     Outbox,
+    /// Per-table change list (#1850): rows of a table changed since a
+    /// cursor, with tombstones. Keys are prefixed by kind and table pure id;
+    /// see `crate::change_log`.
+    TableChanges,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -82,6 +86,7 @@ const SEARCH_DOC_TOKENS: &str = "search_doc_tokens_v1";
 const SEARCH_TRIGRAMS: &str = "search_trigrams_v1";
 const ENVELOPES: &str = "envelopes_v1";
 const OUTBOX: &str = "outbox_v1";
+const TABLE_CHANGES: &str = "table_changes_v1";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -106,6 +111,7 @@ impl std::fmt::Display for Tree {
             Tree::SearchTrigrams => f.write_str(SEARCH_TRIGRAMS),
             Tree::Envelopes => f.write_str(ENVELOPES),
             Tree::Outbox => f.write_str(OUTBOX),
+            Tree::TableChanges => f.write_str(TABLE_CHANGES),
         }
     }
 }
@@ -134,6 +140,7 @@ impl AsRef<[u8]> for Tree {
             Tree::SearchTrigrams => SEARCH_TRIGRAMS.as_bytes(),
             Tree::Envelopes => ENVELOPES.as_bytes(),
             Tree::Outbox => OUTBOX.as_bytes(),
+            Tree::TableChanges => TABLE_CHANGES.as_bytes(),
         }
     }
 }
