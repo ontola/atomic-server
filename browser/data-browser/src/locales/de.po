@@ -1911,6 +1911,7 @@ msgid "Copied error to clipboard"
 msgstr ""
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/QuickFilterField.tsx
 #: src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
@@ -12504,3 +12505,20 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows containing text"
+msgstr ""
+
+#. 0: quickFilterQuery
+#: src/chunks/TablePage/TableResource.tsx
+msgid "No rows show “{0}”."
+msgstr ""

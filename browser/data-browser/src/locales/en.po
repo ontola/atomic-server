@@ -1911,6 +1911,7 @@ msgid "Copied error to clipboard"
 msgstr "Copied error to clipboard"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
+#: src/chunks/TablePage/QuickFilterField.tsx
 #: src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
@@ -12550,3 +12551,20 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows"
+msgstr "Find rows"
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows…"
+msgstr "Find rows…"
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows containing text"
+msgstr "Find rows containing text"
+
+#. 0: quickFilterQuery
+#: src/chunks/TablePage/TableResource.tsx
+msgid "No rows show “{0}”."
+msgstr "No rows show “{0}”."
