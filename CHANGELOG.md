@@ -7,6 +7,29 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Forms (beta): guests can fill in a form without an account, and each answer
+  becomes a row in a Table. New default ontology `forms`
+  (`lib/defaults/forms.json`: `Form`, `FormPage`, `FormField`, `FormHeading`,
+  `FormParagraph`, `FormInfoBox`, `FormCondition`, `FormInviteCode` and their
+  properties). New public endpoints: `GET /form/{id}` (the form page),
+  `GET /form/{id}/definition`, `GET /form/{id}/challenge` (a self-hosted
+  proof-of-work captcha, ALTCHA), `GET /form/{id}/image` and
+  `POST /form/{id}/submit`. `{id}` is a short publish slug or the form's
+  identifier. Only published forms inside their open/close window answer
+  (others get `410`); invite-only forms need a single-use code. Submissions
+  are validated against the form's questions and branching conditions
+  (answers to hidden questions are dropped), rate-limited per client address,
+  and written by the server's agent; a form can only write into, and show
+  visitors resources from, its own drive. A class extender adds
+  `form-submission-summary` to a Form for readers who may see it.
+  `server/build.rs` embeds the `browser/form-app` bundle.
+  [#875](https://github.com/ontola/atomic-server/issues/875)
+- Collection `/query`: the rights walk no longer full-decodes ancestors (memoize by subject + `get_resource_shallow`). Denied members still do not consume `page_size`, so a readable row after a private streak is returned.
+- Commits whose Loro update depends on ops the server does not have are now
+  refused ("parked as pending") instead of being accepted without effect; the
+  browser resends a self-contained update.
+- `/download/files/{hash}` and blob URLs serve the File's stored mimetype.
+
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private
   drive points to its Inbox with.
@@ -610,8 +633,6 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
-- Collection `/query`: the rights walk no longer full-decodes ancestors (memoize by subject + `get_resource_shallow`). Denied members still do not consume `page_size`, so a readable row after a private streak is returned.
-- Forms: branching — hide/show pages and questions from earlier answers (`FormCondition` resources). Submit validation skips hidden fields (required-on-hidden is not an error; submitted values for them are dropped). [#875](https://github.com/ontola/atomic-server/issues/875)
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

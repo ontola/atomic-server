@@ -4,6 +4,25 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Forms (beta): build a form or survey and share a link; guests fill it in
+  without an account and each answer becomes a table row. Create one with
+  New > Form, or from a table with "Create form from this table" (pick its
+  columns). The builder has 21 question types, pages, drag-to-reorder,
+  "Show when" rules that hide questions and pages based on earlier answers,
+  required fields and limits, a Results tab (the table) and a Summary tab
+  (charts). Settings cover public or invite-only access, an open/close
+  schedule, a thank-you message, appearance and custom CSS. Share with a
+  link, QR code or embed snippet. Guests get a small separate app
+  (`@tomic/form-app`, built on the new `@tomic/form-renderer`) with a
+  progress bar and answers saved on their device until they submit.
+  [#875](https://github.com/ontola/atomic-server/issues/875)
+- `@tomic/lib`: the forms ontology (`forms`) is exported and, like
+  `notifications`, fetched from the host rather than atomicdata.dev.
+- Fix: after the server refuses a commit that depends on ops it never
+  received, the next save resends the whole history instead of dropping the
+  edit.
+- Fix: uploaded SVG files display in the data browser.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
@@ -410,7 +429,6 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: opening a filled table no longer flashes rows (or sidebar children) in the wrong order. Local queries are unsorted; hydrating each member used to optimistic-add them in arrival order before the client-side sort landed. The sidebar also listed every table row until the resource's class arrived. OPFS cold-load could shuffle array properties the same way by merging a JSON-AD-seeded LoroList with the stored snapshot. Reloading a table after a cell edit no longer leaves the page stuck loading: an OPFS snapshot replace was importing the same bytes twice and could drop `isA`. Table totals now re-query after the edit is queued to OPFS, so a sum follows a cell change without a reload.
 - Dev: React Compiler now runs through native `oxc-transform-react` instead of `babel-plugin-react-compiler`. JSX/TS and Fast Refresh share that pass. styled-components `displayName` comes from Oxc's built-in plugin on Vite's oxc pass, so Babel is gone (`babel-plugin-react-compiler`, `babel-plugin-styled-components`, `@rolldown/plugin-babel`). Vite dev no longer pays a Babel tax per module (files that used to take ~100ms now land around ~10ms). Oxlint 1.79's compiler-powered Rules of React (`react/immutability`, `react/purity`, `react/error-boundaries`, …) are on; `set-state-in-effect` / `refs` / `static-components` stay warn until those call sites are cleaned up.
 - Fix: clicking a button in the navbar no longer draws a blue outline around the whole bar. The bar used `:has(:focus)`, which matched mouse clicks; keyboard focus still shows on the button itself.
-- Forms: branching — a "Show when" editor on questions and pages hides follow-ups unless earlier answers match. Published forms skip hidden pages in Next/Back/progress/Submit. [#875](https://github.com/ontola/atomic-server/issues/875)
 
 ## [v0.41.0-beta.2] - 2026-08-01
 
