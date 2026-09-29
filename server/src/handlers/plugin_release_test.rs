@@ -231,6 +231,7 @@ async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
             "routesOrigin": null,
             "listeners": [],
             "sidecars": [],
+            "requestHost": crate::plugin_routes::COMPILED,
         })
     );
     let entries: Vec<serde_json::Value> = serde_json::from_value(body["entries"].clone()).unwrap();

@@ -172,6 +172,9 @@ impl PluginRoutesConfig {
             "routesOrigin": self.routes_origin.as_ref().map(|u| u.origin().ascii_serialization()),
             "listeners": self.listeners.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(),
             "sidecars": self.sidecars.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            // Handlers get `request.host`, the name the request was
+            // dispatched on, so a plugin can tell hosts apart.
+            "requestHost": self.compiled,
         })
     }
 
@@ -743,6 +746,7 @@ mod tests {
                 "routesOrigin": "https://routes.example.net",
                 "listeners": ["willow-wgps"],
                 "sidecars": ["pds"],
+                "requestHost": true,
             })
         );
         let text = config.report().to_string();
@@ -756,6 +760,7 @@ mod tests {
                 "routesOrigin": null,
                 "listeners": [],
                 "sidecars": [],
+                "requestHost": false,
             })
         );
     }
