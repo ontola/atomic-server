@@ -21,7 +21,10 @@ use crate::plugins::route_registry::{
     host_name, Answer, Dispatch, Request, RouteRegistry, State, PAUSED_RETRY_AFTER_SECS,
 };
 
-fn request_host(head: &actix_web::dev::RequestHead) -> &str {
+/// The `Host` a request is dispatched on: the header, else the URI's
+/// authority. Never `Forwarded` or `X-Forwarded-Host`, which any client can
+/// set. Route execution hands the same value to handlers as `request.host`.
+pub(crate) fn request_host(head: &actix_web::dev::RequestHead) -> &str {
     head.headers
         .get(header::HOST)
         .and_then(|h| h.to_str().ok())
@@ -971,6 +974,74 @@ mod tests {
         // Pausing takes the claims off the host.
         set_status(&f.appstate.store, &installation, "paused").await;
         let resp = test::call_service(&app, on!(ALICE, "/.well-known/nodeinfo")).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    /// Answers with the host fields the handler was given.
+    const HOSTS: &str = r#"
+        export function handle(ctx, request) {
+          return { status: 200, headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ host: request.host, url: request.url, seen: request.headers }) };
+        }"#;
+
+    /// `request.host` is the name the request was dispatched on, one of the
+    /// drive's hosts, whatever `Forwarded`/`X-Forwarded-Host` a client adds.
+    #[actix_rt::test]
+    async fn handlers_get_the_dispatched_host_not_a_forwarded_one() {
+        let f = fixture_with_args("route_request_host", &ROUTES).await;
+        let release = js_release_with_source(
+            HOSTS,
+            json!({
+                "schemaVersion": 3,
+                "name": "hosts",
+                "namespace": "acme",
+                "capabilities": [{"name": "storage", "reason": "reads its config"}],
+                "http": {
+                    "mount": "drive-host",
+                    "routes": [{"id": "did", "path": "/atproto-did", "methods": ["GET"]}],
+                    "wellKnown": [{"name": "atproto-did", "kind": "exclusive", "route": "did"}],
+                },
+            }),
+        );
+        install_release(&f, &release).await.unwrap();
+        bind(&f, ALICE);
+        bind(&f, "bob.example");
+        let app = app!(f.appstate);
+
+        for (host, expected) in [
+            ("Alice.Example:443", ALICE),
+            (ALICE, ALICE),
+            ("bob.example", "bob.example"),
+        ] {
+            let resp = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri("/.well-known/atproto-did")
+                    .insert_header((header::HOST, host))
+                    .insert_header(("x-forwarded-host", "evil.example"))
+                    .insert_header((header::FORWARDED, "host=evil.example;proto=https"))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(resp.status(), 200, "{host}");
+            let body: serde_json::Value = test::read_body_json(resp).await;
+            assert_eq!(body["host"], expected, "{host}: {body}");
+            // The forwarding headers don't reach the handler either.
+            let seen = body["seen"].as_object().unwrap();
+            assert!(!seen.contains_key("x-forwarded-host"), "{body}");
+            assert!(!seen.contains_key("forwarded"), "{body}");
+        }
+
+        // A host the drive isn't bound to never reaches the handler.
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/.well-known/atproto-did")
+                .insert_header((header::HOST, "evil.example"))
+                .insert_header(("x-forwarded-host", ALICE))
+                .to_request(),
+        )
+        .await;
         assert_eq!(resp.status(), 404);
     }
 

@@ -62,7 +62,7 @@ use super::{
     js_runtime::{self, StoreHost},
     manifest::Manifest,
     manifest_http::{Auth, Body, Cors, Mount, Principal, Route},
-    route_registry::{slug, Target},
+    route_registry::{host_name, slug, Target},
 };
 use crate::{plugin_routes::PluginRoutesLevel, rate_limit::WriteRateLimiter};
 
@@ -1550,11 +1550,19 @@ async fn run(
             .map(|p| p.as_str())
             .unwrap_or("/")
     );
+    // The host name the registry dispatched this request on (no port,
+    // lowercase), from the same `Host` value it looked the drive up by. On a
+    // `drive-host` mount it is always one of the drive's bound names, unlike
+    // the authority of `url`/`base`, which Actix takes from `Forwarded` or
+    // `X-Forwarded-Host` when a client sends them. For plugins that answer
+    // per host, such as an AT Protocol handle.
+    let host = host_name(crate::handlers::plugin_routes::request_host(req.head()));
     let request = json!({
         "method": req.method().as_str(),
         "path": path,
         "url": url,
         "base": base,
+        "host": host,
         "wellKnown": well_known,
         "params": params,
         "query": query(req.query_string()),
