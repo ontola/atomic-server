@@ -196,6 +196,23 @@ const E2E_TIMING_SUMMARY = [
 ].join(' ');
 
 /**
+ * Shard sizes, in tests, for `PWTEST_SHARD_WEIGHTS`, keyed by shard count.
+ *
+ * Playwright cuts the test list into contiguous slices of equal test count, but
+ * the tests differ in cost. Measured on run 4783 (one worker per shard), the
+ * slices took 30.3, ~22.9, 27.1 and 26.5 min, and a shard's minutes are its
+ * `E2E-TIMING test-seconds`. Shard 1 ended in a run of cheap tests (the ai-*
+ * specs, ~8s each), so sixty tests instead of seventy-nine shed about 200s,
+ * which shard 2 takes on. Weights are proportions, so a growing suite keeps
+ * the same split. Re-measure from the `E2E-TIMING` lines when it drifts.
+ * Playwright wants the weights separated by ":" and one per shard, so only a
+ * shard count with an entry here is weighted.
+ */
+const E2E_SHARD_WEIGHTS: Record<number, string> = {
+  4: '60:98:79:78',
+};
+
+/**
  * `bash -c` payload for one Playwright shard.
  *
  * The log label must be safe inside a double-quoted `echo`. The previous
@@ -214,6 +231,9 @@ function e2eShardRunScript(
   return (
     'set -o pipefail; ' +
     `echo "e2e mode grep=${grepLabel} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+    (E2E_SHARD_WEIGHTS[shardCount]
+      ? `export PWTEST_SHARD_WEIGHTS=${E2E_SHARD_WEIGHTS[shardCount]}; `
+      : '') +
     'export PLAYWRIGHT_JSON_OUTPUT_NAME=/test-results.json; ' +
     `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
     'echo ${PIPESTATUS[0]} > /test-exit-code; ' +
