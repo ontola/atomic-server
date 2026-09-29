@@ -15,6 +15,7 @@ import {
 } from './helpers/originNode';
 
 import { useEffect, type JSX } from 'react';
+import { reportRepeatedCommitFailures } from './helpers/sentry';
 import { RouterProvider } from '@tanstack/react-router';
 import { ProxyConnectReturn } from './chunks/AppPage/ProxyConnectReturn';
 import { router } from './routes/Router';
@@ -241,6 +242,7 @@ window.store = store;
 // traffic shows up alongside React render counts. Cmd/Ctrl+Shift+P to
 // dump a snapshot.
 attachStoreToProfiler(store);
+reportRepeatedCommitFailures(store);
 
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');
