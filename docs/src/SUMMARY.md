@@ -97,6 +97,7 @@
     - [Concepts](commits/concepts.md)
     - [Compared to](commits/compare.md)
   - [Endpoints](endpoints.md)
+    - [Table change list](changes.md)
   - [Collections, filtering, sorting](schema/collections.md)
   - [Uploading and downloading files](files.md)
 

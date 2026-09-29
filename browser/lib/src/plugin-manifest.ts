@@ -186,6 +186,11 @@ export interface DeclaredEntrypoints {
   view?: string;
   /** Class URLs whose hooks this package exports. Only in `server-extension`. */
   classExtender?: string[];
+  /**
+   * Exports `afterCommit(ctx)`: told when rows change in tables where it is
+   * added as a view (#1851). Only in `extension`. Grants nothing by itself.
+   */
+  afterCommit?: boolean;
 }
 
 /**
@@ -698,16 +703,25 @@ export function validateManifest(raw: unknown): PluginManifest {
     run: entry.entrypoints === undefined,
     view: undefined as unknown as string,
     classExtender: undefined as unknown as string[],
+    afterCommit: false,
   };
 
   if (entry.entrypoints !== undefined) {
     const declared = object(entry.entrypoints, 'entrypoints');
-    known(declared, ['run', 'view', 'classExtender']);
+    known(declared, ['run', 'view', 'classExtender', 'afterCommit']);
 
     if (declared.run !== undefined) {
       if (typeof declared.run !== 'boolean')
         throw new Error('entrypoints.run: invalid type, expected a boolean');
       entrypoints.run = declared.run;
+    }
+
+    if (declared.afterCommit !== undefined) {
+      if (typeof declared.afterCommit !== 'boolean')
+        throw new Error(
+          'entrypoints.afterCommit: invalid type, expected a boolean',
+        );
+      entrypoints.afterCommit = declared.afterCommit;
     }
 
     if (declared.view !== undefined)
@@ -734,6 +748,10 @@ export function validateManifest(raw: unknown): PluginManifest {
 
   if (world === 'extension' && classUrls.length > 0)
     throw new Error('world extension may not declare classExtender');
+  if (world === 'server-extension' && entrypoints.afterCommit)
+    throw new Error(
+      'entrypoints.afterCommit is for world extension; a server extension hooks commits with classExtender',
+    );
   if (
     world === 'server-extension' &&
     runtime !== 'wasip2/1' &&
@@ -863,7 +881,8 @@ export function validateManifest(raw: unknown): PluginManifest {
   const entrypointsDefault =
     entrypoints.run === true &&
     entrypoints.view === undefined &&
-    entrypoints.classExtender === undefined;
+    entrypoints.classExtender === undefined &&
+    !entrypoints.afterCommit;
 
   return {
     schemaVersion: version,
@@ -881,6 +900,7 @@ export function validateManifest(raw: unknown): PluginManifest {
             ...(entrypoints.classExtender !== undefined
               ? { classExtender: entrypoints.classExtender }
               : {}),
+            ...(entrypoints.afterCommit ? { afterCommit: true } : {}),
           },
         }),
     ...(capabilities.length ? { capabilities } : {}),

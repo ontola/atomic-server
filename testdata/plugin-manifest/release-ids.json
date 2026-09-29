@@ -15,5 +15,6 @@
   "v2-accepts-base64.json": "blake3:fe4f9d2f125081c41a045268f7e440b4088a864bf4eb9d451a442018016742db",
   "v2-accepts-default-text.json": "blake3:23af18483d0f180824694a899d91fc3374c4495ab65da150de2d43fc7896cc9a",
   "v2-destination-tables.json": "blake3:7ac2291a55e8bbe11c26bc0ce413173b3527e85505dbdd7d9f9fd167afeb421d",
-  "v2-destination-tables-only.json": "blake3:ed8b010912f877717c191a10dd2975c2bb216f8108dc832a88e79571d3d9ed63"
+  "v2-destination-tables-only.json": "blake3:ed8b010912f877717c191a10dd2975c2bb216f8108dc832a88e79571d3d9ed63",
+  "v2-extension-after-commit.json": "blake3:ad4d6e7dc300e5a63a87a4bb921cf456e0d2565898c87ad2679e82fd718a6ddd"
 }

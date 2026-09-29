@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "world": "extension",
+  "entrypoints": {
+    "run": true,
+    "afterCommit": true
+  }
+}

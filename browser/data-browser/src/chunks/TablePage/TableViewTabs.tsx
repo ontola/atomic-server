@@ -19,6 +19,8 @@ import {
   FaTrash,
   FaLock,
   FaLockOpen,
+  FaCircle,
+  FaTriangleExclamation,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -50,6 +52,8 @@ import { QuickAddDialog } from './QuickAddDialog';
 import { RowGrantDialog } from './RowGrantDialog';
 import { addAppView } from './appViewGrant';
 import { grantRowAccess, revokeRowAccess } from '@chunks/AppPage/rowGrant';
+import { followTable } from '@chunks/AppPage/afterCommit';
+import { useAfterCommit } from '@chunks/AppPage/useAfterCommit';
 import { useRowGrant } from '@chunks/AppPage/useRowGrant';
 import type { QuickAddSpec } from './quickAdd';
 
@@ -144,6 +148,15 @@ export function TableViewTabs({
       setViewKind,
       grant: (view, via) =>
         grantRowAccess(store, {
+          drive,
+          table,
+          app: pending.app.subject,
+          view,
+          via,
+        }),
+      // Read-only still follows the table's changes (#1851, decision 1).
+      follow: (view, via) =>
+        followTable(store, {
           drive,
           table,
           app: pending.app.subject,
@@ -385,6 +398,15 @@ function ViewTab({
     canWrite && subject ? table : undefined,
     viewApp,
   );
+  // A quiet mark when the app's `afterCommit` hook stopped following this
+  // table, or has edits waiting (#1851, decisions 2 and 3).
+  const hook = useAfterCommit(subject ? viewApp : undefined, table);
+  const following = hook?.subscriptions.find(s => s.view === subject);
+  const hookMark = following?.stopped
+    ? `${appName} stopped following changes to this table`
+    : following?.pending
+      ? `${appName} wants to change rows`
+      : undefined;
 
   const startRename = () => {
     setDraft(name);
@@ -537,6 +559,17 @@ function ViewTab({
       >
         <ViewKindIcon />
         {name}
+        {hookMark && (
+          <HookMark
+            role='img'
+            aria-label={hookMark}
+            title={hookMark}
+            data-testid='after-commit-tab-mark'
+            data-kind={following?.stopped ? 'stopped' : 'pending'}
+          >
+            {following?.stopped ? <FaTriangleExclamation /> : <FaCircle />}
+          </HookMark>
+        )}
       </Tab>
       {menuPoint && (
         <DropdownMenu
@@ -759,6 +792,21 @@ const Tab = styled.button<{ $active: boolean }>`
 
   &:hover {
     background-color: ${p => p.theme.colors.bg1};
+  }
+`;
+
+/** The app view's `afterCommit` state on its tab (#1851). */
+const HookMark = styled.span`
+  display: inline-flex;
+  font-size: 0.75em;
+
+  &[data-kind='stopped'] {
+    color: ${p => p.theme.colors.warning};
+  }
+
+  &[data-kind='pending'] {
+    color: ${p => p.theme.colors.main};
+    font-size: 0.5em;
   }
 `;
 

@@ -30,3 +30,21 @@ export function RowGrantText({
     </>
   );
 }
+
+/**
+ * The line the same dialog gains when the app exports `afterCommit` (#1851,
+ * decision 1): adding it as the table's view also lets it follow the
+ * table's changes, whichever answer is chosen.
+ */
+export function FollowsChangesText({
+  appName,
+}: {
+  appName: string;
+}): JSX.Element {
+  return (
+    <>
+      <strong>{appName}</strong> is told when rows change, also when this tab is
+      closed.
+    </>
+  );
+}

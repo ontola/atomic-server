@@ -113,11 +113,18 @@ pub fn spawn(appstate: AppState) {
 
     let guard = Arc::new(Mutex::new(Guard::default()));
     let mut events = appstate.store.subscribe_events();
+    // The durable `afterCommit` hook (#1851) rides the same worker: the same
+    // wake-ups, tick and plugin-event records, a sibling drain.
+    let after_commit = Arc::new(Mutex::new(super::after_commit::Worker::default()));
 
     actix_web::rt::spawn(async move {
+        let after_commit_on = super::after_commit::start(&appstate).await;
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
         loop {
             drain(&appstate, &guard).await;
+            if after_commit_on {
+                super::after_commit::tick(&appstate, &after_commit).await;
+            }
             tokio::select! {
                 _ = tick.tick() => {},
                 event = events.recv() => {

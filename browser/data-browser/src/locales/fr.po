@@ -965,9 +965,11 @@ msgstr "Secret de l'Agent"
 msgid "Copy secret to continue"
 msgstr "Copier le secret pour continuer"
 
+#: src/chunks/AppPage/AfterCommitBar.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
+#: src/views/Installation/AfterCommitTables.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Retry"
 msgstr "Réessayer"
@@ -8881,9 +8883,6 @@ msgstr ""
 msgid "v"
 msgstr ""
 
-#~ msgid "Pinned to <0/> {0}"
-#~ msgstr ""
-
 #: src/chunks/Plugins/CapabilityList.tsx
 msgid "No permissions required"
 msgstr "Aucune autorisation requise"
@@ -9802,12 +9801,6 @@ msgstr ""
 msgid "Route writes"
 msgstr ""
 
-#~ msgid "Pinned to <0/> <1/>"
-#~ msgstr ""
-
-#~ msgid "<0/> from {0}"
-#~ msgstr ""
-
 #: src/chunks/Plugins/EndpointHealth.tsx
 msgid "Serving"
 msgstr ""
@@ -10050,6 +10043,7 @@ msgstr ""
 msgid "Let this app edit rows"
 msgstr ""
 
+#: src/chunks/AppPage/AfterCommitBar.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "This app"
 msgstr ""
@@ -10091,6 +10085,7 @@ msgstr ""
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "from <0/>"
+msgstr ""
 
 #: src/chunks/TablePage/ExpandedRowDialog.tsx
 msgid "Kept by apps"
@@ -10103,4 +10098,77 @@ msgstr ""
 #. 0: extras
 #: src/chunks/AppPage/RowGrantText.tsx
 msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> is told when rows change, also when this tab is closed."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "No proposed edits are waiting."
+msgstr ""
+
+#. 0: waiting
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "{0} proposed edits are waiting for review."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "Tables it follows"
+msgstr ""
+
+#. 0: sub.pending.rows
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "{0} rows waiting"
+msgstr ""
+
+#. 0: table.title || 'this table'
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "Stopped following changes to {0}: <0/>"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} stopped following changes to this table"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} wants to change rows"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Allow all edits by this view on this table"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Apply"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Decline"
+msgstr ""
+
+#. 0: tableName
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "<0/> stopped following changes to {0}: <1/>"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "{0} wants to change 1 row"
+msgstr ""
+
+#. 0: appName; 1: rows
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "{0} wants to change {1} rows"
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "One proposed edit is waiting for review."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "One row waiting"
 msgstr ""
