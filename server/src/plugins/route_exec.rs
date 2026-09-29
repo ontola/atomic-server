@@ -560,7 +560,26 @@ pub fn build_response(response: &Json, rules: &ResponseRules) -> Result<Built, S
         Some(_) => return Err("response headers must be an object".into()),
     }
 
+    let base64_body = match object.get("bodyBase64") {
+        None | Some(Json::Null) => None,
+        Some(Json::String(encoded)) => {
+            if !matches!(object.get("body"), None | Some(Json::Null)) {
+                return Err("a response has either body or bodyBase64, not both".into());
+            }
+            use base64::Engine as _;
+            Some(
+                base64::engine::general_purpose::STANDARD
+                    .decode(encoded)
+                    .map_err(|_| "bodyBase64 must be standard base64".to_string())?,
+            )
+        }
+        Some(_) => return Err("bodyBase64 must be a string".into()),
+    };
     let (body, default_type) = match object.get("body") {
+        _ if base64_body.is_some() => (
+            base64_body.unwrap_or_default(),
+            Some("application/octet-stream"),
+        ),
         None | Some(Json::Null) => (Vec::new(), None),
         Some(Json::String(s)) => (s.clone().into_bytes(), Some("text/plain; charset=utf-8")),
         Some(other) => (
@@ -1269,7 +1288,7 @@ async fn run(
             db: Arc::new(store.clone()),
             plugin: installation.to_string(),
             drive: loaded.drive.clone(),
-            for_agent,
+            for_agent: for_agent.clone(),
             manifest: Some(loaded.manifest.clone()),
         },
         grants,
@@ -1289,6 +1308,8 @@ async fn run(
             api_origin: appstate.config.get_origin(),
             log: signed.clone(),
             now: at,
+            config: loaded.config.clone(),
+            reader: for_agent.clone(),
         }),
     };
     let deadline = route
@@ -2301,6 +2322,49 @@ mod tests {
         assert_eq!(p["name"], "al ice");
         assert_eq!(p["rest"], "a/b/c");
         assert!(params("/", "/").is_empty());
+    }
+
+    /// Raw bytes (a Willow drop) cross as `bodyBase64`, and are served as
+    /// `application/octet-stream` unless the handler names a type.
+    #[test]
+    fn base64_bodies_are_served_as_raw_bytes() {
+        let rules = ResponseRules {
+            shared_host: true,
+            host: "localhost:9883",
+            cors: Cors::None,
+            max_bytes: 4,
+            head: false,
+            consent_page: None,
+        };
+        let built = build_response(
+            &serde_json::json!({ "status": 200, "bodyBase64": "AP8Afw==" }),
+            &rules,
+        )
+        .unwrap();
+        assert_eq!(built.body, vec![0, 255, 0, 127]);
+        assert!(built
+            .headers
+            .iter()
+            .any(|(n, v)| n == header::CONTENT_TYPE && v == "application/octet-stream"));
+        for (response, error) in [
+            (
+                serde_json::json!({ "bodyBase64": "not base64!" }),
+                "standard base64",
+            ),
+            (serde_json::json!({ "bodyBase64": 5 }), "must be a string"),
+            (
+                serde_json::json!({ "bodyBase64": "AA==", "body": "x" }),
+                "not both",
+            ),
+            // Five bytes: over this route's limit, as for text bodies.
+            (
+                serde_json::json!({ "bodyBase64": "AAAAAAA=" }),
+                "byte limit",
+            ),
+        ] {
+            let refused = build_response(&response, &rules).unwrap_err();
+            assert!(refused.contains(error), "{refused}");
+        }
     }
 
     #[test]

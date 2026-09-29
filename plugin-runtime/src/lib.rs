@@ -92,6 +92,13 @@ globalThis.__atomic = (function () {
     publicKey: (key, options) => call('keys.publicKey', { ...(options || {}), key }),
     sign: (request) => call('keys.sign', request),
   };
+  // Willow'25 entries, signed by a host-held subspace key. The host checks
+  // the Entry against the key's binding and the source's current commit.
+  input.willow = {
+    subspace: (key) => call('willow.subspace', { key }),
+    authorise: (request) => call('willow.authorise', request),
+    list: (key) => call('willow.list', { key }),
+  };
   input.tokens = {
     issue: (request) => call('tokens.issue', request),
     verify: (token) => call('tokens.verify', { token }),

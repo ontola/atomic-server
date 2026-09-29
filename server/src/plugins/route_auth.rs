@@ -444,6 +444,10 @@ pub struct CryptoHost {
     /// Lines for the run log: every signature, with its operation id.
     pub log: Arc<Mutex<Vec<String>>>,
     pub now: i64,
+    /// The Installation's config, which `willow` key bindings read.
+    pub config: Json,
+    /// Whom the route reads as: a Willow entry's source must be readable by it.
+    pub reader: atomic_lib::agents::ForAgent,
 }
 
 impl CryptoHost {
@@ -527,6 +531,35 @@ impl CryptoHost {
                     .unwrap_or_else(|e| e.into_inner())
                     .push(line);
                 out
+            }
+            "willow.subspace" | "willow.authorise" | "willow.list" => {
+                let willow = super::willow::WillowHost {
+                    db: &self.db,
+                    installation: &self.installation,
+                    manifest: &self.manifest,
+                    config: &self.config,
+                    reader: &self.reader,
+                    now_ms: self.now,
+                    willow_now: super::willow::willow_now(),
+                };
+                let key = request["key"].as_str().ok_or("give the key's name")?;
+                match name {
+                    "willow.subspace" => willow.subspace(key)?,
+                    "willow.list" => willow.list(key)?,
+                    _ => {
+                        let authorise: super::willow::AuthoriseRequest =
+                            serde_json::from_value(request.clone())
+                                .map_err(|e| format!("not a Willow authorisation request: {e}"))?;
+                        let (out, line) = willow.authorise(&authorise).await?;
+                        if !line.is_empty() {
+                            self.log
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push(line);
+                        }
+                        out
+                    }
+                }
             }
             "tokens.issue" => {
                 let issue = if let Some(code) = request["code"].as_str() {

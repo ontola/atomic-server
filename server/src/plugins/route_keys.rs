@@ -349,6 +349,51 @@ pub fn erase(db: &Db, installation: &str) -> usize {
     entries.len()
 }
 
+/// Signs `message` with a declared Willow subspace key (an Ed25519 key with a
+/// `willow` binding), generating it if activation did not. Returns the public
+/// key (the subspace id) and the signature. Only [`super::willow`] calls
+/// this, after it has checked that `message` is an Entry the binding allows.
+pub fn sign_willow(
+    db: &Db,
+    installation: &str,
+    manifest: &Manifest,
+    name: &str,
+    message: &[u8],
+) -> Result<([u8; 32], [u8; 64]), String> {
+    let key = declared(manifest, name)?;
+    if key.willow.is_none() || key.alg != KeyAlg::Ed25519 {
+        return Err(format!("key `{name}` is not a Willow subspace key"));
+    }
+    ensure(db, installation, std::slice::from_ref(key))?;
+    let Private::Ed25519(signing) = load(db, installation, name)?.private else {
+        return Err(format!("key `{name}` is not an Ed25519 key"));
+    };
+    use ed25519_dalek::Signer as _;
+    Ok((
+        signing.verifying_key().to_bytes(),
+        signing.sign(message).to_bytes(),
+    ))
+}
+
+/// The subspace id of a declared Willow subspace key, generating the key if
+/// activation did not.
+pub fn willow_public(
+    db: &Db,
+    installation: &str,
+    manifest: &Manifest,
+    name: &str,
+) -> Result<[u8; 32], String> {
+    let key = declared(manifest, name)?;
+    if key.willow.is_none() || key.alg != KeyAlg::Ed25519 {
+        return Err(format!("key `{name}` is not a Willow subspace key"));
+    }
+    ensure(db, installation, std::slice::from_ref(key))?;
+    let Private::Ed25519(signing) = load(db, installation, name)?.private else {
+        return Err(format!("key `{name}` is not an Ed25519 key"));
+    };
+    Ok(signing.verifying_key().to_bytes())
+}
+
 /// `ctx.keys.sign`: what the plugin asks the host to sign.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -389,6 +434,14 @@ pub fn sign(
     now: std::time::SystemTime,
 ) -> Result<(serde_json::Value, String), String> {
     let key = declared(manifest, &request.key)?;
+    // Domain separation: a Willow subspace key signs Willow Entry bytes
+    // through `ctx.willow.authorise` and nothing else.
+    if key.willow.is_some() {
+        return Err(format!(
+            "key `{}` is a Willow subspace key; it only signs Willow entries",
+            request.key
+        ));
+    }
     let method = request.request.method.to_ascii_uppercase();
     let operation = manifest
         .operations

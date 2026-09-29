@@ -121,6 +121,8 @@ pub mod versioning;
 pub mod view_token;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm;
+#[cfg(feature = "plugin-routes")]
+pub mod willow;
 
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod plugin_for_testing_tests;
