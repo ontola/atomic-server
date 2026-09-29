@@ -12,6 +12,23 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   already on the conversation reads what arrived while you were away, and after
   you missed something the app offers system notifications once, instead of
   only a checkbox in Settings.
+- Someone given a chat, or anything else, out of a drive they can't open sees
+  all of it. A list answered from the local database was trusted whenever it
+  was non-empty, but only a drive synced to this device has its whole list
+  there: the guest's own messages and the ones present when they joined were
+  shown as the entire chat, and a reload asked the same database again. For a
+  drive this device hasn't synced the server is now asked too, and anything
+  only the local database knows (a write not yet confirmed) is kept.
+- Things shared with you out of someone else's drive update live and notify
+  you. The app only listened to the drive you had open, so a guest in a shared
+  chat never received new messages from the host, and got no notifications for
+  them. Everything in "Shared with me" is now subscribed for as long as the app
+  runs (`Store.subscribeLive`).
+- The Notifications page shows placeholder rows while it loads, instead of a
+  blank page that could flash "Nothing yet" before the list arrived.
+- In development, invite links open in the app you are using and name the
+  server (`?server=`). They pointed at the server, which during `pnpm start`
+  has no frontend of its own, so every invite link was a blank page.
 - Turning workspace sync off says what is actually in the way. All three of its
   preconditions used to answer with "Open this drive with local storage
   available before disconnecting", so someone signed out, or on a server this

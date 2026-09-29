@@ -7,6 +7,13 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- A commit is also sent to WebSocket subscribers of the resource's parent. A
+  resource shared out of a drive the recipient can't read (a chatroom) can only
+  be subscribed to on its own, and a new child is a new subject, so its new
+  messages reached neither that subscription nor a drive subscription the
+  recipient could hold. Reading a parent means reading its children, which is
+  the check the subscription already passed.
+
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private
   drive points to its Inbox with.

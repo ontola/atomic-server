@@ -665,12 +665,40 @@ impl Handler<CommitMessage> for CommitMonitor {
                 .as_ref()
                 .and_then(|r| r.get_drive());
             let owner = resource_drive.as_ref().unwrap_or(&target_subject);
+            #[allow(clippy::mutable_key_type)]
+            let mut sent: HashSet<&Addr<WebSocketConnection>> = HashSet::new();
             for (drive, subscribers) in &self.drive_subscriptions {
                 let drive_subject = atomic_lib::Subject::from_raw(drive, base_domain.as_deref());
                 if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }
                 send_scheme_frames(subscribers, frames, |_| false);
+                sent.extend(subscribers.keys());
+            }
+
+            // Subscribers of the parent. Someone given one resource out of a
+            // drive they can't read (a shared chatroom) can subscribe to that
+            // resource but not to the drive, and a new child is a new subject,
+            // so neither map above reaches them: every message after the one
+            // they loaded never arrived. Reading a parent means reading its
+            // children — rights are inherited downwards and never narrowed —
+            // which is the check their subscription already passed.
+            let parent = msg
+                .commit_response
+                .resource_new
+                .as_ref()
+                .or(msg.commit_response.resource_old.as_ref())
+                .and_then(|r| r.get(atomic_lib::urls::PARENT).ok())
+                .map(|p| atomic_lib::Subject::from_raw(&p.to_string(), base_domain.as_deref()));
+            if let Some(subscribers) = parent.and_then(|p| self.subscriptions.get(&p)) {
+                for (connection, subscriber) in subscribers {
+                    if sent.contains(connection) {
+                        continue;
+                    }
+                    connection.do_send(SendFrame {
+                        frame: frames.for_subscriber(subscriber),
+                    });
+                }
             }
         }
 
