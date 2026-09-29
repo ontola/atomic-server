@@ -428,3 +428,44 @@ describe('ClientDbWorker losing its lock to another tab', () => {
     }
   });
 });
+
+describe('ClientDbWorker with a precompiled WebAssembly module', () => {
+  it('hands the module to its worker instead of a url to fetch', async () => {
+    const request = vi.fn((_name, _options, callback) => callback());
+    vi.stubGlobal('navigator', { locks: { request } });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        postMessage() {}
+        close() {}
+      },
+    );
+    const sent: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage?: (event: unknown) => void;
+        postMessage(message: { id: string } & Record<string, unknown>) {
+          sent.push(message);
+          queueMicrotask(() =>
+            this.onmessage?.({ data: { id: message.id, type: 'result' } }),
+          );
+        }
+        terminate() {}
+      },
+    );
+    const compiled = { compiled: true } as unknown as WebAssembly.Module;
+    const db = new ClientDbWorker('wasm-url', 'worker-url', {
+      wasmModule: Promise.resolve(compiled),
+    });
+
+    try {
+      await db.init('https://example.com');
+      const init = sent.find(message => message.type === 'init');
+      expect(init?.wasmModule).toBe(compiled);
+    } finally {
+      db.destroy();
+      vi.unstubAllGlobals();
+    }
+  });
+});

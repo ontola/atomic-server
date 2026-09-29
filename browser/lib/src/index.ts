@@ -74,7 +74,7 @@ export * from './loro-loader.js';
 export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
-export { ClientDbWorker } from './client-db.js';
+export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
 export {
   attributionForVersion,
   mergeHistoryAttributions,

@@ -321,6 +321,7 @@ msgstr "Ollama URL"
 msgid "Ollama"
 msgstr "Ollama"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -1050,6 +1051,7 @@ msgstr "Add description"
 msgid "Resources"
 msgstr "Resources"
 
+#: src/actions/resourceActions.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
@@ -1327,6 +1329,8 @@ msgid "Show data view"
 msgstr "Show data view"
 
 #: src/actions/appActions.ts
+#: src/actions/appMenuItems.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New resource"
 msgstr "New resource"
@@ -1983,13 +1987,11 @@ msgstr "Open the resource"
 msgid "Open the edit form."
 msgstr "Open the edit form."
 
-#: src/actions/resourceActions.tsx
-msgid "Add child"
-msgstr "Add child"
+#~ msgid "Add child"
+#~ msgstr "Add child"
 
-#: src/actions/resourceActions.tsx
-msgid "Create a new resource under this resource."
-msgstr "Create a new resource under this resource."
+#~ msgid "Create a new resource under this resource."
+#~ msgstr "Create a new resource under this resource."
 
 #: src/actions/resourceActions.tsx
 msgid "Use in code"
@@ -2011,9 +2013,8 @@ msgstr "Add the resource as context to the AI sidebar"
 msgid "Search children"
 msgstr "Search children"
 
-#: src/actions/resourceActions.tsx
-msgid "Scope search to resource"
-msgstr "Scope search to resource"
+#~ msgid "Scope search to resource"
+#~ msgstr "Scope search to resource"
 
 #: src/actions/resourceActions.tsx
 msgid "Permissions & Invites"
@@ -2329,6 +2330,7 @@ msgstr "Rearange {0}"
 msgid "<0/> Note"
 msgstr "<0/> Note"
 
+#: src/actions/appMenuItems.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/SettingsAgent.tsx
@@ -4423,6 +4425,7 @@ msgstr "Only stored on this device. Star a drive to keep it in My drives."
 msgid "Recently visited"
 msgstr "Recently visited"
 
+#: src/routes/DemoRoute.tsx
 #: src/routes/DemoRoute.tsx
 msgid "Setting up your demo…"
 msgstr "Setting up your demo…"
@@ -10170,6 +10173,7 @@ msgid "{0} purchased credits · carries over"
 msgstr "{0} purchased credits · carries over"
 
 #: src/chunks/AI/HostedAICredits.tsx
+#: src/components/Vault/AICreditsService.tsx
 msgid "AI credits"
 msgstr "AI credits"
 
@@ -12589,6 +12593,110 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 
+#: src/actions/resourceActions.tsx
+msgid "Add or remove tags"
+msgstr "Add or remove tags"
+
+#: src/routes/DemoRoute.tsx
+msgid "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
+msgstr "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Could not open checkout. Try again."
+msgstr "Could not open checkout. Try again."
+
+#. 0: usedPct; 1: credits(allowance); 2: resets
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0}% of this month’s {1} credits used. Resets {2}."
+msgstr "{0}% of this month’s {1} credits used. Resets {2}."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "AI credits used this month"
+msgstr "AI credits used this month"
+
+#. 0: credits(purchased)
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0} purchased credits left. These carry over."
+msgstr "{0} purchased credits left. These carry over."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Opening checkout…"
+msgstr "Opening checkout…"
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Buy more credits"
+msgstr "Buy more credits"
+
+#: src/actions/appMenuItems.tsx
+msgid "Create a new resource in this drive."
+msgstr "Create a new resource in this drive."
+
+#: src/actions/appMenuItems.tsx
+msgid "New AI chat"
+msgstr "New AI chat"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open the assistant."
+msgstr "Open the assistant."
+
+#: src/actions/appMenuItems.tsx
+msgid "Open settings"
+msgstr "Open settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Switch drive"
+msgstr "Switch drive"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open user settings"
+msgstr "Open user settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Give feedback"
+msgstr "Give feedback"
+
+#: src/actions/appMenuItems.tsx
+msgid "Show notifications"
+msgstr "Show notifications"
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this one."
+msgstr "Create a new resource under this one."
+
+#: src/actions/resourceActions.tsx
+msgid "Search only inside this resource"
+msgstr "Search only inside this resource"
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+msgid "Search everywhere"
+msgstr "Search everywhere"
+
+#. 0: scopeResource.title
+#: src/components/OverlayContainer.tsx
+msgid "Searching in {0}"
+msgstr "Searching in {0}"
+
+#: src/components/OverlayContainer.tsx
+msgid "Recently opened"
+msgstr "Recently opened"
+
+#: src/routes/AppSettings.tsx
+msgid "Search settings"
+msgstr "Search settings"
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Click or drag to open"
+msgstr "Click or drag to open"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open sync settings"
+msgstr "Open sync settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Go to"
+msgstr "Go to"
+
 #. 0: Math.round(bytes / 1024); 1: MAX_CUSTOM_CSS_BYTES / 1024
 #: src/chunks/CodeEditor/cssLint.ts
 msgid "Too long: {0} KB of CSS, the limit is {1} KB. Longer stylesheets are dropped entirely when the form is served."
@@ -12613,6 +12721,18 @@ msgstr "All columns are on this form. Add a column to the table to ask something
 #: src/chunks/FormBuilder/AddFieldMenu.tsx
 msgid "Add a column to the table"
 msgstr "Add a column to the table"
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "Also delete the results table and its responses"
+msgstr "Also delete the results table and its responses"
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "Are you sure you want to delete this form?"
+msgstr "Are you sure you want to delete this form?"
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "Delete form"
+msgstr "Delete form"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 msgid "Show Page When"
@@ -12664,18 +12784,6 @@ msgstr "checked"
 msgid "unchecked"
 msgstr "unchecked"
 
-#: src/chunks/FormBuilder/DeleteFormDialog.tsx
-msgid "Also delete the results table and its responses"
-msgstr "Also delete the results table and its responses"
-
-#: src/chunks/FormBuilder/DeleteFormDialog.tsx
-msgid "Are you sure you want to delete this form?"
-msgstr "Are you sure you want to delete this form?"
-
-#: src/chunks/FormBuilder/DeleteFormDialog.tsx
-msgid "Delete form"
-msgstr "Delete form"
-
 #: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "No options yet"
 msgstr "No options yet"
@@ -12687,6 +12795,31 @@ msgstr "No rows or columns yet"
 #: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "No columns yet"
 msgstr "No columns yet"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Empty heading"
+msgstr "Empty heading"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Empty info box"
+msgstr "Empty info box"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Empty paragraph"
+msgstr "Empty paragraph"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Untitled question"
+msgstr "Untitled question"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+#: src/chunks/FormBuilder/PageTabBar.tsx
+msgid "Conditional"
+msgstr "Conditional"
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Remove from form"
+msgstr "Remove from form"
 
 #: src/chunks/FormBuilder/FormAccessSection.tsx
 msgid "Anyone with the share link can view and submit"
@@ -12764,51 +12897,6 @@ msgstr "Invite link copied to clipboard"
 msgid "Used"
 msgstr "Used"
 
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid "Back to table"
-msgstr "Back to table"
-
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid "Fields"
-msgstr "Fields"
-
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid "Summary"
-msgstr "Summary"
-
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid "Required table columns are missing from this form:"
-msgstr "Required table columns are missing from this form:"
-
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid ". Responses cannot be saved without them."
-msgstr ". Responses cannot be saved without them."
-
-#: src/chunks/FormBuilder/FieldRow.tsx
-msgid "Empty heading"
-msgstr "Empty heading"
-
-#: src/chunks/FormBuilder/FieldRow.tsx
-msgid "Empty info box"
-msgstr "Empty info box"
-
-#: src/chunks/FormBuilder/FieldRow.tsx
-msgid "Empty paragraph"
-msgstr "Empty paragraph"
-
-#: src/chunks/FormBuilder/FieldRow.tsx
-msgid "Untitled question"
-msgstr "Untitled question"
-
-#: src/chunks/FormBuilder/FieldRow.tsx
-#: src/chunks/FormBuilder/PageTabBar.tsx
-msgid "Conditional"
-msgstr "Conditional"
-
-#: src/chunks/FormBuilder/FieldRow.tsx
-msgid "Remove from form"
-msgstr "Remove from form"
-
 #: src/chunks/FormBuilder/FieldSettingsPanel.tsx
 msgid "Heading text"
 msgstr "Heading text"
@@ -12868,6 +12956,64 @@ msgstr "Preview"
 msgid "Loading preview…"
 msgstr "Loading preview…"
 
+#: src/chunks/FormBuilder/PageSettingsPanel.tsx
+msgid "<0/> Delete page"
+msgstr "<0/> Delete page"
+
+#: src/chunks/FormBuilder/PageSettingsPanel.tsx
+msgid "Are you sure you want to delete this page? Its fields will no longer be part of the form."
+msgstr "Are you sure you want to delete this page? Its fields will no longer be part of the form."
+
+#: src/chunks/FormBuilder/PageSettingsPanel.tsx
+msgid "Delete page"
+msgstr "Delete page"
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Back to table"
+msgstr "Back to table"
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Fields"
+msgstr "Fields"
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Summary"
+msgstr "Summary"
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Required table columns are missing from this form:"
+msgstr "Required table columns are missing from this form:"
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid ". Responses cannot be saved without them."
+msgstr ". Responses cannot be saved without them."
+
+#. 0: formatScheduleMoment(availability.opensAt)
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Opens {0}"
+msgstr "Opens {0}"
+
+#. 0: formatScheduleMoment(availability.closedAt)
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Closed {0}"
+msgstr "Closed {0}"
+
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Unpublish"
+msgstr "Unpublish"
+
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Publish"
+msgstr "Publish"
+
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Connect to a server to publish or unpublish this form."
+msgstr "Connect to a server to publish or unpublish this form."
+
+#: src/chunks/FormBuilder/PublishToggle.tsx
+msgid "Scheduled"
+msgstr "Scheduled"
+
 #: src/chunks/FormBuilder/FormScheduleSection.tsx
 msgid "Opens"
 msgstr "Opens"
@@ -12926,43 +13072,51 @@ msgstr "<0/> Add page"
 msgid "Untitled page"
 msgstr "Untitled page"
 
-#: src/chunks/FormBuilder/PageSettingsPanel.tsx
-msgid "<0/> Delete page"
-msgstr "<0/> Delete page"
+#: src/chunks/FormBuilder/ResultsTab.tsx
+msgid "No results table found for this form."
+msgstr "No results table found for this form."
 
-#: src/chunks/FormBuilder/PageSettingsPanel.tsx
-msgid "Are you sure you want to delete this page? Its fields will no longer be part of the form."
-msgstr "Are you sure you want to delete this page? Its fields will no longer be part of the form."
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Preparing share link…"
+msgstr "Preparing share link…"
 
-#: src/chunks/FormBuilder/PageSettingsPanel.tsx
-msgid "Delete page"
-msgstr "Delete page"
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Share form"
+msgstr "Share form"
 
-#. 0: formatScheduleMoment(availability.opensAt)
-#: src/chunks/FormBuilder/PublishToggle.tsx
-msgid "Opens {0}"
-msgstr "Opens {0}"
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "<0/> Share"
+msgstr "<0/> Share"
 
-#. 0: formatScheduleMoment(availability.closedAt)
-#: src/chunks/FormBuilder/PublishToggle.tsx
-msgid "Closed {0}"
-msgstr "Closed {0}"
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "QR code for the form link"
+msgstr "QR code for the form link"
 
-#: src/chunks/FormBuilder/PublishToggle.tsx
-msgid "Unpublish"
-msgstr "Unpublish"
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Share form view"
+msgstr "Share form view"
 
-#: src/chunks/FormBuilder/PublishToggle.tsx
-msgid "Publish"
-msgstr "Publish"
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Link"
+msgstr "Link"
 
-#: src/chunks/FormBuilder/PublishToggle.tsx
-msgid "Connect to a server to publish or unpublish this form."
-msgstr "Connect to a server to publish or unpublish this form."
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Embed"
+msgstr "Embed"
 
-#: src/chunks/FormBuilder/PublishToggle.tsx
-msgid "Scheduled"
-msgstr "Scheduled"
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "This form is invite only — the plain link and embed won't open without a valid invite code. Create and copy invite links in Settings → Form access."
+msgstr "This form is invite only — the plain link and embed won't open without a valid invite code. Create and copy invite links in Settings → Form access."
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
+msgid "Form"
+msgstr "Form"
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Paste this where you want the form to appear."
+msgstr "Paste this where you want the form to appear."
 
 #: src/chunks/FormBuilder/SettingsTab.tsx
 msgid "Form access"
@@ -13061,55 +13215,26 @@ msgstr "Pick {0}"
 msgid "Reset"
 msgstr "Reset"
 
-#: src/chunks/FormBuilder/ResultsTab.tsx
-msgid "No results table found for this form."
-msgstr "No results table found for this form."
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "Preparing share link…"
-msgstr "Preparing share link…"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "Share form"
-msgstr "Share form"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "<0/> Share"
-msgstr "<0/> Share"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "QR code for the form link"
-msgstr "QR code for the form link"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "Share form view"
-msgstr "Share form view"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "Link"
-msgstr "Link"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "Embed"
-msgstr "Embed"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "This form is invite only — the plain link and embed won't open without a valid invite code. Create and copy invite links in Settings → Form access."
-msgstr "This form is invite only — the plain link and embed won't open without a valid invite code. Create and copy invite links in Settings → Form access."
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
-msgid "Form"
-msgstr "Form"
-
-#: src/chunks/FormBuilder/ShareLinkPanel.tsx
-msgid "Paste this where you want the form to appear."
-msgstr "Paste this where you want the form to appear."
-
 #: src/chunks/FormBuilder/useFormFieldPropertySync.ts
 msgid "Already used by another question"
 msgstr "Already used by another question"
+
+#. 0: collection.totalMembers
+#: src/chunks/TablePage/DeleteTableDialog.tsx
+msgid "{0} attached forms will also be deleted, including their pages and questions."
+msgstr "{0} attached forms will also be deleted, including their pages and questions."
+
+#: src/chunks/TablePage/DeleteTableDialog.tsx
+msgid "Attached forms will also be deleted, including their pages and questions."
+msgstr "Attached forms will also be deleted, including their pages and questions."
+
+#: src/chunks/TablePage/DeleteTableDialog.tsx
+msgid "Are you sure you want to delete this table?"
+msgstr "Are you sure you want to delete this table?"
+
+#: src/chunks/TablePage/DeleteTableDialog.tsx
+msgid "Delete table"
+msgstr "Delete table"
 
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
 msgid "New form"
@@ -13137,23 +13262,6 @@ msgstr "Select the columns to include. Responses will be added to this table."
 msgid "Create form"
 msgstr "Create form"
 
-#. 0: collection.totalMembers
-#: src/chunks/TablePage/DeleteTableDialog.tsx
-msgid "{0} attached forms will also be deleted, including their pages and questions."
-msgstr "{0} attached forms will also be deleted, including their pages and questions."
-
-#: src/chunks/TablePage/DeleteTableDialog.tsx
-msgid "Attached forms will also be deleted, including their pages and questions."
-msgstr "Attached forms will also be deleted, including their pages and questions."
-
-#: src/chunks/TablePage/DeleteTableDialog.tsx
-msgid "Are you sure you want to delete this table?"
-msgstr "Are you sure you want to delete this table?"
-
-#: src/chunks/TablePage/DeleteTableDialog.tsx
-msgid "Delete table"
-msgstr "Delete table"
-
 #: src/chunks/TablePage/TableForms.tsx
 msgid "Forms"
 msgstr "Forms"
@@ -13169,6 +13277,225 @@ msgstr "No server connected"
 #: src/components/forms/FormServerWarning.tsx
 msgid "You can create and edit this form, but you need to connect to a server before you can publish it and receive responses."
 msgstr "You can create and edit this form, but you need to connect to a server before you can publish it and receive responses."
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
+msgid "Add option"
+msgstr "Add option"
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
+msgid "Remove option"
+msgstr "Remove option"
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "Min selected"
+msgstr "Min selected"
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "The fewest options an answer may carry. An unanswered question still counts as unanswered rather than as too few — that is what Required is for."
+msgstr "The fewest options an answer may carry. An unanswered question still counts as unanswered rather than as too few — that is what Required is for."
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "Max selected"
+msgstr "Max selected"
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "The most options a visitor may tick. Once they reach it the remaining options grey out."
+msgstr "The most options a visitor may tick. Once they reach it the remaining options grey out."
+
+#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
+#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
+msgid "No default"
+msgstr "No default"
+
+#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
+msgid "Default country"
+msgstr "Default country"
+
+#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
+msgid "Min"
+msgstr "Min"
+
+#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
+msgid "Max"
+msgstr "Max"
+
+#: src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
+msgid "Style"
+msgstr "Style"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkableTagList.tsx
+msgid "Change the linked table"
+msgstr "Change the linked table"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+#: src/chunks/FormBuilder/FieldOptions/LinkableTagList.tsx
+msgid "Link options to a table"
+msgstr "Link options to a table"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
+msgid "The options are that column’s tags. Add or rename them on the table."
+msgstr "The options are that column’s tags. Add or rename them on the table."
+
+#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
+msgid "Every row of that table is an option, so answers link back to the row. The list follows the table."
+msgstr "Every row of that table is an option, so answers link back to the row. The list follows the table."
+
+#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
+msgid "<0/> Unlink"
+msgstr "<0/> Unlink"
+
+#. 0: ' '
+#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
+msgid "Linked to <0/> in{0} <1/>"
+msgstr "Linked to <0/> in{0} <1/>"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Rows (statements)"
+msgstr "Rows (statements)"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Add row"
+msgstr "Add row"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Remove row"
+msgstr "Remove row"
+
+#. 0: index
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Statement {0}"
+msgstr "Statement {0}"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Columns (answers)"
+msgstr "Columns (answers)"
+
+#. 0: index
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Answer {0}"
+msgstr "Answer {0}"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "The table these options come from."
+msgstr "The table these options come from."
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "Column"
+msgstr "Column"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "A select column contributes its tags. Any other column turns each row into an option, labelled by that column."
+msgstr "A select column contributes its tags. Any other column turns each row into an option, labelled by that column."
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "This table has no columns to link to."
+msgstr "This table has no columns to link to."
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "Everyone who opens this form sees every row of"
+msgstr "Everyone who opens this form sees every row of"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "as an option. Only link a table whose contents you are happy to make public."
+msgstr "as an option. Only link a table whose contents you are happy to make public."
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "This publishes the rows"
+msgstr "This publishes the rows"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "Link options"
+msgstr "Link options"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "Use its tags as the options"
+msgstr "Use its tags as the options"
+
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "Use each row, labelled by this column"
+msgstr "Use each row, labelled by this column"
+
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
+msgid "Replace"
+msgstr "Replace"
+
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
+msgid "Add image"
+msgstr "Add image"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "points"
+msgstr "points"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "Scale"
+msgstr "Scale"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "Low end label"
+msgstr "Low end label"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "High end label"
+msgstr "High end label"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "Steps"
+msgstr "Steps"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "★ Star"
+msgstr "★ Star"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "♥ Heart"
+msgstr "♥ Heart"
+
+#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+msgid "Min length"
+msgstr "Min length"
+
+#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+msgid "The fewest characters an answer may carry. An unanswered question still counts as unanswered rather than as too short — that is what Required is for."
+msgstr "The fewest characters an answer may carry. An unanswered question still counts as unanswered rather than as too short — that is what Required is for."
+
+#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+msgid "Max length"
+msgstr "Max length"
+
+#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+msgid "The most characters an answer may carry. Going over is shown as an error rather than blocked, but the form cannot be submitted until it is back under."
+msgstr "The most characters an answer may carry. Going over is shown as an error rather than blocked, but the form cannot be submitted until it is back under."
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "<0/> Add column"
+msgstr "<0/> Add column"
+
+#. 0: columns.length + 1
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Column {0}"
+msgstr "Column {0}"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Columns"
+msgstr "Columns"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Min rows"
+msgstr "Min rows"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Max rows"
+msgstr "Max rows"
+
+#. 0: allowsOnly.length + 1
+#: src/chunks/FormBuilder/FieldOptions/TagListEditor.tsx
+msgid "Option {0}"
+msgstr "Option {0}"
 
 #: src/chunks/FormBuilder/Summary/AnswerList.tsx
 msgid "Showing first"
@@ -13231,225 +13558,6 @@ msgstr "No numeric answers yet"
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "No answers yet"
 msgstr "No answers yet"
-
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
-#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
-msgid "Add option"
-msgstr "Add option"
-
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
-#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
-msgid "Remove option"
-msgstr "Remove option"
-
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
-msgid "Min selected"
-msgstr "Min selected"
-
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
-msgid "The fewest options an answer may carry. An unanswered question still counts as unanswered rather than as too few — that is what Required is for."
-msgstr "The fewest options an answer may carry. An unanswered question still counts as unanswered rather than as too few — that is what Required is for."
-
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
-msgid "Max selected"
-msgstr "Max selected"
-
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
-msgid "The most options a visitor may tick. Once they reach it the remaining options grey out."
-msgstr "The most options a visitor may tick. Once they reach it the remaining options grey out."
-
-#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
-#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
-msgid "No default"
-msgstr "No default"
-
-#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
-msgid "Default country"
-msgstr "Default country"
-
-#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
-#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
-msgid "Min"
-msgstr "Min"
-
-#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
-#: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
-msgid "Max"
-msgstr "Max"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-#: src/chunks/FormBuilder/FieldOptions/LinkableTagList.tsx
-msgid "Link options to a table"
-msgstr "Link options to a table"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "The table these options come from."
-msgstr "The table these options come from."
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "Column"
-msgstr "Column"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "A select column contributes its tags. Any other column turns each row into an option, labelled by that column."
-msgstr "A select column contributes its tags. Any other column turns each row into an option, labelled by that column."
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "This table has no columns to link to."
-msgstr "This table has no columns to link to."
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "Everyone who opens this form sees every row of"
-msgstr "Everyone who opens this form sees every row of"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "as an option. Only link a table whose contents you are happy to make public."
-msgstr "as an option. Only link a table whose contents you are happy to make public."
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "This publishes the rows"
-msgstr "This publishes the rows"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "Link options"
-msgstr "Link options"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "Use its tags as the options"
-msgstr "Use its tags as the options"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "Use each row, labelled by this column"
-msgstr "Use each row, labelled by this column"
-
-#: src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
-msgid "Style"
-msgstr "Style"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkableTagList.tsx
-msgid "Change the linked table"
-msgstr "Change the linked table"
-
-#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
-msgid "The options are that column’s tags. Add or rename them on the table."
-msgstr "The options are that column’s tags. Add or rename them on the table."
-
-#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
-msgid "Every row of that table is an option, so answers link back to the row. The list follows the table."
-msgstr "Every row of that table is an option, so answers link back to the row. The list follows the table."
-
-#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
-msgid "<0/> Unlink"
-msgstr "<0/> Unlink"
-
-#. 0: ' '
-#: src/chunks/FormBuilder/FieldOptions/LinkedOptions.tsx
-msgid "Linked to <0/> in{0} <1/>"
-msgstr "Linked to <0/> in{0} <1/>"
-
-#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
-msgid "Rows (statements)"
-msgstr "Rows (statements)"
-
-#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
-msgid "Add row"
-msgstr "Add row"
-
-#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
-msgid "Remove row"
-msgstr "Remove row"
-
-#. 0: index
-#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
-msgid "Statement {0}"
-msgstr "Statement {0}"
-
-#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
-msgid "Columns (answers)"
-msgstr "Columns (answers)"
-
-#. 0: index
-#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
-msgid "Answer {0}"
-msgstr "Answer {0}"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "points"
-msgstr "points"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "Scale"
-msgstr "Scale"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "Low end label"
-msgstr "Low end label"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "High end label"
-msgstr "High end label"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "Steps"
-msgstr "Steps"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "★ Star"
-msgstr "★ Star"
-
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "♥ Heart"
-msgstr "♥ Heart"
-
-#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
-msgid "Replace"
-msgstr "Replace"
-
-#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
-msgid "Add image"
-msgstr "Add image"
-
-#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-msgid "<0/> Add column"
-msgstr "<0/> Add column"
-
-#. 0: columns.length + 1
-#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-msgid "Column {0}"
-msgstr "Column {0}"
-
-#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-msgid "Columns"
-msgstr "Columns"
-
-#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-msgid "Min rows"
-msgstr "Min rows"
-
-#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-msgid "Max rows"
-msgstr "Max rows"
-
-#. 0: allowsOnly.length + 1
-#: src/chunks/FormBuilder/FieldOptions/TagListEditor.tsx
-msgid "Option {0}"
-msgstr "Option {0}"
-
-#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
-msgid "Min length"
-msgstr "Min length"
-
-#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
-msgid "The fewest characters an answer may carry. An unanswered question still counts as unanswered rather than as too short — that is what Required is for."
-msgstr "The fewest characters an answer may carry. An unanswered question still counts as unanswered rather than as too short — that is what Required is for."
-
-#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
-msgid "Max length"
-msgstr "Max length"
-
-#: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
-msgid "The most characters an answer may carry. Going over is shown as an error rather than blocked, but the form cannot be submitted until it is back under."
-msgstr "The most characters an answer may carry. Going over is shown as an error rather than blocked, but the form cannot be submitted until it is back under."
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx

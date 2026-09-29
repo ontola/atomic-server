@@ -74,6 +74,10 @@ function isStorageBlockedDbError(error: unknown): boolean {
  * stack trace on every single page load. Every other failure passes through
  * untouched, because those we DO want to see in full.
  */
+/** `name` of the init error when the browser refuses this site storage, so a
+ *  caller that cannot work without it (the demo) can say so in its own words. */
+export const STORAGE_BLOCKED_ERROR_NAME = 'StorageBlockedError';
+
 function asInitError(e: unknown): Error {
   const message = e instanceof Error ? e.message : String(e);
 
@@ -90,14 +94,17 @@ function asInitError(e: unknown): Error {
   }
 
   if (isStorageBlockedDbError(e)) {
-    return new Error(
-      'Local caching and offline support are disabled: this browser is not ' +
-        'giving this site access to local storage right now. That is usually ' +
-        'private browsing, or a setting that blocks site data or cross-site ' +
-        'tracking — but it can also be another tab of this site still ' +
-        'holding the local database, in which case a reload clears it. The ' +
-        'app still works, reading directly from the server; nothing is kept ' +
-        'locally between reloads.',
+    return Object.assign(
+      new Error(
+        'Local caching and offline support are disabled: this browser is not ' +
+          'giving this site access to local storage right now. That is usually ' +
+          'private browsing, or a setting that blocks site data or cross-site ' +
+          'tracking — but it can also be another tab of this site still ' +
+          'holding the local database, in which case a reload clears it. The ' +
+          'app still works, reading directly from the server; nothing is kept ' +
+          'locally between reloads.',
+      ),
+      { name: STORAGE_BLOCKED_ERROR_NAME },
     );
   }
 
@@ -155,6 +162,11 @@ export interface ClientDbOptions {
    *  hold a local-only drive that exists nowhere else, and a key that is
    *  missing now is not necessarily gone (see `client-db-open.ts`). */
   discardUndecryptable?: boolean;
+  /** The database's WebAssembly, already fetched and compiled. The page can
+   *  start that long before this worker exists (the app does it from
+   *  index.html), and a compiled module crosses into the worker for free. A
+   *  rejection, or none, falls back to the worker fetching it itself. */
+  wasmModule?: Promise<WebAssembly.Module | undefined>;
 }
 
 type PendingRequest = {
@@ -662,9 +674,11 @@ export class ClientDbWorker {
     };
 
     const endWorkerInit = perfSpan('clientdb.workerInit');
+    const wasmModule = await this.opts.wasmModule?.catch(() => undefined);
     const timings = (await this.sendToWorker({
       type: 'init',
       wasmUrl: this.wasmUrl,
+      wasmModule,
       baseUrl,
       dbName: this.opts.dbName,
       dbKey: this.opts.dbKey,

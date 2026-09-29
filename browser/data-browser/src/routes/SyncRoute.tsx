@@ -54,6 +54,7 @@ import {
   CARD_TITLE_FONT,
 } from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
+import { AICreditsService } from '../components/Vault/AICreditsService';
 import {
   FaLaptop,
   FaServer,
@@ -1803,6 +1804,9 @@ function SyncPage() {
                 </ServiceBody>
               </ProviderService>
             )}
+            {/* Credits belong to the account, not to a plan or a drive: shown
+                with or without a Cloud Server, only while signed in. */}
+            {managedAccount && <ProviderAICredits />}
           </ProviderCard>
         )}
 
@@ -2515,6 +2519,21 @@ const ProviderHeader = styled.div`
  * account above them, and whitespace alone made them read as neighbours of it
  * instead of contents.
  */
+/* The same row look as ProviderService, for a row that is its own
+   component. */
+const providerRowCss = css`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
+  min-width: 0;
+`;
+
+const ProviderAICredits = styled(AICreditsService)`
+  ${providerRowCss}
+`;
+
 const ProviderService = styled(ServiceSection)`
   display: flex;
   align-items: flex-start;

@@ -3,6 +3,7 @@ import {
   before,
   editTitle,
   setTitle,
+  contextMenu,
   contextMenuClick,
   timestamp,
   newResource,
@@ -225,7 +226,7 @@ test.describe('search', async () => {
     const driveSubject = await page.evaluate(() => window.store.getDrive());
     const folderSubject = await getCurrentSubject(page);
 
-    // Add tags via the TagBar.
+    // Add tags via the TagBar. Tags live in More until the resource has one.
     //
     // The tag names must be unique per run, the same way the folder name is.
     // They used to be the literals `first-tag` / `second-tag`, which made this
@@ -244,10 +245,8 @@ test.describe('search', async () => {
     // the assertions below would look for a name the app never stored.
     const tagRunId = Math.random().toString(36).slice(2, 8);
     const firstTagName = `first-tag-${tagRunId}`;
-    await page
-      .locator('[aria-label="navigation"] button')
-      .filter({ hasText: 'Tags' })
-      .click();
+    await page.click(contextMenu);
+    await page.getByRole('menuitem', { name: 'Tags' }).click();
     await page.getByPlaceholder('New tag').fill(firstTagName);
     await page.getByTitle('Add tag').click();
     await expect(

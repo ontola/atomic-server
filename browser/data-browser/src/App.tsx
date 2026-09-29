@@ -211,7 +211,12 @@ import { isClientDbEnabled } from './helpers/clientDbMode';
 
 if (isClientDbEnabled()) {
   initClientDb(store, {
-    deferAnonymous: window.location.pathname === '/app/dev-drive',
+    // The demo makes a guest identity straight away, and that identity gets
+    // its own database: opening the anonymous one first only to close it
+    // again cost a second worker and WebAssembly start on every first visit.
+    deferAnonymous:
+      window.location.pathname === '/app/dev-drive' ||
+      window.location.pathname === '/app/demo',
   });
 }
 

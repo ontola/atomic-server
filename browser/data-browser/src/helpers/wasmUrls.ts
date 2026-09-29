@@ -28,3 +28,39 @@ export function wasmJsUrl(origin: string = window.location.origin): string {
 export function wasmBinaryUrl(origin: string = window.location.origin): string {
   return `${origin}/wasm/atomic_wasm_bg.wasm?v=${__WASM_VERSION__}`;
 }
+
+let compiled: Promise<WebAssembly.Module> | undefined;
+
+/**
+ * The binary behind {@link wasmBinaryUrl}, fetched and compiled once per page.
+ *
+ * Three places instantiate it: the ClientDb worker, and on the main thread the
+ * key wrapping a new identity's database needs and the recovery KDF. Each used
+ * to download the 7 MB file for itself, so a first visit to the demo fetched it
+ * twice over a connection that was busy with everything else. index.html starts
+ * this compile before the app's JavaScript has even loaded; everyone shares it,
+ * and a compiled module can be handed to a worker as is.
+ *
+ * Resolves `undefined` when it cannot be compiled this way (an old browser, or
+ * a server sending the wrong MIME type); callers then pass the url instead.
+ */
+export function compiledAtomicWasm(): Promise<WebAssembly.Module | undefined> {
+  if (!compiled) {
+    const early = (
+      window as { __atomicWasmModule?: Promise<WebAssembly.Module> }
+    ).__atomicWasmModule;
+
+    compiled =
+      early ??
+      (typeof WebAssembly.compileStreaming === 'function'
+        ? WebAssembly.compileStreaming(fetch(wasmBinaryUrl()))
+        : Promise.reject(new Error('compileStreaming is unavailable')));
+  }
+
+  return compiled.catch(() => undefined);
+}
+
+/** What to hand the glue's `default({ module_or_path })`. */
+export async function atomicWasmSource(): Promise<WebAssembly.Module | string> {
+  return (await compiledAtomicWasm()) ?? wasmBinaryUrl();
+}

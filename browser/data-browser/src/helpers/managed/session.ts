@@ -4,7 +4,12 @@
 // route. Mirrors the captured `getManagedUser()` in helpers/managedUsage.ts.
 
 import { PRODUCT_NAME } from './product';
-import { hasManagedApi, managedFetch, setManagedDeviceToken } from './api';
+import {
+  getManagedDeviceToken,
+  hasManagedApi,
+  managedFetch,
+  setManagedDeviceToken,
+} from './api';
 
 export type ManagedAccount = {
   email: string;
@@ -20,7 +25,39 @@ let pendingLogouts = 0;
  */
 export async function getManagedAccount(): Promise<ManagedAccount | null> {
   if (pendingLogouts > 0 || !hasManagedApi()) return null;
+
+  // Callers asking at the same moment share one request. A page load asks from
+  // several places at once (the identity gate, the demo, sync status), and on a
+  // first visit each one waited on its own cold cross-origin round trip. Only
+  // concurrent callers share: a later call, such as the check right after
+  // signing in, still asks again.
   const generation = sessionGeneration;
+  // A device linked in the meantime asks with a different credential.
+  const token = getManagedDeviceToken();
+
+  if (inFlight?.generation === generation && inFlight.token === token) {
+    return inFlight.promise;
+  }
+
+  const promise = fetchManagedAccount(generation).finally(() => {
+    if (inFlight?.promise === promise) inFlight = undefined;
+  });
+  inFlight = { generation, token, promise };
+
+  return promise;
+}
+
+let inFlight:
+  | {
+      generation: number;
+      token: string | null;
+      promise: Promise<ManagedAccount | null>;
+    }
+  | undefined;
+
+async function fetchManagedAccount(
+  generation: number,
+): Promise<ManagedAccount | null> {
   const response = await managedFetch(`/me`, {});
   if (generation !== sessionGeneration) return null;
 

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { before, newResource, setTitle } from './test-utils';
+import { before, contextMenu, newResource, setTitle } from './test-utils';
 
 test.describe('tags', () => {
   test.beforeEach(before);
@@ -12,9 +12,12 @@ test.describe('tags', () => {
     const folderTitle = `Tagged folder ${Date.now()}`;
     await setTitle(page, folderTitle);
 
-    // Add a tag via the navbar: Tags → type a name → the "+" (Add tag).
+    // Add a tag via More → Tags (the navbar only shows Tags once a resource
+    // has some) → type a name → the "+" (Add tag).
     const tagName = 'e2etag';
-    await page.getByTestId('navbar-tags-button').click();
+    await expect(page.getByTestId('navbar-tags-button')).toHaveCount(0);
+    await page.click(contextMenu);
+    await page.getByRole('menuitem', { name: 'Tags' }).click();
     await page.getByPlaceholder('New tag').fill(tagName);
     await page.getByRole('button', { name: 'Add tag' }).click();
 

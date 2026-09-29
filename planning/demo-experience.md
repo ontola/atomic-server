@@ -15,6 +15,47 @@
 > the team and free to edit anything. No server involvement, no mock
 > layer: real resources flowing through the production code paths.
 
+## Starting the demo: one loading screen
+
+From the click on "Try Atomic" to the workspace there is one screen: the
+boot splash from `data-browser/index.html`, the orbiting mark from
+atomic.place's hero. It lives outside `#root`, and `helpers/bootSplash.ts`
+decides when it leaves. Every other page drops it after its first render;
+`/app/demo` keeps it up until the welcome document has its content, then
+fades it out while the app fades in. Started from inside the app, the demo
+brings the splash back. Errors and a stalled setup hide it, because they
+need to be read.
+
+What used to show in between, and why it no longer does:
+- A blank page while `IdentityReconcileGate` asked the account server for a
+  session (a cold cross-origin request, 1.2 s). The gate skips `/app/demo`,
+  `index.tsx` preconnects to the account server, and concurrent
+  `getManagedAccount()` calls share one request.
+- "Checking local storage…" from the onboarding shell. The storage check is
+  now a step of `startDemoWorkspace`, after the guest identity exists.
+- "Setting up your demo…" with its own spinner. Only shown on error.
+
+Speed:
+- `index.html` starts `WebAssembly.compileStreaming` for the atomic wasm
+  before the app's JavaScript loads. The ClientDb worker and the main-thread
+  users (database key wrapping, recovery KDF) share that one compiled module
+  (`compiledAtomicWasm()` in `wasmUrls.ts`); each used to download the 7 MB
+  binary for itself.
+- `/app/demo` defers the anonymous database (`deferAnonymous`): the guest's
+  own encrypted database is the only one opened.
+
+- The build emits `/prefetch.json` (entry chunk, its imports and CSS, both
+  wasm files). atomic.place's portal (`portal/src/warmApp.ts` in
+  atomic-saas) fetches those into the HTTP cache when its page is idle on a
+  fast connection, and when a pointer or focus reaches a link into the app.
+  Same site, so the app reads them from cache: click to workspace about
+  4.0 s → 2.4 s on production. Chromium does not reuse the JS and CSS
+  (module scripts send `Origin`, and the app varies on it); the wasm, the
+  bulk, it does.
+
+After the reveal, the director waits 1.2 s before anyone moves, and Mara
+types at 50 ms a letter instead of 35.
+
 ## Why this is cheap here
 
 Three existing properties make "entirely client-side" natural:
