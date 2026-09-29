@@ -1178,6 +1178,7 @@ describe('the rows of the table an app is a view of (#1740)', () => {
               grantedBy: 'did:ad:agent:me',
               grantedAt: 1790000000000,
               via: 'add-view',
+              extras: ['did:ad:google-etag'],
             },
             history: [],
           }),
@@ -1193,6 +1194,7 @@ describe('the rows of the table an app is a view of (#1740)', () => {
       grantedBy: 'did:ad:agent:me',
       grantedAt: 1790000000000,
       via: 'add-view',
+      extras: ['did:ad:google-etag'],
     });
     expect(String(sent[0].url)).toContain('/app-row-grant?');
   });

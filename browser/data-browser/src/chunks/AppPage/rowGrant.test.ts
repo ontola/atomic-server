@@ -6,6 +6,7 @@ import {
   onRowGrantChange,
   revokeRowAccess,
   rowAccessQuestion,
+  uncoveredExtras,
   type RowGrant,
 } from './rowGrant';
 
@@ -139,9 +140,51 @@ describe("an app's requestRowAccess (#1740)", () => {
         { app: APP, drive: DRIVE, table: TABLE, view: VIEW },
         name,
       ),
-    ).toEqual({ ask: true, appName: 'Money' });
+    ).toEqual({ ask: true, appName: 'Money', extras: [] });
+  });
+});
+
+describe('row extras in requestRowAccess (#1849)', () => {
+  const ETAG = 'did:ad:google-etag';
+  const BASELINE = 'did:ad:sync-baseline';
+  const target = { app: APP, drive: DRIVE, table: TABLE, view: VIEW };
+
+  it('asks naming the extras the app keeps on rows', async () => {
+    expect(
+      await rowAccessQuestion(fakeStore(true), target, name, async () => [
+        ETAG,
+      ]),
+    ).toEqual({ ask: true, appName: 'Money', extras: [ETAG] });
   });
 
+  it('is answered at once when the grant covers every declared extra', async () => {
+    live = { ...GRANT, extras: [BASELINE, ETAG] };
+
+    expect(
+      await rowAccessQuestion(fakeStore(true), target, name, async () => [
+        ETAG,
+      ]),
+    ).toEqual({ ask: false, result: { status: 'granted' } });
+  });
+
+  it('asks again when the app now declares more than it was granted', async () => {
+    live = { ...GRANT, extras: [ETAG] };
+
+    expect(
+      await rowAccessQuestion(fakeStore(true), target, name, async () => [
+        ETAG,
+        BASELINE,
+      ]),
+    ).toEqual({ ask: true, appName: 'Money', extras: [ETAG, BASELINE] });
+  });
+
+  it('treats a grant from before extras as covering none', () => {
+    expect(uncoveredExtras(GRANT, [ETAG])).toEqual([ETAG]);
+    expect(uncoveredExtras(GRANT, [])).toEqual([]);
+  });
+});
+
+describe('giving and taking back a row grant (#1740)', () => {
   it('records the confirmation as a grant by that gesture, tied to the tab', async () => {
     const changed = vi.fn();
     const stop = onRowGrantChange(changed);

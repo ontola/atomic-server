@@ -48,6 +48,13 @@ export interface CreateAppOptions {
    * about what the app holds.
    */
   rowName?: { singular: string; plural: string };
+  /**
+   * Properties the app keeps on rows of a table it is allowed to edit,
+   * besides the table's columns: a two-way sync's provider id, ETag or
+   * version, and baseline (#1849). A grant covers the ones declared when it
+   * is given. Never shown as table columns.
+   */
+  rowExtras?: string[];
 }
 
 export interface CreatedApp {
@@ -199,6 +206,11 @@ export async function createApp(
   // offered on someone else's table adds that class deliberately, rather than
   // every app being offered for every table.
   await saved.set(schema.properties.renders, [rowClass.subject]);
+
+  if (options.rowExtras?.length) {
+    await saved.set(schema.properties['row-extras'], options.rowExtras);
+  }
+
   await saved.save();
 
   // The app's own identity, and the only thing that decides what it may
