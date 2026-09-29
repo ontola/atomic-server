@@ -186,7 +186,7 @@ ignored.
 | --- | --- | --- |
 | `--routes-origin` | `ATOMIC_ROUTES_ORIGIN` | A dedicated origin, e.g. `https://routes.example.net`, where each plugin installation gets its own subdomain. It has to be separate from the API, drive and website domains (`http://routes.localhost:PORT` works in development). Without it, plugin routes are only served under `/_routes/` on each drive, and the server says so at startup. |
 | `--plugin-listeners` | `ATOMIC_PLUGIN_LISTENERS` | Ports you bind for server-extension plugins, as `name:port,...`, e.g. `willow-wgps:4455`. Needs `read-write`. |
-| `--plugin-sidecars` | `ATOMIC_PLUGIN_SIDECARS` | Loopback daemons plugins may call, as `name=http://127.0.0.1:port,...`, e.g. `pds=http://127.0.0.1:2583`. Only loopback addresses are accepted. Needs `read-write`. |
+| `--plugin-sidecars` | `ATOMIC_PLUGIN_SIDECARS` | Loopback daemons plugins may call, as `name=http://127.0.0.1:port,...`, e.g. `pds=http://127.0.0.1:2583`. Only loopback addresses are accepted. Needs `read-write`. Every request the server sends a sidecar is signed by that installation's app agent on this node (an Atomic version 2 request signature that also covers the `x-atomic-installation` and `x-atomic-drive` headers), and a sidecar checks the signer with `GET /plugin-runtime?installation=<subject>`, which answers `{"agent", "publicKey"}` or `404`. |
 | `--trusted-proxies` | `ATOMIC_TRUSTED_PROXIES` | The reverse proxies in front of the server, as comma-separated IP addresses or CIDR ranges of the *direct* peer, e.g. `127.0.0.1,10.0.0.0/8`. See below. Unset, no peer is trusted. |
 
 #### Plugin routes behind a reverse proxy
