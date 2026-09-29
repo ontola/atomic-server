@@ -227,6 +227,9 @@ export default defineConfig(({ mode }) => {
             type: 'asset',
             fileName: 'prefetch.json',
             source: JSON.stringify({ files: [...files] }, null, 2),
+          });
+        },
+      },
       {
         // index.html preloads the wasm pair to warm the worker's fetch, so those
         // hrefs have to carry the same `?v=` the app requests — a preload for a
