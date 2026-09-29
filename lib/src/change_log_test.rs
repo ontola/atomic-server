@@ -655,3 +655,118 @@ async fn the_log_survives_a_restart() {
     let page = changes(&store, &t, Some(&cursor)).await;
     assert_eq!(kinds(&page), vec![(a, ChangeKind::Updated)]);
 }
+
+// ------------------------------------------- afterCommit wake-ups (#1851)
+
+fn subscribe(store: &Db, table: &str, id: &str) {
+    store.set_after_commit_index(std::collections::HashMap::from([(
+        table.to_string(),
+        vec![id.to_string()],
+    )]));
+}
+
+#[tokio::test]
+async fn a_change_to_a_subscribed_table_writes_a_marker_and_others_do_not() {
+    let store = store("after_commit_marker").await;
+    let class = row_class(&store, "task").await;
+    let watched = table(&store, &class).await;
+    let other = table(&store, &class).await;
+    subscribe(&store, &watched, "sub-a");
+
+    row(&store, &other, &class, "elsewhere").await;
+    assert!(store.after_commit_wake("sub-a").unwrap().is_none());
+
+    let a = row(&store, &watched, &class, "a")
+        .await
+        .get_subject()
+        .pure_id();
+    let wake = store.after_commit_wake("sub-a").unwrap().unwrap();
+    assert_eq!(wake.count, 1);
+    assert_eq!(wake.hint, vec![a]);
+    assert_eq!(store.after_commit_wakes().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn commits_coalesce_into_one_marker() {
+    let store = store("after_commit_coalesce").await;
+    let class = row_class(&store, "task").await;
+    let t = table(&store, &class).await;
+    subscribe(&store, &t, "sub-b");
+    let a = row(&store, &t, &class, "a").await.get_subject().pure_id();
+    for i in 0..9 {
+        rename(&store, &a, &format!("a{i}")).await;
+    }
+    let wake = store.after_commit_wake("sub-b").unwrap().unwrap();
+    assert_eq!(wake.count, 10);
+    assert_eq!(wake.hint.len(), 1, "one row, listed once");
+
+    // Claiming removes it; the next change writes a fresh one.
+    assert!(store.claim_after_commit_wake("sub-b").unwrap().is_some());
+    assert!(store.after_commit_wake("sub-b").unwrap().is_none());
+    rename(&store, &a, "again").await;
+    assert_eq!(store.after_commit_wake("sub-b").unwrap().unwrap().count, 1);
+}
+
+#[tokio::test]
+async fn replicated_and_sync_removed_rows_write_markers() {
+    let store = store("after_commit_replicated").await;
+    let class = row_class(&store, "task").await;
+    let t = table(&store, &class).await;
+    subscribe(&store, &t, "sub-c");
+
+    let subject = format!("{}/remote-row-wake", "https://localhost");
+    let mut remote = Resource::new(subject.clone());
+    remote
+        .set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![class.clone().into()]),
+        )
+        .unwrap();
+    remote
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(t.clone().into()))
+        .unwrap();
+    store.persist_replicated_resource(&remote).await.unwrap();
+    assert_eq!(
+        store
+            .claim_after_commit_wake("sub-c")
+            .unwrap()
+            .unwrap()
+            .count,
+        1
+    );
+
+    let pure = store.canonical_id(&subject);
+    store
+        .remove_resource(&Subject::from(pure.as_str()))
+        .await
+        .unwrap();
+    assert_eq!(store.after_commit_wake("sub-c").unwrap().unwrap().count, 1);
+}
+
+#[tokio::test]
+async fn without_an_index_no_marker_is_written() {
+    let store = store("after_commit_off").await;
+    let class = row_class(&store, "task").await;
+    let t = table(&store, &class).await;
+    row(&store, &t, &class, "a").await;
+    assert!(store.after_commit_wakes().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_head_cursor_skips_existing_rows() {
+    let store = store("after_commit_head").await;
+    let class = row_class(&store, "task").await;
+    let t = table(&store, &class).await;
+    for i in 0..5 {
+        row(&store, &t, &class, &format!("r{i}")).await;
+    }
+    let head = table_changes_head(&store, &Subject::from(t.as_str()), &ForAgent::Sudo)
+        .await
+        .unwrap();
+    assert!(changes(&store, &t, Some(&head)).await.changes.is_empty());
+    let n = row(&store, &t, &class, "new").await.get_subject().pure_id();
+    assert_eq!(
+        kinds(&changes(&store, &t, Some(&head)).await),
+        vec![(n, ChangeKind::Created)]
+    );
+}

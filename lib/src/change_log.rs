@@ -198,6 +198,10 @@ pub struct ChangeLog {
     /// Never held across an `.await`.
     pub(crate) lock: Mutex<()>,
     tombstone_retention: RwLock<Duration>,
+    /// Table → ids of the `afterCommit` wake-up markers a change to it
+    /// upserts (#1851, `crate::after_commit_wake`). Empty unless the server
+    /// turned the hook on.
+    pub(crate) wakes: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl Default for ChangeLog {
@@ -205,6 +209,7 @@ impl Default for ChangeLog {
         Self {
             lock: Mutex::new(()),
             tombstone_retention: RwLock::new(DEFAULT_TOMBSTONE_RETENTION),
+            wakes: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -514,6 +519,9 @@ impl Db {
         if ops.is_empty() {
             return Ok(());
         }
+        // Wake-up markers of plugins following these tables (#1851), in the
+        // same transaction as the entries they announce.
+        self.stage_after_commit_wakes(ops, tx)?;
         let now = crate::utils::now();
         let mut metas: HashMap<String, TableMeta> = HashMap::new();
         // Rows staged in this batch: their `r` key in the kv is stale.
@@ -915,6 +923,42 @@ pub async fn table_changes(
         cursor,
         has_more,
     })
+}
+
+/// A cursor at the head of `table`'s change list: reading from it returns
+/// only changes made after this call. Runs the one-time backfill first, so
+/// rows that predate the log are behind the head rather than ahead of it.
+/// Same rights as [`table_changes`].
+pub async fn table_changes_head(
+    store: &Db,
+    table: &Subject,
+    for_agent: &ForAgent,
+) -> Result<String, ChangeListError> {
+    let table_resource = store.get_resource(table).await?;
+    crate::hierarchy::check_read(store, &table_resource, for_agent).await?;
+    let table_id = store.canonical_id(table.as_str());
+    let class = store
+        .table_class_of(table_resource.get_propvals())
+        .ok_or(ChangeListError::NotATable)?;
+    if !store.read_meta(&table_id)?.is_some_and(|m| m.backfilled) {
+        let mut rows = Vec::new();
+        for child in table_resource.get_children(store).await? {
+            let classes = store.subjects_of(child.get_propvals(), urls::IS_A);
+            if classes.contains(&class) {
+                let id = store.canonical_id(child.get_subject().as_str());
+                let version = store.stored_version(&id);
+                rows.push((id, version));
+            }
+        }
+        store.backfill(&table_id, &class, rows)?;
+    }
+    let _guard = store
+        .change_log
+        .lock
+        .lock()
+        .map_err(|_| AtomicError::from("change log lock poisoned"))?;
+    let meta = store.read_meta(&table_id)?.unwrap_or_default();
+    Ok(encode_cursor(&table_id, meta.epoch, meta.last, false))
 }
 
 #[cfg(test)]

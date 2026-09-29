@@ -62,6 +62,8 @@ tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().bloc
 ```
 */
 
+#[cfg(feature = "db")]
+pub mod after_commit_wake;
 pub mod agents;
 pub mod aggregate;
 pub mod atoms;
