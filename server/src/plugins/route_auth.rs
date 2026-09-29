@@ -4,7 +4,7 @@
 //!
 //! | `auth` | Verified here | `request.caller` |
 //! | --- | --- | --- |
-//! | `http-signature` | draft-cavage-12 or RFC 9421, the body digest, ±5 min | `{ keyId, owner, scheme, alg }` |
+//! | `http-signature` | draft-cavage-12 or RFC 9421, the body digest, ±5 min | `{ keyId, owner, scheme, alg, actor? }` |
 //! | `bearer` | a token of this installation's `tokens` store | `{ token: { id, name, scopes, client } }` |
 //!
 //! A failure is a `401` from the host, and the sandbox never runs. `atomic`
@@ -17,7 +17,10 @@
 //! `owner` must be on the same origin. Keys are cached per installation for
 //! an hour, failures for a minute. When a cached key fails to verify, it is
 //! fetched again (at most once a minute), since the sender may have rotated
-//! it. A `keyId` an installation on this node bound
+//! it. When the key came inside its owner's actor document, `caller.actor`
+//! carries that actor's `inbox` and `endpoints.sharedInbox` (same origin
+//! only; see [`actor_endpoints`]), so a plugin can answer the signer without
+//! fetching anything itself. A `keyId` an installation on this node bound
 //! ([`super::route_keys::bind_key_id`]) is not fetched.
 
 use std::{
@@ -65,20 +68,29 @@ pub trait KeyFetch: Send + Sync {
 
 /// The egress-guarded fetch: every resolved address public, the checked
 /// address pinned, no proxy, no redirects, a 5 s deadline and a 64 KiB cap.
-pub struct EgressFetch;
+/// `loopback` and `peer_ca` are the test seams of
+/// [`crate::config::Config::plugin_delivery_loopback`] and
+/// [`crate::config::Config::plugin_e2e_peer_ca`].
+#[derive(Default)]
+pub struct EgressFetch {
+    pub loopback: bool,
+    pub peer_ca: Option<std::path::PathBuf>,
+}
 
 #[async_trait::async_trait]
 impl KeyFetch for EgressFetch {
     async fn fetch(&self, url: &url::Url) -> Result<Vec<u8>, String> {
-        let addresses = egress::checked_addresses(url).await?;
+        let addresses = super::route_delivery::guarded_addresses(url, self.loopback).await?;
         let host = url.host_str().ok_or("URL has no host")?;
-        let client = reqwest::Client::builder()
+        let builder = reqwest::Client::builder()
             .no_proxy()
             .resolve_to_addrs(host, &addresses)
             .timeout(std::time::Duration::from_secs(KEY_FETCH_TIMEOUT_SECS))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| format!("could not build an HTTP client: {e}"))?;
+            .redirect(reqwest::redirect::Policy::none());
+        let client =
+            super::route_delivery::with_seam_roots(builder, self.peer_ca.as_deref(), &addresses)?
+                .build()
+                .map_err(|e| format!("could not build an HTTP client: {e}"))?;
         let response = client
             .get(url.clone())
             .header(
@@ -133,11 +145,43 @@ pub fn key_from_document(
     Ok((public, owner.to_string()))
 }
 
+/// The signer's inbox, from the actor document the key was found in: its
+/// `id`, `inbox` and `endpoints.sharedInbox`. Only when the fetched document
+/// is the key owner's own actor (its `id` is the owner), and only URLs on
+/// the owner's origin, so a key document cannot point deliveries at another
+/// server. Mastodon, Pleroma and Misskey serve the key inside the actor, so
+/// they qualify; a separate key document (GoToSocial's `/main-key`) doesn't.
+pub fn actor_endpoints(document: &[u8], owner: &str) -> Option<Json> {
+    let doc: Json = serde_json::from_slice(document).ok()?;
+    if doc["id"].as_str() != Some(owner) {
+        return None;
+    }
+    let origin = url::Url::parse(owner).ok()?.origin();
+    let same_origin = |value: &Json| {
+        let value = value.as_str()?;
+        let parsed = url::Url::parse(value).ok()?;
+        (matches!(parsed.scheme(), "http" | "https")
+            && parsed.origin() == origin
+            && parsed.username().is_empty()
+            && parsed.password().is_none()
+            && value.len() <= 2048)
+            .then(|| value.to_string())
+    };
+    let inbox = same_origin(&doc["inbox"]);
+    let shared = same_origin(&doc["endpoints"]["sharedInbox"]);
+    if inbox.is_none() && shared.is_none() {
+        return None;
+    }
+    Some(json!({ "id": owner, "inbox": inbox, "sharedInbox": shared }))
+}
+
 #[derive(Clone)]
 enum Cached {
     Found {
-        key: PublicKey,
+        /// Boxed, so a cached failure stays small.
+        key: Box<PublicKey>,
         owner: String,
+        actor: Option<Json>,
         at: i64,
     },
     Missing {
@@ -154,7 +198,7 @@ pub struct KeyResolver {
 
 impl Default for KeyResolver {
     fn default() -> Self {
-        Self::new(Arc::new(EgressFetch))
+        Self::new(Arc::new(EgressFetch::default()))
     }
 }
 
@@ -162,6 +206,8 @@ impl Default for KeyResolver {
 pub struct Resolved {
     pub key: PublicKey,
     pub owner: String,
+    /// [`actor_endpoints`] of the fetched document, if it had them.
+    pub actor: Option<Json>,
     /// Answered from the cache, not fetched now.
     pub cached: bool,
 }
@@ -216,14 +262,18 @@ impl KeyResolver {
             return Ok(Resolved {
                 key,
                 owner,
+                actor: None,
                 cached: false,
             });
         }
         match self.cached(installation, key_id, now) {
-            Some(Cached::Found { key, owner, .. }) => {
+            Some(Cached::Found {
+                key, owner, actor, ..
+            }) => {
                 return Ok(Resolved {
-                    key,
+                    key: *key,
                     owner,
+                    actor,
                     cached: true,
                 })
             }
@@ -248,23 +298,27 @@ impl KeyResolver {
             let mut document = parsed.clone();
             document.set_fragment(None);
             let bytes = self.fetch.fetch(&document).await?;
-            key_from_document(&bytes, &parsed)
+            let (key, owner) = key_from_document(&bytes, &parsed)?;
+            let actor = actor_endpoints(&bytes, &owner);
+            Ok((key, owner, actor))
         }
         .await;
         match result {
-            Ok((key, owner)) => {
+            Ok((key, owner, actor)) => {
                 self.store(
                     installation,
                     key_id,
                     Cached::Found {
-                        key: key.clone(),
+                        key: Box::new(key.clone()),
                         owner: owner.clone(),
+                        actor: actor.clone(),
                         at: now,
                     },
                 );
                 Ok(Resolved {
                     key,
                     owner,
+                    actor,
                     cached: false,
                 })
             }
@@ -369,12 +423,12 @@ pub async fn verify_signature(
             }
         };
         let verified = match http_signatures::verify(parsed, &resolved.key) {
-            Ok(alg) => Some((alg, resolved.owner)),
+            Ok(alg) => Some((alg, resolved.owner, resolved.actor)),
             Err(e) if resolved.cached => {
                 match resolver.refetch(installation, &parsed.key_id, now_ms).await {
                     Some(again) => http_signatures::verify(parsed, &again.key)
                         .ok()
-                        .map(|alg| (alg, again.owner)),
+                        .map(|alg| (alg, again.owner, again.actor)),
                     None => {
                         last = e;
                         None
@@ -386,13 +440,19 @@ pub async fn verify_signature(
                 None
             }
         };
-        if let Some((alg, owner)) = verified {
-            return Ok(json!({
+        if let Some((alg, owner, actor)) = verified {
+            let mut caller = json!({
                 "keyId": parsed.key_id,
                 "owner": owner,
                 "scheme": parsed.scheme.as_str(),
                 "alg": alg.rfc9421_name(),
-            }));
+            });
+            // Where to answer the signer, from the document the key came
+            // from; never from the request.
+            if let Some(actor) = actor {
+                caller["actor"] = actor;
+            }
+            return Ok(caller);
         }
     }
     Err(last)
@@ -679,6 +739,50 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    #[test]
+    fn the_signers_inbox_comes_only_from_its_own_actor_document() {
+        let owner = "https://m.example/users/bob";
+        let doc = |v: Json| v.to_string().into_bytes();
+        assert_eq!(
+            actor_endpoints(
+                &doc(json!({
+                    "id": owner,
+                    "inbox": "https://m.example/users/bob/inbox",
+                    "endpoints": {"sharedInbox": "https://m.example/inbox"}
+                })),
+                owner
+            ),
+            Some(json!({
+                "id": owner,
+                "inbox": "https://m.example/users/bob/inbox",
+                "sharedInbox": "https://m.example/inbox"
+            }))
+        );
+        // A shared inbox on another server is not the signer's to name.
+        assert_eq!(
+            actor_endpoints(
+                &doc(json!({
+                    "id": owner,
+                    "inbox": "https://m.example/i",
+                    "endpoints": {"sharedInbox": "https://elsewhere.example/inbox"}
+                })),
+                owner
+            ),
+            Some(json!({"id": owner, "inbox": "https://m.example/i", "sharedInbox": null}))
+        );
+        for other in [
+            // A separate key document, not the actor.
+            json!({"id": format!("{owner}/main-key"), "inbox": "https://m.example/i"}),
+            // Only inboxes elsewhere, or with credentials, or none.
+            json!({"id": owner, "inbox": "https://elsewhere.example/i"}),
+            json!({"id": owner, "inbox": "https://u:p@m.example/i"}),
+            json!({"id": owner}),
+        ] {
+            assert_eq!(actor_endpoints(&doc(other.clone()), owner), None, "{other}");
+        }
+        assert_eq!(actor_endpoints(b"<html>", owner), None);
+    }
+
     /// Serves one key document from memory and counts fetches.
     struct Fake {
         document: Mutex<Vec<u8>>,
@@ -894,7 +998,7 @@ mod tests {
             "http://[::1]/users/bob",
             "http://user:pass@example.com/users/bob",
         ] {
-            let err = EgressFetch
+            let err = EgressFetch::default()
                 .fetch(&url::Url::parse(url).unwrap())
                 .await
                 .unwrap_err();

@@ -104,6 +104,65 @@
     ]
   },
   {
+    "name": "webfinger claim with rels",
+    "file": "v3-webfinger-rels.json",
+    "serialized": {
+      "schemaVersion": 3,
+      "secrets": [],
+      "operations": [],
+      "http": {
+        "mount": "drive-host",
+        "routes": [
+          {
+            "id": "webfinger",
+            "path": "/webfinger",
+            "methods": [
+              "GET",
+              "HEAD"
+            ],
+            "cors": "any-origin-no-credentials"
+          }
+        ],
+        "wellKnown": [
+          {
+            "name": "webfinger",
+            "kind": "shared",
+            "match": {
+              "resourcePrefix": "acct:",
+              "rels": [
+                "self",
+                "http://webfinger.net/rel/profile-page"
+              ]
+            },
+            "route": "webfinger"
+          }
+        ],
+        "reason": "Answers WebFinger for this drive's actor, next to other claims for the same accounts."
+      }
+    },
+    "gate": {
+      "needed": "read-only",
+      "listeners": [],
+      "sidecars": [],
+      "surfaces": [
+        {
+          "surface": "route `GET,HEAD /webfinger`",
+          "needs": "read-only"
+        },
+        {
+          "surface": "well-known `webfinger`",
+          "needs": "read-only"
+        }
+      ]
+    },
+    "requires": [
+      "persistent-host",
+      "plugin-routes:read-only",
+      "public-origin",
+      "wasm-sandbox"
+    ]
+  },
+  {
     "name": "v3 activitypub",
     "file": "v3-activitypub.json",
     "gate": {
@@ -443,5 +502,15 @@
     "name": "bad sidecar name",
     "file": "v3-sidecar-bad-name.json",
     "error": "sidecar names"
+  },
+  {
+    "name": "duplicate webfinger rel",
+    "file": "v3-webfinger-rels-duplicate.json",
+    "error": "match.rels"
+  },
+  {
+    "name": "rels on an exclusive claim",
+    "file": "v3-rels-not-webfinger.json",
+    "error": "match.rels"
   }
 ]

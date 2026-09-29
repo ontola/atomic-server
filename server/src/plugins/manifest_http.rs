@@ -183,7 +183,17 @@ pub enum WellKnownKind {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WellKnownMatch {
     pub resource_prefix: String,
+    /// The link relations a `webfinger` claim answers for. Two claims on one
+    /// host whose prefixes overlap may coexist when both list their `rels`
+    /// and none is in both: the host then asks each one and merges their
+    /// answers (a remoteStorage server and a fediverse actor for the same
+    /// `acct:`). Empty: every relation, and no overlap.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rels: Vec<String>,
 }
+
+/// Link relations one claim may list.
+pub const MAX_WELL_KNOWN_RELS: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -471,6 +481,21 @@ impl Http {
                     "shared well-known claims need match.resourcePrefix; exclusive ones take none"
                         .into(),
                 );
+            }
+            if let Some(rels) = claim.matches.as_ref().map(|m| &m.rels) {
+                let mut seen = HashSet::new();
+                let valid = rels.len() <= MAX_WELL_KNOWN_RELS
+                    && rels.iter().all(|rel| {
+                        !rel.is_empty()
+                            && rel.len() <= 512
+                            && rel.bytes().all(|c| c.is_ascii_graphic())
+                            && seen.insert(rel.as_str())
+                    });
+                if !valid || (!rels.is_empty() && claim.name != "webfinger") {
+                    return Err(format!(
+                        "match.rels must be at most {MAX_WELL_KNOWN_RELS} unique link relations without spaces, on a webfinger claim"
+                    ));
+                }
             }
             if !self.routes.iter().any(|r| r.id == claim.route) {
                 return Err("well-known claims must name a declared route".into());

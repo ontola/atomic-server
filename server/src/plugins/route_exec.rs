@@ -16,9 +16,10 @@
 //! is sent ([`super::route_writes`], AS-07), and the deliveries it enqueues
 //! into the route's declared `enqueues` are stored in the durable queue
 //! ([`super::route_delivery`], AS-09), which sends them later. `auth: http-signature` and `auth: bearer` are verified by
-//! [`super::route_auth`] before the sandbox starts (AS-08), and a failure is
-//! a `401`; `auth: atomic`, `auth: dpop` and the `caller` principal still
-//! answer `501` without starting it. At `read-write` a handler also gets the
+//! [`super::route_auth`] before the sandbox starts (AS-08), `auth: atomic`
+//! by a version 2 Atomic request signature ([`crate::require_v2`]), and a
+//! failure is a `401`; `auth: dpop` and the `caller` principal still answer
+//! `501` without starting it. At `read-write` a handler also gets the
 //! host-held `ctx.keys` and `ctx.tokens` ([`super::route_keys`],
 //! [`super::route_tokens`]).
 //!
@@ -965,17 +966,16 @@ async fn run(
     let route = &loaded.route;
     *cors = RouteCors::declared(route.cors);
 
-    // Authentication (design 2.5, AS-08). `bearer` and `http-signature` are
-    // verified below. `atomic` (and with it the `caller` principal) needs
-    // Atomic request signatures bound to the method and body (v2, #1696),
-    // which this server does not have yet; `dpop` is phase 3. Never run a
-    // handler that expects a caller this host cannot verify.
-    if matches!(route.auth, Auth::Atomic | Auth::Dpop) || route.principal == Principal::Caller {
+    // Authentication (design 2.5, AS-08). `bearer`, `http-signature` and
+    // `atomic` are verified below. The `caller` principal (acting with the
+    // caller's own rights) is not implemented, and `dpop` is phase 3. Never
+    // run a handler that expects a caller this host cannot verify.
+    if route.auth == Auth::Dpop || route.principal == Principal::Caller {
         return problem(
             StatusCode::NOT_IMPLEMENTED,
             "route-auth-unavailable",
             "This plugin route needs authentication this server cannot verify yet",
-            "Routes with `auth: atomic` or `auth: dpop`, or the `caller` principal, are not served by this server version.",
+            "Routes with `auth: dpop`, or the `caller` principal, are not served by this server version.",
         )
         .into();
     }
@@ -1160,10 +1160,58 @@ async fn run(
             Err(refused) => return unauthorized(route.auth, &slug, refused),
         }
     }
+    // `atomic`: a version 2 Atomic request signature over the method, the
+    // URL the client addressed and the body, each proof once (#1700), as on
+    // the server's own state-changing endpoints. Cookies and version 1
+    // signatures are not accepted. The URL is built from the `Host` header
+    // the registry routed on, never from `X-Forwarded-Host`.
+    if route.auth == Auth::Atomic {
+        let signed_url = format!(
+            "{}://{}{}",
+            req.connection_info().scheme(),
+            req.headers()
+                .get(header::HOST)
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or_default(),
+            req.uri()
+                .path_and_query()
+                .map(|p| p.as_str())
+                .unwrap_or("/")
+        );
+        let bytes = match &blob_in {
+            Some((bytes, ..)) => bytes.as_slice(),
+            None => body.as_deref().unwrap_or("").as_bytes(),
+        };
+        let verified = if appstate.config.opts.public_mode {
+            Err("this server runs in public mode, where nobody is authenticated".to_string())
+        } else {
+            crate::require_v2::verify_v2_request(
+                appstate,
+                req.headers(),
+                &signed_url,
+                req.method().as_str(),
+                bytes,
+            )
+            .await
+            .map_err(|e| e.message)
+        };
+        match verified {
+            Ok(ForAgent::AgentSubject(agent)) => caller = json!({ "agent": agent.to_string() }),
+            Ok(_) => {
+                return unauthorized(
+                    route.auth,
+                    &slug,
+                    super::http_signatures::Refused("the request is not signed by an agent".into()),
+                )
+            }
+            Err(e) => return unauthorized(route.auth, &slug, super::http_signatures::Refused(e)),
+        }
+    }
     // Per verified caller, like per remote address above.
     let caller_key = caller["owner"]
         .as_str()
-        .or_else(|| caller["token"]["id"].as_str());
+        .or_else(|| caller["token"]["id"].as_str())
+        .or_else(|| caller["agent"].as_str());
     if let Some(key) = caller_key {
         if let Err(limited) = executor.rate.check(&format!("{slug} caller {key}"), true) {
             let mut response = problem(
@@ -1771,6 +1819,7 @@ async fn run(
 fn unauthorized(auth: Auth, slug: &str, refused: super::http_signatures::Refused) -> Outcome {
     let challenge = match auth {
         Auth::Bearer => format!("Bearer realm=\"{slug}\""),
+        Auth::Atomic => format!("AtomicRequestV2 realm=\"{slug}\""),
         _ => format!("Signature realm=\"{slug}\",headers=\"(request-target) host date digest\""),
     };
     let mut response = problem(
