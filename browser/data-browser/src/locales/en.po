@@ -1414,9 +1414,8 @@ msgstr "Failed to load image."
 msgid "Enter a URL..."
 msgstr "Enter a URL..."
 
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Choose an image <0/>"
-msgstr "Choose an image <0/>"
+#~ msgid "Choose an image <0/>"
+#~ msgstr "Choose an image <0/>"
 
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Or"
@@ -1430,9 +1429,8 @@ msgstr "Add a caption..."
 msgid "Alt text"
 msgstr "Alt text"
 
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Textual Description <0/>"
-msgstr "Textual Description <0/>"
+#~ msgid "Textual Description <0/>"
+#~ msgstr "Textual Description <0/>"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
@@ -12550,3 +12548,11 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image"
+msgstr "Choose an image"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description"
+msgstr "Textual Description"

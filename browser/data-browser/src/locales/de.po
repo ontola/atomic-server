@@ -1414,9 +1414,8 @@ msgstr ""
 msgid "Enter a URL..."
 msgstr ""
 
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Choose an image <0/>"
-msgstr ""
+#~ msgid "Choose an image <0/>"
+#~ msgstr ""
 
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Or"
@@ -1430,9 +1429,8 @@ msgstr ""
 msgid "Alt text"
 msgstr ""
 
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Textual Description <0/>"
-msgstr ""
+#~ msgid "Textual Description <0/>"
+#~ msgstr ""
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
@@ -12504,3 +12502,11 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description"
+msgstr ""

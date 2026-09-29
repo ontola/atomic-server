@@ -1414,9 +1414,8 @@ msgstr "Error al cargar la imagen."
 msgid "Enter a URL..."
 msgstr "Introduce una URL..."
 
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Choose an image <0/>"
-msgstr "Elegir una imagen <0/>"
+#~ msgid "Choose an image <0/>"
+#~ msgstr "Elegir una imagen <0/>"
 
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Or"
@@ -1430,9 +1429,8 @@ msgstr "Añade un pie de foto..."
 msgid "Alt text"
 msgstr "Texto alternativo"
 
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Textual Description <0/>"
-msgstr "Descripción Textual <0/>"
+#~ msgid "Textual Description <0/>"
+#~ msgstr "Descripción Textual <0/>"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
@@ -12504,3 +12502,11 @@ msgstr "No se pudo traer tu espacio de trabajo a tu cuenta. Inténtalo de nuevo 
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Permite que {0} edite las unidades creadas en este navegador y luego cambia a esa identidad. Todo sigue siendo editable y se respalda con tu cuenta."
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description"
+msgstr ""

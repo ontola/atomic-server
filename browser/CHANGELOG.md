@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Images in documents show again instead of "Failed to load image". An uploaded
+  image's address points at the server, but a browser-only workspace never
+  sends its files there, so the server could not answer it. The editor now shows
+  the copy this browser already holds, as file previews already did, and falls
+  back to the server when there is none. New `useBlobObjectUrl` hook in
+  `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
