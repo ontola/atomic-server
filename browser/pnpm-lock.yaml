@@ -38,6 +38,9 @@ patchedDependencies:
   playwright-core@1.63.0:
     hash: 51ccaaf15d34f7f1a82e936ef746184b5ff972a17b05ddff80d43daf6d89d86b
     path: patches/playwright-core@1.63.0.patch
+  wuchale@0.25.6:
+    hash: 3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9
+    path: patches/wuchale@0.25.6.patch
 
 importers:
 
@@ -406,7 +409,7 @@ importers:
         version: 7.4.1
       wuchale:
         specifier: ^0.25.6
-        version: 0.25.6
+        version: 0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9)
       yjs:
         specifier: ^13.6.30
         version: 13.6.30
@@ -14489,7 +14492,7 @@ snapshots:
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0
-      wuchale: 0.25.6
+      wuchale: 0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9)
     optionalDependencies:
       react: 19.2.6
 
@@ -20813,7 +20816,7 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
-  wuchale@0.25.6:
+  wuchale@0.25.6(patch_hash=3535d24297638ee4d7b316964c329276347f3cfc5319f512d101374da748a6d9):
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0
