@@ -149,7 +149,9 @@ function AccountMenuRow({
     {
       id: 'sync',
       label: 'Sync',
-      icon: getSyncIcon(syncStatus),
+      // The status is in the tooltip; hiding the icon's own title keeps the
+      // item's accessible name "Sync".
+      icon: <IconSlot aria-hidden>{getSyncIcon(syncStatus)}</IconSlot>,
       helper: getSyncLabel(syncStatus),
       onClick: goTo(paths.sync),
     },
@@ -312,6 +314,10 @@ const TriggerButton = styled(SideBarMenuRow)`
   &[aria-expanded='true'] {
     background-color: ${p => p.theme.colors.bg1};
   }
+`;
+
+const IconSlot = styled.span`
+  display: inline-flex;
 `;
 
 const UnreadDot = styled.span`
