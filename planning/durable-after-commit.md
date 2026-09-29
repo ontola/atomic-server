@@ -1,8 +1,10 @@
 # Durable `afterCommit` for user-installed plugins
 
-Status: **design**, 2026-09-29, for
-[#1851](https://github.com/ontola/atomic-server/issues/1851). Nothing here is
-built. It implements the `afterCommit` half of
+Status: **implemented behind `--plugin-after-commit`** (off by default),
+2026-09-29, for [#1851](https://github.com/ontola/atomic-server/issues/1851),
+with Michiel's four product decisions as recommended below (all "A"). See
+[Implementation notes](#implementation-notes) for where the code differs from
+this design and what is left. It implements the `afterCommit` half of
 [plugin-runtime-convergence.md](plugin-runtime-convergence.md) step 4 for the
 **extension** world, as decided by Michiel on
 [ontola/atomic-plugins#177](https://github.com/ontola/atomic-plugins/issues/177)
@@ -468,20 +470,84 @@ converges hits the 30-per-minute cap, and the subscription is stopped with
 
 ## Implementation checklist
 
-- [ ] `Entrypoints.after_commit`; refuse `onResourceGet`/`beforeCommit` in the
-      extension world (already refused; add a test).
-- [ ] `plugin-runtime`: call `input.entry ?? 'run'`.
-- [ ] `AfterCommitSubscription` store, index, lapse checks; creation on the
-      #1788 gestures; end on the View extender.
-- [ ] Marker upsert in `apply_with_change_log`; startup + 10-minute sweep.
-- [ ] `QueuedEvent.kind`; claim, deliver, ack-with-cursor in `drain`.
-- [ ] Own-write records and echo dropping.
-- [ ] Apply under row grant for unattended hook runs; review with Apply / Allow
+- [x] `Entrypoints.after_commit` (Rust and the `@tomic/lib` mirror, with shared
+      fixtures in `testdata/plugin-manifest/`); `onResourceGet`/`beforeCommit`
+      refused in the extension world (test added).
+- [x] `plugin-runtime`: call `input.entry ?? 'run'` (`run` and `afterCommit`
+      only).
+- [x] Subscription store, index, lapse checks; creation on the #1788 gestures
+      (`op: "grant"` and the new `op: "follow"` on `/app-row-grant`); end on the
+      View extender.
+- [x] Marker upsert in `stage_change_log` (inside `apply_with_change_log`);
+      startup + 10-minute sweep.
+- [x] Claim, deliver, ack-with-cursor (a sibling drain in the trigger worker,
+      see below).
+- [x] Own-write records and echo dropping.
+- [x] Apply under row grant for unattended hook runs; review with Apply / Allow
       all / Decline; `via: "hook-review"`.
-- [ ] Backoff, poison, Retry; health on the Installation page and the tab.
-- [ ] `ctx.changes` host call, scoped to the event's table.
-- [ ] Server flag; grant backfill.
-- [ ] Docs: `docs/src/plugins/creating-plugins.md` section; `TESTING_COVERAGE.md`.
+- [x] Backoff, poison, Retry; health on the Installation page and the tab.
+- [x] `ctx.changes` host call, scoped to the event's table.
+- [x] Server flag; grant backfill.
+- [x] Docs: `docs/src/plugins/creating-plugins.md` section; `TESTING_COVERAGE.md`.
+
+## Implementation notes
+
+Where the code (`server/src/plugins/after_commit.rs`,
+`lib/src/after_commit_wake.rs`, `server/src/handlers/after_commit.rs`) differs
+from the design above, and why:
+
+- **Own record prefixes, shared worker.** Markers, deliveries, own-write
+  records and subscriptions live under `after-commit/v1/{wake,delivery,own,sub}/`
+  in `Tree::PluginMeta`, not under `plugin-event/v1/`. The trigger drain
+  deserializes every `plugin-event/v1/` entry as a `QueuedEvent` and
+  acknowledges (deletes) any whose trigger record is missing, so sharing the
+  prefix would have had it delete deliveries. What is shared is the worker:
+  `after_commit::tick` runs in the same loop as the trigger drain, woken by the
+  same DB events and one-second tick, with the same `Journal` and run log. No
+  `QueuedEvent.kind` was needed.
+- **Claim order.** The marker is removed (under the change-log lock) before
+  the page is read, and the delivery is persisted after. A crash between the
+  two loses the marker but not the change: the sweep finds the cursor behind the
+  head and writes a new one. Reading first and deleting after could lose a
+  change that landed in between until the next sweep.
+- **Keyed by app, not installation.** A subscription is per (drive, app,
+  table), where the app is what the View's `view-kind` names, like the row
+  grant. Its `installation` is recorded when an Installation is found at or
+  above the app; the code comes from that Installation's release, or, for an
+  app made with `createApp` (no Installation), from its own `plugin-source` or
+  its `entrypoint`'s. Those apps have no Installation page, so their count and
+  warnings show only on the tab.
+- **Subscribed only when the app declares it.** `follow` records nothing (and
+  answers `null`) when the flag is off or the app does not export
+  `afterCommit`. A view added before the app declared it is picked up by the
+  grant backfill only when it has a live grant.
+- **Pure echoes run nothing.** A claimed page that is empty after dropping
+  echoes (and is not a reset) is acknowledged without a run.
+- **Loop cap bookkeeping.** `continuation` on the subscription marks a marker
+  written for `hasMore` (or by Retry), which the cap does not count.
+- **Reads.** A host wrapper limits `ctx.read`/`ctx.query` to the table, its
+  rows, the row class, its properties and the app's declared extras, and the
+  app's own subtree; everything else is refused, query results filtered.
+- **Reviewed writes.** "Apply" writes rows through the `*_under_row_grant`
+  paths with the reviewer's rights as the person check. It cannot destroy a row
+  the app does not own (there is no reviewed destroy path); such a proposal
+  fails to apply and can be declined.
+- **Integration actions.** `allow_automatic` stays off for `afterCommit` runs
+  (as for manual runs); actions wait for approval on their connection.
+- **Deliveries carry their own clock.** `ctx.event` and `Date.now()` use the
+  claim time, stable across redeliveries.
+
+Left for later:
+
+- Deleting subscriptions when an Installation is uninstalled or revoked (they
+  now wait, as for a paused one, and end with the View).
+- Ending a subscription the moment its activator loses read (it ends at the next
+  delivery attempt instead).
+- Refusing to apply a waiting proposal after the release changed (it is applied
+  as reviewed).
+- A `browser/lib` integration test and the Playwright spec.
+- A test for "a person's edit just before the hook's write is delivered" (the
+  "just after" case is covered).
 
 ## Test plan
 
