@@ -9,6 +9,7 @@ import {
   resumePeerLinks,
 } from '../../helpers/browserPeerSync';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { isDev } from '../../config';
 
 export interface InviteLinkOptions {
   write: boolean;
@@ -81,13 +82,37 @@ export function useCreateInviteLink(
       resumePeerLinks(store);
     }
 
-    const baseUrl = browserPeer ? window.location.origin : store.getServerUrl();
+    const token = encodeURIComponent(tokenBase64);
 
-    return `${baseUrl}/app/invite?token=${encodeURIComponent(tokenBase64)}`;
+    if (browserPeer) {
+      return `${window.location.origin}/app/invite?token=${token}`;
+    }
+
+    const serverUrl = store.getServerUrl();
+
+    return `${inviteLinkPrefix(serverUrl)}${token}${inviteServerParam(serverUrl)}`;
   };
+}
+
+/**
+ * The app that opens an invite. The server serves one, except in development,
+ * where the app comes from Vite and a server built without its frontend
+ * answers every asset with index.html.
+ */
+function inviteAppOrigin(serverUrl: string): string {
+  return isDev() ? window.location.origin : serverUrl.replace(/\/$/, '');
+}
+
+/** Names the invite's server when the app that opens it isn't that server. */
+function inviteServerParam(serverUrl: string): string {
+  const serverOrigin = serverUrl.replace(/\/$/, '');
+
+  return inviteAppOrigin(serverUrl) === serverOrigin
+    ? ''
+    : `&server=${encodeURIComponent(serverOrigin)}`;
 }
 
 /** Where invite links for this store point, before one has been made. */
 export function inviteLinkPrefix(serverUrl: string): string {
-  return `${serverUrl.replace(/\/$/, '')}/app/invite?token=`;
+  return `${inviteAppOrigin(serverUrl)}/app/invite?token=`;
 }
