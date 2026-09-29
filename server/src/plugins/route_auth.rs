@@ -443,6 +443,10 @@ pub struct CryptoHost {
     pub api_origin: String,
     /// Lines for the run log: every signature, with its operation id.
     pub log: Arc<Mutex<Vec<String>>>,
+    /// The origins of the clients of tokens issued from a person's consent
+    /// in this request: the response may redirect there
+    /// ([`super::route_exec::ResponseRules::approved_clients`]).
+    pub approved_clients: Arc<Mutex<Vec<String>>>,
     pub now: i64,
 }
 
@@ -553,6 +557,20 @@ impl CryptoHost {
                 };
                 let (token, info) =
                     route_tokens::issue(&self.db, &self.installation, issue, self.now)?;
+                // A person approved this client on the consent page: the
+                // response may hand the token back to it.
+                if info.approved_by.is_some() {
+                    if let Some(origin) = info
+                        .client
+                        .as_deref()
+                        .and_then(super::route_exec::origin_of)
+                    {
+                        self.approved_clients
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push(origin);
+                    }
+                }
                 let mut out = serde_json::to_value(info).map_err(|e| e.to_string())?;
                 out["token"] = json!(token);
                 out

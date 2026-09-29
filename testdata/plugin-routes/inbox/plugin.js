@@ -35,8 +35,12 @@
 //   refused delivery leaves nothing behind. `extra` is added to the
 //   enqueued delivery as-is, for the refusal tests.
 // - `GET /storage/{*rest}` (`auth: bearer`) answers with the caller.
+// - `GET /public/{*rest}` (`auth: bearer`, `authOptional`) too, and runs
+//   without a token as well.
 // - `GET /oauth?scope&client_id&state` redirects to the host's consent page;
-//   `GET /oauth/callback` redeems the code it sends back for a token.
+//   `GET /oauth/callback` redeems the code it sends back for a token. With
+//   `state=redirect` it hands the token to the approved client in a `302`,
+//   the OAuth implicit grant; `state=elsewhere` tries another origin.
 // - `POST /tokens` with `{ op: issue | verify | revoke, ... }` calls
 //   `ctx.tokens.*` directly.
 // - `GET /dump` answers with everything the handler can see, for the test
@@ -160,6 +164,7 @@ export function handle(ctx, request) {
         ],
       };
     case 'GET storage':
+    case 'GET public':
       return reply(200, { caller: request.caller, path: request.params.rest });
     case 'GET oauth': {
       const { url } = ctx.tokens.requestConsent({
@@ -174,6 +179,16 @@ export function handle(ctx, request) {
     case 'GET oauth-callback':
       if (request.query.error) {
         return reply(403, { error: request.query.error, state: request.query.state });
+      }
+      if (request.query.state === 'redirect' || request.query.state === 'elsewhere') {
+        // An OAuth implicit grant: the token goes back to the client in the
+        // fragment. `elsewhere` tries another origin, which the host drops.
+        const issued = ctx.tokens.issue({ code: request.query.code });
+        const to = request.query.state === 'redirect' ? issued.client : 'https://evil.example';
+        return {
+          status: 302,
+          headers: { location: `${to}/cb#access_token=${issued.token}&token_type=bearer` },
+        };
       }
       return reply(200, {
         ...ctx.tokens.issue({ code: request.query.code }),

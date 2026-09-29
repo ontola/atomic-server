@@ -469,6 +469,21 @@ pub struct ResponseRules<'a> {
     /// A `location` on another host is allowed when it starts with this:
     /// the host's consent page, which a route redirects to (D6).
     pub consent_page: Option<String>,
+    /// A `location` on another origin is also allowed when that origin is
+    /// the `client` of a token this very request issued from a person's
+    /// consent (`ctx.tokens.issue({ code })`): the client that person
+    /// approved on the consent page, which an OAuth-style flow hands the
+    /// token back to (remoteStorage's implicit grant, D6). Origins, as
+    /// `scheme://host[:port]`.
+    pub approved_clients: Vec<String>,
+}
+
+/// The `scheme://host[:port]` of an absolute http(s) URL.
+pub fn origin_of(url: &str) -> Option<String> {
+    url::Url::parse(url)
+        .ok()
+        .filter(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some())
+        .map(|u| u.origin().ascii_serialization())
 }
 
 /// A validated response, and the headers that were dropped from it.
@@ -538,7 +553,10 @@ pub fn build_response(response: &Json, rules: &ResponseRules) -> Result<Built, S
                     || rules
                         .consent_page
                         .as_deref()
-                        .is_some_and(|page| value.starts_with(page));
+                        .is_some_and(|page| value.starts_with(page))
+                    || origin_of(&value).is_some_and(|origin| {
+                        rules.approved_clients.iter().any(|c| *c == origin)
+                    });
                 if !allowed || (lower == "location" && !location_ok) {
                     dropped.push(lower);
                     continue;
@@ -965,7 +983,11 @@ async fn run(
     // A bearer token costs a lookup, so it is checked before the body is
     // read. A signature needs the body for its digest: below.
     let mut caller = Json::Null;
-    if route.auth == Auth::Bearer {
+    // `authOptional`: a request without an `Authorization` header is an
+    // anonymous one (`caller: null`); a token that is there must be valid.
+    let anonymous_allowed =
+        route.auth_optional && !req.headers().contains_key(header::AUTHORIZATION);
+    if route.auth == Auth::Bearer && !anonymous_allowed {
         match super::route_auth::verify_bearer(store, installation, req, at) {
             Ok(verified) => caller = verified,
             Err(refused) => return unauthorized(route.auth, &slug, refused),
@@ -1264,6 +1286,8 @@ async fn run(
 
     // Every signature the host makes for this request, for the run log.
     let signed: Arc<Mutex<Vec<String>>> = Default::default();
+    // The clients of tokens this request issued from a person's consent.
+    let approved_clients: Arc<Mutex<Vec<String>>> = Default::default();
     let host = RouteHost {
         inner: StoreHost {
             db: Arc::new(store.clone()),
@@ -1288,6 +1312,7 @@ async fn run(
             base: base.clone(),
             api_origin: appstate.config.get_origin(),
             log: signed.clone(),
+            approved_clients: approved_clients.clone(),
             now: at,
         }),
     };
@@ -1543,6 +1568,9 @@ async fn run(
         head: req.method() == actix_web::http::Method::HEAD,
         consent_page: (level >= PluginRoutesLevel::ReadWrite)
             .then(|| super::route_auth::consent_url(&appstate.config.get_origin(), "")),
+        approved_clients: std::mem::take(
+            &mut *approved_clients.lock().unwrap_or_else(|e| e.into_inner()),
+        ),
     };
     // The response is validated before anything is written, and the writes
     // are stored before it is sent: a 2xx means stored (design 2.6).
@@ -2301,6 +2329,9 @@ mod tests {
         assert_eq!(p["name"], "al ice");
         assert_eq!(p["rest"], "a/b/c");
         assert!(params("/", "/").is_empty());
+        // A trailing slash stays: a folder.
+        assert_eq!(params("/files/{*rest}", "/files/a/b/")["rest"], "a/b/");
+        assert_eq!(params("/files/{*rest}", "/files/")["rest"], "");
     }
 
     #[test]
@@ -2316,6 +2347,57 @@ mod tests {
         ] {
             assert_eq!(same_host(location, "localhost:9883"), ok, "{location}");
         }
+    }
+
+    #[test]
+    fn a_location_may_go_to_a_client_a_person_approved_in_this_request() {
+        let rules = |approved: &[&str]| ResponseRules {
+            shared_host: false,
+            host: "abc.routes.example",
+            cors: Cors::None,
+            max_bytes: RESPONSE_BYTES,
+            head: false,
+            consent_page: Some("https://api.example/app/route-consent?request=".into()),
+            approved_clients: approved.iter().map(|s| s.to_string()).collect(),
+        };
+        let location = |value: &str, rules: &ResponseRules| {
+            build_response(
+                &json!({"status": 302, "headers": {"location": value}}),
+                rules,
+            )
+            .unwrap()
+            .headers
+            .iter()
+            .find(|(name, _)| name == header::LOCATION)
+            .map(|(_, v)| v.to_str().unwrap().to_string())
+        };
+        let token = "https://app.example/cb#access_token=atr_x&token_type=bearer";
+        // Without an approved client: dropped, as any other host.
+        assert_eq!(location(token, &rules(&[])), None);
+        let approved = rules(&["https://app.example"]);
+        assert_eq!(location(token, &approved).as_deref(), Some(token));
+        // Only that origin: not another port, scheme or host.
+        for other in [
+            "https://app.example:8443/cb",
+            "http://app.example/cb",
+            "https://evil.example/cb",
+            "https://app.example.evil.example/cb",
+            "javascript:alert(1)",
+        ] {
+            assert_eq!(location(other, &approved), None, "{other}");
+        }
+        // The consent page and the own host still work.
+        assert!(location(
+            "https://api.example/app/route-consent?request=abc",
+            &approved
+        )
+        .is_some());
+        assert!(location("/oauth/callback", &approved).is_some());
+        assert_eq!(
+            origin_of("https://App.Example:443/x").as_deref(),
+            Some("https://app.example")
+        );
+        assert_eq!(origin_of("urn:x"), None);
     }
 
     #[test]

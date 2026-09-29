@@ -709,6 +709,149 @@ async fn the_consent_flow_gives_a_token_for_exactly_what_was_approved() {
     assert_eq!(resp.status(), 403);
 }
 
+/// The OAuth implicit grant remoteStorage uses: after a person approved a
+/// client on the consent page, the route that redeems the code may redirect
+/// the browser, token and all, to that client's origin, and to no other.
+#[actix_rt::test]
+async fn a_redeemed_consent_may_redirect_to_the_approved_client_only() {
+    let i = setup("route_crypto_consent_redirect").await;
+    let app = app!(i.f.appstate);
+    for state in ["redirect", "elsewhere"] {
+        let resp = actix_test::call_service(
+            &app,
+            get(&format!(
+                "{}/oauth?scope=notes:rw&client_id={}&state={state}",
+                i.prefix,
+                urlencoding("https://app.example")
+            ))
+            .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 302);
+        let location = resp.headers().get(header::LOCATION).unwrap();
+        let request = query_of(location.to_str().unwrap())["request"].clone();
+        let approve = format!("/plugin-route-consent?request={request}&decision=approve");
+        let resp =
+            actix_test::call_service(&app, signed(&i.f.appstate, "POST", &approve).to_request())
+                .await;
+        assert_eq!(resp.status(), 200);
+        let redirect = json_of(resp).await["redirect"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let resp = actix_test::call_service(
+            &app,
+            get(redirect.trim_start_matches("http://localhost")).to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 302, "{state}");
+        let location = resp
+            .headers()
+            .get(header::LOCATION)
+            .map(|v| v.to_str().unwrap().to_string());
+        if state == "elsewhere" {
+            // Another origin, in the same kind of request: dropped.
+            assert_eq!(location, None);
+            continue;
+        }
+        let location = location.unwrap();
+        let token = location
+            .strip_prefix("https://app.example/cb#access_token=")
+            .and_then(|rest| rest.strip_suffix("&token_type=bearer"))
+            .unwrap_or_else(|| panic!("{location}"));
+        let resp = actix_test::call_service(
+            &app,
+            get(&format!("{}/storage/x", i.prefix))
+                .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 200);
+    }
+}
+
+/// `authOptional`: without an `Authorization` header the handler runs with
+/// `caller: null`; with a token it gets the caller; a bad token is a 401.
+#[actix_rt::test]
+async fn an_optional_bearer_route_runs_anonymous_requests_too() {
+    let i = setup("route_crypto_optional_bearer").await;
+    let app = app!(i.f.appstate);
+    let resp = actix_test::call_service(
+        &app,
+        post(
+            &format!("{}/tokens", i.prefix),
+            &json!({"op": "issue", "scopes": ["notes:r"]}).to_string(),
+            &[],
+        )
+        .to_request(),
+    )
+    .await;
+    let token = json_of(resp).await["token"].as_str().unwrap().to_string();
+    let public = format!("{}/public/notes/a", i.prefix);
+
+    let resp = actix_test::call_service(&app, get(&public).to_request()).await;
+    assert_eq!(resp.status(), 200);
+    let answer = json_of(resp).await;
+    assert_eq!(answer["caller"], Json::Null);
+    assert_eq!(answer["path"], "notes/a");
+
+    let resp = actix_test::call_service(
+        &app,
+        get(&public)
+            .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(json_of(resp).await["caller"]["token"]["scopes"], json!(["notes:r"]));
+
+    for bad in ["Bearer atr_not-a-token", "Basic abc", ""] {
+        let resp = actix_test::call_service(
+            &app,
+            get(&public)
+                .insert_header((header::AUTHORIZATION, bad))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 401, "{bad}");
+    }
+    // A folder: the trailing slash reaches the handler.
+    let resp =
+        actix_test::call_service(&app, get(&format!("{}/public/notes/", i.prefix)).to_request())
+            .await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(json_of(resp).await["path"], "notes/");
+    // The same route without `authOptional` still refuses a missing token.
+    let resp = actix_test::call_service(
+        &app,
+        get(&format!("{}/storage/notes/a", i.prefix)).to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), 401);
+}
+
+#[test]
+fn auth_optional_needs_auth_bearer() {
+    use crate::plugins::manifest_http::{Context, Http};
+    let http = |route: Json| -> Result<(), String> {
+        let http: Http = serde_json::from_value(json!({
+            "routes": [route],
+            "tokens": [{"name": "t"}],
+        }))
+        .unwrap();
+        http.validate(&Context {
+            server_extension: false,
+            operations: vec![],
+        })
+    };
+    http(json!({"id": "a", "path": "/a", "methods": ["GET"], "auth": "bearer", "authOptional": true}))
+        .unwrap();
+    assert_eq!(
+        http(json!({"id": "a", "path": "/a", "methods": ["GET"], "authOptional": true})).unwrap_err(),
+        "authOptional requires auth bearer"
+    );
+}
+
 #[actix_rt::test]
 async fn no_key_material_reaches_the_plugin_its_answers_or_the_run_log() {
     let i = setup("route_crypto_no_leak").await;

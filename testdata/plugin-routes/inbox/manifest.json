@@ -95,6 +95,14 @@
         "auth": "bearer"
       },
       {
+        "id": "public",
+        "path": "/public/{*rest}",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "bearer",
+        "authOptional": true
+      },
+      {
         "id": "oauth",
         "path": "/oauth",
         "methods": ["GET"],
