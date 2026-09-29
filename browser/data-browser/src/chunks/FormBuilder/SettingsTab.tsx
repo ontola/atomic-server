@@ -14,7 +14,11 @@ import { FaXmark } from 'react-icons/fa6';
 import Field from '@components/forms/Field';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { FilePicker } from '@components/forms/FilePicker/FilePicker';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+  TextAreaStyled,
+} from '@components/forms/InputStyles';
 import { Button } from '@components/Button';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Column, Row } from '@components/Row';
@@ -71,7 +75,7 @@ interface SettingsTabProps {
  * by the Preview dialog and the published runtime via the definition's
  * `styling` object), Form access (public vs invite-only + invite link
  * management), Schedule (the optional open/close window on top of the
- * publish switch) and Custom CSS (collapsed — an escape hatch for what the
+ * publish switch), After submitting (the thank-you message) and Custom CSS (collapsed — an escape hatch for what the
  * Appearance controls cannot express). */
 export function SettingsTab({ resource }: SettingsTabProps): JSX.Element {
   return (
@@ -82,6 +86,9 @@ export function SettingsTab({ resource }: SettingsTabProps): JSX.Element {
         </SettingsSection>
         <SettingsSection label='Schedule' initialState>
           <FormScheduleSection resource={resource} />
+        </SettingsSection>
+        <SettingsSection label='After submitting' initialState>
+          <AfterSubmitSettings resource={resource} />
         </SettingsSection>
         <SettingsSection label='Appearance' initialState>
           <AppearanceSettings resource={resource} />
@@ -275,6 +282,88 @@ const CSS_PLACEHOLDER = `:scope {
  * the form's root element. Because layer order beats specificity, a one-class
  * rule written here wins over anything in the renderer's stylesheet without
  * `!important` — which is the whole point of the feature. */
+/** Shown by the published runtime when `confirmationMessage` is unset. Keep
+ * in step with `FormRenderer`'s fallback. */
+const DEFAULT_CONFIRMATION = 'Thank you, your response has been recorded.';
+
+/** The thank-you message visitors see once their answers are in. Stored as
+ * `confirmationMessage` in the form's `form-settings` object, which the
+ * definition passes through as `settings`; an empty box removes the key so
+ * the runtime's default applies again. */
+function AfterSubmitSettings({ resource }: SettingsTabProps): JSX.Element {
+  const [settings, setSettings] = useValue(
+    resource,
+    forms.properties.formSettings,
+    { commit: true },
+  );
+  const settingsObj = parseStylingValue(settings);
+  const stored =
+    typeof settingsObj.confirmationMessage === 'string'
+      ? settingsObj.confirmationMessage
+      : '';
+
+  const save = (message: string) => {
+    const next = {
+      ...parseStylingValue(resource.get(forms.properties.formSettings)),
+    };
+
+    if (message.trim() === '') {
+      delete next.confirmationMessage;
+    } else {
+      next.confirmationMessage = message;
+    }
+
+    setSettings(next);
+  };
+
+  const [draft, setDraft] = useState(stored);
+  // Commit at rest, not per keystroke; same shape as CustomCssSettings.
+  const debounced = useDebounce(draft, 500);
+
+  useEffect(() => {
+    if (debounced !== stored) {
+      save(debounced);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
+
+  const latest = useRef({ draft, stored, save });
+  useEffect(() => {
+    latest.current = { draft, stored, save };
+  });
+  useEffect(
+    () => () => {
+      const pending = latest.current;
+
+      if (pending.draft !== pending.stored) {
+        pending.save(pending.draft);
+      }
+    },
+    [],
+  );
+
+  return (
+    <Sections>
+      <Section>
+        <Field
+          label='Thank-you message'
+          helper='Shown to visitors after they submit. Leave empty for the default.'
+          helperAlwaysVisible
+        >
+          <InputWrapper>
+            <TextAreaStyled
+              value={draft}
+              placeholder={DEFAULT_CONFIRMATION}
+              onChange={e => setDraft(e.target.value)}
+              aria-label='Thank-you message'
+            />
+          </InputWrapper>
+        </Field>
+      </Section>
+    </Sections>
+  );
+}
+
 function CustomCssSettings({ resource }: SettingsTabProps): JSX.Element {
   const [customCss, setCustomCss] = useString(
     resource,

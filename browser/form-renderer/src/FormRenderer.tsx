@@ -350,6 +350,7 @@ export function FormRenderer({
   if (status === 'submitted') {
     const message =
       (definition.settings.confirmationMessage as string | undefined) ??
+      // Keep in step with DEFAULT_CONFIRMATION in the builder's SettingsTab.
       'Thank you, your response has been recorded.';
 
     return (
