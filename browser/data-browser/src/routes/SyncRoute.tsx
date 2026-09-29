@@ -450,6 +450,9 @@ function ServerCard({
           ? rawToNodeDid(serverNodeId)
           : undefined
       }
+      afterFacts={
+        isCloud && <SyncAIUsage portalUrl={getManagedPortalUrl(managedInfo)} />
+      }
       footer={
         isCloud && managedInfo.portalUrl ? (
           <ManagedLink
@@ -533,7 +536,6 @@ function ServerCard({
           <UsageFill style={{ width: `${usagePct}%` }} />
         </UsageBar>
       )}
-      {isCloud && <SyncAIUsage portalUrl={getManagedPortalUrl(managedInfo)} />}
     </SyncCard>
   );
 }
@@ -569,6 +571,8 @@ interface SyncCardProps {
   facts?: (string | false | undefined | null)[];
   /** Anything between the facts and the node id: errors, a usage bar. */
   children?: ReactNode;
+  /** A group of its own after the facts line, e.g. AI credit usage. */
+  afterFacts?: ReactNode;
   /** Rendered as a click-to-copy row. Pass the full `did:ad:node:…`. */
   nodeId?: string;
   footer?: ReactNode;
@@ -589,6 +593,7 @@ function SyncCard({
   subtitle,
   facts,
   children,
+  afterFacts,
   nodeId,
   footer,
   active,
@@ -631,6 +636,8 @@ function SyncCard({
         {children}
 
         {shown.length > 0 && <ConnMeta>{shown.join(' · ')}</ConnMeta>}
+
+        {afterFacts}
 
         {nodeId && (
           <NodeIdRow>

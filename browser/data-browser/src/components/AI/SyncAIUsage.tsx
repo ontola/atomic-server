@@ -79,7 +79,7 @@ export function SyncAIUsage({ portalUrl }: { portalUrl?: string | null }) {
 }
 
 const AIUsage = styled.div`
-  margin-top: 0.6rem;
+  margin-top: 0.9rem;
   font-size: 0.8rem;
 `;
 
