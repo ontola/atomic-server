@@ -16,7 +16,9 @@ use crate::plugins::{
     },
     route_exec::RouteExecutor,
     route_registry::slug,
-    test_fixture::{fixture_with_args, genesis, install_release_with, js_release_with_source, Fixture},
+    test_fixture::{
+        fixture_with_args, genesis, install_release_with, js_release_with_source, Fixture,
+    },
 };
 
 const SOURCE: &str = include_str!("../../../testdata/plugin-routes/solid-dpop/plugin.js");
@@ -137,7 +139,8 @@ async fn children(p: &Pod) -> Vec<atomic_lib::Resource> {
 async fn anonymous_requests_read_as_the_public_and_cannot_write() {
     let p = setup("dpop_anonymous").await;
     let app = app!(p.f.appstate);
-    let resp = actix_test::call_service(&app, request("GET", &p.host, "/notes/a").to_request()).await;
+    let resp =
+        actix_test::call_service(&app, request("GET", &p.host, "/notes/a").to_request()).await;
     assert_eq!(resp.status(), 200);
     let links: Vec<_> = resp.headers().get_all(header::LINK).collect();
     assert_eq!(links.len(), 2, "one Link line per value");
@@ -147,7 +150,8 @@ async fn anonymous_requests_read_as_the_public_and_cannot_write() {
     let body: Json = actix_test::read_body_json(resp).await;
     assert_eq!(body["caller"], Json::Null);
 
-    let resp = actix_test::call_service(&app, request("PUT", &p.host, "/notes/a").to_request()).await;
+    let resp =
+        actix_test::call_service(&app, request("PUT", &p.host, "/notes/a").to_request()).await;
     assert_eq!(resp.status(), 502);
     let body: Json = actix_test::read_body_json(resp).await;
     assert_eq!(body["type"], "route-write-refused");
@@ -162,7 +166,14 @@ async fn a_verified_webid_reaches_the_handler_and_its_write_is_stored() {
     let url = format!("http://{}/notes/a", p.host);
     let resp = actix_test::call_service(
         &app,
-        authorized(request("PUT", &p.host, "/notes/a"), &client, "PUT", &url, "put-1").to_request(),
+        authorized(
+            request("PUT", &p.host, "/notes/a"),
+            &client,
+            "PUT",
+            &url,
+            "put-1",
+        )
+        .to_request(),
     )
     .await;
     assert_eq!(resp.status(), 201);
@@ -178,7 +189,13 @@ async fn a_verified_webid_reaches_the_handler_and_its_write_is_stored() {
     assert_eq!(provenance["caller"]["webid"], WEBID);
 
     // The same proof again is a replay.
-    let replay = authorized(request("PUT", &p.host, "/notes/a"), &client, "PUT", &url, "put-1");
+    let replay = authorized(
+        request("PUT", &p.host, "/notes/a"),
+        &client,
+        "PUT",
+        &url,
+        "put-1",
+    );
     let resp = actix_test::call_service(&app, replay.to_request()).await;
     assert_eq!(resp.status(), 401);
 }
@@ -193,11 +210,17 @@ async fn the_proof_must_name_the_url_this_node_serves_not_a_forwarded_one() {
     let elsewhere = "https://pod.elsewhere.example/notes/a";
     let resp = actix_test::call_service(
         &app,
-        authorized(request("GET", &p.host, "/notes/a"), &client, "GET", elsewhere, "fwd")
-            .insert_header(("x-forwarded-host", "pod.elsewhere.example"))
-            .insert_header(("x-forwarded-proto", "https"))
-            .insert_header(("forwarded", "host=pod.elsewhere.example;proto=https"))
-            .to_request(),
+        authorized(
+            request("GET", &p.host, "/notes/a"),
+            &client,
+            "GET",
+            elsewhere,
+            "fwd",
+        )
+        .insert_header(("x-forwarded-host", "pod.elsewhere.example"))
+        .insert_header(("x-forwarded-proto", "https"))
+        .insert_header(("forwarded", "host=pod.elsewhere.example;proto=https"))
+        .to_request(),
     )
     .await;
     assert_eq!(resp.status(), 401);
@@ -215,7 +238,14 @@ async fn bad_or_unbound_tokens_are_401_before_the_sandbox() {
     let client = Client::new(&p.issuer, now(), json!({"aud": "not-solid"}));
     let resp = actix_test::call_service(
         &app,
-        authorized(request("GET", &p.host, "/notes/a"), &client, "GET", &url, "aud").to_request(),
+        authorized(
+            request("GET", &p.host, "/notes/a"),
+            &client,
+            "GET",
+            &url,
+            "aud",
+        )
+        .to_request(),
     )
     .await;
     assert_eq!(resp.status(), 401);

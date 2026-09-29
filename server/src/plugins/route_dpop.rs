@@ -123,7 +123,7 @@ impl Issuers {
 
     fn contains(&self, issuer: &str) -> bool {
         let issuer = normalize_issuer(issuer);
-        self.0.iter().any(|i| *i == issuer)
+        self.0.contains(&issuer)
     }
 
     /// Origins of the configured issuers: fetches there may reach loopback.
@@ -205,7 +205,8 @@ pub fn decode_jws(token: &str) -> Result<Jws, String> {
         return Err("the JWT is too large".into());
     }
     let mut parts = token.split('.');
-    let (Some(h), Some(c), Some(s), None) = (parts.next(), parts.next(), parts.next(), parts.next())
+    let (Some(h), Some(c), Some(s), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
     else {
         return Err("not a compact JWS".into());
     };
@@ -324,7 +325,10 @@ pub fn thumbprint(jwk: &Json) -> Result<String, String> {
         ),
         _ => return Err("the JWK's `kty` is not supported".into()),
     };
-    Ok(B64URL.encode(ring::digest::digest(&ring::digest::SHA256, canonical.as_bytes())))
+    Ok(B64URL.encode(ring::digest::digest(
+        &ring::digest::SHA256,
+        canonical.as_bytes(),
+    )))
 }
 
 /// The URL as a DPoP `htu` compares: without query and fragment.
@@ -352,8 +356,10 @@ pub fn profile_issuers(profile: &[u8], document: &str, webid: &str) -> Result<Ve
     let mut issuers = Vec::new();
     parser
         .parse_all(&mut |t| -> Result<(), rio_turtle::TurtleError> {
-            if let (Subject::NamedNode(NamedNode { iri: s }), Term::NamedNode(NamedNode { iri: o })) =
-                (t.subject, t.object)
+            if let (
+                Subject::NamedNode(NamedNode { iri: s }),
+                Term::NamedNode(NamedNode { iri: o }),
+            ) = (t.subject, t.object)
             {
                 if s == webid && t.predicate.iri == SOLID_OIDC_ISSUER {
                     issuers.push(normalize_issuer(o));
@@ -475,7 +481,10 @@ impl DpopVerifier {
             .filter(|j| !j.is_empty() && j.chars().count() <= MAX_JTI_CHARS)
             .ok_or_else(|| refused("the DPoP proof needs a `jti`"))?;
         if let Some(ath) = claims.get("ath") {
-            let hash = B64URL.encode(ring::digest::digest(&ring::digest::SHA256, token.as_bytes()));
+            let hash = B64URL.encode(ring::digest::digest(
+                &ring::digest::SHA256,
+                token.as_bytes(),
+            ));
             if ath.as_str() != Some(hash.as_str()) {
                 return Err(refused("the DPoP proof's `ath` is not this access token's"));
             }
@@ -500,8 +509,13 @@ impl DpopVerifier {
             return Err(refused("the access token has expired"));
         }
         for claim in ["nbf", "iat"] {
-            if tc[claim].as_i64().is_some_and(|t| t - TOKEN_LEEWAY_SECS > now) {
-                return Err(refused(format!("the access token's `{claim}` is in the future")));
+            if tc[claim]
+                .as_i64()
+                .is_some_and(|t| t - TOKEN_LEEWAY_SECS > now)
+            {
+                return Err(refused(format!(
+                    "the access token's `{claim}` is in the future"
+                )));
             }
         }
         let audience_ok = match &tc["aud"] {
@@ -510,16 +524,18 @@ impl DpopVerifier {
             _ => false,
         };
         if !audience_ok {
-            return Err(refused("the access token's audience does not include `solid`"));
+            return Err(refused(
+                "the access token's audience does not include `solid`",
+            ));
         }
         if tc["cnf"]["jkt"].as_str() != Some(jkt.as_str()) {
-            return Err(refused("the access token is not bound to the DPoP proof's key"));
+            return Err(refused(
+                "the access token is not bound to the DPoP proof's key",
+            ));
         }
         let webid = tc["webid"]
             .as_str()
-            .filter(|w| {
-                url::Url::parse(w).is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
-            })
+            .filter(|w| url::Url::parse(w).is_ok_and(|u| matches!(u.scheme(), "http" | "https")))
             .ok_or_else(|| refused("the access token has no `webid`"))?;
         let token_alg = access.header["alg"].as_str().unwrap_or("");
         self.verify_token_signature(&access, iss, token_alg, now_ms)
@@ -567,7 +583,12 @@ impl DpopVerifier {
     async fn jwks(&self, iss: &str, now_ms: i64, fresh: bool) -> Result<Json, String> {
         let issuer = normalize_issuer(iss);
         if !fresh {
-            let cached = self.jwks.lock().unwrap_or_else(|e| e.into_inner()).get(&issuer).cloned();
+            let cached = self
+                .jwks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&issuer)
+                .cloned();
             if let Some(c) = cached.filter(|c| now_ms - c.at < DOC_TTL_MS) {
                 return Ok(c.value);
             }
@@ -656,13 +677,16 @@ impl DpopVerifier {
         document.set_fragment(None);
         let bytes = self.fetch.fetch(&document, "text/turtle").await?;
         let issuers = profile_issuers(&bytes, document.as_str(), webid)?;
-        self.profiles.lock().unwrap_or_else(|e| e.into_inner()).insert(
-            webid.to_string(),
-            Cached {
-                value: issuers.clone(),
-                at: now_ms,
-            },
-        );
+        self.profiles
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(
+                webid.to_string(),
+                Cached {
+                    value: issuers.clone(),
+                    at: now_ms,
+                },
+            );
         Ok(issuers)
     }
 }
@@ -684,7 +708,8 @@ pub(crate) mod testing {
     impl Es256 {
         pub fn generate(kid: &str) -> Self {
             let rng = SystemRandom::new();
-            let pkcs8 = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+            let pkcs8 =
+                EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
             let pair =
                 EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8.as_ref(), &rng)
                     .unwrap();
@@ -720,7 +745,10 @@ pub(crate) mod testing {
 
     /// Documents from memory, keyed by URL without fragment.
     #[derive(Default)]
-    pub struct Docs(pub Mutex<HashMap<String, Vec<u8>>>, pub std::sync::atomic::AtomicUsize);
+    pub struct Docs(
+        pub Mutex<HashMap<String, Vec<u8>>>,
+        pub std::sync::atomic::AtomicUsize,
+    );
 
     #[async_trait::async_trait]
     impl DocFetch for Docs {
@@ -871,10 +899,12 @@ mod tests {
         // A new proof is fine, and the documents came from the cache.
         let fetched = docs.1.load(std::sync::atomic::Ordering::SeqCst);
         let proof = client.proof("GET", &format!("{URL}?x=1"), NOW, "two");
-        assert!(check(&v, "GET", URL, Some(&client.authorization()), Some(&proof))
-            .await
-            .unwrap()
-            .is_some());
+        assert!(
+            check(&v, "GET", URL, Some(&client.authorization()), Some(&proof))
+                .await
+                .unwrap()
+                .is_some()
+        );
         assert_eq!(docs.1.load(std::sync::atomic::Ordering::SeqCst), fetched);
     }
 
@@ -893,11 +923,23 @@ mod tests {
         let auth = client.authorization();
         let cases = [
             (client.proof("GET", URL, NOW, "m"), "another method"),
-            (client.proof("PUT", "https://abc.routes.example/other", NOW, "u"), "another URL"),
-            (client.proof("PUT", URL, NOW - PROOF_MAX_AGE_SECS - 1, "t"), "not fresh"),
-            (client.proof("PUT", URL, NOW + PROOF_MAX_FUTURE_SECS + 1, "f"), "not fresh"),
+            (
+                client.proof("PUT", "https://abc.routes.example/other", NOW, "u"),
+                "another URL",
+            ),
+            (
+                client.proof("PUT", URL, NOW - PROOF_MAX_AGE_SECS - 1, "t"),
+                "not fresh",
+            ),
+            (
+                client.proof("PUT", URL, NOW + PROOF_MAX_FUTURE_SECS + 1, "f"),
+                "not fresh",
+            ),
             // Another key signs a proof for the same token.
-            (Client::new(&key, NOW, json!({})).proof("PUT", URL, NOW, "k"), "not bound"),
+            (
+                Client::new(&key, NOW, json!({})).proof("PUT", URL, NOW, "k"),
+                "not bound",
+            ),
         ];
         for (proof, expected) in cases {
             let err = check(&v, "PUT", URL, Some(&auth), Some(&proof))
@@ -928,14 +970,14 @@ mod tests {
         let key = Es256::generate("k1");
         let (v, _) = verifier(&key);
         let cases = [
-            (json!({"iss": "https://other.example"}), "not one this server trusts"),
+            (
+                json!({"iss": "https://other.example"}),
+                "not one this server trusts",
+            ),
             (json!({"aud": "https://app.example/id"}), "audience"),
             (json!({"exp": NOW - TOKEN_LEEWAY_SECS - 1}), "expired"),
             (json!({"webid": null}), "no `webid`"),
-            (
-                json!({"webid": "https://pod.example/bob/card#me"}),
-                "WebID",
-            ),
+            (json!({"webid": "https://pod.example/bob/card#me"}), "WebID"),
         ];
         for (extra, expected) in cases {
             let client = Client::new(&key, NOW, extra);
@@ -949,10 +991,12 @@ mod tests {
         let impostor = Es256::generate("k1");
         let client = Client::new(&impostor, NOW, json!({}));
         let proof = client.proof("GET", URL, NOW, "imp");
-        assert!(check(&v, "GET", URL, Some(&client.authorization()), Some(&proof))
-            .await
-            .unwrap_err()
-            .contains("does not verify"));
+        assert!(
+            check(&v, "GET", URL, Some(&client.authorization()), Some(&proof))
+                .await
+                .unwrap_err()
+                .contains("does not verify")
+        );
     }
 
     #[actix_rt::test]
@@ -961,14 +1005,17 @@ mod tests {
         let (v, docs) = verifier(&key);
         docs.0.lock().unwrap().insert(
             "https://pod.example/alice/profile/card".into(),
-            b"<#me> <http://www.w3.org/ns/solid/terms#oidcIssuer> <https://evil.example> .".to_vec(),
+            b"<#me> <http://www.w3.org/ns/solid/terms#oidcIssuer> <https://evil.example> ."
+                .to_vec(),
         );
         let client = Client::new(&key, NOW, json!({}));
         let proof = client.proof("GET", URL, NOW, "p");
-        assert!(check(&v, "GET", URL, Some(&client.authorization()), Some(&proof))
-            .await
-            .unwrap_err()
-            .contains("does not list"));
+        assert!(
+            check(&v, "GET", URL, Some(&client.authorization()), Some(&proof))
+                .await
+                .unwrap_err()
+                .contains("does not list")
+        );
     }
 
     #[test]
@@ -980,7 +1027,10 @@ mod tests {
         assert!(i.contains("http://127.0.0.1:9000/"));
         assert_eq!(
             i.origins(),
-            vec!["https://a.example".to_string(), "http://127.0.0.1:9000".to_string()]
+            vec![
+                "https://a.example".to_string(),
+                "http://127.0.0.1:9000".to_string()
+            ]
         );
         assert!(Issuers::parse(None).unwrap().is_empty());
     }
@@ -1005,9 +1055,16 @@ mod tests {
     fn profiles_resolve_relative_iris() {
         let profile = b"@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<#me> solid:oidcIssuer <https://a.example/>, <https://b.example>.\n<#other> solid:oidcIssuer <https://c.example>.";
         assert_eq!(
-            profile_issuers(profile, "https://pod.example/card", "https://pod.example/card#me")
-                .unwrap(),
-            vec!["https://a.example".to_string(), "https://b.example".to_string()]
+            profile_issuers(
+                profile,
+                "https://pod.example/card",
+                "https://pod.example/card#me"
+            )
+            .unwrap(),
+            vec![
+                "https://a.example".to_string(),
+                "https://b.example".to_string()
+            ]
         );
         assert!(profile_issuers(b"not turtle <", "https://pod.example/card", "x").is_err());
     }

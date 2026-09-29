@@ -565,30 +565,30 @@ pub fn build_response(response: &Json, rules: &ResponseRules) -> Result<Built, S
                     }
                 };
                 for value in values {
-                let allowed = RESPONSE_HEADERS.contains(&lower.as_str())
-                    || (rules.cors == Cors::AnyOriginNoCredentials
-                        && CORS_HEADERS.contains(&lower.as_str()));
-                let location_ok = same_host(&value, rules.host)
-                    || rules
-                        .consent_page
-                        .as_deref()
-                        .is_some_and(|page| value.starts_with(page));
-                if !allowed || (lower == "location" && !location_ok) {
-                    dropped.push(lower.clone());
-                    continue;
-                }
-                let (Ok(name), Ok(value)) = (
-                    HeaderName::from_bytes(lower.as_bytes()),
-                    HeaderValue::from_str(&value),
-                ) else {
-                    dropped.push(lower.clone());
-                    continue;
-                };
-                if name == header::CONTENT_TYPE {
-                    content_type = Some(value.to_str().unwrap_or("").to_string());
-                    continue;
-                }
-                headers.push((name, value));
+                    let allowed = RESPONSE_HEADERS.contains(&lower.as_str())
+                        || (rules.cors == Cors::AnyOriginNoCredentials
+                            && CORS_HEADERS.contains(&lower.as_str()));
+                    let location_ok = same_host(&value, rules.host)
+                        || rules
+                            .consent_page
+                            .as_deref()
+                            .is_some_and(|page| value.starts_with(page));
+                    if !allowed || (lower == "location" && !location_ok) {
+                        dropped.push(lower.clone());
+                        continue;
+                    }
+                    let (Ok(name), Ok(value)) = (
+                        HeaderName::from_bytes(lower.as_bytes()),
+                        HeaderValue::from_str(&value),
+                    ) else {
+                        dropped.push(lower.clone());
+                        continue;
+                    };
+                    if name == header::CONTENT_TYPE {
+                        content_type = Some(value.to_str().unwrap_or("").to_string());
+                        continue;
+                    }
+                    headers.push((name, value));
                 }
             }
         }
