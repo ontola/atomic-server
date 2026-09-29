@@ -138,6 +138,7 @@ const Title = styled(ServiceTitle)`
 const Price = styled.span`
   color: ${p => p.theme.colors.textLight};
   font-size: ${CARD_SUB_FONT};
+  line-height: 1.4;
 `;
 
 const Badge = styled.span<{ $current?: boolean }>`
@@ -156,6 +157,7 @@ const Tagline = styled(ServiceDescription)`
   margin: 0;
   color: ${p => p.theme.colors.text};
   font-size: ${CARD_SUB_FONT};
+  line-height: 1.5;
 `;
 
 const Features = styled.ul`
@@ -166,9 +168,11 @@ const Features = styled.ul`
   padding: 0;
   list-style: none;
   font-size: ${CARD_SUB_FONT};
+  line-height: 1.45;
   color: ${p => p.theme.colors.textLight};
 
   li {
+    margin: 0;
     display: flex;
     align-items: baseline;
     gap: 0.5rem;

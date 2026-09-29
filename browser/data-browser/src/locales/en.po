@@ -10784,3 +10784,7 @@ msgstr "Unlike Cloud Vault, our servers store and process a readable copy"
 #: src/components/Vault/VaultPanel.tsx
 msgid "Not turned on for this workspace yet."
 msgstr "Not turned on for this workspace yet."
+
+#: src/routes/SyncRoute.tsx
+msgid "A Server plan covers one workspace. Checkout shows the price before you pay; connecting your account is free."
+msgstr "A Server plan covers one workspace. Checkout shows the price before you pay; connecting your account is free."
