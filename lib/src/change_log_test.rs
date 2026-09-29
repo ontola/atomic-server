@@ -659,10 +659,10 @@ async fn the_log_survives_a_restart() {
 // ------------------------------------------- afterCommit wake-ups (#1851)
 
 fn subscribe(store: &Db, table: &str, id: &str) {
-    store.set_after_commit_index(std::collections::HashMap::from([(
+    store.set_after_commit_index(Some(std::collections::HashMap::from([(
         table.to_string(),
         vec![id.to_string()],
-    )]));
+    )])));
 }
 
 #[tokio::test]

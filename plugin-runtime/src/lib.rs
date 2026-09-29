@@ -99,6 +99,11 @@ globalThis.__atomic = (function () {
     requestConsent: (request) => call('tokens.requestConsent', request),
   };
 
+  // The table's change list, for a full compare from `afterCommit` (#1851).
+  // Only the event's own table; the host refuses any other.
+  input.changes = (table, options) =>
+    call('changes', { ...(options || {}), table });
+
   return input;
 })();
 "#;
@@ -229,9 +234,27 @@ impl Guest for Component {
                     .map_err(|e| describe(&ctx, e, "handle()"));
             }
 
+            // Which export to call: `run` unless the host names another
+            // entrypoint, as the durable `afterCommit` hook does (#1851).
+            let entry = ctx
+                .eval::<Option<String>, _>(
+                    "typeof __atomic.entry === 'string' ? __atomic.entry : null",
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "run".to_string());
+            if !matches!(entry.as_str(), "run" | "afterCommit") {
+                return Err(format!("`{entry}` is not an entrypoint a plugin can export"));
+            }
             let run: Function = module
-                .get("run")
-                .map_err(|_| "the plugin does not export a run() function".to_string())?;
+                .get(entry.as_str())
+                .map_err(|_| {
+                    if entry == "run" {
+                        "the plugin does not export a run() function".to_string()
+                    } else {
+                        format!("the plugin does not export {entry}()")
+                    }
+                })?;
 
             globals.set("__run", run).map_err(|e| e.to_string())?;
 
@@ -241,7 +264,7 @@ impl Guest for Component {
                 "(async () => JSON.stringify((await __run(__atomic)) ?? null))()",
             )
             .and_then(|promise| promise.finish::<String>())
-            .map_err(|e| describe(&ctx, e, "run()"))
+            .map_err(|e| describe(&ctx, e, &format!("{entry}()")))
         })
     }
 }

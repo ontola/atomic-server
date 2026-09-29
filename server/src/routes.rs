@@ -420,6 +420,12 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
                 .route(web::post().to(handlers::app_row_grant::post_row_grant)),
         )
         .service(
+            web::resource("/app-after-commit")
+                .wrap(from_fn(require_v2))
+                .route(web::get().to(handlers::after_commit::get_status))
+                .route(web::post().to(handlers::after_commit::post_answer)),
+        )
+        .service(
             web::resource("/plugin-trigger")
                 .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))

@@ -264,6 +264,15 @@ impl AppState {
                 .saturating_mul(24 * 60 * 60),
         ));
 
+        // The durable `afterCommit` hook (#1851): with the flag off, the
+        // store writes no wake-up marker at all.
+        #[cfg(feature = "wasm-plugins")]
+        if let Err(e) =
+            plugins::after_commit::rebuild_index(&store, config.opts.plugin_after_commit)
+        {
+            tracing::warn!("afterCommit: could not build the subscription index: {e}");
+        }
+
         match atomic_lib::envelopes::EnvelopeRetention::parse(&config.opts.envelope_retention) {
             Some(retention) => store.set_envelope_retention(retention),
             None => {

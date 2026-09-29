@@ -102,7 +102,17 @@ pub const ROW_EXTRAS: &str = "row-extras";
 /// The App class, by shortname in the drive's plugin vocabulary.
 const APP_CLASS: &str = "app";
 
-const GRANT_VIAS: [&str; 4] = [VIA_ADD_VIEW, VIA_VIEW_TYPE, VIA_REQUEST, VIA_MENU];
+/// "Allow all edits by this view on this table", answered on a proposal the
+/// app's `afterCommit` hook made in the background (#1851).
+pub const VIA_HOOK_REVIEW: &str = "hook-review";
+
+const GRANT_VIAS: [&str; 5] = [
+    VIA_ADD_VIEW,
+    VIA_VIEW_TYPE,
+    VIA_REQUEST,
+    VIA_MENU,
+    VIA_HOOK_REVIEW,
+];
 
 /// Never writable through a grant, whatever the row class declares.
 const NEVER: [&str; 6] = [
@@ -172,7 +182,7 @@ pub enum RowWrite<'a> {
     },
 }
 
-fn pure(subject: &str) -> String {
+pub(crate) fn pure(subject: &str) -> String {
     Subject::from_raw(subject, None).pure_id()
 }
 
@@ -209,7 +219,7 @@ fn put(db: &Db, grant: &RowGrant) -> Result<(), String> {
     db.flush().map_err(|e| e.to_string())
 }
 
-fn scan(db: &Db, prefix: &str) -> Result<Vec<RowGrant>, String> {
+pub(crate) fn scan(db: &Db, prefix: &str) -> Result<Vec<RowGrant>, String> {
     let mut found = db
         .kv
         .scan_prefix(Tree::PluginMeta, prefix.as_bytes())
@@ -237,7 +247,7 @@ fn revoke_record(db: &Db, mut grant: RowGrant, by: &str, via: &str) -> Result<Ro
     Ok(grant)
 }
 
-fn string_of(value: &Value) -> Option<String> {
+pub(crate) fn string_of(value: &Value) -> Option<String> {
     match value {
         Value::AtomicUrl(s) => Some(s.to_string()),
         Value::String(s) => Some(s.clone()),
@@ -245,7 +255,7 @@ fn string_of(value: &Value) -> Option<String> {
     }
 }
 
-fn subjects_of(resource: &Resource, property: &str) -> Vec<String> {
+pub(crate) fn subjects_of(resource: &Resource, property: &str) -> Vec<String> {
     resource
         .get(property)
         .ok()
@@ -256,7 +266,7 @@ fn subjects_of(resource: &Resource, property: &str) -> Vec<String> {
         .collect()
 }
 
-fn parent_of(resource: &Resource) -> Option<String> {
+pub(crate) fn parent_of(resource: &Resource) -> Option<String> {
     resource
         .get(urls::PARENT)
         .ok()
@@ -352,7 +362,12 @@ pub async fn checked_extras(db: &Db, drive: &str, app: &str) -> Result<Vec<Strin
 }
 
 /// Why `view` does not (or no longer) show `app` on `table`, if it does not.
-async fn view_problem(db: &Db, table: &str, app: &str, view: &str) -> Option<&'static str> {
+pub(crate) async fn view_problem(
+    db: &Db,
+    table: &str,
+    app: &str,
+    view: &str,
+) -> Option<&'static str> {
     let Ok(view_resource) = db.get_resource(&view.into()).await else {
         return Some(VIA_VIEW_REMOVED);
     };
@@ -371,7 +386,7 @@ async fn view_problem(db: &Db, table: &str, app: &str, view: &str) -> Option<&'s
     None
 }
 
-async fn may_write(db: &Db, subject: &str, agent: &str) -> bool {
+pub(crate) async fn may_write(db: &Db, subject: &str, agent: &str) -> bool {
     let Ok(resource) = db.get_resource(&subject.into()).await else {
         return false;
     };
@@ -645,6 +660,16 @@ fn on_view_commit(
             };
             revoke_record(store, grant, &signer, via).map_err(atomic_lib::AtomicError::from)?;
         }
+        // The same moment ends the app's `afterCommit` subscription (#1851).
+        super::after_commit::end_for_view(
+            store,
+            &table,
+            &view,
+            kind.as_deref(),
+            destroyed,
+            &signer,
+        )
+        .map_err(atomic_lib::AtomicError::from)?;
         Ok(())
     })
 }

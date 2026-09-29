@@ -126,7 +126,47 @@ pub async fn post_row_grant(
             )
             .await
             .map_err(AtomicServerError::bad_request)?;
+            // Allow editing also lets the app follow the table's changes
+            // (#1851, decision 1). Refusing that must not undo the grant.
+            if let Err(e) = crate::plugins::after_commit::follow(
+                store,
+                &body.drive,
+                &body.table,
+                &body.app,
+                view,
+                &agent,
+                via,
+            )
+            .await
+            {
+                tracing::warn!("afterCommit: could not follow {}: {e}", body.table);
+            }
             Ok(HttpResponse::Ok().json(grant))
+        }
+        // The Read-only answer: no grant, but the app follows the table's
+        // changes all the same (#1851, decision 1). `null` when the hook is
+        // off here or the app does not export it.
+        "follow" => {
+            let view = body
+                .view
+                .as_deref()
+                .ok_or_else(|| AtomicServerError::bad_request("Following needs its view"))?;
+            let via = body.via.as_deref().ok_or_else(|| {
+                AtomicServerError::bad_request("Following needs its gesture (via)")
+            })?;
+            let sub = crate::plugins::after_commit::follow(
+                store,
+                &body.drive,
+                &body.table,
+                &body.app,
+                view,
+                &agent,
+                via,
+            )
+            .await
+            .map_err(AtomicServerError::bad_request)?;
+            Ok(HttpResponse::Ok()
+                .json(sub.map(|s| crate::plugins::after_commit::status_json(store, &s))))
         }
         "revoke" => {
             let via = body.via.as_deref().unwrap_or(VIA_MENU);

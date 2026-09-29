@@ -201,7 +201,7 @@ pub struct ChangeLog {
     /// Table → ids of the `afterCommit` wake-up markers a change to it
     /// upserts (#1851, `crate::after_commit_wake`). Empty unless the server
     /// turned the hook on.
-    pub(crate) wakes: RwLock<HashMap<String, Vec<String>>>,
+    pub(crate) wakes: RwLock<Option<HashMap<String, Vec<String>>>>,
 }
 
 impl Default for ChangeLog {
@@ -209,7 +209,7 @@ impl Default for ChangeLog {
         Self {
             lock: Mutex::new(()),
             tombstone_retention: RwLock::new(DEFAULT_TOMBSTONE_RETENTION),
-            wakes: RwLock::new(HashMap::new()),
+            wakes: RwLock::new(None),
         }
     }
 }

@@ -69,15 +69,27 @@ fn wake_key(id: &str) -> Vec<u8> {
 impl Db {
     /// Replace the table → marker index. `tables` maps a table (any spelling;
     /// it is normalized the way the change list keys tables) to the ids of the
-    /// markers a change to it wakes. An empty map turns markers off.
-    pub fn set_after_commit_index(&self, tables: HashMap<String, Vec<String>>) {
-        let normalized: HashMap<String, Vec<String>> = tables
-            .into_iter()
-            .map(|(table, ids)| (self.canonical_id(&table), ids))
-            .collect();
+    /// markers a change to it wakes. `None` turns the hook off on this store
+    /// (the default): no marker is ever written.
+    pub fn set_after_commit_index(&self, tables: Option<HashMap<String, Vec<String>>>) {
+        let normalized = tables.map(|tables| {
+            tables
+                .into_iter()
+                .map(|(table, ids)| (self.canonical_id(&table), ids))
+                .collect::<HashMap<String, Vec<String>>>()
+        });
         if let Ok(mut guard) = self.change_log.wakes.write() {
             *guard = normalized;
         }
+    }
+
+    /// Whether the server turned the `afterCommit` hook on for this store.
+    pub fn after_commit_enabled(&self) -> bool {
+        self.change_log
+            .wakes
+            .read()
+            .map(|guard| guard.is_some())
+            .unwrap_or(false)
     }
 
     /// The table key the change list uses for `subject`.
@@ -93,8 +105,11 @@ impl Db {
         tx: &mut Transaction,
     ) -> AtomicResult<()> {
         let index = match self.change_log.wakes.read() {
-            Ok(guard) if !guard.is_empty() => guard.clone(),
-            _ => return Ok(()),
+            Ok(guard) => match guard.as_ref() {
+                Some(index) if !index.is_empty() => index.clone(),
+                _ => return Ok(()),
+            },
+            Err(_) => return Ok(()),
         };
         let now = crate::utils::now();
         let mut staged: HashMap<String, Wake> = HashMap::new();
