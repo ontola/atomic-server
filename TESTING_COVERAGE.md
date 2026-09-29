@@ -208,9 +208,325 @@ on its first render without fetching again; `helpers/integrationVisibility.test.
 stored preferences. `integration-visibility.spec.ts` checks no "Show API
 plugins" toggle is offered.
 
+Plugin-routes gates (#1711): `server/src/plugin_routes.rs` unit tests cover the
+three levels, the startup refusals (no `plugin-routes` feature; listeners or
+sidecars below `read-write`), routes-origin validation, the catalog report,
+and that no release feature set (nor atomic.place's) turns the feature on.
+`config.rs` tests parse the flag and, in child processes, the env var;
+`tests/it/server_cli.rs` checks the binary exits non-zero on
+`ATOMIC_PLUGIN_ROUTES=read-only` without the feature. CI runs the lib tests
+and clippy once more with `--features plugin-routes`. Not covered: no e2e
+build has the feature yet (nothing is served behind it before #1714).
+
+Manifest v3 `http` block (#1712): `testdata/plugin-manifest/http-index.json`
+(accepted and rejected cases, the gate each needs, the derived `requires`) and
+`http-refusals.json` (one case per refusal message of the design's 0.4) run
+against both `server/src/plugins/manifest.rs` and
+`browser/lib/src/plugin-manifest-http.test.ts`. `release-ids.json` pins the
+release ids of every accepted v1/v2 fixture, computed before v3 existed.
+`plugin.rs` installation tests check that an install and an upgrade of a
+gated release are refused on the test node (gate `off`) and that the old
+release stays; `plugin_release_test.rs` checks `/plugin-release-pin` answers
+`409` with the typed problem, and the catalog's `requires`. The refused
+install and upgrade commits carry the typed problem after their message
+(`protocol::split_problem`), classify as `HOST_FEATURE_UNAVAILABLE` and answer
+`409` over HTTP with it in the Error resource (#1743).
+`the_catalog_derives_requires_for_a_release_it_has_not_cached` covers a listed
+release missing from the cache (derived from its local `Release` resource),
+one whose resource hashes to another id and one on an unreachable server (both
+`"unknown"`). Not covered: an install on a node with the gates open (the test
+fixture's config is fixed at `off`), a remote `Release` that answers, and the
+per-request budget of remote fetches.
+
+Catalog and install review for gated plugins (#1713): the lib test
+`plugin-manifest-http.test.ts` checks that a catalog entry's derived
+`requires` gives the same verdict as its manifest for every
+`http-refusals.json` case (`requiresGate` + `checkGate`), and parses
+`hostFeatures`. In the data-browser, `catalogGate.test.ts` covers hidden (not
+compiled, or a server without `hostFeatures`), marked (level too low, listener
+not bound) and listed; `PublicEndpoints.test.tsx` renders the "Public
+endpoints" section from `v3-activitypub.json` and the review dialog both
+refusing up front and showing a thrown `HostFeatureUnavailableError` (the
+`409`) inline with Install disabled, and the same for a refused Installation
+commit (an `AtomicError` carrying the problem). The lib's
+`plugin-install.test.ts` checks `installRelease` and
+`updateInstallationRelease` raise `HostFeatureUnavailableError` from a refused
+commit and that a refused install leaves nothing in the outbox;
+`plugin-manifest-http.test.ts` maps both commit transports' errors.
+`catalogGate.test.ts` checks an entry with `requires: "unknown"` is marked,
+never hidden. Not covered: an e2e test against a default
+build (hidden plugin, refused direct link; there is no direct plugin link
+yet), and the upgrade review's diff of surfaces.
+
+Plugin route registry (#1714): `server/src/plugins/route_registry.rs` unit
+tests cover slugs, `{param}`/`{*rest}` matching, both mounts, reserved paths
+(`/.well-known/` names, the API origin outside `/_routes/<slug>/`, and a check
+that every route in `routes.rs` is on the reserved list), collisions naming
+the other installation, pause/revoke/degraded answers and level `off`.
+`handlers/plugin_routes.rs` runs real installs through the app: 200 on a
+match, 405, 503 + `Retry-After`, 410 after revoke, the routes host, refusal
+before anything is materialized, no registration from a peer's import, and a
+restart restoring or degrading routes. `plugins/route_levels_test.rs` installs
+the shared fixture `testdata/plugin-routes/hello-route/` at every build and
+level. `lib/src/commit.rs` checks, in every build, that nothing can be created
+under `/_routes/`. `tests/it/plugin_routes.rs` (only with `--features
+plugin-routes`) installs over HTTP on a real server and gets both mounts'
+answers, the fixture's `Hello, world` among them. Not covered: removed
+routes answering `410` after an upgrade, and a peer `COMMIT` applied outside a
+sync import scope (the owner check relies on that scope).
+
+Plugin route execution (#1715): `server/src/plugins/route_exec.rs` runs real
+installs through the app: a route verdict with intents refused at `read-only`
+and `read-write` with nothing applied, the deadline and fuel and memory
+exhaustion answering `503`, body limits and content types (`413`, `415`,
+`400`), request and response header filtering through the server's CORS
+layers, declared CORS, HTML refused on `drive-prefix`, and the route status
+counts. `route_levels_test.rs` gets `200 Hello, alice` at both open levels;
+`tests/it/plugin_routes.rs` gets `200 Hello, world` from a real server. Not
+covered: the `installation` principal's reads, `ctx.http` from a route, the
+pool and per-installation concurrency limits under real load, and the
+`/plugin-route-status` endpoint over HTTP (its counts are unit-tested).
+
+Well-known claims and the `drive-host` mount (#1716): `route_registry.rs` unit
+tests dispatch claims on a drive's hosts, an installation's own origin and
+(with the operator's grant) the API origin; `webfinger` by `resourcePrefix`
+(404 unmatched, 400 without `resource`), generated `host-meta`; a second
+exclusive claim or an overlapping prefix refused naming the holder;
+server-owned and unlisted names refused; the paths a `drive-host` route may
+not take; nothing at level `off`. `handlers/plugin_routes.rs` runs the shared
+fixture `testdata/plugin-routes/well-known/` on a host bound to the drive
+(nodeinfo, webfinger, host-meta, fall-through to the drive, not on the API
+origin, gone when paused), two installations sharing `webfinger` each running
+only for their own queries, install-time refusals, and the drive-owner and
+resource-path checks. `route_levels_test.rs` runs that fixture at every build
+and level; `tests/it/plugin_routes.rs` gets nodeinfo, webfinger (with CORS)
+and host-meta from a claimed name on a real server. Not covered: a
+`drive-host` route or claim over HTTP on a real server (binding a host needs a
+signed `/bind-drive` on that host), and resources created later at a route's
+path (they are shadowed on the drive's hosts by design).
+
+Route writes (#1717): `server/src/plugins/route_writes.rs` runs the shared
+fixture `testdata/plugin-routes/inbox/` through the app at `read-write`: a
+POST stored under the configured inbox, signed by the installation's agent,
+with `routeProvenance`; an update and a delete of its own item; a create
+under another parent or with another class, and an update or delete of a
+resource someone else created, refused (`502`) with nothing written; the
+per-caller quota answering `429` with `Retry-After` and nothing written; no
+route grant answering `403`; a grant that does not cover the release's
+write targets, or level `read-only`, refusing the install. The quota ledger
+(windows, refunds, `0` = off) and `check_grants` with the route grant are
+unit-tested. `tests/it/plugin_routes.rs` POSTs to a real server and reads
+the item back through the route and from the store. Not covered: the daily
+and byte quotas end to end (only in the ledger's unit test), concurrent
+requests racing one quota, and a write that fails halfway (`500`).
+
+The route grant from the install review: `testdata/plugin-routes/inbox/page-install.json`
+is what the page writes (the grants verbatim, and `write` on the inbox for the
+installation's agent). `browser/lib/src/plugin-route-grant.test.ts` checks
+`installRelease` produces exactly that, signed by the installer; that a
+`config:` target that doesn't resolve refuses before anything is committed;
+that revoking takes the agent off the parent and leaves other writers; and
+that an upgrade replaces the grant and moves the rights. A config edit on the
+Installation page that moves a `config:` target (#1758): the same file checks
+`routeWriteConfigChange` finds the moved targets and refuses an unresolved one,
+and that `saveInstallationConfig` moves `write` to the new parent when
+approved, drops the grant and the rights when declined, commits nothing for an
+unresolved target and only saves when nothing moves.
+`RouteWriteMoveDialog.test.tsx` checks the dialog marks the new parent New,
+starts unchecked and saves with the choice.
+`route_writes::http_tests::a_page_shaped_install_stores_a_post` installs that
+fixture and POSTs (`2xx`). `RouteWriteApproval.test.tsx` covers the review:
+unchecked by default, the targets passed only once approved, install disabled
+while a target doesn't resolve, not offered below `read-write`, and an update
+kept approved or asked again. Not covered: a Playwright run of install, POST
+and revoke (done by hand for #1717's follow-up), and a Playwright run of the
+config edit (done by hand for #1758).
+
+Host crypto (#1718): `server/src/plugins/http_signatures.rs` checks the
+published vectors in `testdata/http-signatures/vectors.json` (draft-cavage-12
+appendix C, RFC 9421 B.2.1, B.2.3, B.2.6 and 4.3; B.2.2's `@query-param` is
+refused), reproduces the deterministic ones by signing, and holds signatures
+to the host's policy (coverage, ±5 min, body digest). `route_auth.rs` covers
+key fetch caching, the negative cache, refetch after rotation, key documents,
+and the egress guard refusing loopback, private and metadata addresses.
+`route_keys.rs` and `route_tokens.rs` cover generation, signing (checked
+independently with the `rsa` crate), wrapping at rest, erasing, hashed
+tokens, and consent requests and codes. `route_crypto_test.rs` runs the
+inbox fixture through the app: a signed POST filling `request.caller` and
+provenance in both schemes; another key, another body, a stale date and no
+signature each `401` without a fetch or a sandbox run; the host signing with
+the installation key and verifying its own `keyId` locally; bearer tokens
+issued, used, listed, revoked; the consent flow approved, replayed and
+denied; no key material in anything the plugin sees or answers; keys and
+tokens erased on revocation. `tests/it/plugin_routes.rs` delivers one signed
+POST end to end on a real server. The consent page's two calls have a
+vitest in `hostStore.test.ts` only for the token ops; the page itself is not
+e2e-tested. Not covered: DPoP and `auth: atomic` (not implemented), ECDSA
+keys, and a real remote key fetch (the egress fetcher is only tested
+refusing).
+
+Delivery queue (#1719): `server/src/plugins/route_delivery_test.rs` runs the
+queue against a fake installation with a loopback stub (through the real
+egress transport, with its loopback test seam) or a scripted transport:
+enqueue, send and settle; the egress guard refusing loopback without the
+seam and private and metadata addresses with it (dead letters, one attempt);
+backoff with jitter per attempt up to the dead letter after 12; which
+answers retry (`5xx`, `429` with `Retry-After` holding the host, timeouts as
+uncertain) and which end the job (`404`, redirects); a job surviving a
+reopened store, with the attempt that was in flight retried as uncertain;
+the daily cap deferring to the next UTC day without dropping; at most two
+requests in flight per destination host; idempotency keys (explicit, and
+derived from the content) while queued, after delivery and once forgotten;
+held and resumed jobs, and a gone installation's jobs dropped; RSA (cavage)
+and Ed25519 (RFC 9421) signatures verified against the installation's public
+key; the refusals of `prepare`. Through the app with the inbox fixture's
+`POST /deliver`: a route enqueues, the worker sends a signed POST that
+verifies with the key `/actor` publishes, `/plugin-route-status` shows the
+queue before and after; a refused delivery refuses the whole verdict,
+intents included; pausing holds and revoking drops; a restart at
+`read-only` degrades the installation and holds its jobs, and a restart at
+`read-write` sends them. `tests/it/plugin_routes.rs` has a real server's
+worker deliver a signed POST to a loopback receiver. Not covered: more than
+16 deliveries in flight, the queue-full `503`, a DNS name that resolves to a
+private address (only literal addresses are tested), and enqueues from query
+triggers (not implemented).
+
+Blob bodies (#1720): `server/src/plugins/route_blobs_test.rs` runs the shared
+fixture `testdata/plugin-routes/files/` (remoteStorage-like `PUT`/`GET
+/files/{*path}`) through the app at `read-write`: a 2 MiB upload stored in
+the blob store with the handler seeing only `{ hash, size, type, subject }`;
+a blob response with its content type, `ETag`, `nosniff`, the sandboxing CSP
+and the right length (also for `HEAD`); `304` and `412` for conditional
+`GET`s, and `If-None-Match: *` / a stale `If-Match` on `PUT` answering `412`
+with nothing stored; the operator's cap and a route's `maxBodyBytes`
+answering `413` with nothing stored; blob bytes counted in the daily byte
+quota (`429`); a foreign blob refused both as a response and as a value in a
+route write, and served once a File under the write target holds it; no
+route grant answering `403` before anything is read; HTML and SVG refused on
+`drive-prefix`; the blob release refused at `read-only`, where a GET-only
+release still serves a blob its installation stored. `route_blobs.rs` unit
+tests cover hash parsing, the limit, and the precondition rules.
+`tests/it/plugin_routes.rs` PUTs 2 MiB to a real server and GETs it back
+byte for byte, with `HEAD`, `304`, `412` and `413` over HTTP. Not covered: a
+body streamed without `Content-Length` (chunked; the limit is checked per
+chunk), an S3 blob backend, and two uploads racing the byte quota.
+
+Endpoint health (#1721): `EndpointHealth.test.tsx` renders the Installation
+page's Endpoints section from server-shaped `/plugin-route-status` bodies:
+nothing yet (zero counts, URLs with copy buttons, method and auth), a route
+with errors and its last error, the queue (depth, today's cap use, a retry
+and a dead letter), the gates off (`hostFeatureMessage`'s words and the
+switch as code), degraded for another reason, and a token revoked after
+confirming; the container renders nothing without plugin routes or routes,
+drops a revoked token, and shows a read error. `hostStore.test.ts` covers the
+view op `readRouteStatus` (answered, `null` on a server without plugin
+routes, refused before any request for someone who can't write the app) and
+`viewProtocol.test.ts` that `store.routes.*` sends the three route ops.
+`route_delivery_test` checks the status carries each route's path, methods
+and auth, the mount, and no `refusal` when the gates are open. Not covered:
+`refusal` on a degraded installation through the handler (only by hand, with
+a restart at `read-only`), and an e2e run of the section.
+
 The data-browser no longer connects or syncs LocalThought platforms: that code
 was removed, and plugins will run in their own iframe and make proxy calls
 through the host (#1624). Nothing in this repo tests a LocalThought connection.
+
+Host signing of `ctx.http` to the integration proxy (ontola/atomic-plugins#54,
+decisions 8 and 12): `plugins::host_core` tests send a real request to a
+one-shot loopback server standing in for the configured proxy and verify its
+v2 signature (method, full URL with query, body hash) as the installation's
+app agent on this node, that plugin-supplied `x-atomic-*` headers are replaced,
+that an installation with no app agent on this node is refused before
+connecting, and that other loopback origins stay refused even when a manifest
+declares them. `plugins::egress` tests pin the exception to exactly the
+configured origin (another port, the other scheme, another loopback address,
+`localhost` for `127.0.0.1`, and credentials in the URL are all refused). They
+also use a table resolver to check that a proxy *name* may resolve to a
+private, CGNAT, ULA or loopback address (`host.docker.internal`, a LAN host),
+resolved once and pinned, while another name, port or scheme resolving to the
+same address is refused, and link-local/metadata is refused even when it is
+the configured proxy. End to end, `it plugin_proxy` starts a real server with
+`--integration-proxy-url` pointing at a loopback stub, pins and installs a JS
+release over HTTP, runs it through `POST /plugin-run`, and checks that
+`ctx.http("atomic-proxy:/demo/items")` arrives as `GET
+/proxy/conn-1/demo/items` with a v2 signature from the installation's node
+agent, that the plugin gets the stub's response, and that an undeclared
+platform is refused before connecting.
+`app_endpoints_test::an_active_installation_reports_its_agent_on_this_node`
+checks `GET /app-agent` reports the identity activation mints for a JS
+Installation. Not covered: a real integration proxy (atomic-plugins#122)
+accepting these requests, delegations and `POST /runtimes`, and a second node.
+
+Installation identities for the proxy (#1700, answers 1–3):
+`plugins::installation_identity` tests commit real Installations and check that
+a keyless `integrationAppAgent` is stored, refused when it is not an agent id,
+and can be added but never changed; that activation publishes the node's agent
+once on an `InstallationRuntime` child, written by that agent and writable by
+it; that `integrationConnections` must map platforms to id strings; and that a
+server-side JS run gets `ctx.app` and `ctx.connections` from the Installation,
+over whatever the caller sent. `browser/lib/src/plugin-install.test.ts` checks
+`installRelease` records a fresh `atomic:agent:` in the genesis with no key
+material. `data-browser/src/helpers/installationRuntimes.test.ts` checks the
+page's side against a fake proxy that mirrors atomic-plugins#122's routes and
+verifies every v2 signature: `POST /runtimes {app, agent, label}` for each
+runtime child whose genesis the named agent signed, nothing posted again in
+the same page or when the proxy already lists it, a re-post when the label
+changes, `DELETE /runtimes/{agent}` on revoke, and a retry after a proxy error.
+`chunks/AppPage/appAgent.test.ts` checks that `appAgentOf` prefers the
+Installation's `integrationAppAgent` and falls back to `GET /app-agent`.
+`helpers/installationConnections.test.ts` checks connecting a platform on an
+Installation against a fake proxy: `/connect`, the signed redeem and the
+delegation to the app id end in `integrationConnections[platform]` written on
+the Installation (and a frame's own connect writes nothing); reusing an
+existing connection delegates and records it; disconnecting calls
+`DELETE /connections/{id}/agents/{app}` and removes the key (the property once
+empty), keeping it when the proxy refuses; and a plain Installation (no
+`proxy` in the manifest, no recorded connection) makes zero fetches to the
+proxy. `views/Installation/InstallationConnections.test.tsx` checks the
+controls are hidden from non-writers and the connected state per platform.
+Not covered: a real proxy accepting the page's calls, the `/connect` return
+end to end in a browser, a second node publishing its own runtime child, and
+syncing those children between nodes.
+
+`atomic-proxy:` URLs (#1700, answer 4): the shared fixtures in
+`testdata/plugin-manifest/` (Rust `shared_manifest_conformance` and the
+`plugin-manifest.test.ts` mirror) cover `proxy` platforms and proxy-relative
+operations, including undeclared platforms, bad names, duplicates, dot
+segments and queries. `manifest::proxy_relative_tests` covers the URL parser.
+`host_core` tests send a proxy-relative request to a one-shot loopback proxy
+and check the resolved `/proxy/{connection}/{platform}/...` request line and
+its v2 signature. They also check refusals, before any connection, for an
+undeclared platform, no delegated connection, no configured proxy, no
+matching operation and a dot segment.
+
+Fail-closed app identity (#1644) with installation identities (#1700,
+answer 8): `plugins::installation::tests` resolve an Installation this node
+activated whose entry point names its app id and another node's published
+agent (runs as this node's agent), the same Installation as synced data on a
+node that never activated it (refused, and so is its entry point), and a
+`createApp` agent with no key here under an activated Installation (still
+refused). `scheduler` tests (from #1644) cover the run path. Not covered: two
+real nodes syncing an Installation.
+
+A wasip2 class extender is refused at the integration proxy, by URL and by
+`atomic-proxy:`, even when its manifest lists the proxy origin (#1700, answer
+5): `host_core::tests::a_class_extender_is_refused_at_the_proxy_and_told_why`.
+
+Version 2 required on state-changing endpoints, with replay protection
+(#1700, piece 6 and answer 7): `app_endpoints_test::state_changing_routes_refuse_v1_and_cookies_and_accept_v2`
+sends every route on the list (including all 13 `/integration-action*`
+routes and the `DELETE`s) a v1 signature, a session cookie and a v2
+signature through the real router and middleware; `a_replayed_v2_request_is_refused`
+replays a captured v2 request byte for byte; `reads_on_v2_routes_still_accept_v1`
+covers `GET`. `replay_cache::tests` cover the window edges, a proof signed
+ahead of the server clock, and a full cache. `server/tests/it/iroh_pairing.rs`
+posts `/iroh-sync` with v2 between two real servers. The browser callers are
+covered with mocked signing (`plugin-server`, `plugin-install`,
+`plugin-connection`, `integration-actions`, `hostingClient`, `hostStore`,
+`managedServer`, `pairing`), and `authentication-v2.test.ts` verifies what
+`signedRequestInit` produces. Not covered: a real browser against a real
+server for these writes (the Playwright suite exercises some of them
+end-to-end), and a restart forgetting the cache.
 
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
@@ -369,6 +685,13 @@ Local validation (2026-09-11): all 840 data-browser unit tests and all five
 new-resource Chromium E2Es pass, including nested website import. E2Es used
 the existing local backend and WASM assets, not a fresh Rust build.
 
+New Table's "Use existing class" picker (`SearchBoxWindow.test.tsx`, vitest):
+an external class the store already fetched is found by a partial shortname,
+name or description, marked with its origin and not listed twice next to the
+server's results, and a pasted URL is still selected directly. The server search
+is mocked. There is no E2E. A class the store has not fetched (after a reload,
+say) is only reachable by its URL.
+
 ## Pre-commit lint gate
 
 `node --test scripts/pre-commit.test.mjs` exercises real Git commits with Oxlint
@@ -514,6 +837,13 @@ Two things worth knowing about the runners:
 | Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold | `lib/src/envelopes.rs` |
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
+| Per-table change list (#1850): created/updated/deleted kinds for create, edit, move out, move in, destroy; one entry per row; per-row Loro version; bounded pages and a row edited between pages; tombstone pruning expires older cursors (410); classtype change rebuilds; backfill of pre-existing rows; replicated (`persist_replicated_resource`) and sync-removed rows; table destroy drops its log; readers without table read learn nothing; restart durability | `lib/src/change_log_test.rs` |
+| `GET /changes`: row listed with version, stranger refused, typed `INVALID_CURSOR` / `CURSOR_EXPIRED` | `server/src/tests.rs` (`table_changes_endpoint`) |
+| `afterCommit` wake-ups (#1851): a change to a subscribed table writes a marker in the same batch, others none; commits coalesce; replicated and sync-removed rows wake; no index, no marker; head cursor skips existing rows | `lib/src/change_log_test.rs` |
+| Durable `afterCommit` (#1851), fixture plugin from a release shown as a table's view: initial delivery at the head, then each change with kind and version; paused installation skipped without counting, catches up; a throw redelivers the same page (`attempt` 2); 8 failures stop the table with the cursor unchanged, Retry delivers the same page; a finished journal is acknowledged once without a rerun; `CURSOR_EXPIRED` → `reset: 'expired'`; 210 rows in three pages not counted by the cap; the loop cap stops it; own writes under a grant apply signed by the app agent and are not delivered back, a person's edit after them is; without a grant writes wait, the table pauses, Apply / Allow all (`hook-review` grant) / Decline, then it catches up; out-of-scope writes held and not allowable in general; `ctx.changes` refused for another table; `view-kind` by hand subscribes nothing, a kind change ends it; the sweep recovers a lost marker; grant backfill; flag off → nothing; an edit survives a hard restart (subprocess) and is delivered | `server/src/plugins/after_commit_test.rs` |
+| `entrypoints.afterCommit` accepted in `extension`, refused in `server-extension`; `onResourceGet`/`beforeCommit` unknown | `server/src/plugins/manifest.rs`, `testdata/plugin-manifest/index.json` (shared with `browser/lib/src/plugin-manifest.test.ts`) |
+| `afterCommit` UI: the dialog line; review bar with Apply / Allow all (only in scope) / Decline; warning with Retry; Read-only still follows, Allow editing does not send a second request; Installation count | `browser/data-browser/src/chunks/AppPage/AfterCommitBar.test.tsx`, `afterCommit.test.ts`, `chunks/TablePage/appViewGrant.test.ts`. **Gap:** no `browser/lib` integration test and no Playwright spec; the Installation page section and the tab mark are only covered by screenshots |
+| Change list client: parse, request shape, 410 → `TableChangesCursorExpiredError` | `browser/lib/src/table-changes.test.ts`. **Gap:** no `browser/lib` integration test against a real server, and no plugin host call yet (#1851) |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
@@ -964,6 +1294,15 @@ mounts without resetting or re-registering the global parser.
   `applyIncoming` / `hydrateResourceFromJsonAd` and is excluded from
   `computeDriveSyncState`. Not covered: a real server round trip for the
   reconnect drain (no `*.integration.test.ts` or Playwright variant yet).
+- `issue-access-agent.test.ts` ("an issued agent queued while offline"): an
+  app agent queued together with the folder it lives in (the drive-app install
+  after a socket drop, ontola/atomic-plugins#171) drains after that folder, not
+  in the agents-first tier, against a stub server that refuses a child whose
+  parent it has not seen. The real server's rule is `check_append` /
+  `check_agent_self_creation` in `lib/src/hierarchy.rs`.
+- `server/tests/it/ws_fragmented.rs`: a `COMMIT` sent as a first frame plus
+  continuation frames is joined and applied. Chromium sends any message over
+  ~128 KB this way; the handler used to drop the socket (`1006`).
 
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded
@@ -1775,6 +2114,43 @@ window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
+App frame navigation (#1734, #1735): `helpers/extensions/externalLink.test.ts`
+checks `openExternal` accepts only http(s) links without credentials, keeps
+the full (punycode) host the confirm bar shows, and opens with
+`noopener,noreferrer`. `hostStore.test.ts` checks `openResource` refuses
+agents, commits, blobs, nodes and non-subjects before loading anything, and
+refuses a resource the person's store cannot read. `viewProtocol.test.ts`
+checks the generated client sends both ops and waits on the person without a
+deadline. Not covered by an automated browser test: the confirm bar itself
+and the navigation (checked by hand with a throwaway Playwright script).
+
+App frame `store.proxy.disconnect({platform})` (#1736):
+`helpers/proxyConnections.test.ts` checks `disconnectApp` against the
+signature-verifying fake proxy: only `DELETE /connections/{id}/agents/{app}`
+calls, another app's delegation on the same connection kept, no connection
+deleted, a 404 counted as gone. `hostStore.test.ts` checks `proxyDisconnect`
+passes an Installation's recorded connection id along and removes
+`integrationConnections[platform]` (keeping other platforms), writes nothing
+for a `createApp` app, and refuses without a proxy or with a bad platform.
+`viewProtocol.test.ts` checks the frame drops its cached capabilities for the
+platform. Not covered: a real proxy, and the op in a browser.
+
+App frame `store.getMany(subjects)` (#1737): `hostStore.test.ts` checks it
+answers in order through the same store read as `get` (same state after a
+local change), reports an unreadable subject in its place without failing the
+rest, and refuses more than 100 subjects or a non-array before reading any.
+`viewProtocol.test.ts` checks the generated client makes one request for the
+batch, hands back resources like `getResource`'s, asks nothing for an empty
+list and refuses 101 without asking.
+
+App frame theme (#1738): `views/PluginView/useCreateThemeVars.test.ts` checks
+the frame stylesheet carries `--t-color-success` and `color-scheme` from the
+built theme's `darkMode`. `FrameBridge.test.ts` checks the theme message
+carries `colorScheme` and keeps it across a ready message and a reload.
+`viewProtocol.test.ts` checks `store.getTheme()` reads the scheme from the
+applied stylesheet before any message, then from messages (only the parent's,
+only `light`/`dark`), and `onThemeChange` fires once per change until stopped.
+
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;
 resource creation and signing still use the real local backend. This verifies the
@@ -2260,3 +2636,60 @@ deployed app's base64 JSON format with an `atomic:agent:` subject through the
 same `Agent.fromSecret` parser used by the local welcome form. It verifies
 the identity and public key. Browser sign-in and data recovery are separate
 flows.
+
+## Drive app runs its own importer (#1739)
+
+| Flow | Layer | Where |
+| --- | --- | --- |
+| Which importer an app may run: the owner of the table it shows, from any of its destination tables; none on its own page or an unrelated table; a named foreign importer refused; Set up required; app file shape and size checked | vitest | `browser/data-browser/src/chunks/AppPage/hostStore.test.ts` |
+| A host that cannot draw the review refuses `runImporter` instead of applying unseen | vitest | same |
+| Summary: applied counts by kind and failed-change errors; cancelled, nothing and blocked | vitest | same |
+| The owning plugin of a destination table (single and keyed); a table merely parked under the plugin has none | vitest | `browser/lib/src/plugin-destination.test.ts` |
+| `store.importer.run()` sends `runImporter` with no 60 s timeout | vitest | `browser/plugin/src/viewProtocol.test.ts` |
+| App button → host bar → host picker or app file → review → apply writes rows → summary in the app; cancel; refused file; foreign importer | Playwright | `browser/e2e/tests/app-importer.spec.ts` |
+
+Not covered: an Installation-based (wasip2) importer, and the money app itself (ontola/atomic-plugins#148 has its own e2e).
+
+## App row grants for a table's view (#1740, 2026-09-25)
+
+`server/src/handlers/app_row_grant_test.rs` runs `/app-row-grant` and
+`/app-write` against a real store: adding the view with a grant lets the app
+save and remove a row property and create a row (signed by the app);
+`view-kind` alone grants nothing; a request confirmed as `via: request` works;
+the record has `grantedBy` (the signer), `grantedAt` and `via`; a grant needs a
+gesture, a View of that table showing the app, and a granter who can edit the
+table; it reaches neither another table, the table itself, its views, rights,
+non-column properties nor `destroy`; revoking from the menu, destroying the
+View, or switching its kind away and back all refuse further writes.
+`hostStore.test.ts` covers the frame ops (`rowAccess`, a bare host refusing
+`requestRowAccess`, row writes going to the server, deletes refused),
+`rowGrant.test.ts` the in-app request, and `appViewGrant.test.ts` the "+ Add
+view" / "View type" confirmation choices. Gap: no Playwright test clicks the
+confirmation; the money app's host E2E (atomic-plugins#148) is the natural one.
+
+## Hidden-tab liveness and presence after reconnect (#1800)
+
+`browser/lib/src/liveness.test.ts` replays the WS liveness timer at a hidden
+tab's once-a-minute cadence and checks that a socket whose probes are answered
+is never closed, while a dead one still closes one tick after its probe times
+out. It does not drive a real browser's throttling.
+`server/tests/it/drive_presence.rs`
+(`presence_sent_right_after_subscribe_is_delivered`) sends a presence update
+right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
+reaches the other subscriber without a retry, and that an update held for a
+refused subscribe is dropped.
+
+Row extras (#1849): the `app_row_grant` tests in
+`server/src/handlers/app_row_grant_test.rs` (13 in all) add four for extras —
+a granted app writes the extras it declared in `row-extras` and nothing else;
+extras reach neither another app's properties nor another table; an app cannot
+claim another app's or forbidden properties as extras; and a wider declaration
+needs a new grant (the old one kept as `superseded`) while a narrower one
+applies at once. `browser/lib/src/plugin-app.test.ts` checks the App declares
+the extras it was given and none by default; `useRowExtras.test.ts` reads an app's declaration
+(none when absent or without the plugin vocabulary) and collects the extras of
+every app shown as one of a table's views; `rowGrant.test.ts` covers the request
+naming the extras, an answer at once when the grant covers them, a new request
+when the declaration widened, and a pre-extras grant covering none. Gap:
+nothing automated checks the row dialog's read-only "Kept by apps" fold or that
+the table shows no extra columns.

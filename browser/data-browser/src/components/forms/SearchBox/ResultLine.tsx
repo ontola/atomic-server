@@ -9,7 +9,7 @@ import React, { useEffect, useRef, type JSX } from 'react';
 import { styled, css } from 'styled-components';
 import { dataTypeIconMap } from '../../../helpers/iconMap';
 import { ResourceGlyph } from '../../ResourceGlyph';
-import { FaAtom } from 'react-icons/fa6';
+import { FaAtom, FaGlobe } from 'react-icons/fa6';
 import { Row } from '../../Row';
 
 interface ResultLineProps {
@@ -20,6 +20,8 @@ interface ResultLineProps {
 
 interface ResourceResultLineProps extends ResultLineProps {
   subject: string;
+  /** Set for resources from outside the user's server; shown next to the title. */
+  origin?: string;
 }
 
 export function ResultLine({
@@ -57,6 +59,7 @@ export function ResultLine({
 
 export function ResourceResultLine({
   subject,
+  origin,
   ...props
 }: ResourceResultLineProps): JSX.Element {
   const resource = useResource(subject);
@@ -67,6 +70,12 @@ export function ResourceResultLine({
       <Row gap='1ch' center>
         <Icon resource={resource} />
         <Name>{resource.title}</Name>
+        {origin && (
+          <Origin data-testid='searchbox-result-origin' title={subject}>
+            <FaGlobe aria-hidden />
+            {new URL(origin).host}
+          </Origin>
+        )}
       </Row>
       {description && (
         <Description>
@@ -150,6 +159,23 @@ export const ListItem = styled.li<{ selected: boolean; gridColumn?: string }>`
 
   @container (max-width: 520px) {
     grid-column: 1/2;
+  }
+`;
+
+const Origin = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  flex-shrink: 0;
+  font-size: 0.8em;
+  padding-inline: 0.5ch;
+  border-radius: ${({ theme }) => theme.radius};
+  border: 1px solid currentColor;
+  color: var(--list-item-svg-color);
+
+  svg {
+    min-width: 0.8em;
+    height: 0.8em;
   }
 `;
 

@@ -34,6 +34,7 @@ pub struct SledStore {
     search_trigrams: sled::Tree,
     envelopes: sled::Tree,
     outbox: sled::Tree,
+    table_changes: sled::Tree,
 }
 
 impl SledStore {
@@ -67,6 +68,7 @@ impl SledStore {
         let search_trigrams = db.open_tree(Tree::SearchTrigrams)?;
         let envelopes = db.open_tree(Tree::Envelopes)?;
         let outbox = db.open_tree(Tree::Outbox)?;
+        let table_changes = db.open_tree(Tree::TableChanges)?;
 
         Ok(SledStore {
             db,
@@ -90,6 +92,7 @@ impl SledStore {
             search_trigrams,
             envelopes,
             outbox,
+            table_changes,
         })
     }
 
@@ -120,6 +123,7 @@ impl SledStore {
             Tree::SearchTrigrams => &self.search_trigrams,
             Tree::Envelopes => &self.envelopes,
             Tree::Outbox => &self.outbox,
+            Tree::TableChanges => &self.table_changes,
         }
     }
 }
@@ -209,6 +213,7 @@ impl KvStore for SledStore {
         let mut batch_search_trigrams = sled::Batch::default();
         let mut batch_envelopes = sled::Batch::default();
         let mut batch_outbox = sled::Batch::default();
+        let mut batch_table_changes = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -232,6 +237,7 @@ impl KvStore for SledStore {
                 Tree::SearchTrigrams => &mut batch_search_trigrams,
                 Tree::Envelopes => &mut batch_envelopes,
                 Tree::Outbox => &mut batch_outbox,
+                Tree::TableChanges => &mut batch_table_changes,
             };
             match op.method {
                 Method::Insert => {
@@ -318,6 +324,9 @@ impl KvStore for SledStore {
         self.outbox
             .apply_batch(batch_outbox)
             .map_err(|e| format!("Failed to apply outbox batch: {}", e))?;
+        self.table_changes
+            .apply_batch(batch_table_changes)
+            .map_err(|e| format!("Failed to apply table_changes batch: {}", e))?;
 
         Ok(())
     }

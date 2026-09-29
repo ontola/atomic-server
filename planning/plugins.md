@@ -677,6 +677,43 @@ So `view` moves onto that substrate, and the work is:
   write its own subtree, so its agent kept there would be a public key the
   app could replace.
 
+  **Row grants for an app shown as a table's view (#1740, 2026-09-25).** The
+  one write outside its subtree an app may be given. Decided: choosing an app
+  as a view (setting `view-kind`) grants nothing; someone who can edit the
+  table confirms "<App> can edit rows in this table" (from "+ Add view", a
+  tab's "View type", the tab's menu, or the app's
+  `store.requestRowAccess()`), and the server records a grant with
+  `grantedBy` (the request's signer), `grantedAt`, `via` and the View it is
+  tied to (`server/src/plugins/app_row_grant.rs`).
+
+  This is a server record, not a `write` right for the app's agent on the
+  table, and it is not a return of the removed `plugin-grant`: it is
+  enforced on the server, in `/app-write`, which is the only path a view
+  writes through. A right would reach the table itself (name, schema,
+  views, rights) and every row whatever its class, and would be a plain
+  value anyone with write could add by hand, the same hole as `view-kind`.
+  The grant is narrower: rows whose parent is the table and whose class is
+  its row class, only the row class's properties, `create` of that class,
+  never `destroy`. It deliberately does not reach an app's unattended runs:
+  it was given to the app as a view, with a person present, and the person's
+  own rights still bound every such write. Removing or switching the View
+  revokes it (a class extender on View), as do the tab's menu, the granter
+  losing write, and the app being re-keyed; revoked grants stay in the record
+  for #1785.
+
+  **Provider extras on granted rows (#1849, 2026-09-25).** Two-way sync keeps
+  its bookkeeping (provider id, ETag or version, baseline) on the row, not in
+  side storage (atomic-plugins#177). An app declares those properties on its
+  App resource as `row-extras`, beside `renders`; a grant records the list as
+  it was when given (`extras`) and covers it while the app still declares it.
+  Widening the list needs a new grant (the old one is kept as `superseded`);
+  narrowing applies at once. Refused as extras: parent, isA, rights, table
+  and view properties, and any property defined under another app. Extras
+  are never table columns (those come from the row class); the row dialog
+  lists them in a collapsed, read-only "Kept by apps" section. Chosen over
+  one JSON property per plugin because separate properties keep datatypes,
+  merge per field and can be queried, and are what the sync parts write.
+
   **Unattended runs sign as the app (2026-08-23).** The key lives on the node,
   in a tree of its own and wrapped by the node key. It has to live there
   rather than with the person: an app importing at 3am has nobody to ask for

@@ -10,7 +10,7 @@
 import {
   decodePairingEnvelope,
   PairingEnvelopeError,
-  signRequest,
+  signedRequestInit,
   type Agent,
 } from '@tomic/lib';
 import { upsertKnownPeer } from './knownPeers';
@@ -52,15 +52,17 @@ export async function pairAndSync(
   // server, inside the desktop/mobile webview.
   const url = `${getLocalServerOrigin()}/iroh-sync`;
   const baseHeaders = { 'Content-Type': 'application/json' };
-  const headers = agent
-    ? await signRequest(url, agent, baseHeaders)
-    : baseHeaders;
+  const body = JSON.stringify({ nodeId: nodeDid, drive });
+  // `/iroh-sync` takes only a version 2 signature, over exactly this body.
+  const init: RequestInit = agent
+    ? await signedRequestInit(url, agent, {
+        method: 'POST',
+        headers: baseHeaders,
+        body,
+      })
+    : { method: 'POST', headers: baseHeaders, body };
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ nodeId: nodeDid, drive }),
-  });
+  const response = await fetch(url, init);
   // A refusal (401/403) may not carry JSON; still say what happened.
   const data = await response.json().catch(() => ({
     error: `${response.status} ${response.statusText}`.trim(),

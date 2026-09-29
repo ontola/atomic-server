@@ -43,17 +43,26 @@ pub async fn genesis(store: &Db, propvals: Vec<(&str, Value)>) -> String {
 }
 
 pub async fn fixture(name: &str) -> Fixture {
+    fixture_with_args(name, &[]).await
+}
+
+/// [`fixture`] with extra command-line options, e.g. `--plugin-routes read-only`.
+pub async fn fixture_with_args(name: &str, extra_args: &[&str]) -> Fixture {
     use clap::Parser;
 
     let unique = format!("{name}_{}", atomic_lib::utils::random_string(10));
-    let opts = crate::config::Opts::parse_from([
+    let data_dir = format!("./.temp/{unique}/db");
+    let config_dir = format!("./.temp/{unique}/config");
+    let mut args = vec![
         "atomic-server",
         "--initialize",
         "--data-dir",
-        &format!("./.temp/{unique}/db"),
+        &data_dir,
         "--config-dir",
-        &format!("./.temp/{unique}/config"),
-    ]);
+        &config_dir,
+    ];
+    args.extend_from_slice(extra_args);
+    let opts = crate::config::Opts::parse_from(args);
 
     let mut config = crate::config::build_config(opts).unwrap();
     config.search_index_path = format!("./.temp/{unique}/search").into();
@@ -103,6 +112,8 @@ pub async fn fixture(name: &str) -> Fixture {
         ("run-problems", urls::JSON),
         ("run-outcomes", urls::JSON),
         ("run-cursor", urls::STRING),
+        ("app-identities", urls::ATOMIC_URL),
+        ("row-extras", urls::RESOURCE_ARRAY),
     ] {
         let subject = genesis(
             &store,
@@ -127,7 +138,7 @@ pub async fn fixture(name: &str) -> Fixture {
 
     let mut classes = Vec::new();
 
-    for shortname in ["plugin-script", "plugin-run"] {
+    for shortname in ["plugin-script", "plugin-run", "app"] {
         let subject = genesis(
             &store,
             vec![
@@ -167,6 +178,157 @@ pub async fn fixture(name: &str) -> Fixture {
         plugin: String::new(),
         terms,
     }
+}
+
+/// `testdata/plugin-routes/hello-route/`: a version-three JS plugin with one
+/// anonymous `GET /hello/{name}` on the `drive-prefix` mount. It needs
+/// `--plugin-routes read-only`. Shared by the gate, registry and (AS-05)
+/// route execution tests; `server/tests/it/plugin_routes.rs` loads the same
+/// files.
+pub const HELLO_ROUTE_SOURCE: &str =
+    include_str!("../../../testdata/plugin-routes/hello-route/plugin.js");
+pub const HELLO_ROUTE_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/hello-route/manifest.json");
+
+/// The hello-route fixture as a release.
+pub fn hello_route_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release(serde_json::from_str(HELLO_ROUTE_MANIFEST).unwrap())
+}
+
+/// `testdata/plugin-routes/well-known/`: a `drive-host` plugin that claims
+/// `/.well-known/nodeinfo` and `/.well-known/webfinger` (for `acct:`).
+pub const WELL_KNOWN_SOURCE: &str =
+    include_str!("../../../testdata/plugin-routes/well-known/plugin.js");
+pub const WELL_KNOWN_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/well-known/manifest.json");
+
+/// The well-known fixture as a release.
+pub fn well_known_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(
+        WELL_KNOWN_SOURCE,
+        serde_json::from_str(WELL_KNOWN_MANIFEST).unwrap(),
+    )
+}
+
+/// `testdata/plugin-routes/inbox/`: a `drive-prefix` plugin whose `POST
+/// /inbox` creates a PlainText under `config.inbox`, and whose `PUT` /
+/// `DELETE /item` change or destroy one. Needs `--plugin-routes read-write`
+/// and a route grant.
+pub const INBOX_SOURCE: &str = include_str!("../../../testdata/plugin-routes/inbox/plugin.js");
+pub const INBOX_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/inbox/manifest.json");
+
+/// The inbox fixture as a release.
+pub fn inbox_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(INBOX_SOURCE, serde_json::from_str(INBOX_MANIFEST).unwrap())
+}
+
+/// `testdata/plugin-routes/files/`: a remoteStorage-like `drive-prefix`
+/// plugin whose `PUT /files/{*path}` takes a blob body and stores a File
+/// under `config.folder`, and whose `GET /files/{*path}` answers with that
+/// blob. Needs `--plugin-routes read-write` and a route grant.
+pub const FILES_SOURCE: &str = include_str!("../../../testdata/plugin-routes/files/plugin.js");
+pub const FILES_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/files/manifest.json");
+
+/// The files fixture as a release.
+pub fn files_release() -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(FILES_SOURCE, serde_json::from_str(FILES_MANIFEST).unwrap())
+}
+
+/// A JS `extension` release of the trivial source with this manifest.
+pub fn js_release(manifest: serde_json::Value) -> atomic_lib::db::plugin_release::PluginRelease {
+    js_release_with_source(HELLO_ROUTE_SOURCE, manifest)
+}
+
+/// A JS `extension` release of `source` with this manifest.
+pub fn js_release_with_source(
+    source: &str,
+    manifest: serde_json::Value,
+) -> atomic_lib::db::plugin_release::PluginRelease {
+    let mut release = atomic_lib::db::plugin_release::PluginRelease::js(
+        source.into(),
+        manifest,
+        Default::default(),
+    );
+    release.world = atomic_lib::db::plugin_release::WORLD_EXTENSION.into();
+    release
+}
+
+/// Publishes `release` and installs it on the fixture's drive as an active
+/// Installation, granting every capability it declares. Namespace and name
+/// come from the manifest. Returns the Installation's subject, or the
+/// commit's refusal.
+pub async fn install_release(
+    fixture: &Fixture,
+    release: &atomic_lib::db::plugin_release::PluginRelease,
+) -> Result<String, String> {
+    install_release_with(fixture, release, None, None).await
+}
+
+/// [`install_release`], also granting `route_grant` (the value of the
+/// `route-writes` grant: the approved write targets) and with this `config`.
+pub async fn install_release_with(
+    fixture: &Fixture,
+    release: &atomic_lib::db::plugin_release::PluginRelease,
+    route_grant: Option<serde_json::Value>,
+    config: Option<serde_json::Value>,
+) -> Result<String, String> {
+    let mut grants: Vec<serde_json::Value> = release
+        .manifest
+        .get("capabilities")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c.get("name").cloned())
+        .collect();
+    if let Some(targets) = route_grant {
+        grants.push(serde_json::json!({ "route-writes": targets }));
+    }
+    install_release_with_grants(fixture, release, grants.into(), config).await
+}
+
+/// [`install_release`] with `grants` written to the Installation verbatim,
+/// as a client (the install review) writes them.
+pub async fn install_release_with_grants(
+    fixture: &Fixture,
+    release: &atomic_lib::db::plugin_release::PluginRelease,
+    grants: serde_json::Value,
+    config: Option<serde_json::Value>,
+) -> Result<String, String> {
+    let store = &fixture.appstate.store;
+    let id = store
+        .publish_plugin_release(release)
+        .map_err(|e| e.to_string())?;
+    let mut resource = Resource::new("did:ad:placeholder".into());
+    if let Some(config) = config {
+        resource
+            .set_unsafe(urls::CONFIG.into(), Value::Json(config))
+            .map_err(|e| e.to_string())?;
+    }
+    for (property, value) in [
+        (
+            urls::IS_A,
+            Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+        ),
+        (
+            urls::PARENT,
+            Value::AtomicUrl(fixture.drive.as_str().into()),
+        ),
+        (urls::RELEASE_PROP, Value::String(id.clone())),
+        (urls::RELEASE_ID, Value::String(id)),
+        (urls::INSTALLATION_STATUS, Value::String("active".into())),
+        (urls::GRANTS, Value::Json(grants)),
+    ] {
+        resource
+            .set_unsafe(property.into(), value)
+            .map_err(|e| e.to_string())?;
+    }
+    resource
+        .save_as_genesis(store)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(resource.get_subject().to_string())
 }
 
 /// A plugin whose every run proposes one new resource with this name.

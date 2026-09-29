@@ -29,7 +29,7 @@ import {
 // only the entry file, leaving its relative imports missing in production.
 import PluginWorker from '@tomic/lib/plugin-run.worker.js?worker';
 import { useEffect, useState } from 'react';
-import { signRequest } from '@tomic/react';
+import { signedRequestInit, signRequest } from '@tomic/react';
 
 /**
  * Running a plugin and applying what it proposed are separate calls on purpose.
@@ -407,6 +407,14 @@ export function usePluginManifest(source: string | undefined): PluginManifest {
   return manifest;
 }
 
+/** A plugin's manifest, read from its source in a sandboxed worker. */
+export function describePluginSource(source: string): Promise<PluginManifest> {
+  return describePlugin(source, {
+    createWorker: () => new PluginWorker() as never,
+    timeoutMs: 5000,
+  });
+}
+
 export interface PreparedRun {
   schemas?: Record<string, string>;
   /** Exactly what `run()` was given, so preview and run can be compared. */
@@ -629,18 +637,18 @@ export async function setPluginSchedule(
   if (!agent) throw new Error('Not signed in');
 
   const url = `${store.getServerUrl()}/plugin-schedule`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(url, agent, {})),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      drive: target.drive,
-      plugin: target.plugin,
-      intervalSeconds,
+  const response = await fetch(
+    url,
+    await signedRequestInit(url, agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        drive: target.drive,
+        plugin: target.plugin,
+        intervalSeconds,
+      }),
     }),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(

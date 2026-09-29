@@ -37,6 +37,20 @@ pub struct Opts {
     #[clap(long, default_value = "latest", env = "ATOMIC_ENVELOPE_RETENTION")]
     pub envelope_retention: String,
 
+    /// How many days the per-table change list (`GET /changes`) keeps the
+    /// tombstones of rows that left a table. A client whose cursor is older
+    /// than this is told to resync.
+    #[clap(long, default_value_t = 30, env = "ATOMIC_TABLE_CHANGE_RETENTION_DAYS")]
+    pub table_change_retention_days: u64,
+
+    /// Let user-installed plugins follow the tables they are a view of with
+    /// a durable `afterCommit` hook (#1851): adding the view subscribes the
+    /// plugin, and the server tells it about changed rows while the tab is
+    /// closed. Off by default. With it off, no subscription is recorded, no
+    /// wake-up marker is written and the entrypoint is inert.
+    #[clap(long, env = "ATOMIC_PLUGIN_AFTER_COMMIT")]
+    pub plugin_after_commit: bool,
+
     /// Compact the store file at startup when it is at least
     /// `--auto-compact-min-mb` and at least `--auto-compact-min-reclaimable-percent`
     /// of it is dead space (pages freed by overwrites and deletes that redb
@@ -86,6 +100,18 @@ pub struct Opts {
     /// Must be separate from Atomic editor and API domains. Omit to disable publishing.
     #[clap(long, env = "ATOMIC_WEBSITE_ORIGIN")]
     pub website_origin: Option<String>,
+
+    /// The integration proxy's origin, e.g. https://localthought.io or, for a proxy on this
+    /// machine, http://localhost:8080 — exactly the proxy's own BASE_URL. A server-side plugin's
+    /// `ctx.http` requests to this origin are signed with this node's app agent for its
+    /// installation (Atomic v2 request signatures). Exactly this scheme, host and port may be
+    /// on loopback or a private network (e.g. http://host.docker.internal:8787 or
+    /// http://proxy.lan:8787), which every other plugin destination is refused; the name is
+    /// resolved once per request and the checked addresses are the ones connected to.
+    /// Link-local and cloud-metadata addresses (169.254.0.0/16, fe80::/10) are refused even
+    /// here. Omit to configure none.
+    #[clap(long, env = "ATOMIC_INTEGRATION_PROXY_URL")]
+    pub integration_proxy_url: Option<String>,
 
     // 9.883 is decimal for the `⚛` character.
     /// The port where the HTTP app is available. Set to 80 if you want this to be available on the network.
@@ -272,6 +298,101 @@ pub struct Opts {
     /// combined with `--enable-vector-index`, in which case it forces indexing off again.
     #[clap(long, env = "ATOMIC_SKIP_VECTOR_INDEX")]
     pub skip_vector_index: bool,
+
+    /// Lets installed plugins open public endpoints on this server: routes,
+    /// `/.well-known/` claims, and (with `read-write`) inbound writes,
+    /// host-held keys and tokens, deliveries, listeners and sidecars. `off`
+    /// (the default) keeps them all closed. Needs a build with the
+    /// `plugin-routes` Cargo feature: any other value on a build without it
+    /// refuses to start. Each plugin still needs its own install review.
+    #[clap(value_enum, long, default_value = "off", env = "ATOMIC_PLUGIN_ROUTES")]
+    pub plugin_routes: crate::plugin_routes::PluginRoutesLevel,
+
+    /// Dedicated origin for plugin routes, e.g. `https://routes.example.net`.
+    /// Each Installation gets a subdomain. Must be separate from the API,
+    /// drive and website domains (`http://routes.localhost:PORT` in
+    /// development). Omit it and plugin routes are only served under
+    /// `/_routes/` on each drive. Needs the `plugin-routes` feature.
+    #[clap(long, env = "ATOMIC_ROUTES_ORIGIN")]
+    pub routes_origin: Option<String>,
+
+    /// Ports the operator binds for `server-extension` plugins, as
+    /// `name:port,...` (e.g. `willow-wgps:4455`). Needs
+    /// `--plugin-routes read-write` and the `plugin-routes` feature.
+    #[clap(long, env = "ATOMIC_PLUGIN_LISTENERS")]
+    pub plugin_listeners: Option<String>,
+
+    /// Loopback daemons plugins may call, as `name=http://127.0.0.1:port,...`
+    /// (e.g. `pds=http://127.0.0.1:2583`). Needs `--plugin-routes read-write`
+    /// and the `plugin-routes` feature.
+    #[clap(long, env = "ATOMIC_PLUGIN_SIDECARS")]
+    pub plugin_sidecars: Option<String>,
+
+    /// `/.well-known/` names installed plugins may claim on the API origin,
+    /// as `name=<Installation subject>,...` (e.g.
+    /// `nodeinfo=did:ad:...`). That origin's identity is the operator's, so
+    /// only this option grants one; claims on a plugin's own origin or on a
+    /// drive's host need no operator config. Names must be claimable
+    /// (`webfinger`, `nodeinfo`, `did.json`, ...). Needs `--plugin-routes
+    /// read-only` and the `plugin-routes` feature.
+    #[clap(long, env = "ATOMIC_PLUGIN_API_WELL_KNOWN")]
+    pub plugin_api_well_known: Option<String>,
+
+    /// Resources one remote caller may make one plugin installation's
+    /// routes create per hour (design 2.6, *proposed* there). Past it the
+    /// route answers `429`. `0` turns this quota off. Only used at
+    /// `--plugin-routes read-write`.
+    #[clap(
+        long,
+        default_value = "100",
+        env = "ATOMIC_PLUGIN_ROUTE_CREATES_PER_CALLER_HOUR"
+    )]
+    pub plugin_route_creates_per_caller_hour: u64,
+
+    /// Resources one plugin installation's routes may create per day, from
+    /// all callers together (design 2.6, *proposed* there). `0` turns this
+    /// quota off.
+    #[clap(
+        long,
+        default_value = "10000",
+        env = "ATOMIC_PLUGIN_ROUTE_CREATES_PER_DAY"
+    )]
+    pub plugin_route_creates_per_day: u64,
+
+    /// Bytes of property values one plugin installation's routes may write
+    /// per day, creates and changes together. The design gives no number;
+    /// the default is 64 MiB. `0` turns this quota off.
+    #[clap(
+        long,
+        default_value = "67108864",
+        env = "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY"
+    )]
+    pub plugin_route_bytes_per_day: u64,
+
+    /// The largest request body a plugin route with `body: blob` may store
+    /// (design 2.8: "operator-configured"). A route's `maxBodyBytes` is
+    /// capped by it; without one a route gets 16 MiB, or this if it is
+    /// smaller. Blob bytes also count toward
+    /// `--plugin-route-bytes-per-day`. Only used at `--plugin-routes
+    /// read-write`.
+    #[clap(
+        long,
+        default_value = "16777216",
+        env = "ATOMIC_PLUGIN_ROUTE_MAX_BLOB_BYTES"
+    )]
+    pub plugin_route_max_blob_bytes: u64,
+
+    /// Deliveries one plugin installation may send per UTC day (design D5;
+    /// default 1,000). Every outbound request counts, retries
+    /// included. Past it, queued deliveries wait for the next day; they are
+    /// not dropped. `0` turns the cap off. Only used at `--plugin-routes
+    /// read-write`.
+    #[clap(
+        long,
+        default_value_t = crate::plugin_routes::DEFAULT_DELIVERIES_PER_DAY,
+        env = "ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY"
+    )]
+    pub plugin_route_deliveries_per_day: u64,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -409,6 +530,13 @@ pub struct Config {
     /// serving. Built from `--auto-compact*`; see
     /// [`atomic_lib::db::compaction::CompactionPolicy`].
     pub compaction: atomic_lib::db::compaction::CompactionPolicy,
+    /// The plugin-routes gates, resolved once at boot. See
+    /// [`crate::plugin_routes`].
+    pub plugin_routes: crate::plugin_routes::PluginRoutesConfig,
+    /// A test seam, not an option: lets plugin deliveries reach loopback
+    /// addresses, which the egress guard otherwise refuses, so tests can
+    /// deliver to a stub on this machine. No flag or env var sets it.
+    pub plugin_delivery_loopback: bool,
 }
 
 impl Config {
@@ -433,6 +561,12 @@ impl Config {
     /// Returns the base domain of the server (e.g. "atomicdata.dev").
     pub fn get_base_domain(&self) -> Option<String> {
         self.base_domain.clone()
+    }
+
+    /// The plugin-routes level in effect: `off` unless this build has the
+    /// `plugin-routes` feature and the operator raised `--plugin-routes`.
+    pub fn plugin_routes_level(&self) -> crate::plugin_routes::PluginRoutesLevel {
+        self.plugin_routes.level()
     }
 
     /// Signals that this node was set up to be reached from outside. Used only
@@ -614,7 +748,9 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         min_reclaimable_fraction: f64::from(opts.auto_compact_min_reclaimable_percent) / 100.0,
     };
 
-    Ok(Config {
+    let mut config = Config {
+        plugin_routes: Default::default(),
+        plugin_delivery_loopback: false,
         host_mode,
         compaction,
         initialize,
@@ -638,7 +774,28 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         plugin_cache_path,
         uploads_path,
         base_domain,
-    })
+    };
+
+    // Resolved before anything binds, like the host mode: an option that a
+    // build can't honour must stop the server, not be ignored.
+    let api_origin = config.get_origin();
+    config.plugin_routes = crate::plugin_routes::resolve(
+        crate::plugin_routes::PluginRoutesOptions {
+            level: config.opts.plugin_routes,
+            routes_origin: config.opts.routes_origin.as_deref(),
+            listeners: config.opts.plugin_listeners.as_deref(),
+            sidecars: config.opts.plugin_sidecars.as_deref(),
+            api_well_known: config.opts.plugin_api_well_known.as_deref(),
+        },
+        crate::plugin_routes::COMPILED,
+        crate::plugin_routes::OriginContext {
+            api_origin: &api_origin,
+            base_domain: config.opts.base_domain.as_deref(),
+            website_origin: config.opts.website_origin.as_deref(),
+        },
+    )?;
+
+    Ok(config)
 }
 
 #[cfg(test)]
@@ -682,5 +839,172 @@ mod tests {
         let err = config_from(&["--auto-compact-min-reclaimable-percent", "101"])
             .expect_err("101% must not build a config");
         assert!(err.to_string().contains("0-100"), "{err}");
+    }
+
+    use crate::plugin_routes::PluginRoutesLevel;
+
+    const LEVELS: [(&str, PluginRoutesLevel); 3] = [
+        ("off", PluginRoutesLevel::Off),
+        ("read-only", PluginRoutesLevel::ReadOnly),
+        ("read-write", PluginRoutesLevel::ReadWrite),
+    ];
+
+    #[test]
+    fn plugin_routes_defaults_to_off() {
+        let opts = Opts::parse_from(["atomic-server"]);
+        assert_eq!(opts.plugin_routes, PluginRoutesLevel::Off);
+        assert_eq!(opts.routes_origin, None);
+        assert_eq!(opts.plugin_listeners, None);
+        assert_eq!(opts.plugin_sidecars, None);
+        assert_eq!(opts.plugin_api_well_known, None);
+        let config = config_from(&[]).unwrap();
+        assert_eq!(config.plugin_routes_level(), PluginRoutesLevel::Off);
+        assert_eq!(
+            config.plugin_routes.compiled(),
+            crate::plugin_routes::COMPILED
+        );
+    }
+
+    #[test]
+    fn plugin_routes_flag_parses_three_levels() {
+        for (raw, level) in LEVELS {
+            let opts = Opts::parse_from(["atomic-server", "--plugin-routes", raw]);
+            assert_eq!(opts.plugin_routes, level, "{raw}");
+        }
+        assert!(Opts::try_parse_from(["atomic-server", "--plugin-routes", "on"]).is_err());
+    }
+
+    #[test]
+    fn plugin_routes_options_read_their_env_vars() {
+        use clap::CommandFactory;
+        let command = Opts::command();
+        for (id, env) in [
+            ("plugin_routes", "ATOMIC_PLUGIN_ROUTES"),
+            ("routes_origin", "ATOMIC_ROUTES_ORIGIN"),
+            ("plugin_listeners", "ATOMIC_PLUGIN_LISTENERS"),
+            ("plugin_sidecars", "ATOMIC_PLUGIN_SIDECARS"),
+            ("plugin_api_well_known", "ATOMIC_PLUGIN_API_WELL_KNOWN"),
+            (
+                "plugin_route_creates_per_caller_hour",
+                "ATOMIC_PLUGIN_ROUTE_CREATES_PER_CALLER_HOUR",
+            ),
+            (
+                "plugin_route_creates_per_day",
+                "ATOMIC_PLUGIN_ROUTE_CREATES_PER_DAY",
+            ),
+            (
+                "plugin_route_bytes_per_day",
+                "ATOMIC_PLUGIN_ROUTE_BYTES_PER_DAY",
+            ),
+            (
+                "plugin_route_max_blob_bytes",
+                "ATOMIC_PLUGIN_ROUTE_MAX_BLOB_BYTES",
+            ),
+            (
+                "plugin_route_deliveries_per_day",
+                "ATOMIC_PLUGIN_ROUTE_DELIVERIES_PER_DAY",
+            ),
+        ] {
+            let arg = command
+                .get_arguments()
+                .find(|a| a.get_id() == id)
+                .unwrap_or_else(|| panic!("no option {id}"));
+            assert_eq!(arg.get_env(), Some(std::ffi::OsStr::new(env)), "{id}");
+        }
+    }
+
+    /// Env vars are process-wide, so each value is parsed in a child process
+    /// running [`plugin_routes_env_child`] instead of racing the other tests.
+    #[test]
+    fn plugin_routes_env_var_parses_three_levels() {
+        let exe = std::env::current_exe().unwrap();
+        for (raw, _) in LEVELS {
+            let output = std::process::Command::new(&exe)
+                .args([
+                    "config::tests::plugin_routes_env_child",
+                    "--exact",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("ATOMIC_PLUGIN_ROUTES", raw)
+                .env("PLUGIN_ROUTES_EXPECTED", raw)
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains("1 passed"),
+                "ATOMIC_PLUGIN_ROUTES={raw}: {stdout}{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "run by plugin_routes_env_var_parses_three_levels"]
+    fn plugin_routes_env_child() {
+        let expected = std::env::var("PLUGIN_ROUTES_EXPECTED").unwrap();
+        let level = LEVELS.iter().find(|(raw, _)| *raw == expected).unwrap().1;
+        assert_eq!(Opts::parse_from(["atomic-server"]).plugin_routes, level);
+        let config = config_from(&[]);
+        if crate::plugin_routes::COMPILED || level == PluginRoutesLevel::Off {
+            assert_eq!(config.unwrap().plugin_routes_level(), level);
+        } else {
+            let err = config.expect_err("must refuse without the feature");
+            assert!(
+                err.to_string().contains("--features plugin-routes"),
+                "{err}"
+            );
+        }
+    }
+
+    #[cfg(not(feature = "plugin-routes"))]
+    #[test]
+    fn plugin_routes_without_the_feature_refuses_to_start() {
+        for raw in ["read-only", "read-write"] {
+            let err =
+                config_from(&["--plugin-routes", raw]).expect_err("no feature, no plugin routes");
+            let err = err.to_string();
+            assert!(
+                err.contains("built without the `plugin-routes` feature")
+                    && err.contains(&format!("`--plugin-routes {raw}`"))
+                    && err.contains("Rebuild with `--features plugin-routes`"),
+                "{err}"
+            );
+        }
+        assert!(config_from(&["--plugin-listeners", "x:4455"]).is_err());
+        assert!(config_from(&["--plugin-sidecars", "pds=http://127.0.0.1:1"]).is_err());
+        assert!(config_from(&["--routes-origin", "https://routes.example.net"]).is_err());
+        // Saying `off` explicitly is fine on every build.
+        let config = config_from(&["--plugin-routes", "off"]).unwrap();
+        assert_eq!(config.plugin_routes_level(), PluginRoutesLevel::Off);
+    }
+
+    #[cfg(feature = "plugin-routes")]
+    #[test]
+    fn plugin_routes_with_the_feature_sets_the_effective_level() {
+        for (raw, level) in LEVELS {
+            let config = config_from(&["--plugin-routes", raw]).unwrap();
+            assert_eq!(config.plugin_routes_level(), level, "{raw}");
+            assert!(config.plugin_routes.compiled());
+        }
+        let err = config_from(&[
+            "--plugin-routes",
+            "read-only",
+            "--plugin-listeners",
+            "x:4455",
+        ])
+        .expect_err("listeners need read-write");
+        assert!(err.to_string().contains("read-write"), "{err}");
+        let config = config_from(&[
+            "--plugin-routes",
+            "read-write",
+            "--plugin-listeners",
+            "x:4455",
+            "--routes-origin",
+            "http://routes.localhost:9883",
+        ])
+        .unwrap();
+        assert_eq!(config.plugin_routes.listeners()[0].port, 4455);
+        assert!(config.plugin_routes.routes_origin().is_some());
     }
 }

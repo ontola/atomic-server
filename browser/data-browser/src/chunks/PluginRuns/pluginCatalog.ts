@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { parseCatalogApp, type CatalogApp } from '@tomic/react';
 import { usePluginCatalogUrl } from '@helpers/pluginCatalogUrl';
 
 const CATALOG_ENTRY_CLASS =
@@ -18,6 +19,8 @@ export interface CatalogEntry {
   experimental: boolean;
   enabled: boolean;
   requiresApiPlugins: boolean;
+  /** Set when the entry is an installable drive app (`app-module`). */
+  app?: CatalogApp;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -25,7 +28,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Malformed entries are skipped, so one bad row can't hide the rest. */
-export function parseCatalogEntries(raw: unknown): CatalogEntry[] {
+export function parseCatalogEntries(
+  raw: unknown,
+  catalogUrl?: string,
+): CatalogEntry[] {
   if (!Array.isArray(raw)) return [];
 
   return raw.flatMap((resource): CatalogEntry[] => {
@@ -42,6 +48,9 @@ export function parseCatalogEntries(raw: unknown): CatalogEntry[] {
         experimental: resource[EXPERIMENTAL_PROP] !== false,
         enabled: resource[ENABLED_PROP] === true,
         requiresApiPlugins: resource[REQUIRES_API_PLUGINS_PROP] === true,
+        // Resolved against the catalog it came from, so a catalog can name
+        // its modules relative to itself.
+        ...(catalogUrl ? { app: parseCatalogApp(resource, catalogUrl) } : {}),
       },
     ];
   });
@@ -77,7 +86,7 @@ function fetchIntegrationCatalog(catalogUrl: string): Promise<CatalogEntry[]> {
 
         return response.json();
       })
-      .then(parseCatalogEntries)
+      .then(raw => parseCatalogEntries(raw, catalogUrl))
       .then(entries => {
         resolved.set(catalogUrl, entries);
 
@@ -97,6 +106,8 @@ export function useIntegrationCatalog(): {
   entries: CatalogEntry[];
   ready: boolean;
   error?: string;
+  /** Where the entries came from. */
+  catalogUrl: string;
 } {
   const catalogUrl = usePluginCatalogUrl();
   const [entries, setEntries] = useState(() => resolved.get(catalogUrl));
@@ -118,7 +129,12 @@ export function useIntegrationCatalog(): {
     };
   }, [catalogUrl]);
 
-  return { entries: entries ?? [], ready: entries !== undefined, error };
+  return {
+    entries: entries ?? [],
+    ready: entries !== undefined,
+    error,
+    catalogUrl,
+  };
 }
 
 /**

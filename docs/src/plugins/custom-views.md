@@ -12,7 +12,7 @@ The iframe receives a generated HTML document that:
 
 1. Loads a reset stylesheet.
 2. Optionally loads your `ui.css` file.
-3. Injects the current theme as CSS custom properties via a `<style>` block.
+3. Injects the current theme as CSS custom properties via a `<style>` block: colours such as `--t-color-bg`, `--t-color-text`, `--t-color-main`, `--t-color-alert`, `--t-color-warning` and `--t-color-success`, plus `color-scheme: light` or `dark` on `:root`. The theme message (`{ type: '__atomic_style', css, colorScheme }`, `ThemeMessage` in `@tomic/plugin`) also names `colorScheme: 'light' | 'dark'`, taken from the host's own setting, so a view does not have to guess dark mode from the background colour.
 4. Loads your `ui.js` as a `<script type="module">`.
 
 A strict Content Security Policy is applied: only scripts and styles with the correct nonce are allowed to run. External scripts or inline scripts without the nonce will be blocked.
@@ -196,4 +196,69 @@ Opens a file picker dialog. The user can select an existing file on AtomicServer
 const file = await rpc.pickFile({
   allowedMimes: ['image/png', 'image/jpeg'],
 });
+```
+
+## App frames
+
+A drive app's view (an app made with `createApp`, or an Installation's app) gets a `store` from `/plugin-ui?format=client` instead of an `RPCClient`. It speaks the same versioned wire protocol (`atomic.view.request` / `atomic.view.response`, the `ViewOperation`s in `@tomic/plugin`). Besides reading and writing resources, it can ask the host to do what a sandboxed, null-origin frame cannot do itself.
+
+#### `store.getMany(subjects): Promise<Array<Resource | { subject, error }>>`
+
+Reads up to 100 resources in one round trip to the host, instead of one `getResource` per row. Each subject is read exactly as `getResource` reads it: through the signed-in person's store, so the app sees what they can see, including their own writes. The array is in the order asked. A subject that cannot be read is `{ subject, error }` in its place, so one missing row does not fail the rest. More than 100 subjects are refused, so ask in batches.
+
+```js
+const subjects = await store.query({ property: PARENT, value: table });
+const rows = await store.getMany(subjects.slice(0, 100));
+for (const row of rows) if (!row.error) render(row.get(NAME));
+```
+
+#### `store.getTheme(): { colorScheme: 'light' | 'dark' }` and `store.onThemeChange(handler)`
+
+Whether the host is drawn light or dark, from the host's actual setting. `onThemeChange` calls back with `{ colorScheme }` when the person switches, and returns a function that stops it. For colours, use the `--t-color-*` CSS variables. They change with the theme, so CSS that uses them needs no JavaScript.
+
+```js
+const { colorScheme } = store.getTheme();
+chart.setDark(colorScheme === 'dark');
+store.onThemeChange(({ colorScheme }) => chart.setDark(colorScheme === 'dark'));
+```
+
+```css
+.saved { color: var(--t-color-success); }
+```
+
+#### `store.openExternal(url): Promise<{ status: 'opened' | 'cancelled' }>`
+
+Opens an `http:` or `https:` link in a new tab. The frame has no popup rights (`allow-popups` is not in its sandbox), so `window.open` and `target="_blank"` do nothing. Instead, the host shows a bar naming the destination's host in full, with the whole link under it, and opens the link only when the person clicks **Open link**. It opens with `noopener,noreferrer`. Other schemes, and links with a user name or password in them, are refused. A second call before the person answers resolves the first as `cancelled`.
+
+```js
+const { status } = await store.openExternal('https://www.notion.so/My-page-abc123');
+```
+
+#### `store.openResource(subject): Promise<{ status: 'opened', subject }>`
+
+Shows a resource in the host page, leaving the app. Only a resource the signed-in person can already read: the host loads it with their store first and refuses it when that fails. Agents, commits, blobs, nodes and anything that is not a resource subject are refused.
+
+```js
+await store.openResource(table.subject);
+```
+
+#### `store.routes.status()`, `store.routes.tokens()` and `store.routes.revokeToken(id)`
+
+This app's public endpoints (plugin routes), as the Installation page's **Endpoints** section shows them. Only for a person who can edit the app's Installation; for anyone else they reject. The view never calls a route itself.
+
+- `status()` (view op `readRouteStatus`) resolves to `{ state, degraded, refusal, level, mount, routes, deliveries }` (`RouteStatusResult` in `@tomic/plugin`): per route its `url`, `path`, `methods`, `auth`, `requests24h`, `errors24h`, `lastError`, `queueDepth` and `oldestQueueFailure`; `deliveries` has the queue's counts, today's use of the daily cap and the last failures; `refusal` is the `host-feature-unavailable` problem when the server's gates hold the release back. `null` on a server built without plugin routes.
+- `tokens()` (`routeTokens`) resolves to `{ tokens: [{ id, name, scopes, client, issuedAt, expiresAt, approvedBy }] }`: the bearer tokens this app's routes issued, never their values (the server keeps only hashes).
+- `revokeToken(id)` (`revokeRouteToken`, `{ tokenId }`) revokes one; it resolves to `{ revoked }`, `false` when it was already gone.
+
+```js
+const status = await store.routes.status();
+if (status) for (const route of status.routes) show(route.url, route.errors24h);
+```
+
+#### `store.proxy.disconnect({ platform }): Promise<{ status: 'disconnected', platform, connectionIds }>`
+
+Stops this app using an integration-proxy platform. The host takes this app's delegation off each `platform` connection delegated to it (`DELETE /connections/{id}/agents/{app agent}` at the proxy, signed by the user), and for an Installation also removes `integrationConnections[platform]`, as the Installation page's **Disconnect** does. The connection itself is never deleted: other apps may share it, so deleting it stays something the person does on a page. `connectionIds` lists the connections the delegation was taken off. The frame drops its cached capabilities for that platform; `store.proxy.connect({ platform })` connects again.
+
+```js
+await store.proxy.disconnect({ platform: 'notion' });
 ```

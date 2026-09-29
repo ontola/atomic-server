@@ -22,7 +22,12 @@ import {
   setCookieAuthentication,
   signRequest,
 } from './authentication.js';
-import { Client, type FileOrFileLike } from './client.js';
+import { Client, isOwnServerUrl, type FileOrFileLike } from './client.js';
+import {
+  fetchTableChanges,
+  type TableChangesOptions,
+  type TableChangesPage,
+} from './table-changes.js';
 import {
   CommitBuilder,
   commitIdOf,
@@ -414,6 +419,21 @@ const GET_MANY_CHUNK = 200;
 const LOCAL_HYDRATION_CHUNK = GET_MANY_CHUNK;
 
 /**
+ * Whether a failed direct fetch of a foreign subject is worth retrying
+ * through the own server's `/path` proxy: the origin could not be reached
+ * (network, DNS, CORS) or failed itself (5xx). A 404 or 401 is an answer
+ * about the resource, which the proxy would only repeat.
+ */
+function isProxyWorthyError(error?: Error): boolean {
+  if (!error) return false;
+
+  return (
+    isTransportError(error) ||
+    (error instanceof AtomicError && error.type === ErrorType.Server)
+  );
+}
+
+/**
  * Subjects of the vocabulary every host carries in its own store.
  *
  * They are `atomicdata.dev` URLs that name a shape, not a deployment: a fixed,
@@ -531,6 +551,12 @@ export class Store {
    *  so subsequent calls (e.g. a forced refresh after a known change)
    *  can re-fetch. Keyed by normalized subject. */
   private _inFlightFetches: Map<string, Promise<Resource>> = new Map();
+
+  /** Foreign origins whose direct fetch failed while the own server's
+   *  `/path` proxy answered. Later fetches from them go straight to the
+   *  proxy for the rest of the session: one failed request per origin, not
+   *  one per term. */
+  private _proxiedOrigins: Set<string> = new Set();
 
   /** Subjects with a gap-recovery fetch in flight. A delta that cannot apply
    *  triggers one full-state fetch; this stops a burst of unappliable deltas
@@ -1207,7 +1233,8 @@ export class Store {
   /**
    * Outbox sort order: agents → current drive → everything else,
    * with shallow-parent before deep within the last tier. Agents
-   * must exist on the server before their commits validate; the
+   * must exist on the server before their commits validate (except an
+   * agent whose parent is queued too: see `hasQueuedParent`); the
    * drive must exist before its children's `parent` references
    * resolve.
    */
@@ -1232,7 +1259,7 @@ export class Store {
    */
   private outboxTier(subject: string): [number, number] {
     let priority = 2;
-    if (isAgentSubject(subject)) priority = 0;
+    if (isAgentSubject(subject) && !this.hasQueuedParent(subject)) priority = 0;
     else if (subject === this.drive) priority = 1;
 
     let depth = 0;
@@ -1248,6 +1275,24 @@ export class Store {
     }
 
     return [priority, depth];
+  }
+
+  /**
+   * Whether `subject`'s parent is itself still waiting in the outbox. An
+   * agent created under a parent — an app's agent in the drive's App
+   * identities folder — is admitted through that parent's append right; sent
+   * ahead of it, the server finds no parent and answers that only the agent
+   * itself may create its Agent resource. Such an agent drains in the depth
+   * order below, after its parent, instead of first.
+   */
+  private hasQueuedParent(subject: string): boolean {
+    const parent = this.resources.get(subject)?.get(core.properties.parent);
+
+    return (
+      typeof parent === 'string' &&
+      parent !== subject &&
+      this.outbox.hasPending(parent)
+    );
   }
 
   private outboxTierOf = (entry: OutboxEntry): string => {
@@ -3866,14 +3911,52 @@ export class Store {
         ? { agent: this.agent, serverURL: this.getServerUrl() }
         : undefined;
 
-      const { resource, createdResources, cancelled } =
-        await this.client.fetchResourceHTTP(fetchSubject, {
-          from: opts.fromProxy ? this.getServerUrl() : undefined,
+      const fetchVia = (fromProxy: boolean) =>
+        this.client.fetchResourceHTTP(fetchSubject, {
+          from: fromProxy ? this.getServerUrl() : undefined,
           method: opts.method,
           body: opts.body,
           signInfo,
           serverURL: this.getServerUrl(),
         });
+
+      // Only plain documents, the shape of a vocabulary term. A query or
+      // collection URL is an endpoint on that server, whose errors mean
+      // something to the caller (an old server refusing `drive`, say).
+      const foreignOrigin =
+        !opts.fromProxy && opts.method !== 'POST' && !fetchSubject.includes('?')
+          ? this.foreignHttpOrigin(fetchSubject)
+          : undefined;
+      const proxyFirst =
+        foreignOrigin !== undefined && this._proxiedOrigins.has(foreignOrigin);
+
+      let result = await fetchVia(!!opts.fromProxy || proxyFirst);
+
+      // A foreign origin that could not answer (down, blocked by CORS, 5xx):
+      // ask the own server, which fetches external vocabulary on first use
+      // and keeps it. When the proxy was tried first (it served this origin
+      // before) and failed, try the origin itself instead. Either way one
+      // extra attempt, never a loop. The result then takes the same path
+      // below as a direct answer, so it is stored and cached the same way.
+      if (
+        foreignOrigin !== undefined &&
+        !result.cancelled &&
+        isProxyWorthyError(result.resource.error)
+      ) {
+        const retried = await fetchVia(!proxyFirst);
+
+        if (!retried.cancelled && !retried.resource.error) {
+          if (proxyFirst) {
+            this._proxiedOrigins.delete(foreignOrigin);
+          } else {
+            this._proxiedOrigins.add(foreignOrigin);
+          }
+
+          result = retried;
+        }
+      }
+
+      const { resource, createdResources, cancelled } = result;
 
       if (cancelled) {
         const cached = this.resources.get(normalizedSubject);
@@ -3935,6 +4018,22 @@ export class Store {
 
   public getAllSubjects(): string[] {
     return Array.from(this.resources.keys());
+  }
+
+  /** The origin of an http(s) `subject` that the own server does not serve,
+   *  or undefined for the own server, DIDs and anything unparseable. */
+  private foreignHttpOrigin(subject: string): string | undefined {
+    if (!this.getServerUrl() || !/^https?:\/\//.test(subject)) {
+      return undefined;
+    }
+
+    if (isOwnServerUrl(subject, this.getServerUrl())) return undefined;
+
+    try {
+      return new URL(subject).origin;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Returns the WebSocket for the current Server URL */
@@ -4001,6 +4100,25 @@ export class Store {
     ]);
 
     return mergeHistoryAttributions(remote, local);
+  }
+
+  /**
+   * Rows of `table` that changed since `opts.since`, including rows that
+   * left it (tombstones), each with its Loro version. Without `since`, lists
+   * every current row. Page through with the returned `cursor` while
+   * `hasMore`. Throws {@link TableChangesCursorExpiredError} when the cursor
+   * is older than the server's retention: resync without `since`.
+   * `GET /changes` on the connected server (atomic-server #1850).
+   */
+  public async getTableChanges(
+    table: string,
+    opts: TableChangesOptions = {},
+  ): Promise<TableChangesPage> {
+    if (!this.serverUrl) {
+      throw new Error('getTableChanges needs a server');
+    }
+
+    return fetchTableChanges(this.serverUrl, this.getAgent(), table, opts);
   }
 
   private async fetchHistoryAttributionFromServer(

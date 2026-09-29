@@ -36,6 +36,10 @@ They are used for performing custom queries, or calculating dynamic attributes.
 #[cfg(feature = "wasm-plugins")]
 pub mod actions;
 #[cfg(feature = "wasm-plugins")]
+pub mod after_commit;
+#[cfg(feature = "wasm-plugins")]
+pub mod app_row_grant;
+#[cfg(feature = "wasm-plugins")]
 pub mod apply;
 pub mod bind_drive;
 pub mod bookmark;
@@ -50,9 +54,13 @@ pub mod external;
 pub mod files;
 #[cfg(feature = "wasm-plugins")]
 pub mod host_core;
+#[cfg(feature = "plugin-routes")]
+pub mod http_signatures;
 pub mod importer;
 #[cfg(feature = "wasm-plugins")]
 pub mod installation;
+#[cfg(feature = "wasm-plugins")]
+pub mod installation_identity;
 pub mod invite;
 #[cfg(feature = "wasm-plugins")]
 pub mod journal;
@@ -60,6 +68,8 @@ pub mod journal;
 pub mod js_runtime;
 #[cfg(feature = "wasm-plugins")]
 pub mod manifest;
+#[cfg(feature = "wasm-plugins")]
+pub mod manifest_http;
 pub mod path;
 #[cfg(feature = "wasm-plugins")]
 pub mod plan;
@@ -71,6 +81,30 @@ pub mod release;
 #[cfg(feature = "wasm-plugins")]
 pub mod release_binding;
 pub mod replicate;
+#[cfg(feature = "plugin-routes")]
+pub mod route_auth;
+#[cfg(feature = "plugin-routes")]
+pub mod route_blobs;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_blobs_test;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_crypto_test;
+#[cfg(feature = "plugin-routes")]
+pub mod route_delivery;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_delivery_test;
+#[cfg(feature = "plugin-routes")]
+pub mod route_exec;
+#[cfg(feature = "plugin-routes")]
+pub mod route_keys;
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod route_levels_test;
+#[cfg(feature = "plugin-routes")]
+pub mod route_registry;
+#[cfg(feature = "plugin-routes")]
+pub mod route_tokens;
+#[cfg(feature = "plugin-routes")]
+pub mod route_writes;
 #[cfg(feature = "wasm-plugins")]
 pub mod run_log;
 #[cfg(feature = "wasm-plugins")]

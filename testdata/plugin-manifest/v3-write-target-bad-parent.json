@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "routes": [],
+    "writeTargets": [
+      {
+        "id": "items",
+        "parent": "table",
+        "classes": [
+          "https://example.com/C"
+        ]
+      }
+    ]
+  }
+}

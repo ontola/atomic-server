@@ -440,8 +440,18 @@ Everything else is open to an anonymous socket and gated per subject by
 | `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
 | `9` | `INVALID_SIGNATURE` | A `COMMIT` whose signature does not verify against its signer's key, or that has none. Terminal for that envelope: sign again. |
 | `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
+| `11` | `HOST_FEATURE_UNAVAILABLE` | A commit activating a plugin Installation (install, upgrade, resume) was refused because the release opens public endpoints this node's plugin-routes gates don't allow. Blocking, not terminal: the operator can open the gates. The message carries the typed problem (see below). Over HTTP, `/commit` answers `409`. |
 
-Codes `1` to `4`, `9` and `10` come from `classify_commit_error`, which pattern-matches the
+A refusal with structured fields appends them to the message: the sentence,
+then `\nproblem+json: `, then one JSON object with RFC 9457 fields (`type`,
+`detail` and the problem's own). The `/commit` Error resource's
+`description` carries the same string. A client splits at the marker and
+shows the sentence; one that doesn't know the marker still shows the sentence
+first. Code `11` carries the `host-feature-unavailable` problem this way:
+`{ type, feature, needed, compiled, level, surfaces, listeners, sidecars,
+detail }`, the same fields `/plugin-release-pin` answers with.
+
+Codes `1` to `4`, `9`, `10` and `11` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,
@@ -818,9 +828,11 @@ saturated renderer can stall pong delivery for seconds.
 
 A browser cannot observe protocol-level pings, so it has its own probe. When
 the server advertised `keepalive`, the client checks every 5 s: after 20 s
-with no inbound frame it sends one `KEEPALIVE (0x41)`; if nothing has arrived
-after 45 s it closes the socket and lets the reconnect loop take over. Any
-inbound frame resets both. The server **echoes** `KEEPALIVE` verbatim, which
+with no inbound frame it sends one `KEEPALIVE (0x41)`; if that probe is still
+unanswered 25 s after it was sent, it closes the socket and lets the reconnect
+loop take over. Any inbound frame resets both. Silence alone never closes the
+socket: a hidden tab's timers can fire a minute apart, and the first check
+after such a gap must ask the server rather than give up on it. The server **echoes** `KEEPALIVE` verbatim, which
 is the whole point of it. Against a server that did not advertise
 `keepalive` the client does not probe, since an unanswered probe would make
 every idle socket look dead.

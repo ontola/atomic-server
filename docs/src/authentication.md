@@ -125,6 +125,44 @@ headers.set('x-atomic-agent', agent?.subject);
 const response = await fetch(subject, {headers});
 ```
 
+### Version 2: signing the method and body
+
+A version 1 signature covers only the URL and the timestamp, and a server accepts it for five minutes (so it can serve as a cookie or a WebSocket `AUTH`). Anyone who captures a signed `POST` can resend it within that window with a different body.
+A version 2 signature also covers the method and the body. Send the same four headers, plus:
+
+- `x-atomic-signature-version: 2`
+
+and sign this string instead (lines joined with `\n`, no trailing newline):
+
+```text
+atomic-request-v2
+{METHOD, upper case}
+{full URL, including the query}
+{timestamp, the same value as x-atomic-timestamp}
+{lower-case hex SHA-256 of the raw body bytes; of zero bytes if there is no body}
+```
+
+In `@tomic/lib`: `signRequest(url, agent, headers, { method, body })`.
+In `atomic_lib`: `client::get_authentication_headers_v2(method, url, body, agent)`.
+Shared test vectors: `lib/src/authentication_v2_vectors.json`.
+
+A server that sees `x-atomic-signature-version: 2` checks only the version 2 message and never falls back to version 1. Cookies and WebSocket `AUTH` are always version 1. The integration proxy accepts only version 2 (see ontola/atomic-plugins#54).
+
+AtomicServer requires version 2 on the endpoints that change state (`POST`, `DELETE`), and refuses a version 1 signature, a bearer token and a session cookie there with a `401`:
+
+- `/app-agent`, `/app-write`, `/plugin-view-token`, `/plugin-secret`;
+- `/plugin-run`, `/plugin-schedule`, `/plugin-resume`, `/plugin-auto-apply`, `/plugin-trigger`;
+- `/plugin-release`, `/plugin-release-package`, `/plugin-release-pin`;
+- `/plugin-sync-preview`, `-apply`, `-schedule`, `-status`, `/plugin-connection-state`, `-checkpoint`, `/plugin-external-read`, `-status`, `-confirm`, `-apply`;
+- `/integration-actions` and the twelve `/integration-action-*` routes;
+- `/bind-drive`, `/forget-peer`, `/iroh-sync`;
+- `/website-hosting/assets/{hash}`, `/website-hosting/deployments`, `/website-hosting/activate`;
+- `/app-row-grant` (an app's grant on a table's rows), and with plugin routes `/plugin-route-consent` (the consent page's answer) and `/plugin-route-tokens` (revoking a route token).
+
+A `GET` on the same paths still takes version 1. Each version 2 signature on these endpoints is accepted once: the server remembers every one it accepted until it can no longer be fresh (five minutes after its timestamp), and answers a second use with a `401`. Sign every request anew; two identical requests signed in the same millisecond carry the same signature, since Ed25519 is deterministic. The memory is per server process and bounded; when it is full the server answers `429` until older signatures age out. The request body is signed as sent, so send it without `Content-Encoding`. In `@tomic/lib`, `signedRequestInit(url, agent, { method, body, headers })` returns the `fetch` options for such a request.
+
+`/commit` (commits carry their own signature), `PUT /blob/{hash}` (content-addressed), `/upload` and `POST` on other resources still take version 1, and refuse version 2 with a `401`.
+
 ## Verifying an Authentication
 
 - If none of the `x-atomic` HTTP headers are present, the server assigns the [PublicAgent](https://atomicdata.dev/agents/publicAgent) to the request. This Agent represents any guest who is not signed in.

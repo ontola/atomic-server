@@ -83,6 +83,27 @@ globalThis.__atomic = (function () {
     return JSON.parse(unwrap(__hostQuery(property, value)));
   };
 
+  // Host-held crypto (plugin routes only). The host signs and keeps
+  // tokens; nothing here ever holds a private key or a token's hash.
+  function call(name, request) {
+    return JSON.parse(unwrap(__hostCall(name, JSON.stringify(request ?? null))));
+  }
+  input.keys = {
+    publicKey: (key, options) => call('keys.publicKey', { ...(options || {}), key }),
+    sign: (request) => call('keys.sign', request),
+  };
+  input.tokens = {
+    issue: (request) => call('tokens.issue', request),
+    verify: (token) => call('tokens.verify', { token }),
+    revoke: (id) => call('tokens.revoke', { id }),
+    requestConsent: (request) => call('tokens.requestConsent', request),
+  };
+
+  // The table's change list, for a full compare from `afterCommit` (#1851).
+  // Only the event's own table; the host refuses any other.
+  input.changes = (table, options) =>
+    call('changes', { ...(options || {}), table });
+
   return input;
 })();
 "#;
@@ -132,6 +153,16 @@ impl Guest for Component {
 
             globals
                 .set(
+                    "__hostCall",
+                    Function::new(ctx.clone(), |name: String, request: String| {
+                        encode(host::host_call(&name, &request))
+                    })
+                    .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
+
+            globals
+                .set(
                     "__hostAction",
                     Function::new(ctx.clone(), |request: String| {
                         encode(host::invoke_action(&request))
@@ -173,9 +204,57 @@ impl Guest for Component {
                     .map_err(|e| describe(&ctx, e, "manifest"));
             }
 
+            // A plugin route (`trigger.kind: "http"`): one request, answered
+            // by the exported `handle(ctx, request)`. It returns a response
+            // `{ status, headers, body }`, or a whole verdict with that
+            // response under `response`; the host validates either. Only a
+            // host built with plugin routes sends this trigger.
+            if ctx
+                .eval::<bool, _>("__atomic.trigger.kind === 'http'")
+                .unwrap_or(false)
+            {
+                let handle: Function = module.get("handle").map_err(|_| {
+                    "the plugin does not export a handle(ctx, request) function, which its routes need"
+                        .to_string()
+                })?;
+                globals
+                    .set("__handle", handle)
+                    .map_err(|e| e.to_string())?;
+                return ctx
+                    .eval::<rquickjs::Promise, _>(
+                        r#"(async () => {
+                            const out = await __handle(__atomic, __atomic.trigger.request);
+                            const verdict = out !== null && typeof out === 'object' && 'response' in out
+                                ? out
+                                : { response: out ?? null };
+                            return JSON.stringify(verdict);
+                        })()"#,
+                    )
+                    .and_then(|promise| promise.finish::<String>())
+                    .map_err(|e| describe(&ctx, e, "handle()"));
+            }
+
+            // Which export to call: `run` unless the host names another
+            // entrypoint, as the durable `afterCommit` hook does (#1851).
+            let entry = ctx
+                .eval::<Option<String>, _>(
+                    "typeof __atomic.entry === 'string' ? __atomic.entry : null",
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "run".to_string());
+            if !matches!(entry.as_str(), "run" | "afterCommit") {
+                return Err(format!("`{entry}` is not an entrypoint a plugin can export"));
+            }
             let run: Function = module
-                .get("run")
-                .map_err(|_| "the plugin does not export a run() function".to_string())?;
+                .get(entry.as_str())
+                .map_err(|_| {
+                    if entry == "run" {
+                        "the plugin does not export a run() function".to_string()
+                    } else {
+                        format!("the plugin does not export {entry}()")
+                    }
+                })?;
 
             globals.set("__run", run).map_err(|e| e.to_string())?;
 
@@ -185,7 +264,7 @@ impl Guest for Component {
                 "(async () => JSON.stringify((await __run(__atomic)) ?? null))()",
             )
             .and_then(|promise| promise.finish::<String>())
-            .map_err(|e| describe(&ctx, e, "run()"))
+            .map_err(|e| describe(&ctx, e, &format!("{entry}()")))
         })
     }
 }

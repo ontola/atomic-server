@@ -231,8 +231,9 @@ fn package_file_subject(package: &str) -> Subject {
 /// Installation's `release` can point at a URL (and another server can fetch
 /// it) instead of a bare id. A wasip2 release's zip gets a `File` resource
 /// under the same drive, reused when the same bytes were uploaded before.
-/// Idempotent: a release that is already recorded is left as it is, including
-/// its publisher. Returns the resource's subject.
+/// Idempotent: a release that is already recorded keeps its drive and its
+/// publisher, and a later publisher of the same release is granted read on it
+/// and on its package File. Returns the resource's subject.
 pub async fn record_release(
     db: &Db,
     id: &str,
@@ -242,11 +243,23 @@ pub async fn record_release(
     origin: &str,
 ) -> AtomicResult<Subject> {
     let subject = release_subject(id);
-    if db.get_resource(&subject).await.is_ok() {
+    if let Ok(existing) = db.get_resource(&subject).await {
+        // The record lives under the first publisher's drive. Anyone else who
+        // publishes the same release holds the same bytes, so they may read
+        // it too; without this their Installation, which resolves the release
+        // as its signer, is refused.
+        if let Some(publisher) = publisher {
+            if let Some(file) = string_value(&existing, urls::PACKAGE) {
+                if let Ok(file) = db.get_resource(&file.as_str().into()).await {
+                    grant_read(db, file, publisher).await?;
+                }
+            }
+            grant_read(db, existing, publisher).await?;
+        }
         return Ok(subject);
     }
     let package_file = match &release.package {
-        Some(package) => Some(ensure_package_file(db, package, drive, origin).await?),
+        Some(package) => Some(ensure_package_file(db, package, drive, publisher, origin).await?),
         None => None,
     };
     let mut resource = Resource::new(subject.to_string());
@@ -268,16 +281,40 @@ pub async fn record_release(
     Ok(subject)
 }
 
-/// The `File` resource for a stored package blob, created when missing.
+/// Adds `agent` to the resource's `read` rights, when it is not there yet.
+async fn grant_read(db: &Db, mut resource: Resource, agent: &str) -> AtomicResult<()> {
+    let mut readers = match resource.get(urls::READ) {
+        Ok(value) => value.to_subjects(None)?,
+        Err(_) => Vec::new(),
+    };
+    if readers.iter().any(|reader| reader == agent) {
+        return Ok(());
+    }
+    readers.push(agent.to_string());
+    resource.set_unsafe(
+        urls::READ.into(),
+        Value::ResourceArray(readers.iter().map(|r| r.as_str().into()).collect()),
+    )?;
+    resource.save_locally(db).await?;
+    Ok(())
+}
+
+/// The `File` resource for a stored package blob, created when missing. An
+/// existing File may sit in another drive (the same bytes were uploaded
+/// there); the publisher is then granted read on it.
 async fn ensure_package_file(
     db: &Db,
     package: &str,
     drive: &str,
+    publisher: Option<&str>,
     origin: &str,
 ) -> AtomicResult<String> {
     let subject = package_file_subject(package);
     if let Ok(existing) = db.get_resource(&subject).await {
         if string_value(&existing, urls::INTERNAL_ID).as_deref() == Some(package) {
+            if let Some(publisher) = publisher {
+                grant_read(db, existing, publisher).await?;
+            }
             return Ok(subject.to_string());
         }
     }
@@ -406,7 +443,7 @@ pub async fn publish_release(
 /// Records a `Listing` for release `id`, readable by everyone: a public
 /// publish is a marketplace entry, whatever the drive's own rights say.
 /// Idempotent: an existing Listing is left as it is.
-async fn record_listing(
+pub(crate) async fn record_listing(
     db: &Db,
     id: &str,
     release_url: &str,
@@ -531,13 +568,23 @@ pub fn declared_capabilities(manifest: &serde_json::Value) -> AtomicResult<Vec<C
 /// from the manifest at every fetch.
 ///
 /// `grants` is a JSON array of capability names, an object keyed by them, or
-/// null (no grants). The Installation stores them as the approved set.
+/// null (no grants). The Installation stores them as the approved set. Either
+/// form may also carry the route grant
+/// ([`super::manifest_http::ROUTE_WRITES_GRANT`]). That is not a capability:
+/// it is checked against the release's write targets instead.
 pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) -> AtomicResult<()> {
+    use super::manifest_http::{check_route_grant, is_route_grant_element, ROUTE_WRITES_GRANT};
     let declared = declared_capabilities(manifest)?;
+    let http = match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => parsed.http,
+        _ => None,
+    };
+    check_route_grant(http.as_ref(), grants).map_err(AtomicError::from)?;
     let granted: Vec<String> = match grants {
         serde_json::Value::Null => Vec::new(),
         serde_json::Value::Array(items) => items
             .iter()
+            .filter(|item| !is_route_grant_element(item))
             .map(|item| match item {
                 serde_json::Value::String(s) => Ok(s.clone()),
                 other => Err(AtomicError::from(format!(
@@ -545,7 +592,11 @@ pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) ->
                 ))),
             })
             .collect::<AtomicResult<_>>()?,
-        serde_json::Value::Object(map) => map.keys().cloned().collect(),
+        serde_json::Value::Object(map) => map
+            .keys()
+            .filter(|key| *key != ROUTE_WRITES_GRANT)
+            .cloned()
+            .collect(),
         other => {
             return Err(AtomicError::from(format!(
                 "grants must be a JSON array or object, got {other}"
@@ -577,10 +628,155 @@ pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) ->
     Ok(())
 }
 
+/// Why this node can't run a release's public endpoints, if it can't (design
+/// 0.4). A version-one or version-two manifest, and a legacy `plugin.json`,
+/// need no gate.
+pub fn gate_refusal(
+    manifest: &serde_json::Value,
+    node: &crate::plugin_routes::PluginRoutesConfig,
+) -> AtomicResult<Option<super::manifest_http::HostFeatureUnavailable>> {
+    match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => Ok(parsed.gate().check(node).err()),
+        Ok(None) => Ok(None),
+        Err(e) => Err(AtomicError::from(format!(
+            "release manifest is invalid: {e}"
+        ))),
+    }
+}
+
+/// Refuses, with the message of design 0.4, a release that needs gates this
+/// node does not open. Checked at install, upgrade and resume, so an upgrade
+/// that raises the needed level is refused and the old release keeps running.
+///
+/// The error is a commit error, so it carries the typed problem the way
+/// commit errors can: appended to the message after
+/// [`atomic_lib::sync::protocol::PROBLEM_MARKER`]. Both wire paths then
+/// classify it as `HOST_FEATURE_UNAVAILABLE` (the `/commit` response as
+/// `409`), and `@tomic/lib` raises `HostFeatureUnavailableError` from it, as
+/// it does for the `409` of `/plugin-release-pin`.
+pub fn check_host_features(
+    manifest: &serde_json::Value,
+    node: &crate::plugin_routes::PluginRoutesConfig,
+) -> AtomicResult<()> {
+    match gate_refusal(manifest, node)? {
+        Some(refusal) => Err(AtomicError::from(host_feature_commit_error(&refusal))),
+        None => Ok(()),
+    }
+}
+
+/// The commit error message for a gate refusal: the sentence of design 0.4,
+/// then the typed problem (with `detail`, as `/plugin-release-pin` sends it).
+pub fn host_feature_commit_error(refusal: &super::manifest_http::HostFeatureUnavailable) -> String {
+    let message = refusal.message();
+    let mut problem = refusal.to_json();
+    problem["detail"] = message.clone().into();
+    atomic_lib::sync::protocol::with_problem(&message, &problem)
+}
+
+/// What a catalog entry says a release needs, as JSON: the derived list; null
+/// for a manifest without versioned declarations (a legacy `plugin.json`),
+/// which needs no gate; or [`REQUIRES_UNKNOWN`] for a manifest this node can't
+/// parse.
+pub fn catalog_requires(manifest: &serde_json::Value) -> serde_json::Value {
+    match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => serde_json::json!(parsed.requires()),
+        Ok(None) => serde_json::Value::Null,
+        Err(_) => REQUIRES_UNKNOWN.into(),
+    }
+}
+
+/// The `requires` of a catalog entry whose release this node couldn't read
+/// or verify. A client treats it conservatively: it marks the entry, never
+/// hides it, and the review reads the manifest before anything is installed.
+pub const REQUIRES_UNKNOWN: &str = "unknown";
+
+/// How long `/plugin-catalog` waits for another server's `Release` resource
+/// (and its package `File`) before answering `requires: "unknown"`.
+pub const REMOTE_RELEASE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// How many remote `Release` resources one `/plugin-catalog` request fetches,
+/// concurrently. Entries past the budget answer `requires: "unknown"`, so a
+/// catalog of remote listings costs at most one timeout, not one per entry.
+pub const REMOTE_RELEASE_BUDGET: usize = 4;
+
+/// A listed release that is not in this node's cache, read from the `Release`
+/// resource its Listing points at and verified against the listed id, without
+/// caching it or fetching its package bytes. The id covers the manifest, so a
+/// record that hashes to `release_id` carries the manifest `requires` is
+/// derived from. `None` when the resource can't be read in time, doesn't
+/// describe a release, or hashes to another id.
+///
+/// A local `Release` is read directly: it belongs to a public Listing, and
+/// only what the catalog shows of it leaves this node. A remote one is fetched
+/// through the SSRF-guarded client, within [`REMOTE_RELEASE_TIMEOUT`], and
+/// only when `fetch_remote` (the request's [`REMOTE_RELEASE_BUDGET`]).
+pub async fn uncached_release(
+    db: &Db,
+    reference: &str,
+    release_id: &str,
+    fetch_remote: bool,
+) -> Option<PluginRelease> {
+    let subject = Subject::from_raw(reference, db.get_base_domain().as_deref());
+    let release = if subject.is_local() {
+        let resource = db.get_resource(&subject).await.ok()?;
+        let package = match string_value(&resource, urls::PACKAGE) {
+            Some(file) => {
+                let file = db.get_resource(&file.as_str().into()).await.ok()?;
+                Some(string_value(&file, urls::INTERNAL_ID)?)
+            }
+            None => None,
+        };
+        PluginRelease::from_resource(&resource, package).ok()?
+    } else if fetch_remote {
+        let fetch = async {
+            let resource = fetch_remote_resource(reference, db).await.ok()?;
+            let package = match string_value(&resource, urls::PACKAGE) {
+                Some(file_url) => {
+                    let file = fetch_remote_resource(&file_url, db).await.ok()?;
+                    Some(string_value(&file, urls::INTERNAL_ID)?)
+                }
+                None => None,
+            };
+            PluginRelease::from_resource(&resource, package).ok()
+        };
+        tokio::time::timeout(REMOTE_RELEASE_TIMEOUT, fetch)
+            .await
+            .ok()
+            .flatten()?
+    } else {
+        return None;
+    };
+    (release.id().ok()? == release_id).then_some(release)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn the_route_grant_must_cover_every_write_target() {
+        let inbox: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../testdata/plugin-routes/inbox/manifest.json"
+        ))
+        .unwrap();
+        let targets = inbox["http"]["writeTargets"].clone();
+        // Array form (an object element) and object form; or no grant at all.
+        check_grants(&inbox, &json!(["storage", {"route-writes": targets}])).unwrap();
+        check_grants(&inbox, &json!({"storage": true, "route-writes": targets})).unwrap();
+        check_grants(&inbox, &json!(["storage"])).unwrap();
+        // A grant for fewer classes than the release asks: a widened upgrade.
+        let mut narrower = targets.clone();
+        narrower[0]["classes"] = json!([]);
+        let err = check_grants(&inbox, &json!(["storage", {"route-writes": narrower}]))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("does not cover (inbox-items)"), "{err}");
+        // Not a list of targets.
+        assert!(check_grants(&inbox, &json!(["storage", {"route-writes": "yes"}])).is_err());
+        // Anything else that is not a capability is still refused.
+        assert!(check_grants(&inbox, &json!(["storage", {"other": []}])).is_err());
+    }
 
     fn v2() -> serde_json::Value {
         json!({
@@ -688,6 +884,32 @@ mod tests {
         });
         let again = serde_json::json!(Manifest::parse(full.clone()).unwrap().unwrap());
         assert_eq!(again, full);
+    }
+
+    #[test]
+    fn accepts_without_as_keeps_the_release_id() {
+        // `as` is optional and text by default. A manifest that leaves it out,
+        // and one written for #1691 that spells out `"as": "text"`, must both
+        // serialize to exactly what was published.
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/plugin-manifest");
+        for file in [
+            "v2-accepts-default-text.json",
+            "v2-accepts-destination.json",
+        ] {
+            let path = format!("{fixtures}/{file}");
+            let raw: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let parsed = serde_json::json!(Manifest::parse(raw.clone()).unwrap().unwrap());
+            let source = "export function run() { return {}; }".to_string();
+            let before = PluginRelease::js(source.clone(), raw.clone(), Default::default());
+            let after = PluginRelease::js(source, parsed.clone(), Default::default());
+            assert_eq!(before.id().unwrap(), after.id().unwrap(), "{file}");
+            assert_eq!(
+                parsed["accepts"][0].get("as"),
+                raw["accepts"][0].get("as"),
+                "{file}"
+            );
+        }
     }
 
     #[test]

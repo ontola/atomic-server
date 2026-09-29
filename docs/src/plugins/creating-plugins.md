@@ -26,6 +26,15 @@ They can also access a few functions provided by the server:
 These functions are documented and typed in the [class-extender.wit](https://github.com/ontola/atomic-server/blob/c2a1aaf814e73381e597fc6472bf0dca9689084c/server/wit/class-extender.wit) file.
 You can use this file to generate bindings for your programming language of choice.
 
+### Class extenders and the integration proxy
+
+A wasip2 class extender cannot reach the integration proxy (`--integration-proxy-url`), whether it calls it by its URL or with an `atomic-proxy:` URL, even when its manifest lists the proxy's origin in `network.origins`.
+The server refuses the request before it connects, with an error that says so.
+
+The proxy only accepts requests signed as an installation's agent on this node, which the page registers with the proxy as a runtime of the installation, and which the connections delegated to the installation name.
+A class extender has no such agent: it signs as its own plugin agent, which no installation or delegated connection names.
+An integration that needs the proxy belongs in a JS plugin (`runtime: atomic-js/1`) installed from the catalog, which gets an agent on every node that activates it.
+
 ## Namespaces
 
 A plugin is identified by a namespace and a name.
@@ -126,12 +135,201 @@ Every field except `schemaVersion` is optional; unknown fields and malformed dec
 - `capabilities`: `storage`, `full-drive-access`, `extended-fuel`, `extended-memory`, `custom-view`, each either as a name or as `{name, reason}`. The reason is shown at review. Network access is not a capability: declare destinations instead.
 - `secrets`, `operations`, `actions`: as in schema version 1. Secrets name an exact origin a credential may be sent to; operations are exact endpoints with an `effect` of `read` or `write`; actions reference operations.
 - `network.origins`: exact origins (no wildcards, paths or ports beyond the origin) for packages that call the host `fetch` without an operation id. It never widens what `operations` grant.
+- `proxy`: integration-proxy platforms the plugin uses, for example `["clockify"]`, also accepted in schema version 1. The plugin calls `ctx.http` with a proxy-relative URL such as `atomic-proxy:/clockify/api/v1/user`, and the operation that admits it is declared with that URL too. The server resolves it to `{--integration-proxy-url}/proxy/{connection_id}/clockify/api/v1/user`, taking the connection id from the Installation's `integrationConnections` (also passed to the plugin as `ctx.connections`), and signs it as the node's agent for the installation. A request is refused when the platform is not declared, when no connection is delegated for it, or when the node has no proxy configured. Calling the proxy by its absolute URL still works but is deprecated. Only JS installations reach the proxy; see [class extenders and the integration proxy](#class-extenders-and-the-integration-proxy).
 - `configSchema`, `defaultConfig`: objects, as in `plugin.json`.
+- `accepts`: files the host may hand the plugin, up to eight entries of `{ extensions?, mediaTypes?, as?, maxBytes? }`. `extensions` (lower-case, with the dot) and `mediaTypes` only filter the file picker. `maxBytes` (default 5 MiB, at most 20 MiB) bounds the file's raw byte size. `as` says how the file arrives in `ctx.upload`, in a field named after it:
+  - `"text"`, the default when `as` is left out: `{ name, mediaType, size, text }`, decoded as UTF-8, falling back to Windows-1252.
+  - `"base64"`: `{ name, mediaType, size, base64 }`, the file's exact bytes in standard padded base64, with no charset detection. `atob(ctx.upload.base64)` gives it back as a binary string, one character per byte.
+
+  `size` is the byte size of the file in both cases. Leaving `as` out does not add it to the stored manifest, so the release id stays the same.
 - `name`, `namespace`, `version`, `description`, `author`: metadata. `name` and `namespace` must be safe path segments.
+
+- `accepts` (version 2): files the host may hand the plugin as `input.upload`, with `extensions`, `mediaTypes`, `as: "text"` and an optional `maxBytes`. The plugin page then shows an Import tab with a file picker instead of Run.
+- `destination` (version 2): where an importer writes. See [Destinations](#destinations-one-table-or-several).
+
+### Destinations: one table or several
+
+A `destination` declares a `schema` (properties and one to eight classes, by shortname) and the tables to create for it.
+The plugin page shows a **Set up** step before the first import.
+Set up adds the schema to the drive's ontology and creates each table beneath the plugin, with a default table view of its `columns`.
+It then stores what it created as the plugin's config, under `config.key` when the manifest declares one.
+
+For one kind of record, declare `table`:
+
+```json
+"destination": {
+  "schema": { "properties": [...], "classes": [...] },
+  "table": { "name": "Bank transactions", "rowClass": "bank-transaction", "columns": ["bank-amount"] }
+}
+```
+
+The config is `{ table, rowClass, properties }`: the table's subject, the subject of its row class, and every schema property's subject by shortname.
+
+For several kinds of record, add `tables`.
+Each table has its own key, and the plugin reads it back under that key:
+
+```json
+"destination": {
+  "schema": { "properties": [...], "classes": [...] },
+  "table": { "name": "Bank transactions", "rowClass": "bank-transaction", "columns": ["bank-amount"] },
+  "tables": {
+    "statements": { "name": "Bank statements", "rowClass": "bank-statement", "columns": ["statement-number"] },
+    "closingBalances": { "name": "Closing balances", "rowClass": "closing-balance", "columns": ["balance-date", "bank-amount"] }
+  }
+}
+```
+
+The config then also has `tables: { statements: { table, rowClass }, closingBalances: { table, rowClass } }`.
+The plugin writes a statement with `parent: config.tables.statements.table, isA: [config.tables.statements.rowClass]`.
+Declaring `table`, `tables` or both is allowed.
+
+- A key starts with a lower-case letter and has only letters and digits, at most 64 characters. Names of `Object.prototype` members, such as `constructor`, are refused.
+- Each table needs its own `rowClass`, so every kind of record lives in its own table and never appears as rows of another table.
+- A manifest that declares only `table` gets the same config, and the same table, as before `tables` existed.
+- Set up resumes. Running it again, or after a release adds a key to `tables`, creates only the tables that are missing. To have Set up run for a new table on existing installations, list `tables` in the manifest's `config.required`. Keep an existing table under `table`: moving it into `tables` creates a new, empty table.
+
+A drive app shown as a view of one of these tables finds the others through `await store.getData()`, which returns `{ table, rowClass, tables }`, with `tables` keyed the same way.
+For every other table, `getData()` returns `{ table, rowClass }` as before.
+
+### Running the importer from its drive app
+
+A drive app shown as a view of an importer's table can start that importer with `store.importer.run()`.
+The person sees the same preview and review as on the importer's own Import tab, and nothing is written unless they apply it.
+
+```js
+// A file the app already read (the app can check it first):
+const result = await store.importer.run({
+  file: { name: file.name, mediaType: file.type, text: await file.text() },
+});
+
+// For an `accepts` entry with `as: 'base64'`, pass the exact bytes instead:
+// file: { name, mediaType, base64 } (standard, padded base64).
+
+// Or let the host show its own file picker (the frame is sandboxed):
+const result = await store.importer.run();
+```
+
+The host draws a bar above the app that names the file and the importer.
+The person chooses **Preview import**, or **Choose file** when the app passed no file, or **Cancel**.
+The importer then runs on the server with the file as `input.upload`, and its proposal opens in the review dialog.
+The promise resolves after the person is done:
+
+- `{ status: 'applied', importer, created, updated, destroyed, failed, errors }`: the person applied the review. The counts are changes applied by kind. `errors` has one message per failed change.
+- `{ status: 'nothing', importer }`: the importer proposed no changes, for example because everything was imported before.
+- `{ status: 'blocked', importer, errors }`: the importer refused the file, or its proposal is blocked.
+- `{ status: 'cancelled', importer }`: the person cancelled the bar or closed the review without applying.
+
+The app reads the new rows from its table as usual, for example through `subscribe`.
+This op has no 60-second timeout, because it waits for a person.
+
+Rules:
+
+- The host chooses the importer, not the app. It is the plugin whose Set up created the table the app is shown on, and whose stored config still names that table. The app may pass `importer` as a check. A different subject is refused with "This app may only run its own importer".
+- An app on its own page, or on a table that no importer created, has no importer, and the call is refused.
+- The importer must declare `accepts` and be set up. A file from the app must have a `name` and `text`, and be no larger than the importer's `maxBytes`.
+- One import per app at a time. A second call while the first is waiting is refused.
+- There is no way to apply without the review.
+
+### Following a table's changes: `afterCommit`
+
+A plugin shown as a view of a table can be told when the table's rows change, also while nobody has the tab open.
+This is off unless the server runs with `--plugin-after-commit` (`ATOMIC_PLUGIN_AFTER_COMMIT=true`).
+
+Declare it, and export the function:
+
+```js
+export const manifest = {
+  schemaVersion: 2,
+  world: 'extension',
+  entrypoints: { run: true, view: 'view.js', afterCommit: true },
+};
+
+export async function afterCommit(ctx) {
+  const { table, changes, reset, hasMore } = ctx.event;
+  // changes: [{ subject, kind: 'created' | 'updated' | 'deleted', version, at }]
+  // reset: null, or 'initial' | 'expired' | 'requested': not a delta, do a full compare.
+  return { intents: [/* same vocabulary as run() */], resync: false };
+}
+```
+
+- **Who is told.** Adding the plugin as the table's view subscribes it, whichever answer the person gives to "Let <App> edit rows?". The dialog says so. Setting a View's `view-kind` by hand subscribes nothing.
+- **What it gets.** A page of the table's change list (up to 100 rows), from where the last acknowledged page ended. The first delivery has `reset: 'initial'` and no changes: compare with your own state. `reset: 'expired'` means the cursor fell out of the change list's retention; compare again. Returning `{ resync: true }` asks for `reset: 'requested'` next time. `ctx.changes(ctx.event.table, { since, limit })` reads the change list directly, for that table only.
+- **Delivery.** At least once. Returning acknowledges the page; throwing retries it with backoff (30 seconds, doubling to an hour), with `ctx.event.attempt` counting up. After 8 failed attempts the table stops until someone presses Retry, or a new release is installed. Make effects idempotent with the row's `version`.
+- **Writes.** With "Allow editing" given on the table, writes to its rows within the grant (the row class's columns and the app's declared `row-extras`) and to the app's own data apply at once, signed by the app. Anything else waits on the table's tab: "<App> wants to change 3 rows", with Apply, "Allow all edits by this view on this table" and Decline. While it waits, the plugin is not told about further changes to that table; it catches up after the answer.
+- **Loops.** The plugin is not told about its own writes (matched by the version it wrote), but it is told about a person's edit in its own view. More than 30 runs a minute stops the table with a warning.
+- **Reads.** The run reads as the person who added the view, limited to the table, its rows, its row class and properties, and the app's own data.
 
 A schema version 1 manifest is still accepted and is read as version 2 with `runtime: atomic-js/1`, `world: extension` and `entrypoints: { run: true }`.
 Its stored form does not change.
 The server-side validator is `server/src/plugins/manifest.rs`, the browser mirror is `@tomic/lib`'s `validateManifest`, and both are checked against the fixtures in `testdata/plugin-manifest/`.
+
+## Manifest v3: public endpoints
+
+Version 3 is version 2 plus an optional `http` block: endpoints the plugin asks the server to open to the internet.
+A v3 manifest without `http` is accepted everywhere v3 is understood; an `http` block in a v2 manifest is rejected.
+
+```json
+{
+  "schemaVersion": 3,
+  "http": {
+    "mount": "installation-origin",
+    "routes": [
+      { "id": "actor", "path": "/users/{name}", "methods": ["GET", "HEAD"] },
+      { "id": "inbox", "path": "/users/{name}/inbox", "methods": ["POST"], "auth": "http-signature",
+        "body": "json", "writes": ["inbox-items"], "enqueues": ["deliver"] }
+    ],
+    "wellKnown": [{ "name": "webfinger", "kind": "shared", "match": { "resourcePrefix": "acct:" }, "route": "actor" }],
+    "writeTargets": [{ "id": "inbox-items", "parent": "config:inboxTable", "classes": ["https://example.com/classes/Activity"] }],
+    "keys": [{ "name": "actor-key", "alg": "rsa-sha256", "reason": "Signs deliveries" }],
+    "tokens": [{ "name": "storage" }],
+    "reason": "Lets other fediverse servers follow this drive's actor."
+  },
+  "operations": [{ "id": "deliver", "method": "POST", "url": "https://*/inbox", "effect": "write" }]
+}
+```
+
+- `mount`: `installation-origin` (default), `drive-host` or `drive-prefix`. Each Installation gets a slug derived from its subject, never reused. `installation-origin` serves the routes at `<slug>.<ATOMIC_ROUTES_ORIGIN>`, and is refused on a server without a routes origin; `drive-prefix` serves them at `/_routes/<slug>/` on the server's own origin. `drive-host` is not served yet. A route is refused when it uses a path the server keeps (`/.well-known/acme-challenge/`, or a `/.well-known/` name that cannot be claimed) or overlaps another installation's route on the same host. A paused installation answers `503` with `Retry-After: 3600`, and an uninstalled one `410` for 30 days, then `404`.
+- `routes`: at most 32. `path` is literal segments, whole-segment `{param}`s and a trailing `{*rest}` (one or more segments); no regex. Routes that share a method may not overlap. `methods` from `GET HEAD POST PUT PATCH DELETE`. `principal` is `anonymous` (default), `installation` or `caller`; `caller` needs `auth: atomic`, and on `drive-prefix` only `anonymous` is allowed unless `auth` is `atomic`. `auth` is `none` (default), `atomic`, `http-signature`, `bearer` (needs `tokens`) or `dpop`. `writes` name `writeTargets`, `enqueues` name declared write operations. `maxBodyBytes` is at most 1 MiB for inline bodies, `timeoutMs` at most 30000.
+- `wellKnown`: `webfinger` is shared and needs `match.resourcePrefix`; `nodeinfo`, `ocm`, `atproto-did`, `solid`, `oauth-authorization-server`, `oauth-protected-resource`, `openid-configuration` and `did.json` are exclusive. Nothing else can be claimed.
+- `listeners` (`world: server-extension` only) and `sidecars` name what the operator configures in `ATOMIC_PLUGIN_LISTENERS` and `ATOMIC_PLUGIN_SIDECARS`.
+- An operation with a wildcard host (`https://*/...`) must be listed in some route's `enqueues`.
+
+The server derives what a release needs from these declarations; the author never writes it.
+Anonymous `GET`/`HEAD` routes and well-known claims need `--plugin-routes read-only`; any other route, write target, key, token, delivery, listener or sidecar needs `read-write`.
+`GET /plugin-catalog` gives each entry a derived `requires` list, such as `["persistent-host", "plugin-routes:read-only", "public-origin", "wasm-sandbox"]`, or `null` for a release without versioned declarations.
+A release that isn't in the server's cache is read from the `Release` resource its Listing names and checked against the listed id; a remote one is fetched within a short timeout, a few per request.
+When that fails, `requires` is `"unknown"`: a client marks such an entry rather than hiding it, and the install review reads the manifest before anything is installed.
+Installing, upgrading or pinning a release that needs more than the server allows is refused with a message that names the endpoints and the switch to turn on (see [Plugin public endpoints](../atomicserver/installation.md#plugin-public-endpoints-opt-in)). A refused upgrade leaves the old release running.
+Both refusals are typed: `/plugin-release-pin` answers `409` with the `host-feature-unavailable` problem, and a refused Installation commit carries the same problem after its message, with error code `11` (see [WebSockets](../websockets.md)). `@tomic/lib` raises `HostFeatureUnavailableError` for both.
+
+### Handling a route request
+
+A matched request runs the plugin's exported `handle(ctx, request)` in the same sandbox as `run`, with `ctx.trigger.kind` set to `"http"`:
+
+```js
+export function handle(ctx, request) {
+  // request: { method, path, params, query, headers, body, caller, receivedAt }
+  return {
+    status: 200,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    body: `Hello, ${request.params.name}`,
+  };
+}
+```
+
+- `path` is relative to the mount (without `/_routes/<slug>`), `params` holds the `{param}` and `{*rest}` values (decoded), and `query` the query string (a repeated key becomes an array).
+- `headers` holds only `accept`, `accept-language`, `content-type`, `content-length`, `content-digest`, `digest`, `date`, `if-match`, `if-none-match`, `if-modified-since`, `if-unmodified-since`, `origin`, `signature`, `signature-input` and `user-agent`, plus `cookie` on `installation-origin`. Atomic auth headers and `authorization` never reach the handler.
+- `body` is the request body as a string, for routes that declare `body: json` or `text` (`json` requires a JSON content type). Other routes refuse a body with `413`. The limit is `maxBodyBytes` (default 256 KiB).
+- `body: blob` (only at `read-write`, and only with a route grant for one of the route's write targets): the server stores the body in its blob store before the handler runs, and the handler gets `request.blob = { hash, size, type, subject }` instead of the bytes (`body` is `null`). `subject` is the `atomic:blob:<hash>` a File's `blob` property takes. The limit is `maxBodyBytes` (default 16 MiB), capped by the operator's `--plugin-route-max-blob-bytes` (default 16 MiB); past it the answer is `413`, and nothing is stored. Blob bytes count toward the installation's `--plugin-route-bytes-per-day` quota (`429`).
+- A handler may answer with `response.blob` (a hash or an `atomic:blob:` subject) instead of `body`. The server sends the bytes with the handler's `content-type` (or the one they were uploaded with) and `ETag: "<hash>"`, under the same content-type rules as any response. A route may only serve a blob its installation stored, or one a resource under its approved write targets holds (`502` otherwise); likewise a route write may only reference such a blob.
+- The server answers `If-Match` and `If-None-Match` against the blob a `GET` serves (`304` / `412`), or, for a write, against `response.current`: the blob (or `null`) the target held before the request, as the handler found it. A failed precondition answers `412` and nothing the verdict asks for is stored. After a blob upload, a `2xx` without an `etag` gets the new blob's.
+- `caller` is `null`: only `auth: none` is served for now. A route with any other `auth`, or the `caller` principal, answers `501` without running. An `anonymous` route reads as the public agent, an `installation` route as the installation's agent; both within the installation's grants.
+- The handler returns `{ status, headers, body }`, or a verdict with that under `response`. `body` may be a string (default `text/plain`) or JSON (default `application/json`), at most 1 MiB (8 MiB with `extended-memory`). Only `content-type`, `cache-control`, `etag`, `last-modified`, `link`, `location` (same host only), `retry-after`, `vary` and `www-authenticate` are kept, plus `access-control-allow-headers`, `-methods`, `-expose-headers` and `-max-age` under `cors: any-origin-no-credentials`; the server adds `X-Content-Type-Options: nosniff`, and CORS headers only as declared. On `drive-prefix`, HTML and SVG responses are refused and responses get a sandboxing `Content-Security-Policy`.
+- A verdict with `intents` or `enqueue` is refused and nothing is applied: at `read-only` always, and at `read-write` until route writes and deliveries exist.
+- A request gets 1G fuel and 64 MiB (10G and 256 MiB with `extended-fuel` / `extended-memory`) and a deadline of `timeoutMs` (default and maximum 3 s, up to 30 s with `extended-fuel`). Running out answers `503`. `ctx.http` works only at `read-write`, for declared read operations, at most 2 calls (4 with `extended-fuel`).
+- Each installation runs at most 8 requests at once (32 with `extended-fuel`) and answers 600 requests a minute, 120 from one address; past that it answers `503` or `429` with `Retry-After`.
+- A failing handler answers `502` with a `problem+json` body; the details are in `GET /plugin-route-status?installation=<subject>` (readable by whoever can read the Installation): per route its URL, requests and errors in the last 24 hours and the last error, and a sampled run log. It also names each route's `path`, `methods` and `auth`, the delivery queue (per route its depth and oldest failure; for the installation the counts, today's use of the daily cap and the last failures), and, when the server's gates hold the release back, `refusal` (the `host-feature-unavailable` problem).
+- The Installation page shows this as **Endpoints**, with the tokens the routes issued (which can be revoked there), to people who can edit the Installation. A plugin's own view reads the same through `store.routes.status()`, `store.routes.tokens()` and `store.routes.revokeToken(id)` (view ops `readRouteStatus`, `routeTokens`, `revokeRouteToken`), also only for people who can edit the Installation; `status()` resolves to `null` on a server without plugin routes.
 
 ## The Plugin Manifest (legacy `plugin.json`)
 

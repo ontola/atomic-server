@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 3,
+  "name": "well-known",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "http": {
+    "mount": "drive-host",
+    "routes": [
+      {
+        "id": "nodeinfo-links",
+        "path": "/nodeinfo",
+        "methods": ["GET", "HEAD"],
+        "cors": "any-origin-no-credentials"
+      },
+      {
+        "id": "nodeinfo",
+        "path": "/nodeinfo/2.1",
+        "methods": ["GET", "HEAD"],
+        "cors": "any-origin-no-credentials"
+      },
+      {
+        "id": "webfinger",
+        "path": "/webfinger",
+        "methods": ["GET", "HEAD"],
+        "cors": "any-origin-no-credentials"
+      }
+    ],
+    "wellKnown": [
+      { "name": "nodeinfo", "kind": "exclusive", "route": "nodeinfo-links" },
+      {
+        "name": "webfinger",
+        "kind": "shared",
+        "match": { "resourcePrefix": "acct:" },
+        "route": "webfinger"
+      }
+    ],
+    "reason": "Answers /.well-known/nodeinfo and /.well-known/webfinger on the drive's own hosts. A fixture for the well-known dispatcher and the drive-host mount."
+  }
+}

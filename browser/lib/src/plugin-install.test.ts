@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AtomicError, ErrorType, PROBLEM_MARKER } from './error.js';
+import { HostFeatureUnavailableError } from './plugin-manifest-http.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import {
@@ -239,6 +241,35 @@ describe('installRelease', () => {
     );
   });
 
+  it('records a fresh keyless app id for the integration proxy', async () => {
+    const { store } = await testStore();
+    const install = () =>
+      installRelease(store, {
+        drive: 'https://example.com/drive',
+        release: { url: 'https://example.com/releases/1', id: 'blake3:1' },
+        name: 'importer',
+        grants: [],
+      });
+
+    const first = store.getResourceLoading(await install());
+    const second = store.getResourceLoading(await install());
+    const app = first.get(server.properties.integrationAppAgent);
+
+    // An agent id, and nothing that could sign as it.
+    expect(app).toMatch(/^atomic:agent:[A-Za-z0-9_-]{43}=?$/);
+    expect(second.get(server.properties.integrationAppAgent)).not.toBe(app);
+    expect(JSON.stringify(first.getLoroDoc()?.toJSON())).not.toMatch(
+      /privateKey|secret/i,
+    );
+    // Part of the genesis the user signs, not a later edit.
+    expect(
+      first
+        .getLoroDoc()
+        ?.getMap('datatypes')
+        .get(server.properties.integrationAppAgent),
+    ).toBe('atomicUrl');
+  });
+
   it('leaves optional fields off and honours a draft status', async () => {
     const { store } = await testStore();
     const subject = await installRelease(store, {
@@ -336,6 +367,84 @@ describe('updateInstallationRelease', () => {
   });
 });
 
+describe('a release the server’s plugin-routes gates refuse', () => {
+  const problem = {
+    type: 'host-feature-unavailable',
+    feature: 'plugin-routes',
+    needed: 'read-only',
+    compiled: true,
+    level: 'off',
+    surfaces: ['route `GET /users/{name}`'],
+    listeners: [],
+    sidecars: [],
+  } as const;
+  const message =
+    'This plugin opens public endpoints on the server (route `GET /users/{name}`). The server operator hasn’t enabled them.';
+  // The `/commit` Error resource the server answers a refused commit with.
+  const refusal = () =>
+    new AtomicError(
+      JSON.stringify({
+        [core.properties.description]:
+          message +
+          PROBLEM_MARKER +
+          JSON.stringify({ ...problem, detail: message }),
+        'https://atomicdata.dev/properties/errorCode': 11,
+      }),
+      ErrorType.Client,
+    );
+
+  it('throws the typed error from a refused install and forgets the Installation', async () => {
+    const { store, postCommitSpy } = await testStore();
+    postCommitSpy.mockRejectedValue(refusal());
+
+    const error = await installRelease(store, {
+      drive: 'https://example.com/drive',
+      release: { url: 'https://example.com/releases/x', id: 'blake3:x' },
+      name: 'gated',
+      grants: [],
+    }).catch(e => e);
+
+    expect(error).toBeInstanceOf(HostFeatureUnavailableError);
+    expect(error.problem).toEqual(problem);
+    // Nothing is left to install it later, unreviewed.
+    expect(store.outbox.pending()).toEqual([]);
+  });
+
+  it('throws the typed error from a refused upgrade', async () => {
+    const { store, postCommitSpy } = await testStore();
+    const subject = await installRelease(store, {
+      drive: 'https://example.com/drive',
+      release: { url: 'https://example.com/releases/one', id: 'blake3:one' },
+      name: 'plain',
+      grants: [],
+    });
+    postCommitSpy.mockRejectedValue(refusal());
+
+    const error = await updateInstallationRelease(store, subject, {
+      release: { url: 'https://example.com/releases/two', id: 'blake3:two' },
+      grants: [],
+    }).catch(e => e);
+
+    expect(error).toBeInstanceOf(HostFeatureUnavailableError);
+    expect(error.problem).toEqual(problem);
+  });
+
+  it('passes any other refusal through', async () => {
+    const { store, postCommitSpy } = await testStore();
+    postCommitSpy.mockRejectedValue(new AtomicError('No write right'));
+
+    const error = await installRelease(store, {
+      drive: 'https://example.com/drive',
+      release: { url: 'https://example.com/releases/x', id: 'blake3:x' },
+      name: 'gated',
+      grants: [],
+    }).catch(e => e);
+
+    expect(error).toBeInstanceOf(AtomicError);
+    expect(error.message).toBe('No write right');
+  });
+});
+
 describe('publishZipRelease', () => {
   it('posts the signed zip bytes to /plugin-release-package for the drive', async () => {
     const { store } = await testStore();
@@ -382,6 +491,8 @@ describe('publishZipRelease', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Content-Type']).toBe('application/zip');
     expect(headers['x-atomic-signature']).toBeTruthy();
+    // The route requires version 2, over exactly these bytes.
+    expect(headers['x-atomic-signature-version']).toBe('2');
     expect(new Uint8Array(init.body as ArrayBuffer)).toEqual(bytes);
   });
 

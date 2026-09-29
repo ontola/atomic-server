@@ -104,6 +104,27 @@ describe('parseCatalogEntries', () => {
     ).toEqual(['kept']);
   });
 
+  it('reads an installable app, resolving its module against the catalog', () => {
+    const [entry] = parseCatalogEntries(
+      [
+        row({
+          'https://atomicdata.dev/properties/name': 'Fixture',
+          [`${P}version`]: '1.2.3',
+          [`${P}app-module`]: 'fixture/app/ui.js',
+          [`${P}app-module-integrity`]: 'sha384-AAAA',
+        }),
+        row({ [SHORTNAME]: 'no-app' }),
+      ],
+      'https://plugins.test/integrations/catalog.json',
+    );
+    expect(entry.app).toMatchObject({
+      id: 'fixture-api',
+      version: '1.2.3',
+      module: 'https://plugins.test/integrations/fixture/app/ui.js',
+      integrity: 'sha384-AAAA',
+    });
+  });
+
   it('returns nothing for a non-array catalog', () => {
     expect(parseCatalogEntries({})).toEqual([]);
     expect(parseCatalogEntries(null)).toEqual([]);

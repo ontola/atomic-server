@@ -9,18 +9,26 @@ import { JSONEditor } from '@components/JSONEditor';
 import { Column, Row } from '@components/Row';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
+  capabilityGrantNames,
   core,
   publishZipRelease,
   readInstallationReview,
+  routeGrantOf,
+  routeWriteConfigChange,
+  saveInstallationConfig,
   server,
   updateInstallationRelease,
+  withdrawRouteWriteRights,
   useCanWrite,
+  useResource,
   useSaveState,
   useStore,
   useString,
   useValue,
+  type DeclaredWriteTarget,
   type InstallationStatus,
   type JSONValue,
+  type RouteWriteConfigChange,
   type Server,
 } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
@@ -45,12 +53,30 @@ import {
 import { ConfigReference } from './ConfigReference';
 import { AssignRights } from './AssignRights';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
+import { useConfigDraft } from './useConfigDraft';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
+import { EndpointHealth } from '@chunks/Plugins/EndpointHealth';
+import {
+  unregisterInstallationRuntimes,
+  unregisterRuntimesInBackground,
+  useInstallationRuntimes,
+} from '@helpers/useInstallationRuntimes';
+import { readInstallationRuntimes } from '@helpers/installationRuntimes';
+import {
+  connectionsOf,
+  loadableRelease,
+  proxyPlatformsOf,
+  usesProxy,
+} from '@helpers/installationConnections';
+import { InstallationConnections } from './InstallationConnections';
+import { AfterCommitTables } from './AfterCommitTables';
 import {
   InstallationReviewDialog,
   type PendingInstallation,
 } from '@chunks/Plugins/InstallationReviewDialog';
+import { unresolvedWriteTarget } from '@chunks/Plugins/RouteWriteApproval';
+import { RouteWriteMoveDialog } from '@chunks/Plugins/RouteWriteMoveDialog';
 
 const UPDATE_VERB = {
   title: 'Update plugin',
@@ -97,7 +123,16 @@ export const InstallationPage: React.FC<
   const [pluginAgent] = useString(resource, server.properties.pluginAgent);
   const [configValid, setConfigValid] = useState(true);
   const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
-  const [configEdited, setConfigEdited] = useState(false);
+  // The config as saved, which the route grant's rights follow. The editor
+  // writes into the resource as you type, so this is kept apart.
+  const {
+    edited: configEdited,
+    savedConfig,
+    markEdited: markConfigEdited,
+    commit: commitConfigDraft,
+  } = useConfigDraft<unknown>(config);
+  const [routeWriteMove, setRouteWriteMove] =
+    useState<RouteWriteConfigChange>();
   const saveState = useSaveState(resource);
   const [changing, setChanging] = useState(false);
   const [pending, setPending] = useState<PendingInstallation>();
@@ -118,18 +153,96 @@ export const InstallationPage: React.FC<
   const hasFullDriveAccess = declared.some(
     c => c.title === 'full-drive-access',
   );
-  const grantNames = Array.isArray(grants)
-    ? grants.map(String)
-    : grants && typeof grants === 'object'
-      ? Object.keys(grants)
-      : [];
+  const routeGrant = routeGrantOf(grants);
+  const grantNames = [
+    ...capabilityGrantNames(grants),
+    ...(routeGrant
+      ? [`route-writes: ${routeGrant.map(t => t.id).join(', ')}`]
+      : []),
+  ];
+
+  // The proxy platforms the pinned release declares, and the connections
+  // already delegated to this Installation (#1700). Neither → the page never
+  // contacts the proxy.
+  const releaseResource = useResource(
+    loadableRelease(release) ? release : undefined,
+  );
+  const [manifest] = useValue(releaseResource, server.properties.manifest);
+  const [connectionsValue] = useValue(
+    resource,
+    server.properties.integrationConnections,
+  );
+  const declaredPlatforms = proxyPlatformsOf(manifest);
+  const connected = connectionsOf(connectionsValue);
+  const proxyPlatforms = [
+    ...new Set([...declaredPlatforms, ...Object.keys(connected)]),
+  ];
+  const needsProxy = usesProxy(declaredPlatforms, connected);
+
+  // Each node that runs this Installation publishes its agent on a child;
+  // the proxy lets it act for the app once the owner registers it (#1700).
+  useInstallationRuntimes(
+    store,
+    resource.subject,
+    canWrite && currentStatus !== 'revoked' && needsProxy,
+  );
+
+  // A target the edited config leaves unresolved refuses the save: the route
+  // grant would let other servers send items the plugin can't store.
+  const unresolved = routeGrant
+    ? unresolvedWriteTarget(routeGrant, config as JSONValue | undefined)
+    : undefined;
+
+  const commitConfig = async (approveRouteWrites: boolean) => {
+    await commitConfigDraft(config, previousConfig =>
+      saveInstallationConfig(store, resource.subject, {
+        config: config as JSONValue | undefined,
+        previousConfig,
+        approveRouteWrites,
+      }),
+    );
+  };
+
+  const saveConfig = async () => {
+    try {
+      const move = routeWriteConfigChange(
+        grants,
+        savedConfig,
+        config as JSONValue | undefined,
+      );
+
+      // A moved write target is approved again first, as in an upgrade.
+      if (move) {
+        setRouteWriteMove(move);
+
+        return;
+      }
+
+      await commitConfig(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const changeStatus = async (next: InstallationStatus) => {
     setChanging(true);
 
     try {
+      // Revoking retires the agent, so its rights on the route grant's
+      // parents go first, while the server still names it.
+      if (next === 'revoked') {
+        await withdrawRouteWriteRights(store, resource.subject);
+      }
+
       await setStatus(next);
       await resource.save();
+
+      // Revoking retires the nodes' agents; the proxy should stop letting
+      // them act for the app too. Runtime children stay, so they can be read.
+      if (next === 'revoked') {
+        void unregisterInstallationRuntimes(store, resource.subject);
+      }
+
       await refreshCustomViews();
       toast.success(`Installation ${next}`);
     } catch (err) {
@@ -161,6 +274,7 @@ export const InstallationPage: React.FC<
         review: readInstallationReview({ ...published, id }),
         release: { url: subject, id },
         currentConfig: config as JSONValue | undefined,
+        approvedRouteWrites: routeGrantOf(grants),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -174,6 +288,7 @@ export const InstallationPage: React.FC<
     p: PendingInstallation,
     nextConfig: JSONValue | undefined,
     nextGrants: string[],
+    routeWrites: DeclaredWriteTarget[] | undefined,
   ) => {
     // The server compares these with the package, so a zip for a different
     // plugin is refused there. Saying so here is the clearer error.
@@ -186,6 +301,7 @@ export const InstallationPage: React.FC<
     await updateInstallationRelease(store, resource.subject, {
       release: p.release,
       grants: nextGrants,
+      routeWrites,
       config: nextConfig,
       version: p.review.version,
     });
@@ -281,20 +397,8 @@ export const InstallationPage: React.FC<
           <h3>Release</h3>
           <Identity>
             Pinned to <code>{releaseId}</code>
-            {release && release !== releaseId && (
-              <>
-                <br />
-                from{' '}
-                {/^https?:\/\//.test(release) ? (
-                  <a href={release} target='_blank' rel='noreferrer'>
-                    {release}
-                  </a>
-                ) : (
-                  release
-                )}
-              </>
-            )}
           </Identity>
+          <ReleaseSource release={release} releaseId={releaseId} />
         </Column>
         <Column as='section' aria-label='Grants'>
           <h3>Grants</h3>
@@ -308,6 +412,19 @@ export const InstallationPage: React.FC<
             </Row>
           )}
         </Column>
+        {currentStatus !== 'revoked' && (
+          <InstallationConnections
+            resource={resource}
+            canWrite={canWrite}
+            platforms={proxyPlatforms}
+            connected={connected}
+          />
+        )}
+        {canWrite && <EndpointHealth installation={resource.subject} />}
+        <AfterCommitTables
+          installation={resource.subject}
+          canWrite={canWrite}
+        />
         {pluginAgent && (
           <Column as='section' aria-label='Plugin agent'>
             <h3>Plugin agent</h3>
@@ -330,15 +447,12 @@ export const InstallationPage: React.FC<
                 disabled={
                   !configValid ||
                   !configSyntaxValid ||
+                  !!unresolved ||
                   saveState.kind === 'saving' ||
                   saveState.kind === 'scheduled' ||
                   (!configEdited && saveState.kind !== 'dirty')
                 }
-                onClick={() => {
-                  setConfigEdited(false);
-
-                  return resource.save();
-                }}
+                onClick={saveConfig}
               >
                 <FaFloppyDisk />
                 <span>Save</span>
@@ -351,7 +465,7 @@ export const InstallationPage: React.FC<
             onChange={v => {
               try {
                 setConfig(JSON.parse(v));
-                setConfigEdited(true);
+                markConfigEdited();
                 setConfigSyntaxValid(true);
               } catch {
                 setConfigSyntaxValid(false);
@@ -361,6 +475,7 @@ export const InstallationPage: React.FC<
             showErrorStyling={!configValid}
             onValidationChange={setConfigValid}
           />
+          {unresolved && <UnresolvedConfigNote keyName={unresolved.key} />}
         </Column>
         {schema && <ConfigReference schema={schema as JSONSchema7} />}
         {declared.length > 0 && (
@@ -372,6 +487,23 @@ export const InstallationPage: React.FC<
         onClose={() => setPending(undefined)}
         onInstall={applyUpdate}
         verb={UPDATE_VERB}
+      />
+      <RouteWriteMoveDialog
+        plugin={title}
+        change={routeWriteMove}
+        config={config as JSONValue | undefined}
+        onSave={async approve => {
+          try {
+            await commitConfig(approve);
+            toast.success(
+              approve ? 'Config saved, rights moved' : 'Config saved',
+            );
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : String(err));
+            throw err;
+          }
+        }}
+        onClose={() => setRouteWriteMove(undefined)}
       />
       <ConfirmationDialog
         title='Revoke installation'
@@ -394,7 +526,14 @@ export const InstallationPage: React.FC<
         bindShow={open => !open && setConfirm(undefined)}
         onConfirm={async () => {
           const parent = resource.props.parent;
+          // Read before the destroy takes the runtime children with it.
+          const runtimes = await readInstallationRuntimes(
+            store,
+            resource.subject,
+          ).catch(() => []);
+          await withdrawRouteWriteRights(store, resource.subject);
           await resource.destroy();
+          unregisterRuntimesInBackground(store, runtimes);
           await refreshCustomViews();
           navigate(constructOpenURL(parent));
           toast.success('Plugin uninstalled');
@@ -407,6 +546,53 @@ export const InstallationPage: React.FC<
     </ContainerNarrow>
   );
 };
+
+/**
+ * Where the pinned release came from. Its own component: wuchale drops a
+ * message with nested elements inside a `{condition && (...)}`. And its own
+ * paragraph: inside the "Pinned to" message it became an unkeyed child of
+ * wuchale's message component, which React warns about.
+ */
+function ReleaseSource({
+  release,
+  releaseId,
+}: {
+  release?: string;
+  releaseId?: string;
+}) {
+  if (!release || release === releaseId) return null;
+
+  // The link is written inside the message, not passed in as a value: wuchale
+  // renders a value that is an element as an unkeyed child.
+  if (/^https?:\/\//.test(release)) {
+    const link = { href: release, target: '_blank', rel: 'noreferrer' };
+
+    return (
+      <Identity>
+        from <a {...link}>{release}</a>
+      </Identity>
+    );
+  }
+
+  return <Identity>from {release}</Identity>;
+}
+
+// Wuchale drops a message with nested elements inside a condition, so the
+// note is its own component.
+function UnresolvedConfigNote({ keyName }: { keyName: string }) {
+  return (
+    <ConfigAlert role='alert' data-testid='route-write-unresolved'>
+      Set <code>{keyName}</code> to the resource that should receive incoming
+      items. The plugin&apos;s route grant stores them there, so this config
+      can&apos;t be saved without it.
+    </ConfigAlert>
+  );
+}
+
+const ConfigAlert = styled.p`
+  color: ${p => p.theme.colors.alert};
+  margin: 0;
+`;
 
 const PluginName = styled.span`
   font-weight: bold;

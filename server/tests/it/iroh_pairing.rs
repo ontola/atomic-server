@@ -199,6 +199,26 @@ async fn spawn_server_process(tag: &str) -> (String, std::process::Child) {
     panic!("peer server never reported its port within 180s\nstderr:\n{stderr}");
 }
 
+/// A `POST` signed with version 2 over `body`, as `/iroh-sync` and
+/// `/forget-peer` require (#1700): they change state, so they refuse version 1.
+fn post_signed(
+    url: &str,
+    agent: &atomic_lib::agents::Agent,
+    body: String,
+) -> reqwest::RequestBuilder {
+    let headers =
+        atomic_lib::client::get_authentication_headers_v2("POST", url, body.as_bytes(), agent)
+            .expect("auth headers");
+    let mut request = reqwest::Client::new()
+        .post(url)
+        .header("Content-Type", "application/json")
+        .body(body);
+    for (key, value) in headers {
+        request = request.header(key, value);
+    }
+    request
+}
+
 /// Ask a server to pair with `node_did` and pull `drive`. This is byte-for-byte
 /// the request `pairAndSync` in the data-browser sends.
 /// `POST /iroh-sync`, signed as a fresh agent created on that server. The
@@ -217,15 +237,11 @@ async fn post_iroh_sync(
         .await
         .unwrap();
     let url = format!("{base_url}/iroh-sync");
-    let headers =
-        atomic_lib::client::get_authentication_headers(&url, &agent).expect("auth headers");
-    let mut request = reqwest::Client::new()
-        .post(&url)
-        .json(&serde_json::json!({ "nodeId": node_did, "drive": drive }));
-    for (key, value) in headers {
-        request = request.header(key, value);
-    }
-    let response = request.send().await.expect("iroh-sync request");
+    let body = serde_json::json!({ "nodeId": node_did, "drive": drive }).to_string();
+    let response = post_signed(&url, &agent, body)
+        .send()
+        .await
+        .expect("iroh-sync request");
 
     let status = response.status();
     let body = response.json().await.unwrap_or(serde_json::Value::Null);
@@ -404,7 +420,13 @@ async fn iroh_sync_requires_both_a_node_and_a_drive() {
     let port = start_server("iroh_pair_fields");
     wait_for_server(port).await;
     let url = format!("http://localhost:{port}");
-    let http = reqwest::Client::new();
+    // Signed, so the refusal is about the fields and not about who asks.
+    let agent = Client::new(&url)
+        .await
+        .unwrap()
+        .new_agent("Pairer")
+        .await
+        .unwrap();
 
     let valid_node = format!("did:ad:node:{}", "a".repeat(64));
 
@@ -416,9 +438,7 @@ async fn iroh_sync_requires_both_a_node_and_a_drive() {
         ("no drive", serde_json::json!({ "nodeId": valid_node })),
         ("neither", serde_json::json!({})),
     ] {
-        let response = http
-            .post(format!("{url}/iroh-sync"))
-            .json(&payload)
+        let response = post_signed(&format!("{url}/iroh-sync"), &agent, payload.to_string())
             .send()
             .await
             .expect("iroh-sync request");
@@ -528,13 +548,10 @@ async fn a_paired_device_can_be_forgotten() {
         .await
         .unwrap();
     let url = forget_peer_url(&peer.base_url, &node_a);
-    let headers =
-        atomic_lib::client::get_authentication_headers(&url, &stranger).expect("auth headers");
-    let mut request = reqwest::Client::new().post(&url);
-    for (key, value) in headers {
-        request = request.header(key, value);
-    }
-    let response = request.send().await.expect("forget-peer request");
+    let response = post_signed(&url, &stranger, String::new())
+        .send()
+        .await
+        .expect("forget-peer request");
     assert!(
         !response.status().is_success(),
         "a stranger must not be able to forget a peer, got {}",
@@ -547,13 +564,10 @@ async fn a_paired_device_can_be_forgotten() {
 
     // Alice may write the drive this peer was paired for, so Alice may undo
     // the pairing.
-    let headers =
-        atomic_lib::client::get_authentication_headers(&url, &agent).expect("auth headers");
-    let mut request = reqwest::Client::new().post(&url);
-    for (key, value) in headers {
-        request = request.header(key, value);
-    }
-    let response = request.send().await.expect("forget-peer request");
+    let response = post_signed(&url, &agent, String::new())
+        .send()
+        .await
+        .expect("forget-peer request");
     assert!(
         response.status().is_success(),
         "a forget-peer signed by the drive's writer must be accepted, got {}",

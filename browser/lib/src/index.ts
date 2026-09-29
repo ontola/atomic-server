@@ -78,6 +78,17 @@ export {
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
+export {
+  fetchTableChanges,
+  parseTableChangesPage,
+  TableChangesCursorExpiredError,
+} from './table-changes.js';
+export type {
+  TableChange,
+  TableChangeKind,
+  TableChangesOptions,
+  TableChangesPage,
+} from './table-changes.js';
 export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
 export {
   LocalOutbox,
@@ -192,6 +203,21 @@ export {
   type CreatedApp,
 } from './plugin-app.js';
 export {
+  catalogAppProperties,
+  catalogAppSchema,
+  catalogAppState,
+  compareVersions,
+  fetchCatalogAppModule,
+  installCatalogApp,
+  parseCatalogApp,
+  readInstalledCatalogApps,
+  resolveModuleUrl,
+  subresourceIntegrity,
+  updateCatalogApp,
+  type CatalogApp,
+  type InstalledCatalogApp,
+} from './catalog-app.js';
+export {
   parseManifest,
   validateManifest,
   type CapabilityName,
@@ -205,11 +231,67 @@ export {
   type DeclaredSecret,
   type DeclaredConfig,
   type DeclaredConfigField,
+  type DeclaredAccept,
+  type AcceptEncoding,
+  type DeclaredDestination,
+  type DeclaredDestinationTable,
+  DEFAULT_ACCEPT_MAX_BYTES,
+  ACCEPT_MAX_BYTES_CEILING,
   type ManifestRuntime,
   type ManifestWorld,
   type PluginManifest,
   type PluginManifestV2,
+  type PluginManifestV3,
 } from './plugin-manifest.js';
+export {
+  acceptFor,
+  readUpload,
+  decodeUploadText,
+  encodeBase64,
+  type PluginUpload,
+} from './plugin-upload.js';
+export {
+  checkGate,
+  checkHostFeatures,
+  derivedRequires,
+  hostFeatureMessage,
+  hostFeatureUnavailableError,
+  httpGate,
+  isWildcardHost,
+  parseHostFeatureUnavailable,
+  parsePluginRoutesStatus,
+  requiresGate,
+  HOST_FEATURE_UNAVAILABLE,
+  HostFeatureUnavailableError,
+  REQUIRES_UNKNOWN,
+  type CatalogRequires,
+  type DeclaredHttp,
+  type DeclaredKey,
+  type DeclaredOperatorNamed,
+  type DeclaredRoute,
+  type DeclaredWellKnown,
+  type DeclaredWriteTarget,
+  type GateSurface,
+  type HostFeatureUnavailable,
+  type PluginRoutesLevel,
+  type PluginRoutesStatus,
+  type ReleaseGate,
+  type RouteAuth,
+  type RouteMethod,
+  type RouteMount,
+  type RoutePrincipal,
+} from './plugin-manifest-http.js';
+export {
+  parseRouteStatus,
+  parseRouteTokens,
+  type DeliveryFailure,
+  type DeliveryHealth,
+  type InstallationRouteState,
+  type InstallationRouteStatus,
+  type RouteHealth,
+  type RouteLastError,
+  type RouteToken,
+} from './plugin-route-status.js';
 export {
   pluginConfigFor,
   pluginConfigProblems,
@@ -257,6 +339,9 @@ export {
 export {
   installRelease,
   updateInstallationRelease,
+  withdrawRouteWriteRights,
+  saveInstallationConfig,
+  type SaveConfigOptions,
   publishZipRelease,
   readInstallationReview,
   grantsFor,
@@ -271,6 +356,24 @@ export {
   type ReleaseReference,
   type ReviewCapability,
 } from './plugin-install.js';
+export {
+  ROUTE_WRITES_GRANT,
+  UnresolvedWriteTargetError,
+  capabilityGrantNames,
+  fetchPluginAgent,
+  giveRouteWriteRights,
+  grantsWithRouteWrites,
+  newWriteTargets,
+  removeRouteWriteRights,
+  resolveWriteTargetParent,
+  resolveWriteTargetParents,
+  routeGrantOf,
+  routeWriteParentsOf,
+  routeWriteRightsDiff,
+  routeWriteConfigChange,
+  type InstallationGrant,
+  type RouteWriteConfigChange,
+} from './plugin-route-grant.js';
 export * from './integration-actions.js';
 
 export { taskSchema } from './task-schema.js';
@@ -294,6 +397,13 @@ export * from './import-resolution.js';
 
 export * from './import-reference-review.js';
 
+export {
+  destinationOwnerOf,
+  destinationTablesFor,
+  provisionDestination,
+  type DestinationConfig,
+  type DestinationTable,
+} from './plugin-destination.js';
 export { pluginWorkspace, workspaceConnections } from './plugin-workspace.js';
 export type { WorkspaceConnection } from './plugin-workspace.js';
 

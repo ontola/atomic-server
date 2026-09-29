@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Agent } from './agent.js';
+import type { Commit } from './commit.js';
 import {
   grantAccessAgent,
   grantedTargetsOf,
@@ -295,5 +296,70 @@ describe('revokeAccessAgent reports what it actually did', () => {
     expect(report.revoked).toEqual([granted.subject]);
     expect(report.untouched).toEqual([other.subject]);
     expect(report.failed).toEqual([]);
+  });
+});
+
+describe('an issued agent queued while offline', () => {
+  // The drive-app install shape (ontola/atomic-plugins#171): the socket drops
+  // mid-install, so the App identities folder and the app agent under it are
+  // both queued, and the reconnect drain sends them. The server lets the
+  // signed-in user create the agent only through the folder's append right;
+  // with no folder yet it falls back to "only the agent itself may create
+  // its Agent resource" and answers 401.
+  it('is posted after the parent it was created under', async () => {
+    const { store, agentDID, posted, postCommitSpy } = await testStore();
+    const drive = await createWorkspace(store, agentDID, 'Apps');
+
+    store.setServerConnected(false);
+
+    const folder = await store.newResource({
+      parent: drive.subject,
+      isA: [dataBrowser.classes.folder],
+      propVals: { [core.properties.name]: 'App identities' },
+    });
+    await folder.save();
+
+    const issued = await issueAccessAgent(store, {
+      name: 'Tracker (app)',
+      write: true,
+      targets: [drive.subject],
+      parent: folder.subject,
+    });
+
+    // A server that knows only what it has been sent.
+    const created = new Set<string>([drive.subject]);
+    postCommitSpy.mockImplementation(async (commit: Commit) => {
+      const parent = store.resources
+        .get(commit.subject)
+        ?.get(core.properties.parent) as string | undefined;
+
+      if (!created.has(commit.subject) && parent && !created.has(parent)) {
+        throw new Error(
+          `Unauthorized. Only ${commit.subject} itself may create its Agent resource; the commit was signed by ${commit.signer}`,
+        );
+      }
+
+      created.add(commit.subject);
+      const acked = {
+        ...commit,
+        id: `https://example.com/commits/${commit.signature}`,
+      } as Commit;
+      posted.push(acked);
+
+      return acked;
+    });
+
+    posted.length = 0;
+    store.setServerConnected(true);
+    await store.syncDirtyResources();
+
+    const order = posted.map(commit => commit.subject);
+    expect(order).toContain(folder.subject);
+    expect(order).toContain(issued.subject);
+    expect(order.indexOf(folder.subject)).toBeLessThan(
+      order.indexOf(issued.subject),
+    );
+    expect(store.outbox.getEntry(issued.subject)).toBeUndefined();
+    expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
   });
 });

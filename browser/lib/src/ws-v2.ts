@@ -135,6 +135,12 @@ export const ErrorCode = {
    *  legacy `<server>/commits/<sig>`), which can never be edited. Terminal:
    *  drop the entry; nothing is lost, a Commit is whatever was signed. */
   IMMUTABLE_COMMIT: 10,
+  /** A commit activating a plugin Installation (install, upgrade, resume)
+   *  was refused because the release opens public endpoints this node's
+   *  plugin-routes gates don't allow. The message carries the typed problem
+   *  (`AtomicError.problem`). Blocking, not terminal: the operator can open
+   *  the gates. */
+  HOST_FEATURE_UNAVAILABLE: 11,
 } as const;
 
 /** Capability names a server may advertise in its AUTH_OK payload (mirrors

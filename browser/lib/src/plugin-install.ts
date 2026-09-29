@@ -9,12 +9,30 @@
  * `planning/plugin-runtime-convergence.md`, "One install path and a
  * marketplace".
  */
-import { signRequest } from './authentication.js';
+import { signedRequestInit } from './authentication.js';
+import { generateKeyPair } from './CryptoProvider.js';
 import { Datatype } from './datatypes.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
+import { agentSubject } from './subject.js';
 import type { JSONValue } from './value.js';
+import {
+  hostFeatureUnavailableError,
+  type DeclaredHttp,
+  type DeclaredWriteTarget,
+} from './plugin-manifest-http.js';
+import {
+  capabilityGrantNames,
+  fetchPluginAgent,
+  giveRouteWriteRights,
+  grantsWithRouteWrites,
+  removeRouteWriteRights,
+  resolveWriteTargetParents,
+  routeGrantOf,
+  routeWriteParentsOf,
+  routeWriteRightsDiff,
+} from './plugin-route-grant.js';
 
 export const RUNTIME_JS = 'atomic-js/1';
 const WORLD_EXTENSION = 'extension';
@@ -84,6 +102,11 @@ export interface InstallationReview {
   capabilities: ReviewCapability[];
   configSchema?: JSONValue;
   defaultConfig?: JSONValue;
+  /**
+   * The public endpoints a version-three manifest opens, in the canonical
+   * form the server validated at publish. Absent when it opens none.
+   */
+  http?: DeclaredHttp;
 }
 
 function asString(value: unknown): string | undefined {
@@ -193,6 +216,9 @@ export function readInstallationReview(
     capabilities,
     configSchema: manifest.configSchema as JSONValue | undefined,
     defaultConfig: manifest.defaultConfig as JSONValue | undefined,
+    ...(asObject(manifest.http)
+      ? { http: manifest.http as unknown as DeclaredHttp }
+      : {}),
   };
 }
 
@@ -218,6 +244,19 @@ export function installationIdentifier(name: string): string {
   return cleaned || 'plugin';
 }
 
+/**
+ * A fresh app id for an Installation at the integration proxy
+ * (ontola/atomic-plugins#54, phase 2): the public `atomic:agent:<key>` of a
+ * keypair whose private key is dropped here, so nobody can ever sign as it.
+ * Proxy delegations and frame capabilities name it; every node that runs the
+ * Installation signs as its own agent, registered as a runtime of this one.
+ */
+export async function mintInstallationAppId(): Promise<string> {
+  const { publicKey } = await generateKeyPair();
+
+  return agentSubject(publicKey);
+}
+
 export interface InstallReleaseOptions {
   drive: string;
   release: ReleaseReference;
@@ -230,6 +269,13 @@ export interface InstallReleaseOptions {
   config?: JSONValue;
   /** Capability names the installer approved. */
   grants: string[];
+  /**
+   * The release's write targets, when the installer approved its route
+   * writes. Written to `grants` as the route grant, and the installation's
+   * agent gets `write` on each target's parent. Every `config:` parent must
+   * resolve against `config`, or nothing is installed.
+   */
+  routeWrites?: DeclaredWriteTarget[];
   /** Committing `active` (the default) is what installs. */
   status?: InstallationStatus;
 }
@@ -252,8 +298,14 @@ export async function installRelease(
     version,
     config,
     grants,
+    routeWrites,
     status = 'active',
   } = options;
+  // Before anything is committed: a target that can't be resolved refuses
+  // the install instead of leaving a plugin that can't store anything.
+  const parents = routeWrites
+    ? resolveWriteTargetParents(routeWrites, config)
+    : [];
   const propVals: Record<string, JSONValue> = {
     [core.properties.name]: name,
     // `release` belongs in the genesis commit, not in a `set` after it.
@@ -264,7 +316,13 @@ export async function installRelease(
     [server.properties.release]: release.url,
     [server.properties.releaseId]: release.id,
     [server.properties.installationStatus]: status,
-    [server.properties.grants]: grants,
+    [server.properties.grants]: grantsWithRouteWrites(
+      grants,
+      routeWrites,
+    ) as JSONValue,
+    // In the genesis, so the user's own signature is what records it. The
+    // server refuses to change it afterwards.
+    [server.properties.integrationAppAgent]: await mintInstallationAppId(),
   };
   if (namespace) propVals[server.properties.namespace] = namespace;
   if (description) propVals[core.properties.description] = description;
@@ -288,9 +346,28 @@ export async function installRelease(
       [server.properties.namespace]: Datatype.STRING,
       [server.properties.version]: Datatype.STRING,
       [server.properties.config]: Datatype.JSON,
+      [server.properties.integrationAppAgent]: Datatype.ATOMIC_URL,
     },
   });
-  await installation.save();
+
+  try {
+    await installation.save();
+  } catch (e) {
+    const refused = hostFeatureUnavailableError(e);
+    if (!refused) throw e;
+    // Refused, not failed: this node's gates don't allow the release, and
+    // retrying changes nothing until the operator opens them. The
+    // Installation never reached the server, so forget it here too rather
+    // than leave a parked genesis that would install it later unreviewed.
+    store.outbox.discard(installation.subject);
+    store.removeResource(installation.subject);
+    throw refused;
+  }
+
+  if (parents.length > 0 && status === 'active') {
+    const agent = await fetchPluginAgent(store, installation.subject);
+    await giveRouteWriteRights(store, agent, parents);
+  }
 
   return installation.subject;
 }
@@ -299,6 +376,13 @@ export interface UpdateReleaseOptions {
   release: ReleaseReference;
   /** Capability names the installer approved for the new release. */
   grants: string[];
+  /**
+   * The new release's write targets, when the installer approved them. The
+   * route grant is replaced by these, and the agent's `write` rights follow:
+   * given on new parents, taken back from parents no longer covered. Absent:
+   * the route grant is dropped and every right it came with is taken back.
+   */
+  routeWrites?: DeclaredWriteTarget[];
   config?: JSONValue;
   version?: string;
 }
@@ -320,8 +404,26 @@ export async function updateInstallationRelease(
   installation: string,
   options: UpdateReleaseOptions,
 ): Promise<void> {
-  const { release, grants, config, version } = options;
+  const { release, grants, routeWrites, config, version } = options;
   const resource = await store.getResource<Server.Installation>(installation);
+  const nextConfig =
+    config !== undefined
+      ? config
+      : (resource.get(server.properties.config) as JSONValue | undefined);
+  const before = routeWriteParentsOf(
+    resource.get(server.properties.grants),
+    resource.get(server.properties.config),
+  );
+  const after = routeWrites
+    ? resolveWriteTargetParents(routeWrites, nextConfig)
+    : [];
+  const { give, remove } = routeWriteRightsDiff(before, after);
+  // Asked while the old release is still installed, so it is known even when
+  // the update fails to activate.
+  const agent =
+    give.length > 0 || remove.length > 0
+      ? await fetchPluginAgent(store, installation)
+      : undefined;
 
   await resource.set(
     server.properties.releaseId,
@@ -335,7 +437,12 @@ export async function updateInstallationRelease(
     false,
     Datatype.ATOMIC_URL,
   );
-  await resource.set(server.properties.grants, grants, false, Datatype.JSON);
+  await resource.set(
+    server.properties.grants,
+    grantsWithRouteWrites(grants, routeWrites) as JSONValue,
+    false,
+    Datatype.JSON,
+  );
 
   if (version !== undefined) {
     await resource.set(
@@ -350,7 +457,102 @@ export async function updateInstallationRelease(
     await resource.set(server.properties.config, config, false, Datatype.JSON);
   }
 
+  try {
+    await resource.save();
+  } catch (e) {
+    // A refused upgrade leaves the old release running; say why, typed.
+    throw hostFeatureUnavailableError(e) ?? e;
+  }
+
+  if (agent) {
+    await giveRouteWriteRights(store, agent, give);
+    await removeRouteWriteRights(store, agent, remove);
+  }
+}
+
+/**
+ * Takes back the `write` rights an Installation's route grant came with, for
+ * revoking or uninstalling it. Call it before the status change or destroy:
+ * the server only reports the plugin's agent while it is installed.
+ */
+export async function withdrawRouteWriteRights(
+  store: Store,
+  installation: string,
+): Promise<void> {
+  const resource = await store.getResource<Server.Installation>(installation);
+  const parents = routeWriteParentsOf(
+    resource.get(server.properties.grants),
+    resource.get(server.properties.config),
+  );
+  if (parents.length === 0) return;
+  const known = resource.get(server.properties.pluginAgent);
+  const agent =
+    typeof known === 'string' && known.length > 0
+      ? known
+      : await fetchPluginAgent(store, installation, { attempts: 1 });
+  await removeRouteWriteRights(store, agent, parents);
+}
+
+export interface SaveConfigOptions {
+  config: JSONValue | undefined;
+  /** The config the Installation had before this edit (its saved value). */
+  previousConfig: unknown;
+  /**
+   * Whether the installer approved the route-write targets at the parents
+   * `config` resolves them to. Declining drops the route grant and the rights
+   * it came with, as declining an upgrade review's new targets does. Ignored
+   * without a route grant.
+   */
+  approveRouteWrites: boolean;
+}
+
+/**
+ * Saves an Installation's config and moves the route-write rights with it.
+ * When the config points a `config:` write target at another resource, the
+ * plugin's agent gets `write` on the new parent and loses it on the old one,
+ * in commits the signed-in agent signs, and `route-writes` in `grants` is
+ * rewritten: kept when approved, dropped when declined. A target the new
+ * config leaves unresolved refuses the save before anything is committed.
+ */
+export async function saveInstallationConfig(
+  store: Store,
+  installation: string,
+  options: SaveConfigOptions,
+): Promise<void> {
+  const { config, previousConfig, approveRouteWrites } = options;
+  const resource = await store.getResource<Server.Installation>(installation);
+  const grants = resource.get(server.properties.grants);
+  const targets = routeGrantOf(grants);
+  const keep = !!targets && targets.length > 0 && approveRouteWrites;
+  const before = targets ? routeWriteParentsOf(grants, previousConfig) : [];
+  // Throws before anything is committed.
+  const after = keep ? resolveWriteTargetParents(targets, config) : [];
+  const { give, remove } = routeWriteRightsDiff(before, after);
+  const agent =
+    give.length > 0 || remove.length > 0
+      ? await fetchPluginAgent(store, installation)
+      : undefined;
+
+  await resource.set(server.properties.config, config, false, Datatype.JSON);
+
+  if (targets) {
+    await resource.set(
+      server.properties.grants,
+      grantsWithRouteWrites(
+        capabilityGrantNames(grants),
+        keep ? targets : undefined,
+      ) as JSONValue,
+      false,
+      Datatype.JSON,
+    );
+  }
+
   await resource.save();
+
+  if (agent) {
+    await giveRouteWriteRights(store, agent, give);
+    await removeRouteWriteRights(store, agent, remove);
+  }
 }
 
 type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;
@@ -377,14 +579,14 @@ export async function publishZipRelease(
   url.searchParams.set('drive', drive);
   if (options.world) url.searchParams.set('world', options.world);
   if (options.public) url.searchParams.set('public', 'true');
-  const response = await transport(url.toString(), {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(url.toString(), agent, {})),
-      'Content-Type': 'application/zip',
-    },
-    body: await file.arrayBuffer(),
-  });
+  const response = await transport(
+    url.toString(),
+    await signedRequestInit(url.toString(), agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/zip' },
+      body: new Uint8Array(await file.arrayBuffer()),
+    }),
+  );
   if (!response.ok) throw new Error(await response.text());
 
   return response.json() as Promise<{

@@ -4,6 +4,8 @@ export type ViewOperation =
   | 'app'
   | 'data'
   | 'get'
+  /** Up to 100 `get`s in one round trip; per-subject errors in place. */
+  | 'getMany'
   | 'query'
   | 'create'
   | 'save'
@@ -16,12 +18,50 @@ export type ViewOperation =
   | 'search'
   | 'subscribe'
   | 'unsubscribe'
-  /** Relay one integration-proxy call; the host holds the connection. */
-  | 'proxy'
-  /** Connection references (never credentials) this app may relay through. */
+  /**
+   * A capability for one integration-proxy connection, bound to the frame's
+   * own public key and signed by the user (ontola/atomic-plugins#54).
+   */
+  | 'proxyCapability'
+  /** Connection references (never credentials) delegated to this app. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
-  | 'proxyConnect';
+  | 'proxyConnect'
+  /**
+   * Take this app's delegation off its connections for a platform. Never
+   * deletes a connection; other apps may share it.
+   */
+  | 'proxyDisconnect'
+  /**
+   * Open an http(s) link in a new tab, once the person confirms it in host
+   * UI that names the destination host. The frame gets no popup rights.
+   */
+  | 'openExternal'
+  /** Show a resource the person can already read in the host page. */
+  | 'openResource'
+  /**
+   * This app's endpoint health (plugin routes, #1721): per route its URL,
+   * method and auth, 24-hour counts and last error, and the delivery queue.
+   * `null` on a server without plugin routes.
+   */
+  | 'readRouteStatus'
+  /** The tokens this app's routes issued (never their values). */
+  | 'routeTokens'
+  /** Revoke one of them: `{ tokenId }`. */
+  | 'revokeRouteToken'
+  /**
+   * Run this app's own importer on a file, reviewed and applied by the person
+   * in host UI (atomic-server#1739). Args: {@link ImporterRunArgs}; result:
+   * {@link ImporterRunResult}.
+   */
+  | 'runImporter'
+  /**
+   * Whether this app may edit the rows of the table it is a view of (#1740):
+   * `{ status: 'granted' | 'none' | 'unavailable' }`.
+   */
+  | 'rowAccess'
+  /** Ask the person, in host UI, to let this app edit the table's rows. */
+  | 'requestRowAccess';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -62,6 +102,7 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'app',
       'data',
       'get',
+      'getMany',
       'query',
       'create',
       'save',
@@ -74,15 +115,88 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'search',
       'subscribe',
       'unsubscribe',
-      'proxy',
+      'proxyCapability',
       'proxyConnections',
       'proxyConnect',
+      'proxyDisconnect',
+      'openExternal',
+      'openResource',
+      'readRouteStatus',
+      'routeTokens',
+      'revokeRouteToken',
+      'runImporter',
+      'rowAccess',
+      'requestRowAccess',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&
     !Array.isArray(request.args)
   );
 }
+
+/** A file the app already has, handed to its importer as `input.upload`. */
+export type ImporterFile = {
+  name: string;
+  mediaType?: string;
+} & (
+  | {
+      /** The file's text, for an `accepts` entry read as text (the default). */
+      text: string;
+    }
+  | {
+      /**
+       * Standard, padded base64 of the file's exact bytes, for an `accepts`
+       * entry declaring `as: 'base64'`.
+       */
+      base64: string;
+    }
+);
+
+/** `store.importer.run(args)`. */
+export interface ImporterRunArgs {
+  /** Omit to have the host ask the person to choose a file. */
+  file?: ImporterFile;
+  /**
+   * The importer the app expects, as a check. The host resolves the importer
+   * itself, from the table the app is a view of, and refuses any other.
+   */
+  importer?: string;
+}
+
+/**
+ * What `store.importer.run()` resolves to. Nothing is written unless the
+ * person applies the reviewed changes, so `cancelled`, `nothing` and `blocked`
+ * all mean the drive is unchanged.
+ */
+export type ImporterRunResult =
+  | {
+      status: 'applied';
+      importer: string;
+      /** Changes applied, by kind. */
+      created: number;
+      updated: number;
+      destroyed: number;
+      /** Changes that failed; the drive keeps what did apply. */
+      failed: number;
+      /** One message per failed change. */
+      errors: string[];
+    }
+  | {
+      /** The person closed the picker or the review without applying. */
+      status: 'cancelled';
+      importer: string;
+    }
+  | {
+      /** The importer proposed no changes: everything was imported before. */
+      status: 'nothing';
+      importer: string;
+    }
+  | {
+      /** The importer refused the file; `errors` says why. */
+      status: 'blocked';
+      importer: string;
+      errors: string[];
+    };
 
 /** Existing package APIs keep their method names; only their wire codec changes. */
 export const packagedViewOperations = {

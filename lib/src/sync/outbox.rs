@@ -127,6 +127,7 @@ impl CommitRefused {
                 | error_code::MISSING_CLASS
                 | error_code::SYNC_REJECTED
                 | error_code::INVALID_SIGNATURE
+                | error_code::HOST_FEATURE_UNAVAILABLE
         )
     }
 }

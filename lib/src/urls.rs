@@ -28,6 +28,7 @@ pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
 pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
 pub const RELEASE: &str = "https://atomicdata.dev/classes/Release";
 pub const INSTALLATION: &str = "https://atomicdata.dev/classes/Installation";
+pub const INSTALLATION_RUNTIME: &str = "https://atomicdata.dev/classes/InstallationRuntime";
 pub const LISTING: &str = "https://atomicdata.dev/classes/Listing";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
@@ -247,7 +248,22 @@ pub const PREVIOUS_RELEASE: &str = "https://atomicdata.dev/properties/previousRe
 pub const PUBLISHER: &str = "https://atomicdata.dev/properties/publisher";
 pub const RELEASE_PROP: &str = "https://atomicdata.dev/properties/release";
 pub const GRANTS: &str = "https://atomicdata.dev/properties/grants";
+/// Which plugin route request last created or changed a resource (JSON).
+/// Written by the host only.
+pub const ROUTE_PROVENANCE: &str = "https://atomicdata.dev/properties/routeProvenance";
 pub const INSTALLATION_STATUS: &str = "https://atomicdata.dev/properties/installationStatus";
+// ... for the integration proxy (ontola/atomic-plugins#54, phase 2)
+/// The installation's keyless app id at the integration proxy: an
+/// `atomic:agent:<pubkey>` the installing page minted and whose private key it
+/// discarded. Delegations and runtimes name it; nobody signs as it.
+pub const INTEGRATION_APP_AGENT: &str = "https://atomicdata.dev/properties/integrationAppAgent";
+/// `{platform: connection_id}`: the proxy connections delegated to an
+/// installation, written by the page when it delegates. Not secret.
+pub const INTEGRATION_CONNECTIONS: &str =
+    "https://atomicdata.dev/properties/integrationConnections";
+/// On an `InstallationRuntime`: the node's own app agent for the installation.
+pub const INTEGRATION_RUNTIME_AGENT: &str =
+    "https://atomicdata.dev/properties/integrationRuntimeAgent";
 pub const DOMAINS: &str = "https://atomicdata.dev/properties/domains";
 pub const STANDARDS: &str = "https://atomicdata.dev/properties/standards";
 pub const EVIDENCE: &str = "https://atomicdata.dev/properties/evidence";

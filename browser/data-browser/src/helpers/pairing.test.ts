@@ -23,6 +23,7 @@ const AGENT = {
   subject: 'did:ad:agent:abc',
   getPublicKey: async () => 'pk',
   createSignature: async () => 'sig',
+  sign: async () => 'sig',
 } as unknown as Agent;
 
 const AUTH_HEADERS = [
@@ -106,6 +107,9 @@ describe('pairAndSync', () => {
     }
 
     expect(init.headers['x-atomic-agent']).toBe(AGENT.subject);
+    // `/iroh-sync` changes state, so it takes only version 2.
+    expect(init.headers['x-atomic-signature-version']).toBe('2');
+    expect(init.method).toBe('POST');
   });
 
   it('goes out unsigned without an agent, so the node’s refusal is what shows', async () => {

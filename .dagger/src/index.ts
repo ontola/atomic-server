@@ -1501,6 +1501,12 @@ export class AtomicServer {
           '/code/browser/e2e/tests/fixtures/test-plugin.zip',
           source.file('browser/e2e/tests/fixtures/test-plugin.zip'),
         )
+        // `atomic_lib`'s tests `include_str!` the browser copy of the v2
+        // signature vectors to catch the two copies drifting apart.
+        .withFile(
+          '/code/browser/lib/src/authentication_v2_vectors.json',
+          source.file('browser/lib/src/authentication_v2_vectors.json'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
@@ -1586,6 +1592,21 @@ export class AtomicServer {
             `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
         ])
+        // The `plugin-routes` feature (#1711) is off in every release build,
+        // so gated code would rot unseen. Its tests run here, scoped to
+        // `atomic-server` (the only crate with the feature); the
+        // `release_feature_sets_exclude_plugin_routes` unit test above, in
+        // the default pass, fails if a release feature set ever turns it on.
+        .withExec([
+          'sh',
+          '-c',
+          'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
+            'cargo nextest run --locked -p atomic-server --lib ' +
+            '--no-default-features --features light,wasm-plugins,plugin-routes ' +
+            `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
+            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
+            `--retries ${this.hostKnobs.nextestRetries}`,
+        ])
         .stdout()
     );
   }
@@ -1621,6 +1642,20 @@ export class AtomicServer {
         '--no-default-features',
         '--features',
         'light,wasm-plugins',
+      ])
+      // Gated `plugin-routes` code (#1711) is in no release build; lint it
+      // here so it doesn't rot. Only `atomic-server` has the feature.
+      .withExec([
+        'cargo',
+        'clippy',
+        '--locked',
+        '-p',
+        'atomic-server',
+        '--no-deps',
+        '--all-targets',
+        '--no-default-features',
+        '--features',
+        'light,wasm-plugins,plugin-routes',
       ])
       .stdout();
   }

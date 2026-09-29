@@ -105,15 +105,7 @@ impl StoreApplyHost {
 
     /// Refuses unless `for_agent` may write here.
     async fn may_write(&self, subject: &str) -> Result<(), String> {
-        let resource = self
-            .store
-            .get_resource(&subject.into())
-            .await
-            .map_err(|e| format!("{subject} could not be read: {e}"))?;
-
-        check_write(&self.store, &resource, &self.for_agent)
-            .await
-            .map_err(|e| e.to_string())?;
+        let resource = self.person_may_write(subject).await?;
         if let Some(agent) = self.app_agent()? {
             check_write(
                 &self.store,
@@ -124,6 +116,55 @@ impl StoreApplyHost {
             .map_err(|e| e.to_string())?;
         }
         Ok(())
+    }
+
+    /// The person's half of [`Self::may_write`]: the rights walk for
+    /// `for_agent` alone. Returns the resource it read.
+    async fn person_may_write(&self, subject: &str) -> Result<Resource, String> {
+        let resource = self
+            .store
+            .get_resource(&subject.into())
+            .await
+            .map_err(|e| format!("{subject} could not be read: {e}"))?;
+
+        check_write(&self.store, &resource, &self.for_agent)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(resource)
+    }
+
+    /// A create through an app's row grant (#1740).
+    ///
+    /// The caller has found a live grant and checked this write against its
+    /// scope ([`super::app_row_grant::check_scope`]). The grant stands in for
+    /// the app's own rights, which is the one check skipped here; the person's
+    /// rights still bound it, and the app's key still signs.
+    pub async fn create_under_row_grant(
+        &mut self,
+        request: CreateRequest,
+    ) -> Result<String, String> {
+        self.person_may_write(&request.parent).await?;
+        self.create_checked(request).await
+    }
+
+    /// A set through an app's row grant. See [`Self::create_under_row_grant`].
+    pub async fn set_under_row_grant(
+        &mut self,
+        subject: &str,
+        prop_vals: HashMap<String, Json>,
+    ) -> Result<(), String> {
+        self.person_may_write(subject).await?;
+        self.set_checked(subject, prop_vals).await
+    }
+
+    /// A remove through an app's row grant. See [`Self::create_under_row_grant`].
+    pub async fn remove_under_row_grant(
+        &mut self,
+        subject: &str,
+        properties: Vec<String>,
+    ) -> Result<(), String> {
+        self.person_may_write(subject).await?;
+        self.remove_checked(subject, properties).await
     }
 
     async fn value_for(&self, property: &str, value: Json) -> Result<Value, String> {
@@ -199,7 +240,41 @@ impl PlanHost for StoreApplyHost {
 impl ApplyHost for StoreApplyHost {
     async fn create(&mut self, request: CreateRequest) -> Result<String, String> {
         self.may_write(&request.parent).await?;
+        self.create_checked(request).await
+    }
 
+    async fn set(&mut self, subject: &str, prop_vals: HashMap<String, Json>) -> Result<(), String> {
+        self.may_write(subject).await?;
+        self.set_checked(subject, prop_vals).await
+    }
+
+    async fn remove(&mut self, subject: &str, properties: Vec<String>) -> Result<(), String> {
+        self.may_write(subject).await?;
+        self.remove_checked(subject, properties).await
+    }
+
+    async fn destroy(&mut self, subject: &str) -> Result<(), String> {
+        self.may_write(subject).await?;
+
+        let mut resource = self
+            .store
+            .get_resource(&subject.into())
+            .await
+            .map_err(|e| format!("{subject} could not be read: {e}"))?;
+
+        match self.app_agent()? {
+            Some(agent) => resource.destroy_as(&agent, &self.store).await,
+            None => resource.destroy(&self.store).await,
+        }
+        .map_err(|e| format!("could not destroy {subject}: {e}"))?;
+
+        Ok(())
+    }
+}
+
+impl StoreApplyHost {
+    /// The write half of `create`, once the rights have been checked.
+    async fn create_checked(&mut self, request: CreateRequest) -> Result<String, String> {
         let mut resource = Resource::new(self.create_subject(&request.parent));
 
         resource
@@ -258,9 +333,11 @@ impl ApplyHost for StoreApplyHost {
         Ok(resource.get_subject().to_string())
     }
 
-    async fn set(&mut self, subject: &str, prop_vals: HashMap<String, Json>) -> Result<(), String> {
-        self.may_write(subject).await?;
-
+    async fn set_checked(
+        &mut self,
+        subject: &str,
+        prop_vals: HashMap<String, Json>,
+    ) -> Result<(), String> {
         let mut resource = self
             .store
             .get_resource(&subject.into())
@@ -283,9 +360,11 @@ impl ApplyHost for StoreApplyHost {
         Ok(())
     }
 
-    async fn remove(&mut self, subject: &str, properties: Vec<String>) -> Result<(), String> {
-        self.may_write(subject).await?;
-
+    async fn remove_checked(
+        &mut self,
+        subject: &str,
+        properties: Vec<String>,
+    ) -> Result<(), String> {
         let mut resource = self
             .store
             .get_resource(&subject.into())
@@ -300,24 +379,6 @@ impl ApplyHost for StoreApplyHost {
 
         self.commit(&mut resource, &format!("could not write {subject}"))
             .await?;
-
-        Ok(())
-    }
-
-    async fn destroy(&mut self, subject: &str) -> Result<(), String> {
-        self.may_write(subject).await?;
-
-        let mut resource = self
-            .store
-            .get_resource(&subject.into())
-            .await
-            .map_err(|e| format!("{subject} could not be read: {e}"))?;
-
-        match self.app_agent()? {
-            Some(agent) => resource.destroy_as(&agent, &self.store).await,
-            None => resource.destroy(&self.store).await,
-        }
-        .map_err(|e| format!("could not destroy {subject}: {e}"))?;
 
         Ok(())
     }

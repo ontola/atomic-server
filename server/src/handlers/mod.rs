@@ -5,12 +5,19 @@ Most of the logic for routing and handling resides in [atomic_lib::Storelike::ge
 However, some features reside in atomic-server.
 */
 
+#[cfg(feature = "wasm-plugins")]
+pub mod after_commit;
 pub mod app_agent;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod app_endpoints_test;
 #[cfg(feature = "wasm-plugins")]
+pub mod app_row_grant;
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod app_row_grant_test;
+#[cfg(feature = "wasm-plugins")]
 pub mod app_write;
 pub mod blob;
+pub mod changes;
 pub mod commit;
 pub mod download;
 pub mod drive_usage;
@@ -28,6 +35,10 @@ pub mod plugin_external;
 pub mod plugin_release;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod plugin_release_test;
+#[cfg(feature = "plugin-routes")]
+pub mod plugin_route_tokens;
+#[cfg(feature = "plugin-routes")]
+pub mod plugin_routes;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_run;
 #[cfg(feature = "wasm-plugins")]

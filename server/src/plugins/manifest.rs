@@ -10,6 +10,11 @@
 //! version-one form: every version-two field is skipped when it holds its
 //! default, and `schemaVersion` keeps the value it was parsed with. Releases are
 //! content-addressed over the serialized manifest, so this must stay true.
+//!
+//! Version three adds the optional `http` block ([`super::manifest_http`]): the
+//! public endpoints a plugin asks for. It is left out when empty, so a version
+//! two manifest serializes exactly as before. A v3 manifest without it is
+//! accepted everywhere; one with it needs the plugin-routes gates.
 use atomic_lib::db::plugin_meta::{validate_plugin_identifiers, PermissionType, PluginManifest};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -35,6 +40,17 @@ pub struct Manifest {
     /// an operation id. It never widens what `operations` grant.
     #[serde(default, skip_serializing_if = "Network::is_default")]
     pub network: Network,
+    /// Integration-proxy platforms the plugin calls through `ctx.http` with
+    /// `atomic-proxy:/<platform>/...` URLs. The host resolves those to the
+    /// connection the installation was delegated for that platform on the
+    /// configured proxy, and signs them. Operations name such URLs; a platform
+    /// grants no request an operation does not.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proxy: Vec<String>,
+    /// Public endpoints (routes, well-known claims, listeners, ...). Version
+    /// three only; see [`super::manifest_http`].
+    #[serde(default, skip_serializing_if = "super::manifest_http::http_is_empty")]
+    pub http: Option<super::manifest_http::Http>,
     /// What the plugin's user-editable config looks like. The host validates
     /// the stored config against it before a run; nothing here grants access,
     /// so it is carried rather than interpreted.
@@ -44,6 +60,17 @@ pub struct Manifest {
     pub config_schema: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_config: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Files the host may hand this plugin as `input.upload`. See [`Accept`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<Accept>,
+    /// Where an importer writes: a schema and the tables (`table`, and/or
+    /// keyed `tables`) the browser host creates before the first run and
+    /// records as the plugin's config. It grants nothing and the server never
+    /// acts on it, so it is carried verbatim (its bytes are part of the
+    /// release id); [`validate_destination`] checks its shape the way the
+    /// browser's `validateManifest` does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -68,6 +95,8 @@ struct ManifestV1 {
     #[serde(default)]
     actions: Vec<super::actions::Action>,
     #[serde(default)]
+    proxy: Vec<String>,
+    #[serde(default)]
     config: Option<serde_json::Value>,
 }
 
@@ -83,9 +112,13 @@ impl From<ManifestV1> for Manifest {
             operations: v1.operations,
             actions: v1.actions,
             network: Network::default(),
+            proxy: v1.proxy,
+            http: None,
             config: v1.config,
             config_schema: None,
             default_config: None,
+            accepts: Vec::new(),
+            destination: None,
             name: None,
             namespace: None,
             version: None,
@@ -138,6 +171,11 @@ pub struct Entrypoints {
     /// Class URLs whose hooks this package exports. Only in `server-extension`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_extender: Option<Vec<String>>,
+    /// Exports `afterCommit(ctx)`: told when rows change in tables where it
+    /// is added as a view (#1851). Only in `extension`; declaring it grants
+    /// nothing, the subscription comes from the person adding the view.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub after_commit: bool,
 }
 
 /// When a manifest names no entrypoints it exports `run`, as version one did.
@@ -147,6 +185,7 @@ impl Default for Entrypoints {
             run: true,
             view: None,
             class_extender: None,
+            after_commit: false,
         }
     }
 }
@@ -299,6 +338,81 @@ pub struct Secret {
     pub description: Option<String>,
 }
 
+/// Used when an `accepts` entry declares no `maxBytes`: 5 MiB.
+pub const DEFAULT_ACCEPT_MAX_BYTES: u64 = 5 * 1024 * 1024;
+/// The largest `maxBytes` a plugin may declare: 20 MiB. The file is held
+/// several times over during a run (request body, host string, sandbox string,
+/// parse output), so this stays well under the sandbox's 256 MiB default.
+pub const ACCEPT_MAX_BYTES_CEILING: u64 = 20 * 1024 * 1024;
+
+/// A file the host may hand the plugin as `input.upload`, instead of the
+/// plugin fetching data itself. `extensions` and `mediaTypes` only filter the
+/// picker; the plugin still validates what it is given. `maxBytes` bounds the
+/// file's raw size, whatever the encoding. See [`AcceptAs`] for what the
+/// plugin receives.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Accept {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub media_types: Vec<String>,
+    /// Kept as declared: left out, it stays out when serialized, so a
+    /// release's id does not change; an explicit `"text"` stays too.
+    #[serde(default, rename = "as", skip_serializing_if = "Option::is_none")]
+    pub read_as: Option<AcceptAs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_bytes: Option<u64>,
+}
+
+impl Accept {
+    pub fn max_bytes(&self) -> u64 {
+        self.max_bytes.unwrap_or(DEFAULT_ACCEPT_MAX_BYTES)
+    }
+
+    pub fn encoding(&self) -> AcceptAs {
+        self.read_as.unwrap_or_default()
+    }
+}
+
+/// How an accepted file reaches the plugin, in `input.upload`
+/// (`{ name, mediaType, size, <encoding> }`, `size` being the byte size):
+///
+/// - `text` (the default): the field `text`, decoded by the host as UTF-8,
+///   falling back to Windows-1252.
+/// - `base64`: the field `base64`, the file's exact bytes in standard padded
+///   base64, with no charset detection.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AcceptAs {
+    #[default]
+    Text,
+    Base64,
+}
+
+impl AcceptAs {
+    /// The `input.upload` field that carries the file in this encoding.
+    pub fn field(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Base64 => "base64",
+        }
+    }
+}
+
+// By hand, so that every wrong value gets the one message both validators share.
+impl<'de> Deserialize<'de> for AcceptAs {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match serde_json::Value::deserialize(deserializer)?.as_str() {
+            Some("text") => Ok(Self::Text),
+            Some("base64") => Ok(Self::Base64),
+            _ => Err(serde::de::Error::custom(
+                "accepts entries must be read `as` text or base64",
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Operation {
@@ -332,7 +446,7 @@ impl Manifest {
             Some(1) => serde_json::from_value::<ManifestV1>(raw)
                 .map_err(|e| e.to_string())?
                 .into(),
-            Some(2) => serde_json::from_value(raw).map_err(|e| e.to_string())?,
+            Some(2) | Some(3) => serde_json::from_value(raw).map_err(|e| e.to_string())?,
             _ => return Err("unsupported manifest schemaVersion".into()),
         };
         manifest.validate()?;
@@ -352,7 +466,23 @@ impl Manifest {
             if operation.id.is_empty() || !names.insert(&operation.id) {
                 return Err("operation IDs must be nonempty and unique".into());
             }
-            endpoint(&operation.url)?;
+            match ProxyRelative::parse(&operation.url) {
+                Some(relative) => {
+                    let relative = relative?;
+                    if relative.query.is_some() {
+                        return Err(PROXY_URL_RULE.into());
+                    }
+                    if !self.proxy.contains(&relative.platform) {
+                        return Err(format!(
+                            "operation {} does not declare proxy platform '{}' in `proxy`",
+                            operation.id, relative.platform
+                        ));
+                    }
+                }
+                None => {
+                    endpoint(&operation.url)?;
+                }
+            }
             if !matches!(
                 operation.method.as_str(),
                 "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -364,6 +494,15 @@ impl Manifest {
             }
         }
         super::actions::validate_actions(self)?;
+        names.clear();
+        for platform in &self.proxy {
+            if !is_proxy_platform(platform) || !names.insert(platform) {
+                return Err(
+                    "proxy platforms must be unique identifiers of letters, digits, `-` and `_`"
+                        .into(),
+                );
+            }
+        }
         names.clear();
         for origin in &self.network.origins {
             exact_origin(origin, "network origin")?;
@@ -395,6 +534,14 @@ impl Manifest {
             World::Extension if !class_urls.is_empty() => {
                 return Err("world extension may not declare classExtender".into());
             }
+            // A server extension's commit hook is its inline class extender;
+            // the durable, queued `afterCommit` is for user plugins (#1851).
+            World::ServerExtension if self.entrypoints.after_commit => {
+                return Err(
+                    "entrypoints.afterCommit is for world extension; a server extension hooks commits with classExtender"
+                        .into(),
+                );
+            }
             World::ServerExtension
                 if self.runtime != Runtime::Wasip2v1 && class_urls.is_empty() =>
             {
@@ -419,12 +566,54 @@ impl Manifest {
                 return Err("view entrypoint requires the custom-view capability".into());
             }
         }
+        if self.accepts.len() > 8 {
+            return Err("at most 8 accepts entries".into());
+        }
+        for accept in &self.accepts {
+            if accept
+                .max_bytes
+                .is_some_and(|max| !(1..=ACCEPT_MAX_BYTES_CEILING).contains(&max))
+            {
+                return Err(format!(
+                    "accepts maxBytes must be a whole number from 1 to {ACCEPT_MAX_BYTES_CEILING}"
+                ));
+            }
+            let lower_ext = |c: char| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')
+            };
+            if accept.extensions.iter().any(|ext| {
+                ext.len() < 2
+                    || ext.len() > 33
+                    || !ext.starts_with('.')
+                    || !ext[1..].starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    || !ext.chars().all(lower_ext)
+            }) {
+                return Err("accepts extensions must be lower-case and start with a dot".into());
+            }
+            let token = |part: &str| {
+                part.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    && part.chars().all(|c| {
+                        c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '+' | '-')
+                    })
+            };
+            if accept.media_types.iter().any(|media| {
+                !media
+                    .split_once('/')
+                    .is_some_and(|(kind, sub)| token(kind) && token(sub))
+            }) {
+                return Err("accepts mediaTypes must be type/subtype".into());
+            }
+        }
+        if let Some(destination) = &self.destination {
+            validate_destination(destination)?;
+        }
         if let Some(namespace) = &self.namespace {
             validate_plugin_identifiers(namespace, "name").map_err(|e| e.to_string())?;
         }
         if let Some(name) = &self.name {
             validate_plugin_identifiers("namespace", name).map_err(|e| e.to_string())?;
         }
+        self.validate_http()?;
         Ok(())
     }
 
@@ -438,6 +627,29 @@ impl Manifest {
         self.network
             .origins
             .contains(&url.origin().ascii_serialization())
+    }
+
+    /// Whether a declared operation admits this proxy-relative request: the
+    /// platform is declared, and an operation with this id, method and effect
+    /// names this platform and path.
+    pub fn allows_proxy_effect(
+        &self,
+        id: Option<&str>,
+        method: &str,
+        request: &ProxyRelative,
+        effect: &str,
+    ) -> bool {
+        self.proxy.contains(&request.platform)
+            && self.operations.iter().any(|operation| {
+                let Some(Ok(declared)) = ProxyRelative::parse(&operation.url) else {
+                    return false;
+                };
+                id == Some(operation.id.as_str())
+                    && operation.method == method
+                    && operation.effect == effect
+                    && declared.platform == request.platform
+                    && matches_path(&declared.path, &request.path)
+            })
     }
 
     pub fn allows_read(&self, id: Option<&str>, method: &str, url: &url::Url) -> bool {
@@ -461,6 +673,68 @@ impl Manifest {
                 && endpoint.origin() == url.origin()
                 && matches_path(endpoint.path(), url.path())
         })
+    }
+
+    /// Whether a delivery of operation `id` may go to `url`: a declared
+    /// write operation with this method, whose URL is this origin, or a
+    /// wildcard host (`https://*/inbox`, design 2.2 and D5) with this scheme.
+    /// The path must match either way. Which operations a route may enqueue
+    /// at all is its `enqueues` list; the egress guard still checks the
+    /// address.
+    pub fn allows_delivery(&self, id: &str, method: &str, url: &url::Url) -> bool {
+        self.operations.iter().any(|operation| {
+            if operation.id != id
+                || !operation.method.eq_ignore_ascii_case(method)
+                || operation.effect != "write"
+            {
+                return false;
+            }
+            let Ok(endpoint) = url::Url::parse(&operation.url) else {
+                return false;
+            };
+            let origin = if endpoint.host_str() == Some("*") {
+                endpoint.scheme() == url.scheme()
+            } else {
+                endpoint.origin() == url.origin()
+            };
+            origin && matches_path(endpoint.path(), url.path())
+        })
+    }
+}
+
+/// Version three: public endpoints, the gate they need, and the derived
+/// `requires`.
+impl Manifest {
+    fn validate_http(&self) -> Result<(), String> {
+        let Some(http) = &self.http else {
+            return Ok(());
+        };
+        if self.schema_version < 3 {
+            return Err("the http block needs schemaVersion 3".into());
+        }
+        http.validate(&super::manifest_http::Context {
+            server_extension: self.world == World::ServerExtension,
+            operations: self
+                .operations
+                .iter()
+                .map(|o| (o.id.as_str(), o.effect.as_str(), o.url.as_str()))
+                .collect(),
+        })
+    }
+
+    /// What this release needs from the node's plugin-routes gates.
+    pub fn gate(&self) -> super::manifest_http::Gate {
+        self.http.as_ref().map(|h| h.gate()).unwrap_or_default()
+    }
+
+    /// Derived from the declarations; authors do not write it.
+    pub fn requires(&self) -> Vec<String> {
+        super::manifest_http::derive_requires(
+            self.http.as_ref(),
+            &self.gate(),
+            !self.secrets.is_empty(),
+            self.runtime == Runtime::Wasip2v1 || self.entrypoints.run,
+        )
     }
 }
 
@@ -519,6 +793,7 @@ pub fn translate_plugin_json(
             run: class_urls.is_empty(),
             view: None,
             class_extender: (!class_urls.is_empty()).then(|| class_urls.to_vec()),
+            after_commit: false,
         },
         capabilities,
         secrets: Vec::new(),
@@ -528,9 +803,13 @@ pub fn translate_plugin_json(
             origins,
             reason: network_reason,
         },
+        proxy: Vec::new(),
+        http: None,
         config: None,
         config_schema: plugin_json.config_schema.as_ref().map(sorted),
         default_config: plugin_json.default_config.as_ref().map(sorted),
+        accepts: Vec::new(),
+        destination: None,
         name: Some(plugin_json.name.clone()),
         namespace: Some(plugin_json.namespace.clone()),
         version: Some(plugin_json.version.clone()),
@@ -581,6 +860,255 @@ fn endpoint(value: &str) -> Result<url::Url, String> {
     Ok(url)
 }
 
+/// The scheme of a proxy-relative URL: `atomic-proxy:/<platform>/<path>`.
+pub const PROXY_SCHEME: &str = "atomic-proxy:";
+
+const PROXY_URL_RULE: &str =
+    "atomic-proxy: URLs are `atomic-proxy:/<platform>/<path>`, with no dot segments, backslashes, fragment or (in an operation) query";
+
+fn is_proxy_platform(platform: &str) -> bool {
+    !platform.is_empty()
+        && platform.len() <= 64
+        && platform
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+}
+
+/// A request to the integration proxy, relative to it and to the connection:
+/// `atomic-proxy:/clockify/api/v1/user?page=2` is platform `clockify`, path
+/// `/api/v1/user` and query `page=2`. The host resolves it to
+/// `{proxy origin}/proxy/{connection id}/{platform}{path}?{query}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProxyRelative {
+    pub platform: String,
+    /// Starts with `/`, and has at least one segment after the platform.
+    pub path: String,
+    pub query: Option<String>,
+}
+
+impl ProxyRelative {
+    /// `None` when `raw` is not an `atomic-proxy:` URL at all, and an error
+    /// when it is one that is malformed.
+    pub fn parse(raw: &str) -> Option<Result<Self, String>> {
+        let rest = raw.strip_prefix(PROXY_SCHEME)?;
+        Some(Self::parse_rest(rest))
+    }
+
+    fn parse_rest(rest: &str) -> Result<Self, String> {
+        let rule = || PROXY_URL_RULE.to_string();
+        if rest.contains('#') || rest.contains('\\') {
+            return Err(rule());
+        }
+        let (path, query) = match rest.split_once('?') {
+            Some((path, query)) => (path, Some(query.to_string())),
+            None => (rest, None),
+        };
+        let path = path.strip_prefix('/').ok_or_else(rule)?;
+        let (platform, path) = path.split_once('/').ok_or_else(rule)?;
+        if !is_proxy_platform(platform) || path.is_empty() {
+            return Err(rule());
+        }
+        // The proxy refuses dot segments too, but the signature covers the
+        // URL as sent, so nothing that normalises differently goes out.
+        let dot = |segment: &str| {
+            let decoded = segment.to_ascii_lowercase().replace("%2e", ".");
+            decoded == "." || decoded == ".."
+        };
+        if path.split('/').any(dot) || path.to_ascii_lowercase().contains("%2f") {
+            return Err(rule());
+        }
+        Ok(Self {
+            platform: platform.to_string(),
+            path: format!("/{path}"),
+            query,
+        })
+    }
+}
+
+/// A class or property shortname: lower-case letters and digits in
+/// dash-separated groups.
+fn is_shortname(value: &str) -> bool {
+    value.split('-').all(|part| {
+        !part.is_empty()
+            && part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    })
+}
+
+/// A `destination.tables` key, read back by the plugin as `config.tables.<key>`:
+/// a lower-case letter, then letters and digits, at most 64. Keys that would
+/// shadow an `Object.prototype` member in the plugin are refused.
+fn is_table_key(value: &str) -> bool {
+    const RESERVED: [&str; 7] = [
+        "constructor",
+        "hasOwnProperty",
+        "isPrototypeOf",
+        "propertyIsEnumerable",
+        "toLocaleString",
+        "toString",
+        "valueOf",
+    ];
+    value.len() <= 64
+        && value.starts_with(|c: char| c.is_ascii_lowercase())
+        && value.chars().all(|c| c.is_ascii_alphanumeric())
+        && !RESERVED.contains(&value)
+}
+
+/// Checks a manifest's `destination` with the rules, and the messages, of
+/// `validateDestination` in `browser/lib/src/plugin-manifest.ts`. Both are
+/// held to `testdata/plugin-manifest/index.json`.
+fn validate_destination(entry: &serde_json::Value) -> Result<(), String> {
+    use serde_json::{Map, Value};
+    use std::collections::HashSet;
+
+    fn fail(message: &str) -> String {
+        format!("destination: {message}")
+    }
+    fn object<'a>(
+        value: Option<&'a Value>,
+        keys: Option<&[&str]>,
+    ) -> Result<&'a Map<String, Value>, String> {
+        let Some(Value::Object(map)) = value else {
+            return Err(fail("expected a map"));
+        };
+        if let Some(keys) = keys {
+            if let Some(key) = map.keys().find(|key| !keys.contains(&key.as_str())) {
+                return Err(fail(&format!("unknown field `{key}`")));
+            }
+        }
+        Ok(map)
+    }
+    fn text(value: Option<&Value>, what: &str) -> Result<String, String> {
+        match value {
+            Some(Value::String(text))
+                if !text.trim().is_empty() && text.encode_utf16().count() <= 1024 =>
+            {
+                Ok(text.clone())
+            }
+            _ => Err(fail(&format!("{what} must be nonempty text"))),
+        }
+    }
+    fn shortnames(value: Option<&Value>, what: &str) -> Result<Vec<String>, String> {
+        let Some(value) = value else {
+            return Ok(Vec::new());
+        };
+        let Value::Array(items) = value else {
+            return Err(fail(&format!("{what} must be a list")));
+        };
+        items
+            .iter()
+            .map(|item| match item {
+                Value::String(name) if is_shortname(name) => Ok(name.clone()),
+                _ => Err(fail(&format!("{what} must list shortnames"))),
+            })
+            .collect()
+    }
+
+    let entry = object(Some(entry), Some(&["schema", "table", "tables"]))?;
+    let schema = object(entry.get("schema"), Some(&["properties", "classes"]))?;
+    let (Some(Value::Array(properties)), Some(Value::Array(classes))) =
+        (schema.get("properties"), schema.get("classes"))
+    else {
+        return Err(fail("schema needs properties and classes lists"));
+    };
+
+    let mut known = HashSet::new();
+    for raw in properties {
+        let property = object(
+            Some(raw),
+            Some(&["shortname", "name", "description", "datatype"]),
+        )?;
+        let shortname = text(property.get("shortname"), "property shortname")?;
+        if !is_shortname(&shortname) {
+            return Err(fail(&format!("invalid shortname {shortname}")));
+        }
+        let datatype = text(property.get("datatype"), "property datatype")?;
+        let supported = datatype
+            .strip_prefix("https://atomicdata.dev/datatypes/")
+            .is_some_and(|name| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphabetic()));
+        if !supported {
+            return Err(fail(&format!("unsupported datatype {datatype}")));
+        }
+        text(property.get("name"), "property name")?;
+        text(property.get("description"), "property description")?;
+        known.insert(shortname);
+    }
+    if known.len() != properties.len() || known.len() > 64 {
+        return Err(fail("property shortnames must be unique, at most 64"));
+    }
+
+    let mut class_names = HashSet::new();
+    for raw in classes {
+        let class = object(
+            Some(raw),
+            Some(&["shortname", "name", "description", "requires", "recommends"]),
+        )?;
+        let shortname = text(class.get("shortname"), "class shortname")?;
+        if !is_shortname(&shortname) {
+            return Err(fail(&format!("invalid shortname {shortname}")));
+        }
+        let requires = shortnames(class.get("requires"), "requires")?;
+        let recommends = shortnames(class.get("recommends"), "recommends")?;
+        if requires
+            .iter()
+            .chain(&recommends)
+            .any(|name| !known.contains(name))
+        {
+            return Err(fail(&format!(
+                "class {shortname} names an undeclared property"
+            )));
+        }
+        text(class.get("name"), "class name")?;
+        text(class.get("description"), "class description")?;
+        class_names.insert(shortname);
+    }
+    if classes.is_empty() || classes.len() > 8 || class_names.len() != classes.len() {
+        return Err(fail("declare one to eight uniquely named classes"));
+    }
+
+    // Checks one declared table and returns its row class.
+    let table = |raw: &Value| -> Result<String, String> {
+        let declared = object(Some(raw), Some(&["name", "rowClass", "columns"]))?;
+        let row_class = text(declared.get("rowClass"), "table rowClass")?;
+        if !class_names.contains(&row_class) {
+            return Err(fail("table rowClass must name a class in schema"));
+        }
+        let columns = shortnames(declared.get("columns"), "table columns")?;
+        if columns.iter().any(|name| !known.contains(name)) {
+            return Err(fail("table columns must name properties in schema"));
+        }
+        text(declared.get("name"), "table name")?;
+        Ok(row_class)
+    };
+
+    if entry.get("table").is_none() && entry.get("tables").is_none() {
+        return Err(fail("declare `table` or `tables`"));
+    }
+    let mut row_classes = Vec::new();
+    if let Some(primary) = entry.get("table") {
+        row_classes.push(table(primary)?);
+    }
+    if let Some(tables) = entry.get("tables") {
+        let tables = object(Some(tables), None)?;
+        if tables.is_empty() {
+            return Err(fail("tables must not be empty"));
+        }
+        for (key, declared) in tables {
+            if !is_table_key(key) {
+                return Err(fail(
+                    "table keys must be identifiers of letters and digits starting with a lower-case letter, at most 64",
+                ));
+            }
+            row_classes.push(table(declared)?);
+        }
+    }
+    if row_classes.iter().collect::<HashSet<_>>().len() != row_classes.len() {
+        return Err(fail("each table needs its own rowClass"));
+    }
+    Ok(())
+}
+
 fn exact_origin(value: &str, what: &str) -> Result<(), String> {
     let parsed = endpoint(value)?;
     if parsed.origin().ascii_serialization() != value {
@@ -601,6 +1129,42 @@ mod tests {
             panic!("{path}: {e}");
         }))
         .unwrap()
+    }
+
+    /// Checking `destination` more strictly must not move a release id: the
+    /// declaration is carried verbatim. The single-table id is the one
+    /// `release-ids.json` pins on the atomic-plugins pin branch.
+    #[test]
+    fn destination_fixtures_keep_their_release_ids() {
+        for (file, pinned) in [
+            (
+                "v2-accepts-destination.json",
+                "blake3:4d41ebf175cb12e05339b85698a8d9b91485523728826485025af20c51ace3ea",
+            ),
+            (
+                "v2-destination-tables.json",
+                "blake3:7ac2291a55e8bbe11c26bc0ce413173b3527e85505dbdd7d9f9fd167afeb421d",
+            ),
+            (
+                "v2-destination-tables-only.json",
+                "blake3:ed8b010912f877717c191a10dd2975c2bb216f8108dc832a88e79571d3d9ed63",
+            ),
+        ] {
+            let manifest = Manifest::parse(fixture(file)).unwrap().unwrap();
+            assert_eq!(
+                manifest.destination.as_ref(),
+                fixture(file).get("destination"),
+                "{file}"
+            );
+            let id = atomic_lib::db::plugin_release::PluginRelease::js(
+                "export function run() {}".into(),
+                serde_json::json!(manifest),
+                Default::default(),
+            )
+            .id()
+            .unwrap();
+            assert_eq!(id, pinned, "{file}");
+        }
     }
 
     #[test]
@@ -635,6 +1199,130 @@ mod tests {
         assert_eq!(manifest.world, World::Extension);
         assert!(manifest.entrypoints.run);
         assert_eq!(serde_json::json!(manifest), raw);
+    }
+
+    /// Releases are content-addressed over the serialized manifest, so every
+    /// manifest accepted before version three must keep its release id. The
+    /// ids in `release-ids.json` were computed before the `http` block existed.
+    #[test]
+    fn accepted_fixtures_keep_their_release_ids() {
+        let pinned = fixture("release-ids.json");
+        let pinned = pinned.as_object().unwrap();
+        let mut checked = 0;
+        for case in fixture("index.json").as_array().unwrap() {
+            if case.get("error").is_some() {
+                continue;
+            }
+            let file = case["file"].as_str().unwrap();
+            let manifest = Manifest::parse(fixture(file)).unwrap().unwrap();
+            let id = atomic_lib::db::plugin_release::PluginRelease::js(
+                "export function run() {}".into(),
+                serde_json::json!(manifest),
+                Default::default(),
+            )
+            .id()
+            .unwrap();
+            assert_eq!(
+                pinned.get(file).and_then(|v| v.as_str()),
+                Some(id.as_str()),
+                "{file}"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, pinned.len());
+    }
+
+    /// Shared with `browser/lib/src/plugin-manifest.test.ts`.
+    #[test]
+    fn shared_http_conformance() {
+        for case in fixture("http-index.json").as_array().unwrap() {
+            let name = &case["name"];
+            let result = Manifest::parse(fixture(case["file"].as_str().unwrap()));
+            match case["error"].as_str() {
+                None => {
+                    let manifest = result.unwrap_or_else(|e| panic!("{name}: {e}")).unwrap();
+                    if let Some(expected) = case.get("serialized") {
+                        assert_eq!(&serde_json::json!(manifest), expected, "{name}");
+                    }
+                    assert_eq!(manifest.gate().to_json(), case["gate"], "{name}");
+                    assert_eq!(
+                        serde_json::json!(manifest.requires()),
+                        case["requires"],
+                        "{name}"
+                    );
+                    // The canonical form parses to the same thing.
+                    let again = Manifest::parse(serde_json::json!(manifest))
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(again.gate(), manifest.gate(), "{name}");
+                }
+                Some(expected) => {
+                    let error = result.expect_err(&format!("{name} should be rejected"));
+                    assert!(
+                        error.contains(expected),
+                        "{name}: {error:?} lacks {expected:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The node described in `http-refusals.json`, built the way startup
+    /// builds it.
+    fn node(raw: &serde_json::Value) -> crate::plugin_routes::PluginRoutesConfig {
+        use crate::plugin_routes::{
+            resolve, OriginContext, PluginRoutesLevel, PluginRoutesOptions,
+        };
+        let level = match raw["level"].as_str().unwrap() {
+            "off" => PluginRoutesLevel::Off,
+            "read-only" => PluginRoutesLevel::ReadOnly,
+            "read-write" => PluginRoutesLevel::ReadWrite,
+            other => panic!("{other}"),
+        };
+        let names = |key: &str, entry: &dyn Fn(&str) -> String| {
+            raw[key]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|n| entry(n.as_str().unwrap()))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let listeners = names("listeners", &|n| format!("{n}:4455"));
+        let sidecars = names("sidecars", &|n| format!("{n}=http://127.0.0.1:2583"));
+        resolve(
+            PluginRoutesOptions {
+                level,
+                routes_origin: None,
+                listeners: Some(listeners.as_str()),
+                sidecars: Some(sidecars.as_str()),
+                api_well_known: None,
+            },
+            raw["compiled"].as_bool().unwrap(),
+            OriginContext {
+                api_origin: "https://example.com",
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    /// One case per refusal message of design 0.4; shared with the TS mirror.
+    #[test]
+    fn shared_host_feature_refusals() {
+        for case in fixture("http-refusals.json").as_array().unwrap() {
+            let name = &case["name"];
+            let manifest = Manifest::parse(fixture(case["file"].as_str().unwrap()))
+                .unwrap()
+                .unwrap();
+            match manifest.gate().check(&node(&case["node"])) {
+                Ok(()) => assert!(case["refusal"].is_null(), "{name} should be refused"),
+                Err(refusal) => {
+                    assert_eq!(refusal.to_json(), case["refusal"], "{name}");
+                    assert_eq!(refusal.message(), case["message"], "{name}");
+                }
+            }
+        }
     }
 
     #[test]
@@ -678,6 +1366,49 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// #1851: `afterCommit` is an extension-world entrypoint; the inline
+    /// hooks stay unknown there, and a server extension cannot declare it.
+    #[test]
+    fn after_commit_is_an_extension_entrypoint_and_inline_hooks_are_refused() {
+        let manifest = Manifest::parse(serde_json::json!({
+            "schemaVersion": 2,
+            "world": "extension",
+            "entrypoints": {"run": true, "afterCommit": true}
+        }))
+        .unwrap()
+        .unwrap();
+        assert!(manifest.entrypoints.after_commit);
+        // Round-trips, and stays out of the serialization when off.
+        let json = serde_json::to_value(&manifest).unwrap();
+        assert_eq!(json["entrypoints"]["afterCommit"], true);
+        let plain = Manifest::parse(serde_json::json!({"schemaVersion": 2}))
+            .unwrap()
+            .unwrap();
+        assert!(serde_json::to_value(&plain)
+            .unwrap()
+            .get("entrypoints")
+            .is_none());
+
+        for hook in ["onResourceGet", "beforeCommit"] {
+            let refused = Manifest::parse(serde_json::json!({
+                "schemaVersion": 2,
+                "world": "extension",
+                "entrypoints": {"run": true, hook: true}
+            }));
+            assert!(
+                refused.is_err(),
+                "{hook} must be refused in the extension world"
+            );
+        }
+        assert!(Manifest::parse(serde_json::json!({
+            "schemaVersion": 2,
+            "runtime": "wasip2/1",
+            "world": "server-extension",
+            "entrypoints": {"afterCommit": true}
+        }))
+        .is_err());
     }
 
     #[test]
@@ -757,6 +1488,46 @@ mod path_tests {
             "/repos/owner/repo/issues/..",
         ] {
             assert!(!matches_path(pattern, path));
+        }
+    }
+}
+
+#[cfg(test)]
+mod proxy_relative_tests {
+    use super::ProxyRelative;
+
+    #[test]
+    fn a_proxy_relative_url_names_a_platform_a_path_and_a_query() {
+        assert_eq!(
+            ProxyRelative::parse("atomic-proxy:/clockify/api/v1/user?page=2&q=a%20b"),
+            Some(Ok(ProxyRelative {
+                platform: "clockify".into(),
+                path: "/api/v1/user".into(),
+                query: Some("page=2&q=a%20b".into()),
+            }))
+        );
+        assert_eq!(ProxyRelative::parse("https://proxy.test/proxy/c/p/x"), None);
+    }
+
+    #[test]
+    fn a_malformed_proxy_relative_url_is_refused() {
+        for bad in [
+            "atomic-proxy:clockify/x",
+            "atomic-proxy:/clockify",
+            "atomic-proxy:/clockify/",
+            "atomic-proxy://clockify/x",
+            "atomic-proxy:/clock ify/x",
+            "atomic-proxy:/clockify/../x",
+            "atomic-proxy:/clockify/a/%2E%2e/x",
+            "atomic-proxy:/clockify/a/./x",
+            "atomic-proxy:/clockify/a%2Fb",
+            "atomic-proxy:/clockify/a\\b",
+            "atomic-proxy:/clockify/x#frag",
+        ] {
+            assert!(
+                matches!(ProxyRelative::parse(bad), Some(Err(_))),
+                "{bad} should be refused"
+            );
         }
     }
 }

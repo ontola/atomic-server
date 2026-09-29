@@ -1,3 +1,5 @@
+import type { InstallationRouteStatus, RouteToken } from '@tomic/lib';
+
 export type JSONPrimitive = string | number | boolean;
 export type JSONValue = JSONPrimitive | JSONObject | JSONArray | undefined;
 export type JSONObject = { [key: string]: JSONValue };
@@ -99,6 +101,72 @@ export interface RPCMessage<T extends MessageType = any, A = MessageArgs[T]> {
   type: MessageType;
   args: A;
   requestId: string;
+}
+
+/**
+ * What `store.openExternal(url)` resolves to in an app frame. The host asks
+ * the person first, naming the destination host; `cancelled` when they say
+ * no, or when the frame asks again before they answered.
+ */
+export type OpenExternalResult = { status: 'opened' | 'cancelled' };
+
+/** What `store.openResource(subject)` resolves to in an app frame. */
+export type OpenResourceResult = { status: 'opened'; subject: string };
+
+/**
+ * What `store.proxy.disconnect({ platform })` resolves to in an app frame:
+ * the connections this app's delegation was taken off. The connections
+ * themselves are left alone.
+ */
+export type ProxyDisconnectResult = {
+  status: 'disconnected';
+  platform: string;
+  connectionIds: string[];
+};
+
+/**
+ * One entry of `store.getMany(subjects)` in an app frame, in the order asked:
+ * the resource, or why it could not be read.
+ */
+export type GetManyEntry =
+  | (Resource & { error?: undefined })
+  | { subject: string; error: string };
+
+/**
+ * What `store.routes.status()` resolves to in an app frame: this app's public
+ * endpoints (plugin routes), their 24-hour counts and last errors, and the
+ * delivery queue. `null` on a server built without plugin routes. Only for a
+ * person who can edit the app's Installation.
+ */
+export type RouteStatusResult = InstallationRouteStatus | null;
+
+/**
+ * What `store.routes.tokens()` resolves to in an app frame: the bearer tokens
+ * this app's routes issued. Never their values; the server keeps only hashes.
+ */
+export type RouteTokensResult = { tokens: RouteToken[] };
+
+/**
+ * What `store.routes.revokeToken(id)` resolves to in an app frame; `revoked`
+ * is `false` when the token was already gone.
+ */
+export type RevokeRouteTokenResult = { revoked: boolean };
+
+/** Whether the host is drawn light or dark. */
+export type ColorScheme = 'light' | 'dark';
+
+/**
+ * The theme message a host posts to a view frame on load and whenever its
+ * theme changes. `css` sets the `--t-*` variables (including
+ * `--t-color-success`) and `color-scheme` on `:root`; `colorScheme` is the
+ * host's actual setting, so a view need not guess it from a background
+ * colour. In an app frame, `store.getTheme()` and `store.onThemeChange()`
+ * read it.
+ */
+export interface ThemeMessage {
+  type: '__atomic_style';
+  css: string;
+  colorScheme?: ColorScheme;
 }
 
 export interface PageContext {

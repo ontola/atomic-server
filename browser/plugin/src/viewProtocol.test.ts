@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { RPCClient } from './rpc';
 import { isViewRequest, viewRequest } from './viewProtocol';
+import type { ImporterRunResult } from './viewProtocol';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -138,10 +139,7 @@ it('lets a generated view wait for host recovery but still rejects a silent host
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it('carries the proxy relay ops, and store.proxy sends them', () => {
-  for (const op of ['proxy', 'proxyConnections', 'proxyConnect'] as const)
-    expect(isViewRequest(viewRequest(1, op, { platform: 'pets' }))).toBe(true);
-  const f = frame();
+function generatedStore(f: ReturnType<typeof frame>) {
   const source = readFileSync(
     new URL(
       '../../../server/src/plugins/assets/view-client.js',
@@ -149,7 +147,8 @@ it('carries the proxy relay ops, and store.proxy sends them', () => {
     ),
     'utf8',
   );
-  const store = new Function(
+
+  return new Function(
     'window',
     'setTimeout',
     'clearTimeout',
@@ -159,20 +158,472 @@ it('carries the proxy relay ops, and store.proxy sends them', () => {
     () => 0,
     () => undefined,
   );
-  void store.proxy.request({
-    platform: 'pets',
-    connectionId: 'c1',
-    path: '/pets',
-    query: { page: '2' },
-  });
+}
+
+const b64 = (s: string) =>
+  Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/')), c =>
+    c.charCodeAt(0),
+  );
+
+async function sha256Hex(text: string) {
+  return Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)),
+    ),
+    b => b.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+/** Lets queued promise callbacks (WebCrypto, postMessage replies) run. */
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
+};
+
+it('carries the proxy ops; the relay op is gone', () => {
+  for (const op of [
+    'proxyCapability',
+    'proxyConnections',
+    'proxyConnect',
+    'proxyDisconnect',
+  ] as const)
+    expect(isViewRequest(viewRequest(1, op, { platform: 'pets' }))).toBe(true);
+  expect(isViewRequest({ ...viewRequest(1, 'get'), op: 'proxy' })).toBe(false);
+
+  const f = frame();
+  const store = generatedStore(f);
   void store.proxy.connections({ platform: 'pets' });
   void store.proxy.connect({ platform: 'pets' });
+  void store.proxy.disconnect({ platform: 'pets' });
   const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
   expect(sent.every(isViewRequest)).toBe(true);
   expect(sent.map(m => [m.op, m.args.platform])).toEqual([
-    ['proxy', 'pets'],
     ['proxyConnections', 'pets'],
     ['proxyConnect', 'pets'],
+    ['proxyDisconnect', 'pets'],
   ]);
-  expect(sent[0].args).toMatchObject({ connectionId: 'c1', path: '/pets' });
+});
+
+it('asks about and for row access over the canonical wire (#1740)', () => {
+  for (const op of ['rowAccess', 'requestRowAccess'] as const)
+    expect(isViewRequest(viewRequest(1, op))).toBe(true);
+
+  const f = frame();
+  const store = generatedStore(f);
+  void store.rowAccess();
+  void store.requestRowAccess();
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args])).toEqual([
+    ['rowAccess', {}],
+    ['requestRowAccess', {}],
+  ]);
+});
+
+it('calls the proxy directly with a capability and a v2 signature by its own key', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  const fetches: { url: string; init: RequestInit }[] = [];
+  let refusals = 1;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init: RequestInit) => {
+      fetches.push({ url, init });
+
+      if (refusals-- > 0)
+        return new Response(
+          JSON.stringify({ error: 'capability_expired', message: 'expired' }),
+          { status: 401 },
+        );
+
+      return new Response(JSON.stringify([{ id: 1 }]), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          link: '<https://pets.example/pets?page=2>; rel="next"',
+          'set-cookie': 'never=forwarded',
+        },
+      });
+    }),
+  );
+
+  const pending = store.proxy.request({
+    platform: 'pets',
+    connectionId: 'c 1',
+    path: '/pets',
+    method: 'post',
+    query: { page: '2' },
+    body: '{"name":"Rex"}',
+  });
+
+  // Two mints: the first capability is refused as expired, once.
+  for (let mint = 0; mint < 2; mint++) {
+    await settle();
+    const ask = f.parent.postMessage.mock.calls.at(-1)![0];
+    expect(isViewRequest(ask)).toBe(true);
+    expect(ask.op).toBe('proxyCapability');
+    expect(ask.args).toMatchObject({ platform: 'pets', connectionId: 'c 1' });
+    expect(ask.args.publicKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    f.reply({
+      type: 'atomic.view.response',
+      version: 1,
+      id: ask.id,
+      result: {
+        capability: `cap-${mint}`,
+        aud: 'https://proxy.example',
+        exp: Math.floor(Date.now() / 1000) + 600,
+      },
+    });
+  }
+
+  const result = await pending;
+  expect(result).toEqual({
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      link: '<https://pets.example/pets?page=2>; rel="next"',
+    },
+    body: [{ id: 1 }],
+  });
+  expect(fetches).toHaveLength(2);
+
+  const { url, init } = fetches[1];
+  expect(url).toBe('https://proxy.example/proxy/c%201/pets/pets?page=2');
+  expect(init).toMatchObject({
+    method: 'POST',
+    body: '{"name":"Rex"}',
+    credentials: 'omit',
+    redirect: 'error',
+  });
+  const headers = init.headers as Record<string, string>;
+  expect(headers.Authorization).toBe('Capability cap-1');
+  expect(headers['x-atomic-signature-version']).toBe('2');
+  const publicKey = headers['x-atomic-public-key'];
+  expect(headers['x-atomic-agent']).toBe(`atomic:agent:${publicKey}`);
+  const message = [
+    'atomic-request-v2',
+    'POST',
+    url,
+    headers['x-atomic-timestamp'],
+    await sha256Hex('{"name":"Rex"}'),
+  ].join('\n');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    b64(publicKey),
+    { name: 'Ed25519' },
+    false,
+    ['verify'],
+  );
+  expect(
+    await crypto.subtle.verify(
+      { name: 'Ed25519' },
+      key,
+      b64(headers['x-atomic-signature']),
+      new TextEncoder().encode(message),
+    ),
+  ).toBe(true);
+  // Same frame key for both attempts; it never leaves the frame.
+  expect(
+    (fetches[0].init.headers as Record<string, string>)['x-atomic-public-key'],
+  ).toBe(publicKey);
+});
+
+it('refuses a path that would leave the connection, before asking anything', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  vi.stubGlobal('fetch', vi.fn());
+  const pending = store.proxy.request({
+    platform: 'pets',
+    connectionId: 'c1',
+    path: '/../../connections',
+  });
+  await settle();
+  const ask = f.parent.postMessage.mock.calls.at(-1)![0];
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: ask.id,
+    result: {
+      capability: 'cap',
+      aud: 'https://proxy.example',
+      exp: Math.floor(Date.now() / 1000) + 600,
+    },
+  });
+  await expect(pending).rejects.toThrow('Invalid proxy path');
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('says so plainly where WebCrypto has no Ed25519', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  const original = crypto.subtle.generateKey;
+  (crypto.subtle as { generateKey: unknown }).generateKey = () =>
+    Promise.reject(new DOMException('Unrecognized name', 'NotSupportedError'));
+
+  try {
+    await expect(
+      store.proxy.request({ platform: 'pets', connectionId: 'c1', path: '/' }),
+    ).rejects.toThrow(/cannot make an Ed25519 key/);
+  } finally {
+    (crypto.subtle as { generateKey: unknown }).generateKey = original;
+  }
+
+  expect(f.parent.postMessage).not.toHaveBeenCalled();
+});
+
+function timedStore(f: ReturnType<typeof frame>) {
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  return new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(f.window, setTimeout, clearTimeout);
+}
+
+it('asks the host to open links and resources, and waits on the person as long as it takes', async () => {
+  for (const op of ['openExternal', 'openResource'] as const)
+    expect(isViewRequest(viewRequest(1, op, {}))).toBe(true);
+
+  vi.useFakeTimers();
+  const f = frame();
+  const store = timedStore(f);
+
+  const external = store.openExternal(new URL('https://www.notion.so/p'));
+  const resource = store.openResource('did:ad:row');
+  const outcome = resource.then(
+    () => 'answered',
+    (e: Error) => e.message,
+  );
+  const [ask, open] = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect([ask, open].every(isViewRequest)).toBe(true);
+  expect(ask).toMatchObject({
+    op: 'openExternal',
+    args: { url: 'https://www.notion.so/p' },
+  });
+  expect(open).toMatchObject({
+    op: 'openResource',
+    args: { subject: 'did:ad:row' },
+  });
+
+  // The person may take minutes to decide; that is not a silent host.
+  expect(vi.getTimerCount()).toBe(1);
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  expect(await outcome).toMatch('did not answer openResource');
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: ask.id,
+    result: { status: 'cancelled' },
+  });
+  expect(await external).toEqual({ status: 'cancelled' });
+});
+
+it('forgets its capabilities for a platform once disconnected', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('[]', { status: 200 })),
+  );
+  const answer = (id: unknown, result: unknown) =>
+    f.reply({ type: 'atomic.view.response', version: 1, id, result });
+  const capability = {
+    capability: 'cap',
+    aud: 'https://proxy.example',
+    exp: Math.floor(Date.now() / 1000) + 600,
+  };
+  const call = () =>
+    store.proxy.request({ platform: 'pets', connectionId: 'c1', path: '/' });
+  const asks = () =>
+    f.parent.postMessage.mock.calls.filter(([m]) => m.op === 'proxyCapability')
+      .length;
+
+  let pending = call();
+  await settle();
+  answer(f.parent.postMessage.mock.calls.at(-1)![0].id, capability);
+  await pending;
+  // Cached: a second call mints nothing.
+  await call();
+  expect(asks()).toBe(1);
+
+  const disconnected = store.proxy.disconnect({ platform: 'pets' });
+  const ask = f.parent.postMessage.mock.calls.at(-1)![0];
+  expect(ask).toMatchObject({
+    op: 'proxyDisconnect',
+    args: { platform: 'pets' },
+  });
+  answer(ask.id, {
+    status: 'disconnected',
+    platform: 'pets',
+    connectionIds: ['c1'],
+  });
+  expect(await disconnected).toEqual({
+    status: 'disconnected',
+    platform: 'pets',
+    connectionIds: ['c1'],
+  });
+
+  // The next call asks the host again, which now refuses it.
+  pending = call();
+  await settle();
+  expect(asks()).toBe(2);
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: f.parent.postMessage.mock.calls.at(-1)![0].id,
+    error: 'No pets connection c1 is delegated to this app. Connect again.',
+  });
+  await expect(pending).rejects.toThrow('delegated to this app');
+});
+
+it('reads many resources in one round trip, with errors in place', async () => {
+  expect(isViewRequest(viewRequest(1, 'getMany', { subjects: [] }))).toBe(true);
+  const f = frame();
+  const store = generatedStore(f);
+
+  const pending = store.getMany(['did:ad:a', 'did:ad:secret']);
+  expect(f.parent.postMessage).toHaveBeenCalledTimes(1);
+  const ask = f.parent.postMessage.mock.calls[0][0];
+  expect(ask).toMatchObject({
+    op: 'getMany',
+    args: { subjects: ['did:ad:a', 'did:ad:secret'] },
+  });
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: ask.id,
+    result: [
+      { subject: 'did:ad:a', title: 'A', props: { name: 'A' }, loading: false },
+      { subject: 'did:ad:secret', error: 'Unauthorized' },
+    ],
+  });
+  const [a, secret] = await pending;
+  // A resource like getResource's: read, stage, save.
+  expect(a.subject).toBe('did:ad:a');
+  expect(a.get('name')).toBe('A');
+  expect(typeof a.save).toBe('function');
+  expect(secret).toEqual({ subject: 'did:ad:secret', error: 'Unauthorized' });
+
+  // Nothing to ask for, nothing asked.
+  expect(await store.getMany([])).toEqual([]);
+  await expect(
+    store.getMany(Array.from({ length: 101 }, (_, i) => `did:ad:${i}`)),
+  ).rejects.toThrow('at most 100');
+  expect(f.parent.postMessage).toHaveBeenCalledTimes(1);
+});
+
+it('knows whether the host is light or dark, before and after a theme message', () => {
+  const f = frame();
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  // The shell applied the host stylesheet (`color-scheme: dark` on :root)
+  // before this module ran, so it missed that first message.
+  let computed = 'dark';
+  const store = new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    'document',
+    'getComputedStyle',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(
+    f.window,
+    () => 0,
+    () => undefined,
+    { documentElement: {} },
+    () => ({ colorScheme: computed }),
+  );
+  expect(store.getTheme()).toEqual({ colorScheme: 'dark' });
+  computed = 'normal';
+  expect(store.getTheme()).toEqual({ colorScheme: 'light' });
+
+  const seen: unknown[] = [];
+  const stop = store.onThemeChange((theme: unknown) => seen.push(theme));
+  const style = (colorScheme: unknown, from?: unknown) =>
+    f.reply({ type: '__atomic_style', css: '', colorScheme }, from);
+  style('dark');
+  style('dark');
+  style('purple');
+  style('light', {});
+  expect(seen).toEqual([{ colorScheme: 'dark' }]);
+  expect(store.getTheme()).toEqual({ colorScheme: 'dark' });
+  style('light');
+  stop();
+  style('dark');
+  expect(seen).toEqual([{ colorScheme: 'dark' }, { colorScheme: 'light' }]);
+});
+
+it('carries the route ops, and store.routes sends them', async () => {
+  for (const op of [
+    'readRouteStatus',
+    'routeTokens',
+    'revokeRouteToken',
+  ] as const)
+    expect(isViewRequest(viewRequest(1, op))).toBe(true);
+  const f = frame();
+  const store = generatedStore(f);
+  void store.routes.status();
+  void store.routes.tokens();
+  void store.routes.revokeToken('tok_1');
+  // No token id, nothing asked.
+  await expect(store.routes.revokeToken('')).rejects.toThrow('token id');
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args])).toEqual([
+    ['readRouteStatus', {}],
+    ['routeTokens', {}],
+    ['revokeRouteToken', { tokenId: 'tok_1' }],
+  ]);
+});
+
+it('runs its importer through the host, which may take as long as the review does', async () => {
+  vi.useFakeTimers();
+  const f = frame();
+  const store = timedStore(f);
+  const file = {
+    name: 'statement.mt940',
+    mediaType: 'text/plain',
+    text: ':20:X',
+  };
+  const outcome = store.importer.run({ file });
+  const [request] = f.parent.postMessage.mock.calls[0];
+
+  expect(isViewRequest(request)).toBe(true);
+  expect(request.op).toBe('runImporter');
+  expect(request.args).toEqual({ file });
+
+  // A person reading a review is not a host that went silent.
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  const summary: ImporterRunResult = {
+    status: 'applied',
+    importer: 'importer',
+    created: 2,
+    updated: 0,
+    destroyed: 0,
+    failed: 0,
+    errors: [],
+  };
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: request.id,
+    result: summary,
+  });
+  expect(await outcome).toEqual(summary);
+
+  // With no file, the host asks the person to choose one.
+  void store.importer.run();
+  expect(f.parent.postMessage.mock.calls[1][0].args).toEqual({});
 });

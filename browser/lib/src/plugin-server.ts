@@ -1,4 +1,4 @@
-import { signRequest } from './authentication.js';
+import { signedRequestInit } from './authentication.js';
 import { errorMessageFromResponse } from './error.js';
 import type { Store } from './store.js';
 
@@ -10,14 +10,17 @@ export async function executeServerPlugin(
   const agent = store.getAgent();
   if (!agent) throw new Error('Not signed in');
   const url = `${store.getServerUrl()}/plugin-run`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(url, agent, {})),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ ...request, input: JSON.stringify(request.input) }),
-  });
+  const response = await fetch(
+    url,
+    await signedRequestInit(url, agent, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...request,
+        input: JSON.stringify(request.input),
+      }),
+    }),
+  );
   if (!response.ok)
     throw new Error(
       errorMessageFromResponse(await response.text(), response.status),

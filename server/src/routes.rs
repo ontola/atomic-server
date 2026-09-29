@@ -1,7 +1,9 @@
 //! Contains routing logic, sends the client to the correct handler.
 //! We should try to minimize what happens in here, since most logic should be defined in Atomic Data - not in the server itself.
 
+use crate::require_v2::require_v2;
 use crate::{content_types, handlers};
+use actix_web::middleware::from_fn;
 use actix_web::{
     guard,
     http::{header, Method},
@@ -79,6 +81,35 @@ fn precompressed_br_available(ctx: &guard::GuardContext<'_>) -> bool {
     map.contains_key(br_key.as_str()) && map.contains_key(path)
 }
 
+/// Whether an embedded static file (the app's bundles, `index.html`,
+/// `robots.txt`, ...) lives under this first path segment. Those are served
+/// on every host, so a plugin route on a drive's host may not use it.
+#[cfg(feature = "plugin-routes")]
+pub fn is_static_asset_segment(first: &str) -> bool {
+    precompressed_index()
+        .keys()
+        .any(|path| path.split('/').next() == Some(first))
+}
+
+/// `404` for a path that nothing serves, as a problem document instead of
+/// the single page app.
+pub fn not_found_problem(path: &str) -> HttpResponse {
+    HttpResponse::NotFound()
+        .content_type("application/problem+json")
+        .json(serde_json::json!({
+            "type": "about:blank",
+            "status": 404,
+            "title": "Not Found",
+            "detail": format!("Nothing is served at {path}."),
+        }))
+}
+
+/// `404` for a `/.well-known/` name, or a `/_routes/` path, that nothing
+/// serves.
+async fn path_not_found(req: HttpRequest) -> HttpResponse {
+    not_found_problem(req.path())
+}
+
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
     let Some(rest) = atomic_lib::identifiers::node_id(node_did) else {
         return Err("Expected nodeId to use atomic:node:<node-id>");
@@ -135,7 +166,7 @@ async fn iroh_sync_handler(
     // The client signs the full request URL; rebuild it exactly.
     let origin = crate::context::RequestContext::new(&req, &appstate).origin;
     let full_url = format!("{}{}", origin, req.uri());
-    let for_agent = crate::helpers::get_client_agent(req.headers(), &appstate, &full_url).await?;
+    let for_agent = crate::helpers::get_client_agent_of(&req, &appstate, &full_url).await?;
     crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     if matches!(for_agent, atomic_lib::agents::ForAgent::Public) {
         return Err(atomic_lib::errors::AtomicError::unauthorized(
@@ -203,102 +234,128 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     app.service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
         .service(
             web::resource("/plugin-view-token")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_ui::handle_mint_view_token)),
         )
         .service(
             web::resource("/plugin-release-pin")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_release::pin)),
         )
         .service(
             web::resource("/plugin-external-read")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::read)),
         )
         .service(web::resource("/plugin-list").to(handlers::plugin_ui::handle_plugin_list))
         .service(
             web::resource("/integration-action-history-compact")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::compact_history)),
         )
         .service(
             web::resource("/integration-action-consumers")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::consumers)),
         )
         .service(
             web::resource("/integration-action-consumer-abandon")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::abandon_consumer)),
         )
         .service(
             web::resource("/integration-action-history")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::history)),
         )
         .service(
             web::resource("/integration-action-cancel")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::cancel)),
         )
         .service(
             web::resource("/integration-action-grant")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::grant)),
         )
         .service(
             web::resource("/integration-action-grants")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::grants)),
         )
         .service(
             web::resource("/integration-action-recovery-inspect")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::inspect_recovery)),
         )
         .service(
             web::resource("/integration-action-recovery-confirm")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::confirm_recovery)),
         )
         .service(
             web::resource("/integration-actions")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::list)),
         )
         .service(
             web::resource("/integration-action-call")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::invoke)),
         )
         .service(
             web::resource("/integration-action-proposals")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::proposals)),
         )
         .service(
             web::resource("/integration-action-approve")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::integration_action::approve)),
         )
         .service(
             web::resource("/plugin-sync-preview")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_sync::preview)),
         )
         .service(
-            web::resource("/plugin-sync-apply").route(web::post().to(handlers::plugin_sync::apply)),
+            web::resource("/plugin-sync-apply")
+                .wrap(from_fn(require_v2))
+                .route(web::post().to(handlers::plugin_sync::apply)),
         )
         .service(
             web::resource("/plugin-sync-schedule")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_sync::schedule)),
         )
         .service(
             web::resource("/plugin-sync-status")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_sync::status)),
         )
         .service(
             web::resource("/plugin-connection-state")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_connection::read)),
         )
         .service(
             web::resource("/plugin-connection-checkpoint")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_connection::checkpoint)),
         )
         .service(
             web::resource("/plugin-external-status")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::status)),
         )
         .service(
             web::resource("/plugin-external-confirm")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::confirm)),
         )
         .service(
             web::resource("/plugin-external-apply")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_external::apply)),
         )
         .service(
@@ -315,42 +372,95 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
         )
         .service(
             web::resource("/plugin-release")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_release::publish)),
         )
         .service(
             web::resource("/plugin-release-package")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_release::publish_package)),
         )
         .service(
             web::resource("/plugin-run")
+                // A file handed to an importer travels in the body.
+                .app_data(
+                    web::JsonConfig::default()
+                        .limit(handlers::plugin_run::RUN_JSON_LIMIT)
+                        .error_handler(crate::jsonerrors::json_error_handler),
+                )
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_run::handle_plugin_run)),
         )
         .service(
             web::resource("/plugin-schedule")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_schedule::handle_set_schedule))
                 .route(web::get().to(handlers::plugin_schedule::handle_get_schedule))
                 .route(web::delete().to(handlers::plugin_schedule::handle_clear_pending)),
         )
         .service(
             web::resource("/plugin-resume")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_schedule::handle_resume)),
         )
         .service(
             web::resource("/plugin-auto-apply")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_schedule::handle_set_auto_apply)),
         )
         .service(
             web::resource("/app-write")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::app_write::handle_app_write)),
         )
         .service(
+            web::resource("/app-row-grant")
+                .wrap(from_fn(require_v2))
+                .route(web::get().to(handlers::app_row_grant::get_row_grant))
+                .route(web::post().to(handlers::app_row_grant::post_row_grant)),
+        )
+        .service(
+            web::resource("/app-after-commit")
+                .wrap(from_fn(require_v2))
+                .route(web::get().to(handlers::after_commit::get_status))
+                .route(web::post().to(handlers::after_commit::post_answer)),
+        )
+        .service(
             web::resource("/plugin-trigger")
+                .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))
                 .route(web::get().to(handlers::plugin_trigger::handle_get_trigger)),
         );
+    // `readRouteStatus`: a plugin route's URL, counts and last error.
+    #[cfg(feature = "plugin-routes")]
+    app.service(
+        web::resource("/plugin-route-status").route(web::get().to(handlers::plugin_routes::status)),
+    )
+    // The host's consent page's API (D6) and an installation's route tokens.
+    .service(
+        web::resource("/plugin-route-consent")
+            .wrap(from_fn(require_v2))
+            .route(web::get().to(handlers::plugin_route_tokens::consent))
+            .route(web::post().to(handlers::plugin_route_tokens::decide)),
+    )
+    .service(
+        web::resource("/plugin-route-tokens")
+            .wrap(from_fn(require_v2))
+            .route(web::get().to(handlers::plugin_route_tokens::tokens))
+            .route(web::post().to(handlers::plugin_route_tokens::revoke)),
+    );
 }
 
 pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
+    // First: every path on a routes host, and `/_routes/...`, belong to
+    // plugins. Only matches while `--plugin-routes` is not `off`.
+    #[cfg(feature = "plugin-routes")]
+    handlers::plugin_routes::configure(app);
+    // Any `/_routes/...` the dispatcher did not answer: `--plugin-routes
+    // off`, a build without the feature, or no active route there. Never the
+    // app's HTML, for any method or `Accept`.
+    app.service(web::resource("/_routes").to(path_not_found))
+        .service(web::resource("/_routes/{tail:.*}").to(path_not_found));
     handlers::website::control_routes(app);
     app.service(
         web::resource("/upload")
@@ -370,31 +480,44 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(
         web::resource("/bind-drive")
+            .wrap(from_fn(require_v2))
             .guard(guard::Method(Method::POST))
             .to(handlers::post_resource::handle_post_resource),
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
     .service(
+        web::resource("/changes")
+            .guard(guard::Method(Method::GET))
+            .to(handlers::changes::handle_changes),
+    )
+    .service(
         web::resource("/history-attribution")
             .to(handlers::history_attribution::handle_history_attribution),
     )
     .service(
         web::resource("/forget-peer")
+            .wrap(from_fn(require_v2))
             .guard(guard::Method(Method::POST))
             .to(handlers::forget_peer::handle_forget_peer),
     )
-    .service(web::resource("/iroh-sync").route(web::post().to(iroh_sync_handler)))
+    .service(
+        web::resource("/iroh-sync")
+            .wrap(from_fn(require_v2))
+            .route(web::post().to(iroh_sync_handler)),
+    )
     .service(web::resource("/export").to(handlers::export::handle_export))
     .configure(configure_wasm_plugin_routes)
     .service(
         web::resource("/app-agent")
+            .wrap(from_fn(require_v2))
             .route(web::post().to(handlers::app_agent::handle_set_app_agent))
             .route(web::get().to(handlers::app_agent::handle_get_app_agent))
             .route(web::delete().to(handlers::app_agent::handle_delete_app_agent)),
     )
     .service(
         web::resource("/plugin-secret")
+            .wrap(from_fn(require_v2))
             .route(web::post().to(handlers::plugin_secret::handle_set_secret))
             .route(web::get().to(handlers::plugin_secret::handle_list_secrets))
             .route(web::delete().to(handlers::plugin_secret::handle_delete_secret)),
@@ -422,6 +545,12 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .skip_handler_when_not_found()
             .do_not_resolve_defaults(),
     )
+    // A `/.well-known/` name nothing above served (with `plugin-routes`, the
+    // dispatcher answers claimed names first). Machine clients probe these
+    // without an `Accept` header, which would otherwise get the app's HTML
+    // with a 200 below.
+    .service(web::resource("/.well-known").to(path_not_found))
+    .service(web::resource("/.well-known/{tail:.*}").to(path_not_found))
     // Catch all (non-download) HTML requests and send them to the single page app
     .service(
         web::resource(ANY)

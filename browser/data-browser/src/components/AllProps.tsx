@@ -11,6 +11,8 @@ type Props = {
   resource: Resource;
   /** A list of property subjects (URLs) that need not be rendered */
   except?: string[];
+  /** When given, only these property subjects are rendered (if present). */
+  only?: string[];
   /** If set to true, adds a button which opens up a form for each property */
   editable?: boolean;
   /**
@@ -22,8 +24,16 @@ type Props = {
 };
 
 /** Lists all PropVals for some resource. Optionally ignores a bunch of subjects */
-function AllProps({ resource, except = [], editable, columns, basic }: Props) {
-  const props = useSortedProps(resource, except, !!editable);
+function AllProps({
+  resource,
+  except = [],
+  only,
+  editable,
+  columns,
+  basic,
+}: Props) {
+  const sorted = useSortedProps(resource, except, !!editable);
+  const props = only ? sorted.filter(prop => only.includes(prop)) : sorted;
 
   if (!props || props.length === 0) {
     return null;

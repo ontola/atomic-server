@@ -265,6 +265,7 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
   ErrorCode.MISSING_CLASS,
   ErrorCode.SYNC_REJECTED,
   ErrorCode.IMMUTABLE_COMMIT,
+  ErrorCode.HOST_FEATURE_UNAVAILABLE,
 ]);
 
 /**
@@ -331,7 +332,8 @@ export function isUnrecoverableCommitError(
     return (
       code === ErrorCode.UNAUTHORIZED_WRITE ||
       code === ErrorCode.MISSING_CLASS ||
-      code === ErrorCode.SYNC_REJECTED
+      code === ErrorCode.SYNC_REJECTED ||
+      code === ErrorCode.HOST_FEATURE_UNAVAILABLE
     );
   }
 

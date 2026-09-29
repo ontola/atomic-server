@@ -1,4 +1,4 @@
-import { signRequest, type Agent } from '@tomic/react';
+import { signedRequestInit, signRequest, type Agent } from '@tomic/react';
 import { serverProps, peerProps } from './serverOntology';
 import { rememberManagedPortalUrl, safePortalUrl } from './managed/api';
 import { isRunningInTauri } from './tauri';
@@ -307,10 +307,14 @@ export async function forgetServerPeer(
   try {
     // Sign the exact URL being fetched (path + query), same scheme as
     // fetchNodeDriveUsage — the server rebuilds and verifies it.
-    const headers = await signRequest(url.toString(), agent, {
-      Accept: 'application/json',
-    });
-    const res = await fetch(url.toString(), { method: 'POST', headers });
+    // A state-changing route: version 2 only, over the (empty) body.
+    const res = await fetch(
+      url.toString(),
+      await signedRequestInit(url.toString(), agent, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      }),
+    );
 
     return res.ok;
   } catch {

@@ -15,6 +15,7 @@ import type { CellIndex } from '@chunks/TableEditor';
 import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
 import { AppFrame } from '@chunks/AppPage/AppFrame';
+import { AfterCommitBar } from '@chunks/AppPage/AfterCommitBar';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
@@ -1110,6 +1111,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       <TablePresenceContext value={presenceValue}>
         {!embedded && (
           <TableViewTabs
+            table={resource.subject}
             rowClass={tableClass.subject}
             views={views}
             activeView={activeView}
@@ -1159,10 +1161,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
           // rather than in place of it: adding a way to look at rows never
           // takes one away, and the table is always one tab over.
           <AppViewWrapper>
+            <AfterCommitBar
+              app={appView}
+              table={resource.subject}
+              tableName={resource.title}
+            />
             <AppFrame
               app={appView}
               drive={store.getDrive()!}
               table={resource.subject}
+              view={activeView}
             />
           </AppViewWrapper>
         ) : viewKind === 'dashboard' ? (

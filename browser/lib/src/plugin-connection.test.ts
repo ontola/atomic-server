@@ -7,7 +7,19 @@ import {
   inspectExternalOperation,
 } from './plugin-connection.js';
 vi.mock('./authentication.js', () => ({
-  signRequest: async () => ({ authorization: 'signed' }),
+  signedRequestInit: async (
+    _url: string,
+    _agent: unknown,
+    request: { method: string; body?: string; headers?: object },
+  ) => ({
+    method: request.method,
+    headers: {
+      ...request.headers,
+      authorization: 'signed',
+      'x-atomic-signature-version': '2',
+    },
+    body: request.body,
+  }),
 }));
 
 describe('external approval transport', () => {

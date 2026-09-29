@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 3,
+  "name": "inbox",
+  "namespace": "fixtures",
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Keeps nothing; a JS extension declares at least one capability in these fixtures."
+    }
+  ],
+  "operations": [
+    {
+      "id": "deliver",
+      "method": "POST",
+      "url": "https://*/inbox",
+      "effect": "write"
+    },
+    {
+      "id": "deliver-local",
+      "method": "POST",
+      "url": "http://*/inbox",
+      "effect": "write"
+    }
+  ],
+  "http": {
+    "mount": "drive-prefix",
+    "routes": [
+      {
+        "id": "inbox",
+        "path": "/inbox",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "maxBodyBytes": 65536,
+        "writes": ["inbox-items"]
+      },
+      {
+        "id": "items",
+        "path": "/items",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "item",
+        "path": "/item",
+        "methods": ["PUT", "DELETE"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "writes": ["inbox-items"]
+      },
+      {
+        "id": "actor",
+        "path": "/actor",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "signed-inbox",
+        "path": "/signed-inbox",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "http-signature",
+        "body": "json",
+        "maxBodyBytes": 65536,
+        "writes": ["inbox-items"]
+      },
+      {
+        "id": "outbox",
+        "path": "/outbox",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "enqueues": ["deliver"]
+      },
+      {
+        "id": "deliver",
+        "path": "/deliver",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json",
+        "writes": ["inbox-items"],
+        "enqueues": ["deliver", "deliver-local"]
+      },
+      {
+        "id": "storage",
+        "path": "/storage/{*rest}",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "bearer"
+      },
+      {
+        "id": "oauth",
+        "path": "/oauth",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "oauth-callback",
+        "path": "/oauth/callback",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      },
+      {
+        "id": "tokens",
+        "path": "/tokens",
+        "methods": ["POST"],
+        "principal": "anonymous",
+        "auth": "none",
+        "body": "json"
+      },
+      {
+        "id": "dump",
+        "path": "/dump",
+        "methods": ["GET"],
+        "principal": "anonymous",
+        "auth": "none"
+      }
+    ],
+    "writeTargets": [
+      {
+        "id": "inbox-items",
+        "parent": "config:inbox",
+        "classes": ["https://atomicdata.dev/classes/PlainText"]
+      }
+    ],
+    "keys": [
+      {
+        "name": "actor-key",
+        "alg": "rsa-sha256",
+        "reason": "Signs what this fixture's actor sends, and is published at /actor."
+      }
+    ],
+    "tokens": [
+      {
+        "name": "storage",
+        "reason": "Bearer tokens for /storage, issued directly or after consent."
+      }
+    ],
+    "reason": "Stores what is POSTed to /_routes/<slug>/inbox (or, signed, to /signed-inbox) as a PlainText under the configured inbox. A fixture for route writes and host crypto."
+  }
+}

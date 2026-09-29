@@ -2,10 +2,28 @@ import { isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
-import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
+import {
+  errorMessageFromResponse,
+  signedRequestInit,
+  useStore,
+} from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  resolveAppImporter,
+  resourceToOpen,
+  type HostReply,
+} from './hostStore';
+import {
+  checkExternalLink,
+  openInNewTab,
+} from '@helpers/extensions/externalLink';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { paths } from '../../routes/paths';
+import { AppImporterRun, type ImporterAsk } from './AppImporterRun';
+import { describePluginSource } from '@chunks/PluginRuns/runScript';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -13,9 +31,24 @@ import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 
 import resetCss from '../../reset.css?raw';
-import { useCreateThemeVars } from '@views/PluginView/useCreateThemeVars';
+import {
+  useCreateThemeVars,
+  useFrameColorScheme,
+} from '@views/PluginView/useCreateThemeVars';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
-import { isPlatformId, ProxyConnections } from '@helpers/proxyConnections';
+import {
+  isPlatformId,
+  platformName,
+  ProxyConnections,
+  type ProxyConnection,
+} from '@helpers/proxyConnections';
+import { ProxyConsentBar, ProxyConsentText } from '@components/ProxyConsentBar';
+import { appAgentOf } from './appAgent';
+import { grantRowAccess, rowAccessQuestion } from './rowGrant';
+import { RowGrantText } from './RowGrantText';
+import { registerRuntimesInBackground } from '@helpers/useInstallationRuntimes';
+
+const IMPORT_WAITING = 'An import from this app is already waiting for you.';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -41,11 +74,18 @@ function AppFrameSession({
   app,
   drive,
   table,
+  view,
   onOutcome,
   silent,
 }: {
   app: string;
   drive: string;
+  /**
+   * The View (tab) showing this app on `table`. An app that asks to edit the
+   * table's rows gets a grant tied to this view, so removing the tab takes
+   * it back.
+   */
+  view?: string;
   /**
    * The table this app is a view of, when it is being used as one.
    *
@@ -74,6 +114,24 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  // An app asking to open a link outside the drive. Same rule: only a click
+  // here opens it, so the frame never needs popup rights.
+  const [externalAsk, setExternalAsk] = useState<ExternalAsk>();
+  const externalAskRef = useRef<ExternalAsk | undefined>(undefined);
+  const navigate = useNavigateWithTransition();
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+  // An app asking to run its own importer: a picker and a review, both drawn
+  // by this page. One at a time, so a review is never swapped out under the
+  // person.
+  const [importerAsk, setImporterAsk] = useState<ImporterAsk>();
+  const importerAskRef = useRef<ImporterAsk | undefined>(undefined);
+  // An app asking to edit the table's rows (#1740). Drawn by this page, and
+  // only a click here grants it.
+  const [rowAsk, setRowAsk] = useState<RowAsk>();
+  const rowAskRef = useRef<RowAsk | undefined>(undefined);
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -84,6 +142,7 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
+  const colorScheme = useFrameColorScheme();
 
   // Which plugin renders it. Resolved here rather than by each caller: a
   // table tab and an app page both need it, and two copies would drift.
@@ -109,6 +168,14 @@ function AppFrameSession({
       cancelled = true;
     };
   }, [store, drive, app]);
+
+  // An Installation's nodes act for its app id at the proxy only once they
+  // are registered as its runtimes. Covers coming back from a connect
+  // handoff, which delegates and then reloads this page. A no-op for
+  // `createApp` apps.
+  useEffect(() => {
+    registerRuntimesInBackground(store, app);
+  }, [store, app]);
 
   useEffect(() => {
     if (!entrypoint) return;
@@ -188,13 +255,127 @@ function AppFrameSession({
         // One question at a time; a second ask answers the first.
         const previous = connectAskRef.current;
         previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
-        const ask = {
+        const ask: ConnectAsk = {
           id: data.id,
           platform: data.platform!,
           reply: session.post,
         };
         connectAskRef.current = ask;
         setConnectAsk(ask);
+
+        // Offer a connection the person already has for this platform, so
+        // using it for one more app needs no second trip through OAuth.
+        existingConnections(store, data.platform!)
+          .then(existing => {
+            if (connectAskRef.current !== ask || existing.length === 0) return;
+            const withExisting = { ...ask, existing };
+            connectAskRef.current = withExisting;
+            setConnectAsk(withExisting);
+          })
+          .catch(() => undefined);
+
+        return;
+      }
+
+      if (data.op === 'requestRowAccess') {
+        const previous = rowAskRef.current;
+        previous?.reply({
+          id: previous.id,
+          result: { status: 'denied', reason: /* @wc-ignore */ 'Asked again' },
+        });
+        rowAskRef.current = undefined;
+        setRowAsk(undefined);
+
+        rowAccessQuestion(store, { app, drive, table, view }, () =>
+          appLabel(store, app),
+        )
+          .then(outcome => {
+            if (outcome.ask === false) {
+              session.post({ id: data.id, result: outcome.result });
+
+              return;
+            }
+
+            const ask: RowAsk = {
+              id: data.id,
+              appName: outcome.appName,
+              keepsExtras: outcome.extras.length > 0,
+              reply: session.post,
+            };
+            rowAskRef.current = ask;
+            setRowAsk(ask);
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
+      if (data.op === 'openExternal') {
+        const link = checkExternalLink(data.url);
+
+        if ('error' in link) {
+          session.post({ id: data.id, error: link.error });
+
+          return;
+        }
+
+        const { url } = link;
+        // One question at a time; a second ask answers the first.
+        const previous = externalAskRef.current;
+        previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
+        const ask: ExternalAsk = { id: data.id, url, reply: session.post };
+        externalAskRef.current = ask;
+        setExternalAsk(ask);
+
+        return;
+      }
+
+      if (data.op === 'openResource') {
+        resourceToOpen(store, data.subject)
+          .then(subject => {
+            session.post({
+              id: data.id,
+              result: { status: 'opened', subject },
+            });
+            void navigateRef.current(
+              `${paths.show}?${new URLSearchParams({ subject })}`,
+            );
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
+
+        return;
+      }
+
+      if (data.op === 'runImporter') {
+        if (importerAskRef.current) {
+          session.post({
+            id: data.id,
+            error: IMPORT_WAITING,
+          });
+
+          return;
+        }
+
+        resolveAppImporter(store, drive, table, data, describePluginSource)
+          .then(resolved => {
+            if (importerAskRef.current) {
+              session.post({
+                id: data.id,
+                error: IMPORT_WAITING,
+              });
+
+              return;
+            }
+
+            const ask: ImporterAsk = {
+              id: data.id,
+              resolved,
+              reply: session.post,
+            };
+            importerAskRef.current = ask;
+            setImporterAsk(ask);
+          })
+          .catch((e: Error) => session.post({ id: data.id, error: e.message }));
 
         return;
       }
@@ -226,11 +407,11 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src]);
+  }, [store, app, drive, table, view, src]);
 
   useEffect(() => {
-    bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
-  }, [stylesheet, src]);
+    bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
+  }, [stylesheet, colorScheme, src]);
 
   // The app never got as far as running: no token, no entry point, no source.
   // Reported as a failure like any other, so a caller waiting on an outcome
@@ -264,35 +445,110 @@ function AppFrameSession({
     return <LoaderBlock />;
   }
 
+  const finishAsk = (reply: HostReply) => {
+    connectAsk?.reply(reply);
+    connectAskRef.current = undefined;
+    setConnectAsk(undefined);
+  };
+
   const connect = () => {
     if (!connectAsk) return;
-    const actor = store.getAgent()?.subject;
 
-    if (!actor) {
-      connectAsk.reply({
-        id: connectAsk.id,
-        error: 'Sign in to connect an account.',
-      });
-      connectAskRef.current = undefined;
-      setConnectAsk(undefined);
+    if (!store.getAgent()) {
+      finishAsk({ id: connectAsk.id, error: 'Sign in to connect an account.' });
 
       return;
     }
 
-    new ProxyConnections(localStorage, getIntegrationProxy())
-      .start({ drive, actor, app }, connectAsk.platform, location.href)
+    (async () => {
+      const appAgent = await appAgentOf(store, { drive, app });
+
+      return proxyConnections(store).start(
+        { drive, app, appAgent },
+        connectAsk.platform,
+        location.href,
+        await appLabel(store, app),
+      );
+    })()
       .then(url => location.assign(url))
-      .catch((e: Error) => {
-        connectAsk.reply({ id: connectAsk.id, error: e.message });
-        connectAskRef.current = undefined;
-        setConnectAsk(undefined);
-      });
+      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
   };
 
+  const pickExisting = (connection: ProxyConnection) => {
+    if (!connectAsk) return;
+
+    (async () => {
+      const appAgent = await appAgentOf(store, { drive, app });
+      await proxyConnections(store).delegate(
+        connection.connection_id,
+        appAgent,
+        await appLabel(store, app),
+      );
+    })()
+      .then(() => {
+        // An Installation's nodes act for its app id only once registered
+        // as runtimes; not waited on, failures are toasted.
+        registerRuntimesInBackground(store, app);
+        finishAsk({
+          id: connectAsk.id,
+          result: {
+            status: 'connected',
+            connectionId: connection.connection_id,
+            platform: connection.platform,
+          },
+        });
+      })
+      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
+  };
+
+  const finishExternal = (status: 'opened' | 'cancelled') => {
+    if (!externalAsk) return;
+
+    // Opened from this click, so the browser allows the new tab without the
+    // frame ever holding popup rights.
+    if (status === 'opened') openInNewTab(externalAsk.url);
+    externalAsk.reply({ id: externalAsk.id, result: { status } });
+    externalAskRef.current = undefined;
+    setExternalAsk(undefined);
+  };
+
+  const externalHost = externalAsk?.url.host;
+
   const cancelConnect = () => {
-    connectAsk?.reply({ id: connectAsk.id, result: { status: 'cancelled' } });
-    connectAskRef.current = undefined;
-    setConnectAsk(undefined);
+    if (!connectAsk) return;
+    finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
+  };
+
+  const finishRowAsk = (reply: HostReply) => {
+    rowAsk?.reply(reply);
+    rowAskRef.current = undefined;
+    setRowAsk(undefined);
+  };
+
+  const allowRows = () => {
+    if (!rowAsk || !table || !view) return;
+
+    grantRowAccess(store, { drive, table, app, view, via: 'request' })
+      .then(() =>
+        finishRowAsk({ id: rowAsk.id, result: { status: 'granted' } }),
+      )
+      .catch((e: Error) =>
+        finishRowAsk({
+          id: rowAsk.id,
+          result: { status: 'denied', reason: e.message },
+        }),
+      );
+  };
+
+  const declineRows = () => {
+    if (!rowAsk) return;
+    finishRowAsk({
+      id: rowAsk.id,
+      result: {
+        status: 'denied',
+        reason: /* @wc-ignore */ 'The person said no',
+      },
+    });
   };
 
   const fixIt = () => {
@@ -333,20 +589,68 @@ function AppFrameSession({
         </ErrorBar>
       )}
       {connectAsk && (
-        <ConnectBar role='group' aria-label='Connect an account'>
-          <ErrorText>
-            This app wants to connect your{' '}
+        <ProxyConsentBar aria-label='Connect an account'>
+          <ProxyConsentText>
+            This app wants to use your{' '}
             <strong>{platformName(connectAsk.platform)}</strong> account through{' '}
-            {getIntegrationProxy()}. The connection stays in this browser; the
-            app can only make requests through it.
-          </ErrorText>
+            {getIntegrationProxy()}. The proxy keeps the connection under your
+            account; this app may use it until you revoke that.
+          </ProxyConsentText>
           <Row gap='0.5rem'>
-            <Button onClick={connect}>Connect</Button>
+            {connectAsk.existing?.[0] && (
+              <Button onClick={() => pickExisting(connectAsk.existing![0])}>
+                Use existing connection
+              </Button>
+            )}
+            <Button subtle={!!connectAsk.existing?.length} onClick={connect}>
+              Connect
+            </Button>
             <Button subtle onClick={cancelConnect}>
               Cancel
             </Button>
           </Row>
-        </ConnectBar>
+        </ProxyConsentBar>
+      )}
+      {externalAsk && (
+        <ProxyConsentBar aria-label='Open a link'>
+          <ProxyConsentText>
+            This app wants to open <Host>{externalHost}</Host> in a new tab.
+            <ExternalUrl>{externalAsk.url.href}</ExternalUrl>
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={() => finishExternal('opened')}>Open link</Button>
+            <Button subtle onClick={() => finishExternal('cancelled')}>
+              Cancel
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {rowAsk && (
+        <ProxyConsentBar aria-label='Let this app edit rows'>
+          <ProxyConsentText>
+            <RowGrantText
+              appName={rowAsk.appName}
+              keepsExtras={rowAsk.keepsExtras}
+            />
+          </ProxyConsentText>
+          <Row gap='0.5rem'>
+            <Button onClick={allowRows}>Allow editing</Button>
+            <Button subtle onClick={declineRows}>
+              Not now
+            </Button>
+          </Row>
+        </ProxyConsentBar>
+      )}
+      {importerAsk && (
+        <AppImporterRun
+          key={String(importerAsk.id)}
+          ask={importerAsk}
+          drive={drive}
+          onDone={() => {
+            importerAskRef.current = undefined;
+            setImporterAsk(undefined);
+          }}
+        />
       )}
       <Frame
         ref={frameRef}
@@ -397,7 +701,7 @@ async function answer(
         drive,
         request,
         table,
-        proxyRelay(store, app, drive),
+        proxyHost(store, app, drive),
       ),
     });
   } catch (e) {
@@ -405,34 +709,93 @@ async function answer(
   }
 }
 
-/** This app's proxy connections in this page, or none when signed out. */
-function proxyRelay(
+/** The configured proxy, managed with the signed-in user's key. */
+function proxyConnections(store: ReturnType<typeof useStore>) {
+  return new ProxyConnections(localStorage, getIntegrationProxy(), () =>
+    store.getAgent(),
+  );
+}
+
+/**
+ * Each app's agent, looked up once per page. A failed lookup is forgotten so
+ * the next request tries again (the app may get an identity meanwhile).
+ */
+const appAgents = new Map<string, Promise<string>>();
+
+function cachedAppAgent(
+  store: ReturnType<typeof useStore>,
+  drive: string,
+  app: string,
+): Promise<string> {
+  const key = JSON.stringify([store.getServerUrl(), drive, app]);
+  let found = appAgents.get(key);
+
+  if (!found) {
+    found = appAgentOf(store, { drive, app });
+    found.catch(() => appAgents.delete(key));
+    appAgents.set(key, found);
+  }
+
+  return found;
+}
+
+/** This app's integration-proxy access, or none when signed out. */
+function proxyHost(
   store: ReturnType<typeof useStore>,
   app: string,
   drive: string,
 ) {
-  const actor = store.getAgent()?.subject;
-
-  return actor
-    ? new ProxyConnections(localStorage, getIntegrationProxy()).relay({
-        drive,
-        actor,
-        app,
-      })
+  return store.getAgent()
+    ? proxyConnections(store).host(() => cachedAppAgent(store, drive, app))
     : undefined;
 }
 
-/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
-function platformName(id: string) {
-  return id
-    .split('-')
-    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
-    .join(' ');
+/** The person's own connections for `platform`, most recently used first. */
+async function existingConnections(
+  store: ReturnType<typeof useStore>,
+  platform: string,
+): Promise<ProxyConnection[]> {
+  if (!store.getAgent()) return [];
+  const rows = await proxyConnections(store).list(platform);
+
+  return rows.sort((a, b) =>
+    String(b.last_used_at ?? b.created_at ?? '').localeCompare(
+      String(a.last_used_at ?? a.created_at ?? ''),
+    ),
+  );
+}
+
+/** What a delegation is labelled with at the proxy: the app's name. */
+async function appLabel(
+  store: ReturnType<typeof useStore>,
+  app: string,
+): Promise<string> {
+  try {
+    return (await store.getResource(app)).title || app;
+  } catch {
+    return app;
+  }
+}
+
+interface RowAsk {
+  id: number | string;
+  appName: string;
+  /** Whether the app declares row extras the grant would cover (#1849). */
+  keepsExtras: boolean;
+  reply: (reply: HostReply) => void;
 }
 
 interface ConnectAsk {
   id: number | string;
   platform: string;
+  reply: (reply: HostReply) => void;
+  /** Connections the person already has for this platform. */
+  existing?: ProxyConnection[];
+}
+
+interface ExternalAsk {
+  id: number | string;
+  url: URL;
   reply: (reply: HostReply) => void;
 }
 
@@ -455,12 +818,14 @@ async function mintViewToken(
   const url = `${store.getServerUrl()}/plugin-view-token`;
 
   try {
-    const headers = await signRequest(url, agent, {});
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ drive, plugin }),
-    });
+    const response = await fetch(
+      url,
+      await signedRequestInit(url, agent, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ drive, plugin }),
+      }),
+    );
 
     if (!response.ok) {
       return {
@@ -488,19 +853,6 @@ const Frame = styled.iframe`
   height: 100%;
   min-height: 20rem;
   background: ${p => p.theme.colors.bg};
-`;
-
-const ConnectBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  margin-bottom: 0.5rem;
 `;
 
 /** Keeps the frame filling whatever is left once the bar has taken its height. */
@@ -533,6 +885,16 @@ const ErrorText = styled.span`
   color: ${p => p.theme.colors.textLight};
   overflow-wrap: anywhere;
   min-width: 0;
+`;
+
+/** The destination host, in full: what the person is deciding about. */
+const Host = styled.strong``;
+
+/** The whole link, under the host, for anyone who wants to check the path. */
+const ExternalUrl = styled.span`
+  display: block;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
 `;
 
 const Problem = styled.p`

@@ -12,6 +12,8 @@
  */
 
 let nextId = 0;
+/** The host refuses larger `getMany` batches; say so before asking. */
+const MAX_GET_MANY = 100;
 const pending = new Map();
 
 window.addEventListener('message', event => {
@@ -35,18 +37,66 @@ window.addEventListener('message', event => {
   }
 });
 
+// ---- Theme: whether the host is light or dark ----
+
+/** The last `colorScheme` the host sent, once one has arrived here. */
+let colorScheme;
+const themeListeners = new Set();
+
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.data?.type !== '__atomic_style') return;
+  const next = event.data.colorScheme;
+  if (next !== 'light' && next !== 'dark') return;
+  // Compared with what `getTheme()` already said, so the first message after
+  // load is not reported as a switch.
+  const changed = next !== currentColorScheme();
+  colorScheme = next;
+  if (changed) for (const listener of themeListeners) listener({ colorScheme });
+});
+
+/**
+ * The host's scheme. The page shell applies the host's theme before this
+ * module runs, so until a message arrives here, read it back from the
+ * `color-scheme` the theme stylesheet sets on `:root`.
+ */
+function currentColorScheme() {
+  if (colorScheme) return colorScheme;
+
+  try {
+    return getComputedStyle(document.documentElement).colorScheme.split(' ').includes('dark') ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+/**
+ * Operations the host answers only once the person has clicked something.
+ * They wait as long as the person takes; the host answers `cancelled` when
+ * the question goes away.
+ */
+const ASKS_THE_PERSON = new Set([
+  'proxyConnect',
+  'openExternal',
+  'runImporter',
+  'requestRowAccess',
+]);
+
 function send(op, payload) {
   const id = ++nextId;
 
   return new Promise((resolve, reject) => {
     // A host that never answers would otherwise leave the plugin waiting
     // forever. Allow the host's 30s database-leader / websocket recovery to
-    // finish before abandoning a cold-start query after a page reload.
-    const timer = setTimeout(() => {
-      if (pending.delete(id)) {
-        reject(new Error(`The host did not answer ${op} in time.`));
-      }
-    }, 60000);
+    // finish before abandoning a cold-start query after a page reload. An op
+    // the person answers in host UI (ASKS_THE_PERSON) has no deadline: the
+    // host always answers it, with `cancelled` if nothing else.
+    const timer = ASKS_THE_PERSON.has(op)
+      ? undefined
+      : setTimeout(() => {
+          if (pending.delete(id)) {
+            reject(new Error(`The host did not answer ${op} in time.`));
+          }
+        }, 60000);
     pending.set(id, { resolve, reject, timer });
     window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
   });
@@ -60,6 +110,13 @@ function send(op, payload) {
  */
 function makeResource(subject, propVals) {
   const props = { ...propVals };
+  // Set and removed since the last save. `save` sends only these: the rest
+  // is what the host already has (re-sending it would also write back
+  // whatever the host keeps alongside, and undo a removal). Removals go apart
+  // from the values: the host's save only sets, so leaving a property out
+  // would keep it.
+  const changed = new Set();
+  const removed = new Set();
   let destroyed = false;
 
   return {
@@ -72,18 +129,26 @@ function makeResource(subject, propVals) {
     },
     set(property, value) {
       props[property] = value;
+      changed.add(property);
+      removed.delete(property);
 
       return this;
     },
     remove(property) {
       delete props[property];
+      changed.delete(property);
+      removed.add(property);
 
       return this;
     },
     async save() {
       if (destroyed) throw new Error('This resource was destroyed.');
 
-      await send('save', { subject, propVals: props });
+      const remove = [...removed];
+      const propVals = Object.fromEntries([...changed].map(property => [property, props[property]]));
+      await send('save', { subject, propVals, ...(remove.length ? { remove } : {}) });
+      for (const property of remove) removed.delete(property);
+      for (const property of Object.keys(propVals)) changed.delete(property);
 
       return this;
     },
@@ -111,10 +176,64 @@ export const store = {
     return send('data', {});
   },
 
+  /**
+   * Whether this app may edit the rows of the table it is a view of.
+   *
+   * Showing an app as a table's view lets it read the rows, not change them.
+   * Someone who can edit the table allows that, when they add the app as a
+   * view or when the app asks with `requestRowAccess()`. Resolves to
+   * `{ status: 'granted', grantedBy, grantedAt, via, extras }`,
+   * `{ status: 'none' }`, or `{ status: 'unavailable' }` when the app is not
+   * shown as a table's view.
+   * With a grant, `resource.save()` on a row of that table may set the
+   * table's columns (the row class's properties), and `newResource` may add a
+   * row of that class. Deleting rows is never included. `extras` lists the
+   * properties the app declared on its App resource as `row-extras` (a sync's
+   * provider id, ETag, baseline) that this grant also lets it write on those
+   * rows. When the app declares more than the grant covers,
+   * `requestRowAccess()` asks the person again.
+   */
+  async rowAccess() {
+    return send('rowAccess', {});
+  },
+
+  /**
+   * Asks the person, in the host's own UI, to let this app edit the table's
+   * rows. Resolves to `{ status: 'granted' }` or `{ status: 'denied', reason }`
+   * (they said no, or cannot edit the table themselves).
+   */
+  async requestRowAccess() {
+    return send('requestRowAccess', {});
+  },
+
   async getResource(subject) {
     const result = await send('get', { subject });
 
     return makeResource(result.subject, result.props);
+  },
+
+  /**
+   * Reads up to 100 resources in one round trip, with the same rights as
+   * `getResource` and seeing this person's own writes the same way.
+   * Resolves to an array in the order asked: a resource for each one that
+   * could be read, and `{ subject, error }` in the place of one that could
+   * not, so one missing row does not fail the rest. More than 100 is
+   * refused; ask in batches.
+   */
+  async getMany(subjects) {
+    const list = Array.from(subjects ?? []);
+
+    if (list.length > MAX_GET_MANY) {
+      throw new Error(`getMany reads at most ${MAX_GET_MANY} subjects at a time; ask in batches`);
+    }
+
+    if (list.length === 0) return [];
+
+    const results = await send('getMany', { subjects: list });
+
+    return results.map(entry =>
+      entry.error === undefined ? makeResource(entry.subject, entry.props) : { subject: entry.subject, error: entry.error },
+    );
   },
 
   /** Subjects matching a property/value pair, scoped to this drive. */
@@ -155,35 +274,344 @@ export const store = {
   },
 
   /**
-   * The integration proxy, reached through the host.
+   * The host's theme, as far as an app needs to branch on it:
+   * `{ colorScheme: 'light' | 'dark' }`, from the host's actual setting.
+   * Colours themselves are CSS variables on `:root` (`--t-color-bg`,
+   * `--t-color-text`, `--t-color-main`, `--t-color-alert`,
+   * `--t-color-warning`, `--t-color-success`, ...).
+   */
+  getTheme() {
+    return { colorScheme: currentColorScheme() };
+  },
+
+  /**
+   * Calls back with `{ colorScheme }` when the person switches the host
+   * between light and dark, until the returned function runs.
+   */
+  onThemeChange(handler) {
+    themeListeners.add(handler);
+
+    return () => themeListeners.delete(handler);
+  },
+
+  /**
+   * Opens an http(s) link in a new tab, after the person confirms it.
    *
-   * This frame never holds a credential: it names a connection by its public
-   * reference (`platform` + `connectionId`) and the host page, which holds the
-   * connection, makes the call and returns only status, a few headers and the
-   * body. A connection is usable only by the app it was made for.
+   * This frame has no popup rights, so `window.open` and `target="_blank"`
+   * do nothing here. The host shows the destination's host in full and asks;
+   * resolves to `{ status: 'opened' }` once it opened the link (with no
+   * opener and no referrer), or `{ status: 'cancelled' }`. Anything but
+   * http(s), or a link with a user name or password in it, is refused.
+   */
+  async openExternal(url) {
+    return send('openExternal', { url: String(url) });
+  },
+
+  /**
+   * Shows a resource in the host page, leaving this app. Only a resource the
+   * person can already read; resolves to `{ status: 'opened', subject }`,
+   * and refuses agents, commits, blobs and anything that is not a subject.
+   */
+  async openResource(subject) {
+    return send('openResource', { subject });
+  },
+
+  /**
+   * This app's own importer: the plugin whose Set up created the table this
+   * app is a view of. The host finds it; an app cannot run anyone else's.
+   */
+  importer: {
+    /**
+     * Runs the importer on a file and lets the person review what it
+     * proposes, in the host's own review. Nothing is written unless they
+     * apply it.
+     *
+     * Pass `file: { name, mediaType, text }` for a file the app already has
+     * (`{ name, mediaType, base64 }` when the importer's `accepts` entry for
+     * it declares `as: 'base64'`), or nothing to have the host show its own
+     * file picker (this frame is
+     * sandboxed and cannot hand over a picked `File`). Resolves to
+     * `{ status: 'applied', importer, created, updated, destroyed, failed, errors }`,
+     * or `{ status: 'cancelled' | 'nothing', importer }`, or
+     * `{ status: 'blocked', importer, errors }`. Rejects when this app has no
+     * importer (it is not shown as a view of an importer's table).
+     */
+    async run({ file, importer } = {}) {
+      return send('runImporter', {
+        ...(file ? { file } : {}),
+        ...(importer ? { importer } : {}),
+      });
+    },
+  },
+
+  /**
+   * The integration proxy (ontola/atomic-plugins#54).
+   *
+   * This frame calls the proxy itself, but never holds a credential that
+   * works anywhere else. It makes its own Ed25519 key, in memory and
+   * non-extractable, when it first needs one. The host page, which holds the
+   * user's key, checks that the connection is delegated to this app and signs
+   * a capability bound to this frame's key, valid for minutes. Each request
+   * then carries the capability and is signed with the frame's key (a version
+   * 2 request signature: method, full URL, timestamp and body hash), so a
+   * copied capability is useless outside this frame.
    */
   proxy: {
     /**
      * One provider call. `path` is the provider path (after the proxy's
-     * `/proxy/<platform>` prefix); `body`, when given, is JSON text. Resolves
-     * to `{ status, headers, body }`, `body` parsed as JSON when it is JSON.
+     * `/proxy/<connection>/<platform>` prefix); `body`, when given, is JSON
+     * text. Resolves to `{ status, headers, body }`, `body` parsed as JSON
+     * when it is JSON.
      */
-    async request({ platform, connectionId, path, method, query, body, ifMatch }) {
-      return send('proxy', { platform, connectionId, path, method, query, body, ifMatch });
+    async request({ platform, connectionId, path, method = 'GET', query, body, ifMatch }) {
+      return proxyRequest({ platform, connectionId, path, method, query, body, ifMatch });
     },
 
-    /** This app's connections for `platform` in this browser: `[{ connectionId, platform }]`. */
+    /** Connections for `platform` delegated to this app: `[{ connectionId, platform }]`. */
     async connections({ platform }) {
       return send('proxyConnections', { platform });
     },
 
     /**
      * Asks the person, in the host's own UI, to connect `platform` for this
-     * app. On consent the page navigates to the proxy and back, reloading
-     * this view, so the promise only settles when they cancel.
+     * app. If they pick a connection they already have, resolves to
+     * `{ status: 'connected', connectionId, platform }`; if they connect a new
+     * one, the page goes to the proxy and back, reloading this view, so the
+     * promise does not settle; if they cancel, `{ status: 'cancelled' }`.
      */
     async connect({ platform }) {
       return send('proxyConnect', { platform });
     },
+
+    /**
+     * Stops this app using `platform`: takes this app's delegation off its
+     * connections at the proxy (and, for an Installation, forgets the
+     * recorded one). The connection itself stays, since other apps may use
+     * it; deleting it is up to the person, on a page. Resolves to
+     * `{ status: 'disconnected', platform, connectionIds }`.
+     */
+    async disconnect({ platform }) {
+      const result = await send('proxyDisconnect', { platform });
+
+      for (const key of [...capabilities.keys()]) {
+        if (JSON.parse(key)[0] === platform) capabilities.delete(key);
+      }
+
+      return result;
+    },
+  },
+
+  /**
+   * This app's public endpoints (plugin routes), for the person viewing it
+   * when they may edit the app. The view never calls a route itself.
+   */
+  routes: {
+    /**
+     * `readRouteStatus`: `{ state, degraded, refusal, level, mount, routes,
+     * deliveries }`. Per route its `url`, `methods`, `auth`,
+     * `requests24h`, `errors24h`, `lastError`, `queueDepth` and
+     * `oldestQueueFailure`; `deliveries` has the queue's counts, today's
+     * use of the daily cap and the last failures. `null` when the server
+     * has no plugin routes.
+     */
+    async status() {
+      return send('readRouteStatus', {});
+    },
+
+    /** The tokens this app's routes issued: `{ tokens: [{ id, name, scopes, ... }] }`, never their values. */
+    async tokens() {
+      return send('routeTokens', {});
+    },
+
+    /** Revokes one issued token. Resolves to `{ revoked }`. */
+    async revokeToken(tokenId) {
+      if (typeof tokenId !== 'string' || tokenId === '') throw new Error('revokeToken takes a token id');
+
+      return send('revokeRouteToken', { tokenId });
+    },
   },
 };
+
+// ---- Integration proxy: frame key, capabilities, signed requests ----
+
+const PROXY_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const PROXY_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
+const PROXY_MAX_BODY = 10 * 1024 * 1024;
+/** Mint a new capability this long before the current one expires. */
+const CAPABILITY_MARGIN_MS = 60_000;
+
+let frameKey;
+const capabilities = new Map();
+
+const b64url = bytes =>
+  btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+
+const hex = bytes => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+
+/**
+ * This frame's key: made once, kept only in this frame's memory, and never
+ * exportable. Where WebCrypto has no Ed25519 (older Safari and Android
+ * WebViews, atomic-server#1688) this fails with a clear message instead of
+ * falling back to a key script could read.
+ */
+function getFrameKey() {
+  frameKey ??= (async () => {
+    if (!globalThis.crypto?.subtle) {
+      throw new Error('This browser has no WebCrypto here, so this view cannot sign integration requests.');
+    }
+
+    let pair;
+
+    try {
+      pair = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']);
+    } catch (e) {
+      throw new Error(`This browser cannot make an Ed25519 key (WebCrypto Ed25519 is missing, see atomic-server#1688), so this view cannot reach integrations: ${e?.message ?? e}`);
+    }
+
+    const publicKey = b64url(await crypto.subtle.exportKey('raw', pair.publicKey));
+
+    return { privateKey: pair.privateKey, publicKey, agent: `atomic:agent:${publicKey}` };
+  })();
+  frameKey.catch(() => {
+    frameKey = undefined;
+  });
+
+  return frameKey;
+}
+
+async function capabilityFor(platform, connectionId, fresh) {
+  const key = JSON.stringify([platform, connectionId]);
+  const cached = capabilities.get(key);
+
+  if (!fresh && cached && cached.exp * 1000 - Date.now() > CAPABILITY_MARGIN_MS) return cached;
+
+  const { publicKey } = await getFrameKey();
+  const minted = await send('proxyCapability', { platform, connectionId, publicKey });
+
+  if (!minted || typeof minted.capability !== 'string' || typeof minted.aud !== 'string') {
+    throw new Error('The host returned no capability.');
+  }
+
+  capabilities.set(key, minted);
+
+  return minted;
+}
+
+/** Version 2 request signature headers, signed with this frame's key. */
+async function signV2(method, url, body) {
+  const { privateKey, publicKey, agent } = await getFrameKey();
+  const timestamp = Date.now();
+  const bytes = new TextEncoder().encode(body ?? '');
+  const digest = hex(await crypto.subtle.digest('SHA-256', bytes));
+  const message = ['atomic-request-v2', method, url, String(timestamp), digest].join('\n');
+  const signature = b64url(await crypto.subtle.sign({ name: 'Ed25519' }, privateKey, new TextEncoder().encode(message)));
+
+  return {
+    'x-atomic-agent': agent,
+    'x-atomic-public-key': publicKey,
+    'x-atomic-timestamp': String(timestamp),
+    'x-atomic-signature': signature,
+    'x-atomic-signature-version': '2',
+  };
+}
+
+function proxyTarget(aud, connectionId, platform, path, query) {
+  if (typeof platform !== 'string' || !/^[a-z0-9-]{1,80}$/.test(platform)) throw new Error('Invalid platform');
+  if (typeof connectionId !== 'string' || !connectionId) throw new Error('connectionId is required');
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || /[\\#]/.test(path) || path.length > 4096) {
+    throw new Error('Invalid proxy path');
+  }
+
+  const prefix = `/proxy/${encodeURIComponent(connectionId)}/${platform}/`;
+  const url = new URL(`${prefix.slice(0, -1)}${path}`, aud);
+
+  if (url.origin !== new URL(aud).origin || !url.pathname.startsWith(prefix)) throw new Error('Invalid proxy path');
+
+  for (const [k, v] of Object.entries(query ?? {})) {
+    if (typeof v !== 'string') throw new Error('Invalid proxy query');
+    url.searchParams.set(k, v);
+  }
+
+  return url;
+}
+
+async function limitedText(response) {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = '';
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > PROXY_MAX_BODY) throw new Error('Proxy response exceeds 10 MB');
+      text += decoder.decode(value, { stream: true });
+    }
+
+    return text + decoder.decode();
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+function parseBody(text) {
+  if (text === '') return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+async function proxyRequest({ platform, connectionId, path, method, query, body, ifMatch }) {
+  const verb = String(method).toUpperCase();
+  if (!PROXY_METHODS.includes(verb)) throw new Error('Invalid proxy method');
+  if (body !== undefined && typeof body !== 'string') throw new Error('A proxy request body is JSON text');
+  if (body !== undefined && verb === 'GET') throw new Error('A GET proxy request has no body');
+  if (ifMatch !== undefined && typeof ifMatch !== 'string') throw new Error('Invalid If-Match');
+
+  const attempt = async fresh => {
+    const cap = await capabilityFor(platform, connectionId, fresh);
+    const url = proxyTarget(cap.aud, connectionId, platform, path, query).href;
+    const headers = {
+      Authorization: `Capability ${cap.capability}`,
+      ...(await signV2(verb, url, body)),
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(ifMatch ? { 'If-Match': ifMatch } : {}),
+    };
+
+    return fetch(url, {
+      method: verb,
+      body,
+      headers,
+      credentials: 'omit',
+      redirect: 'error',
+      signal: AbortSignal.timeout(30000),
+    });
+  };
+
+  let response = await attempt(false);
+  let text = await limitedText(response);
+  let parsed = parseBody(text);
+
+  // The capability ran out between minting and use (a laptop lid, a slow
+  // tab): mint a new one once. Any other refusal is the answer.
+  if (response.status === 401 && parsed?.error === 'capability_expired') {
+    response = await attempt(true);
+    text = await limitedText(response);
+    parsed = parseBody(text);
+  }
+
+  const headers = {};
+
+  for (const name of PROXY_HEADERS) {
+    const value = response.headers.get(name);
+    if (value !== null) headers[name] = value;
+  }
+
+  return { status: response.status, headers, body: parsed };
+}

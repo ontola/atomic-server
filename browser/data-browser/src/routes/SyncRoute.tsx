@@ -121,7 +121,7 @@ import {
   decodePairingEnvelope,
   PairingEnvelopeError,
   PAIRING_URI_PREFIX,
-  signRequest,
+  signedRequestInit,
 } from '@tomic/lib';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { PRODUCT_NAME } from '../helpers/managed/product';
@@ -1455,14 +1455,18 @@ function SyncPage() {
 
     try {
       const syncUrl = `${getLocalServerOrigin()}/iroh-sync`;
-      const headers = await signRequest(syncUrl, agent, {
-        'Content-Type': 'application/json',
-      });
-      const res = await fetch(syncUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ nodeId: canonicalNodeDid, drive: status.drive }),
-      });
+      // `/iroh-sync` takes only a version 2 signature, over exactly this body.
+      const res = await fetch(
+        syncUrl,
+        await signedRequestInit(syncUrl, agent, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nodeId: canonicalNodeDid,
+            drive: status.drive,
+          }),
+        }),
+      );
       // A refusal (401/403) may not carry JSON; still say what happened.
       const data = await res
         .json()

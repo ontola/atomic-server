@@ -37,7 +37,25 @@ fn consumer_run(input: &str) -> Option<String> {
     match value["trigger"]["kind"].as_str()? {
         "query" => Some(format!("query:{id}")),
         "cron" if id.starts_with("cron:") => Some(id.into()),
+        "afterCommit" => Some(format!("after-commit:{id}")),
         _ => None,
+    }
+}
+
+/// The run's input with the host's keys set on it, so `ctx.connections` sits
+/// next to `ctx.config`. The host's value wins: a caller cannot hand a plugin
+/// another installation's connections. An input that is not a JSON object, or
+/// a host that adds nothing, passes through byte for byte.
+fn with_run_context(input: &str, context: serde_json::Map<String, serde_json::Value>) -> String {
+    if context.is_empty() {
+        return input.to_string();
+    }
+    match serde_json::from_str::<serde_json::Value>(input) {
+        Ok(serde_json::Value::Object(mut map)) => {
+            map.extend(context);
+            serde_json::Value::Object(map).to_string()
+        }
+        _ => input.to_string(),
     }
 }
 
@@ -90,6 +108,10 @@ impl<H: PluginHost> bindings::atomic::plugin_runtime::host::Host for RuntimeStat
     async fn query(&mut self, property: String, value: String) -> Result<String, String> {
         self.host.query(property, value).await
     }
+
+    async fn host_call(&mut self, name: String, request: String) -> Result<String, String> {
+        self.host.host_call(name, request).await
+    }
 }
 
 /// The compiled runtime, kept for the process' lifetime.
@@ -121,7 +143,11 @@ impl JsRuntime {
         input: &str,
         host: H,
     ) -> AtomicServerResult<Result<String, String>> {
-        self.run_inner(source, input, host, false).await
+        Ok(self
+            .run_inner(source, input, host, false, Runtime::Js)
+            .await?
+            .outcome
+            .map_err(|stopped| stopped.message))
     }
     pub(crate) async fn run_triggered<H: PluginHost>(
         &self,
@@ -129,7 +155,24 @@ impl JsRuntime {
         input: &str,
         host: H,
     ) -> AtomicServerResult<Result<String, String>> {
-        self.run_inner(source, input, host, true).await
+        Ok(self
+            .run_inner(source, input, host, true, Runtime::Js)
+            .await?
+            .outcome
+            .map_err(|stopped| stopped.message))
+    }
+    /// One plugin route request: `input` carries `trigger.kind: "http"`, and
+    /// the run gets the route budget ([`Runtime::Route`]). Reports what it
+    /// cost, for the route's run log and the instantiation measurement.
+    #[cfg(feature = "plugin-routes")]
+    pub async fn run_route<H: PluginHost>(
+        &self,
+        source: &str,
+        input: &str,
+        host: H,
+    ) -> AtomicServerResult<Run> {
+        self.run_inner(source, input, host, false, Runtime::Route)
+            .await
     }
     async fn run_inner<H: PluginHost>(
         &self,
@@ -137,7 +180,9 @@ impl JsRuntime {
         input: &str,
         host: H,
         trusted_trigger: bool,
-    ) -> AtomicServerResult<Result<String, String>> {
+        runtime: Runtime,
+    ) -> AtomicServerResult<Run> {
+        let started = std::time::Instant::now();
         let mut linker: Linker<RuntimeState<H>> = Linker::new(&self.engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)
             .map_err(|e| format!("could not link WASI: {e}"))?;
@@ -152,7 +197,9 @@ impl JsRuntime {
         // global, not a leak. How much it gets is decided by the capabilities
         // its installation was granted.
         let mut host = host;
-        let limits = host_core::limits(Runtime::Js, host.resource_grants().await);
+        let limits = host_core::limits(runtime, host.resource_grants().await);
+        let input = with_run_context(input, host.run_context().await);
+        let input = input.as_str();
 
         let mut store = Store::new(
             &self.engine,
@@ -182,20 +229,55 @@ impl JsRuntime {
             bindings::PluginRuntime::instantiate_async(&mut store, &self.component, &linker)
                 .await
                 .map_err(|e| format!("could not start the plugin runtime: {e}"))?;
+        let instantiate = started.elapsed();
 
-        match instance.call_run(&mut store, source, input).await {
+        let outcome = match instance.call_run(&mut store, source, input).await {
             Ok(result) => {
                 if !store.data().waits.is_empty() {
-                    return Ok(Ok(serde_json::json!({"integrationWaits":store.data().waits,"intents":[],"problems":[{"severity":"error","message":"Waiting for integration approval. Review the action on its connection."}]}).to_string()));
+                    Ok(serde_json::json!({"integrationWaits":store.data().waits,"intents":[],"problems":[{"severity":"error","message":"Waiting for integration approval. Review the action on its connection."}]}).to_string())
+                } else {
+                    result.map_err(|message| Stopped {
+                        exhausted: message.contains("out of memory"),
+                        message,
+                    })
                 }
-                Ok(result)
             }
             // A trap is a plugin that ran out of fuel or memory, which is a
             // problem to report rather than an error to propagate: the run
             // failed, the server did not.
-            Err(e) => Ok(Err(format!("the plugin was stopped: {e}"))),
-        }
+            Err(e) => Err(Stopped {
+                exhausted: matches!(
+                    e.downcast_ref::<wasmtime::Trap>(),
+                    Some(wasmtime::Trap::OutOfFuel)
+                ) || format!("{e:?}").contains("out of memory"),
+                message: format!("the plugin was stopped: {e}"),
+            }),
+        };
+        Ok(Run {
+            outcome,
+            fuel_used: limits.fuel.saturating_sub(store.get_fuel().unwrap_or(0)),
+            instantiate,
+            total: started.elapsed(),
+        })
     }
+}
+
+/// Why a run produced no verdict.
+#[derive(Debug, Clone)]
+pub struct Stopped {
+    /// It ran out of fuel or memory, as opposed to failing on its own.
+    pub exhausted: bool,
+    pub message: String,
+}
+
+/// One run: its verdict (as JSON) or why it has none, and what it cost.
+#[derive(Debug)]
+pub struct Run {
+    pub outcome: Result<String, Stopped>,
+    pub fuel_used: u64,
+    /// Linking and instantiating the component, before the plugin's code.
+    pub instantiate: std::time::Duration,
+    pub total: std::time::Duration,
 }
 
 /// The runtime component, built and embedded by `build.rs`.
@@ -374,6 +456,10 @@ impl PluginHost for StoreHost {
     async fn resource_grants(&mut self) -> ResourceGrants {
         host_core::installation_grants(&self.db, &self.drive, &self.plugin, self.manifest.as_ref())
             .await
+    }
+
+    async fn run_context(&mut self) -> serde_json::Map<String, serde_json::Value> {
+        super::installation_identity::run_context(&self.db, &self.drive, &self.plugin).await
     }
 }
 
@@ -711,6 +797,47 @@ mod tests {
             .expect_err("stopped");
 
         assert!(error.contains("stopped"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_base64_upload_reaches_the_plugin_byte_for_byte() {
+        // `accepts: [{ as: "base64" }]`: the host hands over the exact bytes
+        // as `upload.base64`, and the sandbox's `atob` gets them back.
+        use base64::Engine as _;
+        let bytes: Vec<u8> = (0..=255u8).collect();
+        let input = serde_json::json!({
+            "trigger": {"kind": "manual", "at": 1700000000000u64},
+            "upload": {
+                "name": "every-byte.bin",
+                "mediaType": "application/octet-stream",
+                "size": bytes.len(),
+                "base64": base64::engine::general_purpose::STANDARD.encode(&bytes),
+            },
+        })
+        .to_string();
+        let runtime = runtime();
+        let (h, _) = host();
+
+        let verdict = runtime
+            .run(
+                r#"export function run(ctx) {
+                     const binary = atob(ctx.upload.base64);
+                     const bytes = Array.from(binary, c => c.charCodeAt(0));
+                     return { intents: [], problems: [], text: typeof ctx.upload.text,
+                              size: ctx.upload.size, bytes };
+                   }"#,
+                &input,
+                h,
+            )
+            .await
+            .unwrap()
+            .expect("ran");
+
+        let verdict: serde_json::Value = serde_json::from_str(&verdict).unwrap();
+        let received: Vec<u8> = serde_json::from_value(verdict["bytes"].clone()).unwrap();
+        assert_eq!(received, bytes);
+        assert_eq!(verdict["size"], 256);
+        assert_eq!(verdict["text"], "undefined");
     }
 
     #[tokio::test]

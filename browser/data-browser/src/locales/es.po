@@ -114,15 +114,19 @@ msgstr "Agentes de IA"
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
@@ -136,6 +140,7 @@ msgstr "Agentes de IA"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
 #: src/views/PluginView/useResourcePicker.tsx
@@ -300,6 +305,7 @@ msgstr "URL de Ollama"
 msgid "Ollama"
 msgstr "Ollama"
 
+#: src/views/Installation/InstallationConnections.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -959,9 +965,11 @@ msgstr "Secreto del Agente"
 msgid "Copy secret to continue"
 msgstr "Copiar secreto para continuar"
 
+#: src/chunks/AppPage/AfterCommitBar.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
+#: src/views/Installation/AfterCommitTables.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Retry"
 msgstr "Reintentar"
@@ -1133,6 +1141,7 @@ msgid "Importing..."
 msgstr "Importando..."
 
 #: src/actions/resourceActions.tsx
+#: src/chunks/PluginRuns/PluginPage.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importar"
@@ -1165,6 +1174,7 @@ msgstr "Error al guardar: {0}"
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
 #: src/components/TeamProfileStep.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
@@ -1895,6 +1905,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx
@@ -2224,6 +2235,7 @@ msgstr "Reorganizar {0}"
 msgid "<0/> Note"
 msgstr "<0/> Nota"
 
+#: src/chunks/Plugins/RouteWriteApproval.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/SettingsAgent.tsx
@@ -2319,10 +2331,12 @@ msgstr "Permitir todas las lecturas realizadas por este complemento"
 msgid "Allow all writes done by this plugin"
 msgstr "Permitir todas las escrituras realizadas por este complemento"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
 msgstr "Denegar"
 
+#: src/routes/RouteConsentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr "Permitir"
@@ -3013,6 +3027,7 @@ msgstr "Copiar código"
 msgid "Enter valid JSON..."
 msgstr "Introduce un JSON válido..."
 
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Install"
 msgstr "Instalar"
@@ -4451,6 +4466,7 @@ msgstr ""
 msgid "No {0} portal is configured for this server."
 msgstr ""
 
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/routes/SyncRoute.tsx
@@ -5823,6 +5839,7 @@ msgid "Cloud Vault is not available here: {0}."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Disconnect"
 msgstr ""
 
@@ -5832,6 +5849,7 @@ msgstr ""
 
 #: src/helpers/browserPeerSync.ts
 #: src/routes/SyncRoute.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Not connected"
 msgstr ""
 
@@ -8005,6 +8023,9 @@ msgstr ""
 msgid "Review this external action before approving it."
 msgstr ""
 
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Preparing preview…"
@@ -8216,6 +8237,8 @@ msgstr ""
 
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/views/Installation/InstallationConnections.tsx
+#: src/views/Installation/InstallationConnections.tsx
 msgid "Connections"
 msgstr ""
 
@@ -8485,7 +8508,9 @@ msgstr ""
 msgid "Previous version"
 msgstr ""
 
+#. 0: app.version
 #. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/PluginRuns/CatalogApps.tsx
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0}"
 msgstr ""
@@ -8858,13 +8883,6 @@ msgstr ""
 msgid "v"
 msgstr ""
 
-#. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#. 0: release && release !== releaseId && ( <> <br /> from{' '} {/^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )} </> )
-#: src/chunks/Plugins/InstallationReviewDialog.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Pinned to <0/> {0}"
-msgstr ""
-
 #: src/chunks/Plugins/CapabilityList.tsx
 msgid "No permissions required"
 msgstr "No se requieren permisos"
@@ -8923,6 +8941,7 @@ msgstr ""
 msgid "Update"
 msgstr "Actualizar"
 
+#: src/chunks/Plugins/EndpointHealth.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke"
@@ -9416,11 +9435,740 @@ msgstr ""
 msgid "Sign in to connect an account."
 msgstr ""
 
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect an account"
+msgstr ""
+
+#. 0: app.name; 1: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "{0} updated to {1}"
+msgstr ""
+
+#. 0: mine.version ?? '(unknown version)'
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installed {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Installing…"
+msgstr ""
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Install {0}"
+msgstr ""
+
+#. 0: app.name
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Open {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Updating…"
+msgstr ""
+
+#. 0: app.version
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Update to {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Drive apps"
+msgstr ""
+
+#: src/chunks/PluginRuns/CatalogApps.tsx
+msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
+msgstr ""
+
+#. 0: String(reason)
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Could not set up this importer: {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Loading importer…"
+msgstr ""
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up"
+msgstr ""
+
+#. 0: names[0]
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "File to import"
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Preview import"
+msgstr ""
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr ""
+
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Open imported data"
+msgstr ""
+
+#. 0: bytes
+#: src/chunks/PluginRuns/importFile.ts
+msgid "{0} bytes"
+msgstr ""
+
 #. 0: ' '; 1: ' '; 2: getIntegrationProxy()
 #: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
 msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
-msgid "Connect an account"
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use existing connection"
+msgstr ""
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Sign in to finish connecting this account."
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Disconnecting…"
+msgstr ""
+
+#. 0: name
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connect {0}"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Connected ·"
+msgstr ""
+
+#: src/views/Installation/InstallationConnections.tsx
+msgid "Use this connection"
+msgstr ""
+
+#. 0: proxyOrigin
+#: src/views/Installation/InstallationConnections.tsx
+msgid "This plugin will use your <0/> account through {0}. The proxy keeps the connection under your account; this plugin may use it until you disconnect it."
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} connected"
+msgstr ""
+
+#. 0: platformName(platform)
+#: src/views/Installation/InstallationConnections.tsx
+msgid "{0} disconnected"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Sign in to answer this request."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Loading the request…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allowing…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Denying…"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to give"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "a token for its"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+#: src/routes/RouteConsentRoute.tsx
+msgid "endpoints."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "asks to issue a token for its"
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "No specific permissions."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "With these permissions"
+msgstr ""
+
+#. 0: ask.redirectOrigin
+#: src/routes/RouteConsentRoute.tsx
+msgid "You can revoke the token later from the plugin. After you answer, you go back to {0}."
+msgstr ""
+
+#: src/routes/RouteConsentRoute.tsx
+msgid "Allow access?"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers sign in with their Atomic agent."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Other servers sign their requests (HTTP Signatures)."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers present an access token this plugin issued."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers present an access token bound to their key (DPoP)."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Anyone can call it, without signing in."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers as itself, with the rights this installation grants it."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers as the caller, with the caller’s rights."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin answers with public data only."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served at <0/>. This address becomes the plugin’s public identity."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served on this drive’s own host name, next to its resources. That address becomes the plugin’s public identity."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Served at its own address under the server’s routes origin, which this server has not set (<0/>). That address becomes the plugin’s public identity."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server must run with <0/> or higher."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server must run with <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Answers for <0/> names only."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Stores what callers send in <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Can send requests to other servers:"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Public endpoints"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Anyone on the internet can call these endpoints; this plugin decides what they may see."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Only this plugin answers this address on its host."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Shared with other plugins on its host; this plugin answers only its own entries."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Stores incoming data: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Callers add resources to <0/> unattended."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The server keeps the private key; the plugin can only ask it to sign."
+msgstr ""
+
+#. 0: key.alg
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Signing key: <0/> ({0})"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The plugin issues access tokens to other apps; the server stores them."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Access tokens: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "A raw port the server operator opens for this plugin."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Network port: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The operator binds it with <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "A service the server operator runs next to the server."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Local service: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "The operator names it in <0/>."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Needs public endpoints"
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "# plugin needs server features this server doesn’t have."
+msgid_plural "# plugins need server features this server doesn’t have."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open link"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to open <0/> in a new tab. <1/>"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Open a link"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "the resource in the config key <0/>, which is not set"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Set <0/> in the config below to the resource that should receive these items, or leave this unchecked."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Let <0/> add items to <1/> when other servers send them"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Incoming items"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "The plugin gets write rights on these resources, and may only change or delete what it added. Revoking or uninstalling it takes the rights back. Unchecked, anything sent to these endpoints is refused."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteApproval.tsx
+msgid "Route writes"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Serving"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Paused"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retired"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Turned off"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Not active"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Public endpoints are turned off on this server"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Its URLs answer 404 and its deliveries wait. Its data, keys and tokens are kept, and it comes back without a new review once the server allows it."
+msgstr ""
+
+#. 0: status; 1: when(at); 2: message
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Last error ({0}, {1}): {2}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No address yet: <0/> is not set."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries waiting: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Requests (24 h): <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Errors (24 h): <0/>"
+msgstr ""
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letter (gave up after attempt {0})"
+msgstr ""
+
+#. 0: failure.attempts; 1: when(failure.nextAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0}), next at {1}"
+msgstr ""
+
+#. 0: failure.attempts
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Retrying (attempt {0})"
+msgstr ""
+
+#. 0: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No answer; it may have arrived. {0}"
+msgstr ""
+
+#. 0: failure.status; 1: failure.error ?? ''
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Answered {0}. {1}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "<0/> to <1/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/>"
+msgstr ""
+
+#. 0: cap
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sent today: <0/> of {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Queued: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Sending: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Delivered (24 h): <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Dead letters: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Deliveries"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Waiting for tomorrow’s cap: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Held while the endpoints are off: <0/>"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No failed deliveries."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Recent failures"
+msgstr ""
+
+#. 0: when(token.issuedAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No scopes"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Scopes: <0/>"
+msgstr ""
+
+#. 0: when(expiresAt)
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Expires {0}"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Revoke token"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Issued tokens"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Refresh"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "No tokens issued."
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Endpoints"
+msgstr ""
+
+#: src/chunks/Plugins/EndpointHealth.tsx
+msgid "Token revoked"
+msgstr ""
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Choose file"
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "Import with this app"
+msgstr ""
+
+#. 0: ' '
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import <0/> with{0} <1/>. You review the changes before anything is saved."
+msgstr ""
+
+#: src/chunks/AppPage/AppImporterRun.tsx
+msgid "This app wants to import a file with <0/>. Choose the file here. You review the changes before anything is saved."
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "Requirements unknown"
+msgstr ""
+
+#: src/chunks/Plugins/PublicEndpoints.tsx
+msgid "This server couldn’t read what this release needs. The review checks it before installing."
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Config saved, rights moved"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Config saved"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Set <0/> to the resource that should receive incoming items. The plugin's route grant stores them there, so this config can't be saved without it."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "Move incoming items"
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "This config stores what other servers send somewhere else. Approve the new place to move the plugin’s write rights there, or save without it to stop accepting these items."
+msgstr ""
+
+#: src/chunks/Plugins/RouteWriteMoveDialog.tsx
+msgid "Save config"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Allow editing"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Not now"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Let this app edit rows"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "This app"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Stop {0} editing rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "It keeps showing the rows, read-only."
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Let {0} edit rows"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/RowGrantDialog.tsx
+msgid "Let {0} edit rows?"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Read-only"
+msgstr ""
+
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/>"
+msgstr ""
+
+#. 0: pending.release.url
+#. 0: release
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "from {0}"
+msgstr ""
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "from <0/>"
+msgstr ""
+
+#: src/chunks/TablePage/ExpandedRowDialog.tsx
+msgid "Kept by apps"
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "It also keeps its own sync information on the rows. That is not shown as columns, only under \"Kept by apps\" when you open a row. "
+msgstr ""
+
+#. 0: extras
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> can edit rows in this table. It can fill in the table's columns and add rows, but not delete rows or change the table itself. {0}You can take this back from the tab's menu."
+msgstr ""
+
+#: src/chunks/AppPage/RowGrantText.tsx
+msgid "<0/> is told when rows change, also when this tab is closed."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "No proposed edits are waiting."
+msgstr ""
+
+#. 0: waiting
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "{0} proposed edits are waiting for review."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "Tables it follows"
+msgstr ""
+
+#. 0: sub.pending.rows
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "{0} rows waiting"
+msgstr ""
+
+#. 0: table.title || 'this table'
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "Stopped following changes to {0}: <0/>"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} stopped following changes to this table"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} wants to change rows"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Allow all edits by this view on this table"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Apply"
+msgstr ""
+
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "Decline"
+msgstr ""
+
+#. 0: tableName
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "<0/> stopped following changes to {0}: <1/>"
+msgstr ""
+
+#. 0: appName
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "{0} wants to change 1 row"
+msgstr ""
+
+#. 0: appName; 1: rows
+#: src/chunks/AppPage/AfterCommitBar.tsx
+msgid "{0} wants to change {1} rows"
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "One proposed edit is waiting for review."
+msgstr ""
+
+#: src/views/Installation/AfterCommitTables.tsx
+msgid "One row waiting"
 msgstr ""

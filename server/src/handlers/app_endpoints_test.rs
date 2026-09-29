@@ -18,7 +18,7 @@ use crate::appstate::AppState;
 use crate::plugins::test_fixture::{fixture, genesis, Fixture};
 
 /// Signs as the store's default agent, the way every other server test does.
-fn signed(path: &str, appstate: &AppState) -> TestRequest {
+pub(super) fn signed(path: &str, appstate: &AppState) -> TestRequest {
     let origin = appstate.config.get_origin();
     let url = format!("{origin}{path}");
     let headers = atomic_lib::client::get_authentication_headers(
@@ -46,35 +46,9 @@ fn signed(path: &str, appstate: &AppState) -> TestRequest {
     request
 }
 
-/// Signs as someone other than this node's own agent — a collaborator.
-fn signed_as(path: &str, appstate: &AppState, agent: &Agent) -> TestRequest {
-    let origin = appstate.config.get_origin();
-    let url = format!("{origin}{path}");
-    let headers =
-        atomic_lib::client::get_authentication_headers(&url, agent).expect("auth headers");
-
-    let mut request = TestRequest::with_uri(path);
-
-    for (key, value) in headers {
-        request = request.insert_header((key, value));
-    }
-
-    if let Ok(parsed) = url::Url::parse(&origin) {
-        if let Some(host) = parsed.host_str() {
-            let authority = match parsed.port() {
-                Some(port) => format!("{host}:{port}"),
-                None => host.to_string(),
-            };
-            request = request.insert_header(("Host", authority));
-        }
-    }
-
-    request
-}
-
 /// Publishes an agent so the server can verify its signatures, and gives it
 /// `right` on `target` — which is exactly what the Share dialog does.
-async fn share(fixture: &Fixture, target: &str, agent: &Agent, right: &str) {
+pub(super) async fn share(fixture: &Fixture, target: &str, agent: &Agent, right: &str) {
     let mut profile = atomic_lib::Resource::new(agent.subject.to_string());
     profile
         .set_unsafe(
@@ -112,7 +86,7 @@ fn create_payload(fixture: &Fixture, app: &str, name: &str) -> String {
     )
 }
 
-fn body_of(response: ServiceResponse) -> String {
+pub(super) fn body_of(response: ServiceResponse) -> String {
     let bytes = response
         .into_body()
         .try_into_bytes()
@@ -122,7 +96,7 @@ fn body_of(response: ServiceResponse) -> String {
 }
 
 /// An app with a view, its own key, and something of its own to write into.
-async fn app_fixture(name: &str) -> (Fixture, String) {
+pub(super) async fn app_fixture(name: &str) -> (Fixture, String) {
     let mut fixture = fixture(name).await;
 
     let app = genesis(
@@ -212,14 +186,15 @@ async fn a_view_is_served_only_to_something_holding_a_token() {
 
     let minted = test::call_service(
         &service,
-        signed("/plugin-view-token", &fixture.appstate)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(format!(
+        post_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            format!(
                 r#"{{"drive":{:?},"plugin":{:?}}}"#,
                 fixture.drive, fixture.plugin,
-            ))
-            .to_request(),
+            ),
+        )
+        .to_request(),
     )
     .await;
 
@@ -253,14 +228,15 @@ async fn a_token_does_not_open_another_plugin() {
 
     let minted = test::call_service(
         &service,
-        signed("/plugin-view-token", &fixture.appstate)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(format!(
+        post_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            format!(
                 r#"{{"drive":{:?},"plugin":{:?}}}"#,
                 fixture.drive, fixture.plugin,
-            ))
-            .to_request(),
+            ),
+        )
+        .to_request(),
     )
     .await;
 
@@ -294,16 +270,17 @@ async fn an_app_writes_its_own_data_as_itself() {
 
     let response = test::call_service(
         &service,
-        signed("/app-write", &fixture.appstate)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(format!(
+        post_v2(
+            "/app-write",
+            &fixture.appstate,
+            format!(
                 r#"{{"drive":{:?},"app":{:?},"op":"create","propVals":{{{:?}:"A note"}}}}"#,
                 fixture.drive,
                 app,
                 urls::NAME,
-            ))
-            .to_request(),
+            ),
+        )
+        .to_request(),
     )
     .await;
 
@@ -365,14 +342,15 @@ async fn an_app_cannot_write_outside_itself() {
     // app has an identity of its own.
     let response = test::call_service(
         &service,
-        signed("/app-write", &fixture.appstate)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(format!(
+        post_v2(
+            "/app-write",
+            &fixture.appstate,
+            format!(
                 r#"{{"drive":{:?},"app":{:?},"op":"create","parent":{:?},"propVals":{{}}}}"#,
                 fixture.drive, app, fixture.drive,
-            ))
-            .to_request(),
+            ),
+        )
+        .to_request(),
     )
     .await;
 
@@ -400,14 +378,15 @@ async fn an_app_with_no_key_is_told_so() {
 
     let response = test::call_service(
         &service,
-        signed("/app-write", &fixture.appstate)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(format!(
+        post_v2(
+            "/app-write",
+            &fixture.appstate,
+            format!(
                 r#"{{"drive":{:?},"app":{:?},"op":"create","propVals":{{}}}}"#,
                 fixture.drive, fixture.drive,
-            ))
-            .to_request(),
+            ),
+        )
+        .to_request(),
     )
     .await;
 
@@ -435,14 +414,16 @@ async fn someone_the_app_was_shared_with_can_use_it() {
     // has to be shared twice.
     let opened = test::call_service(
         &service,
-        signed_as("/plugin-view-token", &fixture.appstate, &collaborator)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(format!(
+        post_v2_as(
+            "/plugin-view-token",
+            &fixture.appstate,
+            &collaborator,
+            format!(
                 r#"{{"drive":{:?},"plugin":{:?}}}"#,
                 fixture.drive, fixture.plugin,
-            ))
-            .to_request(),
+            ),
+        )
+        .to_request(),
     )
     .await;
 
@@ -450,11 +431,13 @@ async fn someone_the_app_was_shared_with_can_use_it() {
 
     let response = test::call_service(
         &service,
-        signed_as("/app-write", &fixture.appstate, &collaborator)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(create_payload(&fixture, &app, "Added by a collaborator"))
-            .to_request(),
+        post_v2_as(
+            "/app-write",
+            &fixture.appstate,
+            &collaborator,
+            create_payload(&fixture, &app, "Added by a collaborator"),
+        )
+        .to_request(),
     )
     .await;
 
@@ -515,13 +498,792 @@ async fn read_only_means_look_not_touch() {
 
     let response = test::call_service(
         &service,
-        signed_as("/app-write", &fixture.appstate, &onlooker)
-            .method(actix_web::http::Method::POST)
-            .insert_header(("Content-Type", "application/json"))
-            .set_payload(create_payload(&fixture, &app, "Should not exist"))
-            .to_request(),
+        post_v2_as(
+            "/app-write",
+            &fixture.appstate,
+            &onlooker,
+            create_payload(&fixture, &app, "Should not exist"),
+        )
+        .to_request(),
     )
     .await;
 
     assert_eq!(response.status(), 401, "{}", body_of(response));
+}
+
+/// A version 2 request signature (ontola/atomic-plugins#54): covers method
+/// and body as well as the URL. `sign_body` is what the signer thinks it
+/// sent; `send_body` is what actually goes over the wire.
+fn signed_v2(
+    path: &str,
+    appstate: &AppState,
+    method: actix_web::http::Method,
+    sign_body: &str,
+    send_body: &str,
+) -> TestRequest {
+    let origin = appstate.config.get_origin();
+    let url = format!("{origin}{path}");
+    let headers = atomic_lib::client::get_authentication_headers_v2(
+        method.as_str(),
+        &url,
+        sign_body.as_bytes(),
+        &appstate.store.get_default_agent().unwrap(),
+    )
+    .expect("auth headers");
+
+    let mut request = TestRequest::with_uri(path)
+        .method(method)
+        .insert_header(("Content-Type", "application/json"))
+        .set_payload(send_body.to_string());
+
+    for (key, value) in headers {
+        request = request.insert_header((key, value));
+    }
+
+    if let Ok(parsed) = url::Url::parse(&origin) {
+        if let Some(host) = parsed.host_str() {
+            let authority = match parsed.port() {
+                Some(port) => format!("{host}:{port}"),
+                None => host.to_string(),
+            };
+            request = request.insert_header(("Host", authority));
+        }
+    }
+
+    request
+}
+
+/// A version 2 request, signed by `agent`, with `body` as JSON.
+pub(super) fn signed_v2_as(
+    path: &str,
+    appstate: &AppState,
+    agent: &Agent,
+    method: actix_web::http::Method,
+    body: &str,
+) -> TestRequest {
+    let origin = appstate.config.get_origin();
+    let url = format!("{origin}{path}");
+    let headers = atomic_lib::client::get_authentication_headers_v2(
+        method.as_str(),
+        &url,
+        body.as_bytes(),
+        agent,
+    )
+    .expect("auth headers");
+
+    let mut request = TestRequest::with_uri(path)
+        .method(method)
+        .insert_header(("Content-Type", "application/json"))
+        .set_payload(body.to_string());
+    for (key, value) in headers {
+        request = request.insert_header((key, value));
+    }
+    with_host(request, appstate)
+}
+
+fn with_host(mut request: TestRequest, appstate: &AppState) -> TestRequest {
+    if let Ok(parsed) = url::Url::parse(&appstate.config.get_origin()) {
+        if let Some(host) = parsed.host_str() {
+            let authority = match parsed.port() {
+                Some(port) => format!("{host}:{port}"),
+                None => host.to_string(),
+            };
+            request = request.insert_header(("Host", authority));
+        }
+    }
+    request
+}
+
+/// A JSON `POST` with a version 2 signature, as this node's own agent.
+fn post_v2(path: &str, appstate: &AppState, body: impl AsRef<str>) -> TestRequest {
+    let agent = appstate.store.get_default_agent().unwrap();
+    signed_v2_as(
+        path,
+        appstate,
+        &agent,
+        actix_web::http::Method::POST,
+        body.as_ref(),
+    )
+}
+
+/// A JSON `POST` with a version 2 signature, as `agent`.
+fn post_v2_as(
+    path: &str,
+    appstate: &AppState,
+    agent: &Agent,
+    body: impl AsRef<str>,
+) -> TestRequest {
+    signed_v2_as(
+        path,
+        appstate,
+        agent,
+        actix_web::http::Method::POST,
+        body.as_ref(),
+    )
+}
+
+/// `/plugin-view-token` and `/app-agent` accept a version 2 signature, and
+/// check the body with it: the same headers on a different body are refused.
+/// Version 1 is refused on both: they require version 2 (#1700, piece 6).
+#[actix_rt::test]
+async fn v2_signatures_bind_the_body() {
+    use actix_web::http::Method;
+
+    let (fixture, app) = app_fixture("app_v2_signatures").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let body = format!(
+        r#"{{"drive":{:?},"plugin":{:?}}}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let ok = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            Method::POST,
+            &body,
+            &body,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(ok.status(), 200, "{}", body_of(ok));
+
+    let other = format!(
+        r#"{{"drive":{:?},"plugin":{:?} }}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let swapped = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            Method::POST,
+            &body,
+            &other,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(swapped.status(), 401, "a different body than was signed");
+    assert!(body_of(swapped).contains("version 2"));
+
+    // The method is covered too.
+    let wrong_method = test::call_service(
+        &service,
+        signed_v2(
+            "/plugin-view-token",
+            &fixture.appstate,
+            Method::PUT,
+            &body,
+            &body,
+        )
+        .method(Method::POST)
+        .to_request(),
+    )
+    .await;
+    assert_eq!(wrong_method.status(), 401);
+
+    // `/app-agent`: the key a captured v1 proof could have swapped. A GET
+    // (empty body) works as v2, and a POST whose secret differs from the one
+    // signed is refused before anything is stored.
+    let query = format!(
+        "/app-agent?drive={}&app={}",
+        urlencoding::encode(&fixture.drive),
+        urlencoding::encode(&app),
+    );
+    let read = test::call_service(
+        &service,
+        signed_v2(&query, &fixture.appstate, Method::GET, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(read.status(), 200, "{}", body_of(read));
+
+    let before = fixture
+        .appstate
+        .store
+        .get_app_agent_info(&AppAgentKey::new(&fixture.drive, &app))
+        .unwrap()
+        .unwrap()
+        .agent;
+    let signed_secret = Agent::new(None).unwrap().build_secret().unwrap();
+    let attacker_secret = Agent::new(None).unwrap().build_secret().unwrap();
+    let set = |secret: &str| {
+        format!(
+            r#"{{"drive":{:?},"app":{:?},"secret":{:?}}}"#,
+            fixture.drive, app, secret
+        )
+    };
+    let refused = test::call_service(
+        &service,
+        signed_v2(
+            "/app-agent",
+            &fixture.appstate,
+            Method::POST,
+            &set(&signed_secret),
+            &set(&attacker_secret),
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(refused.status(), 401);
+    let after = fixture
+        .appstate
+        .store
+        .get_app_agent_info(&AppAgentKey::new(&fixture.drive, &app))
+        .unwrap()
+        .unwrap()
+        .agent;
+    assert_eq!(before, after, "nothing was stored");
+
+    // Version 1 no longer works here: v2 is required (#1700, piece 6).
+    let v1 = test::call_service(
+        &service,
+        signed("/plugin-view-token", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .set_payload(body.clone())
+            .to_request(),
+    )
+    .await;
+    assert_eq!(v1.status(), 401);
+    assert!(body_of(v1).contains(crate::require_v2::REQUIRES_V2));
+}
+
+/// An endpoint that does not bind method and body yet refuses a v2
+/// signature outright instead of checking it as v1, and an unknown version
+/// is refused everywhere.
+#[actix_rt::test]
+async fn v2_is_never_downgraded_to_v1() {
+    use actix_web::http::Method;
+
+    let (fixture, app) = app_fixture("app_v2_downgrade").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let _ = app;
+    // A POST on an ordinary resource reads the headers alone, with no body
+    // to bind (`/upload` and POST on any resource are not v2 routes yet).
+    let unbound = test::call_service(
+        &service,
+        signed_v2("/not-an-endpoint", &fixture.appstate, Method::POST, "", "").to_request(),
+    )
+    .await;
+    assert_eq!(unbound.status(), 401);
+    assert!(
+        body_of(unbound).contains("does not check version 2"),
+        "the caller is told to sign with version 1"
+    );
+
+    let body = format!(
+        r#"{{"drive":{:?},"plugin":{:?}}}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let unknown = test::call_service(
+        &service,
+        signed("/plugin-view-token", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .insert_header(("x-atomic-signature-version", "3"))
+            .set_payload(body.clone())
+            .to_request(),
+    )
+    .await;
+    assert_eq!(unknown.status(), 401);
+
+    // A v1 proof labelled as v2 is checked as v2, and fails.
+    let relabelled = test::call_service(
+        &service,
+        signed("/plugin-view-token", &fixture.appstate)
+            .method(Method::POST)
+            .insert_header(("Content-Type", "application/json"))
+            .insert_header(("x-atomic-signature-version", "2"))
+            .set_payload(body)
+            .to_request(),
+    )
+    .await;
+    assert_eq!(relabelled.status(), 401);
+}
+
+/// An installed catalog plugin has an app identity on this node, as an app
+/// from `createApp` does: activating the Installation mints it, and
+/// `GET /app-agent` reports it. That is the agent a page delegates an
+/// integration-proxy connection to, or registers as this node's runtime of the
+/// installation (ontola/atomic-plugins#54, decisions 2 and 10), and the one
+/// the host signs the plugin's proxy requests with.
+#[actix_rt::test]
+async fn an_active_installation_reports_its_agent_on_this_node() {
+    let fixture = fixture("installation_app_agent").await;
+    let db = &fixture.appstate.store;
+    let release = atomic_lib::db::plugin_release::PluginRelease::js(
+        "export function run() { return { intents: [] }; }".into(),
+        serde_json::json!({"schemaVersion":2,"capabilities":[{"name":"storage","reason":"keeps a cursor"}]}),
+        Default::default(),
+    );
+    let id = db.publish_plugin_release(&release).unwrap();
+    let installation = genesis(
+        db,
+        vec![
+            (
+                urls::IS_A,
+                Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+            ),
+            (
+                urls::PARENT,
+                Value::AtomicUrl(fixture.drive.as_str().into()),
+            ),
+            (urls::NAME, Value::String("importer".into())),
+            (urls::NAMESPACE, Value::String("acme".into())),
+            (urls::RELEASE_PROP, Value::String(id.clone())),
+            (urls::RELEASE_ID, Value::String(id)),
+            (urls::INSTALLATION_STATUS, Value::String("active".into())),
+            (urls::GRANTS, Value::Json(serde_json::json!(["storage"]))),
+        ],
+    )
+    .await;
+
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let response = test::call_service(
+        &service,
+        signed(
+            &format!(
+                "/app-agent?drive={}&app={}",
+                urlencoding::encode(&fixture.drive),
+                urlencoding::encode(&installation),
+            ),
+            &fixture.appstate,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    let reported: serde_json::Value = serde_json::from_str(&body_of(response)).expect("json");
+
+    let stored = db
+        .get_app_agent_info(&AppAgentKey::new(&fixture.drive, &installation))
+        .unwrap()
+        .expect("activation minted an identity for the installation")
+        .agent;
+    assert_eq!(reported["agent"], stored.as_str());
+    // Its own agent, not the server's.
+    assert_ne!(stored, db.get_default_agent().unwrap().subject.to_string());
+}
+
+/// What an app frame sends for `resource.remove(p).save()`: a `remove` op,
+/// then a `save` of whatever else changed. The property has to be gone
+/// afterwards, and stay gone through the next edit — which builds on the
+/// stored Loro doc, where a removal that only reached the propvals returns.
+#[actix_rt::test]
+async fn an_app_removes_a_property_and_it_stays_removed() {
+    let (fixture, app) = app_fixture("app_write_remove").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let post = |payload: String| post_v2("/app-write", &fixture.appstate, payload).to_request();
+
+    // Shaped like an importing app's row (timesheets, notion): an import
+    // identity and a baseline, which the server checks on every write.
+    let values = serde_json::json!({ urls::NAME: "A note", urls::DESCRIPTION: "Goes away" });
+    let created = test::call_service(
+        &service,
+        post(
+            serde_json::json!({
+                "drive": fixture.drive,
+                "app": app,
+                "op": "create",
+                "propVals": {
+                    urls::NAME: "A note",
+                    urls::DESCRIPTION: "Goes away",
+                    urls::LOCAL_ID: "source:1",
+                    urls::IMPORT_BASELINE: { "values": values, "previous": {} },
+                },
+            })
+            .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(created.status(), 200, "{}", body_of(created));
+    let written: serde_json::Value = serde_json::from_str(&body_of(created)).expect("json");
+    let subject = written["subject"].as_str().expect("a subject").to_string();
+
+    let removed = test::call_service(
+        &service,
+        post(format!(
+            r#"{{"drive":{:?},"app":{:?},"op":"remove","subject":{:?},"properties":[{:?}]}}"#,
+            fixture.drive,
+            app,
+            subject,
+            urls::DESCRIPTION,
+        )),
+    )
+    .await;
+    assert_eq!(removed.status(), 200, "{}", body_of(removed));
+
+    let description = |resource: &atomic_lib::Resource| {
+        resource.get(urls::DESCRIPTION).ok().map(|v| v.to_string())
+    };
+
+    let after_remove = fixture
+        .appstate
+        .store
+        .get_resource(&subject.as_str().into())
+        .await
+        .unwrap();
+    assert_eq!(
+        description(&after_remove),
+        None,
+        "the remove did not take effect"
+    );
+
+    let saved = test::call_service(
+        &service,
+        post(
+            serde_json::json!({
+                "drive": fixture.drive,
+                "app": app,
+                "op": "save",
+                "subject": subject,
+                "propVals": {
+                    urls::NAME: "Renamed",
+                    urls::IMPORT_BASELINE: {
+                        "values": { urls::NAME: "Renamed", urls::DESCRIPTION: "Goes away" },
+                        "previous": values,
+                    },
+                },
+            })
+            .to_string(),
+        ),
+    )
+    .await;
+    assert_eq!(saved.status(), 200, "{}", body_of(saved));
+
+    let after_save = fixture
+        .appstate
+        .store
+        .get_resource(&subject.as_str().into())
+        .await
+        .unwrap();
+    assert_eq!(after_save.get(urls::NAME).unwrap().to_string(), "Renamed");
+    assert_eq!(
+        description(&after_save),
+        None,
+        "the removed property came back on the next save"
+    );
+}
+
+/// A session cookie holding a version 1 proof for this server, as
+/// `setCookieAuthentication` writes it.
+fn session_cookie(appstate: &AppState, agent: &Agent) -> String {
+    use base64::Engine;
+    let origin = appstate.config.get_origin();
+    let timestamp = atomic_lib::utils::now();
+    let signature = atomic_lib::agents::sign_message(
+        format!("{origin} {timestamp}").as_bytes(),
+        agent.private_key.as_ref().unwrap(),
+    )
+    .unwrap();
+    let proof = serde_json::json!({
+        "https://atomicdata.dev/properties/auth/agent": agent.subject.to_string(),
+        "https://atomicdata.dev/properties/auth/requestedSubject": origin,
+        "https://atomicdata.dev/properties/auth/publicKey": agent.public_key,
+        "https://atomicdata.dev/properties/auth/timestamp": timestamp,
+        "https://atomicdata.dev/properties/auth/signature": signature,
+    });
+    format!(
+        "atomic_session={}",
+        base64::engine::general_purpose::STANDARD.encode(proof.to_string())
+    )
+}
+
+/// Every state-changing route that requires a version 2 signature (#1700,
+/// piece 6), with a request body shaped roughly like what it takes. A body
+/// the handler cannot use is fine: what is checked is whether the request
+/// gets past authentication.
+fn v2_required_routes(
+    fixture: &Fixture,
+    app: &str,
+) -> Vec<(actix_web::http::Method, String, String)> {
+    use actix_web::http::Method;
+    let target = format!(
+        r#"{{"drive":{:?},"plugin":{:?}}}"#,
+        fixture.drive, fixture.plugin
+    );
+    let drive = urlencoding::encode(&fixture.drive).to_string();
+    let plugin = urlencoding::encode(&fixture.plugin).to_string();
+    let app_query = format!("drive={drive}&app={}", urlencoding::encode(app));
+    let plugin_query = format!("drive={drive}&plugin={plugin}");
+    let hosting = format!("project=p1&drive={drive}");
+    let post = |path: &str, body: &str| (Method::POST, path.to_string(), body.to_string());
+    let mut routes = vec![
+        post(
+            "/app-agent",
+            &format!(
+                r#"{{"drive":{:?},"app":{:?},"secret":"x"}}"#,
+                fixture.drive, app
+            ),
+        ),
+        (
+            Method::DELETE,
+            format!("/app-agent?{app_query}"),
+            String::new(),
+        ),
+        post("/plugin-view-token", &target),
+        post(
+            "/plugin-secret",
+            &format!(
+                r#"{{"drive":{:?},"plugin":{:?},"name":"n","value":"v"}}"#,
+                fixture.drive, fixture.plugin
+            ),
+        ),
+        (
+            Method::DELETE,
+            format!("/plugin-secret?{plugin_query}&name=n"),
+            String::new(),
+        ),
+        post(
+            "/app-write",
+            &create_payload(fixture, app, "v2 route check"),
+        ),
+        post("/plugin-run", &target),
+        post("/plugin-schedule", &target),
+        (
+            Method::DELETE,
+            format!("/plugin-schedule?{plugin_query}"),
+            String::new(),
+        ),
+        post("/plugin-resume", &target),
+        post("/plugin-auto-apply", &target),
+        post("/plugin-trigger", &target),
+        post("/plugin-release", &target),
+        post(
+            &format!("/plugin-release-package?drive={drive}"),
+            "not a zip",
+        ),
+        post("/plugin-release-pin", &target),
+        post("/plugin-sync-preview", &target),
+        post("/plugin-sync-apply", &target),
+        post("/plugin-sync-schedule", &target),
+        post("/plugin-sync-status", &target),
+        post("/plugin-connection-state", &target),
+        post("/plugin-connection-checkpoint", &target),
+        post("/plugin-external-read", &target),
+        post("/plugin-external-status", &target),
+        post("/plugin-external-confirm", &target),
+        post("/plugin-external-apply", &target),
+        post("/bind-drive", "{}"),
+        post("/forget-peer?node=unknown", ""),
+        post(
+            "/iroh-sync",
+            &format!(r#"{{"nodeId":"not-a-node","drive":{:?}}}"#, fixture.drive),
+        ),
+        post(
+            &format!("/website-hosting/assets/{}?{hosting}", "0".repeat(64)),
+            "bytes",
+        ),
+        post(&format!("/website-hosting/deployments?{hosting}"), "{}"),
+        post(&format!("/website-hosting/activate?{hosting}"), "{}"),
+    ];
+    for action in [
+        "approve",
+        "call",
+        "cancel",
+        "consumer-abandon",
+        "consumers",
+        "grant",
+        "grants",
+        "history",
+        "history-compact",
+        "proposals",
+        "recovery-confirm",
+        "recovery-inspect",
+    ] {
+        routes.push(post(&format!("/integration-action-{action}"), &target));
+    }
+    routes.push(post("/integration-actions", &target));
+    // Added on the plugins line after #1832: the app's row grant (#1740),
+    // and the route consent answer and token revoke (#1759).
+    routes.push(post(
+        "/app-row-grant",
+        &format!(
+            r#"{{"op":"revoke","drive":{:?},"table":{:?},"app":{:?}}}"#,
+            fixture.drive, fixture.drive, app
+        ),
+    ));
+    #[cfg(feature = "plugin-routes")]
+    {
+        let installation = urlencoding::encode(&fixture.plugin).to_string();
+        routes.push(post(
+            "/plugin-route-consent?request=unknown&decision=deny",
+            "",
+        ));
+        routes.push(post(
+            &format!("/plugin-route-tokens?installation={installation}&revoke=unknown"),
+            "",
+        ));
+    }
+    routes
+}
+
+/// #1700, piece 6: each state-changing route refuses a version 1 signature
+/// and a session cookie, and gets past authentication with version 2.
+#[actix_rt::test]
+async fn state_changing_routes_refuse_v1_and_cookies_and_accept_v2() {
+    let (fixture, app) = app_fixture("app_v2_required").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let agent = fixture.appstate.store.get_default_agent().unwrap();
+    let routes = v2_required_routes(&fixture, &app);
+    assert_eq!(
+        routes
+            .iter()
+            .filter(|(_, path, _)| path.starts_with("/integration-action"))
+            .count(),
+        13,
+        "all 13 integration-action routes"
+    );
+
+    for (method, path, body) in routes {
+        let v1 = test::call_service(
+            &service,
+            signed(&path, &fixture.appstate)
+                .method(method.clone())
+                .insert_header(("Content-Type", "application/json"))
+                .set_payload(body.clone())
+                .to_request(),
+        )
+        .await;
+        assert_eq!(v1.status(), 401, "{method} {path} with v1");
+        assert!(
+            body_of(v1).contains(crate::require_v2::REQUIRES_V2),
+            "{method} {path} says why"
+        );
+
+        let cookie = test::call_service(
+            &service,
+            with_host(TestRequest::with_uri(&path), &fixture.appstate)
+                .method(method.clone())
+                .insert_header(("Content-Type", "application/json"))
+                .insert_header(("Cookie", session_cookie(&fixture.appstate, &agent)))
+                .set_payload(body.clone())
+                .to_request(),
+        )
+        .await;
+        assert_eq!(cookie.status(), 401, "{method} {path} with a cookie");
+
+        let v2 = test::call_service(
+            &service,
+            signed_v2_as(&path, &fixture.appstate, &agent, method.clone(), &body).to_request(),
+        )
+        .await;
+        let status = v2.status();
+        let answer = body_of(v2);
+        assert!(
+            status != 401 && !answer.contains(crate::require_v2::REQUIRES_V2),
+            "{method} {path} with v2 got {status}: {answer}"
+        );
+    }
+}
+
+/// #1700, answer 7: the same v2 request sent twice is refused the second
+/// time, even though it is still fresh and its signature verifies.
+#[actix_rt::test]
+async fn a_replayed_v2_request_is_refused() {
+    let (fixture, _app) = app_fixture("app_v2_replay").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let body = format!(
+        r#"{{"drive":{:?},"plugin":{:?}}}"#,
+        fixture.drive, fixture.plugin,
+    );
+    let agent = fixture.appstate.store.get_default_agent().unwrap();
+    let request = || {
+        signed_v2_as(
+            "/plugin-view-token",
+            &fixture.appstate,
+            &agent,
+            actix_web::http::Method::POST,
+            &body,
+        )
+    };
+    let captured: Vec<(String, String)> = request()
+        .to_http_request()
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string()))
+        .collect();
+    let replay = || {
+        let mut replayed = TestRequest::with_uri("/plugin-view-token")
+            .method(actix_web::http::Method::POST)
+            .set_payload(body.clone());
+        for (key, value) in &captured {
+            replayed = replayed.insert_header((key.as_str(), value.as_str()));
+        }
+        replayed.to_request()
+    };
+
+    let accepted = test::call_service(&service, replay()).await;
+    assert_eq!(accepted.status(), 200, "{}", body_of(accepted));
+    let refused = test::call_service(&service, replay()).await;
+    assert_eq!(refused.status(), 401);
+    assert!(body_of(refused).contains("already used"));
+
+    // A fresh signature over the same request is fine. (Signed in the same
+    // millisecond it would be the same signature: Ed25519 is deterministic.)
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    let again = test::call_service(&service, request().to_request()).await;
+    assert_eq!(again.status(), 200, "{}", body_of(again));
+}
+
+/// Reads on the same routes do not change state and keep accepting
+/// version 1.
+#[actix_rt::test]
+async fn reads_on_v2_routes_still_accept_v1() {
+    let (fixture, app) = app_fixture("app_v2_reads").await;
+    let service = test::init_service(
+        App::new()
+            .app_data(Data::new(fixture.appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let read = test::call_service(
+        &service,
+        signed(
+            &format!(
+                "/app-agent?drive={}&app={}",
+                urlencoding::encode(&fixture.drive),
+                urlencoding::encode(&app),
+            ),
+            &fixture.appstate,
+        )
+        .to_request(),
+    )
+    .await;
+    assert_eq!(read.status(), 200, "{}", body_of(read));
 }
