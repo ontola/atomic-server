@@ -38,6 +38,7 @@ pub mod plugin_route_tokens;
 pub mod plugin_routes;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_run;
+pub mod plugin_runtime;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_schedule;
 pub mod plugin_secret;

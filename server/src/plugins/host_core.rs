@@ -899,7 +899,11 @@ impl HostCore {
     /// The sidecar gets no secrets and no plugin-chosen identity: only the
     /// `content-type` and `accept` headers pass, and the host adds
     /// `x-atomic-installation` (this installation's subject) and
-    /// `x-atomic-drive`, which the sidecar binds its own grants to.
+    /// `x-atomic-drive`, which the sidecar binds its own grants to. The
+    /// request is signed by this installation's app agent on this node, over
+    /// the method, the full sidecar URL, the body and those two headers
+    /// ([`super::sidecar_auth`]); an installation without one is refused
+    /// here, since the sidecar would refuse it too.
     async fn fetch_sidecar(
         &self,
         request: FetchRequest,
@@ -949,8 +953,27 @@ impl HostCore {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| format!("could not build an HTTP client: {e}"))?;
+        let key = self.signing_as.as_ref().ok_or(
+            "this installation has no app agent on this node, so the host cannot sign its requests to a sidecar",
+        )?;
+        let headers = sidecar_headers(request.headers, plugin, self.drive.as_deref());
+        let body = request.body.as_deref().unwrap_or_default().as_bytes();
+        let signed = self
+            .db
+            .with_app_agent(key, |agent| {
+                super::sidecar_auth::sign(
+                    agent,
+                    method.as_str(),
+                    url.as_str(),
+                    body,
+                    headers,
+                    atomic_lib::utils::now(),
+                )
+            })
+            .map_err(|e| e.to_string())?
+            .ok_or("this installation's app agent is missing or revoked on this node")??;
         let mut outgoing = client.request(method, url);
-        for (name, value) in sidecar_headers(request.headers, plugin, self.drive.as_deref()) {
+        for (name, value) in signed {
             outgoing = outgoing.header(name, value);
         }
         if let Some(body) = request.body {
@@ -2090,9 +2113,31 @@ mod tests {
         name: &str,
         sidecars: &[(&str, &str)],
     ) -> (crate::plugins::test_fixture::Fixture, HostCore) {
+        sidecar_host_as(name, sidecars, true).await
+    }
+
+    /// [sidecar_host], with or without an app agent for the installation on
+    /// this node (which signs its sidecar requests).
+    async fn sidecar_host_as(
+        name: &str,
+        sidecars: &[(&str, &str)],
+        with_agent: bool,
+    ) -> (crate::plugins::test_fixture::Fixture, HostCore) {
         let mut fixture = crate::plugins::test_fixture::fixture(name).await;
         crate::plugins::test_fixture::write_plugin(&mut fixture, "probe").await;
         let db = Arc::new(fixture.appstate.store.clone());
+        if with_agent {
+            let agent = Agent::new(None).unwrap();
+            db.set_app_agent(
+                &AppAgentKey::new(&fixture.drive, &fixture.plugin),
+                &atomic_lib::db::app_agent::AppAgent::new(
+                    agent.subject.to_string(),
+                    agent.build_secret().unwrap(),
+                    0,
+                ),
+            )
+            .unwrap();
+        }
         db.set_plugin_sidecars(
             sidecars
                 .iter()
@@ -2137,6 +2182,93 @@ mod tests {
         assert_eq!(header(&raw, "content-type"), vec!["application/json"]);
         assert!(header(&raw, "cookie").is_empty(), "{raw}");
         assert!(header(&raw, "authorization").is_empty(), "{raw}");
+
+        // Signed by this installation's app agent over the method, the full
+        // sidecar URL, the body and the host's two headers, the way the
+        // sidecar checks it; and that agent is what `/plugin-runtime`
+        // answers for the installation.
+        let headers: Vec<(String, String)> = raw
+            .split("\r\n\r\n")
+            .next()
+            .unwrap()
+            .lines()
+            .skip(1)
+            .filter_map(|line| {
+                let (k, v) = line.split_once(':')?;
+                Some((k.trim().to_string(), v.trim().to_string()))
+            })
+            .collect();
+        crate::plugins::sidecar_auth::tests::verify(
+            "POST",
+            &format!("{origin}/v1/query"),
+            br#"{"document":"did:ng:o:x"}"#,
+            &headers,
+        )
+        .unwrap();
+        let (agent, public_key) =
+            crate::handlers::plugin_runtime::agent_of(&fixture.appstate, &fixture.plugin)
+                .await
+                .unwrap();
+        assert_eq!(header(&raw, "x-atomic-agent"), vec![agent.as_str()]);
+        assert_eq!(
+            header(&raw, "x-atomic-public-key"),
+            vec![public_key.as_str()]
+        );
+        assert_eq!(header(&raw, "x-atomic-signature-version"), vec!["2"]);
+    }
+
+    /// Without an app agent on this node the host cannot vouch for the
+    /// installation, so nothing is sent unsigned.
+    #[actix_rt::test]
+    async fn a_sidecar_request_without_an_app_agent_is_not_sent() {
+        let (_fixture, host) = sidecar_host_as(
+            "host_core_sidecar_unsigned",
+            &[("nextgraph", "http://127.0.0.1:9")],
+            false,
+        )
+        .await;
+        let err = host
+            .fetch(
+                sidecar_request("query", "atomic-sidecar:/nextgraph/v1/query"),
+                "read",
+            )
+            .await
+            .unwrap_err();
+        assert!(err.contains("no app agent on this node"), "{err}");
+    }
+
+    /// `GET /plugin-runtime?installation=`: the runtime agent, or 404.
+    #[actix_rt::test]
+    async fn plugin_runtime_answers_the_installations_app_agent() {
+        use actix_web::{test as actix_test, web, App};
+        let (fixture, _host) = sidecar_host("host_core_plugin_runtime", &[]).await;
+        let app = actix_test::init_service(
+            App::new()
+                .app_data(web::Data::new(fixture.appstate.clone()))
+                .configure(crate::routes::config_routes),
+        )
+        .await;
+        let ask = |installation: &str| {
+            actix_test::TestRequest::get()
+                .uri(&format!(
+                    "/plugin-runtime?installation={}",
+                    urlencoding::encode(installation)
+                ))
+                .to_request()
+        };
+        let resp = actix_test::call_service(&app, ask(&fixture.plugin)).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = actix_test::read_body_json(resp).await;
+        let (agent, public_key) =
+            crate::handlers::plugin_runtime::agent_of(&fixture.appstate, &fixture.plugin)
+                .await
+                .unwrap();
+        assert_eq!(
+            body,
+            serde_json::json!({"agent": agent, "publicKey": public_key})
+        );
+        let resp = actix_test::call_service(&app, ask("did:ad:nothing-here")).await;
+        assert_eq!(resp.status(), 404);
     }
 
     #[actix_rt::test]

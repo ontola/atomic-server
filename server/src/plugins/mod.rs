@@ -115,6 +115,7 @@ pub mod run_log;
 pub mod scheduler;
 pub mod search;
 pub mod server_info;
+pub mod sidecar_auth;
 #[cfg(feature = "wasm-plugins")]
 pub mod store_host;
 #[cfg(all(test, feature = "wasm-plugins"))]
