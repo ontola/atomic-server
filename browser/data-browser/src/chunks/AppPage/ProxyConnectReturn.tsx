@@ -44,10 +44,7 @@ export function ProxyConnectReturn({
     history.replaceState(history.state, '', location.pathname);
     let cancelled = false;
 
-    // Redeeming is signed with the user key, which may still be loading this
-    // early in a page load.
-    waitForAgent(store)
-      .then(() => finishProxyReturn(store, pending.connections, pending.params))
+    redeemOnce(store, pending.connections, pending.params)
       .then(returnTo => {
         if (!cancelled) location.replace(returnTo);
       })
@@ -67,6 +64,43 @@ export function ProxyConnectReturn({
       {error ?? 'Finishing the connection…'}
     </p>
   );
+}
+
+/**
+ * Redemptions in flight, by `integration_state`. `finish` consumes the pending
+ * handoff, so a second call for the same return always fails; StrictMode in
+ * development runs the effect twice, and the second run must wait for the
+ * first run's redemption rather than start its own (#1883).
+ */
+const redemptions = new Map<string, Promise<string>>();
+
+/** How long a settled redemption stays shared, for a remount right after. */
+const KEEP_SETTLED_MS = 10_000;
+
+function redeemOnce(
+  store: ReturnType<typeof useStore>,
+  connections: ProxyConnections,
+  params: URLSearchParams,
+): Promise<string> {
+  const state = params.get('integration_state') ?? '';
+  const known = redemptions.get(state);
+
+  if (known) return known;
+
+  // Redeeming is signed with the user key, which may still be loading this
+  // early in a page load.
+  const redemption = waitForAgent(store).then(() =>
+    finishProxyReturn(store, connections, params),
+  );
+  redemptions.set(state, redemption);
+
+  const forget = () =>
+    setTimeout(() => {
+      if (redemptions.get(state) === redemption) redemptions.delete(state);
+    }, KEEP_SETTLED_MS);
+  redemption.then(forget, forget);
+
+  return redemption;
 }
 
 /** The signed-in agent, once there is one; gives up after 30 s. */
