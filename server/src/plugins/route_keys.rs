@@ -213,6 +213,9 @@ pub struct PublicInfo {
     pub name: String,
     pub alg: KeyAlg,
     pub public_key_pem: String,
+    /// The same key as a public JWK (RFC 7517) without `kid`, for a JWK Set
+    /// such as Open Cloud Mesh's `jwksUri`.
+    pub jwk: serde_json::Value,
     pub created_at: i64,
 }
 
@@ -234,10 +237,12 @@ pub fn public(
     let key = declared(manifest, name)?;
     ensure(db, installation, std::slice::from_ref(key))?;
     let stored = read(db, installation, name)?.ok_or("the key was not stored")?;
+    let jwk = PublicKey::from_pem(&stored.public_pem)?.to_jwk();
     Ok(PublicInfo {
         name: name.to_string(),
         alg: stored.alg,
         public_key_pem: stored.public_pem,
+        jwk,
         created_at: stored.created_at,
     })
 }
@@ -361,6 +366,20 @@ pub struct SignRequest {
     /// (what the fediverse verifies) and RFC 9421 for `ed25519`.
     #[serde(default)]
     pub format: Option<String>,
+    /// An RFC 9421 `tag` parameter, e.g. `ocm` for Open Cloud Mesh. A tagged
+    /// signature with a body also covers `content-length`. Only with
+    /// `rfc9421`.
+    #[serde(default)]
+    pub tag: Option<String>,
+}
+
+/// A signature `tag`: 1 to 64 characters from `a-z`, `0-9`, `-`, `_`, `.`.
+pub fn valid_tag(tag: &str) -> bool {
+    !tag.is_empty()
+        && tag.len() <= 64
+        && tag
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b"-_.".contains(&c))
 }
 
 #[derive(Debug, Deserialize)]
@@ -422,13 +441,25 @@ pub fn sign(
         None => http_signatures::Scheme::Rfc9421,
         Some(other) => return Err(format!("unknown signature format `{other}`")),
     };
+    if let Some(tag) = &request.tag {
+        if format != http_signatures::Scheme::Rfc9421 {
+            return Err("a signature `tag` needs format `rfc9421`".into());
+        }
+        if !valid_tag(tag) {
+            return Err("a signature `tag` is 1 to 64 characters: a-z, 0-9, -, _ or .".into());
+        }
+    }
     let headers = match format {
         http_signatures::Scheme::Cavage => {
             http_signatures::sign_cavage(&signer, &request.key_id, &outbound, now)
         }
-        http_signatures::Scheme::Rfc9421 => {
-            http_signatures::sign_rfc9421(&signer, &request.key_id, &outbound, now)
-        }
+        http_signatures::Scheme::Rfc9421 => http_signatures::sign_rfc9421_tagged(
+            &signer,
+            &request.key_id,
+            &outbound,
+            now,
+            request.tag.as_deref(),
+        ),
     };
     let host = url.host_str().unwrap_or_default().to_string();
     tracing::info!(
@@ -516,6 +547,7 @@ pub(crate) mod tests {
                 body: Some("{\"type\":\"Follow\"}".into()),
             },
             format: None,
+            tag: None,
         };
         let (signed, log) = sign(
             &db,
@@ -572,6 +604,92 @@ pub(crate) mod tests {
             .unwrap()
             .starts_with("sig1=(\"@method\" \"@target-uri\" \"content-digest\")"));
 
+        // An OCM-tagged RFC 9421 signature covers `content-length` too, and
+        // verifies against the key's published JWK the way an OCM peer
+        // checks it: the one `tag="ocm"` signature, OCM's coverage rules.
+        let ed = public(&db, INSTALLATION, &m, "ed-key").unwrap();
+        assert_eq!(ed.jwk["kty"], "OKP");
+        assert_eq!(ed.jwk["alg"], "Ed25519");
+        let (jwk_key, jwk_alg) = PublicKey::from_jwk(&ed.jwk).unwrap();
+        assert_eq!(jwk_key, PublicKey::from_pem(&ed.public_key_pem).unwrap());
+        assert_eq!(jwk_alg, http_signatures::Algorithm::Ed25519);
+        let body = "{\"notificationType\":\"SHARE_ACCEPTED\"}";
+        let (signed, _) = sign(
+            &db,
+            INSTALLATION,
+            &m,
+            &SignRequest {
+                key: "ed-key".into(),
+                key_id: "a.example#ocm".into(),
+                operation: "deliver".into(),
+                request: OutboundRequest {
+                    method: "POST".into(),
+                    url: "https://b.example/ocm/notifications".into(),
+                    body: Some(body.into()),
+                },
+                format: None,
+                tag: Some("ocm".into()),
+            },
+            std::time::SystemTime::now(),
+        )
+        .unwrap();
+        let input = signed["headers"]["signature-input"].as_str().unwrap();
+        assert!(
+            input.contains("\"content-length\"") && input.ends_with(";tag=\"ocm\""),
+            "{input}"
+        );
+        assert_eq!(signed["headers"]["content-length"], body.len().to_string());
+        let headers: Vec<(String, String)> = signed["headers"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(n, v)| (n.clone(), v.as_str().unwrap().to_string()))
+            .collect();
+        let message = http_signatures::Message {
+            method: "POST",
+            scheme: "https",
+            authority: "b.example",
+            path: "/ocm/notifications",
+            query: None,
+            headers: &headers,
+        };
+        let parsed = http_signatures::parse(&message).unwrap();
+        let ocm = http_signatures::tagged(&parsed, http_signatures::OCM_TAG).unwrap();
+        http_signatures::check_policy(
+            ocm,
+            &message,
+            body.as_bytes(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+        )
+        .unwrap();
+        http_signatures::check_ocm_policy(ocm, body.as_bytes()).unwrap();
+        http_signatures::verify(ocm, &jwk_key).unwrap();
+        // A tag needs RFC 9421, and a sane value.
+        for (format, tag) in [(Some("draft-cavage-12"), "ocm"), (None, "OCM"), (None, "")] {
+            assert!(sign(
+                &db,
+                INSTALLATION,
+                &m,
+                &SignRequest {
+                    key: "ed-key".into(),
+                    key_id: "k".into(),
+                    operation: "deliver".into(),
+                    request: OutboundRequest {
+                        method: "POST".into(),
+                        url: "https://b.example/inbox".into(),
+                        body: None,
+                    },
+                    format: format.map(str::to_string),
+                    tag: Some(tag.into()),
+                },
+                std::time::SystemTime::now(),
+            )
+            .is_err());
+        }
+
         // Undeclared keys and operations, and a method the operation is not.
         for (key, operation, method) in [
             ("nope", "deliver", "POST"),
@@ -588,6 +706,7 @@ pub(crate) mod tests {
                     body: None,
                 },
                 format: None,
+                tag: None,
             };
             assert!(sign(&db, INSTALLATION, &m, &bad, std::time::SystemTime::now()).is_err());
         }

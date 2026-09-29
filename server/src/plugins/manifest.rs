@@ -661,6 +661,27 @@ impl Manifest {
         })
     }
 
+    /// Whether `blobs.fetch` of operation `id` may `GET` `url`: a declared
+    /// `GET` operation whose URL is this origin, or a wildcard host with this
+    /// scheme, and whose path matches. Which operations a route may use at
+    /// all is its `enqueues` list; the egress guard still checks the address.
+    pub fn allows_fetch(&self, id: &str, url: &url::Url) -> bool {
+        self.operations.iter().any(|operation| {
+            if operation.id != id || !operation.method.eq_ignore_ascii_case("GET") {
+                return false;
+            }
+            let Ok(endpoint) = url::Url::parse(&operation.url) else {
+                return false;
+            };
+            let origin = if endpoint.host_str() == Some("*") {
+                endpoint.scheme() == url.scheme()
+            } else {
+                endpoint.origin() == url.origin()
+            };
+            origin && matches_path(endpoint.path(), url.path())
+        })
+    }
+
     /// Whether a delivery of operation `id` may go to `url`: a declared
     /// write operation with this method, whose URL is this origin, or a
     /// wildcard host (`https://*/inbox`, design 2.2 and D5) with this scheme.
@@ -807,9 +828,21 @@ pub fn translate_plugin_json(
 
 /// Typed parameters admit only positive decimal IDs or hyphenated UUIDs.
 /// No globbing, repository substitution, encoded slashes or traversal.
+/// Segment by segment: `{number}` and `{uuid}` match one such segment, and a
+/// last `{*rest}` matches one or more non-empty segments (for destinations
+/// whose path comes from data, like an OCM WebDAV URI or `endPoint`).
 fn matches_path(pattern: &str, actual: &str) -> bool {
     let p: Vec<_> = pattern.split('/').collect();
     let a: Vec<_> = actual.split('/').collect();
+    if let Some((last, head)) = p.split_last() {
+        if *last == "%7B*rest%7D" || *last == "{*rest}" {
+            return a.len() > head.len()
+                && a[head.len()..]
+                    .iter()
+                    .all(|s| !s.is_empty() && *s != "." && *s != "..")
+                && matches_path(&head.join("/"), &a[..head.len()].join("/"));
+        }
+    }
     p.len() == a.len()
         && p.iter().zip(a).all(|(p, a)| {
             if *p == "%7Bnumber%7D" || *p == "{number}" {

@@ -97,6 +97,8 @@ pub mod route_exec;
 pub mod route_keys;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod route_levels_test;
+#[cfg(all(test, feature = "plugin-routes"))]
+mod route_ocm_test;
 #[cfg(feature = "plugin-routes")]
 pub mod route_registry;
 #[cfg(feature = "plugin-routes")]

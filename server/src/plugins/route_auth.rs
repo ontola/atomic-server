@@ -22,6 +22,20 @@
 //! only; see [`actor_endpoints`]), so a plugin can answer the signer without
 //! fetching anything itself. A `keyId` an installation on this node bound
 //! ([`super::route_keys::bind_key_id`]) is not fetched.
+//!
+//! **Open Cloud Mesh.** A request whose RFC 9421 signature carries
+//! `tag="ocm"` is verified the way OCM 1.5 ("HTTP Message Signatures")
+//! prescribes, instead of by fetching its `keyid`: exactly one signature with
+//! that tag, covering `@method`, `@target-uri` and, with a body,
+//! `content-digest` and `content-length`; the signer's domain is the JSON
+//! body's `senderDomain`, or the part after the last `@` of its `sender`;
+//! the key is the JWK whose `kid` is the `keyid`, in the JWK Set at the
+//! `jwksUri` of `https://<domain>/.well-known/ocm`; its `alg` decides the
+//! algorithm. `request.caller` is then `{ keyId, owner, domain, scheme,
+//! alg, tag, endPoint }`, where `owner` is the discovery origin and
+//! `endPoint` the OCM API URL that discovery advertised. Both fetches go
+//! through the same egress guard (and test seams) as any key fetch, over
+//! `https` only.
 
 use std::{
     collections::HashMap,
@@ -34,7 +48,7 @@ use serde_json::{json, Value as Json};
 
 use super::{
     egress, host_core,
-    http_signatures::{self, Message, PublicKey, Refused},
+    http_signatures::{self, Algorithm, Message, PublicKey, Refused},
     manifest::Manifest,
     route_keys,
     route_registry::RouteRegistry,
@@ -182,6 +196,10 @@ enum Cached {
         key: Box<PublicKey>,
         owner: String,
         actor: Option<Json>,
+        /// The algorithm a JWK's `alg` fixes (OCM keys); `None` for a PEM.
+        alg: Option<Algorithm>,
+        /// The OCM `endPoint` the signer's discovery advertised.
+        endpoint: Option<String>,
         at: i64,
     },
     Missing {
@@ -208,9 +226,16 @@ pub struct Resolved {
     pub owner: String,
     /// [`actor_endpoints`] of the fetched document, if it had them.
     pub actor: Option<Json>,
+    /// The algorithm the key's JWK fixes, if it came from one (OCM).
+    pub alg: Option<Algorithm>,
+    /// The OCM `endPoint` of the signer's discovery, for an OCM key.
+    pub endpoint: Option<String>,
     /// Answered from the cache, not fetched now.
     pub cached: bool,
 }
+
+/// How long an OCM discovery or JWK Set document may be.
+pub const OCM_DOCUMENT_MAX_BYTES: usize = KEY_FETCH_MAX_BYTES;
 
 impl KeyResolver {
     pub fn new(fetch: Arc<dyn KeyFetch>) -> Self {
@@ -263,17 +288,26 @@ impl KeyResolver {
                 key,
                 owner,
                 actor: None,
+                alg: None,
+                endpoint: None,
                 cached: false,
             });
         }
         match self.cached(installation, key_id, now) {
             Some(Cached::Found {
-                key, owner, actor, ..
+                key,
+                owner,
+                actor,
+                alg,
+                endpoint,
+                ..
             }) => {
                 return Ok(Resolved {
                     key: *key,
                     owner,
                     actor,
+                    alg,
+                    endpoint,
                     cached: true,
                 })
             }
@@ -281,6 +315,138 @@ impl KeyResolver {
             None => {}
         }
         self.fetch_now(installation, key_id, now).await
+    }
+
+    /// The OCM key `kid` of `domain`: from the JWK Set its discovery's
+    /// `jwksUri` names. Cached like any key, under `ocm:<domain>#<kid>`.
+    pub async fn resolve_ocm(
+        &self,
+        installation: &str,
+        domain: &str,
+        kid: &str,
+        now: i64,
+    ) -> Result<Resolved, Refused> {
+        let cache_key = format!("ocm:{domain}#{kid}");
+        match self.cached(installation, &cache_key, now) {
+            Some(Cached::Found {
+                key,
+                owner,
+                alg,
+                endpoint,
+                ..
+            }) => {
+                return Ok(Resolved {
+                    key: *key,
+                    owner,
+                    actor: None,
+                    alg,
+                    endpoint,
+                    cached: true,
+                })
+            }
+            Some(Cached::Missing { reason, .. }) => return Err(Refused(reason)),
+            None => {}
+        }
+        self.fetch_ocm_now(installation, domain, kid, now).await
+    }
+
+    /// Whether the OCM key of `domain` was cached long enough ago to fetch
+    /// it again after it failed to verify.
+    fn ocm_stale(&self, installation: &str, domain: &str, kid: &str, now: i64) -> bool {
+        matches!(
+            self.cached(installation, &format!("ocm:{domain}#{kid}"), now),
+            Some(Cached::Found { at, .. }) if now - at >= REFETCH_AFTER_MS
+        )
+    }
+
+    async fn fetch_ocm_now(
+        &self,
+        installation: &str,
+        domain: &str,
+        kid: &str,
+        now: i64,
+    ) -> Result<Resolved, Refused> {
+        let cache_key = format!("ocm:{domain}#{kid}");
+        let result = async {
+            let origin = url::Url::parse(&format!("https://{domain}/"))
+                .map_err(|_| format!("`{domain}` is not a domain"))?;
+            let discovery = origin.join("/.well-known/ocm").map_err(|e| e.to_string())?;
+            let bytes = self.fetch.fetch(&discovery).await?;
+            let doc: Json = serde_json::from_slice(&bytes)
+                .map_err(|_| "the OCM discovery document is not JSON".to_string())?;
+            let jwks = doc["jwksUri"]
+                .as_str()
+                .ok_or("the OCM discovery document has no jwksUri")?;
+            let jwks = url::Url::parse(jwks).map_err(|_| "jwksUri is not a URL".to_string())?;
+            if jwks.scheme() != "https"
+                || jwks.fragment().is_some()
+                || !jwks.username().is_empty()
+                || jwks.password().is_some()
+            {
+                return Err("jwksUri must be an https URL without credentials".to_string());
+            }
+            let bytes = self.fetch.fetch(&jwks).await?;
+            let set: Json = serde_json::from_slice(&bytes)
+                .map_err(|_| "the JWK Set is not JSON".to_string())?;
+            let mut keys = set["keys"]
+                .as_array()
+                .ok_or("the JWK Set has no keys")?
+                .iter()
+                .filter(|k| k["kid"].as_str() == Some(kid));
+            let jwk = keys
+                .next()
+                .ok_or("the JWK Set has no key with this keyid")?;
+            if keys.next().is_some() {
+                return Err("the JWK Set has more than one key with this keyid".to_string());
+            }
+            let (key, alg) = PublicKey::from_jwk(jwk)?;
+            let endpoint = doc["endPoint"]
+                .as_str()
+                // Where to notify the signer. Its scheme is checked where it
+                // is used: a delivery must match a declared operation.
+                .filter(|e| {
+                    url::Url::parse(e).is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
+                })
+                .map(|e| e.trim_end_matches('/').to_string());
+            Ok((key, alg, origin.origin().ascii_serialization(), endpoint))
+        }
+        .await;
+        match result {
+            Ok((key, alg, owner, endpoint)) => {
+                self.store(
+                    installation,
+                    &cache_key,
+                    Cached::Found {
+                        key: Box::new(key.clone()),
+                        owner: owner.clone(),
+                        actor: None,
+                        alg: Some(alg),
+                        endpoint: endpoint.clone(),
+                        at: now,
+                    },
+                );
+                Ok(Resolved {
+                    key,
+                    owner,
+                    actor: None,
+                    alg: Some(alg),
+                    endpoint,
+                    cached: false,
+                })
+            }
+            Err(e) => {
+                let reason = format!("the OCM signing key could not be used: {e}");
+                self.store(
+                    installation,
+                    &cache_key,
+                    Cached::Missing {
+                        reason: reason.clone(),
+                        at: now,
+                    },
+                );
+                Err(Refused(reason))
+            }
+        }
     }
 
     async fn fetch_now(
@@ -312,6 +478,8 @@ impl KeyResolver {
                         key: Box::new(key.clone()),
                         owner: owner.clone(),
                         actor: actor.clone(),
+                        alg: None,
+                        endpoint: None,
                         at: now,
                     },
                 );
@@ -319,6 +487,8 @@ impl KeyResolver {
                     key,
                     owner,
                     actor,
+                    alg: None,
+                    endpoint: None,
                     cached: false,
                 })
             }
@@ -392,9 +562,109 @@ impl RequestParts {
     }
 }
 
+/// The domain an OCM request names as its signer: `senderDomain`, or the
+/// part after the last `@` of `sender` (an OCM address). When both are
+/// given they must agree. Lowercased; a host with an optional port.
+pub fn ocm_signer_domain(body: &[u8]) -> Result<String, Refused> {
+    let doc: Json = serde_json::from_slice(body).map_err(|_| {
+        Refused("an OCM-signed request needs a JSON body that names its sender".into())
+    })?;
+    let from_domain = doc["senderDomain"].as_str();
+    let from_sender = doc["sender"]
+        .as_str()
+        .and_then(|s| s.rsplit_once('@'))
+        .map(|(_, d)| d);
+    let raw = match (from_domain, from_sender) {
+        (Some(a), Some(b)) if !a.eq_ignore_ascii_case(b) => {
+            return Err(Refused(
+                "`senderDomain` and the domain of `sender` differ".into(),
+            ))
+        }
+        (Some(d), _) | (None, Some(d)) => d,
+        (None, None) => {
+            return Err(Refused(
+                "an OCM-signed request must name `senderDomain` or a `sender` address".into(),
+            ))
+        }
+    };
+    let domain = raw.to_ascii_lowercase();
+    let parsed = url::Url::parse(&format!("https://{domain}/")).ok();
+    let exact = parsed.as_ref().is_some_and(|u| {
+        u.path() == "/"
+            && u.username().is_empty()
+            && u.query().is_none()
+            && u.host_str().is_some()
+            && match u.port() {
+                Some(port) => format!("{}:{port}", u.host_str().unwrap_or_default()) == domain,
+                None => u.host_str() == Some(domain.as_str()),
+            }
+    });
+    if !exact || domain.len() > 255 {
+        return Err(Refused(format!("`{raw}` is not a server domain")));
+    }
+    Ok(domain)
+}
+
+/// Verifies an OCM request (see the module docs): the one `tag="ocm"`
+/// signature, with the key from the signer's discovery.
+pub async fn verify_ocm_signature(
+    resolver: &KeyResolver,
+    installation: &str,
+    message: &Message<'_>,
+    signatures: &[http_signatures::Parsed],
+    body: &[u8],
+    now_ms: i64,
+) -> Result<Json, Refused> {
+    let parsed = http_signatures::tagged(signatures, http_signatures::OCM_TAG)?;
+    http_signatures::check_policy(parsed, message, body, now_ms.div_euclid(1000))?;
+    http_signatures::check_ocm_policy(parsed, body)?;
+    let domain = ocm_signer_domain(body)?;
+    let check = |resolved: &Resolved| {
+        let mut pinned = parsed.clone();
+        if let Some(alg) = resolved.alg {
+            if parsed.algorithm.is_some_and(|stated| stated != alg) {
+                return Err(Refused(
+                    "the signature's `alg` is not the algorithm of the key's JWK".into(),
+                ));
+            }
+            pinned.algorithm = Some(alg);
+        }
+        http_signatures::verify(&pinned, &resolved.key)
+    };
+    let resolved = resolver
+        .resolve_ocm(installation, &domain, &parsed.key_id, now_ms)
+        .await?;
+    let (alg, owner, endpoint) = match check(&resolved) {
+        Ok(alg) => (alg, resolved.owner, resolved.endpoint),
+        Err(e) => {
+            // The sender may have rotated its key: fetch its set again, at
+            // most once a minute.
+            if !(resolved.cached
+                && resolver.ocm_stale(installation, &domain, &parsed.key_id, now_ms))
+            {
+                return Err(e);
+            }
+            let again = resolver
+                .fetch_ocm_now(installation, &domain, &parsed.key_id, now_ms)
+                .await?;
+            (check(&again)?, again.owner, again.endpoint)
+        }
+    };
+    Ok(json!({
+        "keyId": parsed.key_id,
+        "owner": owner,
+        "domain": domain,
+        "scheme": parsed.scheme.as_str(),
+        "alg": alg.rfc9421_name(),
+        "tag": http_signatures::OCM_TAG,
+        "endPoint": endpoint,
+    }))
+}
+
 /// Verifies an `http-signature` request. Policy (freshness, coverage,
 /// digest) is checked before any key is fetched, so a stale or unbound
-/// request costs no fetch.
+/// request costs no fetch. A request with an OCM-tagged signature is
+/// verified as OCM ([`verify_ocm_signature`]).
 pub async fn verify_signature(
     resolver: &KeyResolver,
     db: &Db,
@@ -406,6 +676,13 @@ pub async fn verify_signature(
     let message = parts.message();
     let now = now_ms.div_euclid(1000);
     let signatures = http_signatures::parse(&message)?;
+    if signatures
+        .iter()
+        .any(|p| p.tag.as_deref() == Some(http_signatures::OCM_TAG))
+    {
+        return verify_ocm_signature(resolver, installation, &message, &signatures, body, now_ms)
+            .await;
+    }
     let mut last = Refused("the request is not signed".into());
     for parsed in signatures.iter().take(MAX_SIGNATURES) {
         if let Err(e) = http_signatures::check_policy(parsed, &message, body, now) {
@@ -1002,5 +1279,328 @@ mod tests {
             resolver.cached("did:ad:i", "http://127.0.0.1:1/k#main-key", 1),
             Some(Cached::Missing { .. })
         ));
+    }
+
+    // -- Open Cloud Mesh ----------------------------------------------------------
+
+    /// Serves an OCM peer's discovery and JWK Set from memory, by URL.
+    struct Peer {
+        documents: Mutex<HashMap<String, Vec<u8>>>,
+        fetched: Mutex<Vec<String>>,
+    }
+
+    #[async_trait::async_trait]
+    impl KeyFetch for Peer {
+        async fn fetch(&self, url: &url::Url) -> Result<Vec<u8>, String> {
+            self.fetched.lock().unwrap().push(url.to_string());
+            self.documents
+                .lock()
+                .unwrap()
+                .get(url.as_str())
+                .cloned()
+                .ok_or_else(|| "404".to_string())
+        }
+    }
+
+    fn peer(origin: &str, keys: &[(&str, &ed25519_dalek::SigningKey)]) -> Arc<Peer> {
+        let jwks = json!({
+            "keys": keys.iter().map(|(kid, key)| {
+                let mut jwk = PublicKey::Ed25519(key.verifying_key()).to_jwk();
+                jwk["kid"] = json!(kid);
+                jwk
+            }).collect::<Vec<_>>()
+        });
+        let discovery = json!({
+            "enabled": true,
+            "apiVersion": "1.5.0",
+            "endPoint": format!("{origin}/ocm"),
+            "capabilities": ["http-sig"],
+            "jwksUri": format!("{origin}/ocm/jwks"),
+        });
+        Arc::new(Peer {
+            documents: Mutex::new(HashMap::from([
+                (
+                    format!("{origin}/.well-known/ocm"),
+                    discovery.to_string().into_bytes(),
+                ),
+                (format!("{origin}/ocm/jwks"), jwks.to_string().into_bytes()),
+            ])),
+            fetched: Default::default(),
+        })
+    }
+
+    /// A share the way an OCM sender signs it (OCM 1.5 appendix B).
+    fn ocm_share(
+        key: &ed25519_dalek::SigningKey,
+        kid: &str,
+        body: &[u8],
+        at: std::time::SystemTime,
+    ) -> RequestParts {
+        let url = url::Url::parse("https://receiver.example/ocm/shares").unwrap();
+        let mut headers = http_signatures::sign_rfc9421_tagged(
+            &Ed(key.clone()),
+            kid,
+            &http_signatures::Outbound {
+                method: "POST",
+                url: &url,
+                body: Some(body),
+            },
+            at,
+            Some("ocm"),
+        );
+        headers.push(("content-type".into(), "application/json".into()));
+        RequestParts {
+            method: "POST".into(),
+            scheme: "https".into(),
+            authority: "receiver.example".into(),
+            path: "/ocm/shares".into(),
+            query: None,
+            headers,
+        }
+    }
+
+    fn share_body(sender: &str) -> Vec<u8> {
+        json!({
+            "shareWith": "marie@receiver.example",
+            "name": "spec.yaml",
+            "providerId": "7c084226",
+            "owner": sender,
+            "sender": sender,
+            "shareType": "user",
+            "resourceType": "file",
+            "protocol": {"name": "multi", "webdav": {"uri": "https://sender.example/dav/7c084226", "sharedSecret": "s", "permissions": ["read"]}}
+        })
+        .to_string()
+        .into_bytes()
+    }
+
+    #[tokio::test]
+    async fn an_ocm_signature_is_verified_with_the_senders_discovered_jwks() {
+        let db = Db::init_temp("route_auth_ocm").await.unwrap();
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let fake = peer("https://sender.example", &[("sender.example#key1", &key)]);
+        let resolver = KeyResolver::new(fake.clone());
+        let body = share_body("einstein@sender.example");
+        let at = std::time::SystemTime::now();
+        let parts = ocm_share(&key, "sender.example#key1", &body, at);
+        let caller = verify_signature(&resolver, &db, "did:ad:i", &parts, &body, now_ms(at))
+            .await
+            .unwrap();
+        assert_eq!(
+            caller,
+            json!({
+                "keyId": "sender.example#key1",
+                "owner": "https://sender.example",
+                "domain": "sender.example",
+                "scheme": "rfc9421",
+                "alg": "ed25519",
+                "tag": "ocm",
+                "endPoint": "https://sender.example/ocm",
+            })
+        );
+        // Discovery, then its jwksUri; cached afterwards.
+        assert_eq!(
+            *fake.fetched.lock().unwrap(),
+            [
+                "https://sender.example/.well-known/ocm",
+                "https://sender.example/ocm/jwks"
+            ]
+        );
+        verify_signature(&resolver, &db, "did:ad:i", &parts, &body, now_ms(at))
+            .await
+            .unwrap();
+        assert_eq!(fake.fetched.lock().unwrap().len(), 2);
+
+        // Another server's address in the body means that server's keys:
+        // its discovery has none, so it fails.
+        let forged = share_body("einstein@other.example");
+        let err = verify_signature(
+            &resolver,
+            &db,
+            "did:ad:i",
+            &ocm_share(&key, "sender.example#key1", &forged, at),
+            &forged,
+            now_ms(at),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.0.contains("OCM signing key"), "{err}");
+
+        // A kid the set does not have.
+        let err = verify_signature(
+            &resolver,
+            &db,
+            "did:ad:j",
+            &ocm_share(&key, "sender.example#key2", &body, at),
+            &body,
+            now_ms(at),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.0.contains("no key with this keyid"), "{err}");
+
+        // Signed by a key that is not the one published under that kid.
+        let other = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let err = verify_signature(
+            &resolver,
+            &db,
+            "did:ad:k",
+            &ocm_share(&other, "sender.example#key1", &body, at),
+            &body,
+            now_ms(at),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.0.contains("does not verify"), "{err}");
+
+        // A body changed after signing fails its digest before any fetch.
+        let fetched = fake.fetched.lock().unwrap().len();
+        let err = verify_signature(
+            &resolver,
+            &db,
+            "did:ad:l",
+            &parts,
+            &share_body("mallory@sender.example"),
+            now_ms(at),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.0.contains("Content-Digest"), "{err}");
+        assert_eq!(fake.fetched.lock().unwrap().len(), fetched);
+
+        // A jwksUri over plain http is refused.
+        let plain = peer("https://plain.example", &[("k", &key)]);
+        plain.documents.lock().unwrap().insert(
+            "https://plain.example/.well-known/ocm".into(),
+            json!({"jwksUri": "http://plain.example/jwks"})
+                .to_string()
+                .into_bytes(),
+        );
+        let body = share_body("einstein@plain.example");
+        let err = verify_signature(
+            &KeyResolver::new(plain),
+            &db,
+            "did:ad:m",
+            &ocm_share(&key, "k", &body, at),
+            &body,
+            now_ms(at),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.0.contains("https"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn ocm_signatures_follow_the_ocm_rules() {
+        let db = Db::init_temp("route_auth_ocm_rules").await.unwrap();
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let fake = peer("https://sender.example", &[("sender.example#key1", &key)]);
+        let resolver = KeyResolver::new(fake.clone());
+        let body = share_body("einstein@sender.example");
+        let at = std::time::SystemTime::now();
+
+        // Without `content-length` covered: a plain RFC 9421 signature with
+        // the tag added by hand is not enough.
+        let mut parts = ocm_share(&key, "sender.example#key1", &body, at);
+        let url = url::Url::parse("https://receiver.example/ocm/shares").unwrap();
+        let untagged = http_signatures::sign_rfc9421(
+            &Ed(key.clone()),
+            "sender.example#key1",
+            &http_signatures::Outbound {
+                method: "POST",
+                url: &url,
+                body: Some(&body),
+            },
+            at,
+        );
+        let input = untagged
+            .iter()
+            .find(|(n, _)| n == "signature-input")
+            .unwrap()
+            .1
+            .clone()
+            + ";tag=\"ocm\"";
+        for (name, value) in parts.headers.iter_mut() {
+            if name == "signature-input" {
+                *value = input.clone();
+            }
+        }
+        let err = verify_signature(&resolver, &db, "did:ad:i", &parts, &body, now_ms(at))
+            .await
+            .unwrap_err();
+        assert!(err.0.contains("content-length"), "{err}");
+
+        // Two OCM-tagged signatures: the whole message is refused.
+        let mut parts = ocm_share(&key, "sender.example#key1", &body, at);
+        for (name, value) in parts.headers.iter_mut() {
+            if name == "signature-input" || name == "signature" {
+                *value = format!("{value}, {}", value.replacen("sig1=", "sig2=", 1));
+            }
+        }
+        let err = verify_signature(&resolver, &db, "did:ad:i", &parts, &body, now_ms(at))
+            .await
+            .unwrap_err();
+        assert!(err.0.contains("more than one"), "{err}");
+
+        // `senderDomain` and `sender` must agree; one of them must be there.
+        for (bad, why) in [
+            (
+                json!({"senderDomain": "other.example", "sender": "a@sender.example"}),
+                "differ",
+            ),
+            (
+                json!({"notificationType": "SHARE_UNSHARED"}),
+                "senderDomain",
+            ),
+            (
+                json!({"senderDomain": "sender.example/path"}),
+                "not a server domain",
+            ),
+            (
+                json!({"senderDomain": "user@sender.example"}),
+                "not a server domain",
+            ),
+        ] {
+            let bytes = bad.to_string().into_bytes();
+            let err = verify_signature(
+                &resolver,
+                &db,
+                "did:ad:i",
+                &ocm_share(&key, "sender.example#key1", &bytes, at),
+                &bytes,
+                now_ms(at),
+            )
+            .await
+            .unwrap_err();
+            assert!(err.0.contains(why), "{bad}: {err}");
+        }
+        assert_eq!(
+            ocm_signer_domain(br#"{"senderDomain":"Sender.Example:8443"}"#).unwrap(),
+            "sender.example:8443"
+        );
+        assert_eq!(
+            ocm_signer_domain(br#"{"sender":"a@b@sender.example"}"#).unwrap(),
+            "sender.example"
+        );
+    }
+
+    #[test]
+    fn jwks_round_trip_and_refuse_what_ocm_does_not_allow() {
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let public = PublicKey::Ed25519(key.verifying_key());
+        let jwk = public.to_jwk();
+        assert_eq!(
+            PublicKey::from_jwk(&jwk).unwrap(),
+            (public, Algorithm::Ed25519)
+        );
+        for bad in [
+            json!({"kty": "OKP", "crv": "Ed25519", "x": jwk["x"]}),
+            json!({"kty": "OKP", "crv": "X25519", "alg": "Ed25519", "x": jwk["x"]}),
+            json!({"kty": "oct", "alg": "HS256", "k": "AAAA"}),
+            json!({"kty": "EC", "alg": "ES256", "crv": "P-256"}),
+            json!({"kty": "OKP", "crv": "Ed25519", "alg": "Ed25519", "x": "AAAA"}),
+        ] {
+            assert!(PublicKey::from_jwk(&bad).is_err(), "{bad}");
+        }
     }
 }

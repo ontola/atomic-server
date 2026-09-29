@@ -134,6 +134,85 @@ impl PublicKey {
         }
     }
 
+    /// A public JWK (RFC 7517) with its `alg`, the way Open Cloud Mesh
+    /// publishes signing keys: `OKP`/`Ed25519` (`alg` `Ed25519` or `EdDSA`),
+    /// or `RSA` (`alg` `RS256` or `PS512`). Other key types and algorithms,
+    /// and JWKs without an `alg`, are refused: the algorithm comes from the
+    /// key, never from the message.
+    pub fn from_jwk(jwk: &serde_json::Value) -> Result<(Self, Algorithm), String> {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64URL;
+        let field = |name: &str| {
+            jwk[name]
+                .as_str()
+                .ok_or_else(|| format!("the JWK has no `{name}`"))
+        };
+        let bytes = |name: &str| -> Result<Vec<u8>, String> {
+            B64URL
+                .decode(field(name)?.trim_end_matches('='))
+                .map_err(|_| format!("the JWK's `{name}` is not base64url"))
+        };
+        let alg = field("alg")?;
+        let key = match (field("kty")?, alg) {
+            ("OKP", "Ed25519" | "EdDSA") => {
+                if field("crv")? != "Ed25519" {
+                    return Err("only the Ed25519 curve is accepted for OKP keys".into());
+                }
+                let raw: [u8; 32] = bytes("x")?
+                    .try_into()
+                    .map_err(|_| "an Ed25519 key is 32 bytes".to_string())?;
+                (
+                    PublicKey::Ed25519(
+                        ed25519_dalek::VerifyingKey::from_bytes(&raw)
+                            .map_err(|e| format!("not an Ed25519 public key: {e}"))?,
+                    ),
+                    Algorithm::Ed25519,
+                )
+            }
+            ("RSA", "RS256" | "PS512") => {
+                let n = rsa::BigUint::from_bytes_be(&bytes("n")?);
+                let e = rsa::BigUint::from_bytes_be(&bytes("e")?);
+                let key = RsaPublicKey::new(n, e).map_err(|e| format!("not an RSA key: {e}"))?;
+                (
+                    PublicKey::Rsa(key),
+                    if alg == "RS256" {
+                        Algorithm::RsaV15Sha256
+                    } else {
+                        Algorithm::RsaPssSha512
+                    },
+                )
+            }
+            (kty, alg) => {
+                return Err(format!(
+                    "a `{kty}` JWK with `alg` `{alg}` is not accepted (Ed25519, RS256 or PS512)"
+                ))
+            }
+        };
+        key.0.check_strength()?;
+        Ok(key)
+    }
+
+    /// The public JWK of this key, without `kid`: `OKP`/`Ed25519` with `alg`
+    /// `Ed25519`, or `RSA` with `alg` `RS256` (what this host signs with).
+    pub fn to_jwk(&self) -> serde_json::Value {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64URL;
+        match self {
+            PublicKey::Ed25519(key) => serde_json::json!({
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "alg": "Ed25519",
+                "use": "sig",
+                "x": B64URL.encode(key.as_bytes()),
+            }),
+            PublicKey::Rsa(key) => serde_json::json!({
+                "kty": "RSA",
+                "alg": "RS256",
+                "use": "sig",
+                "n": B64URL.encode(key.n().to_bytes_be()),
+                "e": B64URL.encode(key.e().to_bytes_be()),
+            }),
+        }
+    }
+
     /// The algorithms this key can have made a signature with, in the order
     /// they are tried when a signature does not say.
     fn algorithms(&self) -> &'static [Algorithm] {
@@ -274,6 +353,9 @@ pub struct Parsed {
     pub covered: Vec<String>,
     pub created: Option<i64>,
     pub expires: Option<i64>,
+    /// The RFC 9421 `tag` parameter (`ocm` for Open Cloud Mesh). `None` for
+    /// cavage.
+    pub tag: Option<String>,
     /// The signing string (cavage) or signature base (RFC 9421).
     pub base: Vec<u8>,
     pub signature: Vec<u8>,
@@ -430,6 +512,7 @@ fn parse_cavage(message: &Message, value: &str) -> Result<Parsed, Refused> {
         covered,
         created,
         expires,
+        tag: None,
         base: lines.join("\n").into_bytes(),
         signature,
     })
@@ -795,6 +878,11 @@ fn parse_rfc9421(message: &Message, input: &str, signature: &str) -> Result<Vec<
             covered,
             created: int("created")?,
             expires: int("expires")?,
+            tag: match param("tag") {
+                None => None,
+                Some(Bare::String(t)) => Some(t.clone()),
+                Some(_) => return refused("`tag` is not a string"),
+            },
             base: lines.join("\n").into_bytes(),
             signature: bytes,
         });
@@ -904,6 +992,50 @@ pub fn check_policy(
         && !(covers("content-digest") && content_digest.is_some())
     {
         return refused("a request with a body must sign a `Digest` or `Content-Digest` of it");
+    }
+    Ok(())
+}
+
+/// The tag Open Cloud Mesh signatures carry (OCM 1.5, "HTTP Message
+/// Signatures").
+pub const OCM_TAG: &str = "ocm";
+
+/// The one RFC 9421 signature on a request that carries `tag`, or a refusal
+/// when there is none or more than one. Signatures with other tags (or none)
+/// are disregarded, as OCM requires.
+pub fn tagged<'a>(signatures: &'a [Parsed], tag: &str) -> Result<&'a Parsed, Refused> {
+    let mut found = signatures
+        .iter()
+        .filter(|p| p.scheme == Scheme::Rfc9421 && p.tag.as_deref() == Some(tag));
+    let first = found
+        .next()
+        .ok_or_else(|| Refused(format!("the request has no signature with tag `{tag}`")))?;
+    if found.next().is_some() {
+        return refused(format!(
+            "the request has more than one signature with tag `{tag}`"
+        ));
+    }
+    Ok(first)
+}
+
+/// OCM's coverage rules on top of [`check_policy`]: `@method`,
+/// `@target-uri`, and with a body `content-digest` and `content-length`.
+pub fn check_ocm_policy(parsed: &Parsed, body: &[u8]) -> Result<(), Refused> {
+    let covers = |name: &str| parsed.covered.iter().any(|c| c == name);
+    let mut needed = vec!["@method", "@target-uri"];
+    if !body.is_empty() {
+        needed.extend(["content-digest", "content-length"]);
+    }
+    let missing: Vec<&str> = needed.into_iter().filter(|c| !covers(c)).collect();
+    if !missing.is_empty() {
+        return refused(format!(
+            "an OCM signature must cover {}",
+            missing
+                .iter()
+                .map(|c| format!("`{c}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
     Ok(())
 }
@@ -1046,6 +1178,19 @@ pub fn sign_rfc9421(
     request: &Outbound,
     now: std::time::SystemTime,
 ) -> Vec<(String, String)> {
+    sign_rfc9421_tagged(signer, key_id, request, now, None)
+}
+
+/// [`sign_rfc9421`] with a `tag` parameter. A tagged signature with a body
+/// also covers `content-length`, and returns that header: Open Cloud Mesh
+/// (`tag="ocm"`) requires it.
+pub fn sign_rfc9421_tagged(
+    signer: &dyn Signer,
+    key_id: &str,
+    request: &Outbound,
+    now: std::time::SystemTime,
+    tag: Option<&str>,
+) -> Vec<(String, String)> {
     let created = now
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -1065,8 +1210,14 @@ pub fn sign_rfc9421(
         lines.push(format!("\"content-digest\": {digest}"));
         items.push((Bare::String("content-digest".into()), Params::new()));
         headers.push(("content-digest".to_string(), digest));
+        if tag.is_some() {
+            let length = body.len().to_string();
+            lines.push(format!("\"content-length\": {length}"));
+            items.push((Bare::String("content-length".into()), Params::new()));
+            headers.push(("content-length".to_string(), length));
+        }
     }
-    let params: Params = vec![
+    let mut params: Params = vec![
         ("created".into(), Bare::Integer(created)),
         ("keyid".into(), Bare::String(key_id.into())),
         (
@@ -1074,6 +1225,9 @@ pub fn sign_rfc9421(
             Bare::String(signer.algorithm().rfc9421_name().into()),
         ),
     ];
+    if let Some(tag) = tag {
+        params.push(("tag".into(), Bare::String(tag.into())));
+    }
     let signature_params = serialize_inner_list(&items, &params);
     lines.push(format!("\"@signature-params\": {signature_params}"));
     let signature = signer.sign(lines.join("\n").as_bytes());
@@ -1519,6 +1673,7 @@ mod tests {
             covered: vec![],
             created: None,
             expires: None,
+            tag: None,
             base: vec![],
             signature: vec![0; 64],
         };

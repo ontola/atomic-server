@@ -318,7 +318,11 @@ impl AppState {
                     peer_ca: config.plugin_e2e_peer_ca.clone(),
                 }))
                 .with_quotas(plugins::route_writes::Quotas::from_opts(&config.opts))
-                .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes),
+                .with_max_blob_bytes(config.opts.plugin_route_max_blob_bytes)
+                .with_egress_seams(
+                    config.plugin_delivery_loopback,
+                    config.plugin_e2e_peer_ca.clone(),
+                ),
         );
         #[cfg(feature = "plugin-routes")]
         let route_delivery = Arc::new(plugins::route_delivery::DeliveryQueue::new(
