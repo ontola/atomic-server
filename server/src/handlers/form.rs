@@ -500,6 +500,13 @@ pub async fn form_image(
         .await
         .map_err(|_| not_found())?;
 
+    // Referenced by the form is not enough: whoever can edit the form picks
+    // what it references. Serve only Files from the form's own drive, or ones
+    // that are public anyway.
+    if !forms::FormScope::of(store, &form).await.may_show(store, &file).await {
+        return Err(not_found());
+    }
+
     let mut response = download_file_handler_partial(&file, &req, &params, &appstate)
         .await
         .map_err(|e| internal_error(e.to_string()))?;
@@ -587,6 +594,15 @@ pub async fn submit_form(
         .await
         .map_err(|_| internal_error("Form's target table no longer exists"))?;
 
+    // The row is written by the server's own agent, so nothing else would
+    // stop a form from filing answers into a table in someone else's drive.
+    if !forms::FormScope::of(store, &form).await.owns(store, &table).await {
+        return Err(FormApiError::new(
+            StatusCode::FORBIDDEN,
+            "This form's results table is outside the form's drive.",
+        ));
+    }
+
     let mut row = Resource::new_instance(&data_class_subject, store)
         .await
         .map_err(|_| internal_error("Form's data class no longer exists"))?;
@@ -615,6 +631,14 @@ pub async fn submit_form(
     }
 
     for (property, value) in coerced {
+        // A question mapped onto structure (where the row lives, who may read
+        // it) would let a visitor decide that. The builder never maps these.
+        if RESERVED_ROW_PROPERTIES.contains(&property.as_str()) {
+            return Err(FormApiError::new(
+                StatusCode::BAD_REQUEST,
+                "This form writes to a property it may not set.",
+            ));
+        }
         row.set(property, value, store)
             .await
             .map_err(internal_error)?;
@@ -660,6 +684,21 @@ pub async fn submit_form(
     Ok(HttpResponse::Created().json(json!({ "ok": true })))
 }
 
+/// Properties a form question may not write: they decide where a row lives
+/// and who can see or change it, which is the form owner's call, not the
+/// visitor's.
+const RESERVED_ROW_PROPERTIES: [&str; 9] = [
+    urls::PARENT,
+    urls::IS_A,
+    urls::DRIVE_PROP,
+    urls::READ,
+    urls::WRITE,
+    urls::APPEND,
+    urls::LAST_COMMIT,
+    urls::CREATED_BY,
+    urls::PUBLIC_KEY,
+];
+
 /// Per-form lock serializing invite-code check-and-consume in [submit_form].
 /// Entries are never pruned — one `Arc<Mutex>` per invite-only form ever
 /// submitted to since the last restart is negligible.
@@ -696,14 +735,20 @@ fn rate_limiter() -> &'static Mutex<HashMap<String, VecDeque<Instant>>> {
 }
 
 fn check_rate_limit(req: &HttpRequest) -> Result<(), FormApiError> {
-    let ip = req
-        .connection_info()
-        .realip_remote_addr()
-        .unwrap_or("unknown")
-        .to_string();
+    // The socket peer, not `X-Forwarded-For`: a client sets that header
+    // itself and could claim a fresh address per request (see
+    // `helpers::peer_ip`).
+    let ip = crate::helpers::peer_ip(req);
 
     let mut guard = rate_limiter().lock().unwrap();
     let now = Instant::now();
+    // Forget addresses whose window has fully passed, so the map stays as
+    // small as the set of recent submitters.
+    guard.retain(|_, times| {
+        times
+            .back()
+            .is_some_and(|last| now.duration_since(*last) <= RATE_LIMIT_WINDOW)
+    });
     let entry = guard.entry(ip).or_default();
     while let Some(front) = entry.front() {
         if now.duration_since(*front) > RATE_LIMIT_WINDOW {

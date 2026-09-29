@@ -1550,6 +1550,15 @@ async fn form_submission_flow() {
     )
     .await
     .unwrap();
+    // Filed under its results table, like "Create form from this table" does,
+    // so the form and the table share a drive (see `forms::FormScope`).
+    form.set(
+        urls::PARENT.into(),
+        Value::AtomicUrl(table.get_subject().to_string().into()),
+        store,
+    )
+    .await
+    .unwrap();
     // DID (genesis) subject — matches how forms are actually created by the
     // data-browser client, and exercises the slug bootstrap fallback below.
     form.save_as_genesis(store).await.unwrap();
@@ -1746,7 +1755,28 @@ async fn form_submission_flow() {
 
     // Options are Tags on the property's `allowsOnly`; a picture-choice
     // option's image is the Tag's `cover-image`.
-    let referenced_image = "https://example.com/files/cat";
+    // A real File in the form's drive: the definition only keeps images it
+    // can see the form may show (`forms::FormScope`).
+    let mut cat_file = Resource::new_instance(urls::FILE, store).await.unwrap();
+    cat_file
+        .set(
+            urls::DOWNLOAD_URL.into(),
+            Value::String("https://example.com/files/cat".into()),
+            store,
+        )
+        .await
+        .unwrap();
+    cat_file
+        .set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(table.get_subject().to_string().into()),
+            store,
+        )
+        .await
+        .unwrap();
+    cat_file.save_locally(store).await.unwrap();
+    let cat_file_subject = cat_file.get_subject().to_string();
+    let referenced_image = cat_file_subject.as_str();
     let mut tag_subjects = Vec::new();
     for (name, image) in [("Cat", Some(referenced_image)), ("Dog", None)] {
         let mut tag = Resource::new_instance(urls::TAG, store).await.unwrap();
@@ -1882,9 +1912,18 @@ async fn form_submission_flow() {
 
     let query =
         atomic_lib::storelike::Query::new_prop_val(urls::PARENT, table.get_subject().as_str());
+    // Rows only: the form and its image File are filed under the table too.
+    let not_rows = [form.get_subject().to_string(), cat_file_subject.clone()];
+    let count_rows = |result: &atomic_lib::storelike::QueryResult| {
+        result
+            .subjects
+            .iter()
+            .filter(|s| !not_rows.contains(&s.to_string()))
+            .count()
+    };
     let result = store.query(&query).await.unwrap();
     assert_eq!(
-        result.subjects.len(),
+        count_rows(&result),
         1,
         "submission row should exist under the table"
     );
@@ -1942,7 +1981,7 @@ async fn form_submission_flow() {
 
     // Only the one valid submission from step 4 should have landed.
     let result = store.query(&query).await.unwrap();
-    assert_eq!(result.subjects.len(), 1);
+    assert_eq!(count_rows(&result), 1);
 
     // 7. Unpublish -> submit now 410
     form.remove_propval(urls::FORM_PUBLISHED_AT).unwrap();
@@ -2205,7 +2244,7 @@ async fn form_submission_flow() {
     );
     let result = store.query(&query).await.unwrap();
     assert_eq!(
-        result.subjects.len(),
+        count_rows(&result),
         2,
         "invited submission should land in the table"
     );
@@ -2241,7 +2280,7 @@ async fn form_submission_flow() {
 
     // No row landed for the rejected replay.
     let result = store.query(&query).await.unwrap();
-    assert_eq!(result.subjects.len(), 2);
+    assert_eq!(count_rows(&result), 2);
 
     // Switching back to public opens the plain link again.
     form.set(
@@ -2261,4 +2300,57 @@ async fn form_submission_flow() {
         resp.status().is_success(),
         "public definition should work again after switching back"
     );
+
+    // Pointing the form at a table in another drive must not let visitors
+    // write there: the server, not the form's editor, would sign the row.
+    let mut foreign_table = Resource::new_instance(urls::TABLE, store).await.unwrap();
+    foreign_table
+        .set(urls::NAME.into(), Value::String("Not yours".into()), store)
+        .await
+        .unwrap();
+    foreign_table
+        .set(
+            urls::CLASSTYPE_PROP.into(),
+            Value::AtomicUrl(class.get_subject().to_string().into()),
+            store,
+        )
+        .await
+        .unwrap();
+    foreign_table
+        .set_unsafe(
+            urls::DRIVE_PROP.into(),
+            Value::AtomicUrl("did:ad:someone-elses-drive".into()),
+        )
+        .unwrap();
+    foreign_table.save_locally(store).await.unwrap();
+    form.set(
+        urls::FORM_TARGET_TABLE.into(),
+        Value::AtomicUrl(foreign_table.get_subject().to_string().into()),
+        store,
+    )
+    .await
+    .unwrap();
+    form.save_locally(store).await.unwrap();
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/form/{}/submit", slug))
+        .set_json(serde_json::json!({
+            "values": { email_prop.get_subject().to_string(): "visitor3@example.com" },
+            "altcha": solve_captcha!(),
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        403,
+        "a target table outside the form's drive should be refused"
+    );
+    let foreign_rows = store
+        .query(&atomic_lib::storelike::Query::new_prop_val(
+            urls::PARENT,
+            foreign_table.get_subject().as_str(),
+        ))
+        .await
+        .unwrap();
+    assert!(foreign_rows.subjects.is_empty(), "no row lands in the other drive");
 }

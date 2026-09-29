@@ -12,6 +12,14 @@ creating a standalone Form generates a data `Class` and a `Table`, while
 creating a form from an existing table reuses that table's class and columns.
 Both store submissions as ordinary rows.
 
+A visitor has no Agent, so the server itself writes each submission and reads
+the form's definition. To keep that from reaching further than the form's
+editor could, a form stays inside its own drive: its results table must be in
+the same drive (a submission to a table elsewhere is refused), and choice
+options, option images and the cover image are shown to visitors only when
+they are in that drive or publicly readable anyway. Questions cannot write the
+row's `parent`, `isA`, `drive` or rights properties.
+
 ## Forms from existing tables
 
 Choose **Create form from this table** in the table’s resource context menu, name the form, and

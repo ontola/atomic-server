@@ -3,9 +3,10 @@
 //!
 //! See `planning/atomic-forms.md` (Phase 3) for the architecture decisions
 //! this module implements: submissions are written by the store's own
-//! default agent (there is no visitor agent), so there is no rights check
-//! here — only publish-state gating (done by the caller) and the field
-//! validation in [`validate_submission`].
+//! default agent (there is no visitor agent), so there is no per-visitor
+//! rights check — publish-state gating (done by the caller), the field
+//! validation in [`validate_submission`], and [`FormScope`], which keeps a
+//! form from reaching outside its own drive.
 
 use std::collections::{HashMap, HashSet};
 
@@ -24,6 +25,142 @@ use atomic_lib::{
     utils::random_string,
     Db, Resource, Subject, Value,
 };
+
+/// How far up the `parent` chain [drive_of] looks for a stamped `drive`.
+const DRIVE_WALK_LIMIT: usize = 32;
+
+/// The drive `resource` lives in: its `drive` propval, else the first one up
+/// its `parent` chain, else (for an HTTP-style top ancestor) its server prefix.
+/// `None` when none of those answer, which [FormScope] treats as "not ours".
+pub async fn drive_of(store: &impl Storelike, resource: &Resource) -> Option<String> {
+    let mut current = resource.clone();
+
+    for _ in 0..DRIVE_WALK_LIMIT {
+        if let Some(drive) = current.get_drive() {
+            return Some(drive.to_string());
+        }
+
+        let Ok(parent) = current.get(atomic_lib::urls::PARENT) else {
+            break;
+        };
+        let Ok(next) = store.get_resource(&parent.to_string().into()).await else {
+            break;
+        };
+        current = next;
+    }
+
+    // No stamp anywhere up the chain. An HTTP-style or `internal:` subject
+    // still names its server; an Atomic identifier names nothing but itself.
+    let subject = current.get_subject();
+
+    if atomic_lib::identifiers::is_atomic_identifier(subject.as_str()) {
+        return None;
+    }
+
+    Some(drive_prefix_from_subject(subject).to_string())
+}
+
+/// What a published form may reach on behalf of its visitors.
+///
+/// A visitor has no agent: the definition is read and the submission written
+/// by the server itself, so the ordinary rights checks never see who set the
+/// form up. Without a boundary, anyone who can edit a Form could point it at
+/// another drive's table (and have the server write rows into it), list that
+/// table's rows as options, or serve another drive's private Files through
+/// `/form/{id}/image`. The rule: a form writes only into its own drive, and
+/// shows a visitor only resources from its own drive or ones anyone may read
+/// anyway (a public ontology's Tags, say).
+pub struct FormScope {
+    drive: Option<String>,
+}
+
+impl FormScope {
+    pub async fn of(store: &impl Storelike, form: &Resource) -> Self {
+        FormScope {
+            drive: drive_of(store, form).await,
+        }
+    }
+
+    /// `resource` sits in the form's own drive.
+    pub async fn owns(&self, store: &impl Storelike, resource: &Resource) -> bool {
+        match &self.drive {
+            Some(drive) => drive_of(store, resource).await.as_deref() == Some(drive.as_str()),
+            None => false,
+        }
+    }
+
+    /// `resource` may be shown to an anonymous visitor of this form.
+    pub async fn may_show(&self, store: &impl Storelike, resource: &Resource) -> bool {
+        self.owns(store, resource).await
+            || atomic_lib::hierarchy::check_read(store, resource, &ForAgent::Public)
+                .await
+                .is_ok()
+    }
+
+    /// Like [FormScope::may_show], by subject. An unresolvable subject is not
+    /// shown.
+    pub async fn may_show_subject(&self, store: &impl Storelike, subject: &str) -> bool {
+        match store.get_resource(&subject.to_string().into()).await {
+            Ok(resource) => self.may_show(store, &resource).await,
+            Err(_) => false,
+        }
+    }
+}
+
+/// Drops whatever in a built definition the form may not show (see
+/// [FormScope]): a table-sourced question's options when the table is out of
+/// scope, individual Tag options that are, and option images likewise.
+async fn restrict_to_scope(
+    store: &impl Storelike,
+    scope: &FormScope,
+    definition: &mut FormDefinition,
+) {
+    for page in definition.pages.iter_mut() {
+        for block in page.blocks.iter_mut() {
+            let FormBlock::Field { options, .. } = block else {
+                continue;
+            };
+
+            // Row options all come from one table: judge the table once.
+            if let Some(table) = source_str(options, "table").map(str::to_string) {
+                if !scope.may_show_subject(store, &table).await {
+                    if let Some(obj) = options.as_object_mut() {
+                        obj.insert(OPTIONS_KEY.into(), json!([]));
+                    }
+                    continue;
+                }
+            }
+
+            let table_sourced = source_str(options, "table").is_some();
+            let Some(list) = options.get_mut(OPTIONS_KEY).and_then(|v| v.as_array_mut()) else {
+                continue;
+            };
+            let mut kept = Vec::with_capacity(list.len());
+
+            for mut option in list.drain(..) {
+                let value = option.get("value").and_then(|v| v.as_str()).map(str::to_string);
+                if !table_sourced {
+                    if let Some(value) = &value {
+                        if !scope.may_show_subject(store, value).await {
+                            continue;
+                        }
+                    }
+                }
+                let image = option.get("image").and_then(|v| v.as_str()).map(str::to_string);
+                if let Some(image) = image {
+                    if !scope.may_show_subject(store, &image).await {
+                        if let Some(obj) = option.as_object_mut() {
+                            obj.remove("image");
+                        }
+                    }
+                }
+                kept.push(option);
+            }
+
+            *list = kept;
+        }
+    }
+}
 
 /// The submit body's top-level key checked for a non-empty honeypot value.
 pub const HONEYPOT_FIELD: &str = "hp";
@@ -395,7 +532,7 @@ pub async fn build_form_definition(
         }
     }
 
-    Ok(FormDefinition {
+    let mut definition = FormDefinition {
         version: 1,
         id: String::new(),
         name,
@@ -404,7 +541,11 @@ pub async fn build_form_definition(
         honeypot_field: HONEYPOT_FIELD.to_string(),
         captcha: None,
         pages,
-    })
+    };
+    let scope = FormScope::of(store, form).await;
+    restrict_to_scope(store, &scope, &mut definition).await;
+
+    Ok(definition)
 }
 
 /// `form-field-options` key holding a choice question's resolved options.
@@ -2095,6 +2236,19 @@ pub async fn resolve_form(store: &Db, id: &str) -> AtomicResult<Resource> {
 /// `form-publish-id`, signed by the store's default agent) and indexes a new
 /// one. `form` must reflect the currently stored state.
 pub async fn mint_publish_slug(store: &Db, form: &mut Resource) -> AtomicResult<String> {
+    // The slug map is one blob, read-modified-written below; two forms minting
+    // at once (a visitor's first GET can trigger this) would otherwise each
+    // write back a map missing the other's slug.
+    static MINT_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _guard = MINT_LOCK.lock().await;
+
+    // A concurrent call for this same form may have minted while we waited.
+    if let Ok(stored) = store.get_resource(form.get_subject()).await {
+        if stored.get(atomic_lib::urls::FORM_PUBLISH_ID).is_ok() {
+            *form = stored;
+        }
+    }
+
     if let Ok(existing) = form.get(atomic_lib::urls::FORM_PUBLISH_ID) {
         let slug = existing.to_string();
         if !slug.is_empty() {
@@ -2270,6 +2424,15 @@ mod tests {
         form.set(
             urls::FORM_PAGES.into(),
             Value::ResourceArray(vec![page.get_subject().to_string().into()]),
+            store,
+        )
+        .await
+        .unwrap();
+        // Filed under its results table so the two share a drive (see
+        // [FormScope]); "Create form from this table" does the same.
+        form.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(table.get_subject().to_string().into()),
             store,
         )
         .await
@@ -2759,6 +2922,115 @@ mod tests {
             ])
         );
         assert!(check_membership(&[open], &options).is_ok());
+    }
+
+    /// A saved resource in `drive` (no parent), for [FormScope] tests.
+    async fn resource_in_drive(store: &Db, class: &str, drive: &str) -> Resource {
+        let mut resource = Resource::new_instance(class, store).await.unwrap();
+        resource
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        // Whatever the class requires; the value is not what's under test.
+        resource
+            .set_unsafe(urls::NAME.into(), Value::String("Probe".into()))
+            .unwrap();
+        resource
+            .set_unsafe(urls::SHORTNAME.into(), Value::Slug("probe".into()))
+            .unwrap();
+        resource.save_locally(store).await.unwrap();
+        resource
+    }
+
+    #[tokio::test]
+    async fn form_scope_follows_the_drive_and_the_parent_chain() {
+        let store = init_store().await;
+        let form = resource_in_drive(&store, urls::TAG, "did:ad:drive-mine").await;
+        let other = resource_in_drive(&store, urls::TAG, "did:ad:drive-theirs").await;
+
+        // No `drive` of its own: found by walking up to the form.
+        let mut child = Resource::new_instance(urls::TAG, &store).await.unwrap();
+        child
+            .set_unsafe(urls::SHORTNAME.into(), Value::Slug("child".into()))
+            .unwrap();
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(form.get_subject().to_string().into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child.save_locally(&store).await.unwrap();
+
+        let scope = FormScope::of(&store, &form).await;
+        assert!(scope.owns(&store, &child).await);
+        assert!(!scope.owns(&store, &other).await);
+        // Private and elsewhere: not shown to a visitor either.
+        assert!(!scope.may_show(&store, &other).await);
+    }
+
+    #[tokio::test]
+    async fn definition_drops_options_the_form_may_not_show() {
+        let store = init_store().await;
+        let (row_class, name_prop) =
+            make_class_and_property(&store, "secret-row", "secret-name", urls::STRING).await;
+        let theirs = make_table_with_rows(&store, &row_class, &name_prop, &["Payroll"]).await;
+        let mut their_table = store.get_resource(&theirs.clone().into()).await.unwrap();
+        their_table
+            .set_unsafe(
+                urls::DRIVE_PROP.into(),
+                Value::AtomicUrl("did:ad:drive-theirs".into()),
+            )
+            .unwrap();
+        their_table.save_locally(&store).await.unwrap();
+        let secret_tag = resource_in_drive(&store, urls::TAG, "did:ad:drive-theirs").await;
+        let form = resource_in_drive(&store, urls::TAG, "did:ad:drive-mine").await;
+
+        let field = |options: JsonValue| FormBlock::Field {
+            maps_to: "https://example.com/p".into(),
+            label: "Pick".into(),
+            description: None,
+            field_type: "dropdown".into(),
+            required: false,
+            options,
+            conditions: vec![],
+        };
+        let mut definition = FormDefinition {
+            version: 1,
+            id: String::new(),
+            name: "Probe".into(),
+            settings: json!({}),
+            styling: build_form_styling(&form),
+            honeypot_field: HONEYPOT_FIELD.into(),
+            captcha: None,
+            pages: vec![FormPageDefinition {
+                name: None,
+                cover_image: None,
+                image_position: None,
+                conditions: vec![],
+                blocks: vec![
+                    field(json!({
+                        OPTIONS_SOURCE_KEY: { "table": theirs },
+                        OPTIONS_KEY: [{ "value": "row", "label": "Payroll" }],
+                    })),
+                    field(json!({
+                        OPTIONS_KEY: [
+                            { "value": secret_tag.get_subject().to_string(), "label": "Secret" },
+                        ],
+                    })),
+                ],
+            }],
+        };
+
+        let scope = FormScope::of(&store, &form).await;
+        restrict_to_scope(&store, &scope, &mut definition).await;
+
+        for block in &definition.pages[0].blocks {
+            let FormBlock::Field { options, .. } = block else {
+                unreachable!()
+            };
+            assert_eq!(options[OPTIONS_KEY], json!([]));
+        }
     }
 
     #[tokio::test]
