@@ -173,6 +173,11 @@ test.describe('form publish and anonymous submit', () => {
     // The swatch label reflects the picked color once state has settled.
     await expect(page.getByTitle('Pick main color')).toContainText('#e91e63');
     await page.getByRole('button', { name: 'Round', exact: true }).click();
+    // A custom thank-you message (Settings > After submitting), shown to the
+    // visitor after they submit below.
+    await page
+      .getByRole('textbox', { name: 'Thank-you message' })
+      .fill('Thank you, Ada! See you at the party.');
     await page.getByRole('tab', { name: 'Fields' }).click();
 
     // The color write is debounced (and flushed on tab-switch unmount);
@@ -187,6 +192,19 @@ test.describe('form publish and anonymous submit', () => {
         return parsed?.mainColor === '#e91e63' && parsed?.roundness === 'round';
       },
       { subject: formSubject, prop: FORM_STYLING },
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      ({ subject, prop }) => {
+        const raw = window.store.resources.get(subject)?.get(prop);
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+
+        return parsed?.confirmationMessage?.includes('See you at the party');
+      },
+      {
+        subject: formSubject,
+        prop: 'https://atomicdata.dev/properties/form-settings',
+      },
       { timeout: 15000 },
     );
 
@@ -256,9 +274,10 @@ test.describe('form publish and anonymous submit', () => {
     await visitorPage
       .getByRole('button', { name: 'Submit', exact: true })
       .click();
-    await expect(visitorPage.getByRole('status')).toContainText('Thank you', {
-      timeout: 15000,
-    });
+    await expect(visitorPage.getByRole('status')).toContainText(
+      'Thank you, Ada! See you at the party.',
+      { timeout: 15000 },
+    );
 
     await visitorContext.close();
 
