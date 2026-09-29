@@ -1,7 +1,6 @@
 import { type CalendarRecord } from '@tomic/lib';
 import {
   calendarOccurrenceBuckets,
-  calendarPropertyMatches,
   type CalendarDayOccurrence,
   type InvalidCalendarRecord,
 } from './calendarOccurrences';
@@ -39,8 +38,8 @@ import {
   type CalendarColumns,
 } from './calendarRows';
 import type { CalendarRowContext } from './CalendarRowFields';
+import { calendarRangeColumns } from './useTableCalendarRow';
 import {
-  calendarFields,
   dayInZone,
   isAllDayOnDate,
   nextCalendarDate,
@@ -172,15 +171,9 @@ export function CalendarView({
   }, [cursor]);
 
   // Imported ranges are opt-in: unrelated table date columns stay single-day.
-  const calendarDate = calendarPropertyMatches(
-    dateProp?.shortname,
-    calendarFields.day,
-  );
-  const allDayProp = allColumns.find(p =>
-    calendarPropertyMatches(p.shortname, calendarFields.allDay),
-  );
-  const endDayProp = allColumns.find(p =>
-    calendarPropertyMatches(p.shortname, calendarFields.endDay),
+  const { calendarDate, allDayProp, endDayProp } = calendarRangeColumns(
+    allColumns,
+    dateProp,
   );
   const allDaySubjects = new Set(
     memberSubjects.filter(

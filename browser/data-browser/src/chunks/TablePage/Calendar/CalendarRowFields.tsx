@@ -31,6 +31,9 @@ import { EventTimeFields, type EventTimeChange } from './EventTimeFields';
 export interface CalendarRowContext extends CalendarColumns {
   ensureRecurrenceProp: () => Promise<string>;
   ensureTimeProps: () => Promise<{ start: string; end: string }>;
+  /** Only the Repeat field, no time of day: the table view's row dialog,
+   * where Start and End are columns of their own. */
+  repeatOnly?: boolean;
 }
 
 /** The calendar fields of a row in its dialog: its time of day (#1802) and
@@ -96,7 +99,7 @@ export function CalendarRowFields({
 
   return (
     <Section>
-      {!imported && (
+      {!imported && !calendar.repeatOnly && (
         <EventTimeFields
           key={`${subject}:${startTime}:${endTime}`}
           allDay={!time?.timed}
@@ -129,8 +132,9 @@ function errorMessage(error: unknown): string {
 }
 
 /** The row's series as the Repeat field shows it. An imported series repeats
- * from its own start; a native one from the row's day. */
-function readRowRepeat(
+ * from its own start; a native one from the row's day. Without an `anchor`
+ * the row has nothing to repeat from, and no Repeat field. */
+export function readRowRepeat(
   subject: string,
   get: (prop: string) => unknown,
   calendar: CalendarRowContext,

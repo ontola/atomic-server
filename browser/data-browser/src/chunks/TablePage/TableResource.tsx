@@ -57,6 +57,10 @@ import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
+import {
+  TableCalendarRowContext,
+  useTableCalendarRow,
+} from './Calendar/useTableCalendarRow';
 import { DashboardView } from './Dashboard/DashboardView';
 import { IssuesView } from './Issues/IssuesView';
 import { TimerToolbar } from './Timer/TimerToolbar';
@@ -185,6 +189,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewColumns,
     viewSplitLanguages,
   );
+  const calendarRow = useTableCalendarRow(tableClass, allColumns);
 
   // The rendered column's property, per grid index (split columns repeat
   // theirs) — for consumers that need index alignment (presence). Virtual
@@ -1178,167 +1183,170 @@ export const TableResource: React.FC<TableResourceProps> = ({
   return (
     <TablePageContext value={tablePageContext}>
       <TablePresenceContext value={presenceValue}>
-        {!embedded && (
-          <TableViewTabs
-            rowClass={tableClass.subject}
-            views={views}
-            activeView={activeView}
-            setActiveView={setActiveView}
-            createView={createView}
-            setViewKind={setViewKind}
-            duplicateView={duplicateView}
-            deleteView={deleteView}
-            viewName={viewName}
-            renameView={renameView}
-            allColumns={allColumns}
-            columns={uniqueColumnProperties}
-            derivedColumns={derivedSpecs}
-            showColumn={showColumn}
-            hideColumn={hideColumn}
-            lockedColumns={lockedColumns}
-            lockedReason={lockedReason}
-            canWrite={canWrite}
-            quickAdd={viewQuickAdd}
-            setQuickAdd={setViewQuickAdd}
-          />
-        )}
-        {/* Above the view switch, not inside the table branch: the filter
-         * dropdown in the tab bar is offered for every view kind, so a kanban /
-         * calendar / timer view could add a filter that then had nowhere to
-         * render its chip — the filter silently did nothing. */}
-        {!embedded && (
-          <TableFilterBar
-            columns={uniqueColumnProperties}
-            derivedColumns={derivedSpecs}
-          />
-        )}
-        {/* Above the view switch on purpose: a grocery board wants its "Add
-         *  item" as much as the list does. Writers only — a create button that
-         *  will be rejected is worse than none. */}
-        {viewQuickAdd && canWrite && (
-          <QuickAddBar
-            spec={viewQuickAdd}
-            tableSubject={resource.subject}
-            tableClass={tableClass}
-            classProperties={allColumns}
-            onRowCreated={notifyEntryCreated}
-          />
-        )}
-        {appView !== undefined ? (
-          // An app rendering this table's rows. It sits beside the Table tab
-          // rather than in place of it: adding a way to look at rows never
-          // takes one away, and the table is always one tab over.
-          <AppViewWrapper>
-            <AppFrame
-              app={appView}
-              drive={store.getDrive()!}
-              table={resource.subject}
+        <TableCalendarRowContext value={calendarRow}>
+          {!embedded && (
+            <TableViewTabs
+              rowClass={tableClass.subject}
+              views={views}
+              activeView={activeView}
+              setActiveView={setActiveView}
+              createView={createView}
+              setViewKind={setViewKind}
+              duplicateView={duplicateView}
+              deleteView={deleteView}
+              viewName={viewName}
+              renameView={renameView}
+              allColumns={allColumns}
+              columns={uniqueColumnProperties}
+              derivedColumns={derivedSpecs}
+              showColumn={showColumn}
+              hideColumn={hideColumn}
+              lockedColumns={lockedColumns}
+              lockedReason={lockedReason}
+              canWrite={canWrite}
+              quickAdd={viewQuickAdd}
+              setQuickAdd={setViewQuickAdd}
             />
-          </AppViewWrapper>
-        ) : viewKind === 'dashboard' ? (
-          <DashboardView dashboard={viewDashboard} />
-        ) : viewKind === 'kanban' ? (
-          <KanbanView
-            tableSubject={resource.subject}
-            tableClass={tableClass}
-            allColumns={allColumns}
-            columns={uniqueColumnProperties}
-            collection={collection}
-            ready={ready}
-            viewGroupBy={viewGroupBy}
-            setViewGroupBy={setViewGroupBy}
-            readOnly={!canWrite}
-          />
-        ) : viewKind === 'issues' ? (
-          <IssuesView
-            tableSubject={resource.subject}
-            tableClass={tableClass}
-            allColumns={allColumns}
-            collection={collection}
-            ready={ready}
-            viewGroupBy={viewGroupBy}
-            setViewGroupBy={setViewGroupBy}
-            readOnly={!canWrite}
-          />
-        ) : viewKind === 'calendar' ? (
-          <CalendarView
-            tableSubject={resource.subject}
-            tableClass={tableClass}
-            allColumns={allColumns}
-            collection={collection}
-            ready={ready}
-            viewGroupBy={viewGroupBy}
-            setViewGroupBy={setViewGroupBy}
-            readOnly={!canWrite}
-          />
-        ) : (
-          <>
-            {isTimer && timer.startProp && timer.endProp && (
-              <TimerToolbar
-                tableSubject={resource.subject}
-                tableClass={tableClass}
-                collection={collection}
-                startProp={timer.startProp}
-                endProp={timer.endProp}
-                exclusive={viewTimerExclusive}
-                setExclusive={setViewTimerExclusive}
-                onEntryCreated={notifyEntryCreated}
+          )}
+          {/* Above the view switch, not inside the table branch: the filter
+           * dropdown in the tab bar is offered for every view kind, so a kanban /
+           * calendar / timer view could add a filter that then had nowhere to
+           * render its chip — the filter silently did nothing. */}
+          {!embedded && (
+            <TableFilterBar
+              columns={uniqueColumnProperties}
+              derivedColumns={derivedSpecs}
+            />
+          )}
+          {/* Above the view switch on purpose: a grocery board wants its "Add
+           *  item" as much as the list does. Writers only — a create button that
+           *  will be rejected is worse than none. */}
+          {viewQuickAdd && canWrite && (
+            <QuickAddBar
+              spec={viewQuickAdd}
+              tableSubject={resource.subject}
+              tableClass={tableClass}
+              classProperties={allColumns}
+              onRowCreated={notifyEntryCreated}
+            />
+          )}
+          {appView !== undefined ? (
+            // An app rendering this table's rows. It sits beside the Table tab
+            // rather than in place of it: adding a way to look at rows never
+            // takes one away, and the table is always one tab over.
+            <AppViewWrapper>
+              <AppFrame
+                app={appView}
+                drive={store.getDrive()!}
+                table={resource.subject}
               />
-            )}
-            <FancyTable
+            </AppViewWrapper>
+          ) : viewKind === 'dashboard' ? (
+            <DashboardView dashboard={viewDashboard} />
+          ) : viewKind === 'kanban' ? (
+            <KanbanView
+              tableSubject={resource.subject}
+              tableClass={tableClass}
+              allColumns={allColumns}
+              columns={uniqueColumnProperties}
+              collection={collection}
+              ready={ready}
+              viewGroupBy={viewGroupBy}
+              setViewGroupBy={setViewGroupBy}
               readOnly={!canWrite}
-              columns={gridColumns}
-              columnSizes={gridColumnSizes}
-              // The session's empty entry row is local state: it needs
-              // nothing from the collection, so it is not gated on `ready`.
-              // Gating it made a fresh table wait for the collection's first
-              // fetch, and when the socket is not authenticated yet that fetch
-              // sits out a 3s `waitForServerConnected` grace period
-              // (`Collection.fetchPage`) before an empty page lands — five
-              // seconds with no row to type into. Members that arrive during
-              // load shift the row's index, not its key (`itemKey` offsets by
-              // `memberCount`), so nothing remounts.
-              itemCount={memberCount + newRowSubjects.length}
-              itemKey={itemKey}
-              columnToKey={columnToKey}
-              labelledBy={titleId}
-              onClearRow={handleDeleteRow}
-              onCellResize={handleColumnResize}
-              onClearCells={handleClearCells}
-              onCopyCommand={handleCopyCommand}
-              onPasteCommand={handlePaste}
-              onUndoCommand={undoLastItem}
-              onColumnReorder={handleColumnReorder}
-              onRowExpand={handleRowExpand}
-              onInsertRowBelow={handleInsertRowBelow}
-              onSelectedCellChange={handleSelectedCellChange}
-              HeadingComponent={TableHeading}
-              NewColumnButtonComponent={NewColumnButton}
-              FooterComponent={TableTotalsFooter}
-            >
-              {Row}
-            </FancyTable>
-            {/* Under the grid, where a spreadsheet's totals live. The numbers
-             *  come from the store, over every row the view matches. Not
-             *  mounted at all without totals: it resolves a title per column,
-             *  and a table with no totals should pay nothing for that. */}
-            {viewAggregates.length > 0 && viewGroupByColumn && (
-              <TableSummaryBar
-                aggregates={viewAggregates}
-                outcomes={aggregateOutcomes}
-                classProperties={allColumns}
-                derivedColumns={derivedSpecs}
-                groupByColumn={viewGroupByColumn}
-                granularity={viewGroupGranularity}
-              />
-            )}
-          </>
-        )}
-        <ExpandedRowDialog
-          subject={expandedRowSubject ?? unknownSubject}
-          open={showExpandedRowDialog}
-          bindOpen={setShowExpandedRowDialog}
-        />
+            />
+          ) : viewKind === 'issues' ? (
+            <IssuesView
+              tableSubject={resource.subject}
+              tableClass={tableClass}
+              allColumns={allColumns}
+              collection={collection}
+              ready={ready}
+              viewGroupBy={viewGroupBy}
+              setViewGroupBy={setViewGroupBy}
+              readOnly={!canWrite}
+            />
+          ) : viewKind === 'calendar' ? (
+            <CalendarView
+              tableSubject={resource.subject}
+              tableClass={tableClass}
+              allColumns={allColumns}
+              collection={collection}
+              ready={ready}
+              viewGroupBy={viewGroupBy}
+              setViewGroupBy={setViewGroupBy}
+              readOnly={!canWrite}
+            />
+          ) : (
+            <>
+              {isTimer && timer.startProp && timer.endProp && (
+                <TimerToolbar
+                  tableSubject={resource.subject}
+                  tableClass={tableClass}
+                  collection={collection}
+                  startProp={timer.startProp}
+                  endProp={timer.endProp}
+                  exclusive={viewTimerExclusive}
+                  setExclusive={setViewTimerExclusive}
+                  onEntryCreated={notifyEntryCreated}
+                />
+              )}
+              <FancyTable
+                readOnly={!canWrite}
+                columns={gridColumns}
+                columnSizes={gridColumnSizes}
+                // The session's empty entry row is local state: it needs
+                // nothing from the collection, so it is not gated on `ready`.
+                // Gating it made a fresh table wait for the collection's first
+                // fetch, and when the socket is not authenticated yet that fetch
+                // sits out a 3s `waitForServerConnected` grace period
+                // (`Collection.fetchPage`) before an empty page lands — five
+                // seconds with no row to type into. Members that arrive during
+                // load shift the row's index, not its key (`itemKey` offsets by
+                // `memberCount`), so nothing remounts.
+                itemCount={memberCount + newRowSubjects.length}
+                itemKey={itemKey}
+                columnToKey={columnToKey}
+                labelledBy={titleId}
+                onClearRow={handleDeleteRow}
+                onCellResize={handleColumnResize}
+                onClearCells={handleClearCells}
+                onCopyCommand={handleCopyCommand}
+                onPasteCommand={handlePaste}
+                onUndoCommand={undoLastItem}
+                onColumnReorder={handleColumnReorder}
+                onRowExpand={handleRowExpand}
+                onInsertRowBelow={handleInsertRowBelow}
+                onSelectedCellChange={handleSelectedCellChange}
+                HeadingComponent={TableHeading}
+                NewColumnButtonComponent={NewColumnButton}
+                FooterComponent={TableTotalsFooter}
+              >
+                {Row}
+              </FancyTable>
+              {/* Under the grid, where a spreadsheet's totals live. The numbers
+               *  come from the store, over every row the view matches. Not
+               *  mounted at all without totals: it resolves a title per column,
+               *  and a table with no totals should pay nothing for that. */}
+              {viewAggregates.length > 0 && viewGroupByColumn && (
+                <TableSummaryBar
+                  aggregates={viewAggregates}
+                  outcomes={aggregateOutcomes}
+                  classProperties={allColumns}
+                  derivedColumns={derivedSpecs}
+                  groupByColumn={viewGroupByColumn}
+                  granularity={viewGroupGranularity}
+                />
+              )}
+            </>
+          )}
+          <ExpandedRowDialog
+            subject={expandedRowSubject ?? unknownSubject}
+            open={showExpandedRowDialog}
+            bindOpen={setShowExpandedRowDialog}
+            calendar={calendarRow}
+          />
+        </TableCalendarRowContext>
       </TablePresenceContext>
     </TablePageContext>
   );
