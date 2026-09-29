@@ -110,6 +110,14 @@ export const ChatMessagesContainer: React.FC<
 
     const scroller = scrollRef.current;
 
+    // Start from the real sizes. From zero, the first scroll looked like the
+    // viewport had grown, so a reader's first scroll up never detached.
+    if (scroller) {
+      lastScrollHeightRef.current = scroller.scrollHeight;
+      lastClientHeightRef.current = scroller.clientHeight;
+      lastScrollTopRef.current = scroller.scrollTop;
+    }
+
     // Any upward scroll detaches immediately (so a slow trackpad scroll works
     // even while tokens keep streaming in); reaching the bottom re-attaches.
     const handleScroll = () => {

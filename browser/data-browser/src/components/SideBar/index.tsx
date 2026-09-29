@@ -93,6 +93,7 @@ export function SideBar(): JSX.Element {
 
   return (
     <SideBarContainer
+      data-side-panel='left'
       $width={SIDEBAR_WIDTH_PROP.var()}
       $size={size}
       $expanded={isWideScreen && sideBarLocked}

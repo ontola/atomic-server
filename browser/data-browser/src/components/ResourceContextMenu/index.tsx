@@ -42,6 +42,7 @@ export const ContextMenuOptions = {
   Edit: 'edit',
   Scope: 'scope',
   Share: 'share',
+  Tags: 'tags',
   Delete: 'delete',
   History: 'history',
   Import: 'import',

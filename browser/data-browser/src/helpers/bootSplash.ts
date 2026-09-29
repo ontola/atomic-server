@@ -49,7 +49,7 @@ export function showBootSplash(): void {
  * Fade the splash out and bring the app in from behind it. Idempotent. The
  * element stays in the document, hidden, so the demo can show it again.
  */
-export function hideBootSplash(): void {
+export function hideBootSplash({ reveal = false } = {}): void {
   const element = splash();
 
   if (!element || element.classList.contains(LEAVING)) {
@@ -59,7 +59,11 @@ export function hideBootSplash(): void {
   }
 
   const root = document.getElementById('root');
-  root?.classList.add(REVEALING);
+  // The app arriving from behind the splash (a slight scale and fade) is for
+  // the demo, whose workspace the splash was held for. An ordinary page load
+  // just lets the splash fade: scaling the whole app for half a second moved
+  // everything a page measured or clicked in that time.
+  if (reveal) root?.classList.add(REVEALING);
   element.classList.add(LEAVING);
 
   leaveTimer = setTimeout(() => {

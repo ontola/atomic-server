@@ -220,7 +220,7 @@ test('start a meeting, join it, follow along, and end it', async ({
   });
   await pageA
     .getByTestId('follow-session-panel')
-    .getByRole('link', { name: 'Notes' })
+    .getByRole('button', { name: 'Notes' })
     .click();
   await expect(pageA.getByText('minutes', { exact: true }).first()).toBeVisible(
     {

@@ -21,7 +21,7 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
-import { useCustomContextItems } from './ResourceContextMenu/CustomContextItemsContext';
+import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
@@ -84,23 +84,19 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   const canCreateTags = useCanWrite(drive);
   // Tags sit in the More menu until a resource has some: most never do, and a
   // Tags button on every page was one more thing in a crowded bar. Choosing it
-  // there shows the button with its picker open.
+  // there (the `tags` action) shows the button with its picker open.
   const [open, setOpen] = useState(false);
 
-  // Stable, or the registration would re-run on every render.
-  const menuItems = useMemo(
-    () => [
-      {
-        id: 'tags',
-        label: 'Tags',
-        helper: 'Add or remove tags',
-        icon: <FaTags />,
-        onClick: () => setOpen(true),
-      },
-    ],
-    [],
-  );
-  useCustomContextItems(menuItems);
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === resource.subject)
+        setOpen(true);
+    };
+
+    window.addEventListener(OPEN_TAGS_EVENT, onOpen);
+
+    return () => window.removeEventListener(OPEN_TAGS_EVENT, onOpen);
+  }, [resource.subject]);
 
   useEffect(() => {
     getResourcesDrive(resource, store).then(setDriveSubject);

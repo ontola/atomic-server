@@ -85,7 +85,7 @@ root.render(
 // Every other page is ready at its first render, as it was when the splash
 // lived inside #root and React replaced it.
 if (window.location.pathname !== '/app/demo') {
-  void afterNextPaint().then(hideBootSplash);
+  void afterNextPaint().then(() => hideBootSplash());
 }
 
 // The account server is another origin, and the first session check against

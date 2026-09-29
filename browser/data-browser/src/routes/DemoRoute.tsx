@@ -189,7 +189,7 @@ const DemoRoute: React.FC = () => {
           });
         },
         target => {
-          void afterNextPaint().then(hideBootSplash);
+          void afterNextPaint().then(() => hideBootSplash());
 
           if (target === paths.newDrive) {
             navigate({ to: target, replace: true });
@@ -288,7 +288,7 @@ async function revealWhenReady(store: Store, welcomeDoc: string) {
   await afterNextPaint();
   // The editor mounts a beat after the route; let it lay out first.
   await new Promise(resolve => setTimeout(resolve, 150));
-  hideBootSplash();
+  hideBootSplash({ reveal: true });
 }
 
 const Surface = styled.main`

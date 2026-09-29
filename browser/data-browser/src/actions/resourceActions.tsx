@@ -17,6 +17,7 @@ import {
   FaRegStar,
   FaShare,
   FaStar,
+  FaTags,
   FaTrash,
   FaTurnUp,
   FaWindowMaximize,
@@ -34,6 +35,9 @@ import {
 import { paths } from '../routes/paths';
 import { shortcuts } from './shortcuts';
 import type { ActionContext, ActionDefinition } from './types';
+
+/** Asks the resource bar to open its tag picker for `detail` (a subject). */
+export const OPEN_TAGS_EVENT = 'atomic-open-tags';
 
 const getParent = (ctx: ActionContext): string | undefined =>
   ctx.resource.get(core.properties.parent) as string | undefined;
@@ -284,6 +288,24 @@ export const resourceActions: ActionDefinition[] = [
     keywords: ['find', 'filter'],
     icon: () => <FaMagnifyingGlass />,
     run: ctx => ctx.enableScope(),
+  },
+  {
+    id: 'tags',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Tags',
+    helper: () => 'Add or remove tags',
+    keywords: ['tag', 'label'],
+    icon: () => <FaTags />,
+    // Only the open resource has a resource bar to show the picker in.
+    available: ctx => ctx.subject === ctx.currentSubject,
+    // The picker lives in the resource bar, which shows its Tags button only
+    // once a resource has tags. This asks it to show the button with the
+    // picker open (see NavBar's TagSelectPopoverWrapper).
+    run: ctx =>
+      window.dispatchEvent(
+        new CustomEvent(OPEN_TAGS_EVENT, { detail: ctx.subject }),
+      ),
   },
   {
     id: 'share',
