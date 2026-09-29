@@ -34,6 +34,7 @@ import {
   fetchManagedInfo,
   accountCreationTarget,
   type AccountCreationTarget,
+  isHostedDistribution,
 } from '../../helpers/managedServer';
 import {
   ensureVaultBackup,
@@ -216,7 +217,13 @@ export function GettingStartedFlow({
       ? 'create'
       : inviteToken
         ? 'restore'
-        : nextDrive || returnToAgent || signInRequested
+        : nextDrive ||
+            returnToAgent ||
+            signInRequested ||
+            // Hosted builds have no Create/Sign-in/Demo choice: creating an
+            // account happens in the portal, so signed-out people get the
+            // sign-in options directly.
+            (isHostedDistribution() && initialStep === 'welcome')
           ? 'signin'
           : initialStep,
   );
@@ -1189,6 +1196,9 @@ export function GettingStartedFlow({
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
+                  } else if (isHostedDistribution() && knownPortalUrl) {
+                    // No welcome step in a hosted build; Back leaves for the portal.
+                    window.location.assign(knownPortalUrl);
                   } else {
                     setStep('welcome');
                   }
