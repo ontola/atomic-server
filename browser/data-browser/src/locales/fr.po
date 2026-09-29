@@ -8232,7 +8232,6 @@ msgid "Integration proxy"
 msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Reset to default"
 msgstr ""
 
@@ -10380,7 +10379,6 @@ msgstr ""
 msgid "Signed in on another device? Use a code"
 msgstr ""
 
-
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
 msgid "Could not save the repeat: {0}"
@@ -10667,6 +10665,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
@@ -10695,3 +10694,7 @@ msgstr ""
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Reset"
+msgstr "<0/> Réinitialiser"
