@@ -243,8 +243,58 @@ pub enum KeyAlg {
 pub struct Key {
     pub name: String,
     pub alg: KeyAlg,
+    /// Makes this an Ed25519 Willow subspace key: the host signs Willow'25
+    /// Entry bytes with it (`ctx.willow.authorise`), only in this namespace
+    /// and under this path prefix, and never signs HTTP requests with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub willow: Option<WillowBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+}
+
+/// Where a Willow subspace key may write (atomic-plugins#167, section 7).
+/// Each value is `config:<key>`, read from the Installation's config when the
+/// host signs, or a literal: 64 hex characters for the namespace, and hex
+/// path components joined by `/` for the prefix (`""` is the empty prefix).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WillowBinding {
+    pub namespace: String,
+    pub path_prefix: String,
+}
+
+/// `config:<key>`, with the same key syntax as write-target parents.
+pub fn config_key(value: &str) -> Option<&str> {
+    value.strip_prefix("config:").filter(|key| {
+        !key.is_empty()
+            && key.len() <= 128
+            && key
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+    })
+}
+
+fn is_hex(value: &str, len: Option<usize>) -> bool {
+    value.len().is_multiple_of(2)
+        && len.is_none_or(|n| value.len() == n)
+        && value.bytes().all(|c| c.is_ascii_hexdigit())
+}
+
+impl WillowBinding {
+    fn validate(&self, key: &str) -> Result<(), String> {
+        let namespace_ok =
+            config_key(&self.namespace).is_some() || is_hex(&self.namespace, Some(64));
+        let prefix_ok = config_key(&self.path_prefix).is_some()
+            || self.path_prefix.is_empty()
+            || self.path_prefix.split('/').all(|c| is_hex(c, None));
+        if namespace_ok && prefix_ok {
+            Ok(())
+        } else {
+            Err(format!(
+                "key `{key}`: willow.namespace must be `config:<key>` or 64 hex characters, and willow.pathPrefix `config:<key>` or hex components joined by `/`"
+            ))
+        }
+    }
 }
 
 /// A host-held store of hashed bearer tokens the plugin issues.
@@ -387,6 +437,17 @@ impl Http {
             "write target IDs",
         )?;
         unique_names(self.keys.iter().map(|k| k.name.as_str()), "key names")?;
+        for key in &self.keys {
+            if let Some(willow) = &key.willow {
+                if key.alg != KeyAlg::Ed25519 {
+                    return Err(format!(
+                        "key `{}`: a Willow subspace key must be ed25519",
+                        key.name
+                    ));
+                }
+                willow.validate(&key.name)?;
+            }
+        }
         unique_names(self.tokens.iter().map(|t| t.name.as_str()), "token names")?;
         unique_names(
             self.listeners.iter().map(|l| l.name.as_str()),
@@ -594,7 +655,12 @@ impl Http {
             add(format!("write target `{}`", target.id), ReadWrite);
         }
         for key in &self.keys {
-            add(format!("key `{}`", key.name), ReadWrite);
+            let surface = if key.willow.is_some() {
+                format!("Willow signing key `{}`", key.name)
+            } else {
+                format!("key `{}`", key.name)
+            };
+            add(surface, ReadWrite);
         }
         for token in &self.tokens {
             add(format!("token store `{}`", token.name), ReadWrite);

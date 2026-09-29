@@ -1339,6 +1339,9 @@ impl RouteRegistry {
             // Which blobs it stored, too: nothing may serve them in its
             // name. The bytes stay (content-addressed; a File may hold them).
             let blobs = super::route_blobs::erase(store, &subject);
+            // The Willow entries its key authorised: without the key they
+            // can no longer be re-issued or superseded in its name.
+            let keys = keys + super::willow::erase(store, &subject);
             if keys + tokens + blobs > 0 {
                 tracing::info!(%subject, keys, tokens, blobs, "erased plugin route keys, tokens and blob records");
             }

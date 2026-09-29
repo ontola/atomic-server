@@ -79,7 +79,15 @@ export interface DeclaredWriteTarget {
 export interface DeclaredKey {
   name: string;
   alg: 'rsa-sha256' | 'ed25519';
+  /** An Ed25519 Willow subspace key: where it may sign Willow entries. */
+  willow?: DeclaredWillowBinding;
   reason?: string;
+}
+
+/** Each value is `config:<key>` or a literal (hex namespace; hex components joined by `/`). */
+export interface DeclaredWillowBinding {
+  namespace: string;
+  pathPrefix: string;
 }
 
 export interface DeclaredOperatorNamed {
@@ -462,11 +470,22 @@ export function validateHttp(
 
   const keys = list(entry.keys, 'http.keys').map(value => {
     const key = object(value, 'key');
-    known(key, ['name', 'alg', 'reason']);
+    known(key, ['name', 'alg', 'willow', 'reason']);
+    let willow: DeclaredWillowBinding | undefined;
+
+    if (key.willow !== undefined) {
+      const binding = object(key.willow, 'key willow');
+      known(binding, ['namespace', 'pathPrefix']);
+      willow = {
+        namespace: text(binding.namespace, 'willow namespace'),
+        pathPrefix: text(binding.pathPrefix, 'willow pathPrefix'),
+      };
+    }
 
     return {
       name: text(key.name, 'key name'),
       alg: variant(key.alg, ['rsa-sha256', 'ed25519'] as const),
+      ...(willow ? { willow } : {}),
       reason: optionalText(key.reason, 'key reason'),
     };
   });
@@ -496,6 +515,30 @@ export function validateHttp(
     keys.map(k => k.name),
     'key names',
   );
+
+  for (const key of keys) {
+    if (!key.willow) continue;
+    if (key.alg !== 'ed25519')
+      throw new Error(
+        `key \`${key.name}\`: a Willow subspace key must be ed25519`,
+      );
+    const configKey = (v: string) =>
+      v.startsWith('config:') &&
+      /^[A-Za-z0-9_.-]{1,128}$/.test(v.slice('config:'.length));
+    const hexBytes = (v: string) => /^(?:[0-9a-fA-F]{2})*$/.test(v);
+    const namespaceOk =
+      configKey(key.willow.namespace) ||
+      (key.willow.namespace.length === 64 && hexBytes(key.willow.namespace));
+    const prefix = key.willow.pathPrefix;
+    const prefixOk =
+      configKey(prefix) || prefix === '' || prefix.split('/').every(hexBytes);
+
+    if (!namespaceOk || !prefixOk)
+      throw new Error(
+        `key \`${key.name}\`: willow.namespace must be \`config:<key>\` or 64 hex characters, and willow.pathPrefix \`config:<key>\` or hex components joined by \`/\``,
+      );
+  }
+
   uniqueNames(
     tokens.map(t => t.name),
     'token names',
@@ -729,7 +772,11 @@ export function httpGate(http: DeclaredHttp | undefined): ReleaseGate {
     add(`well-known \`${claim.name}\``, 'read-only');
   for (const target of http?.writeTargets ?? [])
     add(`write target \`${target.id}\``, 'read-write');
-  for (const key of http?.keys ?? []) add(`key \`${key.name}\``, 'read-write');
+  for (const key of http?.keys ?? [])
+    add(
+      key.willow ? `Willow signing key \`${key.name}\`` : `key \`${key.name}\``,
+      'read-write',
+    );
   for (const token of http?.tokens ?? [])
     add(`token store \`${token.name}\``, 'read-write');
   const deliveries = [
