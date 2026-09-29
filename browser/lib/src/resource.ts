@@ -1971,26 +1971,51 @@ export class Resource<C extends OptionalClass = any> {
       | { timestamp: number; lamport: number; message: string | undefined }
       | undefined;
 
-    for (const [, changes] of doc.getAllChanges().entries()) {
-      for (const change of changes) {
-        // Select by Lamport (causal order) — the founding change is the
-        // minimum. NOT by timestamp: a server-authored follow-up (e.g.
-        // `lastCommit` after apply) can carry a second-resolution timestamp
-        // that sorts before the client's millisecond-precise genesis within
-        // the same second, mis-picking a later, message-less change.
-        if (!genesis || change.lamport < genesis.lamport) {
-          genesis = {
-            timestamp: change.timestamp,
-            lamport: change.lamport,
-            message: change.message,
-          };
+    const consider = (change: {
+      timestamp: number;
+      lamport: number;
+      message?: string;
+    }) => {
+      // Select by Lamport (causal order) — the founding change is the
+      // minimum. NOT by timestamp: a server-authored follow-up (e.g.
+      // `lastCommit` after apply) can carry a second-resolution timestamp
+      // that sorts before the client's millisecond-precise genesis within
+      // the same second, mis-picking a later, message-less change.
+      if (!genesis || change.lamport < genesis.lamport) {
+        genesis = {
+          timestamp: change.timestamp,
+          lamport: change.lamport,
+          message: change.message,
+        };
+      }
+    };
+
+    try {
+      // The founding change is the first change of one of the doc's peers, so
+      // read one change per peer instead of `getAllChanges()`, which builds a
+      // JS object for every change in the history. On a resource with a long
+      // history (or a sidebar sorting thousands of children) that was the
+      // dominant cost of opening a drive.
+      for (const peer of doc.oplogVersion().toJSON().keys()) {
+        consider(doc.getChangeAt({ peer, counter: 0 }));
+      }
+    } catch {
+      genesis = undefined;
+    }
+
+    if (!genesis) {
+      for (const [, changes] of doc.getAllChanges().entries()) {
+        for (const change of changes) {
+          consider(change);
         }
       }
     }
 
-    return (
-      genesis && { timestamp: genesis.timestamp, message: genesis.message }
-    );
+    const found = genesis as
+      | { timestamp: number; lamport: number; message: string | undefined }
+      | undefined;
+
+    return found && { timestamp: found.timestamp, message: found.message };
   }
 
   /**
