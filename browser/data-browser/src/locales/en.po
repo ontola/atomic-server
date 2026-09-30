@@ -7206,6 +7206,7 @@ msgstr "Continue with passkey"
 msgid "Could not update your passkey. Please try again."
 msgstr "Could not update your passkey. Please try again."
 
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr "Use another account"
@@ -12656,9 +12657,8 @@ msgstr "Open sync settings"
 msgid "Go to"
 msgstr "Go to"
 
-#: src/chunks/AppPage/ConnectDialog.tsx
-msgid "Connect another account"
-msgstr "Connect another account"
+#~ msgid "Connect another account"
+#~ msgstr "Connect another account"
 
 #. 0: platform
 #: src/chunks/AppPage/ConnectDialog.tsx
@@ -12698,3 +12698,11 @@ msgstr "Connected {0}."
 #: src/chunks/AppPage/ConnectDialog.tsx
 msgid "Used by {0}."
 msgstr "Used by {0}."
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not use this account."
+msgstr "Could not use this account."
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not start connecting."
+msgstr "Could not start connecting."

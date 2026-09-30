@@ -33,6 +33,12 @@ interface ConnectDialogProps {
 /** Marks the "connect a new account" button as the one being waited on. */
 const NEW_ACCOUNT = 'new';
 
+/** What went wrong, and which button it came from. */
+interface Failure {
+  during: 'connect' | 'pick';
+  detail: string;
+}
+
 /**
  * An app asking to use one of the person's accounts elsewhere.
  *
@@ -58,7 +64,7 @@ export function ConnectDialog({
   // Read once the dialog has closed, which is when the app is told.
   const used = useRef<ProxyConnection | undefined>(undefined);
   const [busy, setBusy] = useState<string>();
-  const [error, setError] = useState<string>();
+  const [failure, setFailure] = useState<Failure>();
   const [dialogProps, show, close] = useDialog({
     onSuccess: () => onClosed(used.current),
     onCancel: () => onClosed(undefined),
@@ -70,17 +76,17 @@ export function ConnectDialog({
 
   const connect = () => {
     setBusy(NEW_ACCOUNT);
-    setError(undefined);
+    setFailure(undefined);
     // On success the tab is on its way to the proxy, so it stays busy.
     onConnect().catch((e: Error) => {
       setBusy(undefined);
-      setError(e.message);
+      setFailure({ during: 'connect', detail: e.message });
     });
   };
 
   const pick = (connection: ProxyConnection) => {
     setBusy(connection.connection_id);
-    setError(undefined);
+    setFailure(undefined);
     onUseExisting(connection)
       .then(() => {
         used.current = connection;
@@ -88,12 +94,12 @@ export function ConnectDialog({
       })
       .catch((e: Error) => {
         setBusy(undefined);
-        setError(e.message);
+        setFailure({ during: 'pick', detail: e.message });
       });
   };
 
   const hasExisting = !!existing?.length;
-  const connectLabel = hasExisting ? 'Connect another account' : 'Connect';
+  const connectLabel = hasExisting ? 'Use another account' : 'Connect';
 
   return (
     <Dialog {...dialogProps} labelledBy={titleId} width='34rem'>
@@ -104,11 +110,7 @@ export function ConnectDialog({
         <Lead>
           <strong>{app}</strong> wants to use your {platform} account.
         </Lead>
-        {existing === undefined && (
-          <Hint aria-hidden>
-            <LoaderInline />
-          </Hint>
-        )}
+        {existing === undefined && <Looking aria-hidden />}
         {existing?.length === 0 && (
           <>
             <Hint>You approve this on the next page, at {proxySite}.</Hint>
@@ -143,9 +145,18 @@ export function ConnectDialog({
             </Accounts>
           </>
         )}
-        {error && <SimpleErrorBlock role='alert'>{error}</SimpleErrorBlock>}
+        {failure && (
+          <Failed role='alert'>
+            {failure.during === 'pick' ? (
+              <strong>Could not use this account.</strong>
+            ) : (
+              <strong>Could not start connecting.</strong>
+            )}
+            <span>{failure.detail}</span>
+          </Failed>
+        )}
       </DialogContent>
-      <DialogActions>
+      <Actions>
         <Button subtle onClick={() => close(false)}>
           Cancel
         </Button>
@@ -157,7 +168,7 @@ export function ConnectDialog({
         >
           {connectLabel}
         </Button>
-      </DialogActions>
+      </Actions>
     </Dialog>
   );
 }
@@ -220,6 +231,40 @@ const Hint = styled.p`
 const Detail = styled.span`
   color: ${p => p.theme.colors.textLight};
   font-size: 0.9rem;
+`;
+
+/** A line of text still coming: where the hint or the accounts will be. */
+const Looking = styled(LoaderInline)`
+  display: block;
+  flex: none;
+  width: min(20rem, 70%);
+  height: 1.1em;
+  margin-bottom: ${p => p.theme.size()};
+`;
+
+/** Proxy errors name request paths, which must wrap rather than overflow. */
+const Failed = styled(SimpleErrorBlock)`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
+  overflow-wrap: anywhere;
+
+  span {
+    font-size: 0.9rem;
+  }
+`;
+
+/**
+ * Buttons keep their words whole: on a narrow screen they go onto a second
+ * line instead of squeezing ("Cance" / "l").
+ */
+const Actions = styled(DialogActions)`
+  flex-wrap: wrap;
+
+  & > button {
+    white-space: nowrap;
+  }
 `;
 
 const Accounts = styled.ul`
