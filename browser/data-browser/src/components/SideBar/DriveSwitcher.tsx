@@ -1,6 +1,7 @@
 import styled from 'styled-components';
 import { useAccountDriveCatalog } from '../../hooks/useAccountDriveCatalog';
 import { useDriveHostingStates } from '../../hooks/useDriveHostingStates';
+import { canonicalizeScheme } from '@tomic/lib';
 import { Resource, core, server, useResources } from '@tomic/react';
 import {
   FaCaretDown,
@@ -52,7 +53,11 @@ export function DriveSwitcher({
   const catalog = useAccountDriveCatalog(
     privateDrive ? [privateDrive, ...savedDrives] : savedDrives,
   );
-  const myDrives = catalog.subjects.filter(subject => subject !== privateDrive);
+  const myDrives = catalog.subjects.filter(
+    subject =>
+      !privateDrive ||
+      canonicalizeScheme(subject) !== canonicalizeScheme(privateDrive),
+  );
   const recentDrives = history.filter(
     subject =>
       subject !== privateDrive &&

@@ -1,4 +1,6 @@
 // @wc-ignore-file
+import { canonicalizeScheme } from '@tomic/lib';
+
 /** Account pointers are discovery hints, never resource access grants. */
 export type CatalogEntry = {
   drive_subject: string;
@@ -13,14 +15,24 @@ export function catalogSubjects(
   local: string[],
   catalog: DriveCatalog | null,
 ): string[] {
-  const removed = new Set(catalog?.removed ?? []);
+  const removed = new Set(
+    (catalog?.removed ?? []).map(s => canonicalizeScheme(s)),
+  );
+  const seen = new Set<string>();
 
+  // `did:ad:X` and `atomic:X` name the same drive; list it once.
   return [
-    ...new Set([
-      ...local,
-      ...(catalog?.drives.map(d => d.drive_subject) ?? []),
-    ]),
-  ].filter(s => !removed.has(s));
+    ...local,
+    ...(catalog?.drives.map(d => d.drive_subject) ?? []),
+  ].filter(subject => {
+    const canonical = canonicalizeScheme(subject);
+
+    if (removed.has(canonical) || seen.has(canonical)) return false;
+
+    seen.add(canonical);
+
+    return true;
+  });
 }
 
 export function parseCatalog(value: unknown): DriveCatalog {
