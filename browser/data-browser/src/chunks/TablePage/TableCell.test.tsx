@@ -86,7 +86,7 @@ async function renderCell(
   property: Property,
   stored: JSONValue,
 ): Promise<Resource> {
-  const store = new Store({ serverUrl: 'https://example.com' });
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
   // A `_new:` row stays local, so nothing here reaches for a server.
   const row = await store.newResource({
     subject: '_new:day-row',
