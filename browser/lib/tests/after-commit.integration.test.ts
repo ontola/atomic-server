@@ -135,25 +135,42 @@ describe('afterCommit against a real server', () => {
     await table.set(TABLE_VIEWS, [view.subject]);
     await table.save();
 
-    const followed = await post('/app-row-grant', {
-      op: 'follow',
-      drive,
-      table: shared.subject,
-      app: created.app,
-      view: view.subject,
-      via: 'add-view',
-    });
-    expect(followed?.table).toBeTruthy();
+    // `follow` answers `null` until the server can read the app's package
+    // (the saves above can still be landing under CI load), and is
+    // idempotent, so it is asked again until it answers or a deadline passes.
+    const follow = () =>
+      post('/app-row-grant', {
+        op: 'follow',
+        drive,
+        table: shared.subject,
+        app: created.app,
+        view: view.subject,
+        via: 'add-view',
+      });
+    const until = async <T>(
+      what: string,
+      ask: () => Promise<T>,
+      done: (answer: T) => boolean,
+      ms = 30_000,
+    ): Promise<T> => {
+      const deadline = Date.now() + ms;
+      let answer = await ask();
 
-    // Let the initial delivery (a full-compare reset) run first.
-    await delay(4000);
+      while (!done(answer)) {
+        if (Date.now() > deadline)
+          throw new Error(`${what}: still ${JSON.stringify(answer)}`);
+        await delay(250);
+        answer = await ask();
+      }
 
-    const row = await store.newResource({
-      parent: shared.subject,
-      isA: [created.rowClass],
-      propVals: { [core.properties.name]: 'Saved through the store' },
-    });
-    await row.save();
+      return answer;
+    };
+    const followed = await until(
+      'follow (is --plugin-after-commit on, and does the app declare afterCommit?)',
+      follow,
+      answer => !!answer?.table,
+    );
+    expect(followed.table).toBeTruthy();
 
     const status = async () => {
       const url = new URL('/app-after-commit', server.serverUrl);
@@ -165,14 +182,27 @@ describe('afterCommit against a real server', () => {
       return (await fetch(url.href, { headers })).json();
     };
 
-    let pending;
-    let last;
+    // Let the initial delivery (a full-compare reset) finish first, so the
+    // row below is a change of its own.
+    await until(
+      'the initial delivery',
+      status,
+      answer => !!answer.subscriptions?.[0]?.lastDeliveredAt,
+    );
 
-    for (let i = 0; i < 40 && !pending; i++) {
-      await delay(500);
-      last = await status();
-      pending = last.subscriptions?.[0]?.pending;
-    }
+    const row = await store.newResource({
+      parent: shared.subject,
+      isA: [created.rowClass],
+      propVals: { [core.properties.name]: 'Saved through the store' },
+    });
+    await row.save();
+
+    const last = await until(
+      'the saved row reaching the hook',
+      status,
+      answer => !!answer.subscriptions?.[0]?.pending,
+    );
+    const pending = last.subscriptions[0].pending;
 
     expect(pending?.rows, JSON.stringify(last)).toBe(1);
     expect(pending?.inScope).toBe(true);
