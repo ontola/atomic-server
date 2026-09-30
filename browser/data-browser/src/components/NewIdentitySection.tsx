@@ -129,15 +129,9 @@ export function NewIdentitySection({
    * this device can't do passkeys, or the user asked for a code instead. */
   const [useCodeFallback, setUseCodeFallback] = useState(false);
 
-  useEffect(() => {
-    if (autoStart) {
-      handleCreate();
-    }
-  }, []);
-
   // ─── Step: Create Identity ───────────────────────────────────────────────
 
-  async function handleCreate() {
+  const handleCreate = async () => {
     // React StrictMode replays mount effects. A second key generation would
     // replace the active agent while the first identity is still onboarding.
     if (creatingIdentity.current) return;
@@ -185,7 +179,13 @@ export function NewIdentitySection({
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  useEffect(() => {
+    if (autoStart) {
+      handleCreate();
+    }
+  }, []);
 
   // ─── Step: Profile → private drive (automatic) ───────────────────────────
 

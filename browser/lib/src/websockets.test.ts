@@ -747,6 +747,30 @@ describe('WSClient drive subscription', () => {
     client.close();
   });
 
+  it.each([ErrorType.NotFound, ErrorType.Unauthorized])(
+    'does not automatically sync an unreadable drive under its legacy alias (%s)',
+    async errorType => {
+      const { client, socket, store } = await connectedClient();
+      const resource = new Resource('atomic:private-drive');
+      resource.setError(new AtomicError('Not readable', errorType));
+      store.resources.set('atomic:private-drive', resource);
+      vi.spyOn(store, 'getAgent').mockReturnValue(undefined);
+      vi.spyOn(store, 'getDrive').mockReturnValue('did:ad:private-drive');
+      vi.spyOn(store, 'isLiveSyncedDrive').mockReturnValue(true);
+      const compute = vi.spyOn(store, 'computeDriveSyncState');
+      const internal = client as unknown as {
+        subscribeToDrive(): void;
+        startVVSync(drive: string): Promise<void>;
+      };
+      internal.subscribeToDrive();
+      await internal.startVVSync('did:ad:private-drive');
+      assert(framesWithTag(socket, Tag.SUB)).toHaveLength(0);
+      assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+      assert(compute).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
+
   it('UNSUBs the previous drive when the store switches drives', async ({
     expect,
   }) => {

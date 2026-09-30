@@ -24,6 +24,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   before,
+  clickAccountMenuItem,
   getCurrentSubject,
   getDevDriveSecret,
   newResource,
@@ -141,7 +142,7 @@ async function signOut(page: Page) {
     dialog.accept();
   });
 
-  await page.locator('a[href$="/app/agent"]').click();
+  await clickAccountMenuItem(page, 'Profile');
   await page.click('[data-test="sign-out"]');
   await expect(
     page.getByRole('button', { name: 'Create account' }),
@@ -173,7 +174,9 @@ async function signInAgain(page: Page, secret: string) {
   await expect(
     page.getByRole('heading', { name: 'Your data is on another device' }),
   ).toBeHidden({ timeout: 15000 });
-  await expect(page.locator('a[href$="/app/agent"]')).toBeVisible();
+  await expect(
+    page.locator('[data-testid="account-menu-trigger"][data-signed-in="true"]'),
+  ).toBeVisible();
   await expect(page).toHaveURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/);
 }
 

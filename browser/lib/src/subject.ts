@@ -238,6 +238,31 @@ export function blobSubject(hashHex: string): string {
   return ATOMIC_BLOB_PREFIX + hashHex;
 }
 
+const CONTENT_ADDRESSED_DOWNLOAD = /\/download\/files\/([0-9a-f]{64})$/i;
+
+/**
+ * The blob a content-addressed download URL (`<origin>/download/files/<hash>`,
+ * what `Store.uploadFiles` writes as a File's `downloadURL`) serves, or
+ * `undefined` for any other URL.
+ *
+ * Places that keep only the URL, like an image in a document, use it to find
+ * the bytes in the local blob store. Those bytes may be the only copy: a
+ * browser-only drive never sends them to the server the URL names.
+ */
+export function blobSubjectFromDownloadUrl(url: string): string | undefined {
+  let pathname: string;
+
+  try {
+    pathname = new URL(url, 'http://localhost').pathname;
+  } catch {
+    return undefined;
+  }
+
+  const hash = CONTENT_ADDRESSED_DOWNLOAD.exec(pathname)?.[1];
+
+  return hash ? blobSubject(hash.toLowerCase()) : undefined;
+}
+
 export function nodeSubject(id: string): string {
   return ATOMIC_NODE_PREFIX + id;
 }

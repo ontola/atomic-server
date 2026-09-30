@@ -83,7 +83,25 @@ test('AI chat discovery includes both duplicate folders and root chats, scoped t
 test('independent signed-in devices create chats in one deterministic folder', async ({
   page,
   browser,
+  browserDiagnostics,
 }) => {
+  // Two apps cold-start in one test, each with its own WASM and local
+  // database. On a CI host running several pipelines, the second one's
+  // database took longer to open than the default budget (batch #1915,
+  // runs 1 and 7). The app keeps working meanwhile and says so.
+  test.slow();
+
+  for (const kind of ['warning', 'error'] as const) {
+    browserDiagnostics.expect(
+      kind,
+      /ClientDb is running without its local cache/,
+      "The second device's local database can open late on a loaded host; the app reads from the server meanwhile",
+      2,
+      undefined,
+      { optional: true },
+    );
+  }
+
   await enableAIForTesting(page);
   await setupAIRouteMocks(page, { chatResponse: 'Phone answer' });
   await before({ page });
@@ -102,10 +120,12 @@ test('independent signed-in devices create chats in one deterministic folder', a
       sendChatMessage(page, 'Phone conversation'),
       sendChatMessage(desktop, 'Desktop conversation'),
     ]);
-    await expect(page.getByText('Phone answer', { exact: true })).toBeVisible();
+    await expect(page.getByText('Phone answer', { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(
       desktop.getByText('Desktop answer', { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     const folder = async (target: typeof page) =>
       target.evaluate(async pointer => {
         const store = window.store;

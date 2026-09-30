@@ -1,3 +1,4 @@
+import { canonicalizeScheme } from '@tomic/lib';
 import styled from 'styled-components';
 import { useAccountDriveCatalog } from '../../hooks/useAccountDriveCatalog';
 import { useDriveHostingStates } from '../../hooks/useDriveHostingStates';
@@ -52,12 +53,18 @@ export function DriveSwitcher({
   const catalog = useAccountDriveCatalog(
     privateDrive ? [privateDrive, ...savedDrives] : savedDrives,
   );
-  const myDrives = catalog.subjects.filter(subject => subject !== privateDrive);
+  // Canonical spelling: the private drive can be `did:ad:` in one list and
+  // `atomic:` in another, which showed it twice.
+  const same = (a: string, b: string | undefined) =>
+    !!b && canonicalizeScheme(a) === canonicalizeScheme(b);
+  const myDrives = catalog.subjects.filter(
+    subject => !same(subject, privateDrive),
+  );
   const recentDrives = history.filter(
     subject =>
-      subject !== privateDrive &&
-      !catalog.removed.includes(subject) &&
-      !myDrives.includes(subject),
+      !same(subject, privateDrive) &&
+      !catalog.removed.some(removed => same(subject, removed)) &&
+      !myDrives.some(mine => same(subject, mine)),
   );
 
   const myDrivesMap = useResources(savedDrives);
@@ -72,7 +79,8 @@ export function DriveSwitcher({
   const createNewResource = useNewResourceUI();
 
   const items: DropdownItem[] = [
-    ...(privateDrive && !catalog.removed.includes(privateDrive)
+    ...(privateDrive &&
+    !catalog.removed.some(removed => same(privateDrive, removed))
       ? [
           {
             id: privateDrive,

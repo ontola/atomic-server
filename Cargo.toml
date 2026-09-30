@@ -51,4 +51,6 @@ overflow-checks = true
 debug = false
 
 [workspace.metadata.bin]
-wasm-pack = { version = "0.15.0" }
+# Explicit defaults select cargo install in cargo-run-bin. Older global
+# cargo-binstall versions do not support its --root argument.
+wasm-pack = { version = "0.15.0", default-features = true, locked = true }
