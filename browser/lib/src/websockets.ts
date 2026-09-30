@@ -1425,6 +1425,8 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
+          if (msg.entries.length > 0) this.store.startDriveSyncPull();
+
           // Per-entry `getResourceLoading + importLoroUpdate +
           // setSource + addResources({skipCommitCompare:true})`
           // collapsed into one `applyIncoming` call per entry.
@@ -1458,11 +1460,21 @@ export class WSClient {
           // SYNC_PUSH is chunked and intermediate chunks shouldn't trigger
           // the "done" UI state.
           if (msg.last) {
-            this.store.finishDriveSync(
-              canonicalizeScheme(msg.drive),
-              msg.entries.length,
-              Date.now(),
-            );
+            const drive = canonicalizeScheme(msg.drive);
+            const count = msg.entries.length;
+            const finish = () =>
+              this.store.finishDriveSync(drive, count, Date.now());
+            const clientDb = this.store.getClientDb();
+
+            // "Synced" is what lets a collection believe its local answer,
+            // an empty one included. Until the pulled resources are in the
+            // local database that answer is a partial one (a large drive
+            // takes minutes to land), so wait for the queued writes first.
+            if (typeof clientDb?.flush === 'function') {
+              clientDb.flush().then(finish, finish);
+            } else {
+              finish();
+            }
           }
         }
 
@@ -1802,7 +1814,26 @@ export class WSClient {
     return !!this.store.outbox.getEntry(drive)?.signedGenesis;
   }
 
-  private async startVVSync(drive: string): Promise<void> {
+  /** Version-vector probes being computed, per drive. Authenticate, reconcile
+   *  and resync can each ask for one at the same moment; computing the sync
+   *  state is O(drive size) on the database worker, so they share one run. */
+  private _vvSyncRuns = new Map<string, Promise<void>>();
+
+  private startVVSync(drive: string): Promise<void> {
+    const running = this._vvSyncRuns.get(drive);
+
+    if (running) return running;
+
+    const run = this.runVVSync(drive).finally(() => {
+      if (this._vvSyncRuns.get(drive) === run) this._vvSyncRuns.delete(drive);
+    });
+
+    this._vvSyncRuns.set(drive, run);
+
+    return run;
+  }
+
+  private async runVVSync(drive: string): Promise<void> {
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
 

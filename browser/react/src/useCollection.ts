@@ -51,6 +51,9 @@ export type UseCollectionOptions = {
   server?: string;
   /** Whether to include nested resources in the collection, defaults to false */
   includeNested?: boolean;
+  /** Let the connected server sort and page the list instead of building every
+   *  member locally, for lists that grow large (a chat). Defaults to false. */
+  preferServer?: boolean;
 };
 
 /** Stable key for the aggregation config, used as a rebuild dep. */
@@ -81,6 +84,7 @@ const buildCollection = (
   }: QueryFilter,
   pageSize?: number,
   includeNested?: boolean,
+  preferServer?: boolean,
 ) => {
   const builder = new CollectionBuilder(store, server);
 
@@ -91,6 +95,7 @@ const buildCollection = (
   if (sort_desc !== undefined) builder.setSortDesc(sort_desc);
   if (pageSize) builder.setPageSize(pageSize);
   if (includeNested) builder.setIncludeNested(includeNested);
+  if (preferServer) builder.setPreferServer(true);
   // The local ClientDb index requires a drive scope; pass it through when the
   // caller provides one so the same query works offline, not only against the
   // server.
@@ -113,6 +118,7 @@ export function useCollection(
     pageSize = undefined,
     server = undefined,
     includeNested = false,
+    preferServer = false,
   }: UseCollectionOptions = {},
 ): UseCollectionResult {
   const store = useStore();
@@ -130,6 +136,7 @@ export function useCollection(
       queryFilterMemo,
       pageSize,
       includeNested,
+      preferServer,
     );
     collectionRef.current = col.__internalObject;
 
@@ -200,6 +207,7 @@ export function useCollection(
         queryFilterMemo,
         pageSize,
         includeNested,
+        preferServer,
       );
       col = built.__internalObject;
       collectionRef.current = col;
@@ -217,7 +225,7 @@ export function useCollection(
     return () => {
       cancelled = true;
     };
-  }, [queryFilterMemo, pageSize, store, server, includeNested]);
+  }, [queryFilterMemo, pageSize, store, server, includeNested, preferServer]);
 
   const invalidateCollection = useCallback(async () => {
     const target = collection.__internalObject;

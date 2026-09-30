@@ -326,6 +326,7 @@ export class Collection {
   private _assemblingPage = false;
   private static legacyQueryServers = new WeakMap<Store, Set<string>>();
   private legacyQuery = false;
+  private readonly preferServer: boolean;
   private legacyMembers?: Promise<string[]>;
 
   public constructor(
@@ -333,10 +334,12 @@ export class Collection {
     server: string,
     params: CollectionParams,
     noFetch = false,
+    options: { preferServer?: boolean } = {},
   ) {
     this.store = store;
     this.server = server;
     this.params = params;
+    this.preferServer = !!options.preferServer;
 
     if (!noFetch) {
       // Route the initial fetch through `refresh()` rather than calling
@@ -925,6 +928,23 @@ export class Collection {
       return;
     }
 
+    // A list that grows large is cheaper for the server to sort and page than
+    // for this client to build every member of. Wait briefly for the
+    // connection; without one the local database answers as usual.
+    if (
+      this.preferServer &&
+      (this.store.serverConnected ||
+        (await this.store.waitForServerConnected(3000)))
+    ) {
+      try {
+        await this.fetchPageFromServer(page);
+
+        return;
+      } catch {
+        // Fall through to the local database.
+      }
+    }
+
     // The worker may still be attaching after agent-key initialization.
     // An expected database is different from an app that opted out of OPFS;
     // share the resource loader's bounded attachment wait before going remote.
@@ -1094,6 +1114,17 @@ export class Collection {
       return 'no-db';
     }
 
+    // While a drive sync is still pulling data, the local database may hold
+    // only part of the members (a chat of thousands of messages, say). The
+    // server has them all, so let it answer instead of a partial list.
+    if (
+      this.store.serverConnected &&
+      this.store.isDriveSyncPulling() &&
+      !this.store.hasCompletedDriveSyncFor(drive)
+    ) {
+      return 'no-db';
+    }
+
     // Hydrate + sort + setPage must not optimistic-add via ResourceUpdated.
     // Set the flag only around this slice — not the `queryLocalDb` wait
     // above — so a locally created member during the query still lands.
@@ -1164,7 +1195,29 @@ export class Collection {
       this._optimisticAdds.delete(subject);
     }
 
+    // A big collection is sorted from the sort key read out of each member's
+    // JSON, and only the members on the requested page are built into
+    // resources. Building all of them (a chat of thousands of messages) took
+    // tens of seconds to show the first fifty.
+    let jsonBySubject: Map<string, string> | undefined;
+    let jsonSortKeys: Map<string, unknown> | undefined;
+
     if (
+      result.resources &&
+      result.resources.length === result.subjects.length &&
+      result.subjects.length > LAZY_HYDRATE_THRESHOLD &&
+      this.params.sort_by
+    ) {
+      jsonBySubject = new Map(
+        result.subjects.map((subject, i) => [subject, result.resources![i]!]),
+      );
+      jsonSortKeys = sortKeysFromJsonAd(this.params.sort_by, jsonBySubject);
+
+      if (!jsonSortKeys) jsonBySubject = undefined;
+    }
+
+    if (
+      !jsonBySubject &&
       result.resources &&
       result.resources.length === result.subjects.length
     ) {
@@ -1210,6 +1263,11 @@ export class Collection {
       const isCreatedAt = sortBy === commits.properties.createdAt;
 
       for (const s of result.subjects) {
+        if (jsonSortKeys) {
+          sortKeys.set(s, jsonSortKeys.get(s));
+          continue;
+        }
+
         const resource = this.store.resources.get(s);
         let key = resource?.get(sortBy);
 
@@ -1273,6 +1331,14 @@ export class Collection {
     const pageSize = parseInt(this.params.page_size, 10);
     const offset = page * pageSize;
     const pageSubjects = result.subjects.slice(offset, offset + pageSize);
+
+    if (jsonBySubject) {
+      for (const subject of pageSubjects) {
+        const json = jsonBySubject.get(subject);
+
+        if (json) this.store.hydrateResourceFromJsonAd(subject, json);
+      }
+    }
 
     // Build a synthetic collection resource from the query result
     const resource = new Resource<Collections.Collection>(
@@ -1477,6 +1543,47 @@ function readAggregates(resource: Resource): AggregateOutcome[] {
   const value = resource.get(collections.properties.aggregates);
 
   return Array.isArray(value) ? (value as unknown as AggregateOutcome[]) : [];
+}
+
+/** Collections with more members than this are sorted from their JSON and only
+ *  the requested page is built into resources. */
+const LAZY_HYDRATE_THRESHOLD = 200;
+
+/**
+ * The sort key of each member, read from its JSON-AD without building a
+ * resource. `undefined` when a key a resource would derive another way (the
+ * creation time, from the genesis change) is not in the JSON, so the caller
+ * builds the resources instead and gets the same order as before.
+ */
+function sortKeysFromJsonAd(
+  sortBy: string,
+  jsonBySubject: Map<string, string>,
+): Map<string, unknown> | undefined {
+  const derived =
+    sortBy === commits.properties.createdAt ||
+    sortBy === dataBrowser.properties.sortOrder;
+  const keys = new Map<string, unknown>();
+
+  for (const [subject, json] of jsonBySubject) {
+    let value: unknown;
+
+    try {
+      value = (JSON.parse(json) as Record<string, unknown>)[sortBy];
+    } catch {
+      return undefined;
+    }
+
+    if (value === undefined && derived) return undefined;
+
+    keys.set(
+      subject,
+      typeof value === 'number' && sortBy === commits.properties.createdAt
+        ? normalizeLoroChangeTimestampMs(value)
+        : value,
+    );
+  }
+
+  return keys;
 }
 
 export function proxyCollection(collection: Collection): Collection {

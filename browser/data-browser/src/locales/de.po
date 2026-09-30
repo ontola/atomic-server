@@ -12612,3 +12612,13 @@ msgstr ""
 #: src/actions/appMenuItems.tsx
 msgid "Go to"
 msgstr ""
+
+#. 0: hidden
+#: src/components/SideBar/SideBarMoreRow.tsx
+msgid "{0} more, open to see all"
+msgstr "{0} weitere, öffnen um alle zu sehen"
+
+#. 0: olderCount
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Show older messages ({0})"
+msgstr "Ältere Nachrichten anzeigen ({0})"

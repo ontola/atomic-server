@@ -683,6 +683,7 @@ export class Store {
   private _serverConnected = false;
   private _serverConnectionError: string | undefined;
   private _driveSyncInProgress = false;
+  private _driveSyncPulling = false;
   /**
    * Saves that a UI layer has scheduled (e.g. `useValue`'s commit
    * debounce) but whose `save()` hasn't run yet. During that window the
@@ -1897,8 +1898,23 @@ export class Store {
     // Collect VVs from WASM DB (persisted snapshots)
     let allVVs: Record<string, Record<string, number>> = {};
 
+    // The state is what the server compares against: built from memory alone
+    // (the database not attached yet, or not answering) it claims the client
+    // holds a handful of resources, and the server answers by sending the
+    // whole drive again. Wait for the database, and fail the sync attempt
+    // rather than describe a partial state.
+    if (!this.clientDb && !(await this.waitForClientDb())) {
+      if (this.clientDbExpected) {
+        throw new Error('Local database not attached yet');
+      }
+    }
+
     if (this.clientDb) {
       try {
+        if (!this.clientDb.isReady && !(await this.clientDb.waitForReady())) {
+          throw new Error('Local database is not ready');
+        }
+
         // Scoped to THIS drive via the same parent-index walk the server uses
         // (`collect_drive_subjects`): O(this drive) instead of O(every resource
         // in every drive). It also keeps foreign-drive subjects out of the VV
@@ -1908,8 +1924,8 @@ export class Store {
         const endVV = perfSpan('clientdb.getVersionVectorsForDrive');
         allVVs = await this.clientDb.getVersionVectorsForDrive(drive);
         endVV({ count: Object.keys(allVVs).length });
-      } catch {
-        // WASM DB may not be ready yet
+      } catch (e) {
+        throw new Error(`Local database unavailable for sync: ${e}`);
       }
     }
 
@@ -4814,6 +4830,7 @@ export class Store {
 
     if (!connected) {
       this._driveSyncInProgress = false;
+      this._driveSyncPulling = false;
     }
 
     console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
@@ -4965,6 +4982,7 @@ export class Store {
     timestamp: number,
   ): void {
     this._driveSyncInProgress = false;
+    this._driveSyncPulling = false;
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
@@ -4989,6 +5007,7 @@ export class Store {
    */
   public failDriveSync(drive: string, message: string): void {
     this._driveSyncInProgress = false;
+    this._driveSyncPulling = false;
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
     if (drive) {
@@ -5016,6 +5035,17 @@ export class Store {
    * An unknown drive returns false, so the caller falls back to the server.
    * That is the safe direction: a needless `/query` costs a round-trip, while
    * a wrongly-trusted empty silently hides the user's data. */
+  /** True while the server is sending a drive's resources and they are not all
+   *  saved locally yet: the local database may hold only part of the drive. */
+  public isDriveSyncPulling(): boolean {
+    return this._driveSyncPulling;
+  }
+
+  /** The server started sending resources for a drive sync. */
+  public startDriveSyncPull(): void {
+    this._driveSyncPulling = true;
+  }
+
   public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
     if (!drive) return false;
 

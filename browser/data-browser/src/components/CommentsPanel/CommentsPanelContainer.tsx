@@ -49,15 +49,13 @@ function CommentsPanel() {
 function Comments({ subject }: { subject: string }) {
   const store = useStore();
   const resource = useResource(subject);
-  const { messages, loading, invalidate } = useChatMessages(
-    subject,
-    dataBrowser.properties.about,
-  );
+  const { messages, loading, invalidate, olderCount, loadOlder } =
+    useChatMessages(subject, dataBrowser.properties.about);
   const [, markSeen] = useLastSeenComments(subject);
 
   // Everything in the thread is visible while the panel is open — mark the
   // rendered messages as seen.
-  const seenCount = messages.length;
+  const seenCount = messages.length + olderCount;
   useEffect(() => {
     if (seenCount > 0) {
       markSeen(seenCount);
@@ -82,6 +80,8 @@ function Comments({ subject }: { subject: string }) {
     <ChatView
       messages={messages}
       loading={loading}
+      olderCount={olderCount}
+      onLoadOlder={loadOlder}
       onSend={handleSend}
       noContainerPadding
       threadSubject={subject}
