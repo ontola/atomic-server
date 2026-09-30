@@ -53,6 +53,7 @@ use super::host_core::{PluginHost, ResourceGrants};
 use super::js_runtime::{self, StoreHost};
 use super::manifest::{Manifest, World};
 use super::plan::{plan_verdict, Op, PlanHost, PlannedChange, RunPlan};
+use super::plugin::STATUS_REVOKED;
 use super::store_host::StoreApplyHost;
 use crate::appstate::AppState;
 
@@ -86,6 +87,10 @@ pub const VIA_GRANT_BACKFILL: &str = "grant-backfill";
 pub const VIA_ACTIVATOR_LOST_READ: &str = "activator-lost-read";
 /// Ended because the table is gone or no longer a table.
 pub const VIA_TABLE_GONE: &str = "table-gone";
+/// Ended because the app or its Installation was uninstalled (destroyed).
+pub const VIA_UNINSTALLED: &str = "uninstalled";
+/// Ended because the app's Installation was revoked.
+pub const VIA_REVOKED: &str = "revoked";
 
 const FOLLOW_VIAS: [&str; 6] = [
     app_row_grant::VIA_ADD_VIEW,
@@ -196,6 +201,11 @@ pub struct Delivery {
     pub verdict: Option<String>,
     #[serde(default)]
     pub waiting_for_review: bool,
+    /// The plugin source that made the proposal waiting for review. If the
+    /// app's source changes meanwhile, the proposal is discarded and the
+    /// page runs again on the new source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_hash: Option<String>,
 }
 
 /// A row the hook wrote, so its echo is not delivered back to it.
@@ -415,9 +425,13 @@ pub struct Eligible {
     pub row_class: String,
 }
 
-pub async fn eligibility(db: &Db, sub: &Subscription) -> Result<Eligible, NotNow> {
+/// The table's row class, or why the subscription can never deliver again:
+/// the table, view, app or Installation is gone, the Installation was
+/// revoked, or the person who turned it on can no longer read the table. A
+/// paused Installation is not a reason: it waits.
+async fn row_class_or_end(db: &Db, sub: &Subscription) -> Result<String, &'static str> {
     let Ok(table) = db.get_resource(&sub.table.as_str().into()).await else {
-        return Err(NotNow::End(VIA_TABLE_GONE));
+        return Err(VIA_TABLE_GONE);
     };
     let Some(row_class) = table
         .get(urls::CLASSTYPE_PROP)
@@ -425,10 +439,22 @@ pub async fn eligibility(db: &Db, sub: &Subscription) -> Result<Eligible, NotNow
         .and_then(app_row_grant::string_of)
         .map(|c| pure(&c))
     else {
-        return Err(NotNow::End(VIA_TABLE_GONE));
+        return Err(VIA_TABLE_GONE);
     };
+    if db.get_resource(&sub.app.as_str().into()).await.is_err() {
+        return Err(VIA_UNINSTALLED);
+    }
+    if let Some(installation) = &sub.installation {
+        match db.get_resource(&installation.as_str().into()).await {
+            Err(_) => return Err(VIA_UNINSTALLED),
+            Ok(r) if text(&r, urls::INSTALLATION_STATUS).as_deref() == Some(STATUS_REVOKED) => {
+                return Err(VIA_REVOKED)
+            }
+            Ok(_) => {}
+        }
+    }
     if let Some(why) = app_row_grant::view_problem(db, &sub.table, &sub.app, &sub.view).await {
-        return Err(NotNow::End(why));
+        return Err(why);
     }
     if atomic_lib::hierarchy::check_read(
         db,
@@ -438,8 +464,18 @@ pub async fn eligibility(db: &Db, sub: &Subscription) -> Result<Eligible, NotNow
     .await
     .is_err()
     {
-        return Err(NotNow::End(VIA_ACTIVATOR_LOST_READ));
+        return Err(VIA_ACTIVATOR_LOST_READ);
     }
+    Ok(row_class)
+}
+
+/// Why `sub` can never deliver again, if so ([`row_class_or_end`]).
+pub async fn end_reason(db: &Db, sub: &Subscription) -> Option<&'static str> {
+    row_class_or_end(db, sub).await.err()
+}
+
+pub async fn eligibility(db: &Db, sub: &Subscription) -> Result<Eligible, NotNow> {
+    let row_class = row_class_or_end(db, sub).await.map_err(NotNow::End)?;
     let installation = super::installation::resolve(db, &sub.drive, &sub.app)
         .await
         .map_err(NotNow::Wait)?;
@@ -621,6 +657,7 @@ pub async fn backfill_from_grants(db: &Db) -> Result<usize, String> {
 /// wakes the ones behind, so a lost marker is recovered. Also prunes stale
 /// own-write records. Returns how many it woke.
 pub async fn sweep(db: &Db) -> Result<usize, String> {
+    end_finished(db, None).await?;
     let now = atomic_lib::utils::now();
     let stale: Vec<Vec<u8>> = db
         .kv
@@ -662,6 +699,73 @@ pub async fn sweep(db: &Db) -> Result<usize, String> {
     Ok(woken)
 }
 
+/// Ends every live subscription (or those in `only`) that can never deliver
+/// again ([`end_reason`]), with its markers, delivery and waiting proposal.
+/// Under the delivery lock, so a delivery in progress never saves over it.
+/// Returns how many it ended.
+pub async fn end_finished(db: &Db, only: Option<&HashSet<String>>) -> Result<usize, String> {
+    let _lock = db.lock_plugin("after-commit-delivery").await;
+    let mut ended = 0;
+    for sub in all(db)?.into_iter().filter(Subscription::is_live) {
+        if only.is_some_and(|ids| !ids.contains(&sub.id)) {
+            continue;
+        }
+        if let Some(via) = end_reason(db, &sub).await {
+            end(db, sub, "server", via)?;
+            ended += 1;
+        }
+    }
+    Ok(ended)
+}
+
+/// Whose subscription may have ended, now that `changed` changed: those
+/// whose table, one of the table's ancestors (read rights are inherited),
+/// view, app or Installation it is.
+async fn affected(db: &Db, changed: &HashSet<String>) -> Result<HashSet<String>, String> {
+    let mut ids = HashSet::new();
+    for sub in all(db)?.into_iter().filter(Subscription::is_live) {
+        let mut hit = [Some(&sub.table), Some(&sub.view), Some(&sub.app)]
+            .into_iter()
+            .chain([sub.installation.as_ref()])
+            .flatten()
+            .any(|s| changed.contains(&pure(s)));
+        if !hit {
+            if let Ok(mut current) = db.get_resource(&sub.table.as_str().into()).await {
+                for _ in 0..64 {
+                    let Ok(parent) = current.get_parent(db).await else {
+                        break;
+                    };
+                    if changed.contains(&parent.get_subject().pure_id()) {
+                        hit = true;
+                        break;
+                    }
+                    if parent.get_subject().pure_id() == pure(&sub.drive) {
+                        break;
+                    }
+                    current = parent;
+                }
+            }
+        }
+        if hit {
+            ids.insert(sub.id);
+        }
+    }
+    Ok(ids)
+}
+
+async fn end_affected(db: &Db, changed: Changed) -> Result<usize, String> {
+    match changed {
+        Changed::Unknown => end_finished(db, None).await,
+        Changed::Subjects(subjects) => {
+            let ids = affected(db, &subjects).await?;
+            if ids.is_empty() {
+                return Ok(0);
+            }
+            end_finished(db, Some(&ids)).await
+        }
+    }
+}
+
 // ------------------------------------------------------------ worker
 
 /// In-memory state of the delivery worker.
@@ -670,6 +774,9 @@ pub struct Worker {
     fires: HashMap<String, VecDeque<i64>>,
     pub debounce_ms: i64,
     pub last_sweep: i64,
+    /// The store's change events, to end subscriptions as soon as what they
+    /// depend on changes (#1907). Subscribed on the first tick.
+    events: Option<tokio::sync::broadcast::Receiver<atomic_lib::DbEvent>>,
 }
 
 impl Default for Worker {
@@ -678,11 +785,49 @@ impl Default for Worker {
             fires: HashMap::new(),
             debounce_ms: DEBOUNCE_MS,
             last_sweep: 0,
+            events: None,
         }
     }
 }
 
+/// What changed in the store since the worker last looked.
+enum Changed {
+    /// These subjects (pure ids).
+    Subjects(HashSet<String>),
+    /// Events were missed: anything may have.
+    Unknown,
+}
+
 impl Worker {
+    fn changed(&mut self, db: &Db) -> Option<Changed> {
+        use tokio::sync::broadcast::error::TryRecvError;
+        let Some(events) = &mut self.events else {
+            self.events = Some(db.subscribe_events());
+            return None;
+        };
+        let mut subjects = HashSet::new();
+        loop {
+            match events.try_recv() {
+                Ok(atomic_lib::DbEvent::Changed { subject, .. })
+                | Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => {
+                    subjects.insert(subject.pure_id());
+                }
+                Ok(_) => {}
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Lagged(_)) => {
+                    // Drain what is left, then check everything.
+                    while events.try_recv().is_ok() {}
+                    return Some(Changed::Unknown);
+                }
+                Err(TryRecvError::Closed) => {
+                    self.events = None;
+                    break;
+                }
+            }
+        }
+        (!subjects.is_empty()).then_some(Changed::Subjects(subjects))
+    }
+
     /// Records a woken run; refuses past the cap.
     fn admit(&mut self, app: &str, now: i64) -> bool {
         let fires = self.fires.entry(app.to_string()).or_default();
@@ -742,6 +887,12 @@ pub async fn tick(appstate: &AppState, worker: &Mutex<Worker>) {
     if sweep_due {
         if let Err(e) = sweep(&appstate.store).await {
             tracing::warn!("afterCommit: sweep failed: {e}");
+        }
+    }
+    let changed = worker.lock().await.changed(&appstate.store);
+    if let Some(changed) = changed {
+        if let Err(e) = end_affected(&appstate.store, changed).await {
+            tracing::warn!("afterCommit: could not end finished subscriptions: {e}");
         }
     }
     drain_at(appstate, worker, now).await;
@@ -899,6 +1050,7 @@ async fn claim_and_process(
         at: now,
         verdict: None,
         waiting_for_review: false,
+        source_hash: None,
     };
     // Nothing for the plugin (only its own echoes): move on without a run.
     if delivery.reset.is_none() && delivery.changes.is_empty() {
@@ -1014,6 +1166,9 @@ async fn process(
         return Ok(false);
     }
     if delivery.waiting_for_review {
+        // A proposal made by the app's previous source is not what the app
+        // would do now: drop it and run the page again (#1907).
+        discard_if_stale(db, &mut sub, &mut delivery).await?;
         return Ok(false);
     }
     if sub.stopped.is_some() && !restart_if_updated(db, &mut sub).await? {
@@ -1037,6 +1192,7 @@ async fn process(
         }
         Ok(Outcome::Held(pending)) => {
             delivery.waiting_for_review = true;
+            delivery.source_hash = Some(eligible.package.source_hash.clone());
             save_delivery(db, &delivery)?;
             sub.pending = Some(pending);
             sub.last_error = None;
@@ -1397,6 +1553,13 @@ pub async fn review(
     if !app_row_grant::may_write(db, table, reviewer).await {
         return Err("Only someone who can edit this table can answer this".into());
     }
+    let mut sub = sub;
+    if discard_if_stale(db, &mut sub, &mut delivery).await? {
+        return Err(
+            "The app was updated since it proposed this, so the proposal was dropped. It will propose again with its new version."
+                .into(),
+        );
+    }
     let journal = journal(db, &sub, &delivery);
     match answer {
         Answer::Decline => {
@@ -1434,6 +1597,41 @@ pub async fn review(
     }
     delivery.waiting_for_review = false;
     acknowledge(db, sub, &delivery)
+}
+
+/// Drops the proposal waiting in `delivery` when the app's source changed
+/// since it was made: the journal records why, and the same page is run
+/// again, as a new delivery, on the new source. `Ok(true)` when it did.
+async fn discard_if_stale(
+    db: &Db,
+    sub: &mut Subscription,
+    delivery: &mut Delivery,
+) -> Result<bool, String> {
+    let Some(proposed_by) = &delivery.source_hash else {
+        return Ok(false);
+    };
+    let Ok(package) = package_of(db, &sub.drive, &sub.app).await else {
+        // No source to compare with (paused, gone): the end checks decide.
+        return Ok(false);
+    };
+    if &package.source_hash == proposed_by {
+        return Ok(false);
+    }
+    journal(db, sub, delivery).abandon(
+        "server",
+        "The app's source changed while this proposal waited for review",
+    )?;
+    // A fresh id: the abandoned journal belongs to the old one.
+    delivery.id = ulid::Ulid::new().to_string().to_lowercase();
+    delivery.waiting_for_review = false;
+    delivery.verdict = None;
+    delivery.source_hash = None;
+    delivery.attempts = 0;
+    delivery.next_attempt_at = 0;
+    save_delivery(db, delivery)?;
+    sub.pending = None;
+    save(db, sub)?;
+    Ok(true)
 }
 
 /// Retry after the table's delivery stopped, or right away after a failure.
