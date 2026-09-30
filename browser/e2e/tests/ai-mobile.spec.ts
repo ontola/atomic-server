@@ -314,6 +314,66 @@ test('keyboard resize keeps the final sentence visible without a spacer above th
     .toBeGreaterThan(100);
 });
 
+test('scrolling up right after the keyboard resize keeps the reading position', async ({
+  page,
+}) => {
+  // The scroll handler used to treat any scroll within 150 ms of a resize as
+  // the browser clamping, so a reader who scrolled up just after the keyboard
+  // opened stayed attached and was pulled back down when the inset changed.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const ending = 'This final sentence must remain fully readable.';
+  await setupScriptedToolCallMocks(
+    page,
+    [],
+    Array(15)
+      .fill(
+        'A longer response fills the chat with useful information and several lines of text.',
+      )
+      .join('\n\n') +
+      '\n\n' +
+      ending,
+  );
+  await enableAIForTesting(page);
+  await before({ page });
+  await sendChatMessage(page, 'Give me a long answer');
+  const panel = page.getByTestId('ai-sidebar');
+  await expect(panel.getByText(ending, { exact: true })).toBeVisible();
+  const viewport = panel.locator('[data-radix-scroll-area-viewport]');
+  await viewport.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const lastLine = panel.getByText(ending, { exact: true });
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty('--keyboard-inset', '320px'),
+  );
+  // Scroll as soon as the resize has been laid out, with nothing in between.
+  await expect
+    .poll(async () => {
+      const text = (await lastLine.boundingBox())!;
+      const bounds = (await viewport.boundingBox())!;
+
+      return text.y + text.height - bounds.y - bounds.height;
+    })
+    .toBeLessThanOrEqual(0);
+  await viewport.evaluate(element => {
+    element.scrollTop = 100;
+  });
+  await expect
+    .poll(() => viewport.evaluate(element => element.scrollTop))
+    .toBe(100);
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty('--keyboard-inset', '240px'),
+  );
+  await expect
+    .poll(() =>
+      viewport.evaluate(
+        element =>
+          element.scrollHeight - element.clientHeight - element.scrollTop,
+      ),
+    )
+    .toBeGreaterThan(100);
+});
+
 test('mobile chat keeps navigation usable and Back dismisses only the chat', async ({
   page,
 }) => {
