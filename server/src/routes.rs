@@ -440,6 +440,11 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     app.service(
         web::resource("/plugin-route-status").route(web::get().to(handlers::plugin_routes::status)),
     )
+    // Caddy's on-demand TLS `ask` (#1922): loopback and trusted proxies only.
+    .service(
+        web::resource("/plugin-route-tls-ask")
+            .route(web::get().to(handlers::plugin_routes::tls_ask)),
+    )
     // The host's consent page's API (D6) and an installation's route tokens.
     .service(
         web::resource("/plugin-route-consent")

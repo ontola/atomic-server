@@ -216,6 +216,32 @@ If the proxy passes `Host` through unchanged and the server's own
 rest of the server keeps its current handling of forwarded headers for now
 ([#1903](https://github.com/ontola/atomic-server/issues/1903)).
 
+#### Certificates for installation hosts (Caddy on-demand TLS)
+
+Each installation on the routes origin gets its own host,
+`<slug>.routes.example.net`, so the proxy needs a certificate per host. A
+wildcard certificate works. Without one, Caddy's on-demand TLS can get them as
+they are first requested, if it asks the server first:
+`GET /plugin-route-tls-ask?domain=<host>` answers `200` only for the host of a
+live (active or paused) installation, and `404` for anything else, including
+revoked installations. It only answers loopback peers and `--trusted-proxies`;
+everyone else gets `403`.
+
+```caddyfile
+{
+	on_demand_tls {
+		ask http://127.0.0.1:9883/plugin-route-tls-ask
+	}
+}
+
+*.routes.example.net {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:9883
+}
+```
+
 Clients see what the server allows in `hostFeatures.pluginRoutes` of
 `GET /plugin-catalog`: `compiled`, `level`, `routesOrigin` and the names of
 listeners and sidecars (never their ports or URLs).

@@ -160,6 +160,50 @@ async fn serve(
     response
 }
 
+/// Asks per minute one TLS terminator may make of [`tls_ask`]. It asks once
+/// per host it has no certificate for, so this only bites a loop.
+const TLS_ASK_PER_MINUTE: u32 = 600;
+
+fn tls_ask_limiter() -> &'static crate::rate_limit::WriteRateLimiter {
+    static LIMITER: std::sync::OnceLock<crate::rate_limit::WriteRateLimiter> =
+        std::sync::OnceLock::new();
+    LIMITER.get_or_init(|| crate::rate_limit::WriteRateLimiter::new(0, TLS_ASK_PER_MINUTE))
+}
+
+#[derive(serde::Deserialize)]
+pub struct TlsAskQuery {
+    #[serde(default)]
+    domain: String,
+}
+
+/// `GET /plugin-route-tls-ask?domain=<host>` (#1922): the `ask` endpoint of
+/// Caddy's on-demand TLS. `200` when `domain` is a live installation's host on
+/// the routes origin ([`RouteRegistry::tls_allowed`]), else `404`. Answered
+/// only to loopback and `--trusted-proxies` peers (`403` otherwise), so it is
+/// not a public oracle of which installations exist.
+pub async fn tls_ask(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    query: web::Query<TlsAskQuery>,
+) -> HttpResponse {
+    let Some(peer) = req.peer_addr().map(|p| p.ip().to_canonical()) else {
+        return HttpResponse::Forbidden().finish();
+    };
+    if !peer.is_loopback() && !state.config.trusted_proxies.trusts(peer) {
+        return HttpResponse::Forbidden().finish();
+    }
+    if let Err(limited) = tls_ask_limiter().check(&peer.to_string(), true) {
+        return HttpResponse::TooManyRequests()
+            .insert_header((header::RETRY_AFTER, limited.retry_after_secs.to_string()))
+            .finish();
+    }
+    if state.route_registry.tls_allowed(&query.domain) {
+        HttpResponse::Ok().finish()
+    } else {
+        HttpResponse::NotFound().finish()
+    }
+}
+
 /// `readRouteStatus` (design 2.10): per route of an installation, its URL,
 /// request and error counts for the last 24 hours, and the last error; and
 /// the sampled run log. Readable by whoever may read the Installation.
@@ -716,6 +760,55 @@ mod tests {
                 .to_request(),
         )
         .await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    #[actix_rt::test]
+    async fn tls_ask_allows_live_installation_hosts_to_local_and_trusted_peers() {
+        let args = [&ROUTES[..], &["--trusted-proxies", "10.0.0.0/8"]].concat();
+        let f = fixture_with_args("routes_tls_ask", &args).await;
+        let installation = try_install(
+            &f,
+            "tlsask",
+            json!({"routes": [{"id": "root", "path": "/", "methods": ["GET"]}]}),
+        )
+        .await
+        .unwrap();
+        let app = app!(f.appstate);
+        let ask = |domain: &str, peer: &str| {
+            test::TestRequest::get()
+                .uri(&format!("/plugin-route-tls-ask?domain={domain}"))
+                .peer_addr(peer.parse().unwrap())
+                .to_request()
+        };
+        let live = format!("{}.routes.localhost", slug(&installation));
+        let unknown = format!("{}.routes.localhost", slug("did:ad:nobody"));
+        let lookalike = format!("{live}.evil.example");
+        for peer in ["127.0.0.1:5000", "[::1]:5000", "10.1.2.3:5000"] {
+            for (domain, expected) in [
+                (live.as_str(), 200),
+                (unknown.as_str(), 404),
+                (lookalike.as_str(), 404),
+                ("routes.localhost", 404),
+            ] {
+                let resp = test::call_service(&app, ask(domain, peer)).await;
+                assert_eq!(resp.status(), expected, "{domain} from {peer}");
+            }
+        }
+        // Not a public oracle.
+        let resp = test::call_service(&app, ask(&live, "203.0.113.9:5000")).await;
+        assert_eq!(resp.status(), 403);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/plugin-route-tls-ask?domain={live}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 403, "no peer address");
+        // Revoked: no new certificate.
+        set_status(&f.appstate.store, &installation, "revoked").await;
+        let resp = test::call_service(&app, ask(&live, "127.0.0.1:5000")).await;
         assert_eq!(resp.status(), 404);
     }
 
