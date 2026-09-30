@@ -312,9 +312,14 @@ export function DropdownMenu({
     };
 
     const viewport = window.visualViewport;
-    const observer = new ResizeObserver(schedulePosition);
+    // Absent in jsdom and very old browsers; the viewport and scroll
+    // listeners below still keep the menu in place there.
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(schedulePosition);
 
-    if (dropdownRef.current) observer.observe(dropdownRef.current);
+    if (dropdownRef.current) observer?.observe(dropdownRef.current);
     viewport?.addEventListener('resize', schedulePosition);
     viewport?.addEventListener('scroll', schedulePosition);
     window.addEventListener('resize', schedulePosition);
@@ -322,7 +327,7 @@ export function DropdownMenu({
 
     return () => {
       cancelAnimationFrame(frame);
-      observer.disconnect();
+      observer?.disconnect();
       viewport?.removeEventListener('resize', schedulePosition);
       viewport?.removeEventListener('scroll', schedulePosition);
       window.removeEventListener('resize', schedulePosition);

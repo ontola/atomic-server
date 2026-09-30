@@ -26,7 +26,7 @@ import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS, type ViewKind } from './tableViewKinds';
 
 vi.mock('@chunks/AppPage/useDriveApps', () => ({
-  useDriveApps: () => [],
+  useDriveApps: () => ({ apps: [], refresh: () => {} }),
   appsForClass: () => [],
 }));
 
