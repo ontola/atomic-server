@@ -831,6 +831,29 @@ const ONLY_MESSAGES = [
  *  viewer's. See `Resource.save` in @tomic/lib. */
 const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
+interface ChatTail {
+  total: number;
+  messages: string[];
+}
+
+function readTail(key: string): ChatTail | undefined {
+  try {
+    const raw = localStorage.getItem(key);
+
+    return raw ? (JSON.parse(raw) as ChatTail) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeTail(key: string, tail: ChatTail) {
+  try {
+    localStorage.setItem(key, JSON.stringify(tail));
+  } catch {
+    // Storage full or blocked: the chat just opens the slower way.
+  }
+}
+
 /**
  * Fetches messages linked to a subject using the Collection system, sorted by
  * createdAt ascending (oldest first) with pagination. ChatRooms link their
@@ -840,12 +863,19 @@ export function useChatMessages(
   subject: string,
   property: string = core.properties.parent,
 ) {
-  const [messages, setMessages] = useState<string[]>([]);
+  // The newest messages seen last time this chat was open, so a reopened chat
+  // fills at once from the local database while the real list (server sorted,
+  // after the connection is up) is on its way.
+  const tailKey = `chat-tail:${subject}:${property}`;
+  const [remembered] = useState(() => readTail(tailKey));
+  const [messages, setMessages] = useState<string[]>(
+    remembered?.messages ?? [],
+  );
   // How many of the NEWEST messages are listed. A busy chat can hold
   // thousands; listing (and rendering) them all made opening it a stall and
   // an unbounded DOM. Older ones load a page at a time on request.
   const [visible, setVisible] = useState(CHAT_PAGE_SIZE);
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState(remembered?.total ?? 0);
 
   // Scope the query to the drive the THREAD lives on, not the viewer's active
   // one. A guest opening a chatroom shared from another drive has their own
@@ -884,10 +914,14 @@ export function useChatMessages(
 
       setTotal(count);
       setMessages(members);
+
+      if (visible === CHAT_PAGE_SIZE && members.length > 0) {
+        writeTail(tailKey, { total: count, messages: members });
+      }
     };
 
     extractMembers();
-  }, [collection, visible]);
+  }, [collection, visible, tailKey]);
 
   // `useCollection` (used internally by this hook) routes
   // `ResourceManuallyCreated` through `applyResourceChange` for an
@@ -896,7 +930,7 @@ export function useChatMessages(
 
   return {
     messages,
-    loading: !ready,
+    loading: !ready && messages.length === 0,
     invalidate: invalidateCollection,
     /** Messages that exist but are not listed yet (older than the window). */
     olderCount: Math.max(0, total - messages.length),

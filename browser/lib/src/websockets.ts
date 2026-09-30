@@ -80,6 +80,10 @@ import {
 } from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
+/** How long a drive's sync probe waits so the screen's first reads are not
+ *  queued behind the version-vector scan. */
+const SYNC_PROBE_DELAY_MS = 2000;
+
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
 // failure mode is a real server hang or stuck WS, not transient slowness.
@@ -224,6 +228,9 @@ function shortPropName(url: string): string {
  * All messages are binary frames — no JSON-AD parsing on the hot path.
  */
 export class WSClient {
+  /** Tests set this to 0. */
+  public static syncProbeDelayMs = SYNC_PROBE_DELAY_MS;
+
   private ws: WebSocket;
   private store: Store;
   private authPromise: Promise<void>;
@@ -685,7 +692,10 @@ export class WSClient {
 
         // Refetch resources that had 401 errors
         if (fetchAll) {
-          await this.reconcileSubscribedDrive();
+          // Not awaited: computing the drive's sync state takes seconds on a
+          // large drive, and `authenticate` resolving is what tells the store
+          // the server is connected, so every read waited for it.
+          void this.reconcileSubscribedDrive().catch(() => undefined);
 
           for (const resource of this.store.resources.values()) {
             if (resource.isUnauthorized()) {
@@ -1838,6 +1848,16 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) return;
 
     const current = this.connectionGuard();
+
+    // Reading every version vector of a large drive keeps the local database
+    // worker busy for a second or more, and everything the screen is waiting
+    // for is read through that same worker. The probe is background work, so
+    // the first reads go first.
+    await new Promise(resolve =>
+      setTimeout(resolve, WSClient.syncProbeDelayMs),
+    );
+    if (!current() || this.readyState !== WebSocket.OPEN) return;
+
     const close = perfSpan('ws.computeDriveSyncState');
 
     try {

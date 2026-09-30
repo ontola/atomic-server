@@ -118,6 +118,8 @@ async function connectedClient() {
   return { client, socket, store };
 }
 
+WSClient.syncProbeDelayMs = 0;
+
 describe('WSClient handshake', () => {
   const original = globalThis.WebSocket;
 
@@ -373,6 +375,7 @@ describe('WSClient drive sync probe', () => {
     const pending = (
       client as unknown as { startVVSync: (drive: string) => Promise<void> }
     ).startVVSync('did:ad:drive');
+    await vi.advanceTimersByTimeAsync(0);
     socket.close();
     socket.fire('close', { code: 1006, reason: '', wasClean: false });
     await vi.advanceTimersByTimeAsync(1000);
