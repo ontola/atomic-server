@@ -247,6 +247,7 @@ const Failed = styled(SimpleErrorBlock)`
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  margin-top: ${p => p.theme.size(1)};
   padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
   overflow-wrap: anywhere;
 
