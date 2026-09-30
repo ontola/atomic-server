@@ -111,9 +111,11 @@ export async function runHook(event, cacheRoot = tmpdir()) {
   }
 }
 
+// Compared as real paths: run through a symlink, `argv[1]` names the link
+// while `import.meta.url` is already resolved.
 if (
   process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)
 ) {
   try {
     const result = await runHook(JSON.parse(readFileSync(0, 'utf8')));

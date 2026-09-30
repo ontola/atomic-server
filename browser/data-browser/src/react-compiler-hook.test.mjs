@@ -4,6 +4,7 @@ import {
   mkdirSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
   readFileSync,
 } from 'node:fs';
@@ -142,12 +143,20 @@ describe('React Compiler hook', () => {
 
     expect('Read').not.toMatch(new RegExp(group.matcher));
 
+    // The registered command finds the scripts through `git rev-parse
+    // --show-toplevel`. Run it in the fixture repository, with this
+    // checkout's scripts linked in, so it does not depend on the tests
+    // running inside a git checkout (CI's containers have no `.git`).
+    symlinkSync(
+      fileURLToPath(new URL('../scripts', import.meta.url)),
+      join(root, 'browser/data-browser/scripts'),
+    );
     const filename = join(src, 'claude.ts');
     writeFileSync(filename, broken);
     const invoke = () =>
       spawnSync(group.hooks[0].command, {
         shell: true,
-        cwd: fileURLToPath(new URL('../', import.meta.url)),
+        cwd: src,
         input: JSON.stringify({
           ...event,
           session_id: `claude-${dir}`,
