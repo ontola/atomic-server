@@ -1820,7 +1820,8 @@ mod tests {
         r.retire(A, 0);
         assert!(!r.tls_allowed(&host));
         // Another mount's installation has no host of its own.
-        let prefix = manifest(serde_json::json!({"mount": "drive-prefix", "routes": [get("/x", "x")]}));
+        let prefix =
+            manifest(serde_json::json!({"mount": "drive-prefix", "routes": [get("/x", "x")]}));
         assert_eq!(r.activate(B, DRIVE, &prefix), State::Active);
         assert!(!r.tls_allowed(&format!("{}.routes.localhost", slug(B))));
         // Nothing when routes are off.
