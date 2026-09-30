@@ -807,8 +807,10 @@ export class AtomicServer {
           // light`, since `ort`'s missing-prebuilt-binary gap is musl-cuda
           // specific). Matches the apt list already on `rustBuild()` /
           // `rustChecksContainer()` — this container just never had it.
+          // `libclang-dev` and `clang`: `bindgen` in `rquickjs-sys` needs libclang, and clang's own headers (stddef.h), to
+          // build the embedded plugin runtime (`wasm32-wasip2`, below).
           .withExec(['apt-get', 'update', '-qq'])
-          .withExec(['apt', 'install', '-y', 'protobuf-compiler']),
+          .withExec(['apt', 'install', '-y', 'protobuf-compiler', 'libclang-dev', 'clang']),
         CARGO_HOME_BOOKWORM,
       )
         .withFile('/code/Cargo.toml', this.source.file('Cargo.toml'))
