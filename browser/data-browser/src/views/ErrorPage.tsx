@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { isUnauthorized, useStore } from '@tomic/react';
+import { isNotAvailableLocally, isUnauthorized, useStore } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
@@ -14,6 +14,7 @@ import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceErro
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { RootWelcomeGate } from './RootWelcomeGate';
+import { DriveUnavailable } from './DriveUnavailable';
 import { VaultRestoreAction } from '../components/Vault/VaultRestoreAction';
 import { constructOpenURL } from '../helpers/navigation';
 
@@ -132,6 +133,21 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
         </Column>
       </ContainerWide>
     );
+  }
+
+  if (
+    resource.subject.startsWith('did:ad:') ||
+    resource.subject.startsWith('atomic:')
+  ) {
+    if (isNotAvailableLocally(resource.error)) {
+      return (
+        <DriveUnavailable
+          subject={resource.subject}
+          error={resource.error!}
+          signedIn={!!agent}
+        />
+      );
+    }
   }
 
   return (
