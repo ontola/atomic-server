@@ -9881,6 +9881,23 @@ msgstr "Add a view"
 msgid "Change this view to"
 msgstr "Change this view to"
 
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows"
+msgstr "Find rows"
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows…"
+msgstr "Find rows…"
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows containing text"
+msgstr "Find rows containing text"
+
+#. 0: quickFilterQuery
+#: src/chunks/TablePage/TableResource.tsx
+msgid "No rows show “{0}”."
+msgstr "No rows show “{0}”."
+
 #~ msgid "<0/> Create New Agent"
 #~ msgstr "<0/> Create New Agent"
 

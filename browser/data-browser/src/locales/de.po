@@ -9865,5 +9865,22 @@ msgstr ""
 msgid "Change this view to"
 msgstr ""
 
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows…"
+msgstr ""
+
+#: src/chunks/TablePage/QuickFilterField.tsx
+msgid "Find rows containing text"
+msgstr ""
+
+#. 0: quickFilterQuery
+#: src/chunks/TablePage/TableResource.tsx
+msgid "No rows show “{0}”."
+msgstr ""
+
 #~ msgid "Enter your recovery code to show your secret or add a passkey on this device. Your existing recovery code will keep working."
 #~ msgstr "Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger Wiederherstellungscode bleibt gültig."
