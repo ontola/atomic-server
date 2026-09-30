@@ -80,6 +80,17 @@ export {
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
+export {
+  fetchTableChanges,
+  parseTableChangesPage,
+  TableChangesCursorExpiredError,
+} from './table-changes.js';
+export type {
+  TableChange,
+  TableChangeKind,
+  TableChangesOptions,
+  TableChangesPage,
+} from './table-changes.js';
 export type {
   ClientDbOutboxWrite,
   ClientDbQueryOpts,
