@@ -998,13 +998,21 @@ async fn revoking_the_installation_ends_the_subscription_and_drops_its_proposal(
     set_status(&t, "revoked").await;
     tick(&t.f.appstate, &t.worker).await;
     let sub = t.sub();
-    assert!(!sub.is_live(), "ended on the revoke, not at the next delivery");
+    assert!(
+        !sub.is_live(),
+        "ended on the revoke, not at the next delivery"
+    );
     assert_eq!(sub.ended_via.as_deref(), Some(VIA_REVOKED));
     assert!(sub.pending.is_none());
-    assert!(delivery(t.db(), &sub.id).unwrap().is_none(), "proposal dropped");
-    assert!(review(t.db(), &t.f.drive, &t.table, &t.app, Answer::Apply, &t.me())
-        .await
-        .is_err());
+    assert!(
+        delivery(t.db(), &sub.id).unwrap().is_none(),
+        "proposal dropped"
+    );
+    assert!(
+        review(t.db(), &t.f.drive, &t.table, &t.app, Answer::Apply, &t.me())
+            .await
+            .is_err()
+    );
     assert_eq!(
         t.get(&row, urls::DESCRIPTION).await,
         None,
@@ -1041,7 +1049,10 @@ async fn losing_read_access_ends_the_subscription_as_soon_as_the_rights_change()
     let (t, row) = setup("ac_lost_read", true).await;
     // Someone else turned it on, with write access to this table only.
     let other = Agent::new(Some("colleague")).unwrap();
-    t.db().add_resource(&other.to_resource().unwrap()).await.unwrap();
+    t.db()
+        .add_resource(&other.to_resource().unwrap())
+        .await
+        .unwrap();
     let mut table = t.db().get_resource(&t.table.as_str().into()).await.unwrap();
     table
         .push(urls::WRITE, other.subject.to_string().into(), true)
@@ -1150,9 +1161,12 @@ async fn a_persons_edit_just_before_the_hooks_write_is_kept_and_delivered() {
         Some("seen by the hook")
     );
     assert!(
-        get_json::<OwnWrite>(t.db(), &own_key(&t.sub().id, &t.db().change_list_table_key(&row)))
-            .unwrap()
-            .is_none(),
+        get_json::<OwnWrite>(
+            t.db(),
+            &own_key(&t.sub().id, &t.db().change_list_table_key(&row))
+        )
+        .unwrap()
+        .is_none(),
         "not recorded as an echo"
     );
     assert!(t.logs().await.len() > logs, "the reviewed proposal applied");
