@@ -372,54 +372,6 @@ export function GettingStartedFlow({
     return recoveryCode;
   }
 
-  /**
-   * The account's own ways in, above the passkey, code and secret: while the
-   * account is unlocking the identity by itself, say so; where there is no
-   * session, or it is too old to unlock with, offer the same sign-in options
-   * as the portal (the shared `AccountSignIn`), which end back here signed in.
-   */
-  function accountSignIn() {
-    if (restore.phase === 'ready' && assistedUnlock === 'trying') {
-      return (
-        <CardSubtitle key='account'>Unlocking {restore.email}…</CardSubtitle>
-      );
-    }
-
-    const offerSignIn =
-      !!knownPortalUrl &&
-      (restore.phase === 'no-session' ||
-        (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
-
-    if (!offerSignIn || !knownPortalUrl) return null;
-
-    const onSignedIn = () => setRestoreAttempt(n => n + 1);
-
-    return (
-      <Column key='account' gap='0.75rem'>
-        {assistedUnlock === 'needs-sign-in' ? (
-          <CardSubtitle>
-            Sign in again to open your account on this device.
-          </CardSubtitle>
-        ) : null}
-        {/* The same options either way; an app that cannot hold the
-            account cookie finishes each one in the system browser. */}
-        {canHoldProviderCookie(knownPortalUrl) ? (
-          <AccountSignInPanel
-            portalUrl={knownPortalUrl}
-            disabled={loading}
-            onSignedIn={onSignedIn}
-          />
-        ) : (
-          <AccountSignInViaBrowser
-            portalUrl={knownPortalUrl}
-            disabled={loading}
-            onSignedIn={onSignedIn}
-          />
-        )}
-      </Column>
-    );
-  }
-
   // The backup when the account service offers assisted recovery: wrapped by
   // the account alone, so there is no passkey to register and no code to
   // save, and signing in on any other device opens it. Resolves false when
@@ -503,6 +455,259 @@ export function GettingStartedFlow({
   const [assistedUnlock, setAssistedUnlock] = useState<
     'idle' | 'trying' | 'needs-sign-in'
   >('idle');
+
+  /**
+   * The account's own ways in, above the passkey, code and secret: while the
+   * account is unlocking the identity by itself, say so; where there is no
+   * session, or it is too old to unlock with, offer the same sign-in options
+   * as the portal (the shared `AccountSignIn`), which end back here signed in.
+   */
+  function accountSignIn() {
+    if (restore.phase === 'ready' && assistedUnlock === 'trying') {
+      return (
+        <CardSubtitle key='account'>Unlocking {restore.email}…</CardSubtitle>
+      );
+    }
+
+    const offerSignIn =
+      !!knownPortalUrl &&
+      (restore.phase === 'no-session' ||
+        (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
+
+    if (!offerSignIn || !knownPortalUrl) return null;
+
+    const onSignedIn = () => setRestoreAttempt(n => n + 1);
+
+    return (
+      <Column key='account' gap='0.75rem'>
+        {assistedUnlock === 'needs-sign-in' ? (
+          <CardSubtitle>
+            Sign in again to open your account on this device.
+          </CardSubtitle>
+        ) : null}
+        {/* The same options either way; an app that cannot hold the
+            account cookie finishes each one in the system browser. */}
+        {canHoldProviderCookie(knownPortalUrl) ? (
+          <AccountSignInPanel
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        ) : (
+          <AccountSignInViaBrowser
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        )}
+      </Column>
+    );
+  }
+
+  async function handleSignInWithSecret(
+    secret: string,
+    confirmed?: SecretAccountConflict,
+  ) {
+    setLoading(true);
+    setError(undefined);
+
+    try {
+      const newAgent = await Agent.fromSecret(secret);
+
+      const conflict =
+        confirmed ??
+        (newAgent.subject
+          ? await withDeadline(
+              findSecretConflict(newAgent.subject),
+              SIGN_IN_LOOKUP_TIMEOUT_MS,
+              null,
+            )
+          : null);
+
+      if (conflict && !confirmed) {
+        setSecretConflict({ ...conflict, secret });
+        setStep('secret-conflict');
+
+        return;
+      }
+
+      setSecretConflict(null);
+      setWorkspaceStage('identity');
+      setStep('opening-workspace');
+      setAgent(newAgent);
+      await saveAgentToIDB(secret);
+      // However they got in — passkey, code, or secret — the device is open
+      // again, so start the clock fresh (see deviceLock.ts).
+      beat();
+
+      if (conflict) {
+        await withDeadline(
+          releaseConflictingPortalSession(conflict),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        );
+      }
+
+      if (inviteToken) {
+        navigate(resumeInviteUrl(inviteToken));
+
+        return;
+      }
+
+      // Where this sign-in wants to end up: the drive it came from, or the
+      // account's own. One target, so there is one gate below — an early
+      // return for the guard case is an early return around the gate.
+      //
+      // Bounded, because both lookups below ask a server and neither fetch has
+      // a timeout of its own. On a device that just restored a secret there may
+      // be no server that knows this account — the desktop and Android apps
+      // embed their own node, which answers, but not about an account it has
+      // never seen. That await never settled, so sign-in sat on "Restoring…"
+      // forever on exactly the device that had nothing. Not finding out is
+      // already a handled outcome here (both helpers have a "no" answer), and
+      // it lands on the connect-device step, which is the screen for a device
+      // holding none of your data — including its offer to restore from the
+      // vault.
+      setWorkspaceStage('local');
+      const target =
+        nextDrive ??
+        (await withDeadline(
+          fetchPrivateDriveSubject(store, newAgent),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        ));
+
+      // Resolve hosting before a failed read sends this device to Cloud Vault.
+      const hosted = target
+        ? await connectHostedDrive(store, target, setServer)
+        : false;
+
+      // Check for existing data before creating anything, so a newly writable
+      // home is never mistaken for successful recovery of previous content.
+      const canRead = (subject: string, refresh = hosted) =>
+        withDeadline(
+          deviceHasDriveData(store, subject, { refresh }),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          false,
+        );
+
+      // The home a pre-derivation secret was made for. Its data has not moved
+      // to the derived home yet — that is what materializing below does, by
+      // adopting its drive lists — so the derived subject alone reports "no
+      // data" for an account whose workspace is sitting on the very server
+      // they just authenticated against. Answering "your data is on another
+      // device" there would be false, and it would skip the adoption that
+      // makes it true. Costs nothing for accounts that never had one: a
+      // secret minted after derivation carries no `initialDrive`.
+      const legacyHome = newAgent.initialDrive;
+
+      let hasData =
+        !!target &&
+        ((await canRead(target)) ||
+          (!!legacyHome &&
+            legacyHome !== target &&
+            (await canRead(legacyHome))));
+
+      // A device holding nothing may still be one download from holding
+      // everything: every account on a managed origin gets an encrypted backup
+      // of its drive, so ask the vault before telling the user their data is
+      // on another device. Signing in as the account is what unlocks it — the
+      // key envelope opens with the agent's signature — so this is the first
+      // moment it can happen. Anything short of a restore (no session, no
+      // backup, an empty one, a failure) falls through to the connect-device
+      // step, which still offers the same restore by hand.
+      // Why the vault had nothing, for the connect-device step to show. Five
+      // different situations answer `no-backup`; a screen that says only
+      // "your data is on another device" hides which one this is.
+      let vaultReason: string | undefined;
+
+      if (!hasData && target && !returnToAgent) {
+        setWorkspaceStage('backup');
+        const restored = await withDeadline(
+          restoreFromVault(store, target),
+          VAULT_RESTORE_TIMEOUT_MS,
+          { status: 'no-backup' as const, reason: 'timed out' },
+        );
+
+        if (restored.status === 'restored') {
+          hasData = await canRead(target, false);
+        } else if (restored.status === 'no-backup') {
+          vaultReason = restored.reason;
+        } else {
+          vaultReason = restored.error.message;
+        }
+      }
+
+      // On an origin with no node the account's drive lives only here — a
+      // restored one exactly like one made here, and one whose data has not
+      // arrived yet just as much: it is still the place this identity writes
+      // to. Without this every commit would park in the outbox waiting for a
+      // server that is not coming. The agent's own subject is deliberately
+      // not registered: `fetchPrivateDriveSubject` answers a local-only agent
+      // with its secret's `initialDrive`, which for an account made elsewhere
+      // is that server's URL, and handing that to `setDrive` moves the app.
+      if (target && isOriginWithoutNode(store.getServerUrl())) {
+        store.registerLocalOnlyDrive(target);
+      }
+
+      setDrive(target ?? '');
+
+      // Recover first, but connecting a device is optional for the identity's
+      // own home. A foreign requested workspace must never be synthesized.
+      const home =
+        !hasData && target && !returnToAgent
+          ? await openPrivateHome(store, target, true)
+          : undefined;
+
+      if (home) {
+        if (home === 'created') privateHomeNudge();
+        navigate(constructOpenURL(target!));
+      } else if (hasData) {
+        // The home drive is derived from the key rather than looked up, so
+        // nothing else will ever write it — `fetchPrivateDriveSubject` above
+        // computes the subject but does not materialize it. Signing in is the
+        // one deliberate moment to do it; leaving it to whichever render-time
+        // resolver asked first is what let a bad derivation mint hundreds of
+        // drives instead of one.
+        //
+        // Here it usually finds the drive the gate just read and returns it
+        // untouched — but that path still seeds the switcher list and adopts
+        // drives from an older, pre-derivation home, which is why it runs on
+        // the "we have it" branch rather than only on the "we don't" one. It
+        // must not run before the gate: a drive written a moment ago is not
+        // evidence that this device has the account's data.
+        await withDeadline(
+          store.ensurePrivateDrive().then(() => undefined),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        );
+
+        // Every account gets a backup, not only the ones onboarding made
+        // here: this is the one moment an existing account is known to be on
+        // a device that holds its data. Not awaited — the first pass seals
+        // the whole drive, and sign-in should not wait on an upload.
+        void ensureVaultBackup(store, target!);
+
+        navigate(
+          returnToAgent ? paths.agentSettings : constructOpenURL(target!),
+        );
+      } else if (returnToAgent) {
+        // Passkey management needs the key, not a downloaded copy of the drive.
+        navigate(paths.agentSettings);
+      } else {
+        setMissingDrive(target);
+        setMissingDriveVaultReason(vaultReason);
+        setStep('connect-device');
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error('Could not parse that secret.'),
+      );
+      setStep('signin');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (step !== 'restore' && step !== 'signin') return;
@@ -725,211 +930,6 @@ export function GettingStartedFlow({
       toast(`Signed out of ${conflict.email}.`);
     } catch {
       // Already gone, or the control plane is unreachable: nothing to release.
-    }
-  }
-
-  async function handleSignInWithSecret(
-    secret: string,
-    confirmed?: SecretAccountConflict,
-  ) {
-    setLoading(true);
-    setError(undefined);
-
-    try {
-      const newAgent = await Agent.fromSecret(secret);
-
-      const conflict =
-        confirmed ??
-        (newAgent.subject
-          ? await withDeadline(
-              findSecretConflict(newAgent.subject),
-              SIGN_IN_LOOKUP_TIMEOUT_MS,
-              null,
-            )
-          : null);
-
-      if (conflict && !confirmed) {
-        setSecretConflict({ ...conflict, secret });
-        setStep('secret-conflict');
-
-        return;
-      }
-
-      setSecretConflict(null);
-      setWorkspaceStage('identity');
-      setStep('opening-workspace');
-      setAgent(newAgent);
-      await saveAgentToIDB(secret);
-      // However they got in — passkey, code, or secret — the device is open
-      // again, so start the clock fresh (see deviceLock.ts).
-      beat();
-
-      if (conflict) {
-        await withDeadline(
-          releaseConflictingPortalSession(conflict),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          undefined,
-        );
-      }
-
-      if (inviteToken) {
-        navigate(resumeInviteUrl(inviteToken));
-
-        return;
-      }
-
-      // Where this sign-in wants to end up: the drive it came from, or the
-      // account's own. One target, so there is one gate below — an early
-      // return for the guard case is an early return around the gate.
-      //
-      // Bounded, because both lookups below ask a server and neither fetch has
-      // a timeout of its own. On a device that just restored a secret there may
-      // be no server that knows this account — the desktop and Android apps
-      // embed their own node, which answers, but not about an account it has
-      // never seen. That await never settled, so sign-in sat on "Restoring…"
-      // forever on exactly the device that had nothing. Not finding out is
-      // already a handled outcome here (both helpers have a "no" answer), and
-      // it lands on the connect-device step, which is the screen for a device
-      // holding none of your data — including its offer to restore from the
-      // vault.
-      setWorkspaceStage('local');
-      const target =
-        nextDrive ??
-        (await withDeadline(
-          fetchPrivateDriveSubject(store, newAgent),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          undefined,
-        ));
-
-      // Resolve hosting before a failed read sends this device to Cloud Vault.
-      const hosted = target
-        ? await connectHostedDrive(store, target, setServer)
-        : false;
-
-      // Check for existing data before creating anything, so a newly writable
-      // home is never mistaken for successful recovery of previous content.
-      const canRead = (subject: string, refresh = hosted) =>
-        withDeadline(
-          deviceHasDriveData(store, subject, { refresh }),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          false,
-        );
-
-      // The home a pre-derivation secret was made for. Its data has not moved
-      // to the derived home yet — that is what materializing below does, by
-      // adopting its drive lists — so the derived subject alone reports "no
-      // data" for an account whose workspace is sitting on the very server
-      // they just authenticated against. Answering "your data is on another
-      // device" there would be false, and it would skip the adoption that
-      // makes it true. Costs nothing for accounts that never had one: a
-      // secret minted after derivation carries no `initialDrive`.
-      const legacyHome = newAgent.initialDrive;
-
-      let hasData =
-        !!target &&
-        ((await canRead(target)) ||
-          (!!legacyHome &&
-            legacyHome !== target &&
-            (await canRead(legacyHome))));
-
-      // A device holding nothing may still be one download from holding
-      // everything: every account on a managed origin gets an encrypted backup
-      // of its drive, so ask the vault before telling the user their data is
-      // on another device. Signing in as the account is what unlocks it — the
-      // key envelope opens with the agent's signature — so this is the first
-      // moment it can happen. Anything short of a restore (no session, no
-      // backup, an empty one, a failure) falls through to the connect-device
-      // step, which still offers the same restore by hand.
-      // Why the vault had nothing, for the connect-device step to show. Five
-      // different situations answer `no-backup`; a screen that says only
-      // "your data is on another device" hides which one this is.
-      let vaultReason: string | undefined;
-
-      if (!hasData && target && !returnToAgent) {
-        setWorkspaceStage('backup');
-        const restored = await withDeadline(
-          restoreFromVault(store, target),
-          VAULT_RESTORE_TIMEOUT_MS,
-          { status: 'no-backup' as const, reason: 'timed out' },
-        );
-
-        if (restored.status === 'restored') {
-          hasData = await canRead(target, false);
-        } else if (restored.status === 'no-backup') {
-          vaultReason = restored.reason;
-        } else {
-          vaultReason = restored.error.message;
-        }
-      }
-
-      // On an origin with no node the account's drive lives only here — a
-      // restored one exactly like one made here, and one whose data has not
-      // arrived yet just as much: it is still the place this identity writes
-      // to. Without this every commit would park in the outbox waiting for a
-      // server that is not coming. The agent's own subject is deliberately
-      // not registered: `fetchPrivateDriveSubject` answers a local-only agent
-      // with its secret's `initialDrive`, which for an account made elsewhere
-      // is that server's URL, and handing that to `setDrive` moves the app.
-      if (target && isOriginWithoutNode(store.getServerUrl())) {
-        store.registerLocalOnlyDrive(target);
-      }
-
-      setDrive(target ?? '');
-
-      // Recover first, but connecting a device is optional for the identity's
-      // own home. A foreign requested workspace must never be synthesized.
-      const home =
-        !hasData && target && !returnToAgent
-          ? await openPrivateHome(store, target, true)
-          : undefined;
-
-      if (home) {
-        if (home === 'created') privateHomeNudge();
-        navigate(constructOpenURL(target!));
-      } else if (hasData) {
-        // The home drive is derived from the key rather than looked up, so
-        // nothing else will ever write it — `fetchPrivateDriveSubject` above
-        // computes the subject but does not materialize it. Signing in is the
-        // one deliberate moment to do it; leaving it to whichever render-time
-        // resolver asked first is what let a bad derivation mint hundreds of
-        // drives instead of one.
-        //
-        // Here it usually finds the drive the gate just read and returns it
-        // untouched — but that path still seeds the switcher list and adopts
-        // drives from an older, pre-derivation home, which is why it runs on
-        // the "we have it" branch rather than only on the "we don't" one. It
-        // must not run before the gate: a drive written a moment ago is not
-        // evidence that this device has the account's data.
-        await withDeadline(
-          store.ensurePrivateDrive().then(() => undefined),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          undefined,
-        );
-
-        // Every account gets a backup, not only the ones onboarding made
-        // here: this is the one moment an existing account is known to be on
-        // a device that holds its data. Not awaited — the first pass seals
-        // the whole drive, and sign-in should not wait on an upload.
-        void ensureVaultBackup(store, target!);
-
-        navigate(
-          returnToAgent ? paths.agentSettings : constructOpenURL(target!),
-        );
-      } else if (returnToAgent) {
-        // Passkey management needs the key, not a downloaded copy of the drive.
-        navigate(paths.agentSettings);
-      } else {
-        setMissingDrive(target);
-        setMissingDriveVaultReason(vaultReason);
-        setStep('connect-device');
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err : new Error('Could not parse that secret.'),
-      );
-      setStep('signin');
-    } finally {
-      setLoading(false);
     }
   }
 
