@@ -855,6 +855,14 @@ export class AtomicServer {
         // symptom. `jsTestIntegration` (this container's only caller) tests
         // `@tomic/lib`'s NodeClientDb sync path — it never touches
         // vector-search, so dropping it here costs no real coverage.
+        //
+        // It does run server-side plugins (`after-commit.integration.test.ts`
+        // reads an app's manifest through the embedded plugin runtime), so
+        // this build needs `wasm32-wasip2` like `rustTest()` and the e2e
+        // build. Without it build.rs ships an empty runtime and the test
+        // fails far from the cause (candidate17, run 36624214790).
+        .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
+        .withEnvVariable('ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME', 'true')
         .withExec([
           'cargo',
           'build',
