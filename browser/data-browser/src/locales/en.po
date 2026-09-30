@@ -116,7 +116,7 @@ msgstr "AI Agents"
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
-#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -4354,7 +4354,7 @@ msgstr "Pairing code copied."
 msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
-#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -7206,6 +7206,7 @@ msgstr "Continue with passkey"
 msgid "Could not update your passkey. Please try again."
 msgstr "Could not update your passkey. Please try again."
 
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr "Use another account"
@@ -11227,8 +11228,10 @@ msgstr "The selected model is not in the zero-retention list. Choose another mod
 #~ msgid "Experimental integration. Preview the first sync before approving changes."
 #~ msgstr "Experimental integration. Preview the first sync before approving changes."
 
-#~ msgid "Connect {0}"
-#~ msgstr "Connect {0}"
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Connect {0}"
+msgstr "Connect {0}"
 
 #~ msgid "Create an automation"
 #~ msgstr "Create an automation"
@@ -12090,22 +12093,17 @@ msgstr "{0} encrypted object{1} stored in {2} · {3}."
 msgid "Less than 1% used"
 msgstr "Less than 1% used"
 
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Sign in to connect an account."
-msgstr "Sign in to connect an account."
+#~ msgid "Sign in to connect an account."
+#~ msgstr "Sign in to connect an account."
 
-#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+#~ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+#~ msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
 
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Use existing connection"
-msgstr "Use existing connection"
+#~ msgid "Use existing connection"
+#~ msgstr "Use existing connection"
 
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Connect an account"
-msgstr "Connect an account"
+#~ msgid "Connect an account"
+#~ msgstr "Connect an account"
 
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
@@ -12658,3 +12656,53 @@ msgstr "Open sync settings"
 #: src/actions/appMenuItems.tsx
 msgid "Go to"
 msgstr "Go to"
+
+#~ msgid "Connect another account"
+#~ msgstr "Connect another account"
+
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "<0/> wants to use your {0} account."
+msgstr "<0/> wants to use your {0} account."
+
+#. 0: proxySite
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "You approve this on the next page, at {0}."
+msgstr "You approve this on the next page, at {0}."
+
+#. 0: app
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "{0} never sees your password."
+msgstr "{0} never sees your password."
+
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "{0} account"
+msgstr "{0} account"
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Use this account"
+msgstr "Use this account"
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Use an account you already connected, or connect another one."
+msgstr "Use an account you already connected, or connect another one."
+
+#. 0: when
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Connected {0}."
+msgstr "Connected {0}."
+
+#. 0: apps
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Used by {0}."
+msgstr "Used by {0}."
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not use this account."
+msgstr "Could not use this account."
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not start connecting."
+msgstr "Could not start connecting."

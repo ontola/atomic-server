@@ -2,7 +2,13 @@ import { isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
-import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
+import {
+  errorMessageFromResponse,
+  signRequest,
+  useResource,
+  useStore,
+  useTitle,
+} from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import { handleRequest, isHostRequest, type HostReply } from './hostStore';
@@ -21,6 +27,7 @@ import {
   type ProxyConnection,
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
+import { ConnectDialog } from './ConnectDialog';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -79,6 +86,7 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  const [appTitle] = useTitle(useResource(app));
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -202,15 +210,16 @@ function AppFrameSession({
         setConnectAsk(ask);
 
         // Offer a connection the person already has for this platform, so
-        // using it for one more app needs no second trip through OAuth.
+        // using it for one more app needs no second trip through OAuth. A
+        // proxy that cannot list them still lets them connect a new one.
         existingConnections(store, data.platform!)
+          .catch((): ProxyConnection[] => [])
           .then(existing => {
-            if (connectAskRef.current !== ask || existing.length === 0) return;
+            if (connectAskRef.current !== ask) return;
             const withExisting = { ...ask, existing };
             connectAskRef.current = withExisting;
             setConnectAsk(withExisting);
-          })
-          .catch(() => undefined);
+          });
 
         return;
       }
@@ -280,62 +289,45 @@ function AppFrameSession({
     return <LoaderBlock />;
   }
 
-  const finishAsk = (reply: HostReply) => {
-    connectAsk?.reply(reply);
+  /** Answers `ask`, unless a newer ask took its place and answered it. */
+  const finishAsk = (ask: ConnectAsk, used: ProxyConnection | undefined) => {
+    if (connectAskRef.current?.id !== ask.id) return;
+    ask.reply({
+      id: ask.id,
+      result: used
+        ? {
+            status: 'connected',
+            connectionId: used.connection_id,
+            platform: used.platform,
+          }
+        : { status: 'cancelled' },
+    });
     connectAskRef.current = undefined;
     setConnectAsk(undefined);
   };
 
-  const connect = () => {
-    if (!connectAsk) return;
+  const connect = async (ask: ConnectAsk) => {
+    if (!store.getAgent()) throw new Error('Sign in to connect an account.');
 
-    if (!store.getAgent()) {
-      finishAsk({ id: connectAsk.id, error: 'Sign in to connect an account.' });
+    const appAgent = await appAgentOf(store, { drive, app });
+    const url = await proxyConnections(store).start(
+      { drive, app, appAgent },
+      ask.platform,
+      location.href,
+      await appLabel(store, app),
+    );
 
-      return;
-    }
-
-    (async () => {
-      const appAgent = await appAgentOf(store, { drive, app });
-
-      return proxyConnections(store).start(
-        { drive, app, appAgent },
-        connectAsk.platform,
-        location.href,
-        await appLabel(store, app),
-      );
-    })()
-      .then(url => location.assign(url))
-      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
+    // Closing the dialog meanwhile was a no; leaving now would overrule it.
+    if (connectAskRef.current?.id === ask.id) location.assign(url);
   };
 
-  const pickExisting = (connection: ProxyConnection) => {
-    if (!connectAsk) return;
-
-    (async () => {
-      const appAgent = await appAgentOf(store, { drive, app });
-      await proxyConnections(store).delegate(
-        connection.connection_id,
-        appAgent,
-        await appLabel(store, app),
-      );
-    })()
-      .then(() =>
-        finishAsk({
-          id: connectAsk.id,
-          result: {
-            status: 'connected',
-            connectionId: connection.connection_id,
-            platform: connection.platform,
-          },
-        }),
-      )
-      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
-  };
-
-  const cancelConnect = () => {
-    if (!connectAsk) return;
-    finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
+  const shareExisting = async (connection: ProxyConnection) => {
+    const appAgent = await appAgentOf(store, { drive, app });
+    await proxyConnections(store).delegate(
+      connection.connection_id,
+      appAgent,
+      await appLabel(store, app),
+    );
   };
 
   const fixIt = () => {
@@ -376,27 +368,15 @@ function AppFrameSession({
         </ErrorBar>
       )}
       {connectAsk && (
-        <ConnectBar role='group' aria-label='Connect an account'>
-          <ErrorText>
-            This app wants to use your{' '}
-            <strong>{platformName(connectAsk.platform)}</strong> account through{' '}
-            {getIntegrationProxy()}. The proxy keeps the connection under your
-            account; this app may use it until you revoke that.
-          </ErrorText>
-          <Row gap='0.5rem'>
-            {connectAsk.existing?.[0] && (
-              <Button onClick={() => pickExisting(connectAsk.existing![0])}>
-                Use existing connection
-              </Button>
-            )}
-            <Button subtle={!!connectAsk.existing?.length} onClick={connect}>
-              Connect
-            </Button>
-            <Button subtle onClick={cancelConnect}>
-              Cancel
-            </Button>
-          </Row>
-        </ConnectBar>
+        <ConnectDialog
+          app={appTitle}
+          platform={platformName(connectAsk.platform)}
+          proxySite={new URL(getIntegrationProxy()).host}
+          existing={connectAsk.existing}
+          onConnect={() => connect(connectAsk)}
+          onUseExisting={shareExisting}
+          onClosed={used => finishAsk(connectAsk, used)}
+        />
       )}
       <Frame
         ref={frameRef}
@@ -535,7 +515,7 @@ interface ConnectAsk {
   id: number | string;
   platform: string;
   reply: (reply: HostReply) => void;
-  /** Connections the person already has for this platform. */
+  /** Connections the person already has for this platform; unset while looking. */
   existing?: ProxyConnection[];
 }
 
@@ -593,20 +573,7 @@ const Frame = styled.iframe`
   background: ${p => p.theme.colors.bg};
 `;
 
-const ConnectBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  margin-bottom: 0.5rem;
-`;
-
-/** Keeps the frame filling whatever is left once the bar has taken its height. */
+/** Keeps the frame filling whatever is left once the error bar has taken its height. */
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
