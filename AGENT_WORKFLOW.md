@@ -57,6 +57,11 @@ the `plugin-routes` feature, `--trusted-proxies`, route `authOptional`,
 
 **`develop`** (after #1830): the "Fresh Worktrees" steps in `AGENTS.md`.
 
+**Claude Code cloud sessions:** #1908 (open on 2026-09-30) adds a SessionStart
+hook that does this setup, and documents it in a "Claude Code Cloud Sessions"
+section of `AGENTS.md`, including `ATOMIC_IP=0.0.0.0` for the missing IPv6.
+Follow that section once it lands rather than repeating it here.
+
 **Candidate line** (branched before #1830):
 
 - Build `@tomic/lib` first, then
@@ -92,6 +97,8 @@ the `plugin-routes` feature, `--trusted-proxies`, route `authOptional`,
   `libclang-dev` and `clang` for bindgen in `rquickjs-sys`.
 - Local e2e: `cd browser && pnpm test-e2e:local --workers=2 <specs>`. Add
   `--skip-build` only after test-only edits; it reuses the built artifacts.
+  In a cloud session, `ATOMIC_E2E_CARGO_PROFILE=dev` reuses the hook's debug
+  build (#1908).
 
 ### Reported flaky tests (unverified)
 
