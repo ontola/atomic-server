@@ -30,6 +30,14 @@ const LOCAL_CLASS = 'did:ad:local-class';
 
 const fixture = vi.hoisted(() => ({ serverResults: [] as string[] }));
 
+/**
+ * No socket: server.example runs no atomic-server, so a connecting store
+ * fails its WebSocket a moment later, reports "Server disconnected", and the
+ * components' state update can land after jsdom is torn down. Vitest counts
+ * that `window is not defined` as an unhandled error and fails the run.
+ */
+const newStore = () => new Store({ serverUrl: SERVER, connect: false });
+
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
   useServerSearch: () => ({ results: fixture.serverResults }),
@@ -56,7 +64,7 @@ function classJson(subject: string, shortname: string, description: string) {
 }
 
 function storeWithFetchedClasses(): Store {
-  const store = new Store({ serverUrl: SERVER });
+  const store = newStore();
   const parser = new JSONADParser();
 
   for (const json of [
@@ -117,7 +125,7 @@ describe('searchLoadedExternal', () => {
   });
 
   it('leaves out subjects the server search already covers', () => {
-    const store = new Store({ serverUrl: SERVER });
+    const store = newStore();
 
     for (const subject of [
       `${SERVER}/classes/own`,
@@ -179,7 +187,7 @@ describe('class picker', () => {
   });
 
   it('still selects a pasted URL directly', () => {
-    const { onSelect } = show(new Store({ serverUrl: SERVER }), {
+    const { onSelect } = show(newStore(), {
       searchValue: '',
     });
     const url = `${PAGES}/classes/never-fetched`;
