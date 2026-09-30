@@ -646,11 +646,14 @@ export class AtomicServer {
         .withWorkdir('/app')
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
-        //    `@tomic/edit-mode/react` unresolvable. All five build from
-        //    TypeScript alone, so this stays in the cheap static tier beside
-        //    lint and `cargo fmt`: no WASM, no Rust.
+        //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
+        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    alone, so this stays in the cheap static tier beside lint and
+        //    `cargo fmt`: no WASM, no Rust.
         .withExec([
           'pnpm',
+          '--filter',
+          '@tomic/form-renderer',
           '--filter',
           '@tomic/lib',
           '--filter',
@@ -1282,6 +1285,18 @@ export class AtomicServer {
       )
       .withFile('/app/plugin/package.json', browser.file('plugin/package.json'))
       .withFile('/app/e2e/package.json', browser.file('e2e/package.json'))
+      // The published-form runtime and its renderer. Without their manifests
+      // here, the install gives `form-app` no node_modules and no link to
+      // `@tomic/form-renderer`, so its typecheck and build cannot resolve
+      // either (or `altcha`).
+      .withFile(
+        '/app/form-app/package.json',
+        browser.file('form-app/package.json'),
+      )
+      .withFile(
+        '/app/form-renderer/package.json',
+        browser.file('form-renderer/package.json'),
+      )
       // Cache pnpm's content-addressable store across CI runs. Without
       // this, every push re-downloaded all node_modules from the
       // registry — adding ~30-60s per run depending on registry latency.
