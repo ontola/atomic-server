@@ -276,11 +276,39 @@ impl ClientDb {
         self.put_resource_inner(json_ad, Some(snapshot)).await
     }
 
-    async fn put_resource_inner(
+    /// [`Self::put_resource_with_snapshot`] for many resources in one write.
+    /// `snapshots[i]` is a `Uint8Array` for `json_ads[i]`, or null/undefined
+    /// for a resource without a Loro doc.
+    #[wasm_bindgen(js_name = "putResourcesWithSnapshots")]
+    pub async fn put_resources_with_snapshots(
+        &self,
+        json_ads: Vec<String>,
+        snapshots: js_sys::Array,
+    ) -> Result<(), JsError> {
+        let mut entries = Vec::with_capacity(json_ads.len());
+        for (i, json_ad) in json_ads.iter().enumerate() {
+            let value = snapshots.get(i as u32);
+            let snapshot = if value.is_null() || value.is_undefined() {
+                None
+            } else {
+                Some(js_sys::Uint8Array::new(&value).to_vec())
+            };
+            let resource = self.resource_for_put(json_ad, snapshot.as_ref()).await?;
+            entries.push((resource, snapshot));
+        }
+        self.db()
+            .persist_replicated_resources(entries)
+            .await
+            .map_err(to_js_err)
+    }
+
+    /// Parse a stored row back into a resource, filling in what the parser
+    /// skipped from the snapshot that travels with it.
+    async fn resource_for_put(
         &self,
         json_ad: &str,
-        snapshot: Option<Vec<u8>>,
-    ) -> Result<(), JsError> {
+        snapshot: Option<&Vec<u8>>,
+    ) -> Result<Resource, JsError> {
         // `SaveOpts::DontSave` keeps `parse_json_ad_resource` from calling
         // `store.add_resource()` (which validates required props) during
         // parsing. This is admitted replica state, not a new authored import:
@@ -301,7 +329,7 @@ impl ClientDb {
         // tab's snapshot still holds its value. `getResourceWithSnapshot`
         // serves this row, so take those values from the snapshot rather than
         // store a row with less in it than the document.
-        if let Some(snapshot) = &snapshot {
+        if let Some(snapshot) = snapshot {
             let keys: Vec<String> =
                 serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_ad)
                     .map(|map| {
@@ -313,6 +341,15 @@ impl ClientDb {
                     .unwrap_or_default();
             resource.restore_props_from_snapshot(&keys, snapshot);
         }
+        Ok(resource)
+    }
+
+    async fn put_resource_inner(
+        &self,
+        json_ad: &str,
+        snapshot: Option<Vec<u8>>,
+    ) -> Result<(), JsError> {
+        let resource = self.resource_for_put(json_ad, snapshot.as_ref()).await?;
         match snapshot {
             Some(snapshot) => self
                 .db()

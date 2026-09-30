@@ -58,6 +58,16 @@ export type WorkerRequest =
        *  flush, so a crash keeps both or neither. */
       outbox?: OutboxWrite;
     }
+  | {
+      id: number;
+      type: 'putResourcesWithSnapshots';
+      /** Written in one transaction and made durable by one flush. */
+      items: {
+        jsonAd: string;
+        snapshot?: Uint8Array;
+        outbox?: OutboxWrite;
+      }[];
+    }
   | { id: number; type: 'outboxEntries'; agent: string }
   | ({ id: number; type: 'outboxWrite'; durable: boolean } & OutboxWrite)
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
@@ -283,6 +293,28 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       // silently drops the offline edit.
       // Leave a periodic retry armed on failure, and reject the RPC so a
       // caller never mistakes an in-memory write for a durable snapshot.
+      dirty = true;
+      db!.flush();
+      dirty = false;
+
+      return;
+    }
+
+    case 'putResourcesWithSnapshots': {
+      // What a burst of `putResourceWithSnapshot` calls costs one at a time:
+      // a transaction each, so a page every resource touches (the parent's
+      // member list, the name index) is written again per resource. Together
+      // they share one commit and one flush.
+      await ensureInit();
+      await db!.putResourcesWithSnapshots(
+        msg.items.map(item => item.jsonAd),
+        msg.items.map(item => item.snapshot ?? null),
+      );
+
+      for (const item of msg.items) {
+        if (item.outbox) writeOutbox(item.outbox);
+      }
+
       dirty = true;
       db!.flush();
       dirty = false;

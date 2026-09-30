@@ -844,19 +844,63 @@ export class ClientDbWorker {
    * callers must not follow this with a separate flush RPC, which could race
    * an identity handoff closing the worker.
    */
-  async putResourceWithSnapshot(
+  putResourceWithSnapshot(
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
     outbox?: ClientDbOutboxWrite,
   ): Promise<void> {
-    await this.send({
-      type: 'putResourceWithSnapshot',
-      subject,
-      jsonAd,
-      snapshot,
-      outbox,
+    // Writes made in the same tick leave as one message: a chunk of pushed
+    // resources is applied in a loop, and one transaction per resource made a
+    // 1200-folder first sync keep the worker busy for minutes.
+    return new Promise<void>((resolve, reject) => {
+      this.pendingPuts.push({ jsonAd, snapshot, outbox, resolve, reject });
+
+      if (this.pendingPuts.length === 1) {
+        queueMicrotask(() => this.flushPendingPuts());
+      }
     });
+  }
+
+  private pendingPuts: {
+    jsonAd: string;
+    snapshot?: Uint8Array;
+    outbox?: ClientDbOutboxWrite;
+    resolve: () => void;
+    reject: (e: unknown) => void;
+  }[] = [];
+
+  /** Send the writes queued by {@link putResourceWithSnapshot}. Called before
+   *  any other message too, so the worker sees them in the order they were
+   *  made. */
+  private flushPendingPuts(): void {
+    const batch = this.pendingPuts;
+
+    if (batch.length === 0) return;
+
+    this.pendingPuts = [];
+
+    const message =
+      batch.length === 1
+        ? {
+            type: 'putResourceWithSnapshot',
+            jsonAd: batch[0].jsonAd,
+            snapshot: batch[0].snapshot,
+            outbox: batch[0].outbox,
+          }
+        : {
+            type: 'putResourcesWithSnapshots',
+            items: batch.map(({ jsonAd, snapshot, outbox }) => ({
+              jsonAd,
+              snapshot,
+              outbox,
+            })),
+          };
+
+    this.send(message, true).then(
+      () => batch.forEach(item => item.resolve()),
+      e => batch.forEach(item => item.reject(e)),
+    );
   }
 
   /** The outbox rows stored for `agent`: one JSON value per subject. */
@@ -1284,8 +1328,13 @@ export class ClientDbWorker {
 
   /* ---------------------------- Internal send ----------------------------- */
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async send(msg: Record<string, any>): Promise<unknown> {
+  private async send(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    msg: Record<string, any>,
+    isPutBatch = false,
+  ): Promise<unknown> {
+    if (!isPutBatch) this.flushPendingPuts();
+
     // Websocket fanout can call into the DB before init() has resolved
     // (leadership election + leader announce takes a few ticks). Wait for
     // init rather than rejecting — the caller already started init, we just

@@ -3708,6 +3708,48 @@ async fn replica_keeps_the_callers_snapshot() {
     assert_eq!(read.get(urls::NAME).unwrap().to_string(), "kept");
 }
 
+/// Persisting many replicas in one write stores each row and snapshot as
+/// writing them one at a time would, and a subject named twice keeps its last
+/// entry.
+#[tokio::test]
+#[timeout(120000)]
+async fn replicas_written_in_a_batch_match_single_writes() {
+    let store = Db::init_temp("replica_batch").await.unwrap();
+    let make = |n: usize, name: &str| {
+        let subject = format!("did:ad:batch{n:02}{}==", "a".repeat(70));
+        let mut authored = crate::Resource::new(subject.clone());
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(name.into()))
+            .unwrap();
+        let snapshot = authored.build_state_doc().unwrap().export_snapshot();
+        let mut replica = crate::Resource::new(subject.clone());
+        replica
+            .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap())
+            .unwrap();
+        (subject, replica, snapshot)
+    };
+    let (s0, r0, snap0) = make(0, "zero");
+    let (s1, r1, snap1) = make(1, "one");
+    let (s1b, r1b, snap1b) = make(1, "one again");
+    assert_eq!(s1, s1b);
+
+    store
+        .persist_replicated_resources(vec![
+            (r0, Some(snap0.clone())),
+            (r1, Some(snap1)),
+            (r1b, Some(snap1b.clone())),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(store.get_loro_snapshot_bytes(&s0), Some(snap0));
+    assert_eq!(store.get_loro_snapshot_bytes(&s1), Some(snap1b));
+    let read0 = store.get_resource(&s0.as_str().into()).await.unwrap();
+    let read1 = store.get_resource(&s1.as_str().into()).await.unwrap();
+    assert_eq!(read0.get(urls::NAME).unwrap().to_string(), "zero");
+    assert_eq!(read1.get(urls::NAME).unwrap().to_string(), "one again");
+}
+
 /// A replica that is written again with a changed value only re-indexes that
 /// value, and the watched queries still follow it: a renamed row moves in a
 /// sorted view, a row whose class changes leaves a class-filtered view, and a
