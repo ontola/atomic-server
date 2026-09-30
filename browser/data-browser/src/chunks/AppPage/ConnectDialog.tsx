@@ -269,7 +269,7 @@ const Actions = styled(DialogActions)`
 
 const Accounts = styled.ul`
   list-style: none;
-  margin: 0 0 ${p => p.theme.size()};
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
