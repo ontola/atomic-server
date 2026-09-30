@@ -4,6 +4,17 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- An app asking to use one of your accounts (Google Calendar, Clockify and so
+  on) now asks in a dialog instead of a bar above the app, in plainer words:
+  which app, which account, and that you approve it on the next page, on the
+  integration proxy's site. If you already connected that account, the dialog
+  lists it with when it was connected and which apps use it, and "Use this
+  account" gives it to the app without leaving the page. A failure stays in
+  the dialog so you can try again; the app hears `cancelled` if you close it.
+  Tests that looked for the `Connect an account` group should look for the
+  dialog named `Connect <platform>`; "Use existing connection" is now "Use
+  this account".
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
