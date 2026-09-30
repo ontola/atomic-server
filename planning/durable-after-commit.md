@@ -438,8 +438,8 @@ converges hits the 30-per-minute cap, and the subscription is stopped with
 | Plugin off longer than retention (30 days) | `CURSOR_EXPIRED` → `reset: 'expired'` → full compare. |
 | Table's `classtype` changes | #1885 starts a new epoch, the old cursor expires → full compare. |
 | View removed, kind changed, activator loses read | Subscription ends (recorded). Its markers and deliveries are dropped. Re-adding the view starts over with `reset: 'initial'`. |
-| Installation uninstalled or revoked | Subscriptions, markers, deliveries and own-write records are deleted. |
-| Release updated while a proposal waits | Existing rule: "the event's approved source or account changed; resolve its saved proposal before continuing". |
+| Installation uninstalled or revoked | Subscriptions end (recorded, `uninstalled` / `revoked`); markers, deliveries, waiting proposals and own-write records are deleted. |
+| Release updated while a proposal waits | The proposal is discarded and the same page is delivered again to the new source; answering the old one is refused. |
 | Hook throws or traps repeatedly | Backoff, then poison (above). Other tables and other plugins keep running. |
 | Grant lapses between run and apply | `live()` re-checks at apply time; intents become a proposal for review. |
 | Very large backlog | `hasMore` continuations, one page per run, not counted by the loop cap. |
@@ -537,17 +537,33 @@ from the design above, and why:
 - **Deliveries carry their own clock.** `ctx.event` and `Date.now()` use the
   claim time, stable across redeliveries.
 
+Follow-ups done (#1907):
+
+- **Uninstall and revoke end the subscription.** When the app or its
+  Installation is destroyed, or the Installation is revoked, the subscription
+  ends (`ended_via: uninstalled` / `revoked`), and its markers, delivery,
+  waiting proposal and own-write records are deleted. The record itself stays,
+  ended, like one whose View was removed, so the Installation page can say
+  why. A paused Installation still only waits.
+- **Ending promptly.** The worker listens to the store's change events. When
+  a subscription's table, one of the table's ancestors (read rights are
+  inherited), its View, app or Installation changes, it re-checks those
+  subscriptions on the next tick (1 s) and ends the ones that can never
+  deliver again, including when the activator lost read. Missed events (a
+  lagging broadcast) re-check everything; the 10-minute sweep does too, as the
+  backstop for rights that change elsewhere (a group's members).
+- **Stale proposals.** A proposal records the source hash that made it. When
+  the app's source changes while it waits, it is discarded (its journal is
+  abandoned with the reason), and the same page is delivered again, as a new
+  delivery, to the new source. Answering a stale proposal is refused with that
+  explanation.
+- **A person's edit just before the hook's write** is covered through the
+  review window: both writes survive and the person's is delivered, not
+  dropped as an echo.
+
 Left for later:
 
-- Deleting subscriptions when an Installation is uninstalled or revoked (they
-  now wait, as for a paused one, and end with the View).
-- Ending a subscription the moment its activator loses read (it ends at the next
-  delivery attempt instead).
-- Refusing to apply a waiting proposal after the release changed (it is applied
-  as reviewed).
 - A `browser/lib` integration test and the Playwright spec.
-- A test for "a person's edit just before the hook's write is delivered" (the
-  "just after" case is covered).
 
 ## Test plan
 

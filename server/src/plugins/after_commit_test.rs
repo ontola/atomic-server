@@ -475,6 +475,7 @@ async fn a_finished_journal_is_acknowledged_once_without_rerunning() {
         at: 0,
         verdict: None,
         waiting_for_review: false,
+        source_hash: None,
     };
     save_delivery(t.db(), &rewound).unwrap();
     save(t.db(), &before).unwrap();
@@ -966,3 +967,201 @@ async fn an_edit_survives_a_hard_restart_and_is_delivered() {
 /// Keep `Resource` in use for the helpers above on every feature set.
 #[allow(dead_code)]
 fn _uses(_: Resource) {}
+
+/// Sets the Installation's status, the way pausing and revoking do.
+async fn set_status(t: &T, status: &str) {
+    let mut app = t.db().get_resource(&t.app.as_str().into()).await.unwrap();
+    app.set_unsafe(
+        urls::INSTALLATION_STATUS.into(),
+        Value::String(status.into()),
+    )
+    .unwrap();
+    app.save(t.db()).await.unwrap();
+}
+
+/// A proposal waiting for review on the table.
+async fn waiting_proposal(t: &T, row: &str) {
+    t.configure(json!({"writeRows": true})).await;
+    t.rename(row, "edited").await;
+    assert_eq!(t.drain().await, 1);
+    assert!(t.sub().pending.is_some(), "held for review");
+}
+
+#[actix_rt::test]
+async fn revoking_the_installation_ends_the_subscription_and_drops_its_proposal() {
+    let (t, row) = setup("ac_revoke", true).await;
+    waiting_proposal(&t, &row).await;
+    // The first tick subscribes the worker to the store's events.
+    tick(&t.f.appstate, &t.worker).await;
+    assert!(t.sub().is_live());
+
+    set_status(&t, "revoked").await;
+    tick(&t.f.appstate, &t.worker).await;
+    let sub = t.sub();
+    assert!(!sub.is_live(), "ended on the revoke, not at the next delivery");
+    assert_eq!(sub.ended_via.as_deref(), Some(VIA_REVOKED));
+    assert!(sub.pending.is_none());
+    assert!(delivery(t.db(), &sub.id).unwrap().is_none(), "proposal dropped");
+    assert!(review(t.db(), &t.f.drive, &t.table, &t.app, Answer::Apply, &t.me())
+        .await
+        .is_err());
+    assert_eq!(
+        t.get(&row, urls::DESCRIPTION).await,
+        None,
+        "nothing written"
+    );
+}
+
+#[actix_rt::test]
+async fn a_paused_installation_is_not_ended() {
+    let (t, _row) = setup("ac_pause_not_end", true).await;
+    tick(&t.f.appstate, &t.worker).await;
+    set_status(&t, "paused").await;
+    tick(&t.f.appstate, &t.worker).await;
+    assert_eq!(sweep(t.db()).await.unwrap(), 0);
+    assert!(t.sub().is_live());
+}
+
+#[actix_rt::test]
+async fn uninstalling_ends_the_subscription_at_the_sweep() {
+    let (t, row) = setup("ac_uninstall", true).await;
+    waiting_proposal(&t, &row).await;
+    let mut app = t.db().get_resource(&t.app.as_str().into()).await.unwrap();
+    app.destroy(t.db()).await.unwrap();
+    // Without the event (the worker was not listening), the sweep ends it.
+    sweep(t.db()).await.unwrap();
+    let sub = t.sub();
+    assert_eq!(sub.ended_via.as_deref(), Some(VIA_UNINSTALLED));
+    assert!(delivery(t.db(), &sub.id).unwrap().is_none());
+    assert!(t.db().after_commit_wake(&sub.id).unwrap().is_none());
+}
+
+#[actix_rt::test]
+async fn losing_read_access_ends_the_subscription_as_soon_as_the_rights_change() {
+    let (t, row) = setup("ac_lost_read", true).await;
+    // Someone else turned it on, with write access to this table only.
+    let other = Agent::new(Some("colleague")).unwrap();
+    t.db().add_resource(&other.to_resource().unwrap()).await.unwrap();
+    let mut table = t.db().get_resource(&t.table.as_str().into()).await.unwrap();
+    table
+        .push(urls::WRITE, other.subject.to_string().into(), true)
+        .unwrap();
+    table.save(t.db()).await.unwrap();
+    let mut sub = t.sub();
+    sub.activated_by = other.subject.to_string();
+    save(t.db(), &sub).unwrap();
+    assert_eq!(end_reason(t.db(), &sub).await, None);
+    tick(&t.f.appstate, &t.worker).await;
+
+    // A row edit is not a reason to look.
+    t.rename(&row, "still here").await;
+    tick(&t.f.appstate, &t.worker).await;
+    assert!(t.sub().is_live());
+
+    let mut table = t.db().get_resource(&t.table.as_str().into()).await.unwrap();
+    table
+        .set_unsafe(urls::WRITE.into(), Value::ResourceArray(vec![]))
+        .unwrap();
+    table.save(t.db()).await.unwrap();
+    tick(&t.f.appstate, &t.worker).await;
+    let sub = t.sub();
+    assert!(!sub.is_live());
+    assert_eq!(sub.ended_via.as_deref(), Some(VIA_ACTIVATOR_LOST_READ));
+}
+
+/// Publishes `SOURCE` plus a comment as a new release and pins it.
+async fn update_release(t: &T) {
+    let changed = format!("{SOURCE}\n// updated\n");
+    let id = t
+        .db()
+        .publish_plugin_release(&js_release_with_source(&changed, manifest()))
+        .unwrap();
+    let mut app = t.db().get_resource(&t.app.as_str().into()).await.unwrap();
+    app.set_unsafe(urls::RELEASE_ID.into(), Value::String(id.clone()))
+        .unwrap();
+    app.set_unsafe(urls::RELEASE_PROP.into(), Value::String(id))
+        .unwrap();
+    app.save(t.db()).await.unwrap();
+}
+
+#[actix_rt::test]
+async fn a_proposal_from_the_previous_release_is_refused_and_proposed_again() {
+    let (t, row) = setup("ac_stale_review", true).await;
+    waiting_proposal(&t, &row).await;
+    let old = delivery(t.db(), &t.sub().id).unwrap().unwrap();
+    update_release(&t).await;
+
+    let err = review(t.db(), &t.f.drive, &t.table, &t.app, Answer::Apply, &t.me())
+        .await
+        .unwrap_err();
+    assert!(err.contains("updated"), "{err}");
+    assert_eq!(t.get(&row, urls::DESCRIPTION).await, None, "not applied");
+    let rerun = delivery(t.db(), &t.sub().id).unwrap().unwrap();
+    assert_ne!(rerun.id, old.id);
+    assert_eq!(rerun.changes, old.changes, "the same page");
+    assert!(!rerun.waiting_for_review);
+    assert!(t.sub().pending.is_none());
+
+    // The new release proposes again, and that one can be applied.
+    assert_eq!(t.drain().await, 1);
+    assert!(t.sub().pending.is_some());
+    review(t.db(), &t.f.drive, &t.table, &t.app, Answer::Apply, &t.me())
+        .await
+        .unwrap();
+    assert_eq!(
+        t.get(&row, urls::DESCRIPTION).await.as_deref(),
+        Some("seen by the hook")
+    );
+}
+
+#[actix_rt::test]
+async fn the_worker_discards_a_stale_proposal_without_a_review() {
+    let (t, row) = setup("ac_stale_worker", true).await;
+    waiting_proposal(&t, &row).await;
+    let logs = t.logs().await.len();
+    update_release(&t).await;
+    assert_eq!(t.drain().await, 0, "the discard pass does not run");
+    assert!(t.sub().pending.is_none());
+    assert_eq!(t.drain().await, 1, "then the new source runs the page");
+    assert!(t.sub().pending.is_some());
+    assert_eq!(t.logs().await.len(), logs, "log intents wait with the rest");
+}
+
+/// A person's edit lands on a row after the hook saw it and before the
+/// hook's write: here, while the write waits for review, the widest window.
+/// Both survive (Loro merges per property), and the person's edit is
+/// delivered next rather than swallowed as the hook's own echo: an own write
+/// is only recorded when the row was still at the version the hook saw.
+#[actix_rt::test]
+async fn a_persons_edit_just_before_the_hooks_write_is_kept_and_delivered() {
+    let (t, row) = setup("ac_race", true).await;
+    waiting_proposal(&t, &row).await;
+    let logs = t.logs().await.len();
+    t.rename(&row, "the person's").await;
+    review(t.db(), &t.f.drive, &t.table, &t.app, Answer::Apply, &t.me())
+        .await
+        .unwrap();
+    assert_eq!(
+        t.get(&row, urls::NAME).await.as_deref(),
+        Some("the person's")
+    );
+    assert_eq!(
+        t.get(&row, urls::DESCRIPTION).await.as_deref(),
+        Some("seen by the hook")
+    );
+    assert!(
+        get_json::<OwnWrite>(t.db(), &own_key(&t.sub().id, &t.db().change_list_table_key(&row)))
+            .unwrap()
+            .is_none(),
+        "not recorded as an echo"
+    );
+    assert!(t.logs().await.len() > logs, "the reviewed proposal applied");
+    assert_eq!(t.drain().await, 1, "the person's edit is delivered");
+    // Without a grant the hook's answer waits again; the page it got holds
+    // the row.
+    let page = delivery(t.db(), &t.sub().id).unwrap().unwrap();
+    assert!(page
+        .changes
+        .iter()
+        .any(|c| c.subject == t.db().change_list_table_key(&row)));
+}
