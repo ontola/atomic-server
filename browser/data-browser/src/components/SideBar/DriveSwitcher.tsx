@@ -79,7 +79,8 @@ export function DriveSwitcher({
   const createNewResource = useNewResourceUI();
 
   const items: DropdownItem[] = [
-    ...(privateDrive && !catalog.removed.includes(privateDrive)
+    ...(privateDrive &&
+    !catalog.removed.some(removed => same(privateDrive, removed))
       ? [
           {
             id: privateDrive,
