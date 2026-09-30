@@ -684,6 +684,30 @@ impl RouteRegistry {
         host.strip_suffix(&format!(".{routes}")).map(str::to_string)
     }
 
+    /// Whether a TLS terminator may get a certificate for `domain` (#1922):
+    /// it is exactly `<slug>.<routes origin host>` for an `installation-origin`
+    /// installation this node serves, active or paused. A paused one still
+    /// answers `503` + `Retry-After`, which peers only see over TLS. The bare
+    /// routes origin, a nested label, a degraded or retired installation and
+    /// any other host are refused.
+    pub fn tls_allowed(&self, domain: &str) -> bool {
+        let Some(label) = self.routes_host_label(domain) else {
+            return false;
+        };
+        if !is_slug(&label) {
+            return false;
+        }
+        let table = self.read();
+        table
+            .by_slug
+            .get(&label)
+            .and_then(|subject| table.installations.get(subject))
+            .is_some_and(|r| {
+                r.mount == Mount::InstallationOrigin
+                    && matches!(r.state, State::Active | State::Paused)
+            })
+    }
+
     /// Whether the operator granted `name` on the API origin to `subject`.
     fn api_granted(&self, name: &str, subject: &str) -> bool {
         let subject = pure(subject);
@@ -1769,6 +1793,40 @@ mod tests {
             ),
             Some(Answer::NotFound)
         );
+    }
+
+    #[test]
+    fn tls_is_allowed_only_for_live_installation_hosts() {
+        let r = registry(ReadOnly);
+        let m = manifest(serde_json::json!({"routes": [get("/x", "x")]}));
+        assert_eq!(r.activate(A, DRIVE, &m), State::Active);
+        let s = slug(A);
+        let host = format!("{s}.routes.localhost");
+        assert!(r.tls_allowed(&host));
+        // Case, a port and a trailing dot do not matter.
+        assert!(r.tls_allowed(&format!("{}.ROUTES.localhost.:443", s.to_uppercase())));
+        // Unknown slugs, the bare origin, nested labels and look-alikes.
+        assert!(!r.tls_allowed(&format!("{}.routes.localhost", slug(B))));
+        assert!(!r.tls_allowed("routes.localhost"));
+        assert!(!r.tls_allowed(&format!("www.{host}")));
+        assert!(!r.tls_allowed(&format!("{host}.evil.example")));
+        assert!(!r.tls_allowed(&format!("{s}routes.localhost")));
+        assert!(!r.tls_allowed(&format!("{s}.localhost")));
+        assert!(!r.tls_allowed(""));
+        // A paused installation still answers (503), so keeps its host.
+        r.pause(A);
+        assert!(r.tls_allowed(&host));
+        // A revoked or uninstalled one does not.
+        r.retire(A, 0);
+        assert!(!r.tls_allowed(&host));
+        // Another mount's installation has no host of its own.
+        let prefix =
+            manifest(serde_json::json!({"mount": "drive-prefix", "routes": [get("/x", "x")]}));
+        assert_eq!(r.activate(B, DRIVE, &prefix), State::Active);
+        assert!(!r.tls_allowed(&format!("{}.routes.localhost", slug(B))));
+        // Nothing when routes are off.
+        let off = registry(Off);
+        assert!(!off.tls_allowed(&host));
     }
 
     #[test]
