@@ -14,7 +14,7 @@ type SharedWithMeLinkProps = {
   'data-testid'?: string;
 };
 
-/** One shared resource: same row layout as {@link SideBarMenuItem} (icon + label). */
+/** One shared resource: same row layout as {@link SideBarMenuRow} (icon + label). */
 export function SharedWithMeLink({
   subject,
   onClick,

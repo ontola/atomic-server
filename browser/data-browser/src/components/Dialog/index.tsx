@@ -28,9 +28,9 @@ import { CurrentBackgroundColor } from '../../globalCssVars';
 import { timeoutEffect } from '@helpers/timeoutEffect';
 import { useAndroidBack } from '../../helpers/androidBack';
 
-const FeedbackMenuItem = lazy(() =>
-  import('../SideBar/FeedbackMenuItem').then(module => ({
-    default: module.FeedbackMenuItem,
+const FeedbackButton = lazy(() =>
+  import('../SideBar/FeedbackButton').then(module => ({
+    default: module.FeedbackButton,
   })),
 );
 
@@ -284,7 +284,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
             {show && rootWelcomeChromeHidden && !hideOnboardingFeedback && (
               <DialogFeedback>
                 <Suspense fallback={null}>
-                  <FeedbackMenuItem floating />
+                  <FeedbackButton />
                 </Suspense>
               </DialogFeedback>
             )}

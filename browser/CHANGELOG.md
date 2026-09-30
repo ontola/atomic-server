@@ -33,6 +33,28 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   may now have an `acct_` id apart from their address: backups and bindings
   keep using the id, and the app shows `address` from `GET /api/me`.
 
+- Agents, Skills and MCP servers are edited in a dialog again. Their lists stay
+  on the AI settings page, but creating or editing one opens a dialog with the
+  form and Cancel / Save buttons, instead of swapping the list for the form
+  inside the settings section. Save stays disabled until the required fields
+  are filled in.
+- The sidebar's App panel is gone. Its entries (your user page, Notifications,
+  Integrations, Sync, Feedback, About and Install App) now live in a dropdown
+  that opens from the user row at the bottom of the sidebar, with Settings as a
+  gear button beside it. A dot on the row shows unread notifications.
+
+- The role picker next to the email field in the share dialog opens again. A
+  click on it also focused the email field, which closed its option list right
+  after it opened. The email field also asks password managers (Bitwarden,
+  1Password, LastPass, Dashlane) not to fill it, since it holds other people's
+  addresses.
+- Images in documents show again instead of "Failed to load image". An uploaded
+  image's address points at the server, but a browser-only workspace never
+  sends its files there, so the server could not answer it. The editor now shows
+  the copy this browser already holds, as file previews already did, and falls
+  back to the server when there is none. New `useBlobObjectUrl` hook in
+  `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
