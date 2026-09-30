@@ -94,6 +94,81 @@ attribution, tampering, two writers under both retentions, destroy fold),
 `server/tests/it/history_attribution.rs` (signer, verified, read gate),
 `browser/lib/src/history-attribution.test.ts` (parse, lookup, merge).
 
+## Where a commit is stored (checked 2026-09-25)
+
+A storage review asked whether critical commits could live only in
+`Tree::Envelopes`, so a genesis, rights, parent or destroy commit is not
+kept twice. They cannot, for now. What `Db::apply_commit` writes for one
+signed commit:
+
+| Copy | Written for | Tree | Holds the `loroUpdate` payload |
+| --- | --- | --- | --- |
+| Envelope | every signed commit | `Envelopes`, keyed by the resource | yes (JSON-AD) |
+| Commit row | critical commits only | `Resources`, keyed by `did:ad:commit:<sig>` | yes (must, see below) |
+| Index rows for the commit row | critical commits only | `PropValSub` / `ValPropSub` | no (`subject`, `signer`, `isA` and other references) |
+| The change itself | every commit | `LoroSnapshots` oplog of the resource | merged into the doc, not as a separate blob |
+
+So a critical commit's payload is stored twice (envelope and row), not three
+times. The third place is the resource's own CRDT state, which is not a copy
+of the commit.
+
+**Who reads the commit row.** Rights checks do not: they read state
+(`read` / `write` / `parent` on the resource and its parents), and
+`hierarchy.rs` only treats a commit resource as readable when its target is.
+The readers are:
+
+- the destroy replay guard in `Db::apply_commit`
+  (`has_resource_locally(did:ad:commit:<sig>)`). After a destroy and a
+  re-create, `latest` retention has already replaced the destroy envelope
+  with the new genesis, so the row is the only local record that this destroy
+  was applied here;
+- `GET did:ad:commit:<sig>` and anything else going through `get_resource`;
+- `all_resources` (index rebuild, the HTTP-URL drive scan in the sync
+  engine);
+- queries on `subject` / `signer` via the index (today only a test in
+  `server/src/plugins/store_host.rs`; `AuthorizationProof` (P3) is the
+  planned consumer).
+
+**Who reads the envelope.** `attribute_history` and `/history-attribution`,
+`tombstones::destroy_envelope` for `SYNC_DIFF.removeCommits`,
+`envelopes::for_subjects` for `SYNC_PUSH` and vault packs. The commit row is
+never replicated; the envelope is how another node gets the commit.
+
+**Why neither goes.**
+
+- Dropping the row and reading critical commits from envelopes means `latest`
+  retention must spare those envelopes. That breaks "one envelope per
+  resource", which `attribute_history` relies on to report a single signer
+  and call itself `complete`, and it breaks the replay guard above for the
+  destroy / re-create case. The row also has to keep its own payload
+  (`add_resource_tx` keeps `loroUpdate` for `did:ad:commit:` subjects):
+  once `latest` drops the envelope on the next edit, the row is the only
+  thing the signature can be checked against. The tests that pinned this on
+  the branch that first tried it
+  (`stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit`,
+  `commit_resource_blob_keeps_loro_update_and_indexes_only_subject`) are not
+  on this branch; only `commit_loro_update_is_not_re_derived_from_doc`
+  (`lib/src/resources.rs`) covers part of it.
+- Skipping the envelope when a row is written means every envelope reader
+  needs a fallback that finds the row by subject through the index, orders it
+  against envelopes by `createdAt`, and re-encodes it to JSON-AD for sync.
+  That is more code in the signing and sync paths than the copy it saves, and
+  it only saves anything until the resource's next edit, when `latest`
+  deletes that envelope anyway.
+
+**What would reclaim the copy.** Under `latest`, the doubled payload lasts
+exactly as long as the critical commit is the resource's newest commit. Two
+options, neither built:
+
+1. Write the row without its payload while the envelope is retained, and
+   fold the payload back into the row when `latest` evicts that envelope.
+   This puts work in the signing path, which is where the earlier regression
+   came from.
+2. Header-only envelopes (*Next*, item 4) for commits that also have a row.
+
+Both are only worth it if bulk imports of never-edited resources show the
+doubled genesis payload in real store sizes.
+
 ## Next
 
 1. ~~**Replicate the rows.**~~ Shipped 2026-09-15. `SYNC_PUSH` carries a
