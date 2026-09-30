@@ -224,6 +224,31 @@ pub fn agent_subject(pubkey: &str) -> String {
     format!("{ATOMIC_AGENT_PREFIX}{pubkey}")
 }
 
+/// Every spelling of the same Ed25519 public key that has ever named an agent:
+/// URL-safe unpadded (canonical), URL-safe padded, and the legacy standard
+/// alphabet padded or not. The original spelling comes first. Empty when the
+/// key does not decode.
+pub fn agent_pubkey_spellings(pubkey: &str) -> Vec<String> {
+    use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
+    use base64::Engine;
+
+    let Ok(bytes) = crate::agents::decode_base64(pubkey) else {
+        return Vec::new();
+    };
+    let mut out = vec![pubkey.to_string()];
+    for spelling in [
+        URL_SAFE_NO_PAD.encode(&bytes),
+        STANDARD.encode(&bytes),
+        URL_SAFE.encode(&bytes),
+        STANDARD_NO_PAD.encode(&bytes),
+    ] {
+        if !out.contains(&spelling) {
+            out.push(spelling);
+        }
+    }
+    out
+}
+
 pub fn resource_subject(genesis_sig: &str) -> String {
     format!("{ATOMIC_PREFIX}{genesis_sig}")
 }
