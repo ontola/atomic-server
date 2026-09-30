@@ -1441,7 +1441,39 @@ export class WSClient {
           // setSource + addResources({skipCommitCompare:true})`
           // collapsed into one `applyIncoming` call per entry.
           // The chunked-final-chunk drive-sync signal stays here.
-          for (const { subject, loroBytes } of msg.entries) {
+          // Resources nobody holds in memory go straight to the database
+          // worker, which merges and stores them without this thread building
+          // each one (a cold pull of 10k resources kept the main thread busy
+          // for 30 s doing that). Whatever a screen asks for later is read
+          // from the database. Held resources take the normal path, so a view
+          // that is waiting on one still gets it.
+          const workerDb = this.store.getClientDb();
+          let entries = msg.entries;
+
+          if (
+            typeof workerDb?.applyStateUpdates === 'function' &&
+            !workerDb.initError
+          ) {
+            const direct = entries.filter(
+              e => !this.store.resources.has(e.subject),
+            );
+
+            if (direct.length > 0) {
+              entries = entries.filter(e =>
+                this.store.resources.has(e.subject),
+              );
+              workerDb
+                .applyStateUpdates(
+                  direct.map(e => e.subject),
+                  direct.map(e => e.loroBytes),
+                )
+                .catch(e =>
+                  console.warn('[WS] applying pulled states failed:', e),
+                );
+            }
+          }
+
+          for (const { subject, loroBytes } of entries) {
             this.store.applyIncoming({
               subject,
               loroBytes,

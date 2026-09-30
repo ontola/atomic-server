@@ -1131,6 +1131,19 @@ export class ClientDbWorker {
   }
 
   /** The subjects of one drive, without reading any snapshot. */
+  /** Merge and persist pulled resource states inside the worker, without
+   *  building them in this thread. */
+  async applyStateUpdates(
+    subjects: string[],
+    states: Uint8Array[],
+  ): Promise<number> {
+    return (await this.send({
+      type: 'applyStateUpdates',
+      subjects,
+      states,
+    })) as number;
+  }
+
   async getDriveSubjects(drive: string): Promise<string[]> {
     return (await this.send({ type: 'getDriveSubjects', drive })) as string[];
   }

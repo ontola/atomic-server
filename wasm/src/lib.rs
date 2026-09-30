@@ -659,6 +659,35 @@ impl ClientDb {
         serde_json::to_string(&report).map_err(to_js_err)
     }
 
+    /// Apply the resource states of a `SYNC_PUSH` without building them in
+    /// JavaScript: each `(subject, state)` pair is merged into the stored
+    /// document and persisted with its indexes (`apply_state_update`, the path
+    /// replicas use). `subjects` is an array of strings and `states` an array
+    /// of `Uint8Array`s of the same length. Returns how many were applied.
+    #[wasm_bindgen(js_name = "applyStateUpdates")]
+    pub async fn apply_state_updates(
+        &self,
+        subjects: Vec<String>,
+        states: js_sys::Array,
+    ) -> Result<u32, JsError> {
+        let items: Vec<(String, Vec<u8>)> = subjects
+            .into_iter()
+            .enumerate()
+            .map(|(i, subject)| {
+                (
+                    subject,
+                    js_sys::Uint8Array::new(&states.get(i as u32)).to_vec(),
+                )
+            })
+            .collect();
+
+        let applied = atomic_lib::sync::ws_apply::apply_state_updates(self.db(), &items)
+            .await
+            .map_err(to_js_err)?;
+
+        Ok(applied as u32)
+    }
+
     /// The retained signed envelopes of each subject, as
     /// `{ "<subject>": ["<commit JSON-AD>", ...] }`, to ride along a
     /// `SYNC_PUSH` (`atomic_lib::envelopes::for_subjects`). `subjects_json`

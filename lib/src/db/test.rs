@@ -3996,3 +3996,48 @@ async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
         found.subjects
     );
 }
+
+/// A pulled batch is merged and stored in one write, and a state that does not
+/// decode is skipped without failing the rest.
+#[tokio::test]
+#[timeout(120000)]
+async fn apply_state_updates_stores_a_batch_and_skips_garbage() {
+    let store = Db::init_temp("apply_state_updates_batch").await.unwrap();
+    let drive =
+        "did:ad:driveBATCHaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let state = |i: usize| {
+        let subj = format!("did:ad:batch{:0>67}==", format!("{i}"));
+        let mut authored = crate::Resource::new(subj.clone());
+        authored
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(format!("row {i}")))
+            .unwrap();
+        (subj, authored.build_state_doc().unwrap().export_snapshot())
+    };
+
+    let mut items: Vec<(String, Vec<u8>)> = (0..3).map(state).collect();
+    items.push(("did:ad:garbage".to_string(), vec![1, 2, 3, 4, 5]));
+
+    let applied = crate::sync::ws_apply::apply_state_updates(&store, &items)
+        .await
+        .unwrap();
+
+    assert_eq!(applied, 3);
+
+    for (i, (subj, _)) in items.iter().take(3).enumerate() {
+        let stored = store
+            .get_resource(&crate::Subject::from_raw(subj, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            stored.get(urls::NAME).unwrap().to_string(),
+            format!("row {i}")
+        );
+    }
+}

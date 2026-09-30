@@ -115,6 +115,12 @@ export type WorkerRequest =
   | { id: number; type: 'getAllVersionVectors' }
   | { id: number; type: 'getVersionVectorsForDrive'; drive: string }
   | { id: number; type: 'getDriveSubjects'; drive: string }
+  | {
+      id: number;
+      type: 'applyStateUpdates';
+      subjects: string[];
+      states: Uint8Array[];
+    }
   | { id: number; type: 'getVersionVectorsForSubjects'; subjects: string[] }
   // Cloud Vault. These live in the worker because it holds the only Db handle;
   // the network half stays on the main thread, where the control-plane session
@@ -555,6 +561,15 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return db!.getVersionVectorsForDrive(msg.drive);
     }
 
+    case 'applyStateUpdates': {
+      await ensureInit();
+      const applied = await db!.applyStateUpdates(msg.subjects, msg.states);
+
+      dirty = true;
+
+      return applied;
+    }
+
     case 'getDriveSubjects': {
       await ensureInit();
 
@@ -710,8 +725,79 @@ setInterval(() => {
   });
 }, FLUSH_INTERVAL_MS);
 
+type ApplyStatesRequest = Extract<WorkerRequest, { type: 'applyStateUpdates' }>;
+
+/** The most resources one coalesced write carries. */
+const MAX_COALESCED_STATES = 2000;
+
+/** Pulled states that arrived while the worker was busy, with no other message
+ *  between them. They are applied as one transaction, so a page that several
+ *  of them touch (a parent's member list, the search index) is written once.
+ *  A first pull queues dozens of batches of 100 faster than they are stored. */
+let statesBuffer: { msgs: ApplyStatesRequest[]; count: number } | null = null;
+
+function respond(id: number, outcome: { data: unknown } | { error: unknown }) {
+  const response: WorkerResponse =
+    'error' in outcome
+      ? {
+          id,
+          type: 'error',
+          message:
+            outcome.error instanceof Error
+              ? outcome.error.message
+              : String(outcome.error),
+        }
+      : { id, type: 'ok', data: outcome.data };
+
+  self.postMessage(response);
+}
+
+function queueApplyStates(msg: ApplyStatesRequest): void {
+  if (statesBuffer && statesBuffer.count < MAX_COALESCED_STATES) {
+    statesBuffer.msgs.push(msg);
+    statesBuffer.count += msg.subjects.length;
+
+    return;
+  }
+
+  const buffer = { msgs: [msg], count: msg.subjects.length };
+
+  statesBuffer = buffer;
+  workQueue = workQueue.then(async () => {
+    // Messages that piled up while the worker was busy are dispatched before
+    // this timer fires, so they join the buffer instead of queueing behind it.
+    await new Promise(resolve => setTimeout(resolve, 30));
+
+    if (statesBuffer === buffer) statesBuffer = null;
+
+    try {
+      await handleMessage({
+        id: msg.id,
+        type: 'applyStateUpdates',
+        subjects: buffer.msgs.flatMap(m => m.subjects),
+        states: buffer.msgs.flatMap(m => m.states),
+      });
+      dirty = true;
+      buffer.msgs.forEach(m => respond(m.id, { data: m.subjects.length }));
+    } catch (error) {
+      buffer.msgs.forEach(m => respond(m.id, { error }));
+    }
+  });
+}
+
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const msg = event.data;
+
+  if (msg.type === 'applyStateUpdates') {
+    queueApplyStates(msg);
+
+    return;
+  }
+
+  // Anything else closes the buffer, so a later message cannot overtake it.
+  // Envelopes ride along with every chunk of a pull and depend on nothing
+  // in it, so they do not.
+  if (msg.type !== 'importEnvelopes') statesBuffer = null;
   workQueue = workQueue.then(async () => {
     try {
       const data = await handleMessage(msg);
