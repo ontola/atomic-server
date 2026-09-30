@@ -33,25 +33,47 @@ skips the frontend build, so it needs nothing else.
 
 ## Claude Code Cloud Sessions
 
-`.claude/hooks/session-start.sh` (registered in `.claude/settings.json`) sets
-up Claude Code on the web sessions: the Rust toolchain and WASM targets,
-wasm-pack, wasm-opt, `pnpm install`, the `@tomic/*` package builds, the
-Playwright browsers for `@tomic/e2e`, and a debug build of `atomic-server`
-(which also builds data-browser and the WASM). Cloud containers have no IPv6,
-so it also exports `ATOMIC_IP=0.0.0.0` for the session; without it the server
-fails with "Address family not supported by protocol". It only runs when
-`CLAUDE_CODE_REMOTE=true`, so local sessions are unaffected.
+Claude Code on the web sessions are set up by three scripts in `.claude/hooks/`.
+They only run when `CLAUDE_CODE_REMOTE=true`, so local sessions are unaffected.
 
-The hook pins versions and works around the cloud sandbox (for example, the proxy
-blocks Playwright's CDN, so browsers come from the Chrome for Testing mirror).
-When environment requirements change — `rust-toolchain.toml`, a new Rust
-target, the wasm-pack or binaryen version, the Playwright version, a new
-workspace package or build step — update the hook in the same PR, and test it
-with `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`.
+- `session-start.sh`, the SessionStart hook registered in
+  `.claude/settings.json`. It exports `ATOMIC_IP=0.0.0.0`: cloud containers have
+  no IPv6, and the server otherwise fails with "Address family not supported by
+  protocol". Then it runs `cloud-setup.sh`, starts `cloud-build.sh` in the
+  background, and tells the agent how to wait for that build.
+- `cloud-setup.sh` installs the Rust toolchain and WASM targets, wasm-pack,
+  wasm-opt, `browser/node_modules` and the Playwright browsers for
+  `@tomic/e2e`, and fetches the crates. Each step skips what is already there.
+- `cloud-build.sh` builds the `@tomic/*` packages, then a debug
+  `atomic-server` (which also builds data-browser and the WASM). It writes
+  `/tmp/atomic-setup/packages.done` and `server.done` (`ok` or `failed`) when
+  each step ends; the log is `/tmp/atomic-setup/build.log`.
+
+Only a cloud environment's setup script is cached between sessions (a
+filesystem snapshot, taken only when the script finishes in about five
+minutes). Hooks run every session, and every session starts from a fresh clone.
+So set the environment's setup script (environment settings, **Setup script**)
+to:
+
+```
+bash /home/user/atomic-server/.claude/hooks/cloud-setup.sh || true
+```
+
+Then toolchains, the pnpm store, crates and browsers come from the cache, and
+the hook blocks for about a minute (mostly linking `node_modules`). Without it
+the hook installs them itself, taking a few minutes more. The server build
+can't be cached either way, which is why it runs in the background.
+
+These scripts pin versions and work around the cloud sandbox (for example, the
+proxy blocks Playwright's CDN, so browsers come from the Chrome for Testing
+mirror). When environment requirements change — `rust-toolchain.toml`, a new
+Rust target, the wasm-pack or binaryen version, the Playwright version, a new
+workspace package or build step — update them in the same PR, and test with
+`CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`.
 
 `pnpm test-e2e:local` builds the `e2e` cargo profile by default, a second cold
 server build. In a cloud session, `ATOMIC_E2E_CARGO_PROFILE=dev pnpm
-test-e2e:local <spec>` reuses the hook's debug build instead (a green is still
+test-e2e:local <spec>` reuses the debug build instead (a green is still
 trustworthy; see `browser/e2e/scripts/e2e-server.sh` on reading reds).
 
 ## Planning

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # SessionStart hook for Claude Code on the web (cloud sessions).
 #
-# Installs the pinned toolchains and warms dependency caches and builds so
-# agents can lint, test and run the stack right away. The container is
-# snapshotted after this hook, so later sessions start warm and every step
-# below is close to a no-op on a re-run.
+# 1. Exports session environment variables.
+# 2. Runs cloud-setup.sh: toolchains, pnpm install, Playwright browsers. Close
+#    to a no-op when the environment's setup script already ran it (see
+#    AGENTS.md); otherwise it installs them here, which takes a few minutes.
+# 3. Starts cloud-build.sh in the background (the @tomic packages, then a
+#    debug atomic-server) and tells the agent how to wait for it.
 #
-# Every step is best-effort: a failing step logs a warning and the rest still
-# runs. Keep this in sync with the repo's requirements (rust-toolchain.toml,
-# wasm-pack/binaryen versions, @tomic/e2e's Playwright) — see AGENTS.md.
+# Keep these scripts in sync with the repo's requirements — see AGENTS.md.
 set -uo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -16,102 +16,47 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 fi
 
 REPO="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
-BIN=/usr/local/bin
-BINARYEN=version_117
+HOOKS="$REPO/.claude/hooks"
+STATE="${ATOMIC_SETUP_STATE:-/tmp/atomic-setup}"
+mkdir -p "$STATE"
 
-step() { echo "==> $*"; }
-warn() { echo "WARN: $*" >&2; }
+# stdout is reserved for the JSON below; everything else goes to the log.
+exec 3>&1 >>"$STATE/setup.log" 2>&1
+echo "==> session-start $(date -u +%FT%TZ)"
 
 # --- Session environment ----------------------------------------------------
 # atomic-server binds to `::` by default, and cloud containers have no IPv6
 # ("Address family not supported by protocol"). ATOMIC_IP makes `cargo run`,
 # browser/lib's integration fixture and the e2e server bind IPv4 instead.
 if [ ! -e /proc/net/if_inet6 ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  step "No IPv6: exporting ATOMIC_IP=0.0.0.0 for this session"
   echo 'export ATOMIC_IP="${ATOMIC_IP:-0.0.0.0}"' >>"$CLAUDE_ENV_FILE"
 fi
 
-# --- Rust -------------------------------------------------------------------
-step "Rust toolchain from rust-toolchain.toml + wasm targets"
-RUST_VERSION=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$REPO/rust-toolchain.toml")
-rustup toolchain install "$RUST_VERSION" --profile minimal \
-  --component rustfmt --component clippy \
-  --target wasm32-unknown-unknown --target wasm32-wasip2 ||
-  warn "rustup install failed"
+# --- Tools ------------------------------------------------------------------
+start=$(date +%s)
+REPO="$REPO" bash "$HOOKS/cloud-setup.sh"
+echo "cloud-setup.sh took $(($(date +%s) - start))s"
 
-# --- wasm-pack + wasm-opt ---------------------------------------------------
-# wasm-pack's own binaryen download fails behind the session proxy, so put
-# wasm-opt on PATH; wasm-pack uses it from there.
-step "wasm-pack"
-if ! command -v wasm-pack >/dev/null; then
-  sh "$REPO/.dagger/scripts/install-wasm-pack.sh" "$BIN" || warn "wasm-pack install failed"
+# --- Background build -------------------------------------------------------
+if [ -f "$STATE/server.done" ]; then
+  context="Cloud setup: toolchains, browser/node_modules, the @tomic packages \
+($(cat "$STATE/packages.done" 2>/dev/null)) and a debug atomic-server \
+($(cat "$STATE/server.done")) are already built on this VM. Log: $STATE/build.log."
+else
+  REPO="$REPO" ATOMIC_SETUP_STATE="$STATE" setsid nohup bash "$HOOKS/cloud-build.sh" \
+    </dev/null >>"$STATE/build.log" 2>&1 &
+  context="Cloud setup: toolchains, wasm-pack, Playwright browsers and \
+browser/node_modules are ready. A background job (.claude/hooks/cloud-build.sh) \
+is still building the @tomic packages and then a debug atomic-server, which \
+also builds data-browser and the WASM; from cold that takes 10-20 minutes. \
+Log: $STATE/build.log. When each step ends it writes $STATE/packages.done or \
+$STATE/server.done, containing ok or failed. Reading and editing code is fine \
+right away. Before JS typecheck or tests, wait for packages.done; before cargo \
+builds or tests, running the server, or e2e, wait for server.done, e.g. run \
+\`until [ -e $STATE/server.done ]; do sleep 10; done; cat $STATE/server.done\` \
+in the background. A cargo command started earlier just waits for the build \
+lock. Don't start a second pnpm install or build of the same packages meanwhile."
 fi
 
-step "binaryen (wasm-opt)"
-if ! wasm-opt --version 2>/dev/null | grep -q "($BINARYEN)"; then
-  tmp=$(mktemp -d)
-  if curl -fsSL --retry 3 \
-    "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN}/binaryen-${BINARYEN}-x86_64-linux.tar.gz" |
-    tar -xz -C "$tmp"; then
-    rm -rf /opt/binaryen && mv "$tmp/binaryen-${BINARYEN}" /opt/binaryen
-    ln -sf /opt/binaryen/bin/wasm-opt "$BIN/wasm-opt"
-    wasm-opt --version
-  else
-    warn "binaryen download failed"
-  fi
-  rm -rf "$tmp"
-fi
-
-# --- JS dependencies and workspace packages ---------------------------------
-step "pnpm install"
-cd "$REPO/browser" || exit 0
-pnpm install --frozen-lockfile || warn "pnpm install failed"
-
-# typecheck and vitest need these packages' dist/. data-browser (which also
-# compiles the WASM) is built by the atomic-server build below.
-step "Build @tomic workspace packages"
-pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/plugin \
-  --filter @tomic/service-ui --filter @tomic/edit-mode \
-  --filter @tomic/cli --filter @tomic/svelte -r build ||
-  warn "workspace package build failed"
-
-# --- Playwright browsers ----------------------------------------------------
-# The image's preinstalled Chromium usually lags @tomic/e2e's Playwright, and
-# the session proxy blocks Playwright's CDN (cdn.playwright.dev). Chrome for
-# Testing builds are the same zips, mirrored on storage.googleapis.com, so
-# unpack those into the directories Playwright expects.
-step "Playwright browsers for @tomic/e2e"
-cd "$REPO/browser/e2e" || exit 0
-if ! PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD= pnpm exec playwright install chromium chromium-headless-shell >/dev/null 2>&1; then
-  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD= pnpm exec playwright install --dry-run chromium chromium-headless-shell 2>/dev/null |
-    awk '/Install location:/{loc=$3} /Download url:/{if (loc) print loc, $3; loc=""}' |
-    while read -r loc url; do
-      case "$url" in */builds/cft/*) ;; *) continue ;; esac
-      [ -f "$loc/INSTALLATION_COMPLETE" ] && continue
-      mirror="https://storage.googleapis.com/chrome-for-testing-public/${url#*/builds/cft/}"
-      echo "Downloading $mirror"
-      tmp=$(mktemp -d)
-      if curl -fsSL --retry 3 "$mirror" -o "$tmp/browser.zip" && unzip -q "$tmp/browser.zip" -d "$tmp/x"; then
-        rm -rf "$loc" && mkdir -p "$loc" && mv "$tmp"/x/* "$loc"/ &&
-          touch "$loc/INSTALLATION_COMPLETE" "$loc/DEPENDENCIES_VALIDATED"
-      else
-        warn "Playwright browser download failed: $mirror"
-      fi
-      rm -rf "$tmp"
-    done
-fi
-
-# --- Rust dependencies and a warm debug build -------------------------------
-step "cargo fetch"
-cd "$REPO" || exit 0
-cargo fetch --locked || warn "cargo fetch failed"
-
-# The biggest time sink in sessions: a cold server build takes tens of
-# minutes. Its build.rs also builds data-browser and the WASM (wasm-pack), so
-# the Vite dev server and `server/` both work afterwards. Uses the default
-# target/ dir: browser/lib's integration tests expect target/debug/atomic-server.
-step "Debug build of atomic-server"
-cargo build -p atomic-server || warn "server build failed"
-
-step "Done"
-df -h / | tail -1
+jq -n --arg ctx "$context" \
+  '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}' >&3
