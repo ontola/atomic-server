@@ -2267,43 +2267,14 @@ export class AtomicServer {
       )
         .filter(Boolean)
         .join('\n\n');
-      const exported = await Promise.all(
-        failed.map(r => this.exportTestResults(r)),
-      );
       throw new Error(
         `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
-          `Reports:\n${reportUrls.join('\n')}\n` +
-          `Traces:\n${exported.join('\n')}\n\n${tails}` +
+          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
           (contexts ? `\n\n${contexts}` : ''),
       );
     }
 
     return reportUrls.join('\n') || 'e2e ok (no report URL)';
-  }
-
-  /**
-   * Copies a failed shard's `test-results` (traces, screenshots,
-   * `error-context.md`) to the calling runner, under
-   * `e2e-test-results/shard-N`, where main-ci.yml uploads it as an artifact.
-   *
-   * The netlify report used to be the only way to get these out, and with
-   * `NETLIFY_TOKEN` unset they were discarded with the container. Then a
-   * failure that only happens on Mancave leaves just an assertion message:
-   * on 29-30 September a reload that rendered a blank page could only be
-   * described, not diagnosed, and every guess cost an hour-long rerun.
-   */
-  private async exportTestResults(r: {
-    shard: number;
-    testResults: Directory;
-  }): Promise<string> {
-    const path = `e2e-test-results/shard-${r.shard}`;
-    try {
-      await r.testResults.export(path);
-
-      return `shard ${r.shard}: exported to ${path} (uploaded as the e2e-test-results artifact)`;
-    } catch (e) {
-      return `shard ${r.shard}: could not export test results: ${e}`;
-    }
   }
 
   /**
