@@ -1474,15 +1474,25 @@ export class AtomicServer {
     // mounted `assets_tmp` holds.
     //
     // Only `dist` goes under `/code/browser`, deliberately: mounting
-    // `form-app/src` too would make `should_build()` see source newer than a
-    // (missing) `data-browser/dist` and try to run `pnpm build` inside the
-    // rust container.
+    // `form-app/src` too would add JS sources to what `should_build()`
+    // compares.
+    //
+    // Even so, that mount is what creates `/code/browser` in this container,
+    // so `build.rs` no longer takes its "no browser folder, skip the JS
+    // build" path. It finds no `data-browser/dist` but does find its other
+    // watched sources (`lib/src`, `wasm/src`), and runs `pnpm install`, which
+    // this container does not have (run 36717450608). The JS is already
+    // built above and placed in `assets_tmp`, so say so: with
+    // `ATOMICSERVER_SKIP_JS_BUILD`, `build.rs` leaves the mounted
+    // `assets_tmp` as it is and still refreshes `form-assets/` from the
+    // mounted `form-app/dist`.
     const assetsDir = jsContainer
       .directory('/app/data-browser/dist')
       .withDirectory('form-assets', formAppDist);
     const containerWithAssets = sourceContainer
       .withDirectory('/code/server/assets_tmp', assetsDir)
-      .withDirectory('/code/browser/form-app/dist', formAppDist);
+      .withDirectory('/code/browser/form-app/dist', formAppDist)
+      .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true');
 
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
