@@ -118,6 +118,14 @@ Performance is the honest limit: an interpreted hook on every read of a class is
 slower than a compiled one. Fuel per call and per-class scoping bound the damage;
 document it and let people move hot hooks to Rust.
 
+**Widened for `afterCommit` only (#1851).** Michiel decided (ontola/atomic-plugins#177,
+questions 4–7) that user-installed plugins may export `afterCommit`, scoped to
+tables where their view is installed. That is not this inline hook: it is a
+durable, queued notification carrying a page of the per-table change list
+(#1850), run as an ordinary extension-world run whose writes follow the view's
+row grant (#1788). `onResourceGet` and `beforeCommit` stay `server-extension`
+only. Design: [durable-after-commit.md](durable-after-commit.md).
+
 ### 5. `run` for wasm components (extension world)
 
 Let a wasip2 component export `run(input) -> verdict`. Then triggers, cron,
@@ -346,7 +354,8 @@ this branch's wider check covers `Installation` as well as `Plugin`.
   `release::publish_release`.
 - [ ] Bundled integrations still come from the hardcoded browser list.
 - [ ] Global server extensions do not yet accept Release URLs.
-- [ ] Steps 4 and 5 (JS class extenders, wasm `run`) not started.
+- [ ] Steps 4 and 5 (JS class extenders, wasm `run`) not started. The
+  extension-world `afterCommit` is designed in [durable-after-commit.md](durable-after-commit.md) (#1851).
 - [ ] The `plugin-script` drafts created from the old catalog are not yet
   migrated to Installations (second bullet of "Migration" above).
 

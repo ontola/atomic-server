@@ -171,6 +171,11 @@ pub struct Entrypoints {
     /// Class URLs whose hooks this package exports. Only in `server-extension`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_extender: Option<Vec<String>>,
+    /// Exports `afterCommit(ctx)`: told when rows change in tables where it
+    /// is added as a view (#1851). Only in `extension`; declaring it grants
+    /// nothing, the subscription comes from the person adding the view.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub after_commit: bool,
 }
 
 /// When a manifest names no entrypoints it exports `run`, as version one did.
@@ -180,6 +185,7 @@ impl Default for Entrypoints {
             run: true,
             view: None,
             class_extender: None,
+            after_commit: false,
         }
     }
 }
@@ -541,6 +547,14 @@ impl Manifest {
             World::Extension if !class_urls.is_empty() => {
                 return Err("world extension may not declare classExtender".into());
             }
+            // A server extension's commit hook is its inline class extender;
+            // the durable, queued `afterCommit` is for user plugins (#1851).
+            World::ServerExtension if self.entrypoints.after_commit => {
+                return Err(
+                    "entrypoints.afterCommit is for world extension; a server extension hooks commits with classExtender"
+                        .into(),
+                );
+            }
             World::ServerExtension
                 if self.runtime != Runtime::Wasip2v1 && class_urls.is_empty() =>
             {
@@ -863,6 +877,7 @@ pub fn translate_plugin_json(
             run: class_urls.is_empty(),
             view: None,
             class_extender: (!class_urls.is_empty()).then(|| class_urls.to_vec()),
+            after_commit: false,
         },
         capabilities,
         secrets: Vec::new(),
@@ -1494,6 +1509,49 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// #1851: `afterCommit` is an extension-world entrypoint; the inline
+    /// hooks stay unknown there, and a server extension cannot declare it.
+    #[test]
+    fn after_commit_is_an_extension_entrypoint_and_inline_hooks_are_refused() {
+        let manifest = Manifest::parse(serde_json::json!({
+            "schemaVersion": 2,
+            "world": "extension",
+            "entrypoints": {"run": true, "afterCommit": true}
+        }))
+        .unwrap()
+        .unwrap();
+        assert!(manifest.entrypoints.after_commit);
+        // Round-trips, and stays out of the serialization when off.
+        let json = serde_json::to_value(&manifest).unwrap();
+        assert_eq!(json["entrypoints"]["afterCommit"], true);
+        let plain = Manifest::parse(serde_json::json!({"schemaVersion": 2}))
+            .unwrap()
+            .unwrap();
+        assert!(serde_json::to_value(&plain)
+            .unwrap()
+            .get("entrypoints")
+            .is_none());
+
+        for hook in ["onResourceGet", "beforeCommit"] {
+            let refused = Manifest::parse(serde_json::json!({
+                "schemaVersion": 2,
+                "world": "extension",
+                "entrypoints": {"run": true, hook: true}
+            }));
+            assert!(
+                refused.is_err(),
+                "{hook} must be refused in the extension world"
+            );
+        }
+        assert!(Manifest::parse(serde_json::json!({
+            "schemaVersion": 2,
+            "runtime": "wasip2/1",
+            "world": "server-extension",
+            "entrypoints": {"afterCommit": true}
+        }))
+        .is_err());
     }
 
     #[test]

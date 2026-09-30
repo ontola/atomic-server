@@ -424,6 +424,12 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
                 .route(web::post().to(handlers::app_row_grant::post_row_grant)),
         )
         .service(
+            web::resource("/app-after-commit")
+                .wrap(from_fn(require_v2))
+                .route(web::get().to(handlers::after_commit::get_status))
+                .route(web::post().to(handlers::after_commit::post_answer)),
+        )
+        .service(
             web::resource("/plugin-trigger")
                 .wrap(from_fn(require_v2))
                 .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))
@@ -484,6 +490,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
+    .service(
+        web::resource("/changes")
+            .guard(guard::Method(Method::GET))
+            .to(handlers::changes::handle_changes),
+    )
     .service(
         web::resource("/history-attribution")
             .to(handlers::history_attribution::handle_history_attribution),

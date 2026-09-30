@@ -292,12 +292,14 @@ impl std::fmt::Display for Refusal {
 /// First path segments `server/src/routes.rs` (and the website control
 /// routes) serve on the API origin. A test keeps this list in step with
 /// `routes.rs`.
-pub const SERVER_ROUTES: [&str; 18] = [
+pub const SERVER_ROUTES: [&str; 20] = [
+    "app-after-commit",
     "app-agent",
     "app-row-grant",
     "app-write",
     "bind-drive",
     "blob",
+    "changes",
     "commit",
     "download",
     "drive-usage",

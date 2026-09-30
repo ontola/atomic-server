@@ -37,6 +37,7 @@ fn consumer_run(input: &str) -> Option<String> {
     match value["trigger"]["kind"].as_str()? {
         "query" => Some(format!("query:{id}")),
         "cron" if id.starts_with("cron:") => Some(id.into()),
+        "afterCommit" => Some(format!("after-commit:{id}")),
         _ => None,
     }
 }

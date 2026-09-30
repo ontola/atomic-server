@@ -70,6 +70,7 @@ import {
   usesProxy,
 } from '@helpers/installationConnections';
 import { InstallationConnections } from './InstallationConnections';
+import { AfterCommitTables } from './AfterCommitTables';
 import {
   InstallationReviewDialog,
   type PendingInstallation,
@@ -420,6 +421,10 @@ export const InstallationPage: React.FC<
           />
         )}
         {canWrite && <EndpointHealth installation={resource.subject} />}
+        <AfterCommitTables
+          installation={resource.subject}
+          canWrite={canWrite}
+        />
         {pluginAgent && (
           <Column as='section' aria-label='Plugin agent'>
             <h3>Plugin agent</h3>

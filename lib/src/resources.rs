@@ -495,6 +495,11 @@ impl Resource {
         self.propvals.insert(property, value);
     }
 
+    /// The oplog version of the live Loro doc, if this resource carries one.
+    pub fn loro_version(&self) -> Option<loro::VersionVector> {
+        self.loro.as_ref().map(|doc| doc.oplog_vv())
+    }
+
     /// Persisted or in-memory materialized state bytes (for sync and signing).
     pub fn materialized_state(&self) -> Option<Vec<u8>> {
         if let Some(doc) = &self.loro {

@@ -7,8 +7,9 @@ import {
   useDialog,
 } from '@components/Dialog';
 import { Button } from '@components/Button';
-import { RowGrantText } from '@chunks/AppPage/RowGrantText';
+import { FollowsChangesText, RowGrantText } from '@chunks/AppPage/RowGrantText';
 import { useAppRowExtras } from '@chunks/AppPage/useRowExtras';
+import { useAfterCommit } from '@chunks/AppPage/useAfterCommit';
 
 /**
  * The confirmation shown when someone makes an app a view of a table (#1740):
@@ -38,6 +39,10 @@ export function RowGrantDialog({
   // Which button closed it. `useDialog` reports only success or not.
   const choice = useRef<boolean | undefined>(undefined);
   const extras = useAppRowExtras(app);
+  // Adding the view also subscribes the app to the table's changes, on
+  // either answer, when it exports `afterCommit` (#1851, decision 1).
+  const hook = useAfterCommit(show ? app : undefined);
+  const followsChanges = !!hook?.enabled && !!hook.declares;
   const [dialogProps, showDialog, hideDialog] = useDialog({
     bindShow,
     onSuccess: () => {
@@ -68,6 +73,11 @@ export function RowGrantDialog({
         <p>
           <RowGrantText appName={appName} keepsExtras={extras.length > 0} />
         </p>
+        {followsChanges && (
+          <p data-testid='row-grant-follows-changes'>
+            <FollowsChangesText appName={appName} />
+          </p>
+        )}
       </DialogContent>
       <DialogActions>
         {/* Where it can be added read-only, the dialog's close button is

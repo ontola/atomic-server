@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "runtime": "wasip2/1",
+  "world": "server-extension",
+  "entrypoints": {
+    "afterCommit": true
+  }
+}

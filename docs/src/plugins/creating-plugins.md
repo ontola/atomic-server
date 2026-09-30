@@ -230,6 +230,35 @@ Rules:
 - One import per app at a time. A second call while the first is waiting is refused.
 - There is no way to apply without the review.
 
+### Following a table's changes: `afterCommit`
+
+A plugin shown as a view of a table can be told when the table's rows change, also while nobody has the tab open.
+This is off unless the server runs with `--plugin-after-commit` (`ATOMIC_PLUGIN_AFTER_COMMIT=true`).
+
+Declare it, and export the function:
+
+```js
+export const manifest = {
+  schemaVersion: 2,
+  world: 'extension',
+  entrypoints: { run: true, view: 'view.js', afterCommit: true },
+};
+
+export async function afterCommit(ctx) {
+  const { table, changes, reset, hasMore } = ctx.event;
+  // changes: [{ subject, kind: 'created' | 'updated' | 'deleted', version, at }]
+  // reset: null, or 'initial' | 'expired' | 'requested': not a delta, do a full compare.
+  return { intents: [/* same vocabulary as run() */], resync: false };
+}
+```
+
+- **Who is told.** Adding the plugin as the table's view subscribes it, whichever answer the person gives to "Let <App> edit rows?". The dialog says so. Setting a View's `view-kind` by hand subscribes nothing.
+- **What it gets.** A page of the table's change list (up to 100 rows), from where the last acknowledged page ended. The first delivery has `reset: 'initial'` and no changes: compare with your own state. `reset: 'expired'` means the cursor fell out of the change list's retention; compare again. Returning `{ resync: true }` asks for `reset: 'requested'` next time. `ctx.changes(ctx.event.table, { since, limit })` reads the change list directly, for that table only.
+- **Delivery.** At least once. Returning acknowledges the page; throwing retries it with backoff (30 seconds, doubling to an hour), with `ctx.event.attempt` counting up. After 8 failed attempts the table stops until someone presses Retry, or a new release is installed. Make effects idempotent with the row's `version`.
+- **Writes.** With "Allow editing" given on the table, writes to its rows within the grant (the row class's columns and the app's declared `row-extras`) and to the app's own data apply at once, signed by the app. Anything else waits on the table's tab: "<App> wants to change 3 rows", with Apply, "Allow all edits by this view on this table" and Decline. While it waits, the plugin is not told about further changes to that table; it catches up after the answer.
+- **Loops.** The plugin is not told about its own writes (matched by the version it wrote), but it is told about a person's edit in its own view. More than 30 runs a minute stops the table with a warning.
+- **Reads.** The run reads as the person who added the view, limited to the table, its rows, its row class and properties, and the app's own data.
+
 A schema version 1 manifest is still accepted and is read as version 2 with `runtime: atomic-js/1`, `world: extension` and `entrypoints: { run: true }`.
 Its stored form does not change.
 The server-side validator is `server/src/plugins/manifest.rs`, the browser mirror is `@tomic/lib`'s `validateManifest`, and both are checked against the fixtures in `testdata/plugin-manifest/`.
