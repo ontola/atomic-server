@@ -582,10 +582,12 @@ export async function signIn(page: Page, secret?: string) {
   // box it was already at 61% of its budget. On a Mancave running four runners
   // at once, where a shard took 44 to 50 minutes against the usual 19 to 25,
   // that doubles and goes past 10s. `meetings.spec.ts:237` failed exactly there
-  // on run 4537, waiting for the `Sign in` button.
+  // on run 4537, waiting for the `Sign in` button. 20s was not enough either
+  // for a second browser context whose local database opened late (batch
+  // #1915, runs 1 and 7). This only waits longer when boot is slow.
   await expect(
     input.or(signInButton).or(settings).or(login).first(),
-  ).toBeVisible({ timeout: 20_000 });
+  ).toBeVisible({ timeout: 45_000 });
   // Not "is the settings link visible": the signed-in layout renders from
   // stored state and can be up before the agent is in the store, so that
   // check returned for sessions that had no agent at all. Ask the store.
