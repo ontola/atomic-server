@@ -33,6 +33,27 @@ async fn synthetic_agent_reads_have_stable_history_without_persisting() {
     assert!(!db.has_stored_resource(&agent.subject));
 }
 
+/// A profile stored under a padded spelling of the key answers for the
+/// canonical unpadded subject too, instead of an empty synthesized twin.
+#[tokio::test]
+async fn agent_profile_under_padded_key_answers_for_unpadded_subject() {
+    let db = Db::init_temp("agent_padded_spelling").await.unwrap();
+    let agent = crate::agents::Agent::new(Some("Padded")).unwrap();
+    let padded = format!("{}=", agent.public_key);
+    let mut stored = agent.to_resource().unwrap();
+    stored.set_subject(format!("atomic:agent:{padded}"));
+    stored
+        .set_unsafe(urls::PUBLIC_KEY.into(), Value::String(padded.clone()))
+        .unwrap();
+    db.add_resource_opts(&stored, false, false, true)
+        .await
+        .unwrap();
+
+    let read = db.get_resource(&agent.subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "Padded");
+    assert_eq!(read.get_subject().to_string(), agent.subject.to_string());
+}
+
 /// Share the Db instance between tests. Otherwise, all tests try to init the same location on disk and throw errors.
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
