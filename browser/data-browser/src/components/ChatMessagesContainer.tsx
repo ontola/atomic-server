@@ -139,10 +139,14 @@ export const ChatMessagesContainer: React.FC<
       // the list comes and goes with every message. That is not the reader
       // scrolling up, and treating it as one detached the chat for good: it
       // stopped following new messages although nobody had touched it.
+      // A clamp always lands on the very bottom, so a scroll shortly after a
+      // resize only counts as one when it ended there. Judging by time alone
+      // swallowed a reader's scroll up made just after the keyboard opened.
+      const atBottom = el.scrollHeight - el.clientHeight - top <= 1;
       const clamped =
         height < lastScrollHeightRef.current ||
         el.clientHeight > viewportHeightRef.current ||
-        performance.now() - resizedAtRef.current < 150;
+        (atBottom && performance.now() - resizedAtRef.current < 150);
 
       if (top < lastScrollTopRef.current - 1 && !clamped) {
         stuckToBottomRef.current = false;
