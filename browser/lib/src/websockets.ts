@@ -87,6 +87,10 @@ const SYNC_PROBE_DELAY_MS = 2000;
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
 // failure mode is a real server hang or stuck WS, not transient slowness.
+/** Envelopes verified per database call, and the pause between calls. */
+const ENVELOPE_SLICE = 50;
+const ENVELOPE_SLICE_GAP_MS = 150;
+
 const REQUEST_TIMEOUT = 10000;
 
 /** The typed error a GET (or one GET_MANY entry) is refused with. Legacy GET
@@ -1492,9 +1496,7 @@ export class WSClient {
             // Not every client-db implementation carries envelope import;
             // one that doesn't simply asks the server for attribution later.
             if (typeof clientDb?.importEnvelopes === 'function') {
-              clientDb
-                .importEnvelopes(msg.envelopes)
-                .catch(e => console.warn('[WS] envelope import failed:', e));
+              this.queueEnvelopeImport(msg.envelopes);
             }
           }
 
@@ -1873,6 +1875,47 @@ export class WSClient {
     this._vvSyncRuns.set(drive, run);
 
     return run;
+  }
+
+  private pendingEnvelopes: Array<{ subject: string; json: string }> = [];
+  private envelopeDrain: ReturnType<typeof setTimeout> | undefined;
+
+  /** Keep the signed envelopes of pulled resources, a slice at a time. Each is
+   *  verified (a signature check in WASM, about 2 ms), which for a 10k drive
+   *  held the database worker for about 19 s in the middle of the pull, with
+   *  the pulled resources queued behind it. History attribution is the only
+   *  thing waiting on them, so they go in once the pull goes quiet, in slices
+   *  the worker can interleave reads between. */
+  private queueEnvelopeImport(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): void {
+    this.pendingEnvelopes.push(...envelopes);
+    clearTimeout(this.envelopeDrain);
+    this.envelopeDrain = setTimeout(() => void this.drainEnvelopes(), 2000);
+  }
+
+  private async drainEnvelopes(): Promise<void> {
+    const clientDb = this.store.getClientDb();
+
+    while (this.pendingEnvelopes.length > 0 && clientDb?.importEnvelopes) {
+      // A different database is a different identity: what is left belongs to
+      // the one that was open, and the server can be asked for it later.
+      if (this.store.getClientDb() !== clientDb) {
+        this.pendingEnvelopes = [];
+
+        return;
+      }
+
+      const slice = this.pendingEnvelopes.splice(0, ENVELOPE_SLICE);
+
+      try {
+        await clientDb.importEnvelopes(slice);
+      } catch (e) {
+        console.warn('[WS] envelope import failed:', e);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, ENVELOPE_SLICE_GAP_MS));
+    }
   }
 
   private async runVVSync(drive: string): Promise<void> {
