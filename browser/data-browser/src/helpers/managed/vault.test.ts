@@ -607,6 +607,51 @@ describe('restoreDrive', () => {
     ).toEqual(objects.map(o => o.object_key));
   });
 
+  it('asks for download urls in batches of at most 64', async () => {
+    const objects = Array.from({ length: 130 }, (_, i) => ({
+      object_id: String(i),
+      object_key: `pack-${i}`,
+    }));
+    const batchSizes: number[] = [];
+    const db = {
+      vaultExport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+      vaultImport: vi.fn(),
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/objects'))
+        return new Response(JSON.stringify(objects));
+
+      if (url.endsWith('/download-urls')) {
+        const ids: string[] = JSON.parse(String(init?.body)).object_ids;
+        batchSizes.push(ids.length);
+
+        return new Response(
+          JSON.stringify({
+            downloads: ids.map(id => ({
+              object_id: id,
+              object_key: `pack-${id}`,
+              url: `https://s3.test/${id}`,
+            })),
+          }),
+        );
+      }
+
+      return new Response(new Uint8Array([1]));
+    });
+
+    await restoreDrive({
+      db,
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    });
+
+    expect(batchSizes).toEqual([64, 64, 2]);
+    expect(db.vaultImport.mock.calls[0][4]).toHaveLength(130);
+  });
+
   it('reports nothing when the vault is empty', async () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(),
