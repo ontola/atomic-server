@@ -46,6 +46,10 @@ introduce a `main` branch, treat `master` as production, or add a job that
 fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
 branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 
+Short-lived agent sessions: read [`AGENT_WORKFLOW.md`](./AGENT_WORKFLOW.md)
+first. It covers dispatching CI on a PR branch, the paired atomic-saas branch,
+plugin pin candidates, build and check gotchas, and decisions already made.
+
 **Stop the vite dev server before any git operation that rewrites files** — a
 rebase, a branch switch, a `git checkout -- .`. See below for why.
 
