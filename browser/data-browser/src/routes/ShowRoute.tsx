@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Client, useStore } from '@tomic/react';
+import { Client, useResource, useStore } from '@tomic/react';
 import ResourcePage from '../views/ResourcePage';
 import { Search } from './Search/SearchRoute';
 import { About } from './AboutRoute';
@@ -8,6 +8,7 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { isOriginWithoutNode } from '../helpers/originNode';
+import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { openPrivateHome } from '../helpers/openPrivateHome';
 import { privateHomeNudge } from '../helpers/privateHomeNudge';
 import { addRecentResource } from '../helpers/recentResources';
@@ -45,7 +46,7 @@ export const ShowComponent: React.FunctionComponent = () => {
   const subject = ShowRoute.useSearch({ select: state => state.subject });
   const requestedDrive = ShowRoute.useSearch({ select: state => state.drive });
   const view = ShowRoute.useSearch({ select: state => state.view });
-  const { agent, drive, setDrive } = useSettings();
+  const { agent, baseURL, drive, setDrive } = useSettings();
   const store = useStore();
   const navigate = useNavigate();
 
@@ -81,12 +82,42 @@ export const ShowComponent: React.FunctionComponent = () => {
     Client.isValidSubject(subject) &&
     isOriginWithoutNode(store.getServerUrl());
 
+  // A drive this visitor cannot read is redirected to the sign-in step by
+  // ErrorPage. That redirect and the consumption below navigate in the same
+  // commit, and the later one wins: consuming first left the visitor on the
+  // error page for good.
+  const resource = useResource(
+    Client.isValidSubject(subject) ? subject : undefined,
+  );
+  const signInRedirect =
+    Client.isValidSubject(subject) &&
+    isDriveSignInError(resource, agent, baseURL, {
+      originWithoutNode: isOriginWithoutNode(store.getServerUrl()),
+    });
+
   React.useEffect(() => {
-    if (signInFirst || !requestedDrive || requestedDrive !== subject) return;
+    if (
+      signInFirst ||
+      signInRedirect ||
+      !requestedDrive ||
+      requestedDrive !== subject
+    ) {
+      return;
+    }
+
     if (drive !== requestedDrive) setDrive(requestedDrive);
     // Consume the instruction so a later manual drive switch is not undone.
     navigate({ to: paths.show, search: { subject, view }, replace: true });
-  }, [signInFirst, requestedDrive, subject, view, drive, setDrive, navigate]);
+  }, [
+    signInFirst,
+    signInRedirect,
+    requestedDrive,
+    subject,
+    view,
+    drive,
+    setDrive,
+    navigate,
+  ]);
 
   React.useEffect(() => {
     if (!signInFirst) return;
