@@ -1,3 +1,4 @@
+import { trustedNow } from './clock.js';
 import stringify from 'fast-json-stable-stringify';
 // https://github.com/paulmillr/noble-ed25519/issues/38
 
@@ -81,7 +82,7 @@ export function isCommitSubject(subject: string): boolean {
 }
 
 export function getTimestampNow(): number {
-  return Math.round(new Date().getTime());
+  return Math.round(trustedNow());
 }
 
 /** A {@link Commit} without its signature, signer and timestamp */

@@ -1,6 +1,7 @@
 // Provides functionality to interact with an Atomic Server.
 // Send requests to the server and receive responses.
 
+import { noteServerDateHeader } from './clock.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import {
   checkAuthenticationCookie,
@@ -477,11 +478,15 @@ export class Client {
   }
 
   private fetch(...params: Parameters<typeof fetch>): ReturnType<typeof fetch> {
-    if (this.__fetchOverride) {
-      return this.__fetchOverride(...params);
-    }
+    const request = this.__fetchOverride
+      ? this.__fetchOverride(...params)
+      : fetch(...params);
 
-    return fetch(...params);
+    return request.then(response => {
+      noteServerDateHeader(response.headers?.get('date'));
+
+      return response;
+    });
   }
 }
 

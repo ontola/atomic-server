@@ -1,3 +1,4 @@
+import { noteServerClockFromMessage } from './clock.js';
 import { core } from './ontologies/core.js';
 import type { Resource } from './resource.js';
 
@@ -122,6 +123,7 @@ export class AtomicError extends Error {
     this.type = type;
     this.code = code;
     this.message = message;
+    noteServerClockFromMessage(message);
 
     // The server should send Atomic Data Errors, which are JSON-AD resources with a Description.
     try {

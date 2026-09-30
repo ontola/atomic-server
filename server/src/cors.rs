@@ -38,7 +38,8 @@ use crate::{appstate::AppState, config::Opts};
 /// header has to be on it; `the_v2_signature_header_passes_a_preflight`
 /// guards it.
 pub(crate) fn any_origin() -> Cors {
-    Cors::permissive().expose_headers([crate::serve::SERVER_VERSION_HEADER])
+    // `date` lets a browser on another origin learn how far its clock is off.
+    Cors::permissive().expose_headers([crate::serve::SERVER_VERSION_HEADER, "date"])
 }
 
 /// Whether a browser on `origin` (the `Origin` header, `scheme://host[:port]`)
