@@ -114,6 +114,8 @@ export type WorkerRequest =
   | { id: number; type: 'blake3Hash'; data: Uint8Array }
   | { id: number; type: 'getAllVersionVectors' }
   | { id: number; type: 'getVersionVectorsForDrive'; drive: string }
+  | { id: number; type: 'getDriveSubjects'; drive: string }
+  | { id: number; type: 'getVersionVectorsForSubjects'; subjects: string[] }
   // Cloud Vault. These live in the worker because it holds the only Db handle;
   // the network half stays on the main thread, where the control-plane session
   // and CORS setup already work. What crosses this boundary is ciphertext.
@@ -551,6 +553,18 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getVersionVectorsForDrive(msg.drive);
+    }
+
+    case 'getDriveSubjects': {
+      await ensureInit();
+
+      return db!.getDriveSubjects(msg.drive);
+    }
+
+    case 'getVersionVectorsForSubjects': {
+      await ensureInit();
+
+      return db!.getVersionVectorsForSubjects(msg.subjects);
     }
 
     default:

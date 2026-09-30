@@ -202,6 +202,8 @@ const REPEATABLE_RPC_TYPES = new Set([
   'envelopesFor',
   'getAllVersionVectors',
   'getVersionVectorsForDrive',
+  'getDriveSubjects',
+  'getVersionVectorsForSubjects',
   'outboxEntries',
 ]);
 
@@ -1124,6 +1126,25 @@ export class ClientDbWorker {
     drive: string,
   ): Promise<Record<string, Record<string, number>>> {
     const r = await this.send({ type: 'getVersionVectorsForDrive', drive });
+
+    return versionVectorRecords(r);
+  }
+
+  /** The subjects of one drive, without reading any snapshot. */
+  async getDriveSubjects(drive: string): Promise<string[]> {
+    return (await this.send({ type: 'getDriveSubjects', drive })) as string[];
+  }
+
+  /** Version vectors of exactly these subjects. A big drive is read in slices
+   *  of these, so reads queued on the same database worker run between the
+   *  slices instead of behind one long scan. */
+  async getVersionVectorsForSubjects(
+    subjects: string[],
+  ): Promise<Record<string, Record<string, number>>> {
+    const r = await this.send({
+      type: 'getVersionVectorsForSubjects',
+      subjects,
+    });
 
     return versionVectorRecords(r);
   }

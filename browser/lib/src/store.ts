@@ -522,6 +522,40 @@ function commitLogValuesEqual(
  * Subscribers (components that use the Resource), and for managing the current
  * Agent (User).
  */
+/** How many snapshots one slice of the version-vector read covers. The worker
+ *  answers reads in order, so this is the longest a screen's read can wait
+ *  behind the scan (about 40 ms at 500 on a laptop). */
+const VV_SLICE = 500;
+
+/** Reads a drive's version vectors in slices, so reads queued on the database
+ *  worker run between them. One call for 10k resources held the worker for
+ *  about 0.8 s and the screen's first reads waited that long. */
+async function readDriveVersionVectors(
+  db: ClientDbWorker,
+  drive: string,
+): Promise<Record<string, Record<string, number>>> {
+  if (!db.getDriveSubjects || !db.getVersionVectorsForSubjects) {
+    return db.getVersionVectorsForDrive(drive);
+  }
+
+  const subjects = await db.getDriveSubjects(drive);
+
+  if (subjects.length <= VV_SLICE) {
+    return db.getVersionVectorsForDrive(drive);
+  }
+
+  const all: Record<string, Record<string, number>> = {};
+
+  for (let i = 0; i < subjects.length; i += VV_SLICE) {
+    Object.assign(
+      all,
+      await db.getVersionVectorsForSubjects(subjects.slice(i, i + VV_SLICE)),
+    );
+  }
+
+  return all;
+}
+
 export class Store {
   /** A list of all functions that need to be called when a certain resource is updated */
   public subscribers: Map<string, ResourceCallback[]>;
@@ -1922,7 +1956,7 @@ export class Store {
         // the drive as a pull/remove candidate, so an unscoped VV made every
         // single-drive sync reason about unrelated drives' resources.
         const endVV = perfSpan('clientdb.getVersionVectorsForDrive');
-        allVVs = await this.clientDb.getVersionVectorsForDrive(drive);
+        allVVs = await readDriveVersionVectors(this.clientDb, drive);
         endVV({ count: Object.keys(allVVs).length });
       } catch (e) {
         throw new Error(`Local database unavailable for sync: ${e}`);

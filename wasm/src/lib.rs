@@ -60,6 +60,54 @@ pub struct ClientDb {
 }
 
 impl ClientDb {
+    async fn drive_subject_list(&self, drive: &str) -> Vec<String> {
+        let drive_subject =
+            atomic_lib::Subject::from_raw(drive, self.db().get_base_domain().as_deref());
+
+        atomic_lib::sync::engine::collect_drive_subjects(self.db(), &drive_subject)
+            .await
+            .into_iter()
+            .collect()
+    }
+
+    fn version_vectors_of(&self, subjects: Vec<String>) -> Result<JsValue, JsError> {
+        use atomic_lib::db::trees::Tree;
+        use atomic_lib::loro::AtomicLoroDoc;
+        use std::collections::HashMap;
+
+        let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
+
+        for subject in subjects {
+            // `collect_drive_subjects` yields `pure_id()` strings, which are
+            // exactly the `LoroSnapshots` keys.
+            match self.db().kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+                Ok(Some(snapshot_bytes)) => {
+                    match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
+                        Ok(vv) => {
+                            result.insert(subject, vv);
+                        }
+                        Err(e) => {
+                            web_sys::console::warn_1(
+                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
+                                    .into(),
+                            );
+                        }
+                    }
+                }
+                // No snapshot for this subject yet (metadata-only / not
+                // materialized) — nothing to diff, skip it.
+                Ok(None) => {}
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
+                    );
+                }
+            }
+        }
+
+        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    }
+
     fn db(&self) -> &Db {
         self.node.db()
     }
@@ -736,46 +784,31 @@ impl ClientDb {
     /// otherwise treat as pull/remove candidates.
     #[wasm_bindgen(js_name = "getVersionVectorsForDrive")]
     pub async fn get_version_vectors_for_drive(&self, drive: String) -> Result<JsValue, JsError> {
-        use atomic_lib::db::trees::Tree;
-        use atomic_lib::loro::AtomicLoroDoc;
-        use std::collections::HashMap;
+        let subjects = self.drive_subject_list(&drive).await;
 
-        let drive_subject =
-            atomic_lib::Subject::from_raw(&drive, self.db().get_base_domain().as_deref());
-        let subjects =
-            atomic_lib::sync::engine::collect_drive_subjects(self.db(), &drive_subject).await;
+        self.version_vectors_of(subjects)
+    }
 
-        let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
+    /// The subjects of one drive (the parent-index walk of
+    /// `getVersionVectorsForDrive`, without reading any snapshot). Together
+    /// with `getVersionVectorsForSubjects` this lets a caller read a big
+    /// drive's version vectors in slices, so reads queued behind the work can
+    /// run between the slices instead of waiting for all of it.
+    #[wasm_bindgen(js_name = "getDriveSubjects")]
+    pub async fn get_drive_subjects(&self, drive: String) -> Result<JsValue, JsError> {
+        let subjects = self.drive_subject_list(&drive).await;
 
-        for subject in subjects {
-            // `collect_drive_subjects` yields `pure_id()` strings, which are
-            // exactly the `LoroSnapshots` keys.
-            match self.db().kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                Ok(Some(snapshot_bytes)) => {
-                    match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
-                        Ok(vv) => {
-                            result.insert(subject, vv);
-                        }
-                        Err(e) => {
-                            web_sys::console::warn_1(
-                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
-                                    .into(),
-                            );
-                        }
-                    }
-                }
-                // No snapshot for this subject yet (metadata-only / not
-                // materialized) — nothing to diff, skip it.
-                Ok(None) => {}
-                Err(e) => {
-                    web_sys::console::warn_1(
-                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
-                    );
-                }
-            }
-        }
+        serde_wasm_bindgen::to_value(&subjects).map_err(|e| JsError::new(&e.to_string()))
+    }
 
-        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    /// Version vectors of exactly these subjects (`pure_id()` strings, as
+    /// returned by `getDriveSubjects`). Subjects without a snapshot are skipped.
+    #[wasm_bindgen(js_name = "getVersionVectorsForSubjects")]
+    pub fn get_version_vectors_for_subjects(&self, subjects: JsValue) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> =
+            serde_wasm_bindgen::from_value(subjects).map_err(|e| JsError::new(&e.to_string()))?;
+
+        self.version_vectors_of(subjects)
     }
 
     /// Get all subjects in the database.
