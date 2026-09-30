@@ -71,8 +71,13 @@ pub async fn apply_state_update(store: &Db, subject: &str, state_bytes: &[u8]) -
 /// [`apply_state_update`] for many subjects in one write: every state is merged
 /// and materialized first, then they are persisted together, so pages the
 /// batch touches repeatedly are written once. Returns how many were applied;
-/// a state that does not decode is skipped and does not fail the rest.
-pub async fn apply_state_updates(store: &Db, items: &[(String, Vec<u8>)]) -> AtomicResult<usize> {
+/// a state that does not decode is skipped and does not fail the rest. With
+/// `defer_search` the search entries are left for [`crate::search::index_pending`].
+pub async fn apply_state_updates(
+    store: &Db,
+    items: &[(String, Vec<u8>)],
+    defer_search: bool,
+) -> AtomicResult<usize> {
     import_scope(None, async {
         let mut entries = Vec::with_capacity(items.len());
 
@@ -83,7 +88,9 @@ pub async fn apply_state_updates(store: &Db, items: &[(String, Vec<u8>)]) -> Ato
         }
 
         let applied = entries.len();
-        store.persist_replicated_resources(entries).await?;
+        store
+            .persist_replicated_resources_opts(entries, defer_search)
+            .await?;
 
         Ok(applied)
     })

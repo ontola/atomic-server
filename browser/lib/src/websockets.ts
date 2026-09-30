@@ -90,6 +90,8 @@ const SYNC_PROBE_DELAY_MS = 2000;
 /** Envelopes verified per database call, and the pause between calls. */
 const ENVELOPE_SLICE = 50;
 const ENVELOPE_SLICE_GAP_MS = 150;
+/** Resources indexed for search per database call. */
+const SEARCH_INDEX_SLICE = 100;
 
 const REQUEST_TIMEOUT = 10000;
 
@@ -700,6 +702,8 @@ export class WSClient {
           // large drive, and `authenticate` resolving is what tells the store
           // the server is connected, so every read waited for it.
           void this.reconcileSubscribedDrive().catch(() => undefined);
+          // Anything a previous session left without search entries.
+          this.scheduleBackgroundImport();
 
           for (const resource of this.store.resources.values()) {
             if (resource.isUnauthorized()) {
@@ -1466,6 +1470,7 @@ export class WSClient {
               entries = entries.filter(e =>
                 this.store.resources.has(e.subject),
               );
+              this.scheduleBackgroundImport();
               workerDb
                 .applyStateUpdates(
                   direct.map(e => e.subject),
@@ -1890,8 +1895,42 @@ export class WSClient {
     envelopes: Array<{ subject: string; json: string }>,
   ): void {
     this.pendingEnvelopes.push(...envelopes);
+    this.scheduleBackgroundImport();
+  }
+
+  /** Run the envelope and search indexing once pulls go quiet. */
+  private scheduleBackgroundImport(): void {
     clearTimeout(this.envelopeDrain);
-    this.envelopeDrain = setTimeout(() => void this.drainEnvelopes(), 2000);
+    this.envelopeDrain = setTimeout(() => void this.drainBackground(), 2000);
+  }
+
+  private async drainBackground(): Promise<void> {
+    await this.drainEnvelopes();
+    await this.drainSearchIndex();
+  }
+
+  /** Index pulled resources for search, a slice at a time. Runs after the
+   *  envelopes so neither holds the database worker for long. */
+  private async drainSearchIndex(): Promise<void> {
+    const clientDb = this.store.getClientDb();
+
+    while (clientDb?.indexPendingSearch) {
+      if (this.store.getClientDb() !== clientDb) return;
+
+      let done = 0;
+
+      try {
+        done = await clientDb.indexPendingSearch(SEARCH_INDEX_SLICE);
+      } catch (e) {
+        console.warn('[WS] search indexing failed:', e);
+
+        return;
+      }
+
+      if (done === 0) return;
+
+      await new Promise(resolve => setTimeout(resolve, ENVELOPE_SLICE_GAP_MS));
+    }
   }
 
   private async drainEnvelopes(): Promise<void> {

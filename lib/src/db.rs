@@ -559,6 +559,17 @@ impl Db {
         &self,
         entries: Vec<(Resource, Option<Vec<u8>>)>,
     ) -> AtomicResult<()> {
+        self.persist_replicated_resources_opts(entries, false).await
+    }
+
+    /// [`Self::persist_replicated_resources`] for a bulk pull: with
+    /// `defer_search` the full-text entries (most of the index writes) are left
+    /// out and each resource is filed for [`crate::search::index_pending`].
+    pub async fn persist_replicated_resources_opts(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+        defer_search: bool,
+    ) -> AtomicResult<()> {
         let mut last: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         for (i, (resource, _)) in entries.iter().enumerate() {
             last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
@@ -574,6 +585,7 @@ impl Db {
                 self.persist_replicated(resource, snapshot.clone()).await?;
                 continue;
             }
+            let before = transaction.len();
             self.build_projection_tx(
                 resource,
                 false,
@@ -583,6 +595,12 @@ impl Db {
                 &mut transaction,
             )
             .await?;
+            if defer_search {
+                let mut added = transaction.split_off(before);
+                added.retain(|op| !crate::search::is_search_op(op));
+                transaction.extend(added);
+                transaction.push(crate::search::pending_marker(&key));
+            }
             batched.push(resource);
         }
         if batched.is_empty() {

@@ -669,6 +669,7 @@ impl ClientDb {
         &self,
         subjects: Vec<String>,
         states: js_sys::Array,
+        defer_search: bool,
     ) -> Result<u32, JsError> {
         let items: Vec<(String, Vec<u8>)> = subjects
             .into_iter()
@@ -681,11 +682,24 @@ impl ClientDb {
             })
             .collect();
 
-        let applied = atomic_lib::sync::ws_apply::apply_state_updates(self.db(), &items)
+        let applied =
+            atomic_lib::sync::ws_apply::apply_state_updates(self.db(), &items, defer_search)
+                .await
+                .map_err(to_js_err)?;
+
+        Ok(applied as u32)
+    }
+
+    /// Add full-text search entries for up to `limit` resources that were
+    /// stored without them (`applyStateUpdates` with `deferSearch`). Returns how
+    /// many were done; call again until it returns 0.
+    #[wasm_bindgen(js_name = "indexPendingSearch")]
+    pub async fn index_pending_search(&self, limit: u32) -> Result<u32, JsError> {
+        let done = atomic_lib::search::index_pending(self.db(), limit as usize)
             .await
             .map_err(to_js_err)?;
 
-        Ok(applied as u32)
+        Ok(done as u32)
     }
 
     /// The retained signed envelopes of each subject, as

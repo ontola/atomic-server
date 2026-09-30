@@ -203,6 +203,7 @@ const REPEATABLE_RPC_TYPES = new Set([
   'getAllVersionVectors',
   'getVersionVectorsForDrive',
   'getDriveSubjects',
+  'indexPendingSearch',
   'getVersionVectorsForSubjects',
   'outboxEntries',
 ]);
@@ -1142,6 +1143,12 @@ export class ClientDbWorker {
       subjects,
       states,
     })) as number;
+  }
+
+  /** Add search entries for up to `limit` resources stored without them.
+   *  Resolves to how many were done; 0 means nothing is left. */
+  async indexPendingSearch(limit: number): Promise<number> {
+    return (await this.send({ type: 'indexPendingSearch', limit })) as number;
   }
 
   async getDriveSubjects(drive: string): Promise<string[]> {

@@ -160,6 +160,69 @@ pub fn index_resources(store: &Db, resources: &[Resource], chunk: usize) -> Atom
     Ok(())
 }
 
+/// Key prefix of the marker left for a resource whose search entries were left
+/// out of a bulk write (see [`pending_marker`]).
+const PENDING_PREFIX: &[u8] = b"search-pending/v1/";
+
+/// Whether an operation writes a full-text search tree.
+pub(crate) fn is_search_op(op: &Operation) -> bool {
+    matches!(
+        op.tree,
+        Tree::SearchPostings | Tree::SearchDocs | Tree::SearchDocTokens | Tree::SearchTrigrams
+    )
+}
+
+/// The operation that records that `subject` still has to be indexed. A bulk
+/// write of pulled resources leaves their search entries out (about three
+/// quarters of everything it would write) and files one of these instead, in
+/// the same transaction, so a crash loses nothing.
+pub(crate) fn pending_marker(subject: &str) -> Operation {
+    let mut key = PENDING_PREFIX.to_vec();
+    key.extend_from_slice(subject.as_bytes());
+    Operation {
+        tree: Tree::PluginMeta,
+        method: Method::Insert,
+        key,
+        val: Some(b"1".to_vec()),
+    }
+}
+
+/// Index up to `limit` resources that were stored without search entries.
+/// Returns how many were done; call again until it returns 0.
+pub async fn index_pending(store: &Db, limit: usize) -> AtomicResult<usize> {
+    let mut subjects = Vec::new();
+    for pair in store.kv.scan_prefix(Tree::PluginMeta, PENDING_PREFIX) {
+        let (key, _) = pair?;
+        if let Ok(subject) = String::from_utf8(key[PENDING_PREFIX.len()..].to_vec()) {
+            subjects.push(subject);
+        }
+        if subjects.len() >= limit {
+            break;
+        }
+    }
+
+    let mut transaction = Transaction::new();
+    for subject in &subjects {
+        let subj = Subject::from_raw(subject, store.get_base_domain().as_deref());
+        if let Ok(resource) = store.get_resource(&subj).await {
+            index_resource(store, &resource, &mut transaction)?;
+        }
+        let mut key = PENDING_PREFIX.to_vec();
+        key.extend_from_slice(subject.as_bytes());
+        transaction.push(Operation {
+            tree: Tree::PluginMeta,
+            method: Method::Delete,
+            key,
+            val: None,
+        });
+    }
+    if !transaction.is_empty() {
+        store.apply_transaction(&mut transaction)?;
+    }
+
+    Ok(subjects.len())
+}
+
 /// Drop every posting for `subject`. Idempotent if the subject is not indexed.
 pub fn unindex_subject(
     store: &Db,

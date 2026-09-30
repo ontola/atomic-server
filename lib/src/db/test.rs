@@ -4024,7 +4024,7 @@ async fn apply_state_updates_stores_a_batch_and_skips_garbage() {
     let mut items: Vec<(String, Vec<u8>)> = (0..3).map(state).collect();
     items.push(("did:ad:garbage".to_string(), vec![1, 2, 3, 4, 5]));
 
-    let applied = crate::sync::ws_apply::apply_state_updates(&store, &items)
+    let applied = crate::sync::ws_apply::apply_state_updates(&store, &items, false)
         .await
         .unwrap();
 
@@ -4040,4 +4040,41 @@ async fn apply_state_updates_stores_a_batch_and_skips_garbage() {
             format!("row {i}")
         );
     }
+}
+
+/// Bulk-pulled resources can be stored without search entries and indexed
+/// later, after which search finds them.
+#[tokio::test]
+#[timeout(120000)]
+async fn deferred_search_entries_are_added_by_index_pending() {
+    let store = Db::init_temp("deferred_search").await.unwrap();
+    let drive =
+        "did:ad:driveDEFERaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let subj = "did:ad:defer00000000000000000000000000000000000000000000000000000000000000000==";
+    let mut authored = crate::Resource::new(subj.to_string());
+    authored
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(
+            urls::NAME.into(),
+            Value::String("zebrafish handbook".into()),
+        )
+        .unwrap();
+    let state = authored.build_state_doc().unwrap().export_snapshot();
+    let items = vec![(subj.to_string(), state)];
+
+    crate::sync::ws_apply::apply_state_updates(&store, &items, true)
+        .await
+        .unwrap();
+
+    let opts = crate::client::search::SearchOpts::default();
+    assert!(store.search_hits("zebrafish", &opts).unwrap().is_empty());
+
+    assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 1);
+    assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 0);
+    assert_eq!(store.search_hits("zebrafish", &opts).unwrap().len(), 1);
 }

@@ -122,6 +122,7 @@ export type WorkerRequest =
       states: Uint8Array[];
     }
   | { id: number; type: 'getVersionVectorsForSubjects'; subjects: string[] }
+  | { id: number; type: 'indexPendingSearch'; limit: number }
   // Cloud Vault. These live in the worker because it holds the only Db handle;
   // the network half stays on the main thread, where the control-plane session
   // and CORS setup already work. What crosses this boundary is ciphertext.
@@ -563,11 +564,26 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
 
     case 'applyStateUpdates': {
       await ensureInit();
-      const applied = await db!.applyStateUpdates(msg.subjects, msg.states);
+      // Search entries are about three quarters of a pulled resource's index
+      // writes; they are added afterwards by `indexPendingSearch`.
+      const applied = await db!.applyStateUpdates(
+        msg.subjects,
+        msg.states,
+        true,
+      );
 
       dirty = true;
 
       return applied;
+    }
+
+    case 'indexPendingSearch': {
+      await ensureInit();
+      const done = await db!.indexPendingSearch(msg.limit);
+
+      if (done > 0) dirty = true;
+
+      return done;
     }
 
     case 'getDriveSubjects': {
