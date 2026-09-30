@@ -138,7 +138,10 @@ async fn restrict_to_scope(
             let mut kept = Vec::with_capacity(list.len());
 
             for mut option in list.drain(..) {
-                let value = option.get("value").and_then(|v| v.as_str()).map(str::to_string);
+                let value = option
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
                 if !table_sourced {
                     if let Some(value) = &value {
                         if !scope.may_show_subject(store, value).await {
@@ -146,7 +149,10 @@ async fn restrict_to_scope(
                         }
                     }
                 }
-                let image = option.get("image").and_then(|v| v.as_str()).map(str::to_string);
+                let image = option
+                    .get("image")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
                 if let Some(image) = image {
                     if !scope.may_show_subject(store, &image).await {
                         if let Some(obj) = option.as_object_mut() {

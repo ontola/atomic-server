@@ -503,7 +503,11 @@ pub async fn form_image(
     // Referenced by the form is not enough: whoever can edit the form picks
     // what it references. Serve only Files from the form's own drive, or ones
     // that are public anyway.
-    if !forms::FormScope::of(store, &form).await.may_show(store, &file).await {
+    if !forms::FormScope::of(store, &form)
+        .await
+        .may_show(store, &file)
+        .await
+    {
         return Err(not_found());
     }
 
@@ -596,7 +600,11 @@ pub async fn submit_form(
 
     // The row is written by the server's own agent, so nothing else would
     // stop a form from filing answers into a table in someone else's drive.
-    if !forms::FormScope::of(store, &form).await.owns(store, &table).await {
+    if !forms::FormScope::of(store, &form)
+        .await
+        .owns(store, &table)
+        .await
+    {
         return Err(FormApiError::new(
             StatusCode::FORBIDDEN,
             "This form's results table is outside the form's drive.",

@@ -2352,5 +2352,8 @@ async fn form_submission_flow() {
         ))
         .await
         .unwrap();
-    assert!(foreign_rows.subjects.is_empty(), "no row lands in the other drive");
+    assert!(
+        foreign_rows.subjects.is_empty(),
+        "no row lands in the other drive"
+    );
 }
