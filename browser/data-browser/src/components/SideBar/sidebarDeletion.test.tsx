@@ -35,7 +35,7 @@ const jsonAd = (subject: string, createdAt: number) =>
 /** A store whose `parent=` query still lists both children, as an answer
  *  produced before the destroy does. */
 function staleAnsweringStore() {
-  const store = new Store({ serverUrl: 'https://example.com' });
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
   store.setDrive(DRIVE);
   store.finishDriveSync(DRIVE, 2, Date.now());
 
