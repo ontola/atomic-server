@@ -1,9 +1,10 @@
 //! WebSocket client for real-time communication with an Atomic Server.
 //!
-//! Hybrid v2 protocol: auth, resource UPDATEs and live collaboration
-//! (`EPHEMERAL`) are binary frames (`sync::protocol`); the Loro and presence
-//! *subscriptions* and the drive inventory are still text frames
-//! (`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`, ...). `SYNC_DELTAS` was removed (F8,
+//! Hybrid v2 protocol: auth, resource UPDATEs, live collaboration
+//! (`EPHEMERAL`) and its subscriptions (`EPHEMERAL_SUB`) are binary frames
+//! (`sync::protocol`). A server that does not list `ephemeral-sub` gets the
+//! legacy text subscription frames (`LORO_SYNC_SUBSCRIBE`,
+//! `PRESENCE_SUBSCRIBE`, ...). `SYNC_DELTAS` was removed (F8,
 //! planning/unified-sync.md) — it imported peer-supplied Loro deltas with
 //! no rights check at all; `SYNC` → `SYNC_PUSH` (binary v2, admission- and
 //! rights-checked via `import_sync_push`) is the real replacement and
@@ -36,6 +37,9 @@ pub enum WsMessage {
     /// Drive-scoped presence: `EPHEMERAL` of kind `PRESENCE`, where
     /// `subject` is the drive.
     PresenceUpdate { subject: String, update: Vec<u8> },
+    /// A drive's vector-search indexing state (`INDEX_STATUS`, 0x45), for a
+    /// drive subscribed on `ephemeral_channel::INDEX_STATUS`.
+    IndexStatus { drive: String, indexing: bool },
     /// Server confirmed authentication. Its advertised capabilities are
     /// available via [`WsClient::server_capabilities`].
     Authenticated,
@@ -357,13 +361,43 @@ impl WsClient {
         self.send_binary(protocol::encode_sub(subject)).await
     }
 
-    /// Subscribe to Loro CRDT sync updates for a resource.
+    /// Subscribe to Loro CRDT sync updates (in-progress edits and cursors)
+    /// for a resource.
     pub async fn subscribe_loro_sync(&self, subject: &str) -> AtomicResult<()> {
-        self.send_raw(&format!(
-            "LORO_SYNC_SUBSCRIBE {}",
-            serde_json::json!({ "subject": subject })
-        ))
+        self.send_channel_sub(
+            protocol::ephemeral_channel::LIVE_DOC,
+            subject,
+            true,
+            "LORO_SYNC_SUBSCRIBE",
+        )
         .await
+    }
+
+    /// `EPHEMERAL_SUB` when the server listed `ephemeral-sub` on `AUTH_OK`,
+    /// otherwise the legacy text frame `legacy` with `{"subject"}` (servers
+    /// up to v0.41.0-beta.7). Every channel this client subscribes to needs
+    /// an identity, so the capability list is known by the time it is sent.
+    async fn send_channel_sub(
+        &self,
+        channel: u8,
+        subject: &str,
+        subscribe: bool,
+        legacy: &str,
+    ) -> AtomicResult<()> {
+        let binary = self
+            .server_capabilities()
+            .iter()
+            .any(|c| c == protocol::CAP_EPHEMERAL_SUB);
+        if !binary {
+            let payload = serde_json::json!({ "subject": subject });
+            return self.send_raw(&format!("{legacy} {payload}")).await;
+        }
+        let frame = if subscribe {
+            protocol::encode_ephemeral_sub(channel, subject)
+        } else {
+            protocol::encode_ephemeral_unsub(channel, subject)
+        };
+        self.send_binary(frame).await
     }
 
     /// Send an `EPHEMERAL (0x40)` frame of `kind` for `subject`. The agent
@@ -392,19 +426,23 @@ impl WsClient {
 
     /// Subscribe to the ephemeral presence channel of a drive.
     pub async fn subscribe_presence(&self, drive: &str) -> AtomicResult<()> {
-        self.send_raw(&format!(
-            "PRESENCE_SUBSCRIBE {}",
-            serde_json::json!({ "subject": drive })
-        ))
+        self.send_channel_sub(
+            protocol::ephemeral_channel::PRESENCE,
+            drive,
+            true,
+            "PRESENCE_SUBSCRIBE",
+        )
         .await
     }
 
     /// Unsubscribe from the ephemeral presence channel of a drive.
     pub async fn unsubscribe_presence(&self, drive: &str) -> AtomicResult<()> {
-        self.send_raw(&format!(
-            "PRESENCE_UNSUBSCRIBE {}",
-            serde_json::json!({ "subject": drive })
-        ))
+        self.send_channel_sub(
+            protocol::ephemeral_channel::PRESENCE,
+            drive,
+            false,
+            "PRESENCE_UNSUBSCRIBE",
+        )
         .await
     }
 
@@ -574,7 +612,7 @@ impl crate::sync::outbox::CommitTransport for std::sync::Arc<WsClient> {
 /// Parse a text frame into a typed `WsMessage`.
 ///
 /// The server's remaining text frames (`docs/src/websockets.md`, "Text
-/// frames") are the `RBSR_ITEMS` inventory answer and `INDEX_STATUS`, none of which this
+/// frames") are the `RBSR_ITEMS` inventory answer and the legacy `INDEX_STATUS`, none of which this
 /// client consumes, so every text frame is reported as
 /// [`WsMessage::Unrecognized`]. Reporting one as `Error` used to fail
 /// whatever `authenticate` / `fetch_blob` / `post_commit` was waiting at
@@ -592,6 +630,8 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
     let tag = *bin.first()?;
     match tag {
         tag::AUTH_OK => Some(WsMessage::Authenticated),
+        tag::INDEX_STATUS => protocol::decode_index_status(&bin[1..])
+            .map(|(drive, indexing)| WsMessage::IndexStatus { drive, indexing }),
         tag::KEEPALIVE => Some(WsMessage::Keepalive),
         tag::ERROR => Some(match protocol::decode_error(&bin[1..]) {
             Some(e) => WsMessage::Error {

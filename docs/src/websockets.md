@@ -80,6 +80,7 @@ The current list (`protocol::CAPABILITIES`):
 | `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 | `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
 | `ephemeral` | Reads and writes `EPHEMERAL (0x40)` over WebSocket for edits in progress, cursors and drive presence, in place of the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames. |
+| `ephemeral-sub` | Understands `EPHEMERAL_SUB (0x43)` / `EPHEMERAL_UNSUB (0x44)` and answers index status with `INDEX_STATUS (0x45)`, in place of the text subscription frames. A client that does not see it sends the text frames. |
 | `get-many` | Answers `GET_MANY (0x15)`, a list of subjects, with one `GET_MANY_RESULT (0x16)` holding an `UPDATE` or `ERROR` entry per subject, so a client fetches a whole list in one round trip. |
 
 The list is **additive only**: a name is never renamed or reused once
@@ -128,6 +129,9 @@ logged and dropped, not answered.
 | `0x40` | `EPHEMERAL` | Iroh peers; WS client and server, both ways | Iroh live loop; WS handler (`require_auth`, then the broadcaster). The server relays between the two transports. |
 | `0x41` | `KEEPALIVE` | both sides, on their own schedule | WS server **echoes** it; Iroh **never** echoes it. |
 | `0x42` | `CHALLENGE` | WS server, as its first frame | client only. Never sent on an Iroh stream. |
+| `0x43` | `EPHEMERAL_SUB` | WS client | WS handler only. Subscribes to a live channel (see below). |
+| `0x44` | `EPHEMERAL_UNSUB` | WS client | WS handler only. Never gated, never answered. |
+| `0x45` | `INDEX_STATUS` | WS server | client only. A drive's vector-indexing state. |
 
 ## Frame layouts
 
@@ -155,7 +159,17 @@ the end of the frame.
 [0x35] [hash: 32 bytes] [blob_bytes...]                  // BLOB_RESPONSE
 [0x41]                                                   // KEEPALIVE, no payload
 [0x42] [nonce_utf8]                                      // CHALLENGE, 64 hex chars today
+[0x43] [channel: u8] [subject_utf8]                      // EPHEMERAL_SUB
+[0x44] [channel: u8] [subject_utf8]                      // EPHEMERAL_UNSUB
+[0x45] [indexing: u8 (0|1)] [drive_utf8]                 // INDEX_STATUS
 ```
+
+`EPHEMERAL_SUB` channels: `0` live doc (a resource's `EPHEMERAL` of kinds
+`DOC` and `LORO`; needs AUTH and read access), `1` presence (a drive's
+`EPHEMERAL` of kind `PRESENCE`; needs AUTH and read access), `2` index status
+(a drive's `INDEX_STATUS`, answered once at once and on every change; no AUTH).
+A refusal is an `ERROR` with request_id 0 (`AUTH_REQUIRED` or
+`UNAUTHORIZED_READ`, message `EPHEMERAL_SUB refused for ...`).
 
 A `COMMIT_OK` decoder tells the two forms apart by the first payload byte: a
 `{` is the full JSON (its `@id` is the commit id), anything else is the id
@@ -841,6 +855,12 @@ up to the larger budget and one that never does never leaves the tight one.
 
 WebSocket only. Format is `PREFIX ` followed by the payload; the prefix
 includes its trailing space. Payloads are JSON except where noted.
+
+The subscription frames below are legacy: a client sends them only to a
+server that does not list `ephemeral-sub`, and the server keeps answering
+them for clients up to v0.41.0-beta.7. They map onto the same channels as
+`EPHEMERAL_SUB`; `INDEX_STATUS` is answered in text only to a text
+subscriber.
 
 Client to server:
 

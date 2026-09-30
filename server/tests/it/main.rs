@@ -24,6 +24,7 @@ mod ws_commit;
 mod ws_commit_isolation;
 mod ws_destroy;
 mod ws_drive_membership;
+mod ws_ephemeral_sub;
 mod ws_errors;
 mod ws_fragmented;
 mod ws_get;

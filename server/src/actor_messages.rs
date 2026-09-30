@@ -2,7 +2,6 @@
 //! In this case it's for communication between the CommitMonitor and the WebSocketConnection.
 
 use actix::{prelude::Message, Addr};
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// An `AUTH` on a connection changed its identity. The commit monitor
@@ -28,17 +27,15 @@ pub struct CommitMessage {
 
 // === Loro CRDT Sync Messages ===
 
-#[derive(Deserialize, Serialize)]
-pub struct LoroSubscriptionJSON {
-    pub subject: atomic_lib::Subject,
-}
-
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct SubscribeLoroSync {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
     pub subject: atomic_lib::Subject,
     pub agent: String,
+    /// The frame that asked (`EPHEMERAL_SUB` or the legacy text name), for
+    /// the refusal message.
+    pub frame: &'static str,
 }
 
 #[derive(Message)]
@@ -89,6 +86,8 @@ pub struct SubscribePresence {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
     pub drive: atomic_lib::Subject,
     pub agent: String,
+    /// As [`SubscribeLoroSync::frame`].
+    pub frame: &'static str,
 }
 
 #[derive(Message)]
