@@ -29,6 +29,11 @@ import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 
+/** Touch screens: focusing a field there raises the keyboard. */
+const isTouchDevice = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(pointer: coarse)').matches;
+
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
   validateSearch: (
@@ -97,6 +102,10 @@ const AppSettings: React.FunctionComponent = () => {
           <InputStyled
             type='text'
             placeholder='Search settings...'
+            aria-label='Search settings'
+            // Ready to type on arrival. Not on touch screens, where focusing
+            // pops the keyboard over the settings you came to look at.
+            autoFocus={!isTouchDevice()}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />

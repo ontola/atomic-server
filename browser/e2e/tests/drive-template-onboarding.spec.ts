@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { installEmptyDiscoveryRoom } from './fixtures';
 import { devDrive, FRONTEND_URL } from './test-utils';
+
+test.beforeEach(async ({ context }) => {
+  await installEmptyDiscoveryRoom(context);
+});
 
 for (const keepEdits of [false, true]) {
   test(`template adoption ${keepEdits ? 'keeps edited content' : 'starts fresh without samples'}`, async ({

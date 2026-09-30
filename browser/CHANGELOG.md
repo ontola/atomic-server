@@ -26,9 +26,29 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   runs (`Store.subscribeLive`).
 - The Notifications page shows placeholder rows while it loads, instead of a
   blank page that could flash "Nothing yet" before the list arrived.
-- In development, invite links open in the app you are using and name the
-  server (`?server=`). They pointed at the server, which during `pnpm start`
-  has no frontend of its own, so every invite link was a blank page.
+- Pasting an agent secret that opens a different agent than the signed-in
+  account no longer signs that account out on its own. The app now says which
+  account is signed in, shows both agents, and lets the user stay signed in or
+  use the secret and sign out.
+
+- Starting the demo is one calm screen. From "Try Atomic" to the workspace
+  the page shows only the orbiting mark from atomic.place, instead of a blank
+  page, a "Checking local storage…" card and a "Setting up your demo…"
+  spinner in turn. The workspace fades in once its welcome document has
+  content, and the scripted teammates wait a moment before they start.
+  Setup is also faster: the database's WebAssembly is fetched and compiled
+  once, from the first line of the page, instead of up to twice after the app
+  loaded; the demo opens only the guest's database; and it no longer waits for
+  an account check it does not need.
+- A second tab no longer leaves the local database locked. When a tab takes
+  over the database from a tab that stopped answering (in Firefox, a throttled
+  background tab), the old tab now closes its worker and carries on through the
+  new one. It used to keep the file open, so the new tab failed with
+  "OPFS unavailable: … NoModificationAllowedError" and ran without its local
+  cache, and anything needing that cache, such as creating a drive, failed with
+  "Open this drive with local storage available before disconnecting". Firefox's
+  locked-file error now reads as one plain sentence, and those actions name the
+  database's own reason instead of a disconnect the reader never started.
 - Turning workspace sync off says what is actually in the way. All three of its
   preconditions used to answer with "Open this drive with local storage
   available before disconnecting", so someone signed out, or on a server this

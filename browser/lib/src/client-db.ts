@@ -74,16 +74,37 @@ function isStorageBlockedDbError(error: unknown): boolean {
  * stack trace on every single page load. Every other failure passes through
  * untouched, because those we DO want to see in full.
  */
+/** `name` of the init error when the browser refuses this site storage, so a
+ *  caller that cannot work without it (the demo) can say so in its own words. */
+export const STORAGE_BLOCKED_ERROR_NAME = 'StorageBlockedError';
+
 function asInitError(e: unknown): Error {
-  if (isStorageBlockedDbError(e)) {
+  const message = e instanceof Error ? e.message : String(e);
+
+  // Firefox's word for "another sync access handle has this file open":
+  // another tab of this site, or its worker, still holds the database. Left
+  // raw it reached people as "OPFS unavailable: … JsValue(NoModificationAllowedError …)".
+  if (message.includes('NoModificationAllowedError')) {
     return new Error(
-      'Local caching and offline support are disabled: this browser is not ' +
-        'giving this site access to local storage right now. That is usually ' +
-        'private browsing, or a setting that blocks site data or cross-site ' +
-        'tracking — but it can also be another tab of this site still ' +
-        'holding the local database, in which case a reload clears it. The ' +
-        'app still works, reading directly from the server; nothing is kept ' +
-        'locally between reloads.',
+      'Local caching and offline support are off in this tab: another tab ' +
+        'of this site is using the local database. Close the other tabs and ' +
+        'reload this one to turn them back on. The app still works ' +
+        'meanwhile, reading directly from the server.',
+    );
+  }
+
+  if (isStorageBlockedDbError(e)) {
+    return Object.assign(
+      new Error(
+        'Local caching and offline support are disabled: this browser is not ' +
+          'giving this site access to local storage right now. That is usually ' +
+          'private browsing, or a setting that blocks site data or cross-site ' +
+          'tracking — but it can also be another tab of this site still ' +
+          'holding the local database, in which case a reload clears it. The ' +
+          'app still works, reading directly from the server; nothing is kept ' +
+          'locally between reloads.',
+      ),
+      { name: STORAGE_BLOCKED_ERROR_NAME },
     );
   }
 
@@ -141,6 +162,11 @@ export interface ClientDbOptions {
    *  hold a local-only drive that exists nowhere else, and a key that is
    *  missing now is not necessarily gone (see `client-db-open.ts`). */
   discardUndecryptable?: boolean;
+  /** The database's WebAssembly, already fetched and compiled. The page can
+   *  start that long before this worker exists (the app does it from
+   *  index.html), and a compiled module crosses into the worker for free. A
+   *  rejection, or none, falls back to the worker fetching it itself. */
+  wasmModule?: Promise<WebAssembly.Module | undefined>;
 }
 
 type PendingRequest = {
@@ -558,9 +584,19 @@ export class ClientDbWorker {
         });
       })
       .catch(e => {
-        // A deliberate abort from `destroy()` (the request was still queued)
-        // is teardown, not a failure — ignore it.
-        if (e instanceof DOMException && e.name === 'AbortError') return;
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          // Another tab stole the lock we were holding as leader. It stole it
+          // to open the database itself, and the lock alone does not let it:
+          // our worker's sync access handle keeps the file locked until the
+          // worker goes away. Keeping it left both tabs broken, the thief
+          // with "NoModificationAllowedError" (Firefox) and us leading a
+          // lock we no longer hold, so hand the file over.
+          if (this.worker && !this.destroyed) this.yieldLeadership(baseUrl);
+
+          // Otherwise a deliberate abort from `destroy()` (the request was
+          // still queued): teardown, not a failure.
+          return;
+        }
 
         // Rejects if the callback throws OR if our hold was aborted by
         // another tab stealing the lock. The latter is fine if we're
@@ -571,6 +607,40 @@ export class ClientDbWorker {
           this._initError = asInitError(e);
         }
       });
+  }
+
+  /**
+   * Give the database up after another tab stole the leader lock. Terminating
+   * the worker closes its OPFS handle, which is what the new leader's open is
+   * waiting for (it retries for a few seconds). This tab carries on as a
+   * follower and queues for the lock again, so it takes over when the new
+   * leader closes, or at once if the new leader's open fails after all.
+   */
+  private yieldLeadership(baseUrl: string | undefined): void {
+    console.warn(
+      '[ClientDb] another tab took over the local database; this tab now uses it through that tab',
+    );
+    this.worker?.terminate();
+    this.worker = null;
+    this.releaseLeaderHold = null;
+    this.role = 'follower';
+    // Unknown until the new leader announces itself; that announcement then
+    // replays the calls waiting on a leader.
+    this.observedLeader = undefined;
+
+    // Calls our own worker was answering died with it. Only the caller knows
+    // whether repeating one is safe.
+    for (const [id, pending] of this.pending) {
+      if (pending.onLeaderChanged) continue;
+      this.pending.delete(id);
+      pending.reject(
+        new RequestCancelledError(
+          'ClientDb leader changed; please retry the operation.',
+        ),
+      );
+    }
+
+    this.requestLeaderLock(baseUrl, false);
   }
 
   /**
@@ -604,9 +674,11 @@ export class ClientDbWorker {
     };
 
     const endWorkerInit = perfSpan('clientdb.workerInit');
+    const wasmModule = await this.opts.wasmModule?.catch(() => undefined);
     const timings = (await this.sendToWorker({
       type: 'init',
       wasmUrl: this.wasmUrl,
+      wasmModule,
       baseUrl,
       dbName: this.opts.dbName,
       dbKey: this.opts.dbKey,

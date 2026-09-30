@@ -39,7 +39,11 @@ vi.mock('@components/Dialog', () => ({
       {children}
     </div>
   ),
+  DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogContent: ({ children }: React.PropsWithChildren) => (
+    <div>{children}</div>
+  ),
+  DialogActions: ({ children }: React.PropsWithChildren) => (
     <div>{children}</div>
   ),
 }));

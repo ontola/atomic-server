@@ -12,6 +12,7 @@ import {
   envCpuThrottle,
   registerPerfPage,
 } from './perf-attach';
+import { installEmptyDiscoveryRoom } from './fixtures';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
 export const smoke = { tag: '@smoke' } as const;
@@ -280,6 +281,15 @@ export const before = async (
   if (throttle) await applyCpuThrottle(page, throttle);
 
   if (testInfo) registerPerfPage(testInfo, page);
+
+  // Peer discovery never reaches a real signalling service from a test,
+  // whichever `test` the spec imported. `fixtures.ts` installs this for the
+  // specs that take their `test` from there; twenty-two spec files import it
+  // straight from `@playwright/test`, and nineteen of those call this function,
+  // which is why it goes here. The app contacts no service unless one is
+  // configured, so this is a guard for the day a build or a stored setting
+  // names one; registering it a second time is harmless.
+  await installEmptyDiscoveryRoom(page.context());
 
   await installCommitWatcher(page);
   await test.step('Initialize fresh agent and drive', () => devDrive(page));

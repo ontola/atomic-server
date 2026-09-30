@@ -1,4 +1,5 @@
 import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { isLoopbackHost } from './runtimeSetting';
 import {
   BrowserPeerSync,
   randomPeerToken,
@@ -112,23 +113,69 @@ export function stopPeerLinks(store: Store): void {
   statuses.clear();
 }
 
-/** Discovery belongs to the app's SaaS environment, never its data node.
- * Works before signing into SaaS and for entirely local-only drives. */
-export function defaultPeerSignalingUrl(): string {
+/** Local storage key for a signalling service the person chose themselves. */
+export const PEER_SIGNALING_SETTING = 'peer-signaling-url';
+
+export const NO_PEER_SIGNALING =
+  'Peer-to-peer sharing needs a signalling service, and none is configured. Nothing is contacted until one is.';
+
+function chosenSignalingUrl(): URL | null {
+  try {
+    const chosen = localStorage.getItem(PEER_SIGNALING_SETTING);
+    if (!chosen) return null;
+    const url = new URL(chosen);
+    const secure = url.protocol === 'wss:' || url.protocol === 'https:';
+    const loopback =
+      (url.protocol === 'ws:' || url.protocol === 'http:') &&
+      isLoopbackHost(url.hostname);
+
+    return secure || loopback ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The signalling service peers meet through, or null when none is configured.
+ *
+ * There is no built-in default. Discovery announces a hash of every local drive
+ * and the device's address to whoever runs the service, so a build that was not
+ * pointed at one contacts nobody. A hosted distribution is compiled against its
+ * own portal (`VITE_MANAGED_PORTAL_URL`), a community rendezvous is named with
+ * `VITE_ATOMIC_SIGNALING_URL`, and a person can choose one at runtime with the
+ * `peer-signaling-url` setting. An app served from a SaaS staging host keeps
+ * using that host's service, since it already talks to it.
+ */
+export function configuredPeerSignalingUrl(): string | null {
+  const explicit = import.meta.env.VITE_ATOMIC_SIGNALING_URL;
   const portal =
     import.meta.env.VITE_MANAGED_PORTAL_URL ||
     (window.location.hostname === 'staging.atomicserver.eu' ||
     window.location.hostname.endsWith('.staging.atomicserver.eu')
       ? 'https://staging.atomicserver.eu'
-      : 'https://atomic.place');
-  const endpoint = new URL(
-    import.meta.env.VITE_ATOMIC_SIGNALING_URL || '/webrtc-signal',
-    portal,
-  );
+      : undefined);
+  let endpoint: URL | null = chosenSignalingUrl();
+
+  try {
+    if (!endpoint && (explicit || portal))
+      endpoint = new URL(explicit || '/webrtc-signal', portal);
+  } catch {
+    return null;
+  }
+
+  if (!endpoint) return null;
   if (endpoint.protocol === 'https:') endpoint.protocol = 'wss:';
   if (endpoint.protocol === 'http:') endpoint.protocol = 'ws:';
 
   return endpoint.toString();
+}
+
+/** For actions the person started: refuse instead of quietly dialling nobody. */
+export function requirePeerSignalingUrl(): string {
+  const url = configuredPeerSignalingUrl();
+  if (!url) throw new Error(NO_PEER_SIGNALING);
+
+  return url;
 }
 
 export function createPeerLink(
@@ -140,7 +187,7 @@ export function createPeerLink(
   ) ?? {
     drive,
     room: randomPeerToken(),
-    signalingUrl: defaultPeerSignalingUrl(),
+    signalingUrl: requirePeerSignalingUrl(),
   };
   const invite = { ...link, expectedPeer: store.getAgent()?.subject };
   const url = new URL('/app/sync', window.location.origin);
@@ -192,7 +239,10 @@ const discovering = new WeakSet<Store>();
 export async function discoverPeerDrives(store: Store): Promise<void> {
   const agent = store.getAgent();
   const db = store.getClientDb();
-  if (!agent || !db || discovering.has(store)) return;
+  // Automatic discovery is background traffic nobody asked for: with no
+  // configured service it must not reach anywhere at all.
+  const signalingUrl = configuredPeerSignalingUrl();
+  if (!signalingUrl || !agent || !db || discovering.has(store)) return;
   discovering.add(store);
   let links = active.get(store);
 
@@ -231,7 +281,7 @@ export async function discoverPeerDrives(store: Store): Promise<void> {
           new BrowserPeerSync(store, {
             drive,
             room,
-            signalingUrl: defaultPeerSignalingUrl(),
+            signalingUrl,
             iceServers: import.meta.env.VITE_ATOMIC_ICE_SERVERS
               ? JSON.parse(import.meta.env.VITE_ATOMIC_ICE_SERVERS)
               : undefined,

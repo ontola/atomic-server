@@ -1,8 +1,14 @@
-import { Dialog, DialogContent, useDialog } from '@components/Dialog';
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  useDialog,
+} from '@components/Dialog';
 import { LocalOllamaDiscovery } from '@components/AI/LocalOllamaDiscovery';
 import React, { Suspense, useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { Column, Row } from '@components/Row';
+import { Column } from '@components/Row';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { AIProvider } from '@components/AI/aiContstants';
 import { OpenRouterLoginButton } from '@components/AI/OpenRouterLoginButton';
@@ -189,13 +195,26 @@ const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
   if (step === 'model') {
     return (
       <SetupDialog
+        title='Choose a default model'
+        actions={
+          <>
+            <Button subtle onClick={handleBack}>
+              Back
+            </Button>
+            <Button
+              onClick={handleStartChatting}
+              disabled={!isProviderAvailable(pendingModel.provider)}
+            >
+              Start chatting
+            </Button>
+          </>
+        }
         onDismiss={() => {
           setDismissed(true);
           onDismiss?.();
         }}
       >
         <Panel>
-          <Title>Choose a default model</Title>
           <Subtle>
             This pre-selects a model for built-in agents and new custom agents.
             You can change each agent&apos;s model individually later.
@@ -216,17 +235,6 @@ const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
             />
             <label htmlFor='sync-gen-features'>Also use for chat titles</label>
           </CheckboxRow>
-          <ActionsRow>
-            <Button subtle onClick={handleBack}>
-              Back
-            </Button>
-            <Button
-              onClick={handleStartChatting}
-              disabled={!isProviderAvailable(pendingModel.provider)}
-            >
-              Start chatting
-            </Button>
-          </ActionsRow>
         </Panel>
       </SetupDialog>
     );
@@ -234,13 +242,18 @@ const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
 
   return (
     <SetupDialog
+      title='Connect a model to use AI chat'
+      actions={
+        <Button onClick={handleContinue} disabled={!hasProvider}>
+          Continue
+        </Button>
+      }
       onDismiss={() => {
         setDismissed(true);
         onDismiss?.();
       }}
     >
       <Panel>
-        <Title>Connect a model to use AI chat</Title>
         {hostedAI?.enabled && (
           <Column>
             <strong>AI included with your account</strong>
@@ -328,9 +341,6 @@ const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
             </ProviderSection>
           </OutlinedSection>
         </ProvidersGrid>
-        <Button onClick={handleContinue} disabled={!hasProvider}>
-          Continue
-        </Button>
       </Panel>
     </SetupDialog>
   );
@@ -339,8 +349,14 @@ const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
 /** Use the app-wide portal, backdrop, focus management and dismissal rules. */
 function SetupDialog({
   children,
+  title,
+  actions,
   onDismiss,
-}: React.PropsWithChildren<{ onDismiss: () => void }>) {
+}: React.PropsWithChildren<{
+  title: string;
+  actions: React.ReactNode;
+  onDismiss: () => void;
+}>) {
   const [dialogProps, showDialog] = useDialog({ onCancel: onDismiss });
   useEffect(() => {
     showDialog();
@@ -348,7 +364,11 @@ function SetupDialog({
 
   return (
     <Dialog {...dialogProps} width='36rem'>
+      <DialogTitle>
+        <h1>{title}</h1>
+      </DialogTitle>
       <DialogContent>{children}</DialogContent>
+      <DialogActions>{actions}</DialogActions>
     </Dialog>
   );
 }
@@ -357,12 +377,6 @@ const Panel = styled(Column)`
   width: 100%;
   min-width: 0;
   gap: 1rem;
-`;
-
-const ActionsRow = styled(Row)`
-  justify-content: flex-end;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 `;
 
 const ProvidersGrid = styled(Column)`
@@ -415,11 +429,6 @@ const FullWidthField = styled(InputWrapper)`
     width: 100%;
     min-width: 0;
   }
-`;
-
-const Title = styled.h3`
-  margin: 0;
-  font-size: 1rem;
 `;
 
 const Subtle = styled.p`

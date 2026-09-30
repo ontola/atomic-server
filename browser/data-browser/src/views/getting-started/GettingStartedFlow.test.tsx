@@ -84,6 +84,18 @@ vi.mock('../../helpers/managed/recovery', () => ({
   getUnlockableRecoverySecret: () => state.recovery(),
   getRecoverySecret: () => state.recovery(),
   readUnlockableCachedBackups: () => [],
+  envelopeWrapperKinds: () => ({ hasPasskey: true, hasCode: false }),
+  secretAccountConflict: (
+    stored: { owner_email: string; agent_subject: string } | null,
+    secretAgent: string,
+  ) =>
+    stored && stored.agent_subject !== secretAgent
+      ? {
+          email: stored.owner_email,
+          accountAgent: stored.agent_subject,
+          secretAgent,
+        }
+      : null,
 }));
 vi.mock('../../helpers/managed/vaultAutoBackup', () => ({
   ensureVaultBackup: vi.fn(),
@@ -91,6 +103,7 @@ vi.mock('../../helpers/managed/vaultAutoBackup', () => ({
 }));
 vi.mock('../../helpers/managed/reconcile', () => ({
   connectHostedDrive: async () => true,
+  shortDid: (subject: string) => subject,
 }));
 vi.mock('../../helpers/agentStorage', () => ({ saveAgentToIDB: vi.fn() }));
 vi.mock('../../helpers/deviceLock', () => ({ beat: vi.fn() }));
@@ -143,6 +156,7 @@ vi.mock('./chrome', () => ({
   BackLabel: 'span',
 }));
 import { GettingStartedFlow } from './GettingStartedFlow';
+import { logoutManagedSession } from '../../helpers/managed';
 
 const show = async (query = '') => {
   window.history.replaceState(null, '', `/app/welcome${query}`);
@@ -298,4 +312,65 @@ it('opens its own home without requiring another device', async () => {
   );
   expect(state.navigate).toHaveBeenCalledWith('/app/show?subject=did:ad:home');
   expect(screen.queryByText('Connect device')).toBeNull();
+});
+
+const pasteOtherAgentsSecret = async () => {
+  state.account = { email: 'joep@ontola.io' };
+  state.recovery.mockResolvedValue({
+    owner_email: 'joep@ontola.io',
+    agent_subject: 'did:ad:agent:account',
+  });
+  await show('?return_to=agent');
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Agent secret'), {
+      target: { value: 'test-secret' },
+    });
+  });
+};
+
+it('asks before a secret for another agent replaces the account', async () => {
+  await pasteOtherAgentsSecret();
+  expect(
+    screen.getByRole('heading', {
+      name: 'This secret is for a different account',
+    }),
+  ).toBeTruthy();
+  expect(screen.getByText('did:ad:agent:account')).toBeTruthy();
+  expect(screen.getByText('did:ad:agent:test')).toBeTruthy();
+  expect(logoutManagedSession).not.toHaveBeenCalled();
+  expect(state.setAgent).not.toHaveBeenCalled();
+
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Stay signed in as joep@ontola.io' }),
+  );
+  expect(screen.getByLabelText('Agent secret')).toBeTruthy();
+  expect(logoutManagedSession).not.toHaveBeenCalled();
+  expect(state.setAgent).not.toHaveBeenCalled();
+});
+
+it('signs out of the account only once the user picks the secret', async () => {
+  await pasteOtherAgentsSecret();
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Use this secret and sign out' }),
+    );
+  });
+  expect(logoutManagedSession).toHaveBeenCalledTimes(1);
+  expect(state.setAgent).toHaveBeenCalled();
+  expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+});
+
+it('signs in without asking when the secret is the account agent', async () => {
+  state.recovery.mockResolvedValue({
+    owner_email: 'joep@ontola.io',
+    agent_subject: 'did:ad:agent:test',
+  });
+  await show('?return_to=agent');
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Agent secret'), {
+      target: { value: 'test-secret' },
+    });
+  });
+  expect(logoutManagedSession).not.toHaveBeenCalled();
+  expect(state.navigate).toHaveBeenCalledWith('/app/agent');
 });

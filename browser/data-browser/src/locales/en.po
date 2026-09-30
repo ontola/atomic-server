@@ -316,6 +316,7 @@ msgstr "Ollama URL"
 msgid "Ollama"
 msgstr "Ollama"
 
+#: src/chunks/AI/AISetupPanel.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -1043,6 +1044,7 @@ msgstr "Add description"
 msgid "Resources"
 msgstr "Resources"
 
+#: src/actions/resourceActions.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
@@ -1318,6 +1320,8 @@ msgid "Show data view"
 msgstr "Show data view"
 
 #: src/actions/appActions.ts
+#: src/actions/appMenuItems.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New resource"
 msgstr "New resource"
@@ -1969,13 +1973,11 @@ msgstr "Open the resource"
 msgid "Open the edit form."
 msgstr "Open the edit form."
 
-#: src/actions/resourceActions.tsx
-msgid "Add child"
-msgstr "Add child"
+#~ msgid "Add child"
+#~ msgstr "Add child"
 
-#: src/actions/resourceActions.tsx
-msgid "Create a new resource under this resource."
-msgstr "Create a new resource under this resource."
+#~ msgid "Create a new resource under this resource."
+#~ msgstr "Create a new resource under this resource."
 
 #: src/actions/resourceActions.tsx
 msgid "Use in code"
@@ -1997,9 +1999,8 @@ msgstr "Add the resource as context to the AI sidebar"
 msgid "Search children"
 msgstr "Search children"
 
-#: src/actions/resourceActions.tsx
-msgid "Scope search to resource"
-msgstr "Scope search to resource"
+#~ msgid "Scope search to resource"
+#~ msgstr "Scope search to resource"
 
 #: src/actions/resourceActions.tsx
 msgid "Permissions & Invites"
@@ -2313,6 +2314,7 @@ msgstr "Rearange {0}"
 msgid "<0/> Note"
 msgstr "<0/> Note"
 
+#: src/actions/appMenuItems.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/SettingsAgent.tsx
@@ -4398,6 +4400,7 @@ msgid "Recently visited"
 msgstr "Recently visited"
 
 #: src/routes/DemoRoute.tsx
+#: src/routes/DemoRoute.tsx
 msgid "Setting up your demo…"
 msgstr "Setting up your demo…"
 
@@ -5284,9 +5287,8 @@ msgstr "Unlock {0} with your fingerprint, face, or screen lock."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Signed out of your account here — that secret belongs to a different one."
-msgstr "Signed out of your account here — that secret belongs to a different one."
+#~ msgid "Signed out of your account here — that secret belongs to a different one."
+#~ msgstr "Signed out of your account here — that secret belongs to a different one."
 
 #: src/routes/SettingsAgent.tsx
 msgid "More profile fields"
@@ -10139,6 +10141,7 @@ msgid "{0} purchased credits · carries over"
 msgstr "{0} purchased credits · carries over"
 
 #: src/chunks/AI/HostedAICredits.tsx
+#: src/components/Vault/AICreditsService.tsx
 msgid "AI credits"
 msgstr "AI credits"
 
@@ -12446,6 +12449,33 @@ msgstr "No column matches"
 msgid "Search the drive for “{0}”"
 msgstr "Search the drive for “{0}”"
 
+#. 0: conflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Signed out of {0}."
+msgstr "Signed out of {0}."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret"
+msgstr "This secret"
+
+#. 0: secretConflict.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Stay signed in as {0}"
+msgstr "Stay signed in as {0}"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This secret is for a different account"
+msgstr "This secret is for a different account"
+
+#. 0: secretConflict.email; 1: secretConflict.email; 2: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+msgstr "You're signed in as {0}, but the secret you entered opens another agent. Using it signs you out of {1} on {2}."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use this secret and sign out"
+msgstr "Use this secret and sign out"
+
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationsBell.tsx
@@ -12533,22 +12563,113 @@ msgstr "Your workspace could not be brought into your account. Try again, or cho
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "You missed a message while you were away"
-msgstr "You missed a message while you were away"
+#: src/actions/resourceActions.tsx
+msgid "Add or remove tags"
+msgstr "Add or remove tags"
 
-#. 0: count
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "You missed {0} messages while you were away"
-msgstr "You missed {0} messages while you were away"
+#: src/routes/DemoRoute.tsx
+msgid "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
+msgstr "The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo."
 
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "Not now"
-msgstr "Not now"
+#: src/components/Vault/AICreditsService.tsx
+msgid "Could not open checkout. Try again."
+msgstr "Could not open checkout. Try again."
 
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "Show new messages as system notifications on this device?"
-msgstr "Show new messages as system notifications on this device?"
+#. 0: usedPct; 1: credits(allowance); 2: resets
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0}% of this month’s {1} credits used. Resets {2}."
+msgstr "{0}% of this month’s {1} credits used. Resets {2}."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "AI credits used this month"
+msgstr "AI credits used this month"
+
+#. 0: credits(purchased)
+#: src/components/Vault/AICreditsService.tsx
+msgid "{0} purchased credits left. These carry over."
+msgstr "{0} purchased credits left. These carry over."
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Opening checkout…"
+msgstr "Opening checkout…"
+
+#: src/components/Vault/AICreditsService.tsx
+msgid "Buy more credits"
+msgstr "Buy more credits"
+
+#: src/actions/appMenuItems.tsx
+msgid "Create a new resource in this drive."
+msgstr "Create a new resource in this drive."
+
+#: src/actions/appMenuItems.tsx
+msgid "New AI chat"
+msgstr "New AI chat"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open the assistant."
+msgstr "Open the assistant."
+
+#: src/actions/appMenuItems.tsx
+msgid "Open settings"
+msgstr "Open settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Switch drive"
+msgstr "Switch drive"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open user settings"
+msgstr "Open user settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Give feedback"
+msgstr "Give feedback"
+
+#: src/actions/appMenuItems.tsx
+msgid "Show notifications"
+msgstr "Show notifications"
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this one."
+msgstr "Create a new resource under this one."
+
+#: src/actions/resourceActions.tsx
+msgid "Search only inside this resource"
+msgstr "Search only inside this resource"
+
+#: src/components/OverlayContainer.tsx
+#: src/components/OverlayContainer.tsx
+msgid "Search everywhere"
+msgstr "Search everywhere"
+
+#. 0: scopeResource.title
+#: src/components/OverlayContainer.tsx
+msgid "Searching in {0}"
+msgstr "Searching in {0}"
+
+#: src/components/OverlayContainer.tsx
+msgid "Recently opened"
+msgstr "Recently opened"
+
+#: src/routes/AppSettings.tsx
+msgid "Search settings"
+msgstr "Search settings"
+
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Click or drag to open"
+msgstr "Click or drag to open"
+
+#: src/actions/appMenuItems.tsx
+msgid "Open sync settings"
+msgstr "Open sync settings"
+
+#: src/actions/appMenuItems.tsx
+msgid "Go to"
+msgstr "Go to"
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Loading notifications"
+msgstr "Loading notifications"
 
 #. 0: first; 1: second
 #: src/components/Notifications/NotificationList.tsx
@@ -12580,6 +12701,19 @@ msgstr "{0} replied to you in {1}"
 msgid "{0}: {1} replies to you in {2}"
 msgstr "{0}: {1} replies to you in {2}"
 
-#: src/components/Notifications/NotificationList.tsx
-msgid "Loading notifications"
-msgstr "Loading notifications"
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed a message while you were away"
+msgstr "You missed a message while you were away"
+
+#. 0: count
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed {0} messages while you were away"
+msgstr "You missed {0} messages while you were away"
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Not now"
+msgstr "Not now"
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Show new messages as system notifications on this device?"
+msgstr "Show new messages as system notifications on this device?"

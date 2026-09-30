@@ -362,3 +362,110 @@ describe('ClientDbWorker version vectors', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('ClientDbWorker losing its lock to another tab', () => {
+  it('lets go of the database file and waits its turn again', async () => {
+    let stealFromUs: (e: unknown) => void = () => {};
+    const request = vi.fn((_name, _options, callback) => {
+      // Only the first bid runs; a later one queues behind the thief.
+      if (request.mock.calls.length > 1) return new Promise(() => {});
+      const held = callback();
+
+      return new Promise((resolve, reject) => {
+        stealFromUs = reject;
+        held.then(resolve);
+      });
+    });
+    vi.stubGlobal('navigator', { locks: { request } });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        postMessage() {}
+        close() {}
+      },
+    );
+    const terminate = vi.fn();
+    let answerCalls = true;
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage?: (event: unknown) => void;
+        postMessage(message: { id: string }) {
+          if (!answerCalls) return;
+          queueMicrotask(() =>
+            this.onmessage?.({ data: { id: message.id, type: 'result' } }),
+          );
+        }
+        terminate = terminate;
+      },
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const db = new ClientDbWorker('wasm-url', 'worker-url');
+    const role = () => (db as unknown as { role: string }).role;
+
+    try {
+      await db.init('https://example.com');
+      expect(role()).toBe('leader');
+
+      // A call our worker is still working on when the lock goes.
+      answerCalls = false;
+      const inFlight = expect(
+        db.getResource('atomic:some-class'),
+      ).rejects.toBeInstanceOf(RequestCancelledError);
+
+      stealFromUs(new DOMException('stolen', 'AbortError'));
+      await vi.waitFor(() => expect(terminate).toHaveBeenCalled());
+
+      // The worker holding the OPFS handle is gone, so the thief can open it.
+      await inFlight;
+      expect(role()).toBe('follower');
+      // And this tab queues to take over when that tab closes.
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      db.destroy();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('ClientDbWorker with a precompiled WebAssembly module', () => {
+  it('hands the module to its worker instead of a url to fetch', async () => {
+    const request = vi.fn((_name, _options, callback) => callback());
+    vi.stubGlobal('navigator', { locks: { request } });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        postMessage() {}
+        close() {}
+      },
+    );
+    const sent: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage?: (event: unknown) => void;
+        postMessage(message: { id: string } & Record<string, unknown>) {
+          sent.push(message);
+          queueMicrotask(() =>
+            this.onmessage?.({ data: { id: message.id, type: 'result' } }),
+          );
+        }
+        terminate() {}
+      },
+    );
+    const compiled = { compiled: true } as unknown as WebAssembly.Module;
+    const db = new ClientDbWorker('wasm-url', 'worker-url', {
+      wasmModule: Promise.resolve(compiled),
+    });
+
+    try {
+      await db.init('https://example.com');
+      const init = sent.find(message => message.type === 'init');
+      expect(init?.wasmModule).toBe(compiled);
+    } finally {
+      db.destroy();
+      vi.unstubAllGlobals();
+    }
+  });
+});

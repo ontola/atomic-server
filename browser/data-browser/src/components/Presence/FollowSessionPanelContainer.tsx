@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useCurrentAgent, useDrivePresence, useResource } from '@tomic/react';
-import { styled, css } from 'styled-components';
+import { styled } from 'styled-components';
 import { FaNoteSticky, FaVideo } from 'react-icons/fa6';
 import { RightPanel } from '../RightPanel/RightPanel';
 import { useContextualPanel } from '../RightPanel/useContextualPanel';
@@ -11,8 +11,10 @@ import { ChatRoomView } from '../../views/ChatRoom/ChatRoomView';
 import { EditableTitle } from '../EditableTitle';
 import { MEETING_PANEL_TITLE_TRANSITION_TAG } from '../../helpers/transitionName';
 import { Column, Row } from '../Row';
-import { AtomicLink } from '../AtomicLink';
-import { Button, ButtonSubtle } from '../Button';
+import { IconButton } from '../IconButton/IconButton';
+import { transition } from '../../helpers/transition';
+import { constructOpenURL } from '../../helpers/navigation';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 const ConferenceRoom = lazy(
   () => import('../../chunks/Conference/ConferenceRoom'),
@@ -94,6 +96,7 @@ function FollowSessionChat({ subject }: { subject: string }) {
 
   // Only leader / joined attendee gets the End / Leave action.
   const showAction = leading || followedAgent === leaderAgent;
+  const navigate = useNavigateWithTransition();
 
   return (
     <PanelWrapper>
@@ -118,21 +121,29 @@ function FollowSessionChat({ subject }: { subject: string }) {
             </Facepile>
           )}
         </TitleRow>
-        <ButtonRow center gap='0.5rem'>
-          <CallToggleButton
-            $active={inCall}
+        {/* Compact and quiet, like the sidebar's quick-create icons: no
+            borders, no gaps, a soft background on hover. Bordered buttons
+            with space between them made the header the loudest part of the
+            panel. */}
+        <ButtonRow center gap='0'>
+          <IconButton
+            color={inCall ? 'main' : 'textLight'}
             onClick={() => setInCall(current => !current)}
             title={inCall ? 'Leave video call' : 'Start video call'}
           >
             <FaVideo />
-          </CallToggleButton>
-          <NotesButton as={AtomicLink} subject={subject} clean title='Notes'>
+          </IconButton>
+          <IconButton
+            color='textLight'
+            title='Notes'
+            onClick={() => navigate(constructOpenURL(subject))}
+          >
             <FaNoteSticky />
-          </NotesButton>
+          </IconButton>
           {showAction && (
-            <Button subtle onClick={handleAction} disabled={ending}>
+            <TextAction type='button' onClick={handleAction} disabled={ending}>
               {ending ? 'Ending…' : label}
-            </Button>
+            </TextAction>
           )}
         </ButtonRow>
       </PanelHeader>
@@ -180,33 +191,28 @@ const PanelTitle = styled(EditableTitle)`
   white-space: nowrap;
 `;
 
-/**
- * AtomicLink's own `LinkView` styling (blue text) has the same CSS
- * specificity as ButtonSubtle's, and wins ties based on style-sheet
- * insertion order. The `&&` doubles our selector's specificity so the
- * button look always wins regardless of that order.
- */
-const NotesButton = styled(ButtonSubtle)`
-  && {
-    color: var(--button-text-color);
-    text-decoration: none;
+/** A text action in the same quiet style as the icon buttons beside it. */
+const TextAction = styled.button`
+  height: 2em;
+  padding: 0 0.6em;
+  border: none;
+  border-radius: ${p => p.theme.radius};
+  background: transparent;
+  color: ${p => p.theme.colors.textLight};
+  font: inherit;
+  cursor: pointer;
+  ${transition('background-color', 'color')};
 
-    &:hover,
-    &:focus-visible {
-      color: var(--button-text-color-hover);
-    }
+  &:not([disabled]):hover,
+  &:not([disabled]):focus-visible {
+    background: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
   }
-`;
 
-/** Icon-only toggle for the p2p video call; highlighted while in a call. */
-const CallToggleButton = styled(ButtonSubtle)<{ $active: boolean }>`
-  ${p =>
-    p.$active &&
-    css`
-      && {
-        color: ${p.theme.colors.main};
-      }
-    `}
+  &[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
 const CallFallback = styled.span`
