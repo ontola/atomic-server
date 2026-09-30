@@ -28,6 +28,8 @@ import {
   type Commit,
   parseCommitJSON,
   serializeDeterministically,
+  learnServerClock,
+  isFutureTimestampRefusal,
 } from './commit.js';
 import {
   Tag,
@@ -1145,6 +1147,10 @@ export class WSClient {
         const msg = decodeError(payload);
         if (!msg) break;
 
+        // A clock that runs ahead is refused on every AUTH and COMMIT; adopt
+        // the server's time so the reconnect and the outbox's retry pass.
+        learnServerClock(msg.message);
+
         // requestId 0 is the server's sentinel for connection-level errors
         // (e.g. AUTH failure) not tied to one specific pending GET/COMMIT —
         // `nextRequestId` starts at 1 and wraps back to 1, never 0, so this
@@ -1753,7 +1759,16 @@ export class WSClient {
 
     if (this.store.getAgent()?.subject) {
       const authClose = perfSpan('ws.authenticate');
-      this.authenticate()
+      // A refusal for a clock that runs ahead has already taught
+      // `getTimestampNow` the server's time (see the ERROR frame handler), so
+      // one more attempt signs a timestamp the server accepts.
+      const authenticateOnce = () =>
+        this.authenticate().catch(e => {
+          if (this._closed || !isFutureTimestampRefusal(e)) throw e;
+
+          return this.authenticate();
+        });
+      authenticateOnce()
         .then(() => {
           authClose('ok');
           if (this._closed) return;
