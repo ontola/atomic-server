@@ -118,7 +118,8 @@ export function TableViewTabs({
 }: TableViewTabsProps): JSX.Element {
   // A table with no saved views yet still shows one implicit "Default View" tab.
   const tabs = views.length > 0 ? views : [undefined];
-  const apps = appsForClass(useDriveApps(useStore().getDrive()), rowClass);
+  const driveApps = useDriveApps(useStore().getDrive());
+  const apps = appsForClass(driveApps.apps, rowClass);
   const typesBySubject = useViewTypes(views);
 
   return (
@@ -140,6 +141,7 @@ export function TableViewTabs({
             }
             canDelete={!subject || canDeleteView(subject, typesBySubject)}
             apps={apps}
+            refreshApps={driveApps.refresh}
             duplicateView={duplicateView}
             deleteView={deleteView}
             classProperties={allColumns}
@@ -147,7 +149,13 @@ export function TableViewTabs({
             setQuickAdd={setQuickAdd}
           />
         ))}
-        {canWrite && <AddViewMenu createView={createView} apps={apps} />}
+        {canWrite && (
+          <AddViewMenu
+            createView={createView}
+            apps={apps}
+            refreshApps={driveApps.refresh}
+          />
+        )}
       </Tabs>
       <Actions>
         <FilterMenu columns={columns} derivedColumns={derivedColumns} />
@@ -197,9 +205,12 @@ const AddViewTrigger = buildDefaultTrigger(<FaPlus />, 'Add view');
 function AddViewMenu({
   createView,
   apps,
+  refreshApps,
 }: {
   createView: (kind?: ViewKind | string, label?: string) => void;
   apps: DriveApp[];
+  /** Asks the drive for its apps again; called as the menu opens. */
+  refreshApps: () => void;
 }): JSX.Element {
   const items = useMemo(
     (): DropdownItem[] => [
@@ -225,7 +236,13 @@ function AddViewMenu({
     [createView, apps],
   );
 
-  return <DropdownMenu Trigger={AddViewTrigger} items={items} />;
+  return (
+    <DropdownMenu
+      Trigger={AddViewTrigger}
+      items={items}
+      bindActive={active => active && refreshApps()}
+    />
+  );
 }
 
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
@@ -300,6 +317,7 @@ function ViewTab({
   canChangeType,
   canDelete,
   apps,
+  refreshApps,
   duplicateView,
   deleteView,
   classProperties,
@@ -324,6 +342,8 @@ function ViewTab({
   canDelete: boolean;
   /** Resolved once by the tab bar rather than once per tab. */
   apps: DriveApp[];
+  /** Asks the drive for its apps again; called as the menu opens. */
+  refreshApps: () => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
   classProperties: Property[];
@@ -514,7 +534,7 @@ function ViewTab({
           items={menuItems}
           Trigger={AutoOpenTrigger}
           anchorPoint={menuPoint}
-          bindActive={a => !a && setMenuPoint(undefined)}
+          bindActive={a => (a ? refreshApps() : setMenuPoint(undefined))}
         />
       )}
       {showQuickAdd && (
