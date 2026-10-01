@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Apps can use Atomic's own UI through `store.ui`: a confirm dialog, a toast, a
+  menu at the click, the resource menu, the share dialog and opening a
+  resource. Atomic draws them, names the app that asked, and a menu is no
+  longer cut off at the app's edge. Ctrl/Cmd shortcuts and Escape that an app
+  does not handle now reach Atomic, so search still opens while you are in one.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
