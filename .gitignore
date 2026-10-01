@@ -54,3 +54,4 @@ node_modules/
 # vite.config.ts runs on every vite / vitest start.
 /browser/data-browser/src/chunks/Website/runtime/search-view.html
 /browser/data-browser/src/chunks/Website/runtime/website-runtime.min.js
+/e2e-test-results

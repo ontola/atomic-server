@@ -33,6 +33,27 @@ async fn synthetic_agent_reads_have_stable_history_without_persisting() {
     assert!(!db.has_stored_resource(&agent.subject));
 }
 
+/// A profile stored under a padded spelling of the key answers for the
+/// canonical unpadded subject too, instead of an empty synthesized twin.
+#[tokio::test]
+async fn agent_profile_under_padded_key_answers_for_unpadded_subject() {
+    let db = Db::init_temp("agent_padded_spelling").await.unwrap();
+    let agent = crate::agents::Agent::new(Some("Padded")).unwrap();
+    let padded = format!("{}=", agent.public_key);
+    let mut stored = agent.to_resource().unwrap();
+    stored.set_subject(format!("atomic:agent:{padded}"));
+    stored
+        .set_unsafe(urls::PUBLIC_KEY.into(), Value::String(padded.clone()))
+        .unwrap();
+    db.add_resource_opts(&stored, false, false, true)
+        .await
+        .unwrap();
+
+    let read = db.get_resource(&agent.subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "Padded");
+    assert_eq!(read.get_subject().to_string(), agent.subject.to_string());
+}
+
 /// Share the Db instance between tests. Otherwise, all tests try to init the same location on disk and throw errors.
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
@@ -4077,4 +4098,78 @@ async fn deferred_search_entries_are_added_by_index_pending() {
     assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 1);
     assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 0);
     assert_eq!(store.search_hits("zebrafish", &opts).unwrap().len(), 1);
+}
+
+/// An `after_commit` extender runs after the commit is persisted, so its
+/// failure must not turn into a failed commit: the client would retry or show
+/// an error for a change that was saved. The error is logged instead, and the
+/// extenders registered after the failing one still run. (#1848)
+#[tokio::test]
+#[timeout(120000)]
+async fn failing_after_commit_does_not_fail_a_saved_commit() {
+    use crate::class_extender::ClassExtender;
+    use crate::commit::{CommitBuilder, CommitOpts};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    const CLASS: &str = "did:ad:afterCommitFailureTestClass";
+
+    let store = Db::init_temp("after_commit_failure").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+
+    store
+        .add_class_extender(
+            ClassExtender::builder()
+                .id("failing")
+                .class(CLASS)
+                .after_commit_fn(|_ctx| Box::pin(async { Err("after_commit exploded".into()) }))
+                .build(),
+        )
+        .unwrap();
+
+    let later_ran = Arc::new(AtomicBool::new(false));
+    let flag = later_ran.clone();
+    store
+        .add_class_extender(
+            ClassExtender::builder()
+                .id("later")
+                .class(CLASS)
+                .after_commit_fn(move |_ctx| {
+                    let flag = flag.clone();
+                    Box::pin(async move {
+                        flag.store(true, Ordering::SeqCst);
+                        Ok(())
+                    })
+                })
+                .build(),
+        )
+        .unwrap();
+
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![Subject::from(CLASS).into()]),
+    );
+    builder.set(urls::NAME.into(), Value::String("saved anyway".into()));
+    let commit = crate::commit::Commit::create_did(builder, &agent, &store)
+        .await
+        .unwrap();
+    let subject = commit.subject.clone();
+
+    let result = store
+        .apply_commit(commit, &CommitOpts::no_validations_no_index())
+        .await;
+    assert!(
+        result.is_ok(),
+        "a failing after_commit must not fail a persisted commit: {:?}",
+        result.err()
+    );
+
+    let stored = store.get_resource(&subject).await.unwrap();
+    assert_eq!(stored.get(urls::NAME).unwrap().to_string(), "saved anyway");
+    assert!(
+        later_ran.load(Ordering::SeqCst),
+        "the extender after the failing one should still run"
+    );
 }

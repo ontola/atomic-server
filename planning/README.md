@@ -78,6 +78,7 @@ fork review diff) are recorded in their owning plans, not here.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
 - [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.
 - [Assistant-authored websites](./assistant-websites.md) — prototype merged with #1500; plugin abstraction audit and remaining SaaS deployment work.
+- [Notifications](./notifications.md) — proposal 2026-09-28: the server delivers into the Inbox, a follow model, and kinds for invites, access requests, new and changed resources and meetings.
 
 Remaining work, not "this file exists."
 
@@ -173,6 +174,7 @@ Not top-level plans. Indexed so they do not go missing.
 | [`app-setup.md`](./app-setup.md) | Typed app setup checklist: shared JSON Schema input contract, generic setup form, assistant handoff. |
 | [`plugin-secrets.md`](./plugin-secrets.md) | **Built** (2026-08-21, encrypted at rest 2026-08-22). Host-side `secret:<name>` substitution for plugin fetch. |
 | [`plugin-runtime-convergence.md`](./plugin-runtime-convergence.md) | **Proposal** (2026-09-18, #1546). One plugin host across JS and WASM worlds. |
+| [`durable-after-commit.md`](./durable-after-commit.md) | **Design** (2026-09-29, #1851). Durable, queued JS `afterCommit` for user-installed plugins on tables showing their view; reads #1850's change list, writes through #1788's row grant. Nothing built. |
 | [`devonian-reconnect.md`](./devonian-reconnect.md) | Task note: concurrent route resumes consuming one PKCE verifier. The Devonian demo it touched has been removed. |
 | [`account-ai-credits.md`](./account-ai-credits.md) | Included AI for SaaS accounts; contract lives in atomic-saas. |
 | [`ai-chat-draft-persistence.md`](./ai-chat-draft-persistence.md) | **Diagnosed, not fixed** (2026-08-24). AI chats are lost while the model is still generating. |

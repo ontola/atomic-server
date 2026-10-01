@@ -1861,6 +1861,41 @@ impl Db {
         Ok(())
     }
 
+    /// Runs one extender's `after_commit` for a commit that is already
+    /// persisted. The caller logs an error and moves on to the next extender;
+    /// see the AFTER APPLY COMMIT HANDLERS block in `apply_commit`.
+    async fn run_after_commit_extender(
+        &self,
+        extender: &ClassExtender,
+        resource: &Resource,
+        commit_response: &CommitResponse,
+        root_subject: &mut Option<String>,
+    ) -> AtomicResult<()> {
+        let Some(handler) = extender.after_commit.as_ref() else {
+            return Ok(());
+        };
+        if !extender.resource_has_extender(resource)? || !extender.can_extend(resource) {
+            return Ok(());
+        }
+
+        let (is_in_scope, cached_root) = extender
+            .check_scope(resource, self, root_subject.take())
+            .await?;
+        *root_subject = cached_root;
+        if !is_in_scope {
+            return Ok(());
+        }
+
+        (handler)(crate::class_extender::CommitExtenderContext {
+            store: self,
+            commit: &commit_response.commit,
+            resource,
+            is_new: commit_response.resource_old.is_none(),
+            changed_props: &commit_response.changed_props,
+        })
+        .await
+    }
+
     pub fn get_class_extenders_on_drive(&self, drive_subject: &str) -> Vec<ClassExtender> {
         let Ok(extenders) = self.class_extenders.read() else {
             return Vec::new();
@@ -4521,46 +4556,41 @@ impl Storelike for Db {
         // AFTER APPLY COMMIT HANDLERS
         // Commit has been checked and saved.
         // Here you can add side-effects, such as creating new Commits.
+        //
+        // Nothing below may fail the commit: it is already persisted, so an
+        // error here would tell the client a saved change failed, and it would
+        // retry or show an error for data that did change (#1848). Each
+        // extender's failure is logged and the next extender still runs.
         let resource_after = commit_response
             .resource_new
             .as_ref()
             .or(commit_response.resource_old.as_ref());
 
         if let Some(resource) = resource_after {
-            let extenders = self
-                .class_extenders
-                .read()
-                .map_err(|e| format!("Failed to read class extenders: {}", e))?
-                .clone();
+            // A poisoned lock still holds a usable list; a panic elsewhere is
+            // no reason to skip every after-commit side effect.
+            let extenders = match self.class_extenders.read() {
+                Ok(extenders) => extenders.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            };
             for extender in extenders.iter() {
-                if extender.resource_has_extender(resource)? {
-                    if !extender.can_extend(resource) {
-                        continue;
-                    }
-
-                    let (is_in_scope, cached_root) =
-                        extender.check_scope(resource, self, root_subject).await?;
-
-                    root_subject = cached_root;
-
-                    if !is_in_scope {
-                        continue;
-                    }
-
-                    use crate::class_extender::CommitExtenderContext;
-
-                    let Some(handler) = extender.after_commit.as_ref() else {
-                        continue;
-                    };
-
-                    let fut = (handler)(CommitExtenderContext {
-                        store,
-                        commit: &commit_response.commit,
+                let result = self
+                    .run_after_commit_extender(
+                        extender,
                         resource,
-                        is_new: commit_response.resource_old.is_none(),
-                        changed_props: &commit_response.changed_props,
-                    });
-                    fut.await?;
+                        &commit_response,
+                        &mut root_subject,
+                    )
+                    .await;
+                if let Err(e) = result {
+                    tracing::error!(
+                        extender = extender.id.as_deref().unwrap_or("<anonymous>"),
+                        plugin = extender.subject.as_deref(),
+                        subject = %commit_response.commit.subject,
+                        commit = %commit_response.commit_resource.get_subject(),
+                        error = %e,
+                        "after_commit extender failed; the commit is saved and still succeeds"
+                    );
                 }
             }
         }
@@ -4667,6 +4697,33 @@ impl Storelike for Db {
                 {
                     let lookup = path.strip_prefix('/').unwrap_or(&path);
                     if let Some(pubkey) = crate::identifiers::agent_public_key(lookup) {
+                        // The same key has been spelled padded, unpadded,
+                        // standard and URL-safe. A profile stored under another
+                        // spelling is this agent: serve it, rather than
+                        // synthesizing an empty twin beside it.
+                        for spelling in crate::identifiers::agent_pubkey_spellings(pubkey)
+                            .into_iter()
+                            .skip(1)
+                        {
+                            let alias = Subject::from_raw(
+                                &crate::identifiers::agent_subject(&spelling),
+                                self.get_base_domain().as_deref(),
+                            );
+                            if self.has_stored_resource(&alias) {
+                                let mut found = self.get_resource(&alias).await?;
+                                found.set_subject(normalized.to_string());
+                                return Ok(found);
+                            }
+                            let legacy_did = Subject::from_raw(
+                                &format!("{}{}", crate::identifiers::DID_AD_AGENT_PREFIX, spelling),
+                                self.get_base_domain().as_deref(),
+                            );
+                            if self.has_stored_resource(&legacy_did) {
+                                let mut found = self.get_resource(&legacy_did).await?;
+                                found.set_subject(normalized.to_string());
+                                return Ok(found);
+                            }
+                        }
                         if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
                             if let Ok(mut resource) = agent.to_resource() {
                                 // A lookup is not creation of an agent. There is

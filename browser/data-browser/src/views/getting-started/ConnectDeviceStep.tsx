@@ -262,7 +262,7 @@ export function ConnectDeviceStep({
 
     const deadline = Date.now() + DRIVE_WAIT_MS;
 
-    for (;;) {
+    while (true) {
       // The store cached a failed fetch of this drive a moment ago (that's how
       // we got here); ask the server again now that the sync has filled it in.
       if (await deviceHasDriveData(store, candidate, { refresh: true })) {

@@ -179,7 +179,7 @@ describe('a linked device', () => {
     const api = await freshApi();
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ ok: true } as Response);
+      .mockResolvedValue(Response.json({}));
 
     api.setManagedDeviceToken('sess', PORTAL);
     api.rememberManagedPortalUrl(OTHER);
@@ -280,7 +280,7 @@ describe('browser control-plane routing', () => {
     const api = await freshApi();
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ ok: true } as Response);
+      .mockResolvedValue(Response.json({}));
 
     await api.managedFetch('/me');
 
@@ -301,3 +301,22 @@ describe('browser control-plane routing', () => {
     expect(api.getManagedApiBase()).toBe(`${PORTAL}/api`);
   });
 }, 60000);
+
+it('refreshes shared metadata when returning from the portal or unlinking', async () => {
+  const events = new EventTarget();
+  vi.stubGlobal('window', events);
+  const api = await freshApi();
+  api.rememberManagedPortalUrl(PORTAL);
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async () => Response.json({ email: 'a@example.com' }));
+  await api.managedFetch('/me');
+  await api.managedFetch('/me');
+  expect(fetch).toHaveBeenCalledTimes(1);
+  events.dispatchEvent(new Event('focus'));
+  await api.managedFetch('/me');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  api.setManagedDeviceToken(null);
+  await api.managedFetch('/me');
+  expect(fetch).toHaveBeenCalledTimes(3);
+});

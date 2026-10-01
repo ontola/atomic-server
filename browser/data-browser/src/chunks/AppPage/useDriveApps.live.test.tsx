@@ -41,7 +41,7 @@ const appJsonAd = (subject: string, name: string, renders: string[]) =>
 
 /** A store whose app query knows only the ledger, as it did at mount. */
 function storeWithLedger() {
-  const store = new Store({ serverUrl: 'https://example.com' });
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
   store.setDrive(DRIVE);
   store.finishDriveSync(DRIVE, 1, Date.now());
 

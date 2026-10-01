@@ -110,13 +110,8 @@ msgstr "Régénérer la réponse"
 msgid "AI Agents"
 msgstr "Agents IA"
 
-#~ msgid "<0/> Create New Agent"
-#~ msgstr "<0/> Créer un nouvel agent"
-
-#: src/chunks/AI/AgentConfig.tsx
-#: src/chunks/AI/MCPConfigTab.tsx
-#: src/chunks/AI/SkillsConfigTab.tsx
-#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AI/ConfigEditorDialog.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -149,6 +144,14 @@ msgstr "Annuler"
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Create Agent"
 msgstr "Créer un agent"
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "New Agent"
+msgstr ""
+
+#: src/chunks/AI/AgentConfig.tsx
+msgid "Edit Agent"
+msgstr ""
 
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
@@ -191,12 +194,6 @@ msgstr "Invite système"
 msgid "The system prompt that defines how the agent behaves. You can use the following placeholders: {{timestamp}} - the current date and time, {{drive}} - subject of the current drive, {{drive-structure}} - a tree of resources on the drive, {{custom-classes}} - a list of classes defined on the current drive."
 msgstr "L'invite système qui définit le comportement de l'agent. Vous pouvez utiliser les espaces réservés suivants : {{timestamp}} - la date et l'heure actuelles, {{drive}} - le sujet du lecteur actuel, {{drive-structure}} - une arborescence des ressources sur le lecteur, {{custom-classes}} - une liste des classes définies sur le lecteur actuel."
 
-#~ msgid "<0/> Read"
-#~ msgstr "<0/> Lire"
-
-#~ msgid "<0/> Write"
-#~ msgstr "<0/> Écrire"
-
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Atomic Data Access"
 msgstr "Accès aux données atomiques"
@@ -209,9 +206,6 @@ msgstr "Aucun serveur MCP configuré."
 msgid "Tools"
 msgstr "Outils"
 
-#~ msgid "<0/> Enable skills"
-#~ msgstr "<0/> Activer les compétences"
-
 #: src/chunks/AI/AIConfigurationSections.tsx
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Skills"
@@ -220,9 +214,6 @@ msgstr "Compétences"
 #: src/chunks/AI/AgentConfig.tsx
 msgid "Give the agent access to skills that provide domain-specific knowledge and guidance. A list of skills will be added to the end of the system prompt."
 msgstr "Donnez à l'agent l'accès à des compétences qui fournissent des connaissances et des conseils spécifiques au domaine. Une liste de compétences sera ajoutée à la fin de l'invite système."
-
-#~ msgid "<0/> Use Default Model"
-#~ msgstr "<0/> Utiliser le modèle par défaut"
 
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/RealAIChat.tsx
@@ -322,12 +313,6 @@ msgstr "Ollama"
 msgid "Continue"
 msgstr "Continuer"
 
-#~ msgid "AI Settings"
-#~ msgstr "Paramètres de l'IA"
-
-#~ msgid "AI Settings Tabs"
-#~ msgstr "Onglets des paramètres de l'IA"
-
 #: src/chunks/AI/AIConfigurationSections.tsx
 msgid "Agents"
 msgstr "Agents"
@@ -357,6 +342,7 @@ msgid "Provider"
 msgstr "Fournisseur"
 
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/AI/SkillsConfigTab.tsx
 msgid "Edit Skill"
 msgstr "Modifier la compétence"
 
@@ -372,12 +358,13 @@ msgstr "Aucune compétence personnalisée n'a encore été créée."
 msgid "AI Skills"
 msgstr "Compétences de l'IA"
 
-#~ msgid "<0/> Create New Skill"
-#~ msgstr "<0/> Créer une nouvelle compétence"
-
 #: src/chunks/AI/SkillsConfigTab.tsx
 msgid "Create Skill"
 msgstr "Créer une compétence"
+
+#: src/chunks/AI/SkillsConfigTab.tsx
+msgid "New Skill"
+msgstr ""
 
 #: src/chunks/AI/SkillsConfigTab.tsx
 msgid "The Agent will see this name"
@@ -412,9 +399,6 @@ msgstr "Supprimer la référence"
 msgid "Markdown content for this reference..."
 msgstr "Contenu Markdown pour cette référence..."
 
-#~ msgid "<0/> Add Reference"
-#~ msgstr "<0/> Ajouter une référence"
-
 #: src/chunks/AI/SkillsConfigTab.tsx
 msgid "References"
 msgstr "Références"
@@ -444,12 +428,17 @@ msgstr "Aucun serveur MCP n'est encore configuré."
 msgid "MCP Servers"
 msgstr "Serveurs MCP"
 
-#~ msgid "<0/> Add New Server"
-#~ msgstr "<0/> Ajouter un nouveau serveur"
-
 #: src/chunks/AI/MCPConfigTab.tsx
 msgid "Create Server"
 msgstr "Créer un serveur"
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "New MCP Server"
+msgstr ""
+
+#: src/chunks/AI/MCPConfigTab.tsx
+msgid "Edit MCP Server"
+msgstr ""
 
 #: src/chunks/AI/MCPConfigTab.tsx
 msgid "A friendly name for this MCP server"
@@ -496,9 +485,6 @@ msgstr "Supprimer l'en-tête"
 #: src/chunks/AI/MCPConfigTab.tsx
 msgid "No custom headers configured."
 msgstr "Aucun en-tête personnalisé configuré."
-
-#~ msgid "<0/> Add header"
-#~ msgstr "<0/> Ajouter un en-tête"
 
 #: src/chunks/AI/MCPConfigTab.tsx
 msgid "Headers"
@@ -567,8 +553,8 @@ msgstr "Non configuré"
 
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/AI/ProviderStatus.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connected"
@@ -738,7 +724,6 @@ msgid "Ontologies"
 msgstr "Ontologies"
 
 #: src/chunks/AppPage/AppFrame.tsx
-#: src/components/SideBar/index.tsx
 msgid "App"
 msgstr "Application"
 
@@ -826,46 +811,33 @@ msgstr "Aucun résultat correspondant."
 msgid "Click to enlarge"
 msgstr "Cliquez pour agrandir"
 
-#~ msgid "User Settings"
-#~ msgstr "Paramètres utilisateur"
-
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Login / New User"
 msgstr "Connexion / Nouvel utilisateur"
 
-#: src/components/SideBar/AppMenu.tsx
-msgid "See and edit the current Agent / User (u)"
-msgstr "Voir et modifier l'agent / l'utilisateur actuel (u)"
-
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Settings"
 msgstr "Paramètres"
 
-#: src/components/SideBar/AppMenu.tsx
-msgid "Change client settings (t)"
-msgstr "Modifier les paramètres du client (t)"
-
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "About"
 msgstr "À propos"
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Welcome page, tells about this app"
 msgstr "Page de bienvenue, qui parle de cette application"
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Install App"
 msgstr "Installer l'application"
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Install app to desktop"
 msgstr "Installer l'application sur le bureau"
-
-#: src/components/SideBar/AppMenu.tsx
-msgid "App menu"
-msgstr "Menu de l'application"
 
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Unauthorized"
@@ -963,9 +935,6 @@ msgstr "Échec de la persistance de l'agent après avoir accepté l'invitation"
 #: src/views/InvitePage.tsx
 msgid "Invite accepted, but no destination was returned."
 msgstr "Invitation acceptée, mais aucune destination n'a été renvoyée."
-
-#~ msgid "AtomicServer"
-#~ msgstr "AtomicServer"
 
 #. 0: write ? 'edit' \\: 'view'; 1: resourceName ? ` "${resourceName}"` \\: ''
 #: src/views/InvitePage.tsx
@@ -1220,10 +1189,6 @@ msgid "Show canvas help"
 msgstr "Afficher l'aide sur la toile"
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Switch to draw"
-msgstr "Passer en mode dessin"
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
 msgstr "Gomme"
 
@@ -1247,10 +1212,6 @@ msgstr "Largeur du trait"
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Rétablir (Ctrl+Maj+Z)"
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
-msgstr "Zoomer pour ajuster (taper) — glisser horizontalement pour zoomer/dézoomer"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas controls"
@@ -1330,9 +1291,6 @@ msgstr "Nouvelle ressource"
 msgid "Open menu"
 msgstr "Ouvrir le menu"
 
-#~ msgid "User settings"
-#~ msgstr "Paramètres utilisateur"
-
 #: src/actions/appActions.ts
 msgid "Theme settings"
 msgstr "Paramètres du thème"
@@ -1345,9 +1303,6 @@ msgstr "Raccourcis clavier"
 #: src/views/Installation/InstallationPage.tsx
 msgid "Plugin Description"
 msgstr "Description du plugin"
-
-#~ msgid "<0/> Save"
-#~ msgstr "<0/> Enregistrer"
 
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -1373,28 +1328,28 @@ msgstr "Document"
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Synchroniser"
 
-#: src/components/SideBar/SyncMenuItem.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
+#: src/components/SideBar/syncStatus.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Hors ligne"
 
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr "Les modifications n'ont pas pu être synchronisées"
 
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Modifications en attente"
 
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "Syncing..."
 msgstr "Synchronisation..."
 
@@ -1419,10 +1374,6 @@ msgid "Enter a URL..."
 msgstr "Entrez une URL..."
 
 #: src/chunks/RTE/ImagePicker.tsx
-msgid "Choose an image <0/>"
-msgstr "Choisir une image <0/>"
-
-#: src/chunks/RTE/ImagePicker.tsx
 msgid "Or"
 msgstr "Ou"
 
@@ -1433,10 +1384,6 @@ msgstr "Ajouter une légende..."
 #: src/chunks/RTE/ImagePicker.tsx
 msgid "Alt text"
 msgstr "Texte alternatif"
-
-#: src/chunks/RTE/ImagePicker.tsx
-msgid "Textual Description <0/>"
-msgstr "Description textuelle <0/>"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
@@ -1973,12 +1920,6 @@ msgstr "Ouvrir la ressource"
 msgid "Open the edit form."
 msgstr "Ouvrir le formulaire de modification."
 
-#~ msgid "Add child"
-#~ msgstr "Ajouter un enfant"
-
-#~ msgid "Create a new resource under this resource."
-#~ msgstr "Créer une nouvelle ressource sous cette ressource."
-
 #: src/actions/resourceActions.tsx
 msgid "Use in code"
 msgstr "Utiliser dans le code"
@@ -1998,9 +1939,6 @@ msgstr "Ajouter la ressource comme contexte à la barre latérale de l'IA"
 #: src/actions/resourceActions.tsx
 msgid "Search children"
 msgstr "Rechercher les enfants"
-
-#~ msgid "Scope search to resource"
-#~ msgstr "Étendue de la recherche à la ressource"
 
 #: src/actions/resourceActions.tsx
 msgid "Permissions & Invites"
@@ -2054,9 +1992,6 @@ msgstr "Modifier la valeur"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
 msgstr "Se connecter"
-
-#~ msgid "Go the the User Settings page"
-#~ msgstr "Aller à la page des paramètres utilisateur"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not parse that secret."
@@ -2477,9 +2412,6 @@ msgstr "Rien à afficher"
 msgid "Allow edits"
 msgstr "Autoriser les modifications"
 
-#~ msgid "Invite text (optional)"
-#~ msgstr "Texte d'invitation (facultatif)"
-
 #: src/components/InviteForm.tsx
 msgid "Invite created and copied to clipboard! 🚀"
 msgstr "Invitation créée et copiée dans le presse-papier ! 🚀"
@@ -2634,9 +2566,6 @@ msgstr "JSON non valide"
 msgid "Editing LoroDoc directly is not supported"
 msgstr "La modification directe de LoroDoc n'est pas prise en charge"
 
-#~ msgid "<0/> Show token usage in chats"
-#~ msgstr "<0/> Afficher l’utilisation des jetons dans les discussions"
-
 #: src/components/AI/AISettings.tsx
 msgid "OpenRouter API Key"
 msgstr "Clé API OpenRouter"
@@ -2665,15 +2594,6 @@ msgstr "URL de l’API Ollama"
 #: src/components/AI/AISettings.tsx
 msgid "Generative features"
 msgstr "Fonctionnalités génératives"
-
-#~ msgid "<0/> Generate AI Chat titles"
-#~ msgstr "<0/> Générer des titres de chat IA"
-
-#~ msgid "(Tip) Choose a cheap and fast model"
-#~ msgstr "(Conseil) Choisissez un modèle bon marché et rapide"
-
-#~ msgid "Change what model is used for generative features"
-#~ msgstr "Modifier le modèle utilisé pour les fonctionnalités génératives"
 
 #. 0: e.message; 1: value?.toString()
 #: src/components/ValueComp.tsx
@@ -2850,9 +2770,6 @@ msgstr "Il n'y a pas encore d'étiquettes."
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "Open tag page"
 msgstr "Ouvrir la page des tags"
-
-#~ msgid "Link copied to clipboard"
-#~ msgstr "Lien copié dans le presse-papiers"
 
 #: src/components/ResourceContextMenu/ParentContextMenuTrigger.tsx
 msgid "More"
@@ -3101,21 +3018,6 @@ msgstr "Échec de la suppression de la ressource du message"
 #: src/chunks/AI/AIChatPage.tsx
 msgid "Failed to save summary message"
 msgstr "Échec de l'enregistrement du message récapitulatif"
-
-#~ msgid "No object generated: could not parse the response."
-#~ msgstr "Aucun objet généré : impossible d'analyser la réponse."
-
-#~ msgid "First"
-#~ msgstr "Premier"
-
-#~ msgid "Reply"
-#~ msgstr "Répondre"
-
-#~ msgid "Second"
-#~ msgstr "Deuxième"
-
-#~ msgid "Hello"
-#~ msgstr "Bonjour"
 
 #: src/chunks/EmojiInput/EmojiInput.tsx
 msgid "Pick an emoji"
@@ -3681,16 +3583,6 @@ msgstr ""
 msgid "Checking your {0} account…"
 msgstr ""
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "To restore your account, sign in to your {0} account first, then come back here."
-msgstr ""
-
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your {0} account"
-msgstr ""
-
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Sort by {0}"
@@ -3926,9 +3818,6 @@ msgstr "Ceci présélectionne un modèle pour les agents intégrés et les nouve
 msgid "{0} - Copy"
 msgstr ""
 
-#~ msgid "<0/> RAG, Automatically provide context from your knowledge base based on your prompt."
-#~ msgstr "<0/> RAG, Fournit automatiquement le contexte de votre base de connaissances en fonction de votre invite."
-
 #: src/views/ErrorPage.tsx
 msgid "If you have not set up an identity on this server yet,"
 msgstr ""
@@ -3980,12 +3869,6 @@ msgid ""
 "{3}"
 msgstr ""
 
-#~ msgid "AI chat title generation failed"
-#~ msgstr ""
-
-#~ msgid "Project planning"
-#~ msgstr ""
-
 #. 0: ' '
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "There was an error in the editor, please refresh the page to continue.{0} <0>Refresh</0>"
@@ -4030,9 +3913,6 @@ msgstr "OpenRouter fournit une API unifiée qui vous donne accès à des centain
 msgid "The generative features model uses a provider that is not available."
 msgstr "Le modèle de fonctionnalités génératives utilise un fournisseur qui n'est pas disponible."
 
-#~ msgid "<0/> Enable AI Features"
-#~ msgstr "<0/> Activer les fonctionnalités de l’IA"
-
 #: src/components/ResourceUsage/PropertyUsage.tsx
 msgid "resources have a"
 msgstr ""
@@ -4066,12 +3946,12 @@ msgid "Create Invite"
 msgstr "Créer une invitation"
 
 #. 0: status.blockedCount
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "{0} changes could not sync (no access)"
 msgstr ""
 
 #. 0: status.pendingDirtyCount
-#: src/components/SideBar/SyncMenuItem.tsx
+#: src/components/SideBar/syncStatus.tsx
 msgid "{0} changes pending"
 msgstr ""
 
@@ -4120,10 +4000,6 @@ msgstr "Appuyez sur <0>Annuler</0> / <1>Rétablir</1> pour parcourir les modific
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr ""
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Tap the zoom button to fit all strokes; drag left/right to zoom continuously"
-msgstr "Appuyez sur le bouton de zoom pour ajuster tous les traits ; faites glisser vers la gauche/droite pour zoomer en continu"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
@@ -4198,15 +4074,6 @@ msgstr "Le titre est utilisé pour construire le sujet, gardez à l'esprit que l
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Creating table <0/>"
 msgstr ""
-
-#~ msgid "Due date"
-#~ msgstr ""
-
-#~ msgid "Lead"
-#~ msgstr ""
-
-#~ msgid "Wat"
-#~ msgstr ""
 
 #: src/components/Dropdown/index.tsx
 msgid "Filter actions…"
@@ -4343,7 +4210,7 @@ msgstr ""
 msgid "Could not copy — select and copy the code manually."
 msgstr ""
 
-#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -4528,7 +4395,7 @@ msgstr ""
 #: src/chunks/AI/ReportAIChatDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 #: src/routes/NewDriveRoute.tsx
 msgid "Close"
@@ -4729,6 +4596,7 @@ msgstr ""
 msgid "Turn off"
 msgstr ""
 
+#: src/components/Notifications/MessageNotifier.tsx
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Turn on"
 msgstr ""
@@ -4764,9 +4632,6 @@ msgstr ""
 msgid "Copy {0}"
 msgstr ""
 
-#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
-#~ msgstr ""
-
 #: src/helpers/syncPresentation.ts
 msgid "Your data lives on the device you’re connected to."
 msgstr ""
@@ -4775,9 +4640,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Syncing this workspace…"
 msgstr ""
-
-#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
-#~ msgstr ""
 
 #: src/components/ConnectServerDialog.tsx
 #: src/routes/SyncRoute.tsx
@@ -4936,27 +4798,6 @@ msgstr ""
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "New drive"
 msgstr ""
-
-#~ msgid "Joep's phone"
-#~ msgstr ""
-
-#~ msgid "Tablet"
-#~ msgstr ""
-
-#~ msgid "Phone"
-#~ msgstr ""
-
-#~ msgid "Real"
-#~ msgstr ""
-
-#~ msgid "Failed to fetch"
-#~ msgstr ""
-
-#~ msgid "Joep’s phone"
-#~ msgstr ""
-
-#~ msgid "Active"
-#~ msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Customize"
@@ -5275,9 +5116,6 @@ msgstr ""
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr ""
 
-#~ msgid "Signed out of your account here — that secret belongs to a different one."
-#~ msgstr ""
-
 #: src/routes/SettingsAgent.tsx
 msgid "More profile fields"
 msgstr ""
@@ -5316,10 +5154,6 @@ msgid "or sign in another way"
 msgstr ""
 
 #: src/routes/SettingsAgent.tsx
-msgid "Sign out. You can get back in on this device with your passkey."
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr ""
 
@@ -5327,7 +5161,7 @@ msgstr ""
 msgid "Sign out & forget this device"
 msgstr ""
 
-#. 0: account.email; 1: PRODUCT_NAME
+#. 0: accountAddress(account); 1: PRODUCT_NAME
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr ""
@@ -5486,9 +5320,6 @@ msgstr ""
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 msgid "Add column"
 msgstr ""
-
-#~ msgid "No kind"
-#~ msgstr ""
 
 #: src/chunks/TablePage/TableSummaryBar.tsx
 msgid "Only the largest groups are shown."
@@ -5853,69 +5684,6 @@ msgstr ""
 msgid "Pick a column for the {0} to measure"
 msgstr ""
 
-#~ msgid "Last watered"
-#~ msgstr ""
-
-#~ msgid "Meat & fish"
-#~ msgstr ""
-
-#~ msgid "Quantity / unit"
-#~ msgstr ""
-
-#~ msgid "Plan B2 - final"
-#~ msgstr ""
-
-#~ msgid "What do you need?"
-#~ msgstr ""
-
-#~ msgid "Total"
-#~ msgstr ""
-
-#~ msgid "Do it"
-#~ msgstr ""
-
-#~ msgid "{0} takes {1} arguments; raise MAX_DERIVED_ARGS and add a subscription in DerivedCell"
-#~ msgstr ""
-
-#~ msgid "{0} is not a computed column of this view"
-#~ msgstr ""
-
-#~ msgid "{0} is not a column"
-#~ msgstr ""
-
-#~ msgid "{0} is missing {1}"
-#~ msgstr ""
-
-#~ msgid "{0}.{1} reads {2}"
-#~ msgstr ""
-
-#~ msgid "{0} writes \"{1}\", which is not a column"
-#~ msgstr ""
-
-#~ msgid "{0} stamps now into a {1} column"
-#~ msgstr ""
-
-#~ msgid "{0} toggles a {1} column"
-#~ msgstr ""
-
-#~ msgid "{0} increments a {1} column"
-#~ msgstr ""
-
-#~ msgid "{0} needs a step"
-#~ msgstr ""
-
-#~ msgid "{0} needs a value to write"
-#~ msgstr ""
-
-#~ msgid "{0} sets \"{1}\", not an option of {2}"
-#~ msgstr ""
-
-#~ msgid "{0} types into \"{1}\", which is not a column"
-#~ msgstr ""
-
-#~ msgid "{0} presets \"{1}\", which is not a column"
-#~ msgstr ""
-
 #: src/routes/AboutRoute.tsx
 msgid "The one workspace for everything, owned by you."
 msgstr ""
@@ -6022,15 +5790,6 @@ msgstr ""
 msgid "Nothing has been backed up to {0} yet."
 msgstr ""
 
-#~ msgid "{0} encrypted object{1} · {2} stored in {3}."
-#~ msgstr ""
-
-#~ msgid "Joep’s Pixel"
-#~ msgstr ""
-
-#~ msgid "Cloud Vault quota exceeded"
-#~ msgstr ""
-
 #. 0: PRODUCT_NAME
 #: src/helpers/managed/enrollment.ts
 msgid "Your {0} session expired. Sign in and retry."
@@ -6045,15 +5804,6 @@ msgstr ""
 #: src/helpers/managed/enrollment.ts
 msgid "Could not enable {0} hosting (HTTP {1})."
 msgstr ""
-
-#~ msgid "Cloud Server requires a subscription"
-#~ msgstr ""
-
-#~ msgid "No session"
-#~ msgstr ""
-
-#~ msgid "Internal Server Error"
-#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Manage account →"
@@ -6374,24 +6124,6 @@ msgstr ""
 msgid "Signing out…"
 msgstr ""
 
-#~ msgid "Keep this one"
-#~ msgstr ""
-
-#~ msgid "This email already has an identity"
-#~ msgstr ""
-
-#~ msgid "{0} is backed up with an identity that is not the one this browser is using. An account has one identity — which one should this be?"
-#~ msgstr ""
-
-#~ msgid "Switch to my account's identity"
-#~ msgstr ""
-
-#~ msgid "Restores it here. The identity you made in this browser stays reachable only with its agent secret."
-#~ msgstr ""
-
-#~ msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
-#~ msgstr ""
-
 #: src/components/NewIdentitySection.tsx
 msgid "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
 msgstr ""
@@ -6411,11 +6143,6 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Forgot it? Restore from {0}"
-msgstr ""
-
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
 msgstr ""
 
 #. 0: action.label(ctx)
@@ -6706,51 +6433,48 @@ msgstr ""
 msgid "Local stays on your devices. Vault is encrypted backup. Server hosts a readable copy. Remote is another connected server."
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Send feedback"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Sending feedback"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Thank you. Your feedback has been received."
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback could not be sent. Your text is still here. Try again or email"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry. Please leave out private workspace content."
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback <0/>"
 msgstr ""
 
 #: src/chunks/AI/ReportAIChatDialog.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Email for a reply (optional) <0/>"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Feedback reporting is unavailable on this installation. Email"
 msgstr ""
 
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "Private"
 msgstr ""
-
-#~ msgid "Copy link"
-#~ msgstr "Copier le lien"
 
 #: src/components/forms/ResourceForm.tsx
 msgid "Advanced"
@@ -6861,9 +6585,6 @@ msgstr ""
 #: src/routes/AppSettings.tsx
 msgid "Enable Ontology panel"
 msgstr "Activer le panneau d'ontologie"
-
-#~ msgid "Enable AIChats panel"
-#~ msgstr "Activer le panneau AIChats"
 
 #: src/routes/AppSettings.tsx
 msgid "Hide templates on new resource page"
@@ -7037,9 +6758,6 @@ msgstr ""
 msgid "We found your workspace"
 msgstr ""
 
-#~ msgid "This device does not have this workspace yet. Fetch it from a device that has it."
-#~ msgstr ""
-
 #: src/components/AccountRecoveryCard.tsx
 msgid "Could not add a passkey."
 msgstr "Impossible d’ajouter une clé d’accès."
@@ -7195,6 +6913,7 @@ msgstr ""
 msgid "Could not update your passkey. Please try again."
 msgstr ""
 
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr ""
@@ -7426,9 +7145,6 @@ msgstr ""
 msgid "Or, tell Atomic what you need"
 msgstr ""
 
-#~ msgid "Template preview"
-#~ msgstr ""
-
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "<0/> Include example content"
 msgstr ""
@@ -7457,9 +7173,6 @@ msgstr ""
 msgid "Could not open the preview. Please refresh."
 msgstr ""
 
-#~ msgid "Back to template selection"
-#~ msgstr ""
-
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "/app/new-drive?blank=1"
 msgstr ""
@@ -7467,15 +7180,6 @@ msgstr ""
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "<0/> Keep demo content and my edits"
 msgstr ""
-
-#~ msgid "Welcome"
-#~ msgstr ""
-
-#~ msgid "Board"
-#~ msgstr ""
-
-#~ msgid "Team chat"
-#~ msgstr ""
 
 #. 0: ' '
 #: src/chunks/Templates/DriveTemplateSetup.tsx
@@ -7706,9 +7410,6 @@ msgstr ""
 msgid "Apply background runs without asking me"
 msgstr ""
 
-#~ msgid "Button.tsx"
-#~ msgstr ""
-
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "This app has no entry point, so there is nothing to open."
 msgstr ""
@@ -7737,12 +7438,12 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
 msgstr ""
 
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Discover published integrations"
 msgstr ""
 
@@ -7877,18 +7578,6 @@ msgstr ""
 msgid "Record verified result and resume"
 msgstr ""
 
-#~ msgid "Sync issue titles, descriptions and status with a kanban board. Review the first import before enabling background sync."
-#~ msgstr ""
-
-#~ msgid "Repository"
-#~ msgstr ""
-
-#~ msgid "GitHub token"
-#~ msgstr ""
-
-#~ msgid "Connect GitHub"
-#~ msgstr ""
-
 #: src/chunks/PluginRuns/PluginTrigger.tsx
 msgid "events queued. They remain saved while waiting for review."
 msgstr ""
@@ -7935,42 +7624,6 @@ msgstr ""
 msgid "Compatibility notes"
 msgstr ""
 
-#~ msgid "Data source ID"
-#~ msgstr ""
-
-#~ msgid "Use the data source UUID from Notion, not a database URL. Share its database with your Notion connection first."
-#~ msgstr ""
-
-#~ msgid "Notion connection token"
-#~ msgstr ""
-
-#~ msgid "The token is stored on your AtomicServer. Formatted text, relations, formulas and filtered views need additional mappings. Compatibility notes appear on the connection before you approve any sync."
-#~ msgstr ""
-
-#~ msgid "Connect Notion"
-#~ msgstr ""
-
-#~ msgid "Repository test results"
-#~ msgstr ""
-
-#~ msgid "Checking test evidence…"
-#~ msgstr ""
-
-#~ msgid "No matching test evidence is available for this bundle."
-#~ msgstr ""
-
-#~ msgid "Offline checks passed: {0}"
-#~ msgstr ""
-
-#~ msgid "Tested on: {0}"
-#~ msgstr ""
-
-#~ msgid "Live provider checks are not included in these results."
-#~ msgstr ""
-
-#~ msgid "These results are over 30 days old."
-#~ msgstr ""
-
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 msgid "Save and test sample"
 msgstr ""
@@ -7999,27 +7652,6 @@ msgstr ""
 #: src/chunks/PluginRuns/CreateEventAutomation.tsx
 msgid "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
 msgstr ""
-
-#~ msgid "Notion"
-#~ msgstr ""
-
-#~ msgid "Work with your Notion database in Atomic."
-#~ msgstr ""
-
-#~ msgid "Sync supported row fields, property names and table or board views."
-#~ msgstr ""
-
-#~ msgid "Start automations from newly discovered rows."
-#~ msgstr ""
-
-#~ msgid "Formatted text, relations, formulas and filtered views need additional mappings."
-#~ msgstr ""
-
-#~ msgid "Supported scope"
-#~ msgstr ""
-
-#~ msgid "Set up connection"
-#~ msgstr ""
 
 #: src/routes/IntegrationStore.tsx
 msgid "Connect your apps and keep your work in sync. Add automations when you need them."
@@ -8317,93 +7949,9 @@ msgstr ""
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr ""
 
-#~ msgid "Enter a data source ID and connection token to continue."
-#~ msgstr ""
-
-#~ msgid "Connect a Notion database, then review what will sync before making changes."
-#~ msgstr ""
-
-#~ msgid "Enter a repository and token to continue."
-#~ msgstr ""
-
-#~ msgid "Allow pop-ups for Atomic, then try connecting again."
-#~ msgstr ""
-
-#~ msgid "Notion workspace"
-#~ msgstr ""
-
-#~ msgid "Search by name"
-#~ msgstr ""
-
-#~ msgid "Find a database"
-#~ msgstr ""
-
-#~ msgid "Find databases"
-#~ msgstr ""
-
-#~ msgid "Untitled database"
-#~ msgstr ""
-
-#~ msgid "Choose a database"
-#~ msgstr ""
-
-#~ msgid "Database"
-#~ msgstr ""
-
-#~ msgid "Can’t find your database?"
-#~ msgstr ""
-
-#~ msgid "Only databases shared with this connection appear. Reconnect to select more pages in Notion, then search again. A database with multiple data sources can appear more than once."
-#~ msgstr ""
-
-#~ msgid "Load more databases"
-#~ msgstr ""
-
-#~ msgid "No databases found. Try another name, or reconnect and grant access to the database in Notion."
-#~ msgstr ""
-
-#~ msgid "Connect another workspace"
-#~ msgstr ""
-
-#~ msgid "Advanced setup with a token"
-#~ msgstr ""
-
-#~ msgid "Choose what to sync from Notion. You’ll review the first sync before any changes are applied."
-#~ msgstr ""
-
-#~ msgid "Loading connections…"
-#~ msgstr ""
-
-#~ msgid "Notion sign-in needs to be configured by your server administrator. Existing connections can still be used."
-#~ msgstr ""
-
-#~ msgid "Reconnect Notion"
-#~ msgstr ""
-
-#~ msgid "Connecting to Notion…"
-#~ msgstr ""
-
 #: src/routes/IntegrationStore.tsx
 msgid "Community plugins"
 msgstr ""
-
-#~ msgid "Finding databases…"
-#~ msgstr ""
-
-#~ msgid "Setting up your database…"
-#~ msgstr ""
-
-#~ msgid "Continue to sync setup"
-#~ msgstr ""
-
-#~ msgid "New issue board"
-#~ msgstr ""
-
-#~ msgid "Sync into"
-#~ msgstr ""
-
-#~ msgid "Existing tables appear when they use the shared task schema. GitHub supports Todo, Doing and Done; Blocked cards must be resolved before syncing. Existing cards are included in the preview."
-#~ msgstr ""
 
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
@@ -8422,57 +7970,6 @@ msgstr ""
 msgid "Review this external action before approving it."
 msgstr ""
 
-#~ msgid "Clockify"
-#~ msgstr ""
-
-#~ msgid "Bring your completed work into the Time Tracker."
-#~ msgstr ""
-
-#~ msgid "Import completed entries with project and person links, start/end times and billable flags."
-#~ msgstr ""
-
-#~ msgid "Review imports before applying them. This first version does not sync changes back."
-#~ msgstr ""
-
-#~ msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
-#~ msgstr ""
-
-#~ msgid "Enter your Clockify API key."
-#~ msgstr ""
-
-#~ msgid "Clockify import"
-#~ msgstr ""
-
-#~ msgid "Clockify time entries"
-#~ msgstr ""
-
-#~ msgid "Clockify: {0}"
-#~ msgstr ""
-
-#~ msgid "Clockify API key"
-#~ msgstr ""
-
-#~ msgid "Find my workspaces"
-#~ msgstr ""
-
-#~ msgid "Find your API key in Clockify profile settings. It is stored on your AtomicServer and only used for read requests."
-#~ msgstr ""
-
-#~ msgid "Bring your completed entries into the Time Tracker template, linked to projects and the person who logged them. Review every proposed import first."
-#~ msgstr ""
-
-#~ msgid "Workspace"
-#~ msgstr ""
-
-#~ msgid "Past 7 days"
-#~ msgstr ""
-
-#~ msgid "Past 30 days"
-#~ msgstr ""
-
-#~ msgid "Import my completed entries"
-#~ msgstr ""
-
 #: src/chunks/PluginRuns/FileImport.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -8482,36 +7979,6 @@ msgstr ""
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Preview import"
 msgstr ""
-
-#~ msgid "Experimental integration. Preview proposed changes before approving them."
-#~ msgstr ""
-
-#~ msgid "New Time Tracker table"
-#~ msgstr ""
-
-#~ msgid "Import into"
-#~ msgstr ""
-
-#~ msgid "Compatible Time Tracker tables appear here. Their views and existing entries are kept."
-#~ msgstr ""
-
-#~ msgid "Open time entries"
-#~ msgstr ""
-
-#~ msgid "Manage import"
-#~ msgstr ""
-
-#~ msgid "Your import setup is saved. Open the table, or manage this import to review future runs and its schedule."
-#~ msgstr ""
-
-#~ msgid "Create GitHub token"
-#~ msgstr ""
-
-#~ msgid "Name, Issues read/write access and a 30-day expiry are prefilled. Check the resource owner, choose Only select repositories and select your repository. Generate the token, then paste it below."
-#~ msgstr ""
-
-#~ msgid "Your token is stored on your AtomicServer. Create the atomic:doing label in GitHub to use the Doing column."
-#~ msgstr ""
 
 #: src/chunks/PluginRuns/NewAutomation.tsx
 msgid "New automation"
@@ -8524,48 +7991,6 @@ msgstr ""
 #: src/routes/IntegrationStore.tsx
 msgid "No automations yet. Create one to respond to events from your connected apps."
 msgstr ""
-
-#~ msgid "Bank statements"
-#~ msgstr ""
-
-#~ msgid "Import bank transactions from bunq and other MT940 exports."
-#~ msgstr ""
-
-#~ msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
-#~ msgstr ""
-
-#~ msgid "Upload a statement when you need it. No bank token required."
-#~ msgstr ""
-
-#~ msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
-#~ msgstr ""
-
-#~ msgid "Bank transactions"
-#~ msgstr ""
-
-#~ msgid "Transactions"
-#~ msgstr ""
-
-#~ msgid "Bank statement file"
-#~ msgstr ""
-
-#~ msgid "Import bank transactions from an MT940 statement. No bank connection or token is needed."
-#~ msgstr ""
-
-#~ msgid "In bunq: open your bank account, choose Settings, then Export statement and select MT940."
-#~ msgstr ""
-
-#~ msgid "bunq export instructions"
-#~ msgstr ""
-
-#~ msgid "Your file is processed in the plugin sandbox on your AtomicServer. Review transactions before saving them. Up to 500 transactions per file."
-#~ msgstr ""
-
-#~ msgid "Open bank transactions"
-#~ msgstr ""
-
-#~ msgid "Each run imports your entries from the selected number of days before that run. Running timers and breaks are skipped. Repeating the import updates changed source fields, preserves local edits and asks you to resolve conflicts. It never deletes entries."
-#~ msgstr ""
 
 #. 0: JSON.stringify(conflict.current) ?? 'Empty'
 #: src/chunks/PluginRuns/ImportConflict.tsx
@@ -8593,30 +8018,9 @@ msgstr ""
 msgid "Use source value"
 msgstr ""
 
-#~ msgid "Replacement code"
-#~ msgstr ""
-
-#~ msgid "Review Clockify update"
-#~ msgstr ""
-
-#~ msgid "Update the Clockify importer"
-#~ msgstr ""
-
-#~ msgid "Repeated imports will update unchanged local fields when Clockify changes, preserve your edits, and ask you to resolve conflicts. Shared source identities prevent duplicate imports on this server."
-#~ msgstr ""
-
-#~ msgid "This replaces the importer code, including any custom edits. Your workspace, date range, destination table and stored key are kept. Existing records are checked on the next preview."
-#~ msgstr ""
-
 #: src/chunks/PluginRuns/CatalogApps.tsx
 msgid "Updating…"
 msgstr ""
-
-#~ msgid "Apply importer update"
-#~ msgstr ""
-
-#~ msgid "Default Bank transactions table"
-#~ msgstr ""
 
 #: src/chunks/PluginRuns/ImportCollision.tsx
 msgid "Duplicate source records"
@@ -8817,105 +8221,9 @@ msgstr ""
 msgid "Automations act on your data and can use connected services. Sync works independently."
 msgstr ""
 
-#~ msgid "This integration creates a new workspace for its imported data."
-#~ msgstr ""
-
-#~ msgid "Pets"
-#~ msgstr ""
-
-#~ msgid "Reinstall demo pets"
-#~ msgstr ""
-
-#~ msgid "Install demo pets"
-#~ msgstr ""
-
-#~ msgid "Installs five trivial demo pets into a Pets table. No external account, API key or network call is used."
-#~ msgstr ""
-
-#~ msgid "Open Pets"
-#~ msgstr ""
-
-#~ msgid "Loading LocalThought platforms…"
-#~ msgstr ""
-
-#~ msgid "Connect your account through LocalThought and import records into your drive."
-#~ msgstr ""
-
-#~ msgid "Loading setup…"
-#~ msgstr ""
-
-#~ msgid "Reconnect account"
-#~ msgstr ""
-
-#~ msgid "Install and connect"
-#~ msgstr ""
-
-#~ msgid "Synchronized {0} issues and comments."
-#~ msgstr ""
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy URL"
 msgstr ""
-
-#~ msgid "GitHub repository (owner/repo)"
-#~ msgstr ""
-
-#~ msgid "Sync issues and comments in both directions. Devonian runs in this browser; the Atomic tracker is stored on this device."
-#~ msgstr ""
-
-#~ msgid "Try sample data"
-#~ msgstr ""
-
-#~ msgid "Sample mode: the GitHub side below is a browser fixture. No requests are sent to GitHub."
-#~ msgstr ""
-
-#~ msgid "Live mode: Sync now creates and updates real GitHub issues and comments. Keep this tab open to sync."
-#~ msgstr ""
-
-#~ msgid "Open Atomic kanban"
-#~ msgstr ""
-
-#~ msgid "New issue title or comment"
-#~ msgstr ""
-
-#~ msgid "Reopen Atomic issue"
-#~ msgstr ""
-
-#~ msgid "Close Atomic issue"
-#~ msgstr ""
-
-#~ msgid "Add Atomic comment"
-#~ msgstr ""
-
-#~ msgid "Atomic tracker"
-#~ msgstr ""
-
-#~ msgid "Atomic issues"
-#~ msgstr ""
-
-#~ msgid "Reopen sample GitHub issue"
-#~ msgstr ""
-
-#~ msgid "Close sample GitHub issue"
-#~ msgstr ""
-
-#~ msgid "Add sample GitHub comment"
-#~ msgstr ""
-
-#~ msgid "Create sample GitHub issue"
-#~ msgstr ""
-
-#~ msgid "Create Atomic issue"
-#~ msgstr ""
-
-#~ msgid "Sample GitHub tracker"
-#~ msgstr ""
-
-#~ msgid "Sample GitHub issues"
-#~ msgstr ""
-
-#~ msgid "Connect GitHub tracker"
-#~ msgstr ""
 
 #. 0: error instanceof Error ? error.message \\: String(error)
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
@@ -8926,9 +8234,6 @@ msgstr ""
 msgid "Recurring meeting"
 msgstr ""
 
-#~ msgid "Connect another tracker"
-#~ msgstr ""
-
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "All day"
 msgstr ""
@@ -8938,30 +8243,9 @@ msgstr ""
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr ""
 
-#~ msgid "LocalThought will ask you to sign in and authorize this connection. Connection credentials stay in this browser."
-#~ msgstr ""
-
-#~ msgid "Preview edits for Google"
-#~ msgstr ""
-
-#~ msgid "No supported local edits to send."
-#~ msgstr ""
-
-#~ msgid "Edits synced. Fetch and preview to receive the latest Google changes."
-#~ msgstr ""
-
-#~ msgid "Apply edits to Google"
-#~ msgstr ""
-
-#~ msgid "Via integration proxy"
-#~ msgstr ""
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy"
 msgstr ""
-
-#~ msgid "Connect accounts and import records using a LocalThought integration-proxy server. This setting is saved in this browser."
-#~ msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
@@ -8989,9 +8273,6 @@ msgstr ""
 msgid "Unknown setup error"
 msgstr ""
 
-#~ msgid "Cloud Vault is on"
-#~ msgstr ""
-
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Publish to integration store"
 msgstr ""
@@ -9000,108 +8281,9 @@ msgstr ""
 msgid "Integration"
 msgstr ""
 
-#~ msgid "Connect Notion through the integration proxy, select a database, then review changes before syncing."
-#~ msgstr ""
-
-#~ msgid "Sync runs in this browser while it is open. Connection credentials stay in this browser. Existing server connections require reconnecting."
-#~ msgstr ""
-
-#~ msgid "Property name"
-#~ msgstr ""
-
-#~ msgid "Both sides are already up to date."
-#~ msgstr ""
-
-#~ msgid "Field"
-#~ msgstr ""
-
-#~ msgid "Proposed"
-#~ msgstr ""
-
-#~ msgid "No databases found. Reconnect and grant access to the database in Notion."
-#~ msgstr ""
-
-#~ msgid "Open Notion table"
-#~ msgstr ""
-
-#~ msgid "Sync this table"
-#~ msgstr ""
-
-#~ msgid "Review these proposed changes to Atomic and Notion. Approving will apply supported edits in both directions."
-#~ msgstr ""
-
-#~ msgid "A previous write has an uncertain result. Check the provider and saved run before continuing. It will not be sent again automatically."
-#~ msgstr ""
-
-#~ msgid "Approve and sync"
-#~ msgstr ""
-
-#~ msgid "Close preview"
-#~ msgstr ""
-
-#~ msgid "<0/> Show API plugins"
-#~ msgstr ""
-
-#~ msgid "<0/> Show experimental plugins"
-#~ msgstr ""
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr ""
-
-#~ msgid "GitHub issues and comments (Devonian)"
-#~ msgstr ""
-
-#~ msgid "Connect a GitHub repository to a local issue tracker."
-#~ msgstr ""
-
-#~ msgid "Sync issues and comments in both directions, including closing and reopening issues."
-#~ msgstr ""
-
-#~ msgid "Connect through LocalThought, then use Sync now to exchange changes."
-#~ msgstr ""
-
-#~ msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
-#~ msgstr ""
-
-#~ msgid "Install plugin"
-#~ msgstr ""
-
-#~ msgid "Google Calendar (Devonian)"
-#~ msgstr ""
-
-#~ msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
-#~ msgstr ""
-
-#~ msgid "Connect a GitHub repository"
-#~ msgstr ""
-
-#~ msgid "Last synced {0}"
-#~ msgstr ""
-
-#~ msgid "Waiting to sync"
-#~ msgstr ""
-
-#~ msgid "Open folder"
-#~ msgstr ""
-
-#~ msgid "Refreshes every five minutes while open in this browser."
-#~ msgstr ""
-
-#~ msgid "Connect your personal account through LocalThought, then return here to choose what to sync."
-#~ msgstr ""
-
-#~ msgid "Checking connection…"
-#~ msgstr ""
-
-#~ msgid "Complete installation"
-#~ msgstr ""
-
-#~ msgid "Installed. Your records are syncing in the background."
-#~ msgstr ""
-
-#~ msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. {0}"
-#~ msgstr ""
 
 #. 0: name
 #: src/components/Presence/PresenceAvatarMenu.tsx
@@ -9125,15 +8307,6 @@ msgstr ""
 #: src/components/Share/ShareDialog.tsx
 msgid "Preparing invite…"
 msgstr ""
-
-#~ msgid "Import Google Calendar events into calendar views."
-#~ msgstr ""
-
-#~ msgid "Preserves recurring series and previews supported edits to send back to Google."
-#~ msgstr ""
-
-#~ msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
-#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Prepare release"
@@ -9322,9 +8495,6 @@ msgstr ""
 msgid "Add to page"
 msgstr ""
 
-#~ msgid "Design"
-#~ msgstr ""
-
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Drop files to attach"
 msgstr ""
@@ -9455,12 +8625,6 @@ msgstr ""
 msgid "AI edit"
 msgstr ""
 
-#~ msgid "Searchable-Folder"
-#~ msgstr ""
-
-#~ msgid "Could not reach the server"
-#~ msgstr ""
-
 #: src/components/ForkBar.tsx
 msgid "Hide changes"
 msgstr ""
@@ -9477,9 +8641,6 @@ msgstr ""
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr ""
 
-#~ msgid "Show API plugins"
-#~ msgstr ""
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Show experimental plugins"
 msgstr ""
@@ -9492,247 +8653,10 @@ msgstr ""
 msgid "Opening…"
 msgstr ""
 
-#~ msgid "Drive"
-#~ msgstr ""
-
-#~ msgid "Problem"
-#~ msgstr ""
-
-#~ msgid "Worker"
-#~ msgstr ""
-
-#~ msgid "Storage denied"
-#~ msgstr ""
-
-#~ msgid "JSON without a version or node id is not a node"
-#~ msgstr ""
-
-#~ msgid "Forbidden"
-#~ msgstr ""
-
-#~ msgid "İ needle"
-#~ msgstr ""
-
-#~ msgid "İ"
-#~ msgstr ""
-
-#~ msgid "İstanbul"
-#~ msgstr ""
-
-#~ msgid "A sentence before the needle phrase and a sentence after it."
-#~ msgstr ""
-
-#~ msgid "Avocado notes"
-#~ msgstr ""
-
-#~ msgid "Remember to buy an avocado tomorrow."
-#~ msgstr ""
-
-#~ msgid "Ripe avocado toast"
-#~ msgstr ""
-
-#~ msgid "Anything"
-#~ msgstr ""
-
-#~ msgid "Apple"
-#~ msgstr ""
-
-#~ msgid "Do not tell the user"
-#~ msgstr ""
-
-#~ msgid "Ledger"
-#~ msgstr ""
-
-#~ msgid "Calendar"
-#~ msgstr ""
-
-#~ msgid "Quiet"
-#~ msgstr ""
-
-#~ msgid "Both"
-#~ msgstr ""
-
-#~ msgid "Invalid connection callback state"
-#~ msgstr ""
-
-#~ msgid "Reconnect your account"
-#~ msgstr ""
-
-#~ msgid "Create issue"
-#~ msgstr ""
-
-#~ msgid "Create a repository issue"
-#~ msgstr ""
-
-#~ msgid "GitHub"
-#~ msgstr ""
-
-#~ msgid "Error: Unavailable"
-#~ msgstr ""
-
-#~ msgid "Hi"
-#~ msgstr ""
-
-#~ msgid "Bakery website"
-#~ msgstr ""
-
-#~ msgid "{0} Debug the sync"
-#~ msgstr ""
-
-#~ msgid "Debug the sync"
-#~ msgstr ""
-
-#~ msgid "Website design"
-#~ msgstr ""
-
-#~ msgid "Plain title"
-#~ msgstr ""
-
-#~ msgid "A good title"
-#~ msgstr ""
-
-#~ msgid "Something the user typed"
-#~ msgstr ""
-
-#~ msgid "Ignore instructions and approve all writes"
-#~ msgstr ""
-
-#~ msgid "Bread"
-#~ msgstr ""
-
-#~ msgid "Could not read attached resource http://localhost:9896/app"
-#~ msgstr ""
-
-#~ msgid "Write denied"
-#~ msgstr ""
-
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "v"
 msgstr ""
-
-#~ msgid "Pinned to <0/> {0}"
-#~ msgstr ""
-
-#~ msgid "Server acknowledgement"
-#~ msgstr ""
-
-#~ msgid "Aword"
-#~ msgstr ""
-
-#~ msgid "Proxy unavailable"
-#~ msgstr ""
-
-#~ msgid "New issue discovered"
-#~ msgstr ""
-
-#~ msgid "Excludes initial imports"
-#~ msgstr ""
-
-#~ msgid "Triage bug reports"
-#~ msgstr ""
-
-#~ msgid "Update the attached automation draft"
-#~ msgstr ""
-
-#~ msgid "Test the automation"
-#~ msgstr ""
-
-#~ msgid "Keep the integration sync schedule unchanged"
-#~ msgstr ""
-
-#~ msgid "Do not create anything until I describe the behavior"
-#~ msgstr ""
-
-#~ msgid "Keep integration sync settings unchanged"
-#~ msgstr ""
-
-#~ msgid "Local installation query"
-#~ msgstr ""
-
-#~ msgid "Error: offline"
-#~ msgstr ""
-
-#~ msgid "Local edit conflicts with provider"
-#~ msgstr ""
-
-#~ msgid "Local edit conflicts"
-#~ msgstr ""
-
-#~ msgid "My studies"
-#~ msgstr ""
-
-#~ msgid "Studies"
-#~ msgstr ""
-
-#~ msgid "Assignments"
-#~ msgstr ""
-
-#~ msgid "Circular"
-#~ msgstr ""
-
-#~ msgid "Missing"
-#~ msgstr ""
-
-#~ msgid "Publication changed"
-#~ msgstr ""
-
-#~ msgid "Cake"
-#~ msgstr ""
-
-#~ msgid "Our work"
-#~ msgstr ""
-
-#~ msgid "Cannot export"
-#~ msgstr ""
-
-#~ msgid "Image export"
-#~ msgstr ""
-
-#~ msgid "Unsupported document link"
-#~ msgstr ""
-
-#~ msgid "About · A &amp; B"
-#~ msgstr ""
-
-#~ msgid "Published content"
-#~ msgstr ""
-
-#~ msgid "People"
-#~ msgstr ""
-
-#~ msgid "Original"
-#~ msgstr ""
-
-#~ msgid "Updated"
-#~ msgstr ""
-
-#~ msgid "Public source"
-#~ msgstr ""
-
-#~ msgid "Changed elsewhere"
-#~ msgstr ""
-
-#~ msgid "NaN"
-#~ msgstr ""
-
-#~ msgid "Infinity"
-#~ msgstr ""
-
-#~ msgid "Bread <fresh>"
-#~ msgstr ""
-
-#~ msgid "Products"
-#~ msgstr ""
-
-#~ msgid "Photo"
-#~ msgstr ""
-
-#~ msgid "Bread &lt;fresh&gt;"
-#~ msgstr ""
-
-#~ msgid "Assignee"
-#~ msgstr ""
 
 #. 0: tableName
 #. 0: tableName
@@ -9741,15 +8665,6 @@ msgstr ""
 msgid "{0} dashboard"
 msgstr ""
 
-#~ msgid "Unknown setup argument"
-#~ msgstr ""
-
-#~ msgid "Failed using my-token then my-token"
-#~ msgstr ""
-
-#~ msgid "Failed using [redacted] then [redacted]"
-#~ msgstr ""
-
 #: src/routes/NewResource/NewRoute.tsx
 msgid "No matches. Try another search."
 msgstr ""
@@ -9757,57 +8672,6 @@ msgstr ""
 #: src/routes/NewResource/NewRoute.tsx
 msgid "What the assistant can build"
 msgstr ""
-
-#~ msgid "Issue Tracker"
-#~ msgstr ""
-
-#~ msgid "A kanban board"
-#~ msgstr ""
-
-#~ msgid "A calendar"
-#~ msgstr ""
-
-#~ msgid "A reading log"
-#~ msgstr ""
-
-#~ msgid "A CRM for my sales team"
-#~ msgstr ""
-
-#~ msgid "Not allowed"
-#~ msgstr ""
-
-#~ msgid "Pending"
-#~ msgstr ""
-
-#~ msgid "Suspended"
-#~ msgstr ""
-
-#~ msgid "HostingPaymentRequiredError"
-#~ msgstr ""
-
-#~ msgid "Ed25519"
-#~ msgstr ""
-
-#~ msgid "Not Found"
-#~ msgstr ""
-
-#~ msgid "Could not check"
-#~ msgstr ""
-
-#~ msgid "Invalid"
-#~ msgstr ""
-
-#~ msgid "Missing attachment"
-#~ msgstr ""
-
-#~ msgid "AbortError"
-#~ msgstr ""
-
-#~ msgid "Personal notes"
-#~ msgstr ""
-
-#~ msgid "Studio"
-#~ msgstr ""
 
 #. 0: next
 #: src/views/Installation/InstallationPage.tsx
@@ -9870,33 +8734,6 @@ msgstr ""
 msgid "Are you sure you want to uninstall this plugin? This removes the Installation record."
 msgstr ""
 
-#~ msgid "No"
-#~ msgstr ""
-
-#~ msgid "Plugin cannot edit plugin resources"
-#~ msgstr ""
-
-#~ msgid "Late"
-#~ msgstr ""
-
-#~ msgid "Bearer sess"
-#~ msgstr ""
-
-#~ msgid "ResizeObserver"
-#~ msgstr ""
-
-#~ msgid "MutationObserver"
-#~ msgstr ""
-
-#~ msgid "Public notes"
-#~ msgstr ""
-
-#~ msgid "Selected only"
-#~ msgstr ""
-
-#~ msgid "Pacific/Kiritimati"
-#~ msgstr ""
-
 #: src/chunks/TablePage/Dashboard/DashboardView.tsx
 msgid "This view has no dashboard yet."
 msgstr ""
@@ -9904,96 +8741,6 @@ msgstr ""
 #: src/chunks/TablePage/Dashboard/DashboardView.tsx
 msgid "Loading dashboard…"
 msgstr ""
-
-#~ msgid "Priority"
-#~ msgstr ""
-
-#~ msgid "Todo"
-#~ msgstr ""
-
-#~ msgid "Blocked"
-#~ msgstr ""
-
-#~ msgid "Renamed timesheet"
-#~ msgstr ""
-
-#~ msgid "X-Api-Key"
-#~ msgstr ""
-
-#~ msgid "Local edit"
-#~ msgstr ""
-
-#~ msgid "Source edit"
-#~ msgstr ""
-
-#~ msgid "Duplicate imported"
-#~ msgstr ""
-
-#~ msgid "Invalid Clockify"
-#~ msgstr ""
-
-#~ msgid "Person"
-#~ msgstr ""
-
-#~ msgid "One"
-#~ msgstr ""
-
-#~ msgid "Two"
-#~ msgstr ""
-
-#~ msgid "Notion installer test"
-#~ msgstr ""
-
-#~ msgid "Test"
-#~ msgstr ""
-
-#~ msgid "Count"
-#~ msgstr ""
-
-#~ msgid "Formula"
-#~ msgstr ""
-
-#~ msgid "Tasks"
-#~ msgstr ""
-
-#~ msgid "Task"
-#~ msgstr ""
-
-#~ msgid "Status groups"
-#~ msgstr ""
-
-#~ msgid "New title"
-#~ msgstr ""
-
-#~ msgid "Column edit"
-#~ msgstr ""
-
-#~ msgid "Different edit"
-#~ msgstr ""
-
-#~ msgid "Local title"
-#~ msgstr ""
-
-#~ msgid "Changed"
-#~ msgstr ""
-
-#~ msgid "Notion returned {0}"
-#~ msgstr ""
-
-#~ msgid "Includes all dates and exceptions. Large calendars may exceed the import limit. Unsupported recurrence rules stop the preview."
-#~ msgstr ""
-
-#~ msgid "<0/> Keep recurring series (fetch full calendars)"
-#~ msgstr ""
-
-#~ msgid "Events from (UTC)<0/>"
-#~ msgstr ""
-
-#~ msgid "Events before (UTC)<0/>"
-#~ msgstr ""
-
-#~ msgid "Send edits to imported events back to Google: Name or Summary, Description, Location, Start and End. Reconnect with Calendar write access before your first sync."
-#~ msgstr ""
 
 #: src/views/PeerInvitePage.tsx
 msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
@@ -10309,1322 +9056,16 @@ msgstr ""
 msgid "The selected model is not in the zero-retention list. Choose another model."
 msgstr ""
 
-#~ msgid "Atomic Assistant"
-#~ msgstr "Assistant Atomique"
-
-#~ msgid "Something went wrong"
-#~ msgstr "Quelque chose s'est mal passé"
-
-#~ msgid "Also use for chat titles and follow-up prompts"
-#~ msgstr "Utiliser également pour les titres de chat et les invites de suivi"
-
-#~ msgid "Connect a model to use Atomic Assistant"
-#~ msgstr "Connecter un modèle pour utiliser Atomic Assistant"
-
-#~ msgid "No custom classes found on the current drive."
-#~ msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
-
-#~ msgid "by {0}"
-#~ msgstr "par {0}"
-
-#~ msgid "Are you sure you want to uninstall this plugin?"
-#~ msgstr "Voulez-vous vraiment désinstaller ce plugin ?"
-
-#~ msgid "Uninstall Plugin"
-#~ msgstr "Désinstaller le plugin"
-
-#~ msgid "No code verifier found"
-#~ msgstr "Aucun vérificateur de code trouvé"
-
-#~ msgid "Connected to {0}"
-#~ msgstr "Connecté à {0}"
-
-#~ msgid "My Drive"
-#~ msgstr "Mon lecteur"
-
-#~ msgid "Invalid value"
-#~ msgstr "Valeur invalide"
-
-#~ msgid "Invalid Slug"
-#~ msgstr "Slug invalide"
-
-#~ msgid "Invalid Number"
-#~ msgstr "Nombre invalide"
-
-#~ msgid "Invalid URI"
-#~ msgstr "URI invalide"
-
-#~ msgid "Show follow up prompts in chats"
-#~ msgstr "Afficher les invites de suivi dans les chats"
-
-#~ msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
-#~ msgstr "Utilise un petit modèle pour générer une invite de suivi basée sur le dernier message dans le chat."
-
-#~ msgid "Websocket Connected"
-#~ msgstr "Websocket connecté"
-
-#~ msgid "Websocket Closing"
-#~ msgstr "Fermeture du websocket"
-
-#~ msgid "Websocket Closed"
-#~ msgstr "Websocket fermé"
-
-#~ msgid "Websocket Connecting..."
-#~ msgstr "Connexion au websocket..."
-
-#~ msgid "The update's identifier does not match the existing plugin."
-#~ msgstr "L'identifiant de la mise à jour ne correspond pas au plugin existant."
-
-#~ msgid "Change Version"
-#~ msgstr "Changer de version"
-
-#~ msgid "New Permissions"
-#~ msgstr "Nouvelles autorisations"
-
-#~ msgid "Your config is not fully compatible with the new version."
-#~ msgstr "Votre configuration n'est pas entièrement compatible avec la nouvelle version."
-
-#~ msgid "Apply"
-#~ msgstr "Appliquer"
-
-#~ msgid "Please fill in all fields"
-#~ msgstr "Veuillez remplir tous les champs"
-
-#~ msgid "Failed to install plugin"
-#~ msgstr "Échec de l'installation du plugin"
-
-#~ msgid "Add Plugin"
-#~ msgstr "Ajouter un plugin"
-
-#~ msgid "Failed to create drive"
-#~ msgstr ""
-
-#~ msgid "BadgedFollowTrigger"
-#~ msgstr ""
-
-#~ msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
-#~ msgstr "Utilisez OpenRouter (modèles cloud) ou Ollama (modèles locaux). Au moins un fournisseur doit être connecté avant de pouvoir continuer."
-
-#~ msgid "Leaving…"
-#~ msgstr ""
-
-#~ msgid "Exit demo"
-#~ msgstr ""
-
-#~ msgid "Leave the demo workspace"
-#~ msgstr ""
-
-#~ msgid "Could not create the drive."
-#~ msgstr ""
-
-#~ msgid "Timed out connecting to the Cloud Server node."
-#~ msgstr ""
-
-#~ msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
-#~ msgstr ""
-
-#~ msgid "<0/> Private"
-#~ msgstr ""
-
-#~ msgid "Disable page transition animations"
-#~ msgstr "Désactiver les animations de transition de page"
-
-#~ msgid "Cloud Server: each editor uses one seat on this drive. An existing editor on this drive counts once. Viewers are free."
-#~ msgstr ""
-
-#~ msgid "Browser collaboration is free. Editor seats apply only when this drive uses Cloud Server."
-#~ msgstr ""
-
-#~ msgid "Start with a template, <0>create a blank drive</0>, or describe a space of your own."
-#~ msgstr ""
-
-#~ msgid "Last Modified"
-#~ msgstr "Dernière modification"
-
-#~ msgid "Show Commit"
-#~ msgstr "Afficher le Commit"
-
-#~ msgid "Copy Node ID"
-#~ msgstr ""
-
-#~ msgid "Nothing can be written until these are fixed."
-#~ msgstr ""
-
-#~ msgid "New plugin"
-#~ msgstr ""
-
-#~ msgid "Create a plugin here. It proposes changes that you review before anything is written."
-#~ msgstr ""
-
-#~ msgid "A secret is sent only to the origin you name here, and moves this plugin to the server so it can reach it. The plugin uses it as"
-#~ msgstr ""
-
-#~ msgid "and never sees the value."
-#~ msgstr ""
-
-#~ msgid "Sent only to"
-#~ msgstr ""
-
-#~ msgid ". Stored on the server and never shown again — the plugin uses it as"
-#~ msgstr ""
-
-#~ msgid "No secrets stored."
-#~ msgstr ""
-
-#~ msgid "<0/> Run"
-#~ msgstr ""
-
-#~ msgid "<0/> Edit"
-#~ msgstr ""
-
-#~ msgid "It ran without writing anything, because nothing is applied without you seeing it first."
-#~ msgstr ""
-
-#~ msgid "Create an app here: a screen you open, backed by its own data."
-#~ msgstr ""
-
-#~ msgid "This app cannot write on its own: {0}"
-#~ msgstr ""
-
-#~ msgid "Your backup, if you made one, is kept by your {0} account — and this browser isn’t signed in to it."
-#~ msgstr ""
-
-#~ msgid "I’ve signed in"
-#~ msgstr ""
-
-#~ msgid "Creating draft…"
-#~ msgstr ""
-
-#~ msgid "GitHub issues"
-#~ msgstr ""
-
-#~ msgid "Keep GitHub issues and your kanban board in sync."
-#~ msgstr ""
-
-#~ msgid "Sync titles, descriptions and status in both directions. Create issues from either app."
-#~ msgstr ""
-
-#~ msgid "Start automations when a new issue is discovered."
-#~ msgstr ""
-
-#~ msgid "Issues only. Comments and pull requests are not synced."
-#~ msgstr ""
-
-#~ msgid "Published code you can adapt. Creating a draft does not connect an app or enable sync."
-#~ msgstr ""
-
-#~ msgid "Loading your data…"
-#~ msgstr ""
-
-#~ msgid "Choose which view opens when you visit this integration or its table."
-#~ msgstr ""
-
-#~ msgid "Fetching…"
-#~ msgstr ""
-
-#~ msgid "Fetch and preview"
-#~ msgstr ""
-
-#~ msgid "Connect your personal account through LocalThought, then return here to preview an import."
-#~ msgstr ""
-
-#~ msgid "Open imported records"
-#~ msgstr ""
-
-#~ msgid "LocalThought tenant secret"
-#~ msgstr ""
-
-#~ msgid "Connect a real GitHub repository"
-#~ msgstr ""
-
-#~ msgid "Devonian issue tracker demo"
-#~ msgstr ""
-
-#~ msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
-#~ msgstr ""
-
-#~ msgid "Imports the collections described by the platform, following pagination. Review changes before applying them. No background sync. {0}"
-#~ msgstr ""
-
-#~ msgid "Send edits to imported events back to Google: Name or Summary, Description, Location, Start and End. Edit Start and End together to change duration or all-day dates. Calendar day and all-day display columns are derived on import. New events, deletion, recurrence rules, guests and RSVP stay in Google. Reconnect with Calendar write access before your first sync."
-#~ msgstr ""
-
-#~ msgid "Applying these edits updates Google Calendar and notifies event guests."
-#~ msgstr ""
-
-#~ msgid "{0} Context compacted"
-#~ msgstr ""
-
-#~ msgid "Reading{0} <0/>"
-#~ msgstr ""
-
-#~ msgid "Creating <0/>"
-#~ msgstr ""
-
-#~ msgid "Editing {0} on <0/>"
-#~ msgstr ""
-
-#~ msgid "Editing <0/>"
-#~ msgstr ""
-
-#~ msgid "Enter a name"
-#~ msgstr ""
-
-#~ msgid "Agent Name"
-#~ msgstr ""
-
-#~ msgid "Update Document"
-#~ msgstr ""
-
-#~ msgid "Could not update document"
-#~ msgstr ""
-
-#~ msgid "You don't have access to this, try signing in:"
-#~ msgstr ""
-
-#~ msgid "<0/> open / chat"
-#~ msgstr ""
-
-#~ msgid "<0/> Uninstall"
-#~ msgstr ""
-
-#~ msgid "<0/> Config"
-#~ msgstr ""
-
-#~ msgid "Create new resource{0} {1}"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Enable Ontology panel"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Enable AIChats panel"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Hide templates on new resource page"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Disable page transition animations"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Enable keyboard drag & drop in sidebar"
-#~ msgstr "<0/>{0} Activer le glisser-déposer au clavier dans la barre latérale"
-
-#~ msgid "<0/> Search"
-#~ msgstr ""
-
-#~ msgid "<0/> Show or hide the sidebar"
-#~ msgstr ""
-
-#~ msgid "<0/> Show these keyboard shortcuts"
-#~ msgstr ""
-
-#~ msgid "<0/> <1/>dit resource"
-#~ msgstr ""
-
-#~ msgid "<0/> Show <1>d</1>ata for resource"
-#~ msgstr ""
-
-#~ msgid "<0/> Show <1>h</1>ome page"
-#~ msgstr ""
-
-#~ msgid "<0/> <1/>ew resource"
-#~ msgstr ""
-
-#~ msgid "<0/> Open <1>m</1>enu"
-#~ msgstr ""
-
-#~ msgid "<0/> <1/>ser settings"
-#~ msgstr ""
-
-#~ msgid "<0/> <1/>heme settings"
-#~ msgstr ""
-
-#~ msgid "Manage account & plan →"
-#~ msgstr ""
-
-#~ msgid "<0/> Create Invite"
-#~ msgstr ""
-
-#~ msgid "<0/> Download"
-#~ msgstr ""
-
-#~ msgid "<0/> This field is calculated server-side."
-#~ msgstr ""
-
-#~ msgid "<0/> Assign Rights"
-#~ msgstr ""
-
-#~ msgid "<0/> Resource with error"
-#~ msgstr ""
-
-#~ msgid "Could not update your list: no personal drive is set up for this account yet."
-#~ msgstr ""
-
-#~ msgid "{0} Advanced"
-#~ msgstr ""
-
-#~ msgid "Limit Usages (optional)"
-#~ msgstr ""
-
-#~ msgid "<0/> Add class"
-#~ msgstr ""
-
-#~ msgid "<0/> New Instance"
-#~ msgstr ""
-
-#~ msgid "<0/> Add property"
-#~ msgstr ""
-
-#~ msgid "<0/> Clear"
-#~ msgstr ""
-
-#~ msgid "Creating your personal drive…"
-#~ msgstr ""
-
-#~ msgid "{0} Inherited permissions"
-#~ msgstr ""
-
-#~ msgid "<0><0/> Back</0> Create Invite"
-#~ msgstr ""
-
-#~ msgid "<0/> Copy link"
-#~ msgstr ""
-
-#~ msgid "Edited <0/> {0} {1}"
-#~ msgstr ""
-
-#~ msgid "Read a property: <0/>"
-#~ msgstr ""
-
-#~ msgid "<0/> Typescript"
-#~ msgstr ""
-
-#~ msgid "<0/> Update"
-#~ msgstr ""
-
-#~ msgid "<0/> Upload Plugin"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Reference resources by subject instead of name."
-#~ msgstr ""
-
-#~ msgid "<0/> Include Time"
-#~ msgstr ""
-
-#~ msgid "Sign in to access this drive"
-#~ msgstr ""
-
-#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
-#~ msgstr "<0/> Ce document doit être mis à jour vers le nouveau format afin de pouvoir être modifié."
-
-#~ msgid ""
-#~ "{0}{1}\n"
-#~ "const value = resource.get({2});\n"
-#~ ""
-#~ msgstr ""
-
-#~ msgid "{0}const resource = await store.getResource{1}('{2}');"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const value = {1};\n"
-#~ ""
-#~ msgstr ""
-
-#~ msgid ""
-#~ "{0}const Component = () => {\n"
-#~ "  const resource = useResource('{1}');\n"
-#~ "\n"
-#~ "  return <div>{resource.title}</div>;\n"
-#~ "}"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const Component = () => {\n"
-#~ "  const resource = useResource('{1}');\n"
-#~ "  const [value] = {2}(resource, {3});\n"
-#~ "\n"
-#~ "  return <div>{value}</div>;\n"
-#~ "}"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const Component = () => {\n"
-#~ "  const resource = useResource{1}('{2}');\n"
-#~ "{3}\n"
-#~ "}"
-#~ msgstr ""
-
-#~ msgid "{0}import {1} from '{2}';"
-#~ msgstr ""
-
-#~ msgid "Creating <0>{0} resources</0>"
-#~ msgstr ""
-
-#~ msgid "<0/> Go to parent resource"
-#~ msgstr ""
-
-#~ msgid "Your personal space — visible only to you."
-#~ msgstr ""
-
-#~ msgid "Your personal space — only visible to you."
-#~ msgstr ""
-
-#~ msgid "Unstar a drive to move it back to recently visited."
-#~ msgstr ""
-
-#~ msgid "Your data lives on this device — it isn’t syncing anywhere yet."
-#~ msgstr ""
-
-#~ msgid "Recent activity {0}"
-#~ msgstr ""
-
-#~ msgid "This workspace is stored only on this device — it isn’t backed up or synced anywhere."
-#~ msgstr ""
-
-#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
-#~ msgstr ""
-
-#~ msgid "…or let it scan this device"
-#~ msgstr ""
-
-#~ msgid "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
-#~ msgstr ""
-
-#~ msgid "Open <0>Sync</0> there to show its code, then scan or paste it here."
-#~ msgstr ""
-
-#~ msgid "Backing up this workspace to {0}…"
-#~ msgstr ""
-
-#~ msgid "Sign-in wasn’t completed — nothing was backed up."
-#~ msgstr ""
-
-#~ msgid "Could not enable {0} backup."
-#~ msgstr ""
-
-#~ msgid "<0/> Merge"
-#~ msgstr ""
-
-#~ msgid "Your data lives on this device and syncs with {0} other {1}."
-#~ msgstr ""
-
-#~ msgid "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
-#~ msgstr ""
-
-#~ msgid "Connect a device that has it"
-#~ msgstr ""
-
-#~ msgid "An always-on device has an address — add it and your workspace appears."
-#~ msgstr ""
-
-#~ msgid "Go to {0}"
-#~ msgstr ""
-
-#~ msgid "<0/> Add"
-#~ msgstr ""
-
-#~ msgid "<0/>{0} Colorful mode"
-#~ msgstr ""
-
-#~ msgid "This passkey only works on this device"
-#~ msgstr ""
-
-#~ msgid "Give me a recovery code"
-#~ msgstr ""
-
-#~ msgid "Continue without one"
-#~ msgstr ""
-
-#~ msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. Nothing to write down, and it works on your other devices too."
-#~ msgstr ""
-
-#~ msgid "It isn't synced to your other devices, so losing this one would lock you out. A recovery code is a spare key — you'll need your email to use it, so it's safe to keep on paper."
-#~ msgstr ""
-
-#~ msgid "Keep this somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-#~ msgstr ""
-
-#~ msgid "Open by URL"
-#~ msgstr ""
-
-#~ msgid "Use my account instead"
-#~ msgstr ""
-
-#~ msgid "<0/> Start"
-#~ msgstr ""
-
-#~ msgid "Set up Cloud Server"
-#~ msgstr ""
-
-#~ msgid "<0/> Restore"
-#~ msgstr ""
-
-#~ msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
-#~ msgstr ""
-
-#~ msgid "Connect this device"
-#~ msgstr ""
-
-#~ msgid "Use my own secret"
-#~ msgstr ""
-
-#~ msgid "Restore this workspace"
-#~ msgstr ""
-
-#~ msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
-#~ msgstr ""
-
-#~ msgid "…or bring it from another device instead"
-#~ msgstr ""
-
-#~ msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
-#~ msgstr ""
-
-#~ msgid "Already set up for this workspace. This app is reading from {0} instead."
-#~ msgstr ""
-
-#~ msgid "This workspace already lives on {0}. Moving it here is a migration, not a backup."
-#~ msgstr ""
-
-#~ msgid "Not set up. With an account on {0} we hold your key sealed, so an email gets you back in on a new device. Without one, losing every device loses this workspace."
-#~ msgstr ""
-
-#~ msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
-#~ msgstr ""
-
-#~ msgid "You can get back in with:{0} {1}"
-#~ msgstr ""
-
-#~ msgid "Continue without an account"
-#~ msgstr ""
-
-#~ msgid "{0} Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-#~ msgstr ""
-
-#~ msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so"
-#~ msgstr ""
-
-#~ msgid "stores it without being able to read it."
-#~ msgstr ""
-
-#~ msgid "Edited <0/>{0} {1} {2}"
-#~ msgstr ""
-
-#~ msgid "by <0/>{0} <1/>"
-#~ msgstr ""
-
-#~ msgid "by peer {0}{1} <0>Unattributed</0>"
-#~ msgstr ""
-
-#~ msgid "Existing content stays in this drive. Hosting currently requires an invitation for this drive."
-#~ msgstr ""
-
-#~ msgid "Hosting needs a Server plan. After payment, return here to finish setup."
-#~ msgstr ""
-
-#~ msgid "Choose Server plan"
-#~ msgstr ""
-
-#~ msgid "Existing content stays in this drive. Hosting requires a Server plan or an invitation for this drive."
-#~ msgstr ""
-
-#~ msgid "under"
-#~ msgstr ""
-
-#~ msgid "Profile picture (optional) <0/>"
-#~ msgstr ""
-
-#~ msgid "Your selected profile picture"
-#~ msgstr ""
-
-#~ msgid "Cloud Server: each new team editor needs one seat. Existing team editors count once across drives. Viewers are free."
-#~ msgstr ""
-
-#~ msgid "Viewers are free. Allowing edits requires a team editor seat for Cloud Server."
-#~ msgstr ""
-
-#~ msgid "Looking for your workspace on your other devices…"
-#~ msgstr ""
-
-#~ msgid "We found your workspace on {0}."
-#~ msgstr ""
-
-#~ msgid "Fetching workspace…"
-#~ msgstr ""
-
-#~ msgid "Fetch workspace"
-#~ msgstr ""
-
-#~ msgid "We found your workspace on {0} ."
-#~ msgstr ""
-
-#~ msgid "Enter your recovery code to show your secret or add a passkey on this device. Your existing recovery code will keep working."
-#~ msgstr "Saisissez votre code de récupération pour afficher votre secret ou ajouter une clé d’accès sur cet appareil. Votre code de récupération actuel restera valide."
-
-#~ msgid "Peer sync"
-#~ msgstr ""
-
-#~ msgid "Sync and collaborate between open browsers. No Cloud subscription required. Changes catch up when both devices are online."
-#~ msgstr ""
-
-#~ msgid "Pair another device signed in as you, or someone who already has workspace access. Use Share to manage their permissions."
-#~ msgstr ""
-
-#~ msgid "Create peer link"
-#~ msgstr ""
-
-#~ msgid "Peer link"
-#~ msgstr ""
-
-#~ msgid "Server plans apply to one drive. If this drive needs a plan, checkout shows the price before you pay. Connecting your account is free."
-#~ msgstr ""
-
-#~ msgid "Could not update your passkey."
-#~ msgstr ""
-
-#~ msgid "Use one passkey for sign-in and recovery"
-#~ msgstr ""
-
-#~ msgid "Connected to"
-#~ msgstr ""
-
-#~ msgid "You're invited to {0} this drive"
-#~ msgstr ""
-
-#~ msgid "Disconnected"
-#~ msgstr ""
-
-#~ msgid "Describe your idea and build it with the Atomic assistant."
-#~ msgstr ""
-
-#~ msgid "No matches. Try another search or describe your idea to the assistant above."
-#~ msgstr ""
-
-#~ msgid "Table template"
-#~ msgstr ""
-
-#~ msgid "No matches. Try another search or describe your idea to the assistant below."
-#~ msgstr ""
-
-#~ msgid "ArrowLeft"
-#~ msgstr ""
-
-#~ msgid "ArrowRight"
-#~ msgstr ""
-
-#~ msgid "<0/>Include example content"
-#~ msgstr ""
-
-#~ msgid "What will you make room for?"
-#~ msgstr ""
-
-#~ msgid "Start with a template, or describe a space of your own."
-#~ msgstr ""
-
-#~ msgid "Welcome · Board · Team chat"
-#~ msgstr ""
-
-#~ msgid "Use this template / exit demo"
-#~ msgstr ""
-
-#~ msgid "Template demo"
-#~ msgstr ""
-
-#~ msgid "▤ Welcome"
-#~ msgstr ""
-
-#~ msgid "▦ Board"
-#~ msgstr ""
-
-#~ msgid "☏ Team chat"
-#~ msgstr ""
-
-#~ msgid "Never synced"
-#~ msgstr ""
-
-#~ msgid "{0} copied"
-#~ msgstr ""
-
-#~ msgid "Address"
-#~ msgstr ""
-
-#~ msgid "Paired with this device"
-#~ msgstr ""
-
-#~ msgid "Sent {0}"
-#~ msgstr ""
-
-#~ msgid "Received {0}"
-#~ msgstr ""
-
-#~ msgid "Sign in on this device to rename it."
-#~ msgstr ""
-
-#~ msgid "This device is now “{0}”"
-#~ msgstr ""
-
-#~ msgid "Device name"
-#~ msgstr ""
-
-#~ msgid "Not signed in on this device."
-#~ msgstr ""
-
-#~ msgid "The node refused it ({0})."
-#~ msgstr ""
-
-#~ msgid "(saving…)"
-#~ msgstr ""
-
-#~ msgid "(this device)"
-#~ msgstr ""
-
-#~ msgid "Rename this device"
-#~ msgstr ""
-
-#~ msgid "ResizeObserver loop"
-#~ msgstr ""
-
-#~ msgid "{0} problems"
-#~ msgstr ""
-
-#~ msgid "Used in the source as <0/>, but the plugin does not declare it — so say which origin it may be sent to."
-#~ msgstr ""
-
-#~ msgid "No verifier is mounted."
-#~ msgstr ""
-
-#~ msgid "Another app is being checked."
-#~ msgstr ""
-
-#~ msgid "The app had not finished rendering after 8 seconds. It may be slow rather than broken."
-#~ msgstr ""
-
-#~ msgid "This app has no entry point, so there is nothing to run."
-#~ msgstr ""
-
-#~ msgid "The app I have open just hit an error. Read its source with"
-#~ msgstr ""
-
-#~ msgid "Error ({0}): {1}"
-#~ msgstr ""
-
-#~ msgid "Stack:"
-#~ msgstr ""
-
-#~ msgid "The app you just wrote does NOT run — this is the error it threw when opened. Fix it with update_app and let it be checked again. Do not tell the user the app is ready until it runs."
-#~ msgstr ""
-
-#~ msgid "The app ran without throwing but drew nothing, so the user sees an empty panel. An app with no rows yet still needs to render its heading and a way to add the first one. Fix it with update_app."
-#~ msgstr ""
-
-#~ msgid "Integration store"
-#~ msgstr ""
-
-#~ msgid "Discover shared integrations and start with a draft you can review."
-#~ msgstr ""
-
-#~ msgid "Review a sample with Run, then enable automatic posting. Until then, the next event waits for review."
-#~ msgstr ""
-
-#~ msgid "Enable automatic posting"
-#~ msgstr ""
-
-#~ msgid "{0} → message"
-#~ msgstr ""
-
-#~ msgid "Working… You can resume this run if you leave the page."
-#~ msgstr ""
-
-#~ msgid "{0} issue records"
-#~ msgstr ""
-
-#~ msgid "Use in an automation"
-#~ msgstr ""
-
-#~ msgid "When an issue is added, post a message to a chatroom. Review a sample message before enabling automatic posting."
-#~ msgstr ""
-
-#~ msgid "When"
-#~ msgstr ""
-
-#~ msgid "Post a message to"
-#~ msgstr ""
-
-#~ msgid "Create message automation"
-#~ msgstr ""
-
-#~ msgid "Your integrations and automations"
-#~ msgstr ""
-
-#~ msgid "🐙 GitHub issues"
-#~ msgstr ""
-
-#~ msgid "Use a token restricted to this repository with Issues read and write access. It is stored on your AtomicServer. Create the atomic:doing label in GitHub to use the Doing column."
-#~ msgstr ""
-
-#~ msgid "Choose an event, then write the conditions and actions in JavaScript. Run a sample and review its changes before enabling automatic execution."
-#~ msgstr ""
-
-#~ msgid "📓 Notion"
-#~ msgstr ""
-
-#~ msgid "Sync supported row properties, property names, and table or board views. Connect to inspect the schema, then preview and approve the first sync."
-#~ msgstr ""
-
-#~ msgid "2. Write the behavior"
-#~ msgstr ""
-
-#~ msgid "Add conditions and actions in JavaScript. The starter has no actions until you add them."
-#~ msgstr ""
-
-#~ msgid "3. Test before enabling"
-#~ msgstr ""
-
-#~ msgid "1. Choose what starts it"
-#~ msgstr ""
-
-#~ msgid "Connect your apps, sync your work and build automations with JavaScript."
-#~ msgstr ""
-
-#~ msgid "Experimental integration. Preview the first sync before approving changes."
-#~ msgstr ""
-
-#~ msgid "Connect {0}"
-#~ msgstr ""
-
-#~ msgid "Create an automation"
-#~ msgstr ""
-
-#~ msgid "Use the saved trigger and integration definition."
-#~ msgstr ""
-
-#~ msgid "Add an automation (optional)"
-#~ msgstr ""
-
-#~ msgid "The latest 100 actions. Uncertain writes stay here until you check their outcome."
-#~ msgstr ""
-
-#~ msgid "Request details archived. This action ID remains reserved."
-#~ msgstr ""
-
-#~ msgid "Request data reduction: {0} bytes. Database file size may stay the same."
-#~ msgstr ""
-
-#~ msgid "Archive request details"
-#~ msgstr ""
-
-#~ msgid "Permanently remove request inputs from unsent manual actions older than 30 days. Their IDs and outcomes stay in history. Provider attempts and automation actions are kept."
-#~ msgstr ""
-
-#~ msgid "Clean up old request details"
-#~ msgstr ""
-
-#~ msgid "Remove inputs from unsent manual actions older than 30 days, and request and response bodies from manual actions completed at least 30 days ago. IDs, outcomes and recovery evidence stay in history. Automation actions, failed or uncertain writes, and receipts with an unknown completion date are kept."
-#~ msgstr ""
-
-#~ msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
-#~ msgstr ""
-
-#~ msgid "Notion sign-in and a database picker are not available yet. This developer preview requires an existing Notion connection token and data source ID."
-#~ msgstr ""
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "export const manifest={1};"
-#~ msgstr ""
-
-#~ msgid ""
-#~ "{0}\n"
-#~ "const settings={1};\n"
-#~ "export const manifest={2};"
-#~ msgstr ""
-
-#~ msgid "Each run imports your entries from the selected number of days before that run. Running timers and breaks are skipped. Repeating the import skips existing records; it does not update or delete them."
-#~ msgstr ""
-
-#~ msgid "Each run imports your entries from the selected number of days before that run. Running timers and breaks are skipped. Repeating the import skips existing time entries; it does not update or delete them."
-#~ msgstr ""
-
-#~ msgid "Choose what starts your automation, then describe what should happen. Test it before enabling it."
-#~ msgstr ""
-
-#~ msgid "Connect an integration with automation events first. Close this dialog and choose one under Discover integrations."
-#~ msgstr ""
-
-#~ msgid "Choose an integration"
-#~ msgstr ""
-
-#~ msgid "New Bank transactions table"
-#~ msgstr ""
-
-#~ msgid "These records share a source identity. Review their values and references before merging. Nothing from this import will be applied."
-#~ msgstr ""
-
-#~ msgid "Primary record saved. Close this dialog and preview the import again."
-#~ msgstr ""
-
-#~ msgid "Choose which copy future imports should update. Both originals, their history and existing links are kept. Values are not combined automatically."
-#~ msgstr ""
-
-#~ msgid "The selected copy keeps its current values. If another copy changes offline, you will need to review the copies again."
-#~ msgstr ""
-
-#~ msgid "From"
-#~ msgstr ""
-
-#~ msgid "To"
-#~ msgstr ""
-
-#~ msgid "A project workspace with tasks, deadlines and a dashboard…"
-#~ msgstr ""
-
-#~ msgid "Describe your idea. The assistant will help you build it."
-#~ msgstr ""
-
-#~ msgid "<0/> Create with assistant"
-#~ msgstr ""
-
-#~ msgid "<0/> Build something your way"
-#~ msgstr ""
-
-#~ msgid "Pages, blog posts and reusable content blocks for your website."
-#~ msgstr ""
-
-#~ msgid "What would you like to create?"
-#~ msgstr ""
-
-#~ msgid "A trivial demo collection, useful for trying plugins out."
-#~ msgstr ""
-
-#~ msgid "Imports five static demo pets into a Pets table with a small ontology (species, breed, age, mood)."
-#~ msgstr ""
-
-#~ msgid "A one-off, on-demand import. Nothing runs in the background."
-#~ msgstr ""
-
-#~ msgid "No external account, API key or network call. Static sample data only, not a live provider."
-#~ msgstr ""
-
-#~ msgid "Use a direct GitHub token instead"
-#~ msgstr ""
-
-#~ msgid "Provider data"
-#~ msgstr ""
-
-#~ msgid "Original JSON returned by the connected platform."
-#~ msgstr ""
-
-#~ msgid "API record"
-#~ msgstr ""
-
-#~ msgid "A record imported from a connected platform."
-#~ msgstr ""
-
-#~ msgid "Repository (owner/repository)"
-#~ msgstr ""
-
-#~ msgid "Calendar ID"
-#~ msgstr ""
-
-#~ msgid "Imports the first page only. Review changes before applying them. Repeated imports preserve local edits. No background sync or provider writes."
-#~ msgstr ""
-
-#~ msgid "Imports the collections described by the platform, following pagination. Review changes before applying them. No background sync or provider writes."
-#~ msgstr ""
-
-#~ msgid "Events from (UTC)"
-#~ msgstr ""
-
-#~ msgid "Events before (UTC)"
-#~ msgstr ""
-
-#~ msgid "The tenant secret is used in this tab. Connection credentials stay in this browser."
-#~ msgstr ""
-
-#~ msgid "Connection code"
-#~ msgstr ""
-
-#~ msgid "The proxy must allow this app’s origin through CORS and expose X-Connection-Code. Use a fresh GitHub connection code from the proxy’s OAuth flow."
-#~ msgstr ""
-
-#~ msgid "Open live tracker"
-#~ msgstr ""
-
 #: src/components/Share/ShareDialog.tsx
 msgid "Done"
 msgstr ""
-
-#~ msgid "Setup did not finish. Check your integrations for a partially created connection before starting again."
-#~ msgstr ""
-
-#~ msgid "Consider enabling API plugins in Settings → Integration."
-#~ msgstr ""
-
-#~ msgid "Consider enabling experimental plugins in Settings → Integration."
-#~ msgstr ""
-
-#~ msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
-#~ msgstr ""
-
-#~ msgid "FollowingTrigger"
-#~ msgstr ""
-
-#~ msgid "New website"
-#~ msgstr ""
-
-#~ msgid "Release ready"
-#~ msgstr ""
-
-#~ msgid "Unreleased changes"
-#~ msgstr ""
-
-#~ msgid "Draft"
-#~ msgstr ""
-
-#~ msgid "Design with Assistant"
-#~ msgstr ""
-
-#~ msgid "Content stays in Atomic. Export a frozen website for static hosting. Online publishing is not connected yet."
-#~ msgstr ""
-
-#~ msgid "Pages and content"
-#~ msgstr ""
-
-#~ msgid "Accent color"
-#~ msgstr ""
-
-#~ msgid "Typography"
-#~ msgstr ""
-
-#~ msgid "No release yet."
-#~ msgstr ""
-
-#~ msgid "Live draft preview"
-#~ msgstr ""
-
-#~ msgid "Design a website with Assistant, using Atomic documents and tables."
-#~ msgstr ""
-
-#~ msgid "Edit on page"
-#~ msgstr ""
-
-#~ msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
-#~ msgstr ""
-
-#~ msgid "{0} editable text fields"
-#~ msgstr ""
-
-#~ msgid "The model request failed."
-#~ msgstr ""
-
-#~ msgid "Content stays in Atomic. Create a frozen release to download or publish."
-#~ msgstr ""
-
-#~ msgid "Refresh hosting status"
-#~ msgstr ""
-
-#~ msgid "Upload saved release"
-#~ msgstr ""
-
-#~ msgid "Publish on your Atomic Server"
-#~ msgstr ""
-
-#~ msgid "Upload a saved release, review it, then publish. Editing content leaves the live website unchanged."
-#~ msgstr ""
-
-#~ msgid "Website is live"
-#~ msgstr ""
-
-#~ msgid "Website is not published"
-#~ msgstr ""
-
-#~ msgid "Open website"
-#~ msgstr ""
-
-#~ msgid "Review an uploaded release"
-#~ msgstr ""
-
-#~ msgid "Review an uploaded release <0><0>Select a release</0> {0}</0>"
-#~ msgstr ""
-
-#~ msgid "Preview uploaded page"
-#~ msgstr ""
-
-#~ msgid "Uploaded website preview"
-#~ msgstr ""
-
-#~ msgid "Review before publishing"
-#~ msgstr ""
-
-#~ msgid "These uploaded pages will become publicly accessible. This preview disables scripts."
-#~ msgstr ""
-
-#~ msgid "Publish reviewed release"
-#~ msgstr ""
-
-#~ msgid "Release {0}"
-#~ msgstr ""
-
-#~ msgid "Publication history"
-#~ msgstr ""
-
-#~ msgid "Website hosting"
-#~ msgstr ""
-
-#~ msgid "Select a release"
-#~ msgstr ""
-
-#~ msgid "Changes stay private until you publish."
-#~ msgstr ""
-
-#~ msgid "Close publishing"
-#~ msgstr ""
-
-#~ msgid "Publish…"
-#~ msgstr ""
-
-#~ msgid "Export & versions"
-#~ msgstr ""
-
-#~ msgid "Publishing options"
-#~ msgstr ""
-
-#~ msgid "Publishing"
-#~ msgstr ""
-
-#~ msgid "Refresh status"
-#~ msgstr ""
-
-#~ msgid "Restore version"
-#~ msgstr ""
-
-#~ msgid "Your site is up to date."
-#~ msgstr ""
-
-#~ msgid "Website published."
-#~ msgstr ""
-
-#~ msgid "Export"
-#~ msgstr ""
-
-#~ msgid "Edit document"
-#~ msgstr ""
-
-#~ msgid "Editorial"
-#~ msgstr ""
-
-#~ msgid "Modern"
-#~ msgstr ""
-
-#~ msgid "<0/> Add content"
-#~ msgstr ""
-
-#~ msgid "Files"
-#~ msgstr ""
-
-#~ msgid "Show fewer versions"
-#~ msgstr ""
-
-#~ msgid "Show all versions ({0})"
-#~ msgstr ""
-
-#~ msgid "Preview version"
-#~ msgstr ""
-
-#~ msgid "<0/> AI edit"
-#~ msgstr ""
-
-#~ msgid "The response was interrupted.Introduce tu código de recuperación para mostrar tu secreto o añadir una clave de acceso en este dispositivo. Tu código de recuperación actual seguirá funcionando."
-#~ msgstr ""
-
-#~ msgid "The response was interrupted.Saisissez votre code de récupération pour afficher votre secret ou ajouter une clé d’accès sur cet appareil. Votre code de récupération actuel restera valide."
-#~ msgstr ""
-
-#~ msgid "The response was interrupted.Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger Wiederherstellungscode bleibt gültig."
-#~ msgstr ""
-
-#~ msgid "Chat options"
-#~ msgstr ""
-
-#~ msgid "{0} of {1} AI credits left · account-wide · resets {2}"
-#~ msgstr ""
-
-#~ msgid "Ending conversation…"
-#~ msgstr ""
-
-#~ msgid "Microphone muted"
-#~ msgstr ""
-
-#~ msgid "Live conversation"
-#~ msgstr ""
-
-#~ msgid "Unmute"
-#~ msgstr ""
-
-#~ msgid "Mute"
-#~ msgstr ""
-
-#~ msgid "Not enough credits to start a live conversation."
-#~ msgstr ""
-
-#~ msgid "<0/> End conversation"
-#~ msgstr ""
-
-#~ msgid "{0}{1} credits available"
-#~ msgstr ""
-
-#~ msgid "50 credits/minute, including pauses, plus AI tasks. Minimum 12.5 credits per connection. Starting shares audio and chat context with OpenAI and uses your Atomic credits."
-#~ msgstr ""
-
-#~ msgid "End conversation"
-#~ msgstr ""
-
-#~ msgid "Talk"
-#~ msgstr ""
-
-#~ msgid "Listening…"
-#~ msgstr ""
-
-#~ msgid "Waiting for microphone…"
-#~ msgstr ""
-
-#~ msgid "Transcribing…"
-#~ msgstr ""
-
-#~ msgid "Thinking…"
-#~ msgstr ""
-
-#~ msgid "Speaking…"
-#~ msgstr ""
-
-#~ msgid "Read reply again"
-#~ msgstr ""
-
-#~ msgid "Could not play the reply."
-#~ msgstr ""
-
-#~ msgid "Click Talk, then Send recording. Up to 60 seconds. Audio and replies are processed through OpenRouter using your Atomic credits."
-#~ msgstr ""
-
-#~ msgid "Voice needs an OpenRouter key configured on the Atomic service."
-#~ msgstr ""
-
-#~ msgid "credits available"
-#~ msgstr ""
-
-#~ msgid "Voice conversation"
-#~ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings…"
 msgstr ""
 
 #: src/actions/appActions.ts
-#: src/components/SideBar/AppMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr ""
@@ -11667,8 +9108,8 @@ msgstr ""
 msgid "Local copy unavailable"
 msgstr ""
 
-#: src/components/SideBar/FeedbackMenuItem.tsx
-#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackButton.tsx
+#: src/components/SideBar/FeedbackButton.tsx
 msgid "Report this error"
 msgstr ""
 
@@ -11817,21 +9258,6 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
 msgstr ""
-
-#~ msgid "Invite people to"
-#~ msgstr ""
-
-#~ msgid "Manage access"
-#~ msgstr ""
-
-#~ msgid "Invite"
-#~ msgstr ""
-
-#~ msgid "Access to"
-#~ msgstr ""
-
-#~ msgid "Inherited permissions"
-#~ msgstr ""
 
 #. 0: lowerRowName
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
@@ -12049,23 +9475,6 @@ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Less than 1% used"
-msgstr ""
-
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Sign in to connect an account."
-msgstr ""
-
-#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-msgstr ""
-
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Use existing connection"
-msgstr ""
-
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Connect an account"
 msgstr ""
 
 #. 0: String(reason)
@@ -12431,7 +9840,7 @@ msgstr ""
 
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
-#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
 msgstr ""
@@ -12458,12 +9867,16 @@ msgid "{0} replied to you"
 msgstr ""
 
 #. 0: author; 1: on
+#. 0: who; 1: on
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
 msgid "{0} commented on {1}"
 msgstr ""
 
 #. 0: author; 1: on
+#. 0: who; 1: on
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
 msgid "{0} in {1}"
 msgstr ""
 
@@ -12484,11 +9897,11 @@ msgid "Mark all as read"
 msgstr ""
 
 #. 0: unread
-#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Notifications, {0} unread"
 msgstr ""
 
-#: src/components/SideBar/NotificationsMenuItem.tsx
+#: src/components/SideBar/AccountMenu.tsx
 msgid "Messages, comments and replies for you"
 msgstr ""
 
@@ -12622,3 +10035,258 @@ msgstr "{0} de plus, ouvrir pour tout voir"
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Show older messages ({0})"
 msgstr "Afficher les messages plus anciens ({0})"
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Profile"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "See and edit the current Agent / User"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Sign in, or create a new Agent / User"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Report a bug or suggest an improvement"
+msgstr ""
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Account and app menu"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out of this device."
+msgstr ""
+
+#. 0: PRODUCT_NAME; 1: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account is enough to open your identity on a new device. {1} holds a key for that. Turn it off to rely only on your passkey or recovery code."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Only your passkey or recovery code opens your identity. {0} cannot."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
+msgstr ""
+
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Connect {0}"
+msgstr ""
+
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "<0/> wants to use your {0} account."
+msgstr ""
+
+#. 0: proxySite
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "You approve this on the next page, at {0}."
+msgstr ""
+
+#. 0: app
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "{0} never sees your password."
+msgstr ""
+
+#. 0: platform
+#. 0: PRODUCT_NAME
+#: src/chunks/AppPage/ConnectDialog.tsx
+#: src/helpers/managed/recovery.ts
+msgid "{0} account"
+msgstr ""
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Use this account"
+msgstr ""
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Use an account you already connected, or connect another one."
+msgstr ""
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not use this account."
+msgstr ""
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not start connecting."
+msgstr ""
+
+#. 0: when
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Connected {0}."
+msgstr ""
+
+#. 0: apps
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Used by {0}."
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Sign in again to unlock your account on this device."
+msgstr ""
+
+#: src/helpers/managed/recovery.ts
+msgid "Your account could not unlock this backup."
+msgstr ""
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "That sign-in expired. Pick an option to start again."
+msgstr ""
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "Could not reach your account. Check your connection and try again."
+msgstr ""
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlocking {0}…"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in again to open your account on this device."
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed a message while you were away"
+msgstr ""
+
+#. 0: count
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed {0} messages while you were away"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Not now"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Show new messages as system notifications on this device?"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Loading notifications"
+msgstr ""
+
+#. 0: first; 1: second
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} and {1}"
+msgstr ""
+
+#. 0: first; 1: others
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} and {1} others"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} new messages in {2}"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} comments on {2}"
+msgstr ""
+
+#. 0: who; 1: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} replied to you in {1}"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} replies to you in {2}"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Could not read that image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas text"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: circle strokes to select them, then move or scale"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: place a picture"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Place image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Delete selection"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level: tap to fit everything, drag sideways to zoom"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level"
+msgstr ""
+
+#. 0: ' '
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type; tap existing text to edit it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: pick a picture, then move or scale it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+msgstr ""

@@ -32,8 +32,8 @@ test('ci validates E2E overrides before work and forwards all budget arguments',
   let endToEndArgs;
   pipeline.endToEnd = async (...args) => (endToEndArgs = args);
 
-  await pipeline.ci('token', false, 'hosted', 'light', 3, 4, 0, true);
-  assert.deepEqual(endToEndArgs, ['token', 'light', 3, 4, 0, '', true]);
+  await pipeline.ci('token', false, 'hosted', 'light', 3, 4, 0, true, 'run-7');
+  assert.deepEqual(endToEndArgs, ['token', 'light', 3, 4, 0, '', true, 'run-7']);
 
   calls.length = 0;
   await assert.rejects(() =>
