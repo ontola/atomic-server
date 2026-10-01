@@ -9873,7 +9873,6 @@ msgstr ""
 
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
-#: src/components/Notifications/NotificationsBell.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
@@ -9931,8 +9930,6 @@ msgid "Mark all as read"
 msgstr ""
 
 #. 0: unread
-#. 0: unread
-#: src/components/Notifications/NotificationsBell.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Notifications, {0} unread"
 msgstr ""

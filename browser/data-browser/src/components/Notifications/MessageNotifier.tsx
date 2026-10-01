@@ -33,7 +33,6 @@ import {
   recordNotification,
 } from '../../helpers/notifications/inbox';
 import { usePrivateDrive } from '../../hooks/usePrivateDrive';
-import { usePrivateDriveList } from '../../hooks/usePrivateDriveList';
 
 const TEXT_MAX = 140;
 
@@ -102,7 +101,6 @@ export function MessageNotifier(): null {
   const { activePanel, setPanelOpen } = useRightPanel();
   const navigate = useNavigateWithTransition();
   const { privateDrive } = usePrivateDrive();
-  const [sharedWithMe] = usePrivateDriveList(core.properties.sharedWithMe);
 
   const handled = useRef(new Set<string>());
   // Announced while away, with system notifications not decided yet.
@@ -315,18 +313,6 @@ export function MessageNotifier(): null {
 
     showOsNotification({ title, body, tag: subject, onClick: () => open(n) });
   });
-
-  // Things shared with you out of drives you can't open are only delivered to
-  // a subscription on the thing itself; the open drive's subscription never
-  // covers them. Hold one for as long as the app runs, not only while the
-  // sidebar happens to show the item, or a shared chat stays silent.
-  useEffect(() => {
-    const unsubscribers = sharedWithMe.map(subject =>
-      store.subscribeLive(subject),
-    );
-
-    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
-  }, [store, sharedWithMe]);
 
   useEffect(
     () =>

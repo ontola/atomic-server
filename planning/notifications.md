@@ -164,9 +164,9 @@ the drive chat and adds it to `currentMeetings`. Proposed:
   One code path for every kind, and no device writes duplicates.
   `MessageNotifier`'s own recording stays only for servers without the
   notifier.
-- **A bell in the top bar** with the unread count, on every screen size,
-  opening the Notifications list (a popover on desktop, the page on a phone).
-  The app menu entry stays.
+- **The unread count in the account menu** (#1915), next to its
+  Notifications entry. No separate bell in the top bar: it would show the same
+  number twice.
 - **Grouped rows** from `notificationCount`, headline written at display time.
 - **Reading.** Opening the thing reads its notifications, and so does coming
   back to the window while already on it.
@@ -219,8 +219,8 @@ drive. What each deployment can use is in the table above.
 
 ## Phases
 
-1. **Client polish on today's model.** Reading on window focus, bell in the
-   top bar, grouping, headline at display time, OS permission in context.
+1. **Client polish on today's model.** Reading on window focus, grouping,
+   headline at display time, OS permission in context.
    Small, independent of the server.
 2. **Server notifier, Inbox append and live Inbox subscription.** Kinds `chat`,
    `reply`, `comment`, `mention`, `access-granted`, `invite-accepted`,

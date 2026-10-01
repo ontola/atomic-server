@@ -4,26 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- Notifications are easier to find and less noisy. A bell with the unread
-  count sits in the top bar, on a phone too, where the app menu's entry was
-  hidden behind the drawer. The Notifications page shows one row per
+- Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
   already on the conversation reads what arrived while you were away, and after
   you missed something the app offers system notifications once, instead of
   only a checkbox in Settings.
-- Someone given a chat, or anything else, out of a drive they can't open sees
-  all of it. A list answered from the local database was trusted whenever it
-  was non-empty, but only a drive synced to this device has its whole list
-  there: the guest's own messages and the ones present when they joined were
-  shown as the entire chat, and a reload asked the same database again. For a
-  drive this device hasn't synced the server is now asked too, and anything
-  only the local database knows (a write not yet confirmed) is kept.
-- Things shared with you out of someone else's drive update live and notify
-  you. The app only listened to the drive you had open, so a guest in a shared
-  chat never received new messages from the host, and got no notifications for
-  them. Everything in "Shared with me" is now subscribed for as long as the app
-  runs (`Store.subscribeLive`).
 - The Notifications page shows placeholder rows while it loads, instead of a
   blank page that could flash "Nothing yet" before the list arrived.
 - An app asking to use one of your accounts (Google Calendar, Clockify and so

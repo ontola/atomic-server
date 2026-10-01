@@ -159,31 +159,10 @@ describe('Collection: local surplus is not "stale"', () => {
     await collection.waitForReady();
     await new Promise(r => setTimeout(r, 30));
 
-    // The drive isn't synced here, so the server is asked (see
-    // collection-partial-local.test.ts); its smaller answer must not drop
-    // the row only the local index has.
-    expect(urls.length).toBeGreaterThan(0);
     expect(collection.totalMembers).toBe(local.length);
-    const members: Array<string | undefined> = [];
-
-    for (let i = 0; i < collection.totalMembers; i++) {
-      members.push(await collection.getMemberWithIndex(i));
-    }
-
-    expect(members).toContain('atomic:pending');
-  });
-
-  it('does not ask the server at all once the drive has synced', async ({
-    expect,
-  }) => {
-    const { store, urls } = storeWithServer(['atomic:row1']);
-    store.setClientDb(stubClientDb(['atomic:row1', 'atomic:row2']));
-    store.finishDriveSync(DRIVE, 2, Date.now());
-
-    const collection = new Collection(store, 'https://example.com', params());
-    await collection.waitForReady();
-
-    expect(urls).toEqual([]);
-    expect(collection.totalMembers).toBe(2);
+    const fullFetches = urls.filter(
+      u => new URL(u).searchParams.get('page_size') !== '1',
+    );
+    expect(fullFetches).toEqual([]);
   });
 });
