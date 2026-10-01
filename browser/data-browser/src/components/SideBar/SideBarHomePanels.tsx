@@ -4,14 +4,15 @@ import { useSettings } from '../../helpers/AppSettings';
 import { usePrivateDriveList } from '../../hooks/usePrivateDriveList';
 import { SideBarPanel } from './SideBarPanel';
 import { SharedWithMeLink } from './SharedWithMeLink';
+import { MessagesPanel } from './MessagesPanel';
 
 interface SideBarHomePanelsProps {
   onItemClick: () => void;
 }
 
 /**
- * The per-user "home index" panels — Favorites and Shared-with-me — read from
- * the user's PRIVATE DRIVE (see {@link usePrivateDriveList}). Rendered in the
+ * The per-user "home index" panels — Messages, Favorites and Shared-with-me —
+ * read from the user's PRIVATE DRIVE (see {@link usePrivateDriveList}). Rendered in the
  * sidebar's bottom-pinned area (above the account menu) rather than scrolling with
  * the active drive's tree, since they are cross-drive and not part of the
  * current drive's contents.
@@ -29,6 +30,7 @@ export function SideBarHomePanels({
 
   return (
     <>
+      <MessagesPanel onItemClick={onItemClick} />
       {favorites.length > 0 && (
         <SideBarPanel
           title='Favorites'

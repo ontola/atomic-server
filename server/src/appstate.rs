@@ -103,6 +103,7 @@ impl AppState {
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
+        store.add_endpoint(plugins::conversations::conversations_endpoint())?;
         store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),

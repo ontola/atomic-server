@@ -101,6 +101,15 @@ pub const DRIVES: &str = "https://atomicdata.dev/properties/drives";
 pub const PRIVATE_DRIVE: &str = "https://atomicdata.dev/properties/personalDrive";
 /// Resources shared with this agent (e.g. accepted invites); clients show as "Shared with me".
 pub const SHARED_WITH_ME: &str = "https://atomicdata.dev/properties/sharedWithMe";
+/// End-to-end encrypted chats. See `lib/defaults/conversations.json` and
+/// [crate::conversation].
+pub const CONVERSATION: &str = "https://atomicdata.dev/classes/Conversation";
+pub const SEALED_MESSAGE: &str = "https://atomicdata.dev/classes/SealedMessage";
+pub const ENCRYPTION_KEY: &str = "https://atomicdata.dev/properties/encryptionKey";
+pub const CONVERSATION_KEYS: &str = "https://atomicdata.dev/properties/conversationKeys";
+pub const SEALED: &str = "https://atomicdata.dev/properties/sealed";
+/// On a private drive: the Conversations its owner is in.
+pub const CONVERSATIONS: &str = "https://atomicdata.dev/properties/conversations";
 pub const AVAILABLE_DOMAINS: &str = "https://atomicdata.dev/properties/availableDomains";
 /// Identifies a version in a resource's Loro history. See [crate::history].
 pub const VERSION_ID: &str = "https://atomicdata.dev/properties/versionId";
@@ -293,6 +302,7 @@ pub const PATH_FETCH_BOOKMARK: &str = "/fetch-bookmark";
 pub const PATH_QUERY: &str = "/query";
 pub const PATH_PRUNE_TESTS: &str = "/prunetests";
 pub const PATH_INVITE: &str = "/invites";
+pub const PATH_CONVERSATIONS: &str = "/conversations";
 
 pub const IMPORT_BASELINE: &str = "https://atomicdata.dev/properties/importBaseline";
 
