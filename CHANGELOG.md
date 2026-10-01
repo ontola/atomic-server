@@ -7,6 +7,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- End-to-end encrypted conversations. `atomic_lib::conversation` derives an
+  agent's X25519 `encryptionKey`, keeps a conversation's keys in a keyring
+  wrapped to each member, and seals and opens messages; the WASM build exports
+  it. New default ontology `conversations` (`lib/defaults/conversations.json`)
+  with the `Conversation` and `SealedMessage` classes. New endpoint
+  `/conversations` lists the conversations on the server the requesting agent
+  is a member of. See `planning/encrypted-conversations.md`.
+
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private
   drive points to its Inbox with.

@@ -12,6 +12,7 @@ import {
   core,
   ai,
   notifications,
+  conversations,
   useArray,
 } from '@tomic/react';
 
@@ -27,6 +28,7 @@ import { FilePage } from './File/FilePage';
 import { ResourcePageDefault } from './ResourcePageDefault';
 import { Spinner } from '../components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
+import { ConversationPage } from './Conversation/ConversationPage';
 import { InboxPage } from './InboxPage';
 import { MessagePage } from './MessagePage';
 import { BookmarkPage } from './BookmarkPage/BookmarkPage';
@@ -292,6 +294,8 @@ function selectComponent(klass: string | undefined) {
       return FilePage;
     case dataBrowser.classes.chatroom:
       return ChatRoomPage;
+    case conversations.classes.conversation:
+      return ConversationPage;
     case dataBrowser.classes.message:
       return MessagePage;
     case dataBrowser.classes.bookmark:

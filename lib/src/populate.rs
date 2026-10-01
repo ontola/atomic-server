@@ -294,6 +294,10 @@ const DEFAULT_FILES: &[(&str, &str)] = &[
         "notifications.json",
         include_str!("../defaults/notifications.json"),
     ),
+    (
+        "conversations.json",
+        include_str!("../defaults/conversations.json"),
+    ),
     ("i18n.json", include_str!("../defaults/i18n.json")),
 ];
 
