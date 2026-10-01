@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asSubject,
+  blobSubjectFromDownloadUrl,
   extractDidSubject,
   InvalidSubjectError,
   isDidSubject,
@@ -181,5 +182,41 @@ describe('subject', () => {
         'did:ad:abc',
       );
     });
+  });
+});
+
+describe('blobSubjectFromDownloadUrl', () => {
+  const hash = 'ab'.repeat(32);
+
+  it('finds the blob behind a content-addressed download URL', () => {
+    expect(
+      blobSubjectFromDownloadUrl(`https://example.com/download/files/${hash}`),
+    ).toBe(`atomic:blob:${hash}`);
+    expect(
+      blobSubjectFromDownloadUrl(
+        `http://localhost:9883/download/files/${hash.toUpperCase()}?w=400`,
+      ),
+    ).toBe(`atomic:blob:${hash}`);
+    expect(blobSubjectFromDownloadUrl(`/download/files/${hash}`)).toBe(
+      `atomic:blob:${hash}`,
+    );
+  });
+
+  it('ignores every other URL', () => {
+    expect(
+      blobSubjectFromDownloadUrl(
+        'https://atomicdata.dev/download/files/1726139217600-photo.jpg',
+      ),
+    ).toBeUndefined();
+    expect(
+      blobSubjectFromDownloadUrl(`https://example.com/files/${hash}`),
+    ).toBeUndefined();
+    expect(
+      blobSubjectFromDownloadUrl(`https://example.com/download/files/${hash}0`),
+    ).toBeUndefined();
+    expect(blobSubjectFromDownloadUrl('blob:https://example.com/abc')).toBe(
+      undefined,
+    );
+    expect(blobSubjectFromDownloadUrl('')).toBeUndefined();
   });
 });

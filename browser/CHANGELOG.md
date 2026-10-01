@@ -4,6 +4,25 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Notifications are less noisy. The Notifications page shows one row per
+  conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
+  titles as they are now, in your language. Coming back to the window while
+  already on the conversation reads what arrived while you were away, and after
+  you missed something the app offers system notifications once, instead of
+  only a checkbox in Settings.
+- The Notifications page shows placeholder rows while it loads, instead of a
+  blank page that could flash "Nothing yet" before the list arrived.
+- An app asking to use one of your accounts (Google Calendar, Clockify and so
+  on) now asks in a dialog instead of a bar above the app, in plainer words:
+  which app, which account, and that you approve it on the next page, on the
+  integration proxy's site. If you already connected that account, the dialog
+  lists it with when it was connected and which apps use it, and "Use this
+  account" gives it to the app without leaving the page. A failure stays in
+  the dialog so you can try again; the app hears `cancelled` if you close it.
+  Tests that looked for the `Connect an account` group should look for the
+  dialog named `Connect <platform>`; "Use existing connection" is now "Use
+  this account".
+
 - Signing in to a hosted account can now be enough to open your identity on a
   new device (#277). When the account service offers assisted recovery
   (`assisted_recovery` in `GET /api/auth/providers`), a new account's backup is
@@ -22,11 +41,42 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   may now have an `acct_` id apart from their address: backups and bindings
   keep using the id, and the app shows `address` from `GET /api/me`.
 
+- Agents, Skills and MCP servers are edited in a dialog again. Their lists stay
+  on the AI settings page, but creating or editing one opens a dialog with the
+  form and Cancel / Save buttons, instead of swapping the list for the form
+  inside the settings section. Save stays disabled until the required fields
+  are filled in.
+- The sidebar's App panel is gone. Its entries (your user page, Notifications,
+  Integrations, Sync, Feedback, About and Install App) now live in a dropdown
+  that opens from the user row at the bottom of the sidebar, with Settings as a
+  gear button beside it. A dot on the row shows unread notifications.
+
+- The role picker next to the email field in the share dialog opens again. A
+  click on it also focused the email field, which closed its option list right
+  after it opened. The email field also asks password managers (Bitwarden,
+  1Password, LastPass, Dashlane) not to fill it, since it holds other people's
+  addresses.
+- Images in documents show again instead of "Failed to load image". An uploaded
+  image's address points at the server, but a browser-only workspace never
+  sends its files there, so the server could not answer it. The editor now shows
+  the copy this browser already holds, as file previews already did, and falls
+  back to the server when there is none. New `useBlobObjectUrl` hook in
+  `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
   use the secret and sign out.
 
+- Starting the demo is one calm screen. From "Try Atomic" to the workspace
+  the page shows only the orbiting mark from atomic.place, instead of a blank
+  page, a "Checking local storage…" card and a "Setting up your demo…"
+  spinner in turn. The workspace fades in once its welcome document has
+  content, and the scripted teammates wait a moment before they start.
+  Setup is also faster: the database's WebAssembly is fetched and compiled
+  once, from the first line of the page, instead of up to twice after the app
+  loaded; the demo opens only the guest's database; and it no longer waits for
+  an account check it does not need.
 - A second tab no longer leaves the local database locked. When a tab takes
   over the database from a tab that stopped answering (in Firefox, a throttled
   background tab), the old tab now closes its worker and carries on through the

@@ -71,6 +71,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
       <PanelContainer
         ref={targetRef}
         data-open={isOpen ? '' : undefined}
+        data-side-panel='right'
         $fullWidthOnMobile={fullWidthOnMobile}
         $overlay={overlay}
         $dragging={isDragging}

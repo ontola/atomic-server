@@ -3,14 +3,9 @@ import { StoreEvents, type StoreSyncStatus, useStore } from '@tomic/react';
 import { FaWifi, FaArrowsRotate, FaCircleExclamation } from 'react-icons/fa6';
 import { MdSignalWifiOff } from 'react-icons/md';
 import { styled, keyframes } from 'styled-components';
-import { paths } from '../../routes/paths';
-import { SideBarMenuItem } from './SideBarMenuItem';
 
-export function SyncMenuItem({
-  onClick,
-}: {
-  onClick?: () => void;
-}): JSX.Element {
+/** The store's sync status, kept up to date as connection and sync change. */
+export function useSyncStatus(): StoreSyncStatus {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
     store.getSyncStatus(),
@@ -33,21 +28,10 @@ export function SyncMenuItem({
     };
   }, [store]);
 
-  const icon = getSyncIcon(status);
-  const label = getSyncLabel(status);
-
-  return (
-    <SideBarMenuItem
-      icon={icon}
-      label='Sync'
-      helper={label}
-      path={paths.sync}
-      onClick={onClick}
-    />
-  );
+  return status;
 }
 
-function getSyncIcon(status: StoreSyncStatus): JSX.Element {
+export function getSyncIcon(status: StoreSyncStatus): JSX.Element {
   if (!status.serverConnected) {
     return (
       <OfflineIcon>
@@ -83,7 +67,7 @@ function getSyncIcon(status: StoreSyncStatus): JSX.Element {
   return <FaWifi title='Connected' />;
 }
 
-function getSyncLabel(status: StoreSyncStatus): string {
+export function getSyncLabel(status: StoreSyncStatus): string {
   if (!status.serverConnected) return 'Offline';
   if (status.syncInProgress) return 'Syncing...';
 

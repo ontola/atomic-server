@@ -21,6 +21,9 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
+import { DIVIDER, DropdownMenu } from './Dropdown';
+import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
+import { useAppMenuItems } from '../actions/appMenuItems';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
@@ -43,7 +46,12 @@ import {
 } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
-import { ButtonArea, LabelButton } from './NavBarButton';
+import {
+  ButtonArea,
+  LabelButton,
+  NAV_BUTTON_HEIGHT,
+  NAV_BUTTON_RADIUS,
+} from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -81,10 +89,27 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
     commit: true,
   });
   const canCreateTags = useCanWrite(drive);
+  // Tags sit in the More menu until a resource has some: most never do, and a
+  // Tags button on every page was one more thing in a crowded bar. Choosing it
+  // there (the `tags` action) shows the button with its picker open.
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === resource.subject)
+        setOpen(true);
+    };
+
+    window.addEventListener(OPEN_TAGS_EVENT, onOpen);
+
+    return () => window.removeEventListener(OPEN_TAGS_EVENT, onOpen);
+  }, [resource.subject]);
 
   useEffect(() => {
     getResourcesDrive(resource, store).then(setDriveSubject);
   }, [resource, store]);
+
+  if (tags.length === 0 && !open) return null;
 
   const handleNewTag = (newTag: string) => {
     // Tag creation finishes asynchronously; append to the live resource
@@ -104,6 +129,8 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   return (
     <>
       <TagSelectPopover
+        open={open}
+        onOpenChange={setOpen}
         tags={driveTags}
         selectedTags={tags}
         setSelectedTags={setTags}
@@ -225,6 +252,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
   const { isOpen: aiOpen, setIsOpen } = useAISidebar();
+  const appMenu = useAppMenuItems();
   const hasAiChanges = !!contextResource && changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
@@ -407,6 +435,16 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             />
           </>
         )}
+        {/* Pages that are not a resource (settings, notifications) still get
+         * a More menu: starting something new, and finding places in the app.
+         * Only the resource's own actions are left out. */}
+        {!contextResource && (
+          <DropdownMenu
+            isMainMenu
+            items={[...appMenu.create, DIVIDER, ...appMenu.find]}
+            Trigger={ParentContextMenuTrigger}
+          />
+        )}
       </ButtonArea>
     </NavBarWrapper>
   );
@@ -458,6 +496,9 @@ const NavBarWrapper = styled.nav`
  * hover like {@link LabelButton} so left and right feel like one set.
  */
 const NavIconButton = styled(IconButton)`
+  height: ${NAV_BUTTON_HEIGHT};
+  border-radius: ${NAV_BUTTON_RADIUS};
+
   &:not([disabled]) {
     &:hover,
     &:focus-visible {

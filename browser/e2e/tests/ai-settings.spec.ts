@@ -183,13 +183,26 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
     .getByLabel('Transcription model', { exact: true })
     .scrollIntoViewIfNeeded();
   await page.screenshot({ path: '/tmp/atomic-speech-settings.png' });
+  // Agents, skills and MCP servers are listed on the settings page, but
+  // created and edited in a dialog.
+  const editorDialog = page.getByRole('dialog');
+
   await page
     .getByRole('button', { name: 'Create New Agent', exact: true })
     .click();
-  await page
+  await expect(
+    editorDialog.getByRole('heading', { name: 'New Agent', exact: true }),
+  ).toBeVisible();
+  await expect(
+    editorDialog.getByRole('button', { name: 'Create Agent', exact: true }),
+  ).toBeDisabled();
+  await editorDialog
     .getByRole('textbox', { name: /^Name/ })
     .fill('Settings test agent');
-  await page.getByRole('button', { name: 'Create Agent', exact: true }).click();
+  await editorDialog
+    .getByRole('button', { name: 'Create Agent', exact: true })
+    .click();
+  await expect(editorDialog).toHaveCount(0);
   await expect(
     page.getByRole('radio', { name: 'Settings test agent', exact: true }),
   ).toBeChecked();
@@ -197,27 +210,52 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
   await page
     .getByRole('button', { name: 'Create New Skill', exact: true })
     .click();
-  await page
+  await editorDialog
     .getByRole('textbox', { name: /^Name/ })
     .fill('settings-test-skill');
-  await page
+  await editorDialog
     .getByRole('textbox', { name: /^Description/ })
     .fill('A skill saved from Settings');
-  await page.getByRole('button', { name: 'Create Skill', exact: true }).click();
+  await editorDialog
+    .getByRole('button', { name: 'Create Skill', exact: true })
+    .click();
+  await expect(editorDialog).toHaveCount(0);
   await expect(
     page.getByText('settings-test-skill', { exact: true }),
+  ).toBeVisible();
+
+  // Cancelling an edit leaves the saved skill untouched.
+  await page.getByRole('button', { name: 'Edit Skill', exact: true }).click();
+  await expect(
+    editorDialog.getByRole('heading', { name: 'Edit Skill', exact: true }),
+  ).toBeVisible();
+  await editorDialog
+    .getByRole('textbox', { name: /^Description/ })
+    .fill('Discarded description');
+  await editorDialog
+    .getByRole('button', { name: 'Cancel', exact: true })
+    .click();
+  await expect(editorDialog).toHaveCount(0);
+  await expect(
+    page.getByText('A skill saved from Settings', { exact: true }),
   ).toBeVisible();
 
   await page
     .getByRole('button', { name: 'Add New Server', exact: true })
     .click();
-  await page.getByRole('textbox', { name: /^Name/ }).fill('Settings test MCP');
-  await page
+  await editorDialog
+    .getByRole('textbox', { name: /^Name/ })
+    .fill('Settings test MCP');
+  await editorDialog
     .getByRole('textbox', { name: /^URL/ })
     .fill('https://mcp.example.test');
-  await page
+  await editorDialog
     .getByRole('button', { name: 'Create Server', exact: true })
     .click();
+  await expect(editorDialog).toHaveCount(0);
+  await expect(
+    page.getByText('Settings test MCP', { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole('radio', { name: 'Settings test agent', exact: true }),

@@ -2,7 +2,7 @@ import { canonicalIdentifier } from '@tomic/lib';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
-import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
+import { atomicWasmSource, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
 import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
@@ -264,7 +264,9 @@ export async function decryptRecoverySecret(
 // --- Envelope v2 (DEK + recovery-code wrapper via Argon2id) ---
 
 type Argon2WasmModule = {
-  default: (init?: { module_or_path: string }) => Promise<unknown>;
+  default: (init?: {
+    module_or_path: string | WebAssembly.Module;
+  }) => Promise<unknown>;
   argon2idDeriveKey: (
     secret: string,
     salt: Uint8Array,
@@ -299,7 +301,7 @@ async function loadArgon2Wasm(): Promise<Argon2WasmModule> {
         const loaded = (await import(
           /* @vite-ignore */ url
         )) as LoadedWasmModule;
-        await loaded.default({ module_or_path: wasmBinaryUrl() });
+        await loaded.default({ module_or_path: await atomicWasmSource() });
 
         if (typeof loaded.argon2idDeriveKey !== 'function') {
           throw new Error(

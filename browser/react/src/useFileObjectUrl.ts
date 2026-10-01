@@ -22,6 +22,23 @@ export function useFileObjectUrl(
   resource: Resource,
   fallbackUrl?: string,
 ): string | undefined {
+  const blobValue = resource.get(BLOB);
+
+  return useBlobObjectUrl(
+    typeof blobValue === 'string' ? blobValue : undefined,
+    fallbackUrl,
+  );
+}
+
+/**
+ * {@link useFileObjectUrl} for a bare blob reference (`atomic:blob:<hash>`),
+ * for places that have no File resource at hand, such as an image in a
+ * document, which keeps only its URL.
+ */
+export function useBlobObjectUrl(
+  blobDid: string | undefined,
+  fallbackUrl?: string,
+): string | undefined {
   const store = useStore();
   const clientDb = store.getClientDb?.();
   const [resolved, setResolved] = useState<{
@@ -29,9 +46,6 @@ export function useFileObjectUrl(
     clientDb: typeof clientDb;
     url?: string;
   }>();
-
-  const blobValue = resource.get(BLOB);
-  const blobDid = typeof blobValue === 'string' ? blobValue : undefined;
 
   useEffect(() => {
     if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return;

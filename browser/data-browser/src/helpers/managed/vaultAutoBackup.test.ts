@@ -418,7 +418,7 @@ describe('restoreFromVault', () => {
       const store = await signedInStore();
       const resource = new Resource(DRIVE);
       resource.error = new AtomicError('missing', errorType);
-      store.resources.set(DRIVE, resource);
+      store.resources.set(store.normalizeSubject(DRIVE), resource);
       const deps = fakeDeps();
 
       await restoreFromVault(store, DRIVE, deps);
@@ -515,7 +515,7 @@ describe('restoreFromVault', () => {
     const store = await signedInStore();
     const resource = new Resource(DRIVE);
     resource.error = new AtomicError('missing', ErrorType.NotFound);
-    store.resources.set(DRIVE, resource);
+    store.resources.set(store.normalizeSubject(DRIVE), resource);
     const deps = fakeDeps({
       restoreDrive: vi.fn(async () => {
         throw new Error('403');

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { styled } from 'styled-components';
 import { Column } from '@components/Row';
 import { FaPlus } from 'react-icons/fa6';
 import { ModelSelect } from './ModelSelect/ModelSelect';
 import { type AIAgent, type AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
-import { Button } from '@components/Button';
 import { SkeletonButton } from '@components/SkeletonButton';
 import { MarkdownInput } from '@components/forms/MarkdownInput';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
@@ -14,6 +12,7 @@ import { Input } from '@components/forms/InputStyles';
 import { SliderInput } from '@components/forms/SliderInput';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { AgentConfigItem } from './AgentConfigItem';
+import { ConfigEditorDialog } from './ConfigEditorDialog';
 import atomicAgentPrompt from './system-prompts/atomic-agent.md?raw';
 import Field from '@components/forms/Field';
 import Markdown from '@components/datatypes/Markdown';
@@ -34,8 +33,6 @@ const generateId = () => {
 interface AgentConfigTabProps {
   selectedAgent: AIAgent;
   onSelectAgent: (agent: AIAgent) => void;
-  actionPortalElement: HTMLElement | null;
-  onActionsVisibleChange: (visible: boolean) => void;
 }
 
 const defaultNewAgent: Omit<AIAgent, 'id'> = {
@@ -157,17 +154,11 @@ export const useAIAgentConfig = () => {
 export const AgentConfigTab = ({
   selectedAgent,
   onSelectAgent,
-  actionPortalElement,
-  onActionsVisibleChange,
 }: AgentConfigTabProps) => {
   const { agents, saveAgents } = useAIAgentConfig();
   const { defaultChatModel } = useAISettings();
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
-  useEffect(() => {
-    return () => onActionsVisibleChange(false);
-  }, [onActionsVisibleChange]);
 
   const handleSaveAgent = () => {
     if (!editingAgent) return;
@@ -186,10 +177,6 @@ export const AgentConfigTab = ({
     if (selectedAgent.id === savedAgent.id || isCreating) {
       onSelectAgent(savedAgent);
     }
-
-    setEditingAgent(null);
-    setIsCreating(false);
-    onActionsVisibleChange(false);
   };
 
   const handleDeleteAgent = (agentToDelete: AIAgent) => {
@@ -229,68 +216,57 @@ export const AgentConfigTab = ({
       model: defaultChatModel,
     });
     setIsCreating(true);
-    onActionsVisibleChange(true);
   };
 
   const handleEditAgent = (agent: AIAgent) => {
     setEditingAgent({ ...agent });
     setIsCreating(false);
-    onActionsVisibleChange(true);
   };
 
-  const handleCancel = () => {
+  const handleDialogClosed = () => {
     setEditingAgent(null);
     setIsCreating(false);
-    onActionsVisibleChange(false);
   };
 
   return (
-    <>
-      {editingAgent ? (
-        <Column>
+    <Column>
+      <AgentsList role='radiogroup' aria-label='AI Agents'>
+        {agents.map((agent: AIAgent) => (
+          <AgentConfigItem
+            key={agent.id}
+            agent={agent}
+            selected={selectedAgent.id === agent.id}
+            onSelect={onSelectAgent}
+            onEdit={handleEditAgent}
+            onDelete={handleDeleteAgent}
+            onDuplicate={handleDuplicateAgent}
+            canDelete={!getDefaultAgent(agent.id)}
+          />
+        ))}
+      </AgentsList>
+
+      <CreateButton onClick={handleCreateNewAgent}>
+        <FaPlus title='' />
+        <span>Create New Agent</span>
+      </CreateButton>
+
+      <ConfigEditorDialog
+        open={!!editingAgent}
+        title={isCreating ? 'New Agent' : 'Edit Agent'}
+        saveLabel={isCreating ? 'Create Agent' : 'Save Changes'}
+        canSave={!!editingAgent?.name.trim()}
+        onSave={handleSaveAgent}
+        onClosed={handleDialogClosed}
+      >
+        {editingAgent && (
           <AgentForm
             agent={editingAgent}
             isDefaultAgent={!!getDefaultAgent(editingAgent.id)}
             onChange={setEditingAgent}
           />
-        </Column>
-      ) : (
-        <Column>
-          <AgentsList role='radiogroup' aria-label='AI Agents'>
-            {agents.map((agent: AIAgent) => (
-              <AgentConfigItem
-                key={agent.id}
-                agent={agent}
-                selected={selectedAgent.id === agent.id}
-                onSelect={onSelectAgent}
-                onEdit={handleEditAgent}
-                onDelete={handleDeleteAgent}
-                onDuplicate={handleDuplicateAgent}
-                canDelete={!getDefaultAgent(agent.id)}
-              />
-            ))}
-          </AgentsList>
-
-          <CreateButton onClick={handleCreateNewAgent}>
-            <FaPlus title='' />
-            <span>Create New Agent</span>
-          </CreateButton>
-        </Column>
-      )}
-      {editingAgent &&
-        actionPortalElement &&
-        createPortal(
-          <>
-            <Button subtle onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveAgent}>
-              {isCreating ? 'Create Agent' : 'Save Changes'}
-            </Button>
-          </>,
-          actionPortalElement,
         )}
-    </>
+      </ConfigEditorDialog>
+    </Column>
   );
 };
 

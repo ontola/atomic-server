@@ -30,6 +30,8 @@ export type WorkerRequest =
       id: number;
       type: 'init';
       wasmUrl: string;
+      /** The binary behind `wasmUrl`, compiled by the page ahead of time. */
+      wasmModule?: WebAssembly.Module;
       baseUrl?: string;
       /** OPFS file name of the database; the WASM side defaults to the
        *  legacy shared `atomic_data.redb` when omitted. */
@@ -184,6 +186,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
 
       initPromise = doInit(
         msg.wasmUrl,
+        msg.wasmModule,
         msg.baseUrl,
         msg.dbName,
         msg.dbKey,
@@ -541,6 +544,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 async function doInit(
   wasmUrl: string,
+  wasmModule: WebAssembly.Module | undefined,
   baseUrl?: string,
   dbName?: string,
   dbKey?: Uint8Array,
@@ -556,7 +560,7 @@ async function doInit(
   // instead of left to wasm-bindgen's `import.meta.url` default, which would
   // drop any version query on `wasmUrl` and pair this glue with a binary from
   // a different build — see `wasmBinaryUrl`.
-  await wasm.default({ module_or_path: wasmBinaryUrl(wasmUrl) });
+  await wasm.default({ module_or_path: wasmModule ?? wasmBinaryUrl(wasmUrl) });
   const t2 = performance.now();
 
   // One-time migration of the legacy shared DB file into the per-agent

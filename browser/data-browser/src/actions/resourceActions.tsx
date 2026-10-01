@@ -17,6 +17,7 @@ import {
   FaRegStar,
   FaShare,
   FaStar,
+  FaTags,
   FaTrash,
   FaTurnUp,
   FaWindowMaximize,
@@ -34,6 +35,10 @@ import {
 import { paths } from '../routes/paths';
 import { shortcuts } from './shortcuts';
 import type { ActionContext, ActionDefinition } from './types';
+import { openSearchOverlay } from '../components/overlayState';
+
+/** Asks the resource bar to open its tag picker for `detail` (a subject). */
+export const OPEN_TAGS_EVENT = 'atomic-open-tags';
 
 const getParent = (ctx: ActionContext): string | undefined =>
   ctx.resource.get(core.properties.parent) as string | undefined;
@@ -246,8 +251,8 @@ export const resourceActions: ActionDefinition[] = [
     id: 'newChild',
     scope: 'resource',
     section: 'action',
-    label: () => 'Add child',
-    helper: () => 'Create a new resource under this resource.',
+    label: () => 'New resource',
+    helper: () => 'Create a new resource under this one.',
     keywords: ['new', 'create'],
     icon: () => <FaPlus />,
     available: ctx => ctx.canWrite,
@@ -280,10 +285,30 @@ export const resourceActions: ActionDefinition[] = [
     scope: 'resource',
     section: 'action',
     label: () => 'Search children',
-    helper: () => 'Scope search to resource',
+    helper: () => 'Search only inside this resource',
     keywords: ['find', 'filter'],
     icon: () => <FaMagnifyingGlass />,
-    run: ctx => ctx.enableScope(),
+    // The search palette, limited to this resource. It used to navigate to
+    // the search page with a scope parameter that nothing there applied.
+    run: ctx => openSearchOverlay(undefined, ctx.subject),
+  },
+  {
+    id: 'tags',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Tags',
+    helper: () => 'Add or remove tags',
+    keywords: ['tag', 'label'],
+    icon: () => <FaTags />,
+    // Only the open resource has a resource bar to show the picker in.
+    available: ctx => ctx.subject === ctx.currentSubject,
+    // The picker lives in the resource bar, which shows its Tags button only
+    // once a resource has tags. This asks it to show the button with the
+    // picker open (see NavBar's TagSelectPopoverWrapper).
+    run: ctx =>
+      window.dispatchEvent(
+        new CustomEvent(OPEN_TAGS_EVENT, { detail: ctx.subject }),
+      ),
   },
   {
     id: 'share',

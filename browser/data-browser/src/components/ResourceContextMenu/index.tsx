@@ -12,6 +12,7 @@ import {
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
 import { addIf } from '../../helpers/addIf';
 import { resourceActions } from '../../actions/resourceActions';
+import { useAppMenuItems } from '../../actions/appMenuItems';
 import { useActionContext } from '../../actions/useActionContext';
 import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
@@ -42,6 +43,7 @@ export const ContextMenuOptions = {
   Edit: 'edit',
   Scope: 'scope',
   Share: 'share',
+  Tags: 'tags',
   Delete: 'delete',
   History: 'history',
   Import: 'import',
@@ -137,6 +139,7 @@ export function ResourceContextMenu({
     pluginClass,
   });
   const { items: customItems } = useCustomContextItemsContext();
+  const appMenu = useAppMenuItems();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const handleBindActive = useCallback(
@@ -241,6 +244,10 @@ export function ResourceContextMenu({
       onClick: () => setReportChatOpen(true),
     }),
   ];
+
+  // The navbar's More menu ends with places in the app (settings, drives,
+  // feedback), below this page's own actions.
+  if (isMainMenu && !showOnly) allItems.push(DIVIDER, ...appMenu.find);
 
   const filteredItems = showOnly
     ? allItems.filter(

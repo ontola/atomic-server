@@ -1,7 +1,6 @@
 import { styled } from 'styled-components';
-import { AtomicLink, AtomicLinkProps } from '../AtomicLink';
+import { AtomicLink } from '../AtomicLink';
 import { SideBarItem } from './SideBarItem';
-import { useLocation } from '@tanstack/react-router';
 
 /** Full-width row; matches resource links in the tree (clean AtomicLink is inline by default). */
 export const SideBarMenuItemLink = styled(AtomicLink)`
@@ -27,48 +26,7 @@ export const SideBarMenuRowLabel = styled.span`
   text-align: start;
 `;
 
-export interface SideBarMenuItemProps extends AtomicLinkProps {
-  label: string;
-  helper?: string;
-  icon?: React.ReactNode;
-  disabled?: boolean;
-  /** Is called when clicking on the item. Used for closing the menu. */
-  onClick?: () => void;
-  /** Shown at the end of the row, e.g. a count. */
-  suffix?: React.ReactNode;
-}
-
-export function SideBarMenuItem({
-  helper,
-  label,
-  icon,
-  path,
-  href,
-  subject,
-  onClick,
-  suffix,
-}: SideBarMenuItemProps) {
-  const { pathname } = useLocation();
-  const targetPath = path || href || subject;
-  const current: boolean = pathname === targetPath;
-
-  return (
-    <SideBarMenuItemLink href={href} subject={subject} path={path} clean>
-      <SideBarMenuRow
-        key={label}
-        title={helper}
-        onClick={onClick}
-        current={current}
-      >
-        {icon && <SideBarMenuRowIcon>{icon}</SideBarMenuRowIcon>}
-        <SideBarMenuRowLabel>{label}</SideBarMenuRowLabel>
-        {suffix}
-      </SideBarMenuRow>
-    </SideBarMenuItemLink>
-  );
-}
-
-/** Icon column for APP menu rows and Shared with me (matches tree LeadingSlot). */
+/** Icon column for sidebar menu rows (account, Shared with me) (matches tree LeadingSlot). */
 export const SideBarMenuRowIcon = styled.span`
   display: inline-flex;
   align-items: center;
