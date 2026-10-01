@@ -4312,3 +4312,56 @@ async fn row_inserted_between_two_others_after_the_index_was_built_lists_between
     let expect: Vec<String> = [0, 2, 1].iter().map(|i| subjects[*i].to_string()).collect();
     assert_eq!(order, expect);
 }
+
+#[tokio::test]
+async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
+    use crate::db::trees::{Method, Operation, Transaction, Tree};
+    let store = Db::init_temp("legacy_atom_rows").await.unwrap();
+    let atom = crate::atoms::IndexAtom {
+        subject: Subject::from("did:ad:legacy-subject"),
+        property: urls::NAME.to_string(),
+        ref_value: "Legacy Title".to_string(),
+        sort_value: "Legacy Title".to_string(),
+    };
+    let legacy_pvs = crate::db::prop_val_sub_index::propvalsub_legacy_key(&atom);
+    let legacy_vps = crate::db::val_prop_sub_index::valpropsub_legacy_key(&atom);
+    let mut tx = Transaction::new();
+    for (tree, key) in [
+        (Tree::PropValSub, &legacy_pvs),
+        (Tree::ValPropSub, &legacy_vps),
+    ] {
+        tx.push(Operation {
+            tree,
+            method: Method::Insert,
+            key: key.clone(),
+            val: Some(Vec::new()),
+        });
+    }
+    store.apply_transaction(&mut tx).unwrap();
+    // An old row is still read back as the same atom.
+    let found: Vec<_> = crate::db::prop_val_sub_index::find_in_prop_val_sub_index(
+        &store,
+        urls::NAME,
+        Some(&Value::String("Legacy Title".into())),
+    )
+    .map(|a| a.unwrap())
+    .collect();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].sort_value, "Legacy Title");
+
+    let mut tx = Transaction::new();
+    for op in Operation::remove_atom_from_legacy_indexes(&atom) {
+        tx.push(op);
+    }
+    store.apply_transaction(&mut tx).unwrap();
+    assert!(store
+        .kv
+        .get(Tree::PropValSub, &legacy_pvs)
+        .unwrap()
+        .is_none());
+    assert!(store
+        .kv
+        .get(Tree::ValPropSub, &legacy_vps)
+        .unwrap()
+        .is_none());
+}
