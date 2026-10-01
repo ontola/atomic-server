@@ -44,6 +44,7 @@ import {
   FaEraser,
   FaFont,
   FaImage,
+  FaPalette,
   FaPen,
   FaRotateLeft,
   FaRotateRight,
@@ -2462,7 +2463,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             onPointerUp={closeFanFromButton}
             onPointerCancel={cancelFanFromButton}
             aria-label='Pen color'
-          />
+          >
+            <FaPalette />
+          </ColorCircleButton>
           <WidthCircleButton
             type='button'
             title={`Stroke width: ${penWidth} (tap to swap with previous, drag to pick from fan)`}
@@ -2472,7 +2475,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             onPointerCancel={cancelFanFromButton}
             aria-label='Stroke width'
           >
-            <WidthDot $size={widthDotPx} />
+            <WidthRing aria-hidden>
+              <WidthDot $size={widthDotPx} />
+            </WidthRing>
           </WidthCircleButton>
           <CircleButton
             type='button'
@@ -2761,6 +2766,14 @@ const BottomToolbar = styled.div<{ $lift: number }>`
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.12);
     padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* Narrow phones: all eleven buttons must fit without sideways scrolling. */
+  @media (max-width: 480px) {
+    --canvas-button-size: 32px;
+    gap: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
 `;
 
 interface CircleButtonProps {
@@ -2771,6 +2784,8 @@ const CircleButton = styled.button<CircleButtonProps>`
   flex: none;
   box-sizing: border-box;
   aspect-ratio: 1;
+  /* Drags on a button (fan, scrub, zoom) must reach us, not scroll the bar. */
+  touch-action: none;
   min-width: var(--canvas-button-size);
   min-height: var(--canvas-button-size);
   width: var(--canvas-button-size);
@@ -2808,10 +2823,26 @@ const CircleButton = styled.button<CircleButtonProps>`
 const colorIntToHex = (c: number): string =>
   `#${(c >>> 0).toString(16).padStart(8, '0').slice(2)}`;
 
+/** Black or white, whichever reads better on the given color. */
+const contrastOn = (c: number): string => {
+  const r = (c >>> 16) & 255;
+  const g = (c >>> 8) & 255;
+  const b = c & 255;
+
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#000' : '#fff';
+};
+
 const ColorCircleButton = styled.button<{ $color: number }>`
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: ${p => contrastOn(p.$color)};
   box-sizing: border-box;
   aspect-ratio: 1;
+  /* Drags on a button (fan, scrub, zoom) must reach us, not scroll the bar. */
+  touch-action: none;
   min-width: var(--canvas-button-size);
   min-height: var(--canvas-button-size);
   width: var(--canvas-button-size);
@@ -2835,6 +2866,8 @@ const WidthCircleButton = styled.button`
   flex: none;
   box-sizing: border-box;
   aspect-ratio: 1;
+  /* Drags on a button (fan, scrub, zoom) must reach us, not scroll the bar. */
+  touch-action: none;
   min-width: var(--canvas-button-size);
   min-height: var(--canvas-button-size);
   width: var(--canvas-button-size);
@@ -2851,6 +2884,17 @@ const WidthCircleButton = styled.button`
   &:hover {
     background: ${p => p.theme.colors.bg1};
   }
+`;
+
+/** Dotted outer ring; the dot inside is filled to the current stroke size. */
+const WidthRing = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 78%;
+  height: 78%;
+  border: 2px dotted ${p => p.theme.colors.textLight};
+  border-radius: 50%;
 `;
 
 const WidthDot = styled.span<{ $size: number }>`
