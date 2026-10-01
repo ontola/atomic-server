@@ -83,6 +83,29 @@ import { perfMark, perfSpan } from './perf-trace.js';
 /** How long a drive's sync probe waits so the screen's first reads are not
  *  queued behind the version-vector scan. */
 const SYNC_PROBE_DELAY_MS = 2000;
+/** A drive with this many resources (last time it was synced) has its first
+ *  sync probe held back; see `runVVSync`. */
+const LARGE_DRIVE_ENTRIES = 500;
+
+function driveSizeKey(drive: string): string {
+  return `atomic.driveSize:${drive}`;
+}
+
+function rememberedDriveSize(drive: string): number {
+  try {
+    return Number(localStorage.getItem(driveSizeKey(drive))) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rememberDriveSize(drive: string, size: number): void {
+  try {
+    localStorage.setItem(driveSizeKey(drive), String(size));
+  } catch {
+    // Blocked storage: the probe is simply not held back next time.
+  }
+}
 
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
@@ -1983,9 +2006,15 @@ export class WSClient {
     // worker busy for a second or more, and everything the screen is waiting
     // for is read through that same worker. The probe is background work, so
     // the first reads go first.
-    await new Promise(resolve =>
-      setTimeout(resolve, WSClient.syncProbeDelayMs),
-    );
+    // Only a drive that was large last time has anything to wait for; a small
+    // one is reconciled at once, so a change made elsewhere shows up promptly.
+    const delay =
+      rememberedDriveSize(drive) >= LARGE_DRIVE_ENTRIES
+        ? WSClient.syncProbeDelayMs
+        : 0;
+
+    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
     if (!current() || this.readyState !== WebSocket.OPEN) return;
 
     const close = perfSpan('ws.computeDriveSyncState');
@@ -2003,6 +2032,10 @@ export class WSClient {
       const localState = await this.store.computeDriveSyncState(drive, {
         sparse,
       });
+      rememberDriveSize(
+        drive,
+        Object.keys(localState.vvs ?? localState.resources).length,
+      );
       const renamed = Object.keys(localState.vvs ?? localState.resources).some(
         s => this.wireSubject(s) !== s,
       );

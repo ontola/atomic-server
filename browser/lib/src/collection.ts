@@ -1521,14 +1521,28 @@ export class Collection {
       (m): m is string => m !== undefined,
     );
     const filteredMembers = filterIndexLeakage(rawMembers);
+    const answeredTotal = resource.props.totalMembers;
 
-    if (filteredMembers.length !== rawMembers.length) {
-      this.writePageMembers(resource, filteredMembers, filteredMembers.length);
+    if (!isNumber(answeredTotal)) {
+      throw new Error('Invalid collection: total-members is not a number');
     }
 
-    this.setPage(page, resource);
+    // The answer is the store's copy of the query resource, shared by every
+    // collection that asks the same question. Members added live are written
+    // into the page, so each collection keeps a page of its own, as the local
+    // database path does. Sharing it made the second collection find the
+    // member already listed, report no change, and never redraw.
+    const own = new Resource<Collections.Collection>(this.buildSubject(page));
+    this.writePageMembers(
+      own,
+      filteredMembers,
+      filteredMembers.length !== rawMembers.length
+        ? filteredMembers.length
+        : answeredTotal,
+    );
+    this.setPage(page, own);
 
-    const totalMembers = resource.props.totalMembers;
+    const totalMembers = own.props.totalMembers;
 
     if (!isNumber(totalMembers)) {
       throw new Error('Invalid collection: total-members is not a number');
