@@ -11141,3 +11141,23 @@ msgstr "This backup is sealed in this browser only. {0} is not holding a copy, s
 #: src/chunks/AppPage/ConnectDialog.tsx
 msgid "Connect {0}"
 msgstr "Connect {0}"
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Host this workspace on a Cloud Server to share it."
+msgstr "Host this workspace on a Cloud Server to share it."
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Connect or self-host a server in Sync settings to share it."
+msgstr "Connect or self-host a server in Sync settings to share it."
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Get a Cloud Server"
+msgstr "Get a Cloud Server"
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Open Sync settings"
+msgstr "Open Sync settings"
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Forms need a server to receive answers."
+msgstr "Forms need a server to receive answers."

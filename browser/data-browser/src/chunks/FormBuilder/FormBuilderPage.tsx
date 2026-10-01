@@ -23,9 +23,10 @@ import { PageSettingsPanel } from './PageSettingsPanel';
 import { PublishToggle } from './PublishToggle';
 import { FormPreviewButton } from './FormPreviewDialog';
 import { ResultsTab } from './ResultsTab';
-import { ShareLinkPanel } from './ShareLinkPanel';
+import { NoHostNudge, ShareLinkPanel } from './ShareLinkPanel';
 import { SummaryTab } from './Summary/SummaryTab';
 import { SettingsTab } from './SettingsTab';
+import { useFormHostOrigin } from './formHostOrigin';
 
 type BuilderTab = 'fields' | 'results' | 'summary' | 'settings';
 
@@ -52,6 +53,7 @@ export function FormBuilderPage({ resource }: ResourcePageProps): JSX.Element {
   const missing = requires.filter(s => !questions.some(q => q.mapsTo === s));
   const tableResource = useResource(tableSubject ?? unknownSubject);
 
+  const { origin: hostOrigin, pending: hostPending } = useFormHostOrigin();
   const [activeTab, setActiveTab] = useState<BuilderTab>('fields');
   const [activePage, setActivePage] = useState<string | undefined>(pages[0]);
   const [selectedField, setSelectedField] = useState<string | undefined>();
@@ -76,9 +78,15 @@ export function FormBuilderPage({ resource }: ResourcePageProps): JSX.Element {
             <EditableTitle resource={resource} id={titleId} />
           </TitleArea>
           <HeaderActions>
-            <ShareLinkPanel resource={resource} />
+            {hostOrigin ? (
+              <ShareLinkPanel resource={resource} origin={hostOrigin} />
+            ) : null}
             <FormPreviewButton formSubject={resource.subject} />
-            <PublishToggle resource={resource} />
+            {hostOrigin ? (
+              <PublishToggle resource={resource} />
+            ) : (
+              !hostPending && <NoHostNudge />
+            )}
           </HeaderActions>
         </HeaderRow>
       </TitleSlot>

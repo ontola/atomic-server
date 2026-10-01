@@ -16,6 +16,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   (`@tomic/form-app`, built on the new `@tomic/form-renderer`) with a
   progress bar and answers saved on their device until they submit.
   [#875](https://github.com/ontola/atomic-server/issues/875)
+- Forms: share links use the server that hosts the workspace. Without one, the
+  builder says forms need a server instead of offering a link guests cannot open.
 - `@tomic/lib`: the forms ontology (`forms`) is exported and, like
   `notifications`, fetched from the host rather than atomicdata.dev.
 - Fix: after the server refuses a commit that depends on ops it never

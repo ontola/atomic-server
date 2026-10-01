@@ -1,11 +1,4 @@
-import {
-  core,
-  forms,
-  Resource,
-  useNumber,
-  useStore,
-  useString,
-} from '@tomic/react';
+import { core, forms, Resource, useNumber, useString } from '@tomic/react';
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
@@ -27,9 +20,14 @@ import { Column, Row } from '@components/Row';
 import { CodeBlock } from '@components/CodeBlock';
 import { Tabs } from '@components/Tabs';
 import { Button } from '@components/Button';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { getManagedPortalUrl } from '@helpers/managed/cloudSync';
+import { paths } from '../../routes/paths';
 
 interface ShareLinkPanelProps {
   resource: Resource;
+  /** Origin of the node hosting the drive; see `useFormHostOrigin`. */
+  origin: string;
 }
 
 /**
@@ -42,8 +40,8 @@ interface ShareLinkPanelProps {
  */
 export function ShareLinkPanel({
   resource,
+  origin,
 }: ShareLinkPanelProps): JSX.Element | null {
-  const store = useStore();
   const [dialogProps, show, , isOpen] = useDialog();
   const [publishedAt] = useNumber(resource, forms.properties.formPublishedAt);
   const [persistedSlug] = useString(resource, forms.properties.formPublishId);
@@ -70,9 +68,7 @@ export function ShareLinkPanel({
     // `mintingRef` stays true for the whole retry chain, not just one
     // attempt, so a re-render mid-retry can't start an overlapping chain.
     const tryMint = () => {
-      fetch(
-        `${store.getServerUrl()}/form/${encodeURIComponent(resource.subject)}/definition`,
-      )
+      fetch(`${origin}/form/${encodeURIComponent(resource.subject)}/definition`)
         .then(async res => {
           if (!res.ok) {
             throw new Error(`status ${res.status}`);
@@ -107,7 +103,7 @@ export function ShareLinkPanel({
       cancelled = true;
       mintingRef.current = false;
     };
-  }, [isPublished, slug, resource.subject, store]);
+  }, [isPublished, slug, resource.subject, origin]);
 
   if (!isPublished) {
     return null;
@@ -117,7 +113,7 @@ export function ShareLinkPanel({
     return <Button subtle disabled title='Preparing share link…' />;
   }
 
-  const shareUrl = `${store.getServerUrl()}/form/${slug}`;
+  const shareUrl = `${origin}/form/${slug}`;
 
   return (
     <>
@@ -324,3 +320,29 @@ const PanelLink = styled.a`
     background-color: ${p => p.theme.colors.bg2};
   }
 `;
+
+/**
+ * Shown in place of Share and Publish when no node hosts the drive: a guest
+ * opens a form on the node, so without one there is nothing to link to. Only
+ * a build with a portal (the hosted app) offers Cloud Server; a source build
+ * just points at connecting or self-hosting a server.
+ */
+export function NoHostNudge(): JSX.Element {
+  const navigate = useNavigateWithTransition();
+  const hasCloud = getManagedPortalUrl() !== null;
+
+  return (
+    <Row gap='0.5rem' center>
+      <InviteOnlyNote role='note'>
+        <strong>Forms need a server to receive answers.</strong>
+        <br />
+        {hasCloud
+          ? 'Host this workspace on a Cloud Server to share it.'
+          : 'Connect or self-host a server in Sync settings to share it.'}
+      </InviteOnlyNote>
+      <Button type='button' subtle onClick={() => navigate(paths.sync)}>
+        {hasCloud ? 'Get a Cloud Server' : 'Open Sync settings'}
+      </Button>
+    </Row>
+  );
+}

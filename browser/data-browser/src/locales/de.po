@@ -11128,3 +11128,23 @@ msgstr ""
 #: src/chunks/AppPage/ConnectDialog.tsx
 msgid "Connect {0}"
 msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Host this workspace on a Cloud Server to share it."
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Connect or self-host a server in Sync settings to share it."
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Get a Cloud Server"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Open Sync settings"
+msgstr ""
+
+#: src/chunks/FormBuilder/ShareLinkPanel.tsx
+msgid "Forms need a server to receive answers."
+msgstr ""
