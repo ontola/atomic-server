@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-/**
- * The row gutter. It holds the row number, the expand button that replaces it
- * when the gutter is hovered, and the row-scoped affordance slot beside them
- * (see `FancyTableProps.RowHeaderAddonComponent`). Wide enough for the widest
- * of those states — a comment bubble with a count next to the expand button —
- * so nothing in it is ever squeezed or clipped.
- */
-const INDEX_CELL_WIDTH = '5.25rem';
+const INDEX_CELL_WIDTH = '6ch';
 
 const parseSize = (size: string) => {
   try {

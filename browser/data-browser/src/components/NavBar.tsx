@@ -452,15 +452,12 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
 
 /** Comments panel toggle showing the live comment count at the icon. */
 function CommentsButton({ subject }: { subject: string }): JSX.Element {
-  const { togglePanel, activePanel, commentSubject } = useRightPanel();
+  const { togglePanel, activePanel } = useRightPanel();
   const { count, hasUnseen } = useCommentCount(subject);
 
   return (
     <CommentsLabelButton
-      // The panel can be showing a thread from *inside* the page — a table
-      // row's. This button is about the page's own thread, and clicking it
-      // brings the panel back to that rather than closing the row's.
-      $active={activePanel === 'comments' && !commentSubject}
+      $active={activePanel === 'comments'}
       onClick={() => togglePanel('comments')}
       data-testid='navbar-comments-button'
       data-unseen={hasUnseen ? '' : undefined}

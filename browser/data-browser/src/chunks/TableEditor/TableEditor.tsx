@@ -95,14 +95,6 @@ interface FancyTableProps<T> {
     column: number | undefined,
   ) => void;
   itemKey?: (index: number) => string;
-  /**
-   * Rendered in every row's gutter, at the start of the row header cell. The
-   * grid knows nothing about rows beyond their index, so a view that can map an
-   * index to a resource passes a component here to hang a per-row affordance
-   * off the row — the table view uses it for the comment bubble. Mount a stable
-   * component type: a new one on every render remounts it for every visible row.
-   */
-  RowHeaderAddonComponent?: React.ComponentType<{ rowIndex: number }>;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
   /**
@@ -158,7 +150,6 @@ function FancyTableInner<T>({
   onRowExpand = noop,
   onInsertRowBelow,
   onSelectedCellChange,
-  RowHeaderAddonComponent,
   HeadingComponent,
   NewColumnButtonComponent,
   FooterComponent,
@@ -363,12 +354,7 @@ function FancyTableInner<T>({
           role='row'
           aria-rowindex={index + 2}
         >
-          <IndexCell
-            rowIndex={index}
-            columnIndex={0}
-            onExpand={onRowExpand}
-            RowHeaderAddonComponent={RowHeaderAddonComponent}
-          >
+          <IndexCell rowIndex={index} columnIndex={0} onExpand={onRowExpand}>
             {index + 1}
           </IndexCell>
           {children({ index })}
@@ -376,7 +362,7 @@ function FancyTableInner<T>({
         </TableRow>
       );
     },
-    [children, onRowExpand, RowHeaderAddonComponent],
+    [children, onRowExpand],
   );
 
   const rowProps = useMemo(() => ({}), []);

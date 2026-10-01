@@ -42,7 +42,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
   children,
 }) => {
   const targetRef = useRef<HTMLDivElement>(null);
-  const { activePanel, closePanel } = useRightPanel();
+  const { activePanel, setPanelOpen } = useRightPanel();
   const wide = useMediaQuery(
     `(min-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT}px)`,
     true,
@@ -59,7 +59,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
 
   const close = () => {
     if (activePanel) {
-      closePanel(activePanel);
+      setPanelOpen(activePanel, false);
     }
   };
 
