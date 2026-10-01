@@ -52,6 +52,7 @@ import { DEFAULT_SIZE_PX } from '@chunks/TableEditor/hooks/useCellSizes';
 import { NewColumnButton } from './NewColumnButton';
 import { TableHeading } from './TableHeading';
 import { TableFilterBar } from './TableFilterBar';
+import { RowSelectCheckbox } from './RowSelectCheckbox';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
@@ -984,8 +985,104 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [collection],
   );
 
+  // Rows ticked in the row header, by subject. A change of view, filter or
+  // sorting changes which rows are visible, so the ticks would point at rows
+  // the person can no longer see: they only count for the query they were made
+  // under.
+  const [selection, setSelection] = useState<{
+    queryKey: string;
+    rows: ReadonlySet<string>;
+  }>({ queryKey, rows: new Set() });
+  const selectedRows = useMemo<ReadonlySet<string>>(
+    () => (selection.queryKey === queryKey ? selection.rows : new Set()),
+    [selection, queryKey],
+  );
+
+  const toggleRowSelected = useCallback(
+    (subject: string) => {
+      setSelection(prev => {
+        const next = new Set(prev.queryKey === queryKey ? prev.rows : []);
+
+        if (!next.delete(subject)) {
+          next.add(subject);
+        }
+
+        return { queryKey, rows: next };
+      });
+    },
+    [queryKey],
+  );
+
+  const clearRowSelection = useCallback(
+    () => setSelection({ queryKey, rows: new Set() }),
+    [queryKey],
+  );
+
+  const deleteSelectedRows = useCallback(async () => {
+    const resources = [...selectedRows]
+      .map(subject => store.getResourceLoading(subject))
+      .filter(row => !isUnsavedDraft(row));
+
+    clearRowSelection();
+
+    // Rows added this session are drawn from `newRowSubjects`; drop them from
+    // the render list right away, like `handleDeleteRow` does.
+    const sessionSubjects = new Set(newRowSubjects);
+
+    setNewRowSubjects(prev => prev.filter(s => !selectedRows.has(s)));
+
+    if (resources.length === 0) {
+      return;
+    }
+
+    // One undo step restores the whole batch.
+    addItemsToHistoryStack(resources.map(createResourceDeletedHistoryItem));
+
+    for (const row of resources) {
+      await row.destroy();
+
+      if (!sessionSubjects.has(row.subject)) {
+        decrementMemberCount();
+      }
+    }
+  }, [
+    newRowSubjects,
+    selectedRows,
+    store,
+    clearRowSelection,
+    addItemsToHistoryStack,
+    decrementMemberCount,
+  ]);
+
+  const RowHeaderExtra = useCallback(
+    ({ index }: { index: number }) => {
+      if (!canWrite) {
+        return null;
+      }
+
+      if (index < memberCount) {
+        return <RowSelectCheckbox collection={collection} index={index} />;
+      }
+
+      // The trailing empty row is the entry placeholder, not a row yet.
+      const newRowIndex = index - memberCount;
+      const subject = newRowSubjects[newRowIndex];
+
+      if (!subject || newRowIndex === newRowSubjects.length - 1) {
+        return null;
+      }
+
+      return <RowSelectCheckbox subject={subject} index={index} />;
+    },
+    [canWrite, collection, memberCount, newRowSubjects],
+  );
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
+      selectedRows,
+      toggleRowSelected,
+      clearRowSelection,
+      deleteSelectedRows,
       tableSubject: resource.subject,
       tableClassSubject: tableClass.subject,
       sorting,
@@ -1019,6 +1116,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
       addItemsToHistoryStack,
     }),
     [
+      selectedRows,
+      toggleRowSelected,
+      clearRowSelection,
+      deleteSelectedRows,
       resource.subject,
       tableClass.subject,
       sorting,
@@ -1310,6 +1411,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onUndoCommand={undoLastItem}
               onColumnReorder={handleColumnReorder}
               onRowExpand={handleRowExpand}
+              RowHeaderExtra={RowHeaderExtra}
               onInsertRowBelow={handleInsertRowBelow}
               onSelectedCellChange={handleSelectedCellChange}
               HeadingComponent={TableHeading}

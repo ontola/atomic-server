@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-const INDEX_CELL_WIDTH = '6ch';
+const INDEX_CELL_WIDTH = '8ch';
 
 const parseSize = (size: string) => {
   try {

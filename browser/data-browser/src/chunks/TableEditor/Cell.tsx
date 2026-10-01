@@ -45,6 +45,8 @@ export interface CellProps {
 
 interface IndexCellProps extends CellProps {
   onExpand: (rowIndex: number) => void;
+  /** Rendered before the expand button, e.g. a row-select tick box. */
+  Extra?: React.ComponentType<{ index: number }>;
 }
 
 export function Cell({
@@ -293,6 +295,7 @@ export function Cell({
 export function IndexCell({
   children,
   onExpand,
+  Extra,
   ...props
 }: React.PropsWithChildren<IndexCellProps>): JSX.Element {
   const { markings } = useTableEditorContext();
@@ -301,6 +304,7 @@ export function IndexCell({
 
   return (
     <StyledIndexCell role='rowheader' {...props} hasMarking={!!marking}>
+      {Extra && <Extra index={props.rowIndex} />}
       <IconButton
         title='Open resource'
         onClick={() => onExpand(props.rowIndex)}
@@ -316,18 +320,43 @@ const IndexNumber = styled.span``;
 
 const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
   justify-content: flex-end !important;
+  gap: 0.4rem;
   color: ${p => p.theme.colors.textLight};
 
-  & button {
+  /* Pinned left, so it doesn't move when the number swaps for the expand
+     button under a hovering or tapping pointer. */
+  & [data-row-select] {
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+  }
+
+  & [data-row-select]:not([data-active='true']) {
     display: none;
   }
 
-  &:hover ${IndexNumber}, &:focus-within ${IndexNumber} {
+  /* No hover on touch: without this there'd be no way to start selecting. */
+  @media (hover: none) {
+    & [data-row-select] {
+      display: flex !important;
+    }
+  }
+
+  &:hover [data-row-select],
+  &:focus-within [data-row-select] {
+    display: flex;
+  }
+
+  & > button {
     display: none;
   }
 
-  &:not([data-hasmarking='true']):hover button,
-  &:not([data-hasmarking='true']):focus-within button {
+  &:hover ${IndexNumber}, &:is(:focus, :has(> button:focus)) ${IndexNumber} {
+    display: none;
+  }
+
+  &:not([data-hasmarking='true']):hover > button,
+  &:not([data-hasmarking='true']):is(:focus, :has(> button:focus)) > button {
     display: ${p => (p.hasMarking ? 'none' : 'block')};
   }
 `;

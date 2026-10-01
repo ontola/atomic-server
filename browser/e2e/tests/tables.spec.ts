@@ -652,4 +652,55 @@ test.describe('tables', async () => {
     await expect(page.getByTestId('editable-title').first()).toBeVisible();
     await expectOrder();
   });
+
+  test('tick rows and delete them in one go', async ({ page }) => {
+    test.slow();
+    await createBlankTable(page, 'Bulk Delete Test');
+
+    await focusCell(page, page.getByRole('gridcell').first());
+
+    for (const value of ['rowA', 'rowB', 'rowC', 'rowD']) {
+      await enterGridEdit(page);
+      await typeInActiveGridCell(page, value);
+      await page.keyboard.press('Enter');
+    }
+
+    await page.keyboard.press('Escape');
+    await waitForSynced(page);
+    await reloadGrid(page);
+
+    // Rows are found by their content, not their position.
+    const tick = (name: string) =>
+      page
+        .getByRole('row')
+        .filter({ has: page.getByRole('gridcell', { name }) })
+        .getByRole('checkbox');
+
+    const toolbar = page.getByRole('toolbar', { name: 'Selected rows' });
+
+    // No toolbar until a row is ticked.
+    await expect(toolbar).toBeHidden();
+
+    // The tick appears on hover; ticking one row starts select mode.
+    await page
+      .getByRole('row')
+      .filter({ has: page.getByRole('gridcell', { name: 'rowB' }) })
+      .getByRole('rowheader')
+      .hover();
+    await tick('rowB').click();
+    await expect(toolbar).toContainText('1 selected');
+
+    // In select mode every row shows its tick without hovering.
+    await expect(tick('rowD')).toBeVisible();
+    await tick('rowD').click();
+    await expect(toolbar).toContainText('2 selected');
+
+    await page.getByRole('button', { name: 'Delete selected rows' }).click();
+
+    await expect(page.getByRole('gridcell', { name: 'rowB' })).toBeHidden();
+    await expect(page.getByRole('gridcell', { name: 'rowD' })).toBeHidden();
+    await expect(page.getByRole('gridcell', { name: 'rowA' })).toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'rowC' })).toBeVisible();
+    await expect(toolbar).toBeHidden();
+  });
 });

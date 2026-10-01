@@ -16,6 +16,7 @@ import {
   FaTableColumns,
   FaWindowMaximize,
   FaTrash,
+  FaXmark,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -134,6 +135,7 @@ export function TableViewTabs({
         {canWrite && <AddViewMenu createView={createView} apps={apps} />}
       </Tabs>
       <Actions>
+        <RowSelectionActions />
         <FilterMenu columns={columns} derivedColumns={derivedColumns} />
         <ColumnsMenu
           allColumns={allColumns}
@@ -185,6 +187,54 @@ function AddViewMenu({
 
   return <DropdownMenu Trigger={AddViewTrigger} items={items} />;
 }
+
+/**
+ * Appears while rows are ticked ("select mode"): how many, and what to do with
+ * them. Sits next to the filter button, where the other table actions live.
+ */
+function RowSelectionActions(): JSX.Element | null {
+  const { selectedRows, clearRowSelection, deleteSelectedRows } =
+    useContext(TablePageContext);
+
+  if (selectedRows.size === 0) {
+    return null;
+  }
+
+  return (
+    <SelectionBar role='toolbar' aria-label='Selected rows'>
+      <SelectionCount>{selectedRows.size} selected</SelectionCount>
+      <IconBtn
+        type='button'
+        title='Delete selected rows'
+        onClick={() => void deleteSelectedRows()}
+      >
+        <FaTrash />
+      </IconBtn>
+      <IconBtn
+        type='button'
+        title='Clear selection'
+        onClick={clearRowSelection}
+      >
+        <FaXmark />
+      </IconBtn>
+    </SelectionBar>
+  );
+}
+
+const SelectionBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-right: 0.5rem;
+  margin-right: 0.25rem;
+  border-right: 1px solid ${p => p.theme.colors.bg2};
+`;
+
+const SelectionCount = styled.span`
+  white-space: nowrap;
+  font-size: 0.9em;
+  color: ${p => p.theme.colors.textLight};
+`;
 
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
 

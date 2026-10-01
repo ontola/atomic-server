@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Tables: tick rows to delete several at once. Hover a row's number (or look
+  left of it on a touch screen) for a checkbox. Once one row is ticked every
+  row shows its checkbox, and the toolbar next to the filter button shows how
+  many are ticked with a delete button. Undo brings all of them back at once.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while

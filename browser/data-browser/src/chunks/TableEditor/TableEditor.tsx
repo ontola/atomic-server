@@ -85,6 +85,8 @@ interface FancyTableProps<T> {
   onCellResize?: (sizes: number[]) => void;
   onColumnReorder?: ColumnReorderHandler;
   onRowExpand?: (index: number) => void;
+  /** Rendered in each row's header cell, before the expand button. */
+  RowHeaderExtra?: React.ComponentType<{ index: number }>;
   /** See {@link TableCommands.insertRowBelow}. */
   onInsertRowBelow?: (index: number) => boolean;
   /** Fires when the active cell moves (both indexes `undefined` when the
@@ -148,6 +150,7 @@ function FancyTableInner<T>({
   onPasteCommand,
   onColumnReorder,
   onRowExpand = noop,
+  RowHeaderExtra,
   onInsertRowBelow,
   onSelectedCellChange,
   HeadingComponent,
@@ -354,7 +357,12 @@ function FancyTableInner<T>({
           role='row'
           aria-rowindex={index + 2}
         >
-          <IndexCell rowIndex={index} columnIndex={0} onExpand={onRowExpand}>
+          <IndexCell
+            rowIndex={index}
+            columnIndex={0}
+            onExpand={onRowExpand}
+            Extra={RowHeaderExtra}
+          >
             {index + 1}
           </IndexCell>
           {children({ index })}
@@ -362,7 +370,7 @@ function FancyTableInner<T>({
         </TableRow>
       );
     },
-    [children, onRowExpand],
+    [children, onRowExpand, RowHeaderExtra],
   );
 
   const rowProps = useMemo(() => ({}), []);
