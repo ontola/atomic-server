@@ -706,6 +706,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   const baselineMemberCountRef = useRef<number | null>(null);
+  const deletedSessionRowsRef = useRef(0);
   const baselineQueryKeyRef = useRef<string | null>(null);
 
   // What the grid is asking for, and what the collection in hand answers.
@@ -736,6 +737,21 @@ export const TableResource: React.FC<TableResourceProps> = ({
     isSavedDraft(store.getResourceLoading(subject)),
   ).length;
 
+  // Session rows the person deleted: they left `newRowSubjects` at once, but the
+  // collection still counts them until its own removal lands. Without this the
+  // gap reads as a row from somewhere else, the baseline is raised for it, and
+  // the grid draws a member that no longer exists (a duplicated neighbour).
+  // Bounded by what the collection really has in excess, so it drains itself.
+  deletedSessionRowsRef.current = Math.min(
+    deletedSessionRowsRef.current,
+    Math.max(
+      0,
+      collection.totalMembers -
+        (baselineMemberCountRef.current ?? 0) -
+        materialisedSessionRows,
+    ),
+  );
+
   // Freeze the count only once the collection actually answers what was asked.
   // Edits land faster than collections arrive — change a filter's operator and
   // then type its value, and the collection built for the operator-only query
@@ -754,7 +770,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
   ) {
     baselineMemberCountRef.current = Math.max(
       0,
-      collection.totalMembers - materialisedSessionRows,
+      collection.totalMembers -
+        materialisedSessionRows -
+        deletedSessionRowsRef.current,
     );
     baselineQueryKeyRef.current = requestedQuery;
   }
@@ -786,7 +804,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // (`itemKey` offsets by `memberCount`), so nothing remounts.
   if (baselineMemberCountRef.current !== null) {
     const accountedFor =
-      baselineMemberCountRef.current + materialisedSessionRows;
+      baselineMemberCountRef.current +
+      materialisedSessionRows +
+      deletedSessionRowsRef.current;
 
     if (collection.totalMembers > accountedFor) {
       baselineMemberCountRef.current += collection.totalMembers - accountedFor;
@@ -795,7 +815,12 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const memberCount = Math.min(
     baselineMemberCountRef.current ??
-      Math.max(0, collection.totalMembers - materialisedSessionRows),
+      Math.max(
+        0,
+        collection.totalMembers -
+          materialisedSessionRows -
+          deletedSessionRowsRef.current,
+      ),
     collection.totalMembers,
   );
 
@@ -1034,6 +1059,15 @@ export const TableResource: React.FC<TableResourceProps> = ({
       const sessionSubjects = new Set(newRowSubjects);
       const doomed = new Set(subjects);
 
+      for (const subject of sessionSubjects) {
+        if (
+          doomed.has(subject) &&
+          isSavedDraft(store.getResourceLoading(subject))
+        ) {
+          deletedSessionRowsRef.current += 1;
+        }
+      }
+
       setNewRowSubjects(prev => prev.filter(s => !doomed.has(s)));
 
       if (resources.length === 0) {
@@ -1225,6 +1259,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
       // Drop a session row from the render list immediately (optimistic).
       if (!isMember) {
+        if (isSavedDraft(store.getResourceLoading(subject))) {
+          deletedSessionRowsRef.current += 1;
+        }
+
         setNewRowSubjects(prev => prev.filter(s => s !== subject));
       }
 

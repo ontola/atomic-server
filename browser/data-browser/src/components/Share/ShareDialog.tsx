@@ -38,6 +38,7 @@ import {
 import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { PeopleWithAccess, effectiveRole } from './PeopleWithAccess';
+import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext';
 import { PublicAccess } from './PublicAccess';
 import { RoleSelect, type ShareRole } from './RoleSelect';
 import { useShareRights } from './useShareRights';
@@ -260,19 +261,22 @@ function ShareOverview({
             </MessageField>
           ) : (
             <>
-              <PeopleWithAccess
-                rights={rights}
-                inheritedRights={inheritedRights}
-                currentAgent={agent?.subject}
-                currentRole={effectiveRole(
-                  agent?.subject,
-                  rights,
-                  inheritedRights,
-                  canWrite,
-                )}
-                currentAgentDetail={agentDetail}
-                onSetRole={canWrite ? setRole : undefined}
-              />
+              {/* Opening a profile closes the dialog behind it. */}
+              <ResourceLinkNavigationContext.Provider value={onDone}>
+                <PeopleWithAccess
+                  rights={rights}
+                  inheritedRights={inheritedRights}
+                  currentAgent={agent?.subject}
+                  currentRole={effectiveRole(
+                    agent?.subject,
+                    rights,
+                    inheritedRights,
+                    canWrite,
+                  )}
+                  currentAgentDetail={agentDetail}
+                  onSetRole={canWrite ? setRole : undefined}
+                />
+              </ResourceLinkNavigationContext.Provider>
               <PublicAccess
                 level={publicRight?.role ?? 'off'}
                 inherited={

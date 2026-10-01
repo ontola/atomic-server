@@ -4,6 +4,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Tables: deleting a row you typed in the same session no longer shows its
+  neighbour twice until you reload.
+- Top bar: notifications and sync have their own icon buttons to the right of
+  More (they stay in the menu too), in the same color as the other buttons. The
+  divider after Search is gone.
+- Share: names under "People with access" open that person's profile.
+- Error toasts: long subject URLs are shortened in the message. Copy still
+  copies the full text.
 - Tables: right-click a row's number to get the same menu as right-clicking one
   of its cells. Select several cells with shift+click or by dragging and
   right-click them for a menu that acts on all of them: clear the values, set
