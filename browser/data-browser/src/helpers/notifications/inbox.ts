@@ -238,3 +238,53 @@ export const occurredAt = (n: Resource): number =>
   (n.get(notifications.properties.occurredAt) as number | undefined) ??
   n.getCreatedAt() ??
   0;
+
+/** Several notifications about the same thing, shown as one row. */
+export interface NotificationGroup {
+  key: string;
+  /** Newest first. */
+  items: Resource[];
+  kind?: string;
+  about?: string;
+  /** Distinct actors, most recent first. */
+  actors: string[];
+  unread: boolean;
+}
+
+const dayOf = (ms: number) => new Date(ms).toDateString();
+
+/**
+ * Groups notifications per thing and kind, so five messages in one chat are
+ * one row. Unread and read ones stay apart, and read ones are grouped per
+ * day, so history still shows when things happened. Expects the input newest
+ * first (as {@link dedupeBySource} returns it) and keeps that order.
+ */
+export function groupNotifications(list: Resource[]): NotificationGroup[] {
+  const groups = new Map<string, NotificationGroup>();
+
+  for (const n of list) {
+    const kind = n.get(notifications.properties.notificationKind) as
+      | string
+      | undefined;
+    const about = n.get(dataBrowser.properties.about) as string | undefined;
+    const unread = isUnread(n);
+    const key = [
+      about ?? n.subject,
+      kind ?? '',
+      unread ? 'unread' : dayOf(occurredAt(n)),
+    ].join('|');
+
+    let group = groups.get(key);
+
+    if (!group) {
+      group = { key, items: [], kind, about, actors: [], unread };
+      groups.set(key, group);
+    }
+
+    group.items.push(n);
+    const actor = n.get(notifications.properties.actor) as string | undefined;
+    if (actor && !group.actors.includes(actor)) group.actors.push(actor);
+  }
+
+  return [...groups.values()];
+}

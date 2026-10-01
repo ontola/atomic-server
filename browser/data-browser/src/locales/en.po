@@ -4607,6 +4607,7 @@ msgstr "Virtual drive"
 msgid "Turn off"
 msgstr "Turn off"
 
+#: src/components/Notifications/MessageNotifier.tsx
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Turn on"
 msgstr "Turn on"
@@ -9884,12 +9885,16 @@ msgid "{0} replied to you"
 msgstr "{0} replied to you"
 
 #. 0: author; 1: on
+#. 0: who; 1: on
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
 msgid "{0} commented on {1}"
 msgstr "{0} commented on {1}"
 
 #. 0: author; 1: on
+#. 0: who; 1: on
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
 msgid "{0} in {1}"
 msgstr "{0} in {1}"
 
@@ -10165,6 +10170,57 @@ msgstr "Unlocking {0}…"
 msgid "Sign in again to open your account on this device."
 msgstr "Sign in again to open your account on this device."
 
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed a message while you were away"
+msgstr "You missed a message while you were away"
+
+#. 0: count
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed {0} messages while you were away"
+msgstr "You missed {0} messages while you were away"
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Not now"
+msgstr "Not now"
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Show new messages as system notifications on this device?"
+msgstr "Show new messages as system notifications on this device?"
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Loading notifications"
+msgstr "Loading notifications"
+
+#. 0: first; 1: second
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} and {1}"
+msgstr "{0} and {1}"
+
+#. 0: first; 1: others
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} and {1} others"
+msgstr "{0} and {1} others"
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} new messages in {2}"
+msgstr "{0}: {1} new messages in {2}"
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} comments on {2}"
+msgstr "{0}: {1} comments on {2}"
+
+#. 0: who; 1: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} replied to you in {1}"
+msgstr "{0} replied to you in {1}"
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} replies to you in {2}"
+msgstr "{0}: {1} replies to you in {2}"
+
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Could not read that image"
 msgstr "Could not read that image"
@@ -10215,6 +10271,19 @@ msgid "Delete selection"
 msgstr "Delete selection"
 
 #: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level: tap to fit everything, drag sideways to zoom"
+msgstr "Zoom level: tap to fit everything, drag sideways to zoom"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level"
+msgstr "Zoom level"
+
+#. 0: ' '
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+msgstr "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+
+#: src/views/Canvas/CanvasPage.tsx
 msgid "Text: tap the canvas and type; tap existing text to edit it"
 msgstr "Text: tap the canvas and type; tap existing text to edit it"
 
@@ -10225,19 +10294,6 @@ msgstr "Image: pick a picture, then move or scale it"
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
 msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
-
-#. 0: ' '
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
-msgstr "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Zoom level: tap to fit everything, drag sideways to zoom"
-msgstr "Zoom level: tap to fit everything, drag sideways to zoom"
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Zoom level"
-msgstr "Zoom level"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
