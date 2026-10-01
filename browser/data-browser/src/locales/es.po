@@ -1189,10 +1189,6 @@ msgid "Show canvas help"
 msgstr "Mostrar ayuda del lienzo"
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Switch to draw"
-msgstr "Cambiar a dibujar"
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
 msgstr "Borrador"
 
@@ -1216,10 +1212,6 @@ msgstr "Grosor del trazo"
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Rehacer (Ctrl+Shift+Z)"
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
-msgstr "Zoom para ajustar (toca) — arrastra horizontalmente para ajustar el zoom"
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas controls"
@@ -3591,12 +3583,6 @@ msgstr ""
 msgid "Checking your {0} account…"
 msgstr ""
 
-#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
-#~ msgstr ""
-
-#~ msgid "Sign in to your {0} account"
-#~ msgstr ""
-
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Sort by {0}"
@@ -4014,10 +4000,6 @@ msgstr "Toca <0>Deshacer</0> / <1>Rehacer</1> para avanzar o retroceder en las e
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr ""
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Tap the zoom button to fit all strokes; drag left/right to zoom continuously"
-msgstr "Toca el botón de zoom para ajustar todos los trazos; arrastra a izquierda/derecha para hacer zoom continuamente"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
@@ -6162,9 +6144,6 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Forgot it? Restore from {0}"
 msgstr ""
-
-#~ msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
-#~ msgstr ""
 
 #. 0: action.label(ctx)
 #: src/actions/deriveTools.ts
@@ -9498,18 +9477,6 @@ msgstr ""
 msgid "Less than 1% used"
 msgstr ""
 
-#~ msgid "Sign in to connect an account."
-#~ msgstr ""
-
-#~ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-#~ msgstr ""
-
-#~ msgid "Use existing connection"
-#~ msgstr ""
-
-#~ msgid "Connect an account"
-#~ msgstr ""
-
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Could not set up this importer: {0}"
@@ -10234,4 +10201,82 @@ msgstr ""
 #. 0: who; 1: count; 2: on
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} replies to you in {2}"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Could not read that image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas text"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: circle strokes to select them, then move or scale"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: place a picture"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Place image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Delete selection"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level: tap to fit everything, drag sideways to zoom"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level"
+msgstr ""
+
+#. 0: ' '
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type; tap existing text to edit it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: pick a picture, then move or scale it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
 msgstr ""

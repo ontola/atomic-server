@@ -1,8 +1,13 @@
 import { useDarkMode } from '@helpers/useDarkMode';
 import {
+  blobHashHex,
   canvas,
   DEFAULT_STROKE_WIDTH,
+  ELEMENT_HAIRLINE_WIDTH,
   enableLoro,
+  hexToBytes,
+  isBlobSubject,
+  server,
   parseCanvasStrokes,
   ResourceEvents,
   strokeToJson,
@@ -12,14 +17,39 @@ import {
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { drawCanvasStrokes, screenToCanvas } from './canvas-draw';
+import {
+  drawCanvasStrokes,
+  drawSelectionOverlay,
+  HANDLE_RADIUS,
+  onCanvasImageLoaded,
+  primeCanvasImage,
+  screenToCanvas,
+  setCanvasImageResolver,
+} from './canvas-draw';
+import {
+  elementBounds,
+  lassoSelect,
+  TEXT_FONT_FAMILY,
+  TEXT_LINE_HEIGHT,
+  transformSelection,
+  unionBounds,
+} from './canvas-elements';
+import { useStore, type Store } from '@tomic/react';
+import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import { useUpload } from '../../hooks/useUpload';
+import { imageMimeTypes } from '../../helpers/filetypes';
+import { errorHandler } from '../../handlers/errorHandler';
 import {
   FaCircleInfo,
   FaEraser,
-  FaExpand,
+  FaFont,
+  FaImage,
+  FaPalette,
   FaPen,
   FaRotateLeft,
   FaRotateRight,
+  FaTrash,
+  FaVectorSquare,
 } from 'react-icons/fa6';
 import {
   Dialog,
@@ -35,7 +65,6 @@ import {
 import { currentWheelSessionStartedAt } from '@helpers/wheelSession';
 import {
   archiveBranch,
-  BRANCH_GRACE_MS,
   bootstrapUndoSteps,
   cloneStrokes,
   loadCanvasHistory,
@@ -56,6 +85,10 @@ import { RemoteCursors, useCanvasPresence } from './CanvasPresence';
  * canvas scale. Matches Flutter's `_onZoomScrubDelta` ratio.
  */
 const ZOOM_SCRUB_PX_PER_2X = 150;
+const ZOOM_MIN = 0.05;
+const ZOOM_MAX = 30;
+/** Hints that belong to a held button linger this long after release. */
+const HINT_LINGER_MS = 100;
 
 /**
  * Pen-color swatches and stroke widths — match Flutter `fan_helpers.dart` so
@@ -70,6 +103,78 @@ const PEN_COLORS = [
  * call site so the visual radius is constant regardless of zoom.
  */
 const ERASE_SCREEN_RADIUS = 15;
+
+type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
+
+/** Screen-pixel radius around a selection corner that grabs the scale handle. */
+const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 14;
+/** Font size of a new text element, in screen pixels at the current zoom. */
+const NEW_TEXT_SCREEN_SIZE = 28;
+const FILE_BLOB_PROPERTY = 'https://atomicdata.dev/properties/blob';
+const PEN_SEEN_KEY = 'atomic-canvas-pen-seen';
+const MIN_SCALE = 0.05;
+const MAX_SCALE = 30;
+
+/** The bytes this device already has for a File resource, else the server's
+ *  download URL: something an `<img>` can load. */
+async function resolveImageUrl(
+  store: Store,
+  subject: string,
+): Promise<string | undefined> {
+  const file = await store.getResource(subject);
+  const blob = file.get(FILE_BLOB_PROPERTY);
+  const clientDb = store.getClientDb?.();
+
+  if (typeof blob === 'string' && isBlobSubject(blob) && clientDb) {
+    const hash = blobHashHex(blob);
+    const bytes = hash ? await clientDb.getBlob(hexToBytes(hash)) : null;
+
+    if (bytes) return URL.createObjectURL(new Blob([bytes as BlobPart]));
+  }
+
+  const url = file.get(server.properties.downloadUrl);
+
+  return typeof url === 'string' ? url : undefined;
+}
+
+function loadImageSize(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error('Could not read that image'));
+    img.src = url;
+  });
+}
+
+type TextEdit = {
+  /** Index of the element being edited, null for a new one. */
+  index: number | null;
+  x: number;
+  y: number;
+  size: number;
+  color: number;
+  text: string;
+};
+
+type TransformGesture = {
+  pointerId: number;
+  mode: 'move' | 'scale';
+  start: [number, number];
+  anchor: [number, number];
+  corner: [number, number];
+  base: CanvasStroke[];
+  selection: number[];
+  moved: boolean;
+};
+
+function readPenSeen(): boolean {
+  try {
+    return localStorage.getItem(PEN_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 type ScrubState = {
   pointerId: number;
@@ -111,6 +216,7 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 
 export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [darkMode] = useDarkMode();
+  const store = useStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -128,7 +234,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [prevColor, setPrevColor] = useState(PEN_COLORS[1]);
   const [penWidth, setPenWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [prevWidth, setPrevWidth] = useState(3);
-  const [eraserMode, setEraserMode] = useState(false);
+  const [tool, setTool] = useState<Tool>('pen');
+  const eraserMode = tool === 'eraser';
+  const [selection, setSelection] = useState<number[]>([]);
+  const [lassoPath, setLassoPath] = useState<[number, number][] | null>(null);
+  const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
+  // A pen / stylus has been seen on this device: one finger then pans
+  // instead of drawing, because the pen is the drawing tool.
+  const [penDetected, setPenDetected] = useState(readPenSeen);
+  const { upload } = useUpload(resource);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const textFieldRef = useRef<HTMLTextAreaElement>(null);
+  // Pixels the toolbar is lifted so the app's bottom navigation bar never
+  // covers it (see the effect below).
+  const [toolbarLift, setToolbarLift] = useState(0);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const textOpen = textEdit !== null;
 
   // Wheel events (pan AND zoom) are ignored if the current wheel session
   // started before the canvas was mounted — that's how we detect macOS
@@ -233,6 +354,27 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const currentStrokeRef = useRef(currentStroke);
   const previewStrokesRef = useRef(previewStrokes);
   const eraserModeRef = useRef(eraserMode);
+  const toolRef = useRef(tool);
+  const selectionRef = useRef(selection);
+  /** Element count when the selection was made; a different count means the
+   *  strokes changed underneath it, so the indices no longer mean the same. */
+  const selectionLengthRef = useRef(0);
+  const lassoPathRef = useRef(lassoPath);
+  const lassoPointerRef = useRef<number | null>(null);
+  const transformRef = useRef<TransformGesture | null>(null);
+  const textEditRef = useRef<TextEdit | null>(null);
+  const penDetectedRef = useRef(penDetected);
+  const penContactRef = useRef(false);
+  const touchesRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{
+    dist: number;
+    scale: number;
+    wx: number;
+    wy: number;
+  } | null>(null);
+  /** True from the second finger down until every finger is up, so the
+   *  fingers left over after a pinch never start a stroke. */
+  const gestureActiveRef = useRef(false);
   const isPanningRef = useRef(false);
   const panStartRef = useRef<{
     x: number;
@@ -294,6 +436,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   currentStrokeRef.current = currentStroke;
   previewStrokesRef.current = previewStrokes;
   eraserModeRef.current = eraserMode;
+  toolRef.current = tool;
+  selectionRef.current = selection;
+  lassoPathRef.current = lassoPath;
+  textEditRef.current = textEdit;
+  penDetectedRef.current = penDetected;
 
   const reloadStrokesFromResource = useCallback((res: Resource) => {
     setStrokes(parseCanvasStrokes(res.get(canvas.properties.strokeData)));
@@ -424,11 +571,118 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.y,
       darkMode,
     );
+
+    const list = previewStrokesRef.current ?? strokesRef.current;
+    const selected = unionBounds(
+      selectionRef.current
+        .filter(i => list[i])
+        .map(i => elementBounds(list[i])),
+    );
+
+    drawSelectionOverlay(
+      ctx,
+      lassoPathRef.current,
+      selected,
+      scaleRef.current,
+      offsetRef.current.x,
+      offsetRef.current.y,
+      '#3b82f6',
+    );
   }, [darkMode]);
 
   useEffect(() => {
     paint();
-  }, [paint, strokes, currentStroke, scale, offset, previewStrokes]);
+  }, [
+    paint,
+    strokes,
+    currentStroke,
+    scale,
+    offset,
+    previewStrokes,
+    selection,
+    lassoPath,
+  ]);
+
+  // The canvas area is sized from the viewport height the browser reports,
+  // which on tablets and phones can be taller than what is visible. Measure
+  // the real overlap with the navigation bar instead of trusting that sum.
+  useEffect(() => {
+    const area = containerRef.current;
+
+    if (!area) return;
+
+    const update = () => {
+      const nav = document.querySelector('div[aria-label="navigation"]');
+      const a = area.getBoundingClientRect();
+      const n = nav?.getBoundingClientRect();
+      // Only a bar along the bottom edge can cover the toolbar.
+      const covers = n && n.top > a.top + a.height / 2;
+
+      setToolbarLift(covers ? Math.max(0, Math.round(a.bottom - n.top)) : 0);
+
+      // Popups that sit above the toolbar follow its height (it may wrap).
+      const bar = toolbarRef.current;
+
+      if (bar) {
+        area.style.setProperty(
+          '--canvas-toolbar-h',
+          `${Math.round(bar.getBoundingClientRect().height)}px`,
+        );
+      }
+    };
+
+    update();
+
+    const ro = new ResizeObserver(update);
+    const later = window.setTimeout(update, 500);
+
+    ro.observe(area);
+
+    if (toolbarRef.current) ro.observe(toolbarRef.current);
+
+    window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(later);
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
+  }, []);
+
+  // Focus the text field only after the tap that opened it has finished: the
+  // browser moves focus to the canvas as the press ends, which would blur a
+  // field focused any earlier and close it empty.
+  useEffect(() => {
+    if (!textOpen) return;
+
+    const id = window.setTimeout(() => textFieldRef.current?.focus(), 60);
+
+    return () => window.clearTimeout(id);
+  }, [textOpen]);
+
+  // An image element's `src` is an uploaded File resource. Resolve it to the
+  // bytes this device already has, else the server's download URL.
+  useEffect(() => {
+    setCanvasImageResolver(subject => resolveImageUrl(store, subject));
+
+    return () => setCanvasImageResolver(undefined);
+  }, [store]);
+
+  // Images decode asynchronously; repaint when one is ready.
+  useEffect(() => onCanvasImageLoaded(paint), [paint]);
+
+  // Drop a selection once the strokes changed under it (an undo, a remote
+  // edit): its indices would point at other elements.
+  useEffect(() => {
+    if (
+      selectionRef.current.length > 0 &&
+      strokes.length !== selectionLengthRef.current
+    ) {
+      setSelection([]);
+    }
+  }, [strokes]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -640,7 +894,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       hoveredBranchIdRef.current = null;
       setHoveredBranchId(null);
       setPreviewStrokes(null);
-    }, BRANCH_GRACE_MS);
+    }, HINT_LINGER_MS);
   }, []);
 
   // Clear a pending grace timer on unmount / canvas navigation.
@@ -832,12 +1086,27 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   );
 
   /** Hover / click on branch tiles during the post-release grace window. */
-  const onBranchHover = useCallback((id: string | null) => {
-    hoveredBranchIdRef.current = id;
-    setHoveredBranchId(id);
-    const branch = id ? branchesRef.current.find(b => b.id === id) : undefined;
-    setPreviewStrokes(branch ? branch.strokes : null);
-  }, []);
+  const onBranchHover = useCallback(
+    (id: string | null) => {
+      // Hovering a tile keeps the panel open; leaving it restarts the short wait.
+      if (id) {
+        if (graceTimerRef.current !== undefined) {
+          window.clearTimeout(graceTimerRef.current);
+          graceTimerRef.current = undefined;
+        }
+      } else {
+        openGraceWindow();
+      }
+
+      hoveredBranchIdRef.current = id;
+      setHoveredBranchId(id);
+      const branch = id
+        ? branchesRef.current.find(b => b.id === id)
+        : undefined;
+      setPreviewStrokes(branch ? branch.strokes : null);
+    },
+    [openGraceWindow],
+  );
 
   const onBranchPick = useCallback(
     async (id: string) => {
@@ -947,10 +1216,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
    */
   const trackCursorForPreview = useCallback((e: React.PointerEvent) => {
     if (
+      e.pointerType === 'touch' ||
       isPanningRef.current ||
       drawingPointerRef.current !== null ||
       erasingPointerRef.current !== null ||
-      eraserModeRef.current
+      toolRef.current !== 'pen'
     ) {
       setCursorPos(null);
 
@@ -965,7 +1235,397 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   }, []);
 
+  // ──────────────── Selection: lasso, move, scale, delete ──────────────────
+
+  /** Write a whole new element list as one undoable step. */
+  const commitReplace = useCallback(
+    async (next: CanvasStroke[], pre: CanvasStroke[]) => {
+      pushUndoSnapshot(pre);
+      setSaving(true);
+      setSaveError(undefined);
+
+      try {
+        await enableLoro();
+        resource.replaceListItems(
+          canvas.properties.strokeData,
+          next.map(strokeToJson),
+        );
+        await resource.save();
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [pushUndoSnapshot, resource],
+  );
+
+  const selectElements = useCallback((indices: number[], length: number) => {
+    selectionLengthRef.current = length;
+    selectionRef.current = indices;
+    setSelection(indices);
+  }, []);
+
+  const deleteSelection = useCallback(() => {
+    const picked = new Set(selectionRef.current);
+
+    if (picked.size === 0) return;
+
+    const pre = strokesRef.current;
+    const next = pre.filter((_, i) => !picked.has(i));
+
+    selectElements([], next.length);
+    setStrokes(next);
+    void commitReplace(next, pre);
+  }, [commitReplace, selectElements]);
+
+  /** The topmost element under a point (a tap), or -1. */
+  const hitTestAt = (x: number, y: number): number => {
+    const reach = 12 / scaleRef.current;
+    const list = strokesRef.current;
+
+    for (let i = list.length - 1; i >= 0; i--) {
+      const el = list[i];
+
+      if (el.kind) {
+        const b = elementBounds(el);
+
+        if (x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY) return i;
+
+        continue;
+      }
+
+      const radius = reach + el.width / 2;
+
+      if (el.path.some(([px, py]) => Math.hypot(x - px, y - py) < radius)) {
+        return i;
+      }
+    }
+
+    return -1;
+  };
+
+  const startLassoOrTransform = (
+    e: React.PointerEvent,
+    x: number,
+    y: number,
+  ) => {
+    const el = canvasRef.current;
+
+    if (!el) return;
+
+    const list = strokesRef.current;
+    const picked = selectionRef.current.filter(i => list[i]);
+    const bounds = unionBounds(picked.map(i => elementBounds(list[i])));
+
+    if (bounds) {
+      const rect = el.getBoundingClientRect();
+      const s = scaleRef.current;
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const corners: [number, number][] = [
+        [bounds.minX, bounds.minY],
+        [bounds.maxX, bounds.minY],
+        [bounds.minX, bounds.maxY],
+        [bounds.maxX, bounds.maxY],
+      ];
+      const cornerIndex = corners.findIndex(
+        ([cx, cy]) =>
+          Math.hypot(
+            sx - (cx * s + offsetRef.current.x),
+            sy - (cy * s + offsetRef.current.y),
+          ) <= HANDLE_HIT_RADIUS,
+      );
+      const pad = 8 / s;
+      const inside =
+        x >= bounds.minX - pad &&
+        x <= bounds.maxX + pad &&
+        y >= bounds.minY - pad &&
+        y <= bounds.maxY + pad;
+
+      if (cornerIndex >= 0 || inside) {
+        transformRef.current = {
+          pointerId: e.pointerId,
+          mode: cornerIndex >= 0 ? 'scale' : 'move',
+          start: [x, y],
+          anchor: corners[3 - Math.max(cornerIndex, 0)],
+          corner: corners[Math.max(cornerIndex, 0)],
+          base: list,
+          selection: picked,
+          moved: false,
+        };
+        el.setPointerCapture(e.pointerId);
+
+        return;
+      }
+    }
+
+    selectElements([], list.length);
+    lassoPointerRef.current = e.pointerId;
+    setLassoPath([[x, y]]);
+    el.setPointerCapture(e.pointerId);
+  };
+
+  /** The element list a transform gesture currently describes. */
+  const transformedStrokes = (
+    g: TransformGesture,
+    x: number,
+    y: number,
+  ): CanvasStroke[] => {
+    if (g.mode === 'move') {
+      return transformSelection(
+        g.base,
+        g.selection,
+        1,
+        0,
+        0,
+        x - g.start[0],
+        y - g.start[1],
+      );
+    }
+
+    const dx = g.corner[0] - g.anchor[0];
+    const dy = g.corner[1] - g.anchor[1];
+    const len2 = dx * dx + dy * dy || 1;
+    const factor = Math.min(
+      50,
+      Math.max(0.05, ((x - g.anchor[0]) * dx + (y - g.anchor[1]) * dy) / len2),
+    );
+
+    return transformSelection(
+      g.base,
+      g.selection,
+      factor,
+      g.anchor[0],
+      g.anchor[1],
+      0,
+      0,
+    );
+  };
+
+  // ──────────────── Text tool ──────────────────────────────────────────────
+
+  const commitText = async () => {
+    const edit = textEditRef.current;
+
+    if (!edit) return;
+
+    textEditRef.current = null;
+    setTextEdit(null);
+    setPreviewStrokes(null);
+
+    const text = edit.text.replace(/\s+$/, '');
+    const pre = strokesRef.current;
+
+    if (edit.index === null) {
+      if (!text) return;
+
+      const element: CanvasStroke = {
+        color: edit.color,
+        width: ELEMENT_HAIRLINE_WIDTH,
+        path: [[edit.x, edit.y]],
+        kind: 'text',
+        text,
+        size: edit.size,
+      };
+
+      setStrokes(prev => [...prev, element]);
+      await pushStrokeToServer(element, pre);
+
+      return;
+    }
+
+    const old = pre[edit.index];
+
+    if (!old || text === old.text) return;
+
+    const next = text
+      ? pre.map((el, i) => (i === edit.index ? { ...el, text } : el))
+      : pre.filter((_, i) => i !== edit.index);
+
+    setStrokes(next);
+    await commitReplace(next, pre);
+  };
+
+  const startText = (x: number, y: number) => {
+    const hit = hitTestAt(x, y);
+    const existing = hit >= 0 ? strokesRef.current[hit] : undefined;
+
+    if (existing?.kind === 'text') {
+      // Hide the element while its text is edited in place.
+      setPreviewStrokes(strokesRef.current.filter((_, i) => i !== hit));
+      setTextEdit({
+        index: hit,
+        x: existing.path[0][0],
+        y: existing.path[0][1],
+        size: existing.size ?? 24,
+        color: existing.color,
+        text: existing.text ?? '',
+      });
+
+      return;
+    }
+
+    setTextEdit({
+      index: null,
+      x,
+      y,
+      size: NEW_TEXT_SCREEN_SIZE / scaleRef.current,
+      color: penColor,
+      text: '',
+    });
+  };
+
+  // ──────────────── Image tool ─────────────────────────────────────────────
+
+  /** Place an existing File resource on the canvas, in the middle of the
+   *  view, and hand it to the lasso so it can be moved and scaled. */
+  const placeImage = async (src: string) => {
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    try {
+      const url = await resolveImageUrl(store, src);
+
+      if (!url) throw new Error('That file has no image to show');
+
+      const natural = await loadImageSize(url);
+
+      primeCanvasImage(src, url);
+
+      const s = scaleRef.current;
+      const screenW = Math.min(natural.w, container.clientWidth * 0.5);
+      const w = screenW / s;
+      const h = (w * natural.h) / natural.w;
+      const cx = (container.clientWidth / 2 - offsetRef.current.x) / s;
+      const cy = (container.clientHeight / 2 - offsetRef.current.y) / s;
+      const element: CanvasStroke = {
+        color: 0xff000000,
+        width: ELEMENT_HAIRLINE_WIDTH,
+        path: [[cx - w / 2, cy - h / 2]],
+        kind: 'image',
+        src,
+        w,
+        h,
+      };
+      const pre = strokesRef.current;
+
+      viewTouchedRef.current = true;
+      setStrokes([...pre, element]);
+      setTool('lasso');
+      selectElements([pre.length], pre.length + 1);
+      await pushStrokeToServer(element, pre);
+    } catch (err) {
+      errorHandler(err);
+    }
+  };
+
+  const uploadAndPlaceImage = async (file: File) => {
+    const [subject] = await upload([file]);
+
+    if (subject) await placeImage(subject);
+  };
+
+  // ──────────────── Pointer flow: pan / pinch / draw / erase ───────────────
+
+  const notePen = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'pen' || penDetectedRef.current) return;
+
+    penDetectedRef.current = true;
+    setPenDetected(true);
+
+    try {
+      localStorage.setItem(PEN_SEEN_KEY, '1');
+    } catch {
+      // Remembering the pen is a convenience only.
+    }
+  };
+
+  /** Drop whatever the current pointer was doing without saving it. */
+  const abortActiveTool = () => {
+    if (drawingPointerRef.current !== null) {
+      drawingPointerRef.current = null;
+      setCurrentStroke(null);
+    }
+
+    if (erasingPointerRef.current !== null) {
+      erasingPointerRef.current = null;
+      erasedIndicesRef.current = new Set();
+      setPreviewStrokes(null);
+    }
+
+    if (lassoPointerRef.current !== null) {
+      lassoPointerRef.current = null;
+      setLassoPath(null);
+    }
+
+    if (transformRef.current) {
+      transformRef.current = null;
+      setPreviewStrokes(null);
+    }
+
+    isPanningRef.current = false;
+    panStartRef.current = null;
+    setPanMode(isPanModeRef.current ? 'ready' : 'idle');
+  };
+
+  const startPan = (e: React.PointerEvent) => {
+    isPanningRef.current = true;
+    setPanMode('panning');
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      ox: offsetRef.current.x,
+      oy: offsetRef.current.y,
+    };
+    canvasRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const startPinch = () => {
+    const container = containerRef.current;
+    const [a, b] = [...touchesRef.current.values()];
+
+    if (!container || !a || !b) return;
+
+    const rect = container.getBoundingClientRect();
+    const mx = (a.x + b.x) / 2 - rect.left;
+    const my = (a.y + b.y) / 2 - rect.top;
+
+    pinchRef.current = {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      scale: scaleRef.current,
+      wx: (mx - offsetRef.current.x) / scaleRef.current,
+      wy: (my - offsetRef.current.y) / scaleRef.current,
+    };
+  };
+
+  /** Two fingers: zoom by the change in distance, pan with the midpoint,
+   *  keeping the canvas point first under the fingers under them. */
+  const movePinch = () => {
+    const container = containerRef.current;
+    const pinch = pinchRef.current;
+    const [a, b] = [...touchesRef.current.values()];
+
+    if (!container || !pinch || !a || !b || pinch.dist < 1) return;
+
+    const rect = container.getBoundingClientRect();
+    const mx = (a.x + b.x) / 2 - rect.left;
+    const my = (a.y + b.y) / 2 - rect.top;
+    const next = Math.min(
+      MAX_SCALE,
+      Math.max(
+        MIN_SCALE,
+        (pinch.scale * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.dist,
+      ),
+    );
+
+    setScale(next);
+    setOffset({ x: mx - pinch.wx * next, y: my - pinch.wy * next });
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
+    notePen(e);
     viewTouchedRef.current = true;
     // Drawing / erasing starts — hide the hover preview; the stroke itself
     // is the feedback.
@@ -977,16 +1637,45 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
-    if (e.button === 1 || (e.button === 0 && isPanModeRef.current)) {
-      isPanningRef.current = true;
-      setPanMode('panning');
-      panStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        ox: offsetRef.current.x,
-        oy: offsetRef.current.y,
-      };
+    // Any tap on the canvas ends a text edit (its blur commits it).
+    if (textEditRef.current) {
+      void commitText();
+
+      return;
+    }
+
+    if (e.pointerType === 'pen') {
+      penContactRef.current = true;
+
+      // The pen takes over from a finger that was panning.
+      if (isPanningRef.current) abortActiveTool();
+    } else if (e.pointerType === 'touch') {
+      // Palm rejection: ignore fingers while the pen touches the screen.
+      if (penContactRef.current) return;
+
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       el.setPointerCapture(e.pointerId);
+
+      if (touchesRef.current.size >= 2) {
+        abortActiveTool();
+        gestureActiveRef.current = true;
+        startPinch();
+
+        return;
+      }
+
+      if (gestureActiveRef.current) return;
+
+      // With a pen around, a finger moves the canvas; without one it draws.
+      if (penDetectedRef.current) {
+        startPan(e);
+
+        return;
+      }
+    }
+
+    if (e.button === 1 || (e.button === 0 && isPanModeRef.current)) {
+      startPan(e);
 
       return;
     }
@@ -1005,10 +1694,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.y,
     );
 
-    if (eraserModeRef.current) {
+    if (toolRef.current === 'eraser') {
       erasingPointerRef.current = e.pointerId;
       el.setPointerCapture(e.pointerId);
       eraseAt(x, y);
+
+      return;
+    }
+
+    if (toolRef.current === 'lasso') {
+      startLassoOrTransform(e, x, y);
+
+      return;
+    }
+
+    if (toolRef.current === 'text') {
+      startText(x, y);
 
       return;
     }
@@ -1023,7 +1724,18 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    notePen(e);
     trackCursorForPreview(e);
+
+    if (e.pointerType === 'touch' && touchesRef.current.has(e.pointerId)) {
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (gestureActiveRef.current) {
+        if (touchesRef.current.size >= 2) movePinch();
+
+        return;
+      }
+    }
 
     if (isPanningRef.current && panStartRef.current) {
       const dx = e.clientX - panStartRef.current.x;
@@ -1060,6 +1772,26 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
+    const gesture = transformRef.current;
+
+    if (gesture && gesture.pointerId === e.pointerId) {
+      gesture.moved = true;
+      setPreviewStrokes(transformedStrokes(gesture, x, y));
+
+      return;
+    }
+
+    if (lassoPointerRef.current === e.pointerId && lassoPathRef.current) {
+      const path = lassoPathRef.current;
+      const last = path[path.length - 1];
+
+      if (Math.hypot(x - last[0], y - last[1]) > 2 / scaleRef.current) {
+        setLassoPath([...path, [x, y]]);
+      }
+
+      return;
+    }
+
     if (
       drawingPointerRef.current !== e.pointerId ||
       !currentStrokeRef.current
@@ -1080,6 +1812,23 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   };
 
   const finishStroke = (e: React.PointerEvent) => {
+    if (e.pointerType === 'pen') {
+      penContactRef.current = false;
+    } else if (e.pointerType === 'touch') {
+      touchesRef.current.delete(e.pointerId);
+
+      if (touchesRef.current.size < 2) pinchRef.current = null;
+
+      if (gestureActiveRef.current) {
+        canvasRef.current?.releasePointerCapture?.(e.pointerId);
+
+        // The gesture is over once the last finger lifts.
+        if (touchesRef.current.size === 0) gestureActiveRef.current = false;
+
+        return;
+      }
+    }
+
     if (isPanningRef.current) {
       isPanningRef.current = false;
       panStartRef.current = null;
@@ -1093,6 +1842,45 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       erasingPointerRef.current = null;
       canvasRef.current?.releasePointerCapture(e.pointerId);
       void finishErase();
+
+      return;
+    }
+
+    const gesture = transformRef.current;
+
+    if (gesture && gesture.pointerId === e.pointerId) {
+      transformRef.current = null;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+
+      const next = previewStrokesRef.current;
+      setPreviewStrokes(null);
+
+      // A release without a drag leaves the strokes as they were.
+      if (gesture.moved && next && e.type !== 'pointercancel') {
+        setStrokes(next);
+        void commitReplace(next, gesture.base);
+      }
+
+      return;
+    }
+
+    if (lassoPointerRef.current === e.pointerId) {
+      lassoPointerRef.current = null;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+
+      const path = lassoPathRef.current ?? [];
+      const list = strokesRef.current;
+      setLassoPath(null);
+
+      if (e.type === 'pointercancel') return;
+
+      if (path.length < 4) {
+        // A tap picks the element under it.
+        const hit = hitTestAt(path[0][0], path[0][1]);
+        selectElements(hit >= 0 ? [hit] : [], list.length);
+      } else {
+        selectElements(lassoSelect(path, list), list.length);
+      }
 
       return;
     }
@@ -1212,6 +2000,24 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z redo.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(e.target)) return;
+
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        selectionRef.current.length > 0
+      ) {
+        e.preventDefault();
+        deleteSelection();
+
+        return;
+      }
+
+      if (e.key === 'Escape' && selectionRef.current.length > 0) {
+        selectElements([], strokesRef.current.length);
+
+        return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         if (e.shiftKey) {
           e.preventDefault();
@@ -1226,7 +2032,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     window.addEventListener('keydown', onKeyDown);
 
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, deleteSelection, selectElements]);
 
   // Help dialog — shows the keyboard / gesture cheat-sheet that used to
   // live in an always-visible footer hint. Triggered by the info button at
@@ -1369,7 +2175,13 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     [],
   );
 
-  const handleEraserToggle = useCallback(() => setEraserMode(m => !m), []);
+  const chooseTool = (next: Tool) => {
+    if (textEditRef.current) void commitText();
+
+    setTool(next);
+    selectElements([], strokesRef.current.length);
+    setLassoPath(null);
+  };
 
   // ──────────────── Zoom scrub gesture (Flutter parity) ────────────────────
   //
@@ -1386,11 +2198,32 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     dragged: boolean;
   } | null>(null);
 
+  // The scale bar shows while the zoom button is held, so people find out they
+  // can hold it, and goes away a moment after release.
+  const [zoomHintShown, setZoomHintShown] = useState(false);
+  const zoomHintTimerRef = useRef<number | undefined>(undefined);
+
+  const showZoomHint = useCallback(() => {
+    window.clearTimeout(zoomHintTimerRef.current);
+    setZoomHintShown(true);
+  }, []);
+
+  const hideZoomHintSoon = useCallback(() => {
+    window.clearTimeout(zoomHintTimerRef.current);
+    zoomHintTimerRef.current = window.setTimeout(
+      () => setZoomHintShown(false),
+      HINT_LINGER_MS,
+    );
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(zoomHintTimerRef.current), []);
+
   const onZoomPointerDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
       const container = containerRef.current;
       if (!container) return;
       e.preventDefault();
+      showZoomHint();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
       const containerW = container.clientWidth;
@@ -1408,7 +2241,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         dragged: false,
       };
     },
-    [],
+    [showZoomHint],
   );
 
   const onZoomPointerMove = useCallback(
@@ -1448,12 +2281,13 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (!z || z.pointerId !== e.pointerId) return;
       (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       zoomScrubRef.current = null;
+      hideZoomHintSoon();
 
       if (!z.dragged) {
         handleZoomToFitRef.current();
       }
     },
-    [],
+    [hideZoomHintSoon],
   );
 
   const onZoomPointerCancel = useCallback(
@@ -1461,8 +2295,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       const z = zoomScrubRef.current;
       if (!z || z.pointerId !== e.pointerId) return;
       zoomScrubRef.current = null;
+      hideZoomHintSoon();
     },
-    [],
+    [hideZoomHintSoon],
   );
 
   /** Zoom to fit: compute the bounding box of all strokes, scale to fit
@@ -1551,8 +2386,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         ref={containerRef}
         $dark={darkMode}
         $panMode={panMode}
-        $eraser={eraserMode}
+        $tool={tool}
         $previewCursor={cursorPos !== null}
+        data-pen-detected={penDetected}
       >
         <DrawCanvas
           ref={canvasRef}
@@ -1565,7 +2401,30 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           }}
           onPointerUp={finishStroke}
           onPointerCancel={finishStroke}
+          onContextMenu={e => e.preventDefault()}
         />
+        {textEdit && (
+          <TextEditor
+            ref={textFieldRef}
+            value={textEdit.text}
+            rows={textEdit.text.split('\n').length}
+            aria-label='Canvas text'
+            onChange={e => setTextEdit({ ...textEdit, text: e.target.value })}
+            onBlur={() => void commitText()}
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            style={{
+              left: textEdit.x * scale + offset.x,
+              top: textEdit.y * scale + offset.y,
+              fontSize: textEdit.size * scale,
+              color: colorIntToHex(textEdit.color),
+            }}
+          />
+        )}
         {cursorPos && (
           <CursorPreview
             style={{
@@ -1580,7 +2439,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           />
         )}
         <RemoteCursors cursors={cursors} scale={scale} offset={offset} />
-        <BottomToolbar>
+        <FilePickerDialog
+          show={imagePickerOpen}
+          onShowChange={setImagePickerOpen}
+          allowedMimes={imageMimeTypes}
+          onResourcePicked={subject => void placeImage(subject)}
+          onNewFilePicked={file => void uploadAndPlaceImage(file)}
+        />
+        <BottomToolbar ref={toolbarRef} $lift={toolbarLift}>
           <CircleButton
             type='button'
             title='Canvas help'
@@ -1591,12 +2457,58 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
           <CircleButton
             type='button'
-            title={eraserMode ? 'Switch to draw' : 'Eraser'}
-            $active={eraserMode}
-            onClick={handleEraserToggle}
+            title='Pen'
+            aria-label='Pen tool'
+            $active={tool === 'pen'}
+            onClick={() => chooseTool('pen')}
           >
-            {eraserMode ? <FaPen /> : <FaEraser />}
+            <FaPen />
           </CircleButton>
+          <CircleButton
+            type='button'
+            title='Eraser'
+            aria-label='Eraser tool'
+            $active={tool === 'eraser'}
+            onClick={() => chooseTool('eraser')}
+          >
+            <FaEraser />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Lasso: circle strokes to select them, then move or scale'
+            aria-label='Lasso tool'
+            $active={tool === 'lasso'}
+            onClick={() => chooseTool('lasso')}
+          >
+            <FaVectorSquare />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Text: tap the canvas and type'
+            aria-label='Text tool'
+            $active={tool === 'text'}
+            onClick={() => chooseTool('text')}
+          >
+            <FaFont />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Image: place a picture'
+            aria-label='Place image'
+            onClick={() => setImagePickerOpen(true)}
+          >
+            <FaImage />
+          </CircleButton>
+          {selection.length > 0 && (
+            <CircleButton
+              type='button'
+              title='Delete selection'
+              aria-label='Delete selection'
+              onClick={deleteSelection}
+            >
+              <FaTrash />
+            </CircleButton>
+          )}
           <ColorCircleButton
             type='button'
             title='Pen color (tap to swap with previous, drag to pick from fan)'
@@ -1606,7 +2518,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             onPointerUp={closeFanFromButton}
             onPointerCancel={cancelFanFromButton}
             aria-label='Pen color'
-          />
+          >
+            <FaPalette />
+          </ColorCircleButton>
           <WidthCircleButton
             type='button'
             title={`Stroke width: ${penWidth} (tap to swap with previous, drag to pick from fan)`}
@@ -1616,7 +2530,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             onPointerCancel={cancelFanFromButton}
             aria-label='Stroke width'
           >
-            <WidthDot $size={widthDotPx} />
+            <WidthRing aria-hidden>
+              <WidthDot $size={widthDotPx} />
+            </WidthRing>
           </WidthCircleButton>
           <CircleButton
             type='button'
@@ -1644,15 +2560,25 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
           <CircleButton
             type='button'
-            title='Zoom to fit (tap) — drag horizontally to zoom-scrub'
+            title='Zoom level: tap to fit everything, drag sideways to zoom'
+            aria-label='Zoom level'
             onPointerDown={onZoomPointerDown}
             onPointerMove={onZoomPointerMove}
             onPointerUp={onZoomPointerUp}
             onPointerCancel={onZoomPointerCancel}
           >
-            <FaExpand />
+            <ZoomLabel>{Math.round(scale * 100)}%</ZoomLabel>
           </CircleButton>
         </BottomToolbar>
+        {zoomHintShown && (
+          <ZoomHint $lift={toolbarLift} aria-hidden>
+            <span>{Math.round(scale * 100)}%</span>
+            <ZoomTrack>
+              <ZoomTick style={{ left: `${zoomFraction(1) * 100}%` }} />
+              <ZoomFill style={{ width: `${zoomFraction(scale) * 100}%` }} />
+            </ZoomTrack>
+          </ZoomHint>
+        )}
         {overlayMode !== 'closed' && (
           <HistoryScrubOverlay
             step={scrubStep}
@@ -1700,6 +2626,19 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
                   Tap the eraser button, then drag across strokes to remove them
                 </li>
                 <li>
+                  Lasso: draw a loop around strokes (or tap one) to select them,
+                  drag inside the box to move, drag a corner to scale, and press{' '}
+                  <kbd>Delete</kbd> to remove
+                </li>
+                <li>
+                  Text: tap the canvas and type; tap existing text to edit it
+                </li>
+                <li>Image: pick a picture, then move or scale it</li>
+                <li>
+                  Touch: two fingers pan and zoom. Once a pen has been seen, one
+                  finger pans as well; without a pen one finger draws
+                </li>
+                <li>
                   Tap the colour or width button to swap with the previous
                   choice; press &amp; drag to open the picker fan
                 </li>
@@ -1712,8 +2651,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
                   after an undo; drag over one and release to restore it
                 </li>
                 <li>
-                  Tap the zoom button to fit all strokes; drag left/right to
-                  zoom continuously
+                  Tap the zoom button (it shows the zoom level) to fit all
+                  strokes; drag left/right to zoom continuously
                 </li>
                 <li>
                   <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+
@@ -1756,7 +2695,7 @@ const SaveStatus = styled.span<{ $error?: boolean }>`
 const CanvasArea = styled.div<{
   $dark: boolean;
   $panMode: string;
-  $eraser: boolean;
+  $tool: Tool;
   $previewCursor: boolean;
 }>`
   position: relative;
@@ -1770,7 +2709,7 @@ const CanvasArea = styled.div<{
       ? 'grab'
       : p.$panMode === 'panning'
         ? 'grabbing'
-        : p.$eraser
+        : p.$tool === 'eraser'
           ? 'cell'
           : // Hide the OS cursor only when the in-canvas preview circle is
             // showing — otherwise crosshair stays so the user isn't left
@@ -1801,10 +2740,91 @@ const CursorPreview = styled.div`
      bottom of the canvas doesn't paint the preview over a button. */
 `;
 
+/* Out of flow: the canvas is sized from its area, so it must not also prop the
+   area open (otherwise the area never shrinks when the window does). */
 const DrawCanvas = styled.canvas`
+  position: absolute;
+  inset: 0;
   display: block;
-  width: 100%;
+`;
+
+/** In-place text field over the canvas, sized to match the drawn text. */
+const TextEditor = styled.textarea`
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed ${p => p.theme.colors.main};
+  background: transparent;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  min-width: 2ch;
+  field-sizing: content;
+  font-family: ${TEXT_FONT_FAMILY};
+  line-height: ${TEXT_LINE_HEIGHT};
+`;
+
+/** The current zoom as a percentage, shown on the zoom button. */
+/** Where a zoom level sits on the bar: logarithmic, like the drag itself. */
+const zoomFraction = (z: number): number =>
+  Math.min(
+    1,
+    Math.max(0, Math.log(z / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN)),
+  );
+
+const ZoomHint = styled.div<{ $lift: number }>`
+  position: absolute;
+  bottom: calc(
+    ${p => p.theme.size(2)} + var(--canvas-toolbar-h, 64px) + ${p => p.$lift}px
+  );
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: ${p => p.theme.colors.text};
+  pointer-events: none;
+`;
+
+const ZoomTrack = styled.div`
+  position: relative;
+  width: 180px;
+  height: 4px;
+  border-radius: 2px;
+  background: ${p => p.theme.colors.bg2};
+`;
+
+const ZoomFill = styled.div`
   height: 100%;
+  border-radius: 2px;
+  background: ${p => p.theme.colors.main};
+`;
+
+/** Marks 100% on the bar. */
+const ZoomTick = styled.div`
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  background: ${p => p.theme.colors.textLight};
+`;
+
+const ZoomLabel = styled.span`
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 `;
 
 const HelpList = styled.ul`
@@ -1830,9 +2850,9 @@ const HelpList = styled.ul`
  * layout: floating, centered, rounded, theme-aware background with a soft
  * shadow. Compact widths just shrink the gap; the desktop pill survives.
  */
-const BottomToolbar = styled.div`
+const BottomToolbar = styled.div<{ $lift: number }>`
   position: absolute;
-  bottom: ${p => p.theme.size(2)};
+  bottom: calc(${p => p.theme.size(2)} + ${p => p.$lift}px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -1840,10 +2860,44 @@ const BottomToolbar = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px;
+  /* Buttons keep their size and stay round; they wrap instead of squeezing. */
+  --canvas-button-size: 44px;
+  /* Natural width (not half the area, which left:50% would allow), capped to
+     the area; beyond that the buttons wrap. */
+  width: max-content;
+  max-width: calc(100% - 16px);
+  /* Too little room: a second row, not a sideways scroll. */
+  flex-wrap: wrap;
+  justify-content: center;
+
   background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 32px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+
+  /* Phones: a flat bar attached to the bottom and both sides. */
+  @media (max-width: 900px) {
+    --canvas-button-size: 36px;
+    gap: 2px;
+    left: 0;
+    right: 0;
+    transform: none;
+    bottom: ${p => p.$lift}px;
+    width: auto;
+    max-width: none;
+    border-radius: 0;
+    border-width: 1px 0 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.12);
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Narrow phones: all eleven buttons must fit without sideways scrolling. */
+  @media (max-width: 480px) {
+    --canvas-button-size: 32px;
+    gap: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
 `;
 
 interface CircleButtonProps {
@@ -1851,8 +2905,15 @@ interface CircleButtonProps {
 }
 
 const CircleButton = styled.button<CircleButtonProps>`
-  width: 44px;
-  height: 44px;
+  flex: none;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  /* Drags on a button (fan, scrub, zoom) must reach us, not scroll the bar. */
+  touch-action: none;
+  min-width: var(--canvas-button-size);
+  min-height: var(--canvas-button-size);
+  width: var(--canvas-button-size);
+  height: var(--canvas-button-size);
   border-radius: 50%;
   border: none;
   background: ${p => (p.$active ? p.theme.colors.main : 'transparent')};
@@ -1886,9 +2947,30 @@ const CircleButton = styled.button<CircleButtonProps>`
 const colorIntToHex = (c: number): string =>
   `#${(c >>> 0).toString(16).padStart(8, '0').slice(2)}`;
 
+/** Black or white, whichever reads better on the given color. */
+const contrastOn = (c: number): string => {
+  const r = (c >>> 16) & 255;
+  const g = (c >>> 8) & 255;
+  const b = c & 255;
+
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#000' : '#fff';
+};
+
 const ColorCircleButton = styled.button<{ $color: number }>`
-  width: 44px;
-  height: 44px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: ${p => contrastOn(p.$color)};
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  /* Drags on a button (fan, scrub, zoom) must reach us, not scroll the bar. */
+  touch-action: none;
+  min-width: var(--canvas-button-size);
+  min-height: var(--canvas-button-size);
+  width: var(--canvas-button-size);
+  height: var(--canvas-button-size);
   border-radius: 50%;
   background: ${p => colorIntToHex(p.$color)};
   border: 2px solid ${p => p.theme.colors.bg2};
@@ -1905,8 +2987,15 @@ const ColorCircleButton = styled.button<{ $color: number }>`
  * stroke width. Tap cycles. D2 replaces this with the fan.
  */
 const WidthCircleButton = styled.button`
-  width: 44px;
-  height: 44px;
+  flex: none;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  /* Drags on a button (fan, scrub, zoom) must reach us, not scroll the bar. */
+  touch-action: none;
+  min-width: var(--canvas-button-size);
+  min-height: var(--canvas-button-size);
+  width: var(--canvas-button-size);
+  height: var(--canvas-button-size);
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -1919,6 +3008,17 @@ const WidthCircleButton = styled.button`
   &:hover {
     background: ${p => p.theme.colors.bg1};
   }
+`;
+
+/** Dotted outer ring; the dot inside is filled to the current stroke size. */
+const WidthRing = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 78%;
+  height: 78%;
+  border: 2px dotted ${p => p.theme.colors.textLight};
+  border-radius: 50%;
 `;
 
 const WidthDot = styled.span<{ $size: number }>`

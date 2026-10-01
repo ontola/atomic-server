@@ -31,12 +31,24 @@ const LOCAL_CLASS = 'did:ad:local-class';
 const fixture = vi.hoisted(() => ({ serverResults: [] as string[] }));
 
 /**
- * No socket: server.example runs no atomic-server, so a connecting store
- * fails its WebSocket a moment later, reports "Server disconnected", and the
- * components' state update can land after jsdom is torn down. Vitest counts
- * that `window is not defined` as an unhandled error and fails the run.
+ * No socket, and no reads. The picker resolves `atomicdata.dev/classes/Class`
+ * and the row of a server result through the store, and a store without a
+ * socket answers that with an HTTP request, a five-second wait for a socket and
+ * a lookup in the local database, all of which can finish after the file does.
+ * The answer then updates a component once jsdom is torn down: React reports
+ * `window is not defined`, and vitest counts it as an unhandled error and fails
+ * the run although every test passed. It only shows when the worker lingers
+ * past the end of the file, so on a loaded CI machine and almost never here.
  */
-const newStore = () => new Store({ serverUrl: SERVER, connect: false });
+const newStore = () => {
+  const store = new Store({ serverUrl: SERVER, connect: false });
+  vi.spyOn(
+    store as unknown as { fetchResourceWithLocalFallback(): Promise<void> },
+    'fetchResourceWithLocalFallback',
+  ).mockResolvedValue();
+
+  return store;
+};
 
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
