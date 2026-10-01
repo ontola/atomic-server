@@ -308,8 +308,6 @@ msgid "Ollama"
 msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/views/InvitePage.tsx
-#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr ""
 
@@ -954,17 +952,14 @@ msgstr ""
 msgid "I already have an account"
 msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "Agent created!"
-msgstr ""
+#~ msgid "Agent created!"
+#~ msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "Agent Secret"
-msgstr ""
+#~ msgid "Agent Secret"
+#~ msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "Copy secret to continue"
-msgstr ""
+#~ msgid "Copy secret to continue"
+#~ msgstr ""
 
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -1175,7 +1170,7 @@ msgstr ""
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
 msgstr ""
@@ -2684,29 +2679,23 @@ msgstr ""
 msgid "Enter your Agent Secret"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Set your profile name!"
-msgstr ""
+#~ msgid "Set your profile name!"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Others can read this. You can change this later."
-msgstr ""
+#~ msgid "Others can read this. You can change this later."
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Enter your name"
-msgstr ""
+#~ msgid "Enter your name"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Profile Name"
-msgstr ""
+#~ msgid "Profile Name"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Creating drive…"
-msgstr ""
+#~ msgid "Creating drive…"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Save & continue"
-msgstr ""
+#~ msgid "Save & continue"
+#~ msgstr ""
 
 #: src/components/ResourceUsage/UsageCard.tsx
 msgid "Previous page"
@@ -3819,9 +3808,8 @@ msgstr ""
 msgid "Accept as"
 msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
-msgstr ""
+#~ msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
+#~ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
@@ -6655,29 +6643,27 @@ msgstr ""
 msgid "Your account session has ended. Sign in again to resume backup."
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Full name"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Save and continue"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Picture ready to save."
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "How your colleagues see you"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
-msgid "Use your full name and a picture so people recognize you. This updates your Atomic profile wherever you collaborate."
-msgstr ""
+#~ msgid "Use your full name and a picture so people recognize you. This updates your Atomic profile wherever you collaborate."
+#~ msgstr ""
 
-#: src/components/TeamProfileStep.tsx
-msgid "You can add or change your picture later in your profile."
-msgstr ""
+#~ msgid "You can add or change your picture later in your profile."
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Your Cloud Server subscription is active"
@@ -6687,11 +6673,11 @@ msgstr ""
 msgid "Your Cloud Server trial is active"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Profile picture (optional)"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Your selected avatar"
 msgstr ""
 
@@ -6870,7 +6856,7 @@ msgstr ""
 msgid "Reload and try again"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Choose profile picture"
 msgstr ""
 
@@ -10234,4 +10220,16 @@ msgstr ""
 #. 0: who; 1: count; 2: on
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} replies to you in {2}"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your profile picture could not be uploaded. You can add it later in your profile."
+msgstr "tificationList.tsx"
+
+#: src/components/ProfileForm.tsx
+msgid "Use your full name and a picture so people recognize you. You can change both later in your profile."
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Account created"
 msgstr ""
