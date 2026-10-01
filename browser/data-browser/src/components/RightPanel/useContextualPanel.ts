@@ -18,25 +18,25 @@ export function useContextualPanel(
   panel: RightPanelId,
   subject?: string,
 ): boolean {
-  const { activePanel, setPanelOpen } = useRightPanel();
+  const { activePanel, closePanel } = useRightPanel();
   const store = useStore();
   const { error } = useResourceSnapshot(
     activePanel === panel ? subject : undefined,
   );
   const available = panelTargetAvailable(subject, error);
   useEffect(() => {
-    if (activePanel === panel && !available) setPanelOpen(panel, false);
-  }, [activePanel, available, panel, setPanelOpen]);
+    if (activePanel === panel && !available) closePanel(panel);
+  }, [activePanel, available, panel, closePanel]);
   useEffect(() => {
     if (activePanel !== panel || !subject) return;
 
     // Deletion evicts the resource; it need not produce a fetch/error snapshot.
     return store.on(StoreEvents.ResourceRemoved, removed => {
       if (store.normalizeSubject(removed) === store.normalizeSubject(subject)) {
-        setPanelOpen(panel, false);
+        closePanel(panel);
       }
     });
-  }, [store, activePanel, panel, subject, setPanelOpen]);
+  }, [store, activePanel, panel, subject, closePanel]);
 
   return activePanel === panel && available;
 }
