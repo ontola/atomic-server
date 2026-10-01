@@ -3876,8 +3876,14 @@ impl Db {
         resource: &Resource,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        for mut index_atom in atom.to_indexable_atoms() {
+        for mut index_atom in atom.to_stored_index_atoms() {
             index_atom.subject = index_atom.subject.pure_id().into();
+            for op in Operation::remove_atom_from_legacy_indexes(&index_atom) {
+                transaction.push(op);
+            }
+            if atom.property == urls::GENESIS {
+                continue;
+            }
             transaction.push(Operation::remove_atom_from_reference_index(&index_atom));
             transaction.push(Operation::remove_atom_from_prop_val_sub_index(&index_atom));
 
