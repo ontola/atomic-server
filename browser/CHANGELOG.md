@@ -17,6 +17,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   chat never received new messages from the host, and got no notifications for
   them. Everything in "Shared with me" is now subscribed for as long as the app
   runs (`Store.subscribeLive`).
+- Notifications are less noisy. The Notifications page shows one row per
+  conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
+  titles as they are now, in your language. Coming back to the window while
+  already on the conversation reads what arrived while you were away, and after
+  you missed something the app offers system notifications once, instead of
+  only a checkbox in Settings.
+- The Notifications page shows placeholder rows while it loads, instead of a
+  blank page that could flash "Nothing yet" before the list arrived.
 - An app asking to use one of your accounts (Google Calendar, Clockify and so
   on) now asks in a dialog instead of a bar above the app, in plainer words:
   which app, which account, and that you approve it on the next page, on the

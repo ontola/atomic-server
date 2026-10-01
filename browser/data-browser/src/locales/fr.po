@@ -4614,6 +4614,7 @@ msgstr ""
 msgid "Turn off"
 msgstr ""
 
+#: src/components/Notifications/MessageNotifier.tsx
 #: src/components/Settings/VirtualDriveSettings.tsx
 msgid "Turn on"
 msgstr ""
@@ -9899,12 +9900,16 @@ msgid "{0} replied to you"
 msgstr ""
 
 #. 0: author; 1: on
+#. 0: who; 1: on
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
 msgid "{0} commented on {1}"
 msgstr ""
 
 #. 0: author; 1: on
+#. 0: who; 1: on
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/Notifications/NotificationList.tsx
 msgid "{0} in {1}"
 msgstr ""
 
@@ -10178,4 +10183,55 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in again to open your account on this device."
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed a message while you were away"
+msgstr ""
+
+#. 0: count
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed {0} messages while you were away"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Not now"
+msgstr ""
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Show new messages as system notifications on this device?"
+msgstr ""
+
+#: src/components/Notifications/NotificationList.tsx
+msgid "Loading notifications"
+msgstr ""
+
+#. 0: first; 1: second
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} and {1}"
+msgstr ""
+
+#. 0: first; 1: others
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} and {1} others"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} new messages in {2}"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} comments on {2}"
+msgstr ""
+
+#. 0: who; 1: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0} replied to you in {1}"
+msgstr ""
+
+#. 0: who; 1: count; 2: on
+#: src/components/Notifications/NotificationList.tsx
+msgid "{0}: {1} replies to you in {2}"
 msgstr ""

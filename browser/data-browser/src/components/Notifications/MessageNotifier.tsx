@@ -21,7 +21,13 @@ import {
   type MessageFacts,
   type MessageNotification,
 } from '../../helpers/notifications/messageNotification';
-import { showOsNotification } from '../../helpers/notifications/osNotifications';
+import {
+  declineOsNotifications,
+  shouldOfferOsNotifications,
+  showOsNotification,
+  turnOnOsNotifications,
+} from '../../helpers/notifications/osNotifications';
+import { Button } from '../Button';
 import {
   markReadAbout,
   recordNotification,
@@ -99,6 +105,8 @@ export function MessageNotifier(): null {
   const [sharedWithMe] = usePrivateDriveList(core.properties.sharedWithMe);
 
   const handled = useRef(new Set<string>());
+  // Announced while away, with system notifications not decided yet.
+  const missed = useRef(0);
   // Inbox writes still in flight, per target, so reading waits for them.
   const recording = useRef(new Map<string, Promise<unknown>>());
 
@@ -118,10 +126,85 @@ export function MessageNotifier(): null {
     readAbout(n.target);
   });
 
-  // Opening something reads what the Inbox says about it.
+  // Opening something reads what the Inbox says about it, and so does coming
+  // back to the window while it is still open: what arrived while you were
+  // away was announced by the OS, and is on screen now.
   useEffect(() => {
-    if (currentSubject) readAbout(currentSubject);
+    if (!currentSubject) return;
+
+    readAbout(currentSubject);
+
+    const onReturn = () => {
+      if (!document.hidden && document.hasFocus()) readAbout(currentSubject);
+    };
+
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+
+    return () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
   }, [currentSubject]);
+
+  // Back after missing something: offer system notifications, once. A
+  // checkbox in Settings alone meant nobody turned them on, so everything
+  // that arrived while the app was in the background went unannounced.
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.hidden || !document.hasFocus() || missed.current === 0) {
+        return;
+      }
+
+      const count = missed.current;
+      missed.current = 0;
+
+      if (!shouldOfferOsNotifications()) return;
+
+      toast.custom(
+        t => (
+          <OfferCard role='status'>
+            <ToastTitle as='p'>
+              {count === 1
+                ? 'You missed a message while you were away'
+                : `You missed ${count} messages while you were away`}
+            </ToastTitle>
+            <ToastText as='p'>
+              Show new messages as system notifications on this device?
+            </ToastText>
+            <OfferButtons>
+              <Button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  void turnOnOsNotifications();
+                }}
+              >
+                Turn on
+              </Button>
+              <Button
+                subtle
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  declineOsNotifications();
+                }}
+              >
+                Not now
+              </Button>
+            </OfferButtons>
+          </OfferCard>
+        ),
+        { duration: Infinity, id: 'offer-os-notifications' },
+      );
+    };
+
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+
+    return () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, []);
 
   const isLookingAt = useEffectEvent((n: MessageNotification) => {
     if (document.hidden || !document.hasFocus()) return false;
@@ -228,6 +311,8 @@ export function MessageNotifier(): null {
       return;
     }
 
+    if (shouldOfferOsNotifications()) missed.current += 1;
+
     showOsNotification({ title, body, tag: subject, onClick: () => open(n) });
   });
 
@@ -269,6 +354,30 @@ const ToastCard = styled.button`
   cursor: pointer;
   text-align: left;
   color: ${p => p.theme.colors.text};
+`;
+
+const OfferCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 22rem;
+  padding: 0.8rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  box-shadow: ${p => p.theme.boxShadowSoft};
+  color: ${p => p.theme.colors.text};
+
+  & p {
+    margin: 0;
+    white-space: normal;
+  }
+`;
+
+const OfferButtons = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
 `;
 
 const ToastBody = styled.span`
