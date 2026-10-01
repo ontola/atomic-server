@@ -64,6 +64,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
 
 - The "Could not set up your account passkey" message now also names the request that failed and its HTTP status, so a report says whether the session, the challenge or the credential was refused.
+- The "Demo setup stalled" report now says where the time went. It carries how
+  long each setup step took and whether the tab was in the background, and a
+  demo that does finish after the notice sends a second, informational report
+  with its total time. The notice fires at a fixed 45 seconds, so until now a
+  slow machine and a stuck one looked the same in Sentry (`ATOMIC-BROWSER-1J`).
+
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
