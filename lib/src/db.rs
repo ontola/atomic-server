@@ -4621,6 +4621,33 @@ impl Storelike for Db {
                 {
                     let lookup = path.strip_prefix('/').unwrap_or(&path);
                     if let Some(pubkey) = crate::identifiers::agent_public_key(lookup) {
+                        // The same key has been spelled padded, unpadded,
+                        // standard and URL-safe. A profile stored under another
+                        // spelling is this agent: serve it, rather than
+                        // synthesizing an empty twin beside it.
+                        for spelling in crate::identifiers::agent_pubkey_spellings(pubkey)
+                            .into_iter()
+                            .skip(1)
+                        {
+                            let alias = Subject::from_raw(
+                                &crate::identifiers::agent_subject(&spelling),
+                                self.get_base_domain().as_deref(),
+                            );
+                            if self.has_stored_resource(&alias) {
+                                let mut found = self.get_resource(&alias).await?;
+                                found.set_subject(normalized.to_string());
+                                return Ok(found);
+                            }
+                            let legacy_did = Subject::from_raw(
+                                &format!("{}{}", crate::identifiers::DID_AD_AGENT_PREFIX, spelling),
+                                self.get_base_domain().as_deref(),
+                            );
+                            if self.has_stored_resource(&legacy_did) {
+                                let mut found = self.get_resource(&legacy_did).await?;
+                                found.set_subject(normalized.to_string());
+                                return Ok(found);
+                            }
+                        }
                         if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
                             if let Ok(mut resource) = agent.to_resource() {
                                 // A lookup is not creation of an agent. There is

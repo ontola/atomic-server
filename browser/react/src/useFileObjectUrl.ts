@@ -23,6 +23,27 @@ export function useFileObjectUrl(
   resource: Resource,
   fallbackUrl?: string,
 ): string | undefined {
+  const blobValue = resource.get(BLOB);
+  const mimetypeValue = resource.get(server.properties.mimetype);
+
+  return useBlobObjectUrl(
+    typeof blobValue === 'string' ? blobValue : undefined,
+    fallbackUrl,
+    typeof mimetypeValue === 'string' ? mimetypeValue : undefined,
+  );
+}
+
+/**
+ * {@link useFileObjectUrl} for a bare blob reference (`atomic:blob:<hash>`),
+ * for places that have no File resource at hand, such as an image in a
+ * document, which keeps only its URL. Pass the file's `mimetype` when it is
+ * known: an SVG only renders from an object URL typed `image/svg+xml`.
+ */
+export function useBlobObjectUrl(
+  blobDid: string | undefined,
+  fallbackUrl?: string,
+  mimetype?: string,
+): string | undefined {
   const store = useStore();
   const clientDb = store.getClientDb?.();
   const [resolved, setResolved] = useState<{
@@ -30,13 +51,6 @@ export function useFileObjectUrl(
     clientDb: typeof clientDb;
     url?: string;
   }>();
-
-  const blobValue = resource.get(BLOB);
-  const blobDid = typeof blobValue === 'string' ? blobValue : undefined;
-
-  const mimetypeValue = resource.get(server.properties.mimetype);
-  const mimetype =
-    typeof mimetypeValue === 'string' ? mimetypeValue : undefined;
 
   useEffect(() => {
     if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return;

@@ -80,8 +80,57 @@ export function isCommitSubject(subject: string): boolean {
   }
 }
 
+/**
+ * How far the server's clock is ahead of this device's, in ms. Learned from a
+ * rejection (see {@link learnServerClock}); zero until then.
+ */
+let serverClockOffsetMs = 0;
+
+/** A device clock this far off is broken, not skewed; don't follow it. */
+const MAX_CLOCK_OFFSET_MS = 24 * 60 * 60 * 1000;
+
+const FUTURE_TIMESTAMP_REJECTION = /Timestamp now: (\d+) CreatedAt is: \d+/;
+
+/** Timestamp for signing commits and authentication, in the server's time. */
 export function getTimestampNow(): number {
-  return Math.round(new Date().getTime());
+  return Math.round(Date.now() + serverClockOffsetMs);
+}
+
+/**
+ * Adopts the server's clock from a "timestamp must lie in the past" refusal.
+ *
+ * The server accepts a timestamp at most 10 s ahead of its own clock, so a
+ * device whose clock runs ahead by more than that had every commit and every
+ * authentication refused, and nothing it did could ever sync. The refusal
+ * carries the server's time, so later signatures use that instead. Returns
+ * whether the message was such a refusal.
+ */
+export function learnServerClock(message: string): boolean {
+  const match = FUTURE_TIMESTAMP_REJECTION.exec(message);
+
+  if (!match) return false;
+
+  const offset = Number(match[1]) - Date.now();
+
+  if (!Number.isFinite(offset) || Math.abs(offset) > MAX_CLOCK_OFFSET_MS) {
+    return false;
+  }
+
+  serverClockOffsetMs = offset;
+
+  return true;
+}
+
+/** Whether an error is the server refusing a timestamp from the future. */
+export function isFutureTimestampRefusal(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return FUTURE_TIMESTAMP_REJECTION.test(message);
+}
+
+/** Forget a learned offset. For tests. */
+export function resetServerClock(): void {
+  serverClockOffsetMs = 0;
 }
 
 /** A {@link Commit} without its signature, signer and timestamp */

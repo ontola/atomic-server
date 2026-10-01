@@ -28,6 +28,8 @@ import {
   type Commit,
   parseCommitJSON,
   serializeDeterministically,
+  learnServerClock,
+  isFutureTimestampRefusal,
 } from './commit.js';
 import {
   Tag,
@@ -1145,6 +1147,10 @@ export class WSClient {
         const msg = decodeError(payload);
         if (!msg) break;
 
+        // A clock that runs ahead is refused on every AUTH and COMMIT; adopt
+        // the server's time so the reconnect and the outbox's retry pass.
+        learnServerClock(msg.message);
+
         // requestId 0 is the server's sentinel for connection-level errors
         // (e.g. AUTH failure) not tied to one specific pending GET/COMMIT —
         // `nextRequestId` starts at 1 and wraps back to 1, never 0, so this
@@ -1570,9 +1576,7 @@ export class WSClient {
       this.authenticatedWith !== this.store.getAgent()?.subject
     )
       return;
-    const knownError = drive
-      ? this.store.resources.get(drive)?.error
-      : undefined;
+    const knownError = drive ? this.hydratedResource(drive)?.error : undefined;
     // Onboarding can name a key-derived home whose data has not arrived yet.
     // A prior read already established that this server cannot subscribe it.
     if (isNotFound(knownError) || isUnauthorized(knownError)) return;
@@ -1753,7 +1757,16 @@ export class WSClient {
 
     if (this.store.getAgent()?.subject) {
       const authClose = perfSpan('ws.authenticate');
-      this.authenticate()
+      // A refusal for a clock that runs ahead has already taught
+      // `getTimestampNow` the server's time (see the ERROR frame handler), so
+      // one more attempt signs a timestamp the server accepts.
+      const authenticateOnce = () =>
+        this.authenticate().catch(e => {
+          if (this._closed || !isFutureTimestampRefusal(e)) throw e;
+
+          return this.authenticate();
+        });
+      authenticateOnce()
         .then(() => {
           authClose('ok');
           if (this._closed) return;
@@ -1798,7 +1811,18 @@ export class WSClient {
     return !!this.store.outbox.getEntry(drive)?.signedGenesis;
   }
 
-  private async startVVSync(drive: string): Promise<void> {
+  private canAutomaticallySyncDrive(drive: string): boolean {
+    const error = this.hydratedResource(drive)?.error;
+
+    return (
+      this.store.isLiveSyncedDrive(drive) &&
+      !isNotFound(error) &&
+      !isUnauthorized(error)
+    );
+  }
+
+  private async startVVSync(drive: string, explicit = false): Promise<void> {
+    if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
 
@@ -1824,7 +1848,8 @@ export class WSClient {
           : localState.driveHash,
       };
       close({ resourceCount: Object.keys(syncState.resources).length });
-      if (!current()) return;
+      if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
+        return;
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
@@ -1848,7 +1873,7 @@ export class WSClient {
   public async resyncDrive(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
-    await this.startVVSync(drive);
+    await this.startVVSync(drive, true);
   }
 
   /** Respond to SYNC_RESEND: the probe's hash missed, so send the drive's

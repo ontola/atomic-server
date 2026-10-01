@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { before, getCurrentSubject, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  clickAccountMenuItem,
+  getCurrentSubject,
+  FRONTEND_URL,
+} from './test-utils';
 
 test.describe('open-locked-drive', () => {
   test('a drive opened signed out through the portal Open link lands on the sign-in step', async ({
@@ -10,7 +15,7 @@ test.describe('open-locked-drive', () => {
     const drive = await getCurrentSubject(page);
 
     page.on('dialog', dialog => dialog.accept());
-    await page.locator('a[href$="/app/agent"]').click();
+    await clickAccountMenuItem(page, 'Profile');
     await page.click('[data-test="sign-out"]');
     await expect(
       page.getByRole('button', { name: 'Create account' }),

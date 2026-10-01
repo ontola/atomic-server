@@ -22,6 +22,8 @@ Collection alias indexing: `sorted_parent_query_deduplicates_legacy_and_canonica
 
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
+Document images: `document-image.spec.ts` uploads a freshly generated PNG through the editor's image picker in a browser-only drive, whose bytes never reach a server, and verifies the image renders from the local blob store before and after a reload instead of showing "Failed to load image". `subject.test.ts` covers mapping a content-addressed `/download/files/<hash>` URL back to its blob. An image in a server-synced drive on a device that has not got the bytes still loads from the server URL; that path is not separately covered.
+
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
 
 Template visibility: `settings-templates.spec.ts` toggles Hide templates through Settings, verifies the loaded New page hides templates across reload, and restores them when unchecked.
@@ -2543,3 +2545,21 @@ out. It does not drive a real browser's throttling.
 right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
 reaches the other subscriber without a retry, and that an update held for a
 refused subscribe is dropped.
+
+## Onboarding audit regressions
+
+- `websockets.test.ts`: missing and unauthorized drives cannot SUB or automatically
+  reconcile via a legacy DID when the read error is cached under its canonical ID.
+- `helpers/readableDrive.test.ts`: explicit portal selection waits for a readable
+  resource and discards results after navigation or identity changes.
+- `helpers/managed/vaultAutoBackup.test.ts`: a confirmed missing canonical drive
+  stays local-only after recovery through its legacy alias; transport failures
+  do not change routing.
+- `helpers/managed/readCache.test.ts`: short metadata read sharing, expiry,
+  independent response bodies, provider/token isolation, mutation invalidation,
+  cancellation/cache-control bypass, and retryable error/anonymous responses.
+- `oxc-react-compiler.test.ts`: the full app must avoid internal compiler invariants,
+  including identity creation and the connect-device polling loop.
+- The paired SaaS `portal/e2e/onboarding.spec.ts` closes the original context,
+  downloads the vault into a fresh browser, verifies the saved document and
+  profile, requires a clean console, and budgets metadata reads after reload.

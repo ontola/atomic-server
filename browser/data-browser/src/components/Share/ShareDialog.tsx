@@ -31,7 +31,10 @@ import { profileReviewedBefore, rememberProfileReviewed } from '../InviteForm';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
-import { getManagedAccount } from '../../helpers/managed/session';
+import {
+  accountAddress,
+  getManagedAccount,
+} from '../../helpers/managed/session';
 import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { PeopleWithAccess, effectiveRole } from './PeopleWithAccess';
@@ -459,7 +462,10 @@ function useCurrentAgentDetail(
     if (!isSaas) return;
     let cancelled = false;
     getManagedAccount()
-      .then(account => !cancelled && setEmail(account?.email))
+      .then(
+        account =>
+          !cancelled && setEmail(account ? accountAddress(account) : undefined),
+      )
       .catch(() => {
         /* The name alone is fine. */
       });

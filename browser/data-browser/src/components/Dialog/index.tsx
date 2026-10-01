@@ -28,9 +28,9 @@ import { CurrentBackgroundColor } from '../../globalCssVars';
 import { timeoutEffect } from '@helpers/timeoutEffect';
 import { useAndroidBack } from '../../helpers/androidBack';
 
-const FeedbackMenuItem = lazy(() =>
-  import('../SideBar/FeedbackMenuItem').then(module => ({
-    default: module.FeedbackMenuItem,
+const FeedbackButton = lazy(() =>
+  import('../SideBar/FeedbackButton').then(module => ({
+    default: module.FeedbackButton,
   })),
 );
 
@@ -44,6 +44,8 @@ export interface InternalDialogProps {
   instantClose?: boolean;
   disableLightDismiss?: boolean;
   width?: CSS.Property.Width;
+  /** Id of the element that names the dialog, usually its title's heading. */
+  labelledBy?: string;
 }
 
 export enum DialogSlot {
@@ -106,6 +108,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   width,
   instantClose = false,
   disableLightDismiss = false,
+  labelledBy,
   onClose,
   onClosed,
 }) => {
@@ -265,6 +268,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       $width={width}
       data-top-level={isTopLevel}
       closedby={disableLightDismiss ? 'none' : 'closerequest'}
+      aria-labelledby={labelledBy}
     >
       <StyledInnerDialog ref={innerDialogRef}>
         <PopoverContainer>
@@ -280,7 +284,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
             {show && rootWelcomeChromeHidden && !hideOnboardingFeedback && (
               <DialogFeedback>
                 <Suspense fallback={null}>
-                  <FeedbackMenuItem floating />
+                  <FeedbackButton />
                 </Suspense>
               </DialogFeedback>
             )}

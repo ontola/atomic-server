@@ -11,6 +11,7 @@ import { isOriginWithoutNode } from '../helpers/originNode';
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { openPrivateHome } from '../helpers/openPrivateHome';
 import { privateHomeNudge } from '../helpers/privateHomeNudge';
+import { selectReadableDrive } from '../helpers/readableDrive';
 import { addRecentResource } from '../helpers/recentResources';
 
 export type ShowRouteSearch = {
@@ -105,16 +106,29 @@ export const ShowComponent: React.FunctionComponent = () => {
       return;
     }
 
-    if (drive !== requestedDrive) setDrive(requestedDrive);
-    // Consume the instruction so a later manual drive switch is not undone.
-    navigate({ to: paths.show, search: { subject, view }, replace: true });
+    let cancelled = false;
+    void selectReadableDrive(
+      store,
+      requestedDrive,
+      setDrive,
+      () => !cancelled,
+    ).then(selected => {
+      if (!selected || cancelled) return;
+      // Consume a successful selection so later manual switches stay put.
+      navigate({ to: paths.show, search: { subject, view }, replace: true });
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     signInFirst,
     signInRedirect,
     requestedDrive,
     subject,
     view,
-    drive,
+    agent,
+    store,
     setDrive,
     navigate,
   ]);

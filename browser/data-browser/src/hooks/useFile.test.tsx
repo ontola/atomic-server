@@ -32,7 +32,10 @@ function Preview({ resource }: { resource: Resource }) {
 
 describe('file preview first render', () => {
   it('does not request the server while local blob lookup is pending', async () => {
-    const store = new Store({ serverUrl: 'https://example.com' });
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
     vi.spyOn(store, 'getClientDb').mockReturnValue({
       getBlob: () => new Promise(() => {}),
     } as unknown as NonNullable<ReturnType<Store['getClientDb']>>);
@@ -49,7 +52,10 @@ describe('file preview first render', () => {
   });
 
   it('uses the server immediately when there is no local database', async () => {
-    const store = new Store({ serverUrl: 'https://example.com' });
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
     const resource = await fileResource();
     const markup = renderToStaticMarkup(
       <StoreContext value={store}>

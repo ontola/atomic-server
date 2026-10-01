@@ -5,6 +5,7 @@ import {
   connectHostedDrive,
   localAgentIsDisposable,
 } from './reconcile';
+import { setManagedDeviceToken } from './api';
 import type { ManagedEnrollmentSummary } from './enrollmentApi';
 
 /**
@@ -20,44 +21,34 @@ function mockFetch(opts: {
   recovery?: { agent_subject: string } | null;
 }) {
   vi.stubEnv('VITE_MANAGED_API_BASE', 'https://portal.example/api');
+  setManagedDeviceToken(null);
   globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
 
     if (url.endsWith('/me')) {
       if (!opts.account) {
-        return Promise.resolve({ status: 401, ok: false } as Response);
+        return Promise.resolve(new Response(null, { status: 401 }));
       }
 
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(opts.account),
-      } as Response);
+      return Promise.resolve(Response.json(opts.account));
     }
 
     if (url.endsWith('/sync-enrollments')) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(opts.enrollments ?? []),
-      } as Response);
+      return Promise.resolve(Response.json(opts.enrollments ?? []));
     }
 
     if (url.endsWith('/recovery-secret')) {
       if (!opts.recovery) {
-        return Promise.resolve({ status: 404, ok: false } as Response);
+        return Promise.resolve(new Response(null, { status: 404 }));
       }
 
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            owner_email: opts.account?.email,
-            wrappers: [],
-            ...opts.recovery,
-          }),
-      } as Response);
+      return Promise.resolve(
+        Response.json({
+          owner_email: opts.account?.email,
+          wrappers: [],
+          ...opts.recovery,
+        }),
+      );
     }
 
     throw new Error(`Unexpected fetch: ${url}`);
@@ -144,6 +135,7 @@ describe('evaluateServerReconciliation', () => {
   });
 
   it('does not switch servers when discovery completes after its deadline', async () => {
+    setManagedDeviceToken(null);
     let resolve!: (response: Response) => void;
     globalThis.fetch = vi.fn(
       () =>
