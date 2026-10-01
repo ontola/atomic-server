@@ -352,6 +352,14 @@ Each step lands on its own.
 - [ ] **0. One host.** Move `PluginView` onto the `AppFrame` bridge and
       `viewProtocol.ts`. Declared network origins instead of `connect-src *`
       for third-party releases.
+  - [x] One client API: `store` from `@tomic/plugin`, shaped after
+        `@tomic/lib`'s Store and the same object drive apps get from
+        `view-client.js` (`getResource`, `newResource`, `query`, `search`,
+        `subscribe`, `getContext`, `ui`). `store.test.ts` checks both clients
+        expose the same calls. `RPCClient` stays, deprecated.
+  - [x] The packaged host answers the `store` ops (`create`, `save`,
+        `destroy`, `query`, `search`) under its own read/write policy.
+  - [ ] One bridge class for both hosts.
 - [ ] **1. Environment.** Versioned `--atomic-*` tokens with `--t-*`
       aliases, locale, placement, resize, keyboard forwarding, focus edges,
       URL view state.
@@ -360,11 +368,18 @@ Each step lands on its own.
       a test in `browser/plugin` like `viewProtocol.test.ts`.
   - [x] Drive apps (`AppFrame`): `store.ui.confirm`, `toast`, `menu`,
         `resourceMenu`, `share`, `openResource`, `environment` (locale and
-        placement), and key forwarding. `chunks/AppPage/hostUI.tsx`.
-  - [ ] `form` from a Class, `dialog` as a sub-view.
-  - [ ] The packaged `PluginView` host (lands with step 0).
+        placement), and key forwarding. `components/HostUI/hostUI.tsx`.
+  - [x] `pickResource`, `pickFile` (uploads under the view's write root) and
+        `form` from a Class.
+  - [x] The packaged `PluginView` host, through the same `useHostUI`.
+  - [ ] `dialog` as a sub-view.
 - [ ] **3. Data.** `collection` with windows and deltas, `transaction` with
       undo, `presence`, `schema`.
+  - [x] `query` takes `CollectionBuilder`'s names: `filters`, `sortBy`,
+        `sortDesc`, `pageSize`, `page` (`helpers/extensions/viewQuery.ts`).
+  - [ ] Deltas instead of re-querying on change.
+  - [ ] Declared capabilities in the manifest, as Android and iOS declare
+        what an app uses (see the docs' "How this compares to a phone").
 - [ ] **4. Kanban as a plugin**, behind a flag, against the existing e2e
       specs.
 - [ ] **5. UI kit.** `@tomic/tokens`, `@tomic/ui` web components including

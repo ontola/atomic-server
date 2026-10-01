@@ -55,62 +55,42 @@ The test plugin uses SolidJS with the `vite-plugin-solid` plugin as a reference 
 
 ## Communicating with the Data Browser
 
-Since the plugin runs in a sandboxed iframe, it cannot directly call the Atomic Store or make authenticated requests. All communication with the host Data Browser is handled via `postMessage`, abstracted by the `RPCClient` from the `@tomic/plugin` package.
+Since the plugin runs in a sandboxed iframe, it cannot call the Atomic Store or make authenticated requests itself. It asks the Data Browser over `postMessage`, through the `store` object from `@tomic/plugin`.
 
-### Setting Up
-
-Install the package:
+`store` is shaped after `Store` and `Resource` from [`@tomic/lib`](../js-lib/store.md): if you know how to write `store.getResource(...)`, `resource.set(...)` and `await resource.save()` there, you know how to write a plugin view. Drive apps (views a model writes for you) get the very same object, so the API below covers both kinds of view.
 
 ```bash
 npm install @tomic/plugin
 ```
 
-Create an `RPCClient` instance once when your app starts:
-
 ```ts
-import { RPCClient } from '@tomic/plugin';
+import { store } from '@tomic/plugin';
 
-const rpc = new RPCClient();
+const { subject } = await store.getContext();
+const page = await store.getResource(subject);
+
+page.set('https://atomicdata.dev/properties/name', 'New name');
+await page.save();
 ```
 
-### RPCClient API
+### Data
 
-#### `getPageContext(): Promise<PageContext>`
+| Call | Returns | Notes |
+| --- | --- | --- |
+| `store.getContext()` | `{ subject, agent? }` | The resource this view shows, and the signed-in agent. |
+| `store.getResource(subject)` | `ViewResource` | Asks the person first when it is outside this view's scope (see below). |
+| `store.newResource({ parent?, isA?, propVals? })` | `ViewResource` | Created and saved. `parent` defaults to the current page (to the app, for a drive app). |
+| `store.query({ property?, value?, filters?, sortBy?, sortDesc?, pageSize?, page? })` | `string[]` | A [collection](../schema/collections.md). Needs a `property` or a filter. Without `page`: every member, at most 500. `pageSize` is 1 to 100, `filters` at most 10 `{ property, value }` pairs. |
+| `store.search(text, { isA?, parents?, limit? })` | `string[]` | Full-text search, `limit` 1 to 50 (default 20). |
+| `store.subscribe(subject, resource => ...)` | unsubscribe function | Called with the fresh resource on every change. |
 
-Returns the current page context, including the resource being viewed and the current user's agent subject.
+A `ViewResource` has `subject`, `title`, `props`, `get(property)`, `set(property, value)`, `remove(property)`, `getClasses()`, `hasClasses(...classes)`, `save()` and `destroy()`. Like in `@tomic/lib`, `set` and `remove` only stage a change; `save()` sends what changed since the last save.
 
-```ts
-const { resource, agent } = await rpc.getPageContext();
-console.log(resource.subject); // the URL of the current resource
-```
+`query` and `search` leave out anything this view may not read: a list of subjects already says what exists.
 
-```ts
-interface PageContext {
-  resource: Resource;
-  agent?: string; // Subject of the user's agent
-}
-```
+### Access control
 
-#### `getResource(subject: string): Promise<Resource>`
-
-Fetches a resource from the host store by its subject URL.
-
-```ts
-const resource = await rpc.getResource('https://example.com/my-resource');
-```
-
-**`Resource`:**
-
-```ts
-interface Resource {
-  subject: string;
-  title: string;
-  loading: boolean;
-  props: Record<string, JSONValue>;
-}
-```
-
-**Access control:** The plugin can read a resource without any user interaction if any of the following conditions are true:
+The plugin can read a resource without any user interaction if any of the following conditions are true:
 
 - The resource is the current page resource (the one the plugin view is rendering).
 - The resource's parent is the current page resource.
@@ -119,81 +99,45 @@ interface Resource {
 
 If none of these conditions are met, the user is shown a **Read Request** dialog asking them to allow or deny access to that specific resource. The user can also check "Allow all reads done by this plugin" to permanently grant the plugin blanket read access. Previously granted permissions are persisted, so the dialog will not appear again for the same resource. If the user denies the request, the promise rejects with an error.
 
-#### `commit(commit: Commit): Promise<{ success: true }>`
-
-Applies a commit to a resource. The commit is signed by the user's agent.
-
-```ts
-await rpc.commit({
-  subject: 'https://example.com/my-resource',
-  set: {
-    'https://atomicdata.dev/properties/name': 'New name',
-  },
-});
-```
-
-```ts
-interface Commit {
-  subject: string;
-  set?: Record<string, JSONValue>;
-  push?: Record<string, unknown[]>;
-  remove?: string[];
-  destroy?: boolean;
-}
-```
-
-**Access control:** The same scope rules as `getResource` apply, but for write access. The plugin can write without a prompt if:
-
-- The target resource is the current page resource.
-- The target resource's parent is the current page resource.
-- Any ancestor of the resource satisfies either of the above.
-- The plugin's agent is listed in the resource's (or any ancestor's) `write` rights.
-
-If none of these conditions are met, the user is shown a **Write Request** dialog. As with read access, the user can permanently grant blanket write permission, and previously granted permissions are persisted. If the user denies, the promise rejects with an error.
+Writes (`save`, `destroy`, `newResource`) follow the same rules for write access, with a **Write Request** dialog when they are not met. Writes are signed by the person's agent.
 
 > [!NOTE]
-> Commits that target plugin resources are always blocked, regardless of permissions. A plugin cannot modify itself or any other plugin resource.
+> Writes that target plugin resources are always blocked, regardless of permissions. A plugin cannot modify itself or any other plugin resource.
 
-#### `subscribe(subject: string, callback: (resource: Resource) => void): () => void`
+Drive apps follow a stricter rule: they read what the signed-in person can read, and write only under their own app resource, signed by the app's own agent.
 
-Subscribes to live updates for a resource. Returns an unsubscribe function.
+### Host UI
 
-```ts
-const unsubscribe = rpc.subscribe('https://example.com/my-resource', (resource) => {
-  console.log('Resource updated:', resource);
-});
+Some things a frame cannot do well on its own: a menu is cut off at the frame's edge, and a share dialog or a confirmation should look like the rest of Atomic. `store.ui` asks the Data Browser to draw them with its own components. Each one names your plugin to the person, so a prompt can never pass as the Data Browser's own. One question is open at a time: asking a new one answers the open one as cancelled.
 
-// Later, to stop listening:
-unsubscribe();
-```
+| Call | Returns |
+| --- | --- |
+| `store.ui.confirm({ title, body?, confirmLabel?, danger? })` | `true` or `false` |
+| `store.ui.toast(text, { kind? })` | `kind` is `'info'`, `'success'` or `'error'` |
+| `store.ui.menu({ at, items })` | The chosen item's `id`, or `null`. `at` is a `MouseEvent` or `{ x, y }` in your frame; `items` are `{ id, label, disabled? }` or `'divider'`, at most 50. |
+| `store.ui.resourceMenu(subject, { at })` | Atomic's own menu for a resource: open, share, delete. |
+| `store.ui.share(subject)` | Atomic's share dialog. Resolves when it closes. |
+| `store.ui.openResource(subject)` | Leaves this view for `subject`. |
+| `store.ui.pickResource({ isA?, title? })` | The chosen subject, or `null`. |
+| `store.ui.pickFile({ accept? })` | A file's subject, or `null`. The person can upload one; `accept` lists MIME types. |
+| `store.ui.form({ class, parent?, propVals? })` | Atomic's own form for a new resource of `class`, saved by the person. The new subject, or `null`. `parent` must be somewhere this view may write. |
+| `store.ui.environment()` | `{ locale, placement }` |
 
-#### `navigate(subject: string): Promise<boolean>`
+Calls that wait on the person (`confirm`, `menu`, `share`, the pickers, `form`) have no timeout. Every other call fails after 60 seconds without an answer.
 
-Navigates the Data Browser to a different resource.
+### Keyboard
 
-```ts
-await rpc.navigate('https://example.com/other-resource');
-```
+Keys your view does not handle are passed to the Data Browser, so its shortcuts (search, Escape to close) keep working while focus is in your view. Only Escape and keys held with Ctrl, Cmd or Alt are passed on, and never the text editing ones (select all, copy, paste, cut, undo, redo). Call `event.preventDefault()` on a key your view handles itself and the Data Browser will not see it.
 
-#### `pickResource(options?): Promise<Resource | undefined>`
+### How this compares to a phone
 
-Opens a resource picker dialog in the Data Browser. Resolves with the selected resource, or `undefined` if the user cancels.
+The contract borrows from how Android and iOS let apps use what the system offers:
 
-```ts
-const picked = await rpc.pickResource({
-  title: 'Select a document',
-  message: 'Pick the document you want to link.',
-  isA: 'https://atomicdata.dev/classes/Document', // optional: filter by class
-  scope: 'https://example.com/my-drive',          // optional: limit search scope
-});
-```
+- **System pickers instead of broad access.** Like Android's document picker or iOS's photo picker, `store.ui.pickResource` and `pickFile` let the person choose one thing, without the plugin being able to list everything.
+- **Asking at the moment of use.** Reading or writing outside the plugin's scope asks the person then, like a runtime permission, and they can make it permanent.
+- **System sheets for system actions.** `share`, `resourceMenu` and `confirm` are the Data Browser's own, like a share sheet or an action sheet, so they behave the same in every plugin.
+- **Declared capabilities.** The `custom-view` permission in the manifest is the start of a manifest that declares what a plugin will use, as an Android manifest or iOS entitlements do.
 
-#### `pickFile(options?): Promise<Resource | undefined>`
+### Legacy `RPCClient`
 
-Opens a file picker dialog. The user can select an existing file on AtomicServer or upload a new one. Resolves with the file resource, or `undefined` if cancelled.
-
-```ts
-const file = await rpc.pickFile({
-  allowedMimes: ['image/png', 'image/jpeg'],
-});
-```
+Plugins written before `store` use `new RPCClient()` with `getPageContext`, `getResource`, `commit`, `subscribe`, `navigate`, `pickResource` and `pickFile`. It keeps working, and `rpc.ui` is the same object as `store.ui`, but new plugins should use `store`.

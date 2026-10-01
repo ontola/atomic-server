@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { isViewKeyEvent } from '@tomic/plugin';
 import {
@@ -13,23 +12,32 @@ import { OpenShareDialog } from '@components/Share/ShareDialog';
 import { useLocale } from '@components/LocaleContext';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import type { HostReply } from './hostStore';
+import { useStore } from '@tomic/react';
+import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import type { HostReply } from '@chunks/AppPage/hostStore';
+import { AppFormDialog, AskedBy, PickResourceDialog } from './hostUIDialogs';
 import {
   parseConfirm,
+  parseForm,
   parseMenu,
+  parsePickFile,
+  parsePickResource,
   parsePoint,
   parseSubject,
   parseToast,
   placeInFrame,
   shouldForwardKey,
   type ConfirmAsk,
+  type FormAsk,
   type MenuEntry,
+  type PickResourceAsk,
   type Point,
 } from './hostUIRequests';
 
 /**
  * The host UI an app's view can ask for: a confirm, a toast, a menu at a
- * point, the resource menu, the share dialog, opening a resource.
+ * point, the resource menu, the share dialog, opening a resource, the
+ * resource and file pickers, and a form for a new resource of a class.
  *
  * Drawn here rather than in the frame for two reasons. A frame cannot draw
  * outside its own box, so its menus would be cut off at the edge. And these
@@ -41,10 +49,17 @@ import {
  * cancelled, the same rule `proxyConnect` follows.
  */
 export function useHostUI({
+  writeRoot,
+  mayWriteUnder,
   appTitle,
   frame,
   table,
 }: {
+  /** Where uploads go, and a form's parent by default: the app, or the page. */
+  writeRoot: string;
+  /** Whether this view may write under `subject`, by its own write policy. */
+  mayWriteUnder: (subject: string) => Promise<boolean>;
+  /** The app or plugin's name, shown on everything it asks for. */
   appTitle: string;
   frame: React.RefObject<HTMLIFrameElement | null>;
   /** Set when the app is a view of a table, so it knows where it sits. */
@@ -61,6 +76,7 @@ export function useHostUI({
   const navigate = useNavigateWithTransition();
   const { openResourceMenu } = useResourceContextMenu();
   const { locale } = useLocale();
+  const store = useStore();
 
   // Read through a ref: `handle` is captured once by the frame bridge, and
   // must still see the current title, locale and navigation.
@@ -70,9 +86,19 @@ export function useHostUI({
     locale,
     appTitle,
     table,
+    writeRoot,
+    mayWriteUnder,
   });
   useEffect(() => {
-    latest.current = { navigate, openResourceMenu, locale, appTitle, table };
+    latest.current = {
+      navigate,
+      openResourceMenu,
+      locale,
+      appTitle,
+      table,
+      writeRoot,
+      mayWriteUnder,
+    };
   });
 
   const open = useCallback((next: UIAsk) => {
@@ -153,6 +179,57 @@ export function useHostUI({
             reply(true);
             break;
 
+          case 'pickResource':
+            open({
+              kind: 'pickResource',
+              id: request.id,
+              reply: post,
+              pick: parsePickResource(request),
+            });
+            break;
+
+          case 'pickFile':
+            open({
+              kind: 'pickFile',
+              id: request.id,
+              reply: post,
+              accept: parsePickFile(request).accept,
+              uploading: false,
+            });
+            break;
+
+          case 'form': {
+            const form = parseForm(request);
+            const parent = form.parent ?? now.writeRoot;
+
+            // Checked before anything is shown: the person sees the fields,
+            // not where the result goes, so a view may only aim it where it
+            // could write itself.
+            void now.mayWriteUnder(parent).then(
+              within => {
+                if (!within) {
+                  post({
+                    id: request.id,
+                    error:
+                      /* @wc-ignore */ 'A form may only create resources where this view may write. Leave parent out to use its default.',
+                  });
+
+                  return;
+                }
+
+                open({
+                  kind: 'form',
+                  id: request.id,
+                  reply: post,
+                  form,
+                  parent,
+                });
+              },
+              (e: Error) => post({ id: request.id, error: e.message }),
+            );
+            break;
+          }
+
           case 'environment':
             reply({
               locale: now.locale,
@@ -167,6 +244,25 @@ export function useHostUI({
       return true;
     },
     [open, frame],
+  );
+
+  /** A new file from disk, uploaded under the app, answers the ask. */
+  const upload = useCallback(
+    (picking: UIAsk & { kind: 'pickFile' }, file: File) => {
+      const busy = { ...picking, uploading: true };
+      askRef.current = busy;
+      setAsk(busy);
+      store.uploadFiles([file], latest.current.writeRoot).then(
+        ([subject]) => finish(busy, subject ?? null),
+        (e: Error) => {
+          if (askRef.current !== busy) return;
+          busy.reply({ id: busy.id, error: e.message });
+          askRef.current = undefined;
+          setAsk(undefined);
+        },
+      );
+    },
+    [store, finish],
   );
 
   const forwardKey = useCallback(
@@ -232,6 +328,36 @@ export function useHostUI({
             }}
           />
         )}
+        {ask?.kind === 'pickResource' && (
+          <PickResourceDialog
+            key={String(ask.id)}
+            appTitle={appTitle}
+            ask={ask.pick}
+            onPicked={subject => finish(ask, subject)}
+            onClosed={() => setTimeout(() => finish(ask, null))}
+          />
+        )}
+        {ask?.kind === 'pickFile' && !ask.uploading && (
+          <FilePickerDialog
+            key={String(ask.id)}
+            show
+            allowedMimes={ask.accept ? new Set(ask.accept) : undefined}
+            onResourcePicked={subject => finish(ask, subject)}
+            onNewFilePicked={file => upload(ask, file)}
+            onShowChange={show => {
+              if (!show) setTimeout(() => finish(ask, null));
+            }}
+          />
+        )}
+        {ask?.kind === 'form' && (
+          <AppFormDialog
+            key={String(ask.id)}
+            ask={ask.form}
+            parent={ask.parent}
+            onSaved={subject => finish(ask, subject)}
+            onClosed={() => setTimeout(() => finish(ask, null))}
+          />
+        )}
         {ask?.kind === 'share' && (
           <OpenShareDialog
             key={String(ask.id)}
@@ -257,6 +383,9 @@ type UIAsk = {
   | { kind: 'confirm'; confirm: ConfirmAsk }
   | { kind: 'menu'; at: Point; items: MenuEntry[] }
   | { kind: 'share'; subject: string }
+  | { kind: 'pickResource'; pick: PickResourceAsk }
+  | { kind: 'pickFile'; accept?: string[]; uploading: boolean }
+  | { kind: 'form'; form: FormAsk; parent: string }
 );
 
 const UI_OPS = new Set([
@@ -267,14 +396,17 @@ const UI_OPS = new Set([
   'share',
   'openResource',
   'environment',
+  'pickResource',
+  'pickFile',
+  'form',
 ]);
 
 /** What an ask answers when a newer one replaces it. */
 function cancelledResult(ask: UIAsk): unknown {
   if (ask.kind === 'confirm') return false;
-  if (ask.kind === 'menu') return null;
+  if (ask.kind === 'share') return true;
 
-  return true;
+  return null;
 }
 
 function menuItems(
@@ -323,9 +455,3 @@ function pointerAt(point: Point): React.MouseEvent {
     preventDefault: () => undefined,
   } as React.MouseEvent;
 }
-
-const AskedBy = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.9rem;
-  margin-top: 0;
-`;

@@ -1,4 +1,5 @@
 import { viewRequest, packagedViewOperations } from './viewProtocol';
+import { forwardUnhandledKeys, store } from './store';
 import {
   MessageType,
   type Commit,
@@ -11,6 +12,12 @@ import {
 
 type ResourceCallback = (resource: Resource) => void;
 
+/**
+ * The first plugin API, kept so existing plugins keep working.
+ *
+ * @deprecated Use `store` from this package: the same API as `@tomic/lib`'s
+ * Store, and the same one drive apps get.
+ */
 export class RPCClient {
   private requests: Map<
     string,
@@ -19,6 +26,8 @@ export class RPCClient {
   private subscriptions: Map<string, ResourceCallback[]> = new Map();
 
   constructor() {
+    forwardUnhandledKeys();
+
     window.addEventListener('message', (event: MessageEvent) => {
       if (
         event.source !== window.parent ||
@@ -167,6 +176,9 @@ export class RPCClient {
       this.subscriptions.set(subject, callbacks);
     };
   }
+
+  /** Host UI: the same calls as `store.ui`. */
+  public readonly ui = store.ui;
 
   private callFunction<T extends MessageType>(
     messageType: T,

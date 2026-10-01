@@ -35,7 +35,9 @@ export type ViewOperation =
   | 'resourceMenu'
   | 'share'
   | 'openResource'
-  | 'environment';
+  | 'environment'
+  /** Atomic's own form for a new resource of a class. */
+  | 'form';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -98,6 +100,7 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'share',
       'openResource',
       'environment',
+      'form',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

@@ -121,6 +121,97 @@ export function parsePoint(value: unknown): Point {
   return { x: x as number, y: y as number };
 }
 
+export interface PickResourceAsk {
+  isA?: string;
+  title?: string;
+}
+
+export function parsePickResource(args: Args): PickResourceAsk {
+  const isA = optionalText(args.isA, 'isA', 2048);
+
+  if (isA !== undefined && !Client.isValidSubject(isA)) {
+    throw new Error(`isA is not a valid subject: ${isA}`);
+  }
+
+  return { isA, title: optionalText(args.title, 'title', MAX_LABEL) };
+}
+
+export interface PickFileAsk {
+  accept?: string[];
+}
+
+export function parsePickFile(args: Args): PickFileAsk {
+  if (args.accept === undefined) return {};
+
+  if (
+    !Array.isArray(args.accept) ||
+    args.accept.length > 20 ||
+    !args.accept.every(
+      mime => typeof mime === 'string' && /^[\w.+-]+\/[\w.+*-]+$/.test(mime),
+    )
+  ) {
+    throw new Error('accept is a list of at most 20 MIME types');
+  }
+
+  return { accept: args.accept as string[] };
+}
+
+export interface FormAsk {
+  classSubject: string;
+  parent?: string;
+  propVals: Record<string, string | number | boolean>;
+}
+
+/**
+ * A form for a new resource of `class`. Initial values are plain scalars keyed
+ * by property subject: enough to prefill a field, and nothing a form could
+ * misrender as something it is not.
+ */
+export function parseForm(args: Args): FormAsk {
+  const classSubject = parseSubject({ subject: args.class });
+  const parent =
+    args.parent === undefined
+      ? undefined
+      : parseSubject({ subject: args.parent });
+  const propVals: FormAsk['propVals'] = {};
+
+  if (args.propVals !== undefined) {
+    if (
+      !args.propVals ||
+      typeof args.propVals !== 'object' ||
+      Array.isArray(args.propVals)
+    ) {
+      throw new Error('propVals is an object of property subject to value');
+    }
+
+    const entries = Object.entries(args.propVals as Args);
+
+    if (entries.length > MAX_ITEMS) {
+      throw new Error(`propVals holds at most ${MAX_ITEMS} properties`);
+    }
+
+    for (const [property, value] of entries) {
+      parseSubject({ subject: property });
+
+      if (
+        !(
+          (typeof value === 'string' && value.length <= 10_000) ||
+          typeof value === 'boolean' ||
+          (typeof value === 'number' && Number.isFinite(value))
+        )
+      ) {
+        throw new Error(
+          `propVals for ${property} is not a string, number or boolean`,
+        );
+      }
+
+      propVals[property] = value;
+    }
+  }
+
+  return { classSubject, parent, propVals };
+}
+
 export function parseSubject(args: Args): string {
   const subject = requiredText(args.subject, 'subject', 2048);
 

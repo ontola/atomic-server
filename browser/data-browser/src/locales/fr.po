@@ -125,6 +125,7 @@ msgstr "Agents IA"
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -10282,6 +10283,16 @@ msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag le
 msgstr ""
 
 #. 0: appTitle
-#: src/chunks/AppPage/hostUI.tsx
+#. 0: appTitle
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
 msgid "Asked by {0}"
 msgstr "Demandé par {0}"
+
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Choose a resource"
+msgstr "Choisir une ressource"
+
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Choose"
+msgstr "Choisir"

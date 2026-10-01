@@ -1,8 +1,9 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import type { ProxyHost } from '@helpers/proxyConnections';
+import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
-  CollectionBuilder,
   core,
   errorMessageFromResponse,
   findSchema,
@@ -130,19 +131,27 @@ export async function handleRequest(
       };
     }
 
-    case 'query': {
+    case 'query':
       // A collection, not `search`. Search drops `filters` whenever it falls
       // back to the local index — property-value constraints need the
       // server's — so an app asking for its own children quietly received the
       // whole drive. Wrong, and a far bigger answer than it asked for.
-      const collection = new CollectionBuilder(store)
-        .setProperty(required(request.property, 'property'))
-        .setValue(required(request.value, 'value'))
-        .setPageSize(500)
-        .build();
+      return await runViewQuery(
+        store,
+        parseViewQuery(request as unknown as Record<string, unknown>),
+      );
 
-      return await collection.getAllMembers();
-    }
+    case 'search':
+      return await runViewSearch(
+        store,
+        parseViewSearch(request as unknown as Record<string, unknown>),
+      );
+
+    case 'context':
+      return {
+        subject: table ?? app,
+        agent: store.getAgent()?.subject,
+      };
 
     case 'create': {
       // Defaulting the parent to the app is not a convenience: it is the one

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseConfirm,
+  parseForm,
   parseMenu,
+  parsePickFile,
+  parsePickResource,
   parseSubject,
   parseToast,
   placeInFrame,
@@ -86,6 +89,51 @@ describe('what an app may ask the host to draw', () => {
     expect(() => parseSubject({ subject: 'javascript:alert(1)' })).toThrow(
       'not a valid subject',
     );
+  });
+});
+
+describe('pickers and forms', () => {
+  it('takes an optional class to pick from', () => {
+    expect(
+      parsePickResource({ isA: 'https://x.dev/C', title: 'Pick' }),
+    ).toEqual({ isA: 'https://x.dev/C', title: 'Pick' });
+    expect(() => parsePickResource({ isA: 'not a class' })).toThrow(
+      'not a valid subject',
+    );
+  });
+
+  it('takes a short list of MIME types', () => {
+    expect(parsePickFile({})).toEqual({});
+    expect(parsePickFile({ accept: ['image/*', 'application/pdf'] })).toEqual({
+      accept: ['image/*', 'application/pdf'],
+    });
+    expect(() => parsePickFile({ accept: ['<script>'] })).toThrow('MIME');
+    expect(() =>
+      parsePickFile({ accept: Array.from({ length: 21 }, () => 'a/b') }),
+    ).toThrow('at most 20');
+  });
+
+  it('prefills a form only with scalars keyed by property subjects', () => {
+    expect(
+      parseForm({
+        class: 'https://x.dev/C',
+        propVals: { 'https://x.dev/name': 'Ada', 'https://x.dev/n': 3 },
+      }),
+    ).toEqual({
+      classSubject: 'https://x.dev/C',
+      parent: undefined,
+      propVals: { 'https://x.dev/name': 'Ada', 'https://x.dev/n': 3 },
+    });
+    expect(() => parseForm({})).toThrow();
+    expect(() =>
+      parseForm({ class: 'https://x.dev/C', propVals: { name: 'Ada' } }),
+    ).toThrow('not a valid subject');
+    expect(() =>
+      parseForm({
+        class: 'https://x.dev/C',
+        propVals: { 'https://x.dev/tags': ['a'] },
+      }),
+    ).toThrow('string, number or boolean');
   });
 });
 

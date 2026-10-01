@@ -9,6 +9,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   resource. Atomic draws them, names the app that asked, and a menu is no
   longer cut off at the app's edge. Ctrl/Cmd shortcuts and Escape that an app
   does not handle now reach Atomic, so search still opens while you are in one.
+- Apps can also let the person pick a resource or a file (uploading one if
+  they like), and open Atomic's own form for a new resource of a class.
+- Plugin views and apps now share one API: `store` from `@tomic/plugin` works
+  like `@tomic/lib`'s Store (`getResource`, `resource.set`, `save`,
+  `newResource`, `query`, `search`, `subscribe`) and drive apps get the same
+  object. Packaged plugin views get `store.ui` too. `query` takes `filters`,
+  `sortBy`, `sortDesc`, `pageSize` and `page`. `RPCClient` keeps working but
+  is deprecated.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while

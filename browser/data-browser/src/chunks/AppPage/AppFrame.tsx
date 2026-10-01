@@ -11,7 +11,12 @@ import {
 } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  handleRequest,
+  isHostRequest,
+  isWithinApp,
+  type HostReply,
+} from './hostStore';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -28,7 +33,7 @@ import {
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
-import { useHostUI } from './hostUI';
+import { useHostUI } from '@components/HostUI/hostUI';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -98,7 +103,13 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
-  const hostUI = useHostUI({ appTitle, frame: frameRef, table });
+  const hostUI = useHostUI({
+    writeRoot: app,
+    mayWriteUnder: subject => isWithinApp(store, subject, app),
+    appTitle,
+    frame: frameRef,
+    table,
+  });
   const { handle: handleUI, forwardKey } = hostUI;
 
   // Which plugin renders it. Resolved here rather than by each caller: a

@@ -248,6 +248,47 @@ test.describe('apps', () => {
       page.getByPlaceholder('Search for resources...'),
     ).toBeVisible();
   });
+
+  test("an app asks through the host's form and pickers, and queries sorted", async ({
+    page,
+  }) => {
+    await newApp(page);
+    await setAppSource(page, PICKERS_APP);
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const said = app.getByRole('status');
+    await expect(app.getByRole('button', { name: 'New row' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // Atomic's own form for the app's row class, prefilled by the app and
+    // saved by the person.
+    await app.getByRole('button', { name: 'New row' }).click();
+    const form = page.getByRole('dialog');
+    await expect(form.getByRole('textbox').first()).toHaveValue('Zebra');
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(said).toHaveText('made a row');
+
+    // A Store-shaped query: the app's rows, sorted by name, newest call wins.
+    await app.getByRole('button', { name: 'List' }).click();
+    await expect(said).toHaveText('Apple, Zebra');
+
+    // The pickers answer null when the person backs out.
+    await app.getByRole('button', { name: 'Pick' }).click();
+    const picker = page.getByRole('dialog');
+    await expect(
+      picker.getByRole('heading', { name: 'Choose a row' }),
+    ).toBeVisible();
+    await expect(picker).toContainText('Asked by');
+    await picker.getByRole('button', { name: 'Cancel' }).click();
+    await expect(said).toHaveText('picked null');
+
+    await app.getByRole('button', { name: 'File' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(said).toHaveText('file null');
+  });
 });
 
 /**
@@ -381,4 +422,51 @@ const HOST_UI_APP = `export async function view({ root, store }) {
     said.textContent = 'chose ' + id;
   });
   root.append(said);
+}`;
+
+const PICKERS_APP = `export async function view({ root, store }) {
+  const name = 'https://atomicdata.dev/properties/name';
+  const parent = 'https://atomicdata.dev/properties/parent';
+  const { table, rowClass } = await store.getData();
+  const said = document.createElement('p');
+  said.setAttribute('role', 'status');
+  const button = (label, onClick) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    root.append(b);
+  };
+  const apple = await store.newResource({
+    parent: table,
+    isA: [rowClass],
+    propVals: { [name]: 'Apple' },
+  });
+  button('New row', async () => {
+    const made = await store.ui.form({
+      class: rowClass,
+      parent: table,
+      propVals: { [name]: 'Zebra' },
+    });
+    said.textContent = made ? 'made a row' : 'no row';
+  });
+  button('List', async () => {
+    const rows = await store.query({
+      property: parent,
+      value: table,
+      sortBy: name,
+      pageSize: 10,
+      page: 0,
+    });
+    const titles = [];
+    for (const row of rows) titles.push((await store.getResource(row)).get(name));
+    said.textContent = titles.join(', ');
+  });
+  button('Pick', async () => {
+    said.textContent = 'picked ' + (await store.ui.pickResource({ isA: rowClass, title: 'Choose a row' }));
+  });
+  button('File', async () => {
+    said.textContent = 'file ' + (await store.ui.pickFile({ accept: ['image/*'] }));
+  });
+  root.append(said);
+  void apple;
 }`;

@@ -36,7 +36,15 @@ window.addEventListener('message', event => {
 });
 
 /** Requests that wait on the person, so they get no timeout. */
-const ASKS_THE_PERSON = new Set(['confirm', 'menu', 'share', 'proxyConnect']);
+const ASKS_THE_PERSON = new Set([
+  'confirm',
+  'menu',
+  'share',
+  'pickResource',
+  'pickFile',
+  'form',
+  'proxyConnect',
+]);
 
 /** A MouseEvent or `{ x, y }`, as a point in this frame. */
 function point(at) {
@@ -98,7 +106,7 @@ function send(op, payload) {
  * `set` stages; `save` sends. Same shape as `@tomic/lib`, and the same reason:
  * a write per keystroke is a commit per keystroke.
  */
-function makeResource(subject, propVals) {
+function makeResource(subject, propVals, title = subject) {
   const props = { ...propVals };
   // Set and removed since the last save. `save` sends only these: the rest
   // is what the host already has (re-sending it would also write back
@@ -111,6 +119,7 @@ function makeResource(subject, propVals) {
 
   return {
     subject,
+    title,
     get props() {
       return { ...props };
     },
@@ -130,6 +139,16 @@ function makeResource(subject, propVals) {
       removed.add(property);
 
       return this;
+    },
+    getClasses() {
+      const isA = props['https://atomicdata.dev/properties/isA'];
+
+      return Array.isArray(isA) ? isA : [];
+    },
+    hasClasses(...classes) {
+      const own = this.getClasses();
+
+      return classes.every(c => own.includes(c));
     },
     async save() {
       if (destroyed) throw new Error('This resource was destroyed.');
@@ -169,12 +188,27 @@ export const store = {
   async getResource(subject) {
     const result = await send('get', { subject });
 
-    return makeResource(result.subject, result.props);
+    return makeResource(result.subject, result.props, result.title);
   },
 
-  /** Subjects matching a property/value pair, scoped to this drive. */
-  async query({ property, value }) {
-    return send('query', { property, value });
+  /**
+   * Subjects of a collection, like `CollectionBuilder` builds: `property` and
+   * `value`, more `filters` (`[{ property, value }]`, at most 10), `sortBy`,
+   * `sortDesc`. Every member (at most 500), or one `page` of `pageSize` (up
+   * to 100).
+   */
+  async query(args) {
+    return send('query', { ...args });
+  },
+
+  /** Full-text search: subjects, optionally of class `isA` or under `parents`. */
+  async search(text, { isA, parents, limit } = {}) {
+    return send('search', { text, isA, parents, limit });
+  },
+
+  /** `{ subject, agent }`: what this view shows, and who is looking. */
+  async getContext() {
+    return send('context', {});
   },
 
   /**
@@ -184,11 +218,12 @@ export const store = {
   async newResource({ parent, isA = [], propVals = {} } = {}) {
     const result = await send('create', { parent, isA, propVals });
 
-    return makeResource(result.subject, result.props);
+    return makeResource(result.subject, result.props, result.title);
   },
 
   /**
-   * Calls back whenever `subject` changes, until the returned function runs.
+   * Calls back with the fresh resource whenever `subject` changes, until the
+   * returned function runs.
    *
    * Writing from inside the handler can feed itself: adding a child counts as
    * a change to its parent, so a view that subscribes to its app and writes
@@ -197,7 +232,9 @@ export const store = {
    */
   subscribe(subject, handler) {
     const listener = event => {
-      if (event.source === window.parent && event.data?.type === 'atomic.view.change' && event.data.version === 1 && event.data.subject === subject) handler();
+      if (event.source === window.parent && event.data?.type === 'atomic.view.change' && event.data.version === 1 && event.data.subject === subject) {
+        store.getResource(subject).then(handler, () => undefined);
+      }
     };
 
     window.addEventListener('message', listener);
@@ -262,6 +299,33 @@ export const store = {
     /** Opens `subject` in the host, leaving this view. */
     async openResource(subject) {
       return send('openResource', { subject });
+    },
+
+    /**
+     * Lets the person search for a resource, optionally of class `isA`.
+     * Resolves to its subject, or null when cancelled.
+     */
+    async pickResource({ isA, title } = {}) {
+      return send('pickResource', { isA, title });
+    },
+
+    /**
+     * Lets the person choose a file in the drive or upload one from their
+     * device; an upload is stored under this app. `accept` is a list of MIME
+     * types. Resolves to the file's subject, or null when cancelled.
+     */
+    async pickFile({ accept } = {}) {
+      return send('pickFile', { accept });
+    },
+
+    /**
+     * Atomic's own form for a new resource of `class`, with its editors and
+     * validation, prefilled from `propVals`. The person saves it, under
+     * `parent` (default: this app; it must be under this app). Resolves to the
+     * new subject, or null when cancelled.
+     */
+    async form({ class: classSubject, parent, propVals } = {}) {
+      return send('form', { class: classSubject, parent, propVals });
     },
 
     /** `{ locale, placement }`: the person's language, and 'page' or 'tab'. */
