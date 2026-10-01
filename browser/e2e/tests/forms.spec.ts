@@ -196,8 +196,7 @@ test.describe('forms', async () => {
   test('every field type is added and survives a reload', async ({ page }) => {
     // 24 fields x ~5 resource saves each. Comfortable locally (~25s alone,
     // ~38s under load) but the long pole of this file, and CI boxes are
-    // slower — keep the tripled budget. The regression walk below does not
-    // need it.
+    // slower — keep the tripled budget.
     test.slow();
 
     const formSubject = await createForm(page, 'Every field type');
@@ -227,6 +226,13 @@ test.describe('forms', async () => {
   test('create a form, sync its properties, and persist across reload', async ({
     page,
   }) => {
+    // Four full page boots (Table, back to the Form, reload, Table again) on
+    // top of ~10 sync waits. Under a loaded Dagger shard each `openSubject`
+    // alone can take 10s+, and run 36788767633 ran out the default 60s at a
+    // different step on each of its three attempts — never at a step's own
+    // timeout.
+    test.slow();
+
     // --- 1. Create the Form (also provisions a data Class + Table + Page 1) ---
     const formSubject = await createForm(page, 'Contact us');
 
