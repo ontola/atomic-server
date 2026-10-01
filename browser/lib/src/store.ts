@@ -527,6 +527,8 @@ export class Store {
   /** One presence manager per drive; managers remove themselves when
    *  their last subscriber leaves. */
   private presenceManagers: Map<string, DrivePresenceManager> = new Map();
+  /** This tab's presence session, shared by every channel it announces in. */
+  public readonly presenceSessionId: string = crypto.randomUUID();
   private injectedFetch: Fetch;
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */
@@ -6016,6 +6018,38 @@ export class Store {
     }
 
     return manager;
+  }
+
+  /**
+   * The presence channel for viewing `subject`, when it isn't the drive's:
+   * the nearest resource at or above it that carries its own `read` list.
+   * That is what an invite or a share writes to, so it is where someone given
+   * this one thing out of a drive they can't open can meet the people who
+   * can. Host and guest compute it from the same resource data, so they land
+   * in the same channel. `undefined` means the drive's channel covers it.
+   * Only walks resources already loaded; a parent that isn't is the top.
+   */
+  public presenceScope(subject: string): string | undefined {
+    let current = this.resources.get(this.normalizeSubject(subject));
+
+    for (let depth = 0; current && depth < 32; depth++) {
+      if (current.error || current.loading) return undefined;
+      if (current.hasClasses(server.classes.drive)) return undefined;
+
+      const readers = current.get(core.properties.read);
+
+      if (Array.isArray(readers) && readers.length > 0) {
+        return current.subject;
+      }
+
+      const parent = current.get(core.properties.parent);
+
+      if (typeof parent !== 'string') return undefined;
+
+      current = this.resources.get(this.normalizeSubject(parent));
+    }
+
+    return undefined;
   }
 
   /** Subscribe to raw presence payloads for a drive. Transport-level —
