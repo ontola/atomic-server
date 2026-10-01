@@ -119,6 +119,13 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       originalMessages: transformedMessages,
       generateMessageId: this.idGenerator,
       messageMetadata: ({ part }) => {
+        // Each tool step resends the whole context, so the summed usage below
+        // is far above the real context size. The last step's input is what
+        // the next request will start from, so that is what compaction uses.
+        if (part.type === 'finish-step') {
+          return { contextTokens: part.usage.inputTokens };
+        }
+
         if (part.type === 'finish') {
           return {
             inputTokensUsed: part.totalUsage.inputTokens,
