@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
   drawCanvasStrokes,
+  drawSelectionHalo,
   drawSelectionOverlay,
   HANDLE_RADIUS,
   onCanvasImageLoaded,
@@ -107,6 +108,9 @@ const ERASE_SCREEN_RADIUS = 15;
 type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
 
 /** Screen-pixel radius around a selection corner that grabs the scale handle. */
+/** Finger wobble below this still counts as a tap on the color/size buttons. */
+const FAN_DRAG_THRESHOLD = 10;
+
 const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 14;
 /** Font size of a new text element, in screen pixels at the current zoom. */
 const NEW_TEXT_SCREEN_SIZE = 28;
@@ -312,6 +316,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     pointerId: number;
     type: 'color' | 'width';
     buttonCenter: { x: number; y: number };
+    /** Where the press landed; a tap is measured against this, not the centre. */
+    start: { x: number; y: number };
     dragged: boolean;
   } | null>(null);
 
@@ -579,6 +585,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         .map(i => elementBounds(list[i])),
     );
 
+    drawSelectionHalo(
+      ctx,
+      selectionRef.current.filter(i => list[i]).map(i => list[i]),
+      scaleRef.current,
+      offsetRef.current.x,
+      offsetRef.current.y,
+      '#3b82f6',
+    );
     drawSelectionOverlay(
       ctx,
       lassoPathRef.current,
@@ -1278,6 +1292,26 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setStrokes(next);
     void commitReplace(next, pre);
   }, [commitReplace, selectElements]);
+
+  /** Recolor the selected strokes and text as one undoable step. */
+  const recolorSelection = useCallback(
+    (color: number) => {
+      const picked = new Set(selectionRef.current);
+
+      if (picked.size === 0) return;
+
+      const pre = strokesRef.current;
+      const next = pre.map((el, i) =>
+        picked.has(i) && el.kind !== 'image' ? { ...el, color } : el,
+      );
+
+      if (next.every((el, i) => el === pre[i])) return;
+
+      setStrokes(next);
+      void commitReplace(next, pre);
+    },
+    [commitReplace],
+  );
 
   /** The topmost element under a point (a tap), or -1. */
   const hitTestAt = (x: number, y: number): number => {
@@ -2066,6 +2100,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         pointerId: e.pointerId,
         type,
         buttonCenter: centre,
+        start: { x: e.clientX, y: e.clientY },
         dragged: false,
       };
       setFanType(type);
@@ -2085,9 +2120,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
       const dx = e.clientX - g.buttonCenter.x;
       const dy = e.clientY - g.buttonCenter.y;
-      const dragLen = Math.hypot(dx, dy);
+      const dragLen = Math.hypot(e.clientX - g.start.x, e.clientY - g.start.y);
 
-      if (!g.dragged && dragLen >= SCRUB_DRAG_THRESHOLD) {
+      if (!g.dragged && dragLen >= FAN_DRAG_THRESHOLD) {
         g.dragged = true;
         setFanPeek(false);
       }
@@ -2131,6 +2166,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         if (type === 'color') {
           setPenColor(prevColor);
           setPrevColor(penColor);
+          recolorSelection(prevColor);
         } else {
           setPenWidth(prevWidth);
           setPrevWidth(penWidth);
@@ -2145,6 +2181,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (type === 'color' && pickedColor !== null) {
         setPrevColor(penColor);
         setPenColor(pickedColor);
+        recolorSelection(pickedColor);
       } else if (type === 'width' && pickedWidth !== null) {
         setPrevWidth(penWidth);
         setPenWidth(pickedWidth);
@@ -2157,6 +2194,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       penWidth,
       prevColor,
       prevWidth,
+      recolorSelection,
     ],
   );
 
