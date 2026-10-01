@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CollectionBuilder,
   core,
@@ -14,15 +14,6 @@ export interface DriveApp {
   name: string;
   /** The row classes this app can show. */
   renders: string[];
-}
-
-export interface DriveApps {
-  apps: DriveApp[];
-  /**
-   * Ask again. Call it when a menu that lists the apps opens, so opening it
-   * always reflects what the drive holds now.
-   */
-  refresh: () => void;
 }
 
 /**
@@ -79,46 +70,22 @@ const sameApp = (a: DriveApp | undefined, b: DriveApp | undefined) =>
     a.renders.every((c, i) => c === b.renders[i]));
 
 /**
- * A resource whose state says nothing about what it is: a draft that has not
- * been saved, or a placeholder that is still loading or failed.
- */
-const undecided = (resource: Resource) =>
-  resource.new ||
-  resource.subject.startsWith('_new:') ||
-  resource.loading ||
-  !!resource.error;
-
-/**
  * The apps on this drive, so one can be chosen as a way of looking at a table.
  *
- * Three sources, each covering what the others miss:
- *
- * - a query for the drive's app class when the page mounts;
- * - every resource the store takes in afterwards — a local save, another tab's
- *   commit, a drive sync — checked against the app class as it lands;
- * - the same query again whenever `refresh` is called, which the menus that
- *   list apps do as they open.
- *
- * The third exists because the second only hears about resources the store
- * announces. A resource whose state changed without a notification — a sync
- * delta that could not apply and was repaired later, an echo folded into a
- * resource in place — is not announced, and was then missing from "+ Add view"
- * until a reload (#1846).
- *
- * Every answer is folded in as it arrives, and each resource is read from the
- * store at that moment, so a slow read cannot hold back the others, and an
- * older answer cannot overwrite a newer one: all of them read the same live
- * resource.
+ * Live: one query when the page mounts, then every resource the store takes in
+ * — a local save, another tab's commit, a drive sync landing after navigation
+ * — is checked against the app class and folded in. Reading only on mount left
+ * an app installed a moment before opening a table missing from its menu until
+ * a reload (#1846).
  *
  * Resolved in state rather than read during render: the app class is minted
  * per drive, so this waits on a lookup, and filling a cache re-renders
  * nothing.
  */
-export function useDriveApps(drive: string | undefined): DriveApps {
+export function useDriveApps(drive: string | undefined): DriveApp[] {
   const store = useStore();
   const appClass = useAppClass(drive);
   const [apps, setApps] = useState<DriveApp[]>([]);
-  const reload = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +93,6 @@ export function useDriveApps(drive: string | undefined): DriveApps {
 
     const cleanup = () => {
       cancelled = true;
-      reload.current = () => undefined;
       offs.forEach(off => off());
     };
 
@@ -141,91 +107,83 @@ export function useDriveApps(drive: string | undefined): DriveApps {
     }
 
     const known = new Map<string, DriveApp>();
-    let rendersProperty: string | undefined;
+    // Subjects a live event has already decided. The mount query may have
+    // been answered before that event, so it must not overrule it.
+    const decided = new Set<string>();
+    let queried = false;
+
+    const publish = () => {
+      if (!cancelled) setApps([...known.values()]);
+    };
 
     const fold = (subject: string, app: DriveApp | undefined) => {
-      if (cancelled || sameApp(known.get(subject), app)) return;
+      decided.add(subject);
+
+      if (sameApp(known.get(subject), app)) return;
 
       if (app) known.set(subject, app);
       else known.delete(subject);
 
-      setApps([...known.values()]);
+      // Until the query answers, its own publish covers this.
+      if (queried) publish();
     };
 
-    const read = (resource: Resource) => {
-      if (undecided(resource)) return;
-
-      fold(resource.subject, readDriveApp(resource, appClass, rendersProperty));
-    };
-
-    const load = async () => {
-      // Looked up on every load: a drive can gain the property after mount.
+    (async () => {
       const schema = await findSchema(store, drive, pluginSchema());
+      const rendersProperty = schema.properties?.renders;
 
       if (cancelled) return;
 
-      if (schema.properties?.renders !== rendersProperty) {
-        rendersProperty = schema.properties?.renders;
+      // Subscribed before the query, so nothing that lands while it runs is
+      // lost between the answer and the listener.
+      offs.push(
+        store.on(StoreEvents.ResourceUpdated, resource => {
+          // An unsaved draft is not an app yet (its save notifies again), and
+          // a placeholder that is still loading or failed says nothing about
+          // what the resource is.
+          if (resource.new || resource.subject.startsWith('_new:')) return;
+          if (resource.loading || resource.error) return;
 
-        // What was folded without it has no `renders`; read it again.
-        for (const subject of known.keys()) {
-          const resource = store.resources.get(subject);
-          if (resource) read(resource);
-        }
-      }
+          fold(
+            resource.subject,
+            readDriveApp(resource, appClass, rendersProperty),
+          );
+        }),
+        store.on(StoreEvents.ResourceRemoved, subject =>
+          fold(subject, undefined),
+        ),
+      );
 
-      // A fresh collection each time: a cached page is exactly the stale
-      // answer a refresh is asked to replace.
-      const members = await new CollectionBuilder(store)
+      const collection = new CollectionBuilder(store)
         .setProperty(core.properties.isA)
         .setValue(appClass)
         .setPageSize(100)
-        .build()
-        .getAllMembers();
+        .build();
 
-      if (cancelled) return;
+      for (const subject of await collection.getAllMembers()) {
+        if (cancelled) return;
+        if (decided.has(subject)) continue;
 
-      // Apps this hook knows of that the query did not return: read them
-      // again rather than trusting either side, so a removed class drops out
-      // and one the index has not caught up with stays.
-      for (const subject of known.keys()) {
-        if (members.includes(subject)) continue;
+        const resource = await store.getResource(subject);
 
-        const resource = store.resources.get(subject);
-        if (resource) read(resource);
+        // `getResource` may itself have notified and decided it by now.
+        if (decided.has(subject)) continue;
+
+        const app = readDriveApp(resource, appClass, rendersProperty);
+
+        if (app) known.set(subject, app);
       }
 
-      // In parallel, and each folded as it resolves: `getResource` waits for a
-      // resource that is still loading or being repaired, and one of those
-      // must not keep every other app out of the menu.
-      await Promise.all(
-        members.map(subject =>
-          store.getResource(subject).then(
-            resource => {
-              if (!cancelled) read(resource);
-            },
-            () => undefined,
-          ),
-        ),
-      );
-    };
-
-    const run = () => void load().catch(() => undefined);
-
-    offs.push(
-      store.on(StoreEvents.ResourceUpdated, read),
-      store.on(StoreEvents.ResourceRemoved, subject =>
-        fold(subject, undefined),
-      ),
-    );
-
-    reload.current = run;
-    run();
+      queried = true;
+      publish();
+    })().catch(() => {
+      // A failed query still leaves the live listener; show what it found.
+      queried = true;
+      publish();
+    });
 
     return cleanup;
   }, [store, drive, appClass]);
 
-  const refresh = useCallback(() => reload.current(), []);
-
-  return { apps, refresh };
+  return apps;
 }
