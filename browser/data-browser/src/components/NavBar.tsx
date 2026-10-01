@@ -11,7 +11,6 @@ import {
   server,
   dataBrowser,
 } from '@tomic/react';
-import { paths } from '../routes/paths';
 import { constructOpenURL } from '../helpers/navigation';
 import {
   useNavigateWithTransition,
@@ -29,9 +28,7 @@ import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMen
 import {
   FaArrowLeft,
   FaArrowRight,
-  FaArrowsRotate,
   FaBars,
-  FaBell,
   FaComments,
   FaMagnifyingGlass,
   FaShare,
@@ -256,7 +253,6 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const { enableAI } = useAISettings();
   const { isOpen: aiOpen, setIsOpen } = useAISidebar();
   const appMenu = useAppMenuItems();
-  const navigate = useNavigateWithTransition();
   const hasAiChanges = !!contextResource && changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
@@ -382,6 +378,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         <span>Search</span>
         <Kbd>{displayShortcut(shortcuts.search)}</Kbd>
       </SearchButton>
+      <VerticalDivider />
       <CrumbGroup $iconOnly={iconOnly}>
         {parent && <DirectParent subject={parent} />}
         <EditableBreadcrumb resource={resource} fallback={title} />
@@ -448,26 +445,6 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             Trigger={ParentContextMenuTrigger}
           />
         )}
-        {/* Also in the More menu; these two are checked often enough to earn
-         * their own icon. Same muted color as the bar's other buttons. */}
-        <NavIconButton
-          color='textLight'
-          type='button'
-          title='Notifications'
-          data-testid='navbar-notifications'
-          onClick={() => navigate(paths.notifications)}
-        >
-          <FaBell />
-        </NavIconButton>
-        <NavIconButton
-          color='textLight'
-          type='button'
-          title='Sync'
-          data-testid='navbar-sync'
-          onClick={() => navigate(paths.sync)}
-        >
-          <FaArrowsRotate />
-        </NavIconButton>
       </ButtonArea>
     </NavBarWrapper>
   );
@@ -558,6 +535,13 @@ const Kbd = styled.kbd`
   border-radius: ${p => p.theme.radius};
   padding: 0 0.3rem;
   margin-inline-start: 0.25rem;
+`;
+
+const VerticalDivider = styled.div`
+  width: 1px;
+  background-color: ${props => props.theme.colors.bg2};
+  height: 1.5rem;
+  margin-inline: ${p => p.theme.size(1)};
 `;
 
 const Spacer = styled.span`

@@ -6,9 +6,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 - Tables: deleting a row you typed in the same session no longer shows its
   neighbour twice until you reload.
-- Top bar: notifications and sync have their own icon buttons to the right of
-  More (they stay in the menu too), in the same color as the other buttons. The
-  divider after Search is gone.
+- Sidebar: notifications and sync have their own icon buttons next to Settings
+  (they stay in the account menu too), in the same muted color as the menu's
+  items, with an unread dot on the bell. The dividers in the menu are gone.
 - Share: names under "People with access" open that person's profile.
 - Error toasts: long subject URLs are shortened in the message. Copy still
   copies the full text.

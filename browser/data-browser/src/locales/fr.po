@@ -1329,7 +1329,7 @@ msgstr "Document"
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/components/NavBar.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
@@ -9843,9 +9843,10 @@ msgstr ""
 msgid "Use this secret and sign out"
 msgstr ""
 
-#: src/components/NavBar.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
@@ -10349,4 +10350,9 @@ msgstr ""
 #. 0: count
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 msgid "Set {0} values"
+msgstr ""
+
+#. 0: getSyncLabel(syncStatus)
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Sync: {0}"
 msgstr ""
