@@ -45,6 +45,7 @@ import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import { notifications } from './ontologies/notifications.js';
+import { conversations } from './ontologies/conversations.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import {
@@ -466,6 +467,9 @@ const embeddedVocabulary = new Set<string>([
   // lib/defaults/notifications.json, likewise not on the catalog yet.
   ...Object.values(notifications.classes),
   ...Object.values(notifications.properties),
+  // lib/defaults/conversations.json, likewise.
+  ...Object.values(conversations.classes),
+  ...Object.values(conversations.properties),
 ]);
 
 /** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */
@@ -517,6 +521,9 @@ function commitLogValuesEqual(
 export class Store {
   /** A list of all functions that need to be called when a certain resource is updated */
   public subscribers: Map<string, ResourceCallback[]>;
+  /** Subjects held live on their own, not via the open drive: see
+   *  {@link Store.subscribeLive}. Counted, so each holder can let go. */
+  public liveSubjects: Map<string, number> = new Map();
   private loroSyncSubscribers: Map<string, LoroSyncCallback[]> = new Map();
   private loroEphemeralSubscribers: Map<string, LoroEphemeralCallback[]> =
     new Map();
@@ -5792,6 +5799,36 @@ export class Store {
           normalized,
         ),
     );
+  }
+
+  /**
+   * Keep changes to `subject`, and to its children, arriving while the app
+   * runs. The open drive's subscription covers everything in it; this is for
+   * what lives elsewhere and was shared with you on its own, like a chatroom
+   * in someone else's drive, which that subscription can never reach.
+   * Survives reconnects. Returns a function that lets go.
+   */
+  public subscribeLive(subject: string): () => void {
+    const normalized = this.normalizeSubject(subject);
+    const count = this.liveSubjects.get(normalized) ?? 0;
+    this.liveSubjects.set(normalized, count + 1);
+
+    if (count === 0) {
+      this.getWebSocketForSubject(normalized)?.subscribeResource(normalized);
+    }
+
+    return () => {
+      const left = (this.liveSubjects.get(normalized) ?? 1) - 1;
+
+      if (left > 0) {
+        this.liveSubjects.set(normalized, left);
+
+        return;
+      }
+
+      this.liveSubjects.delete(normalized);
+      this.getWebSocketForSubject(normalized)?.unsubscribeResource(normalized);
+    };
   }
 
   /** Drive resources use drive-wide fan-out. Mounted agent profiles also need

@@ -1,9 +1,11 @@
 import { useMessageSpeaker } from '../../chunks/Demo/messageSpeaker';
 import {
   commits,
+  conversations,
   core,
   dataBrowser,
   Resource,
+  server,
   Store,
   useArray,
   useCanWrite,
@@ -41,6 +43,10 @@ import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
 import { ResourceInline } from '../ResourceInline';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { TypingIndicator } from '../../components/Presence/TypingIndicator';
+import {
+  useSealedMessage,
+  type SealedState,
+} from '../Conversation/sealedMessages';
 
 const CHAT_PAGE_SIZE = 50;
 
@@ -302,6 +308,19 @@ export async function sendChatMessage(
 
 type SetReplyToType = (subject: string) => unknown;
 
+/** What a sealed message shows: its text, nothing while it is being opened,
+ *  or why it can't be read. */
+function sealedText(state: SealedState & { sealed: true }): string {
+  if (state.payload === undefined) {
+    return '';
+  }
+
+  return (
+    state.payload?.text ??
+    'This message was sent before you joined, or it was changed, so it can not be opened.'
+  );
+}
+
 interface MessageProps {
   subject: string;
   /** Is called when the `reply` button is pressed */
@@ -314,7 +333,9 @@ const MESSAGE_MAX_LEN = 500;
 /** Single message shown in a ChatRoom */
 const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   const resource = useResource(subject);
-  const [description] = useString(resource, core.properties.description);
+  const sealed = useSealedMessage(subject);
+  const [plainDescription] = useString(resource, core.properties.description);
+  const description = sealed.sealed ? sealedText(sealed) : plainDescription;
   const [isA] = useArray(resource, core.properties.isA);
   const isFollowEvent = isA.includes(dataBrowser.classes.followEvent);
   // Creation date + creator come from the genesis change in the resource's own
@@ -322,9 +343,11 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   // a refresh. The commit subject is intentionally NOT passed.
   const createdAt = useCreatedAt(resource);
   const createdBy = useMessageSpeaker(resource);
-  const [replyTo] = useSubject(resource, dataBrowser.properties.replyTo);
+  const [plainReplyTo] = useSubject(resource, dataBrowser.properties.replyTo);
+  const replyTo = sealed.sealed ? sealed.payload?.replyTo : plainReplyTo;
   const navigate = useNavigateWithTransition();
-  const canWrite = useCanWrite(resource);
+  // A sealed message has no plain text to edit in the form.
+  const canWrite = useCanWrite(resource) && !sealed.sealed;
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(subject);
@@ -528,7 +551,9 @@ const MESSAGE_LINE_MAX_LEN = 50;
 /** Small single line preview of a message, useful in replies */
 function MessageLine({ subject }: MessageLineProps) {
   const { resource, ready } = useResourceSnapshot(subject);
-  const [description] = useString(resource, core.properties.description);
+  const sealed = useSealedMessage(subject);
+  const [plainDescription] = useString(resource, core.properties.description);
+  const description = sealed.sealed ? sealedText(sealed) : plainDescription;
   // Author from the resource's own genesis metadata (createdBy) — not a commit
   // fetch, so it survives a refresh.
   const author = useMessageSpeaker(resource);
@@ -759,6 +784,9 @@ const EmptyChatState = styled.div`
 const ONLY_MESSAGES = [
   { property: core.properties.isA, value: dataBrowser.classes.message },
 ];
+const ONLY_SEALED_MESSAGES = [
+  { property: core.properties.isA, value: conversations.classes.sealedMessage },
+];
 
 /** Every resource is stamped with the drive it belongs to at genesis, which
  *  for a resource shared from elsewhere is the OWNER's drive, not the
@@ -773,6 +801,8 @@ const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 export function useChatMessages(
   subject: string,
   property: string = core.properties.parent,
+  /** A Conversation's messages are SealedMessages. */
+  sealed = false,
 ) {
   const [messages, setMessages] = useState<string[]>([]);
 
@@ -783,13 +813,16 @@ export function useChatMessages(
   // zero. Until the thread resource has loaded its stamp there is nothing
   // better than the default, so leave it alone.
   const thread = useResource(subject);
-  const threadDrive = thread.get(DRIVE_PROP);
+  // A Conversation is a drive itself, so it carries no stamp of its own.
+  const threadDrive =
+    thread.get(DRIVE_PROP) ??
+    (thread.hasClasses(server.classes.drive) ? subject : undefined);
 
   const { collection, ready, invalidateCollection } = useCollection(
     {
       property,
       value: subject,
-      filters: ONLY_MESSAGES,
+      filters: sealed ? ONLY_SEALED_MESSAGES : ONLY_MESSAGES,
       sort_by: commits.properties.createdAt,
       sort_desc: false,
       drive: typeof threadDrive === 'string' ? threadDrive : undefined,

@@ -134,6 +134,7 @@ msgstr "AI Agents"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
+#: src/views/Conversation/NewMessageDialog.tsx
 #: src/views/Installation/AssignRights.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1044,6 +1045,7 @@ msgstr "Remove tag"
 msgid "Loading messages..."
 msgstr "Loading messages..."
 
+#: src/components/SideBar/MessagesPanel.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
 msgstr "No messages yet"
@@ -9364,6 +9366,7 @@ msgstr "Invite sent to {0}"
 msgid "Invite sent to {0} people"
 msgstr "Invite sent to {0} people"
 
+#: src/components/Presence/PresenceAvatarMenu.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Message"
 msgstr "Message"
@@ -10298,3 +10301,44 @@ msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pa
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
 msgstr "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+
+#: src/components/SideBar/MessagesPanel.tsx
+msgid "Messages"
+msgstr "Messages"
+
+#: src/components/SideBar/MessagesPanel.tsx
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "New message"
+msgstr "New message"
+
+#: src/helpers/conversations/conversations.ts
+msgid "This person has no encryption key yet. They need to open Atomic once before you can message them."
+msgstr "This person has no encryption key yet. They need to open Atomic once before you can message them."
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "This message was sent before you joined, or it was changed, so it can not be opened."
+msgstr "This message was sent before you joined, or it was changed, so it can not be opened."
+
+#: src/views/Conversation/ConversationPage.tsx
+msgid "End-to-end encrypted. Only the people in this conversation can read it."
+msgstr "End-to-end encrypted. Only the people in this conversation can read it."
+
+#: src/views/Conversation/ConversationTitle.tsx
+msgid "Only you"
+msgstr "Only you"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Who"
+msgstr "Who"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+msgstr "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Starting…"
+msgstr "Starting…"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Start conversation"
+msgstr "Start conversation"

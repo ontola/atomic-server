@@ -4,6 +4,15 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Messages: send someone a direct message that only the two of you can
+  read. Pick "Message" on anyone's avatar, or start one from the new Messages
+  section in the sidebar with their Atomic ID. The server that holds the
+  conversation stores it encrypted. It can see who talks to whom and when,
+  not what is said. Someone who has never opened the app since this release
+  has no key yet, and the app says so.
+- `@tomic/lib`: the `conversations` ontology, and `Store.subscribeLive` to
+  keep a resource outside the open drive live.
+
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while

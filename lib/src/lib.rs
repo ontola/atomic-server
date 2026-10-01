@@ -73,6 +73,8 @@ pub mod collections;
 pub mod commit;
 #[cfg(feature = "config")]
 pub mod config;
+#[cfg(feature = "db")]
+pub mod conversation;
 pub mod datatype;
 #[cfg(feature = "db")]
 pub mod db;
