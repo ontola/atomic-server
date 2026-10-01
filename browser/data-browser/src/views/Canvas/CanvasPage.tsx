@@ -248,6 +248,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // Pixels the toolbar is lifted so the app's bottom navigation bar never
   // covers it (see the effect below).
   const [toolbarLift, setToolbarLift] = useState(0);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const textOpen = textEdit !== null;
 
   // Wheel events (pan AND zoom) are ignored if the current wheel session
@@ -618,6 +619,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       const covers = n && n.top > a.top + a.height / 2;
 
       setToolbarLift(covers ? Math.max(0, Math.round(a.bottom - n.top)) : 0);
+
+      // Popups that sit above the toolbar follow its height (it may wrap).
+      const bar = toolbarRef.current;
+
+      if (bar) {
+        area.style.setProperty(
+          '--canvas-toolbar-h',
+          `${Math.round(bar.getBoundingClientRect().height)}px`,
+        );
+      }
     };
 
     update();
@@ -626,6 +637,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     const later = window.setTimeout(update, 500);
 
     ro.observe(area);
+
+    if (toolbarRef.current) ro.observe(toolbarRef.current);
+
     window.addEventListener('resize', update);
     window.visualViewport?.addEventListener('resize', update);
 
@@ -2432,7 +2446,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           onResourcePicked={subject => void placeImage(subject)}
           onNewFilePicked={file => void uploadAndPlaceImage(file)}
         />
-        <BottomToolbar $lift={toolbarLift}>
+        <BottomToolbar ref={toolbarRef} $lift={toolbarLift}>
           <CircleButton
             type='button'
             title='Canvas help'
@@ -2762,7 +2776,9 @@ const zoomFraction = (z: number): number =>
 
 const ZoomHint = styled.div<{ $lift: number }>`
   position: absolute;
-  bottom: calc(${p => p.theme.size(2)} + 64px + ${p => p.$lift}px);
+  bottom: calc(
+    ${p => p.theme.size(2)} + var(--canvas-toolbar-h, 64px) + ${p => p.$lift}px
+  );
   left: 50%;
   transform: translateX(-50%);
   z-index: 4;
@@ -2844,11 +2860,15 @@ const BottomToolbar = styled.div<{ $lift: number }>`
   align-items: center;
   gap: 6px;
   padding: 6px;
-  /* Buttons keep their size and stay round; a toolbar wider than the screen
-     scrolls sideways instead of squeezing them. */
+  /* Buttons keep their size and stay round; they wrap instead of squeezing. */
   --canvas-button-size: 44px;
+  /* Natural width (not half the area, which left:50% would allow), capped to
+     the area; beyond that the buttons wrap. */
+  width: max-content;
   max-width: calc(100% - 16px);
-  overflow-x: auto;
+  /* Too little room: a second row, not a sideways scroll. */
+  flex-wrap: wrap;
+  justify-content: center;
 
   background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
@@ -2863,8 +2883,8 @@ const BottomToolbar = styled.div<{ $lift: number }>`
     right: 0;
     transform: none;
     bottom: ${p => p.$lift}px;
+    width: auto;
     max-width: none;
-    justify-content: space-evenly;
     border-radius: 0;
     border-width: 1px 0 0;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.12);
