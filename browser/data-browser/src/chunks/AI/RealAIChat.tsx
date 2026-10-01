@@ -452,7 +452,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         // A failed request must not spend more quota on compaction.
         if (isError) return;
 
-        const inputTokens = message.metadata?.inputTokensUsed ?? 0;
+        const inputTokens =
+          message.metadata?.contextTokens ??
+          message.metadata?.inputTokensUsed ??
+          0;
         const threshold = autoCompactTokenThresholdRef.current;
 
         if (threshold !== null && inputTokens > threshold) {
