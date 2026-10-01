@@ -1222,6 +1222,34 @@ export class Resource<C extends OptionalClass = any> {
     this._loroVersionAtLastSave = new VersionVectorClass(merged);
   }
 
+  /**
+   * Rewind the save cursor to the empty version so the next drain export
+   * carries the WHOLE oplog instead of a delta. Recovery path for the
+   * server's pending-deps rejection ("your update depends on ops I don't
+   * have"): the cursor sits past ops the server never received — usually
+   * because an earlier commit was lost in transit after the cursor advanced —
+   * so every delta exported from it is un-importable. An update from the
+   * empty version is self-contained: the server merges it and recovers the
+   * missing range along the way.
+   *
+   * Rewound, not cleared: an `undefined` cursor reads as "fresh", and the
+   * next import or merge (`initLoroSaveCursorIfFresh`) would re-seat it at
+   * the current version — past the unsent edit, which the drain would then
+   * see as saved and drop.
+   *
+   * @internal store-level drain only — not part of the public API.
+   */
+  public clearLoroSaveCursor(): void {
+    if (!this._loroDoc) {
+      this._loroVersionAtLastSave = undefined;
+
+      return;
+    }
+
+    const { VersionVector: VersionVectorClass } = LoroLoader.Loro;
+    this._loroVersionAtLastSave = new VersionVectorClass(new Map());
+  }
+
   /** Base64-encode the current save cursor (last-synced Loro version) for
    *  durable storage. Returns undefined when nothing has synced yet (the
    *  cursor is the resource's whole history → handled as a first commit).
@@ -1490,8 +1518,18 @@ export class Resource<C extends OptionalClass = any> {
     this._loroDoc.import(snapshot);
     this._loroMap = this._loroDoc.getMap('properties');
 
+    // Carry over the source's cursor VALUE, not the doc's current version.
+    // Stamping `oplogVersion()` here would mark any not-yet-drained local
+    // ops as "already saved" — the next export would start past them and
+    // silently drop the edit on the wire (the incident class described in
+    // `initLoroSaveCursorIfFresh`). Copy via encode/decode: the clone's doc
+    // was seeded from the source's full snapshot, so the vector is valid
+    // for it, and sharing the WASM object would tie its lifetime to the
+    // source doc.
     this._loroVersionAtLastSave = resource._loroVersionAtLastSave
-      ? this._loroDoc.oplogVersion()
+      ? LoroLoader.Loro.VersionVector.decode(
+          resource._loroVersionAtLastSave.encode(),
+        )
       : undefined;
   }
 
@@ -1601,6 +1639,14 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Cannot merge resources with different subjects');
     }
 
+    // Captured before any mutation below: does `this` already carry real
+    // content? A failed fetch (e.g. a 404 for a subject only known to the
+    // locally-connected server, never published upstream) produces an empty
+    // placeholder Resource with nothing but `.error` set. Letting that
+    // clobber `.error` here would flip an otherwise fully-populated,
+    // healthy resource into a permanent "not found" state.
+    const hadContent = this.getEntries().length > 0;
+
     const incomingSnapshot = Resource.extractLoroSnapshot(resourceB);
 
     if (
@@ -1705,7 +1751,17 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.new = resourceB.new;
-    this.error = resourceB.error;
+
+    // Adopt the incoming error UNLESS it's a content-free failure trying to
+    // override a resource that already had something better. A successful
+    // incoming resource (no error) always wins — that's the recovery path.
+    const incomingIsEmptyFailure =
+      resourceB.error !== undefined && resourceB.getEntries().length === 0;
+
+    if (!incomingIsEmptyFailure || !hadContent) {
+      this.error = resourceB.error;
+    }
+
     this.commitError = resourceB.commitError;
 
     // Only update _lastCommit if the remote version has one and we don't have one,

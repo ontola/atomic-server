@@ -13,6 +13,7 @@ import { ai } from './ai.js';
 import { forks } from './forks.js';
 import { notifications } from './notifications.js';
 import { i18n } from './i18n.js';
+import { forms } from './forms.js';
 
 export function initOntologies(): void {
   registerOntologies(
@@ -25,5 +26,6 @@ export function initOntologies(): void {
     forks,
     notifications,
     i18n,
+    forms,
   );
 }

@@ -2,6 +2,7 @@ import {
   hexToBytes,
   isBlobSubject,
   blobHashHex,
+  server,
   type Resource,
 } from '@tomic/lib';
 import { useEffect, useState } from 'react';
@@ -23,21 +24,25 @@ export function useFileObjectUrl(
   fallbackUrl?: string,
 ): string | undefined {
   const blobValue = resource.get(BLOB);
+  const mimetypeValue = resource.get(server.properties.mimetype);
 
   return useBlobObjectUrl(
     typeof blobValue === 'string' ? blobValue : undefined,
     fallbackUrl,
+    typeof mimetypeValue === 'string' ? mimetypeValue : undefined,
   );
 }
 
 /**
  * {@link useFileObjectUrl} for a bare blob reference (`atomic:blob:<hash>`),
  * for places that have no File resource at hand, such as an image in a
- * document, which keeps only its URL.
+ * document, which keeps only its URL. Pass the file's `mimetype` when it is
+ * known: an SVG only renders from an object URL typed `image/svg+xml`.
  */
 export function useBlobObjectUrl(
   blobDid: string | undefined,
   fallbackUrl?: string,
+  mimetype?: string,
 ): string | undefined {
   const store = useStore();
   const clientDb = store.getClientDb?.();
@@ -62,7 +67,12 @@ export function useBlobObjectUrl(
         if (cancelled) return;
 
         if (bytes) {
-          revoked = URL.createObjectURL(new Blob([bytes as BlobPart]));
+          // The Blob's type becomes the object URL's Content-Type. Without it
+          // an `<img>` can still sniff raster formats, but never SVG — browsers
+          // only render SVG when the type is exactly `image/svg+xml`.
+          revoked = URL.createObjectURL(
+            new Blob([bytes as BlobPart], mimetype ? { type: mimetype } : {}),
+          );
         }
 
         setResolved({ blobDid, clientDb, url: revoked });
@@ -75,7 +85,7 @@ export function useBlobObjectUrl(
       cancelled = true;
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [blobDid, clientDb]);
+  }, [blobDid, clientDb, mimetype]);
 
   if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return fallbackUrl;
 

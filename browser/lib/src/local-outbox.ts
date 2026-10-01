@@ -234,6 +234,26 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
 }
 
 /**
+ * Pattern-match the server's pending-deps rejection: "your Loro delta
+ * depends on ops I never received". Retrying the same delta can never
+ * succeed (the missing base ops won't materialize server-side), but the
+ * write is fully recoverable — the drain reacts by clearing the resource's
+ * save cursor so the next attempt exports a self-contained snapshot, which
+ * the server can always merge. So: not terminal (don't drop), not blocking
+ * (don't park); the caller resets the cursor and lets backoff retry.
+ */
+export function isPendingDepsCommitErrorMessage(message: string): boolean {
+  // Server emits: "Commit's Loro update depends on ops the server does not
+  // have — the update was parked as pending ..." (lib/src/commit.rs).
+  return message.includes('parked as pending');
+}
+
+/** A managed node's refusal of a drive it does not host ("not enrolled"). */
+export function isNotEnrolledMessage(message: string | undefined): boolean {
+  return !!message?.includes('is not enrolled for sync on this node');
+}
+
+/**
  * Pattern-match server errors that mean "this drain cannot succeed by
  * retrying, but the user write is not necessarily lost." Unlike
  * {@link isTerminalCommitErrorMessage} (which drops the entry), a match here
@@ -245,11 +265,6 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
  * Retrying spins the server (see the 401-flood); the only resolutions are a
  * rights change or the user abandoning the edit — neither helped by hammering.
  */
-/** A managed node's refusal of a drive it does not host ("not enrolled"). */
-export function isNotEnrolledMessage(message: string | undefined): boolean {
-  return !!message?.includes('is not enrolled for sync on this node');
-}
-
 export function isUnrecoverableCommitErrorMessage(message: string): boolean {
   // A causality rejection is deterministic for the same Loro update. Keep the
   // local edit visible, but stop sending it once the bounded retry window ends.

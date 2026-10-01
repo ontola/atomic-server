@@ -4,6 +4,26 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Forms (beta): build a form or survey and share a link; guests fill it in
+  without an account and each answer becomes a table row. Create one with
+  New > Form, or from a table with "Create form from this table" (pick its
+  columns). The builder has 21 question types, pages, drag-to-reorder,
+  "Show when" rules that hide questions and pages based on earlier answers,
+  required fields and limits, a Results tab (the table) and a Summary tab
+  (charts). Settings cover public or invite-only access, an open/close
+  schedule, a thank-you message, appearance and custom CSS. Share with a
+  link, QR code or embed snippet. Guests get a small separate app
+  (`@tomic/form-app`, built on the new `@tomic/form-renderer`) with a
+  progress bar and answers saved on their device until they submit.
+  [#875](https://github.com/ontola/atomic-server/issues/875)
+- Forms: share links use the server that hosts the workspace. Without one, the
+  builder says forms need a server instead of offering a link guests cannot open.
+- `@tomic/lib`: the forms ontology (`forms`) is exported and, like
+  `notifications`, fetched from the host rather than atomicdata.dev.
+- Fix: after the server refuses a commit that depends on ops it never
+  received, the next save resends the whole history instead of dropping the
+  edit.
+- Fix: uploaded SVG files display in the data browser.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
