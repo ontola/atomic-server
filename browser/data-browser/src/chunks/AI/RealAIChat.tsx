@@ -12,6 +12,13 @@ import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
 import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
+import {
+  attachRun,
+  createRun,
+  detachRun,
+  getRun,
+  type ChatRunHandlers,
+} from './chatRunRegistry';
 import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
@@ -419,47 +426,91 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     addContextToMessages,
   });
 
+  const handleChatError = (error: Error) => {
+    console.error('AI request failed:', error);
+    // The provider's own words: "NetworkError when attempting to fetch
+    // resource", "401 Unauthorized", "model not found". Rendered next to the
+    // input, where the reason belongs.
+    lastRequestErrorRef.current = error.message || 'Unknown error';
+    setRequestError(lastRequestErrorRef.current);
+  };
+
+  const handleChatFinish: ChatRunHandlers['onFinish'] = ({
+    message,
+    isError,
+    messages: _messages,
+  }) => {
+    if (isError) {
+      message.metadata = {
+        ...(message.metadata || {}),
+        error: lastRequestErrorRef.current ?? 'The response was interrupted.',
+      };
+    } else {
+      message.metadata = { ...message.metadata, error: undefined };
+      setRequestError(undefined);
+    }
+
+    setMessages(previous =>
+      previous.map(m => (m.id === message.id ? { ...message } : m)),
+    );
+    onNewMessage(message);
+
+    // A failed request must not spend more quota on compaction.
+    if (isError) return;
+
+    const inputTokens = message.metadata?.inputTokensUsed ?? 0;
+    const threshold = autoCompactTokenThresholdRef.current;
+
+    if (threshold !== null && inputTokens > threshold) {
+      compact(_messages);
+    }
+  };
+
+  const runHandlers = {
+    onError: handleChatError,
+    onFinish: handleChatFinish,
+    save: onNewMessage,
+  };
+
+  // The full-page chat keeps its run in a registry, so the reply carries on
+  // (and is saved) while the reader is on another page.
+  const [run] = useState(() =>
+    fullView && chatSubject
+      ? (getRun(chatSubject) ??
+        createRun(
+          chatSubject,
+          transport,
+          initialMessages ?? [],
+          () => store.newLocalId(),
+          runHandlers,
+        ))
+      : undefined,
+  );
+
+  useEffect(() => {
+    if (run) run.handlers = runHandlers;
+  });
+
+  useEffect(() => {
+    if (!run) return;
+
+    attachRun(run);
+
+    return () => detachRun(run);
+  }, [run]);
+
   const { messages, sendMessage, setMessages, status, stop, regenerate } =
-    useChat({
-      transport,
-      messages: initialMessages,
-      generateId: () => store.newLocalId(),
-      onError: error => {
-        console.error('AI request failed:', error);
-        // The provider's own words: "NetworkError when attempting to fetch
-        // resource", "401 Unauthorized", "model not found". Rendered next to the
-        // input, where the reason belongs.
-        lastRequestErrorRef.current = error.message || 'Unknown error';
-        setRequestError(lastRequestErrorRef.current);
-      },
-      onFinish: ({ message, isError, messages: _messages }) => {
-        if (isError) {
-          message.metadata = {
-            ...(message.metadata || {}),
-            error:
-              lastRequestErrorRef.current ?? 'The response was interrupted.',
-          };
-        } else {
-          message.metadata = { ...message.metadata, error: undefined };
-          setRequestError(undefined);
-        }
-
-        setMessages(previous =>
-          previous.map(m => (m.id === message.id ? { ...message } : m)),
-        );
-        onNewMessage(message);
-
-        // A failed request must not spend more quota on compaction.
-        if (isError) return;
-
-        const inputTokens = message.metadata?.inputTokensUsed ?? 0;
-        const threshold = autoCompactTokenThresholdRef.current;
-
-        if (threshold !== null && inputTokens > threshold) {
-          compact(_messages);
-        }
-      },
-    });
+    useChat(
+      run
+        ? { chat: run.chat }
+        : {
+            transport,
+            messages: initialMessages,
+            generateId: () => store.newLocalId(),
+            onError: handleChatError,
+            onFinish: handleChatFinish,
+          },
+    );
 
   // Save streamed progress even when a tool or provider keeps the run open.
   // The persistence layer updates one message and serializes partial/final saves.
