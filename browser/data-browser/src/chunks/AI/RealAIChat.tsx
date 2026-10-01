@@ -696,6 +696,29 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
   };
 
+  /**
+   * "Try again" after a failed request. Regenerating throws the half reply
+   * away: the thinking that already streamed vanishes, and tool calls that
+   * already ran (resources created, edits made) run a second time. When the
+   * failed reply holds anything, ask the model to carry on from it instead.
+   */
+  const retryLastReply = () => {
+    const last = messages.at(-1);
+    const hasProgress =
+      last?.role === 'assistant' &&
+      last.parts.some(
+        part =>
+          part.type !== 'step-start' &&
+          !(part.type === 'text' && !part.text.trim()),
+      );
+
+    if (hasProgress) {
+      void sendMessage();
+    } else {
+      regenerate();
+    }
+  };
+
   const regenerateMessage = async (message: AtomicUIMessage) => {
     await onRegenerateMessage(message);
 
@@ -916,7 +939,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     ) {
                       void handleSubmit();
                     } else {
-                      regenerate();
+                      retryLastReply();
                     }
                   }}
                 >
