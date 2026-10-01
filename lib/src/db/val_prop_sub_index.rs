@@ -2,7 +2,7 @@
 use crate::{atoms::IndexAtom, errors::AtomicResult, Db, Value};
 
 use super::{
-    query_index::{IndexIterator, SEPARATION_BIT},
+    query_index::{sort_part, IndexIterator, SEPARATION_BIT},
     trees::{Method, Operation, Transaction, Tree},
 };
 
@@ -19,14 +19,25 @@ pub fn add_atom_to_valpropsub_index(
     Ok(())
 }
 
-/// Constructs the Key for the prop_val_sub_index.
+/// Constructs the Key for the val_prop_sub_index. The sort part is left empty
+/// when it equals the reference value, as in
+/// [`super::prop_val_sub_index::propvalsub_key`].
 pub fn valpropsub_key(atom: &IndexAtom) -> Vec<u8> {
+    key_with_sort_part(atom, sort_part(atom))
+}
+
+/// The key as stores before the sort part was left out wrote it.
+pub fn valpropsub_legacy_key(atom: &IndexAtom) -> Vec<u8> {
+    key_with_sort_part(atom, atom.sort_value.as_bytes())
+}
+
+fn key_with_sort_part(atom: &IndexAtom, sort: &[u8]) -> Vec<u8> {
     [
         atom.ref_value.as_bytes(),
         &[SEPARATION_BIT],
         atom.property.as_bytes(),
         &[SEPARATION_BIT],
-        atom.sort_value.as_bytes(),
+        sort,
         &[SEPARATION_BIT],
         atom.subject.as_str().as_bytes(),
     ]
@@ -71,7 +82,12 @@ fn key_to_index_atom(key: &[u8]) -> AtomicResult<IndexAtom> {
     Ok(IndexAtom {
         property: prop.into(),
         ref_value: ref_val.into(),
-        sort_value: sort_val.into(),
+        sort_value: if sort_val.is_empty() {
+            ref_val
+        } else {
+            sort_val
+        }
+        .into(),
         subject: sub.into(),
     })
 }

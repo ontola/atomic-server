@@ -2,7 +2,7 @@
 use crate::{atoms::IndexAtom, errors::AtomicResult, storelike::Storelike, Db, Value};
 
 use super::{
-    query_index::{IndexIterator, SEPARATION_BIT},
+    query_index::{sort_part, IndexIterator, SEPARATION_BIT},
     trees::{Method, Operation, Transaction, Tree},
 };
 
@@ -44,13 +44,27 @@ pub fn add_atom_to_prop_val_sub_index(
 }
 
 /// Constructs the Key for the prop_val_sub_index.
+///
+/// An atom's sort value is its reference value, so the key leaves the sort
+/// part empty then instead of writing a long URL or text twice
+/// ([`sort_part`]). Keys from before that kept it, and are still read.
 pub fn propvalsub_key(atom: &IndexAtom) -> Vec<u8> {
+    key_with_sort_part(atom, sort_part(atom))
+}
+
+/// The key as stores before the sort part was left out wrote it. Removing an
+/// atom deletes this form too, so rows from an older store go with it.
+pub fn propvalsub_legacy_key(atom: &IndexAtom) -> Vec<u8> {
+    key_with_sort_part(atom, atom.sort_value.as_bytes())
+}
+
+fn key_with_sort_part(atom: &IndexAtom, sort: &[u8]) -> Vec<u8> {
     [
         atom.property.as_bytes(),
         &[SEPARATION_BIT],
         atom.ref_value.as_bytes(),
         &[SEPARATION_BIT],
-        atom.sort_value.as_bytes(),
+        sort,
         &[SEPARATION_BIT],
         atom.subject.as_str().as_bytes(),
     ]
@@ -72,7 +86,12 @@ fn key_to_index_atom(key: &[u8], base_domain: Option<&str>) -> AtomicResult<Inde
     Ok(IndexAtom {
         property: prop.into(),
         ref_value: ref_val.into(),
-        sort_value: sort_val.into(),
+        sort_value: if sort_val.is_empty() {
+            ref_val
+        } else {
+            sort_val
+        }
+        .into(),
         subject: crate::Subject::from_raw(sub, base_domain),
     })
 }
@@ -92,5 +111,31 @@ mod test {
         let key = propvalsub_key(&atom);
         let atom2 = key_to_index_atom(&key, None).unwrap();
         assert_eq!(atom, atom2);
+    }
+
+    #[test]
+    fn sort_value_equal_to_the_reference_is_not_written_twice() {
+        let atom = IndexAtom {
+            property: "http://example.com/prop".into(),
+            ref_value: "http://example.com/a/long/value".into(),
+            sort_value: "http://example.com/a/long/value".into(),
+            subject: "http://example.com/subj".into(),
+        };
+        let key = propvalsub_key(&atom);
+        assert!(key.len() < propvalsub_legacy_key(&atom).len());
+        assert_eq!(key_to_index_atom(&key, None).unwrap(), atom);
+        assert_eq!(
+            key_to_index_atom(&propvalsub_legacy_key(&atom), None).unwrap(),
+            atom
+        );
+        // Both forms sit under the same `{property}-{value}-` prefix a lookup scans.
+        let prefix = [
+            atom.property.as_bytes(),
+            &[SEPARATION_BIT],
+            atom.ref_value.as_bytes(),
+            &[SEPARATION_BIT],
+        ]
+        .concat();
+        assert!(key.starts_with(&prefix) && propvalsub_legacy_key(&atom).starts_with(&prefix));
     }
 }
