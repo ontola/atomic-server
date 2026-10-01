@@ -108,6 +108,9 @@ const ERASE_SCREEN_RADIUS = 15;
 type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
 
 /** Screen-pixel radius around a selection corner that grabs the scale handle. */
+/** Finger wobble below this still counts as a tap on the color/size buttons. */
+const FAN_DRAG_THRESHOLD = 10;
+
 const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 14;
 /** Font size of a new text element, in screen pixels at the current zoom. */
 const NEW_TEXT_SCREEN_SIZE = 28;
@@ -313,6 +316,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     pointerId: number;
     type: 'color' | 'width';
     buttonCenter: { x: number; y: number };
+    /** Where the press landed; a tap is measured against this, not the centre. */
+    start: { x: number; y: number };
     dragged: boolean;
   } | null>(null);
 
@@ -2095,6 +2100,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         pointerId: e.pointerId,
         type,
         buttonCenter: centre,
+        start: { x: e.clientX, y: e.clientY },
         dragged: false,
       };
       setFanType(type);
@@ -2114,9 +2120,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
       const dx = e.clientX - g.buttonCenter.x;
       const dy = e.clientY - g.buttonCenter.y;
-      const dragLen = Math.hypot(dx, dy);
+      const dragLen = Math.hypot(e.clientX - g.start.x, e.clientY - g.start.y);
 
-      if (!g.dragged && dragLen >= SCRUB_DRAG_THRESHOLD) {
+      if (!g.dragged && dragLen >= FAN_DRAG_THRESHOLD) {
         g.dragged = true;
         setFanPeek(false);
       }
