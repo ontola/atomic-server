@@ -1093,9 +1093,10 @@ paths, and continued checking after an unreadable file with a failing exit code.
 It also verifies compact line/column diagnostics and optional verbose output.
 `react-compiler-hook.test.mjs` covers UTF-8 source locations, advisory hook JSON,
 per-session content caching, source changes, staged/untracked/deleted files,
-excluded files, subdirectory invocation and the repository hook registration.
-The Claude Code registration is exercised with an Edit event, verifying compact
-advisory JSON and silence on a repeated check through the shared hook command.
+excluded files, subdirectory invocation, ignored non-PostToolUse events and
+advisory output when the hook cannot run. It feeds an Edit event to the script
+through a symlinked path, verifying compact advisory JSON and silence on a
+repeated check. The hook is opt-in personal config, so no agent config is tested.
 
 Automatic Vault scheduling (`vaultAutoBackup.test.ts`) covers sustained-edit
 maximum delay, queued edits across drive switches, late account availability,

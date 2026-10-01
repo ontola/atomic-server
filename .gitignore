@@ -21,10 +21,7 @@ server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad
-.claude/*
-!/.claude/settings.json
-.codex/*
-!/.codex/hooks.json
+.claude
 .antigravitycli
 
 # Release binaries and one-off rustc scratch files at repo root

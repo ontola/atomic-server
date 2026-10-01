@@ -1314,15 +1314,6 @@ export class AtomicServer {
       // and `../../../../../logo.svg`. Browser mount sits at /app, so those
       // resolve to /logo.svg. Place the asset there.
       .withFile('/logo.svg', this.source.file('logo.svg'))
-      // data-browser's react-compiler-hook test checks the hook registrations
-      // at the repository root (`../../../.claude/settings.json` and
-      // `../../../.codex/hooks.json` from data-browser/src), which with the
-      // browser at /app resolve to the filesystem root.
-      .withFile(
-        '/.claude/settings.json',
-        this.source.file('.claude/settings.json'),
-      )
-      .withFile('/.codex/hooks.json', this.source.file('.codex/hooks.json'))
       // browser/lib/src/genesis.test.ts reads the Rust/TS/Dart shared golden
       // vectors fixture via a plain `readFileSync` (not Vite, so the
       // lib-defaults alias below doesn't apply) at

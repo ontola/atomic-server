@@ -32,23 +32,70 @@ IDE extensions using Babel React Compiler can report different results. Run
 `pnpm typecheck` separately for TypeScript errors.
 
 Diagnostics default to `file:line:column — message`; add `--verbose` for code
-frames. The repository's `.codex/hooks.json` also runs this compiler after
-`apply_patch` and Bash tools. It checks staged, unstaged and untracked JS/TS in
-`browser/data-browser/src`, excluding tests, declaration files and workers.
-Content hashes are cached per checkout and Codex session in the OS temporary
-directory. Successful and unchanged files produce no hook output; failures are
-advisory context, not a blocking gate. Existing issues may be reported on the
-first check; fix regressions relevant to the current task, not unrelated bailouts.
+frames.
 
-New or changed Codex hooks require a trust review: open `/hooks` in the Codex CLI
-for this repository and review the React Compiler hook. Until trusted, use the
-manual command above. Hook feedback does not replace typecheck or runtime tests.
+### Opt-in: run the check automatically after edits
 
-Claude Code uses the same checker through `.claude/settings.json`, after `Edit`,
-`Write` and successful `Bash` calls. It has the same compact, cached, advisory
-behavior. Check `/hooks` in Claude Code to inspect the project hook. Both clients
-key their cache by checkout and session ID; personal Claude settings and worktrees
-remain git-ignored.
+`scripts/react-compiler-hook.mjs` can run as a personal `PostToolUse` hook. It is
+not enabled for the repository: running node and git after every tool call is a
+per-person choice. After each Edit, Write or Bash call it checks staged,
+unstaged and untracked JS/TS in `browser/data-browser/src` (excluding tests,
+declaration files and workers). It is:
+
+- **advisory** — diagnostics come back as `additionalContext` for the agent,
+  never as a block decision; if the hook itself fails, it says so the same way.
+- **cached** — content hashes are kept per checkout and session in the OS
+  temporary directory, so unchanged and clean files produce no output.
+- **never blocking** — it always exits 0. Existing issues may show up on the
+  first check; fix regressions relevant to the task, not unrelated bailouts.
+
+Claude Code: add this to your git-ignored `.claude/settings.local.json` at the
+repository root (merge with what is already there), then check `/hooks`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^(Edit|Write|Bash)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/browser/data-browser/scripts/react-compiler-hook.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Codex: add this to your personal `~/.codex/hooks.json`. Being user-wide, the
+command only runs where the script exists, so other repositories are unaffected.
+Review the hook in `/hooks` to trust it; until then, use the manual command.
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/browser/data-browser/scripts/react-compiler-hook.mjs\"; [ -f \"$f\" ] && node \"$f\" || true",
+            "timeout": 30,
+            "additionalContextLimit": 1500
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Hook feedback does not replace `pnpm typecheck` or runtime tests.
 
 ## Localization
 

@@ -6,7 +6,6 @@ import {
   rmSync,
   symlinkSync,
   writeFileSync,
-  readFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -115,71 +114,75 @@ describe('React Compiler hook', () => {
     ).toContain('command.ts');
   });
 
-  it('registers advisory checks for shell and patch tool calls', () => {
-    const config = JSON.parse(
-      readFileSync(
-        new URL('../../../.codex/hooks.json', import.meta.url),
-        'utf8',
-      ),
-    );
-    const group = config.hooks.PostToolUse[0];
-    expect('Bash').toMatch(new RegExp(group.matcher));
-    expect('apply_patch').toMatch(new RegExp(group.matcher));
-    expect(group.hooks[0].command).toContain('react-compiler-hook.mjs');
-  });
-
-  it('runs the Claude Code registration with advisory output and cached silence', () => {
-    const config = JSON.parse(
-      readFileSync(
-        new URL('../../../.claude/settings.json', import.meta.url),
-        'utf8',
-      ),
-    );
-    const group = config.hooks.PostToolUse[0];
-
-    for (const tool of ['Edit', 'Write', 'Bash']) {
-      expect(tool).toMatch(new RegExp(group.matcher));
-    }
-
-    expect('Read').not.toMatch(new RegExp(group.matcher));
-
-    // The registered command finds the scripts through `git rev-parse
-    // --show-toplevel`. Run it in the fixture repository, with this
-    // checkout's scripts linked in, so it does not depend on the tests
-    // running inside a git checkout (CI's containers have no `.git`).
+  it('runs through a symlinked script path with advisory output and cached silence', () => {
+    // Personal hook configs call the script by path; a linked checkout
+    // must not silently skip the main-module check.
     symlinkSync(
       fileURLToPath(new URL('../scripts', import.meta.url)),
       join(root, 'browser/data-browser/scripts'),
     );
-    const filename = join(src, 'claude.ts');
+    const filename = join(src, 'linked.ts');
     writeFileSync(filename, broken);
     const invoke = () =>
-      spawnSync(group.hooks[0].command, {
-        shell: true,
-        cwd: src,
-        input: JSON.stringify({
-          ...event,
-          session_id: `claude-${dir}`,
-          tool_name: 'Edit',
-          tool_input: {
-            file_path: filename,
-            old_string: clean,
-            new_string: broken,
-          },
-          tool_response: { filePath: filename, success: true },
-        }),
-        encoding: 'utf8',
-        env: { ...process.env, TMPDIR: dir },
-      });
+      spawnSync(
+        process.execPath,
+        [join(root, 'browser/data-browser/scripts/react-compiler-hook.mjs')],
+        {
+          cwd: src,
+          input: JSON.stringify({
+            ...event,
+            session_id: `linked-${dir}`,
+            tool_name: 'Edit',
+            tool_input: {
+              file_path: filename,
+              old_string: clean,
+              new_string: broken,
+            },
+            tool_response: { filePath: filename, success: true },
+          }),
+          encoding: 'utf8',
+          env: { ...process.env, TMPDIR: dir },
+        },
+      );
     const result = invoke();
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
     const output = JSON.parse(result.stdout);
     expect(output.hookSpecificOutput.hookEventName).toBe('PostToolUse');
     expect(output.hookSpecificOutput.additionalContext).toContain(
-      'claude.ts:4:',
+      'linked.ts:4:',
     );
     expect(output).not.toHaveProperty('decision');
     expect(invoke().stdout).toBe('');
+  });
+
+  it('ignores other hook events', async () => {
+    writeFileSync(join(src, 'otherEvent.ts'), broken);
+    expect(
+      await runHook({ ...event, hook_event_name: 'PreToolUse' }, dir),
+    ).toBeUndefined();
+  });
+
+  it('reports infrastructure failures as advisory context without blocking', () => {
+    const outside = mkdtempSync(join(dir, 'not-a-repo-'));
+    const result = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(
+          new URL('../scripts/react-compiler-hook.mjs', import.meta.url),
+        ),
+      ],
+      {
+        input: JSON.stringify({ ...event, cwd: outside }),
+        encoding: 'utf8',
+        env: { ...process.env, TMPDIR: dir, GIT_CEILING_DIRECTORIES: dir },
+      },
+    );
+    expect(result.status).toBe(0);
+    const output = JSON.parse(result.stdout);
+    expect(output.hookSpecificOutput.additionalContext).toMatch(
+      /^React Compiler hook could not run: /,
+    );
+    expect(output).not.toHaveProperty('decision');
   });
 });
