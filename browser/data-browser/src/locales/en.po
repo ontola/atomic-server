@@ -116,6 +116,7 @@ msgstr "AI Agents"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -1615,6 +1616,7 @@ msgid "Enter a Drive DID or URL"
 msgstr "Enter a Drive DID or URL"
 
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr "Set"
 
@@ -5541,6 +5543,8 @@ msgstr "Showing the largest"
 msgid "groups"
 msgstr "groups"
 
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 msgid "Value"
@@ -10320,3 +10324,45 @@ msgstr "{0} selected"
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Selected rows"
 msgstr "Selected rows"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear value"
+msgstr "Clear value"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear values"
+msgstr "Clear values"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value…"
+msgstr "Set value…"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete row"
+msgstr "Delete row"
+
+#. 0: rowCount
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete {0} rows"
+msgstr "Delete {0} rows"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the row this selection touches? You can undo it."
+msgstr "Delete the row this selection touches? You can undo it."
+
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the {0} rows this selection touches? You can undo it."
+msgstr "Delete the {0} rows this selection touches? You can undo it."
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value"
+msgstr "Set value"
+
+#. 0: count
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set {0} values"
+msgstr "Set {0} values"

@@ -703,4 +703,103 @@ test.describe('tables', async () => {
     await expect(page.getByRole('gridcell', { name: 'rowC' })).toBeVisible();
     await expect(toolbar).toBeHidden();
   });
+
+  test('right-click a row header and a multi-cell selection', async ({
+    page,
+  }) => {
+    test.slow();
+    await createBlankTable(page, 'Context Menu Test');
+
+    await focusCell(page, page.getByRole('gridcell').first());
+
+    for (const value of ['one', 'two', 'three', 'four']) {
+      await enterGridEdit(page);
+      await typeInActiveGridCell(page, value);
+      await page.keyboard.press('Enter');
+    }
+
+    await page.keyboard.press('Escape');
+    await waitForSynced(page);
+    await reloadGrid(page);
+
+    const nameCell = (row: number) =>
+      page.locator(`[aria-rowindex="${row}"] > [aria-colindex="2"]`);
+
+    // A row's header cell opens the row's resource menu.
+    await page
+      .locator('[aria-rowindex="3"] > [role="rowheader"]')
+      .click({ button: 'right' });
+    await expect(
+      page.getByRole('menuitem', { name: 'Data View' }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    const selectThree = async () => {
+      await nameCell(2).click();
+      await nameCell(4).click({ modifiers: ['Shift'] });
+      await nameCell(3).click({ button: 'right' });
+    };
+
+    // Right-clicking inside a multi-cell selection opens a menu for all of it.
+    await selectThree();
+    await page.getByRole('menuitem', { name: 'Set value…' }).click();
+    await page.getByLabel('Value').fill('same');
+    await page.getByRole('button', { name: 'Set', exact: true }).click();
+    await expect(page.getByRole('gridcell', { name: 'same' })).toHaveCount(3);
+
+    await selectThree();
+    await page.getByRole('menuitem', { name: 'Clear values' }).click();
+    await expect(page.getByRole('gridcell', { name: 'same' })).toHaveCount(0);
+    await expect(page.getByRole('gridcell', { name: 'four' })).toBeVisible();
+
+    await selectThree();
+    await page.getByRole('menuitem', { name: 'Delete 3 rows' }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    await expect(page.getByRole('gridcell', { name: 'four' })).toBeVisible();
+    await expect(page.locator('[aria-rowindex="3"]')).toContainText('2');
+  });
+
+  test('drag view tabs to reorder them', async ({ page }) => {
+    test.slow();
+    await createBlankTable(page, 'View Order Test');
+
+    for (const kind of ['Kanban', 'Calendar']) {
+      await page.getByTitle('Add view').click();
+      await page.getByRole('menuitem', { name: kind }).click();
+      await expect(page.getByRole('tab', { name: kind })).toBeVisible();
+    }
+
+    const tabNames = () =>
+      page.getByRole('tab').evaluateAll(tabs => tabs.map(t => t.textContent));
+
+    await expect.poll(tabNames).toEqual(['Kanban', 'Calendar']);
+
+    const kanban = (await page
+      .getByRole('tab', { name: 'Kanban' })
+      .boundingBox())!;
+    const calendar = (await page
+      .getByRole('tab', { name: 'Calendar' })
+      .boundingBox())!;
+
+    await page.mouse.move(calendar.x + calendar.width / 2, calendar.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(
+      calendar.x + calendar.width / 2 - 20,
+      calendar.y + 10,
+      {
+        steps: 5,
+      },
+    );
+    await page.mouse.move(kanban.x + 5, kanban.y + 10, { steps: 15 });
+    await page.mouse.up();
+
+    await expect.poll(tabNames).toEqual(['Calendar', 'Kanban']);
+
+    await waitForSynced(page);
+    await page.reload();
+    await expect.poll(tabNames).toEqual(['Calendar', 'Kanban']);
+  });
 });

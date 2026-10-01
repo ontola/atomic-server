@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Tables: right-click a row's number to get the same menu as right-clicking one
+  of its cells. Select several cells with shift+click or by dragging and
+  right-click them for a menu that acts on all of them: clear the values, set
+  one value in all of them, or delete the rows they touch. Delete is one undo
+  step.
+- Tables: drag a view's tab to change the order of the views.
 - Tables: tick rows to delete several at once. Hover a row's number (or look
   left of it on a touch screen) for a checkbox. Once one row is ticked every
   row shows its checkbox, and the toolbar next to the filter button shows how

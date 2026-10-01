@@ -13,6 +13,7 @@ import {
   useTableEditorContext,
 } from './TableEditorContext';
 import { FaUpRightAndDownLeftFromCenter } from 'react-icons/fa6';
+import { isInMultiSelection } from './helpers/selectionBounds';
 import { IconButton } from '@components/IconButton/IconButton';
 import { KeyboardInteraction } from './helpers/keyboardHandlers';
 import { CSSVar } from '@helpers/CSSVar';
@@ -82,12 +83,38 @@ export function Cell({
     registerEventListener,
     disabledKeyboardInteractions,
     setMouseDown,
+    openSelectionMenu,
   } = useTableEditorContext();
 
   const isActive = rowIndex === selectedRow && columnIndex === selectedColumn;
   const isActiveCorner =
     rowIndex === multiSelectCornerRow &&
     columnIndex === multiSelectCornerColumn;
+
+  const inMultiSelection = isInMultiSelection(
+    cursorMode,
+    selectedRow,
+    selectedColumn,
+    multiSelectCornerRow,
+    multiSelectCornerColumn,
+    rowIndex,
+    columnIndex,
+  );
+
+  // Right-clicking inside a multi-cell selection acts on all of it, so it
+  // opens the selection's own menu rather than the cell's.
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (inMultiSelection) {
+        openSelectionMenu(e);
+
+        return;
+      }
+
+      onContextMenu?.(e);
+    },
+    [inMultiSelection, openSelectionMenu, onContextMenu],
+  );
 
   const handleMouseUp = useCallback(() => {
     setMouseDown(false);
@@ -142,6 +169,12 @@ export function Cell({
         return;
       }
 
+      // A right-click inside the selection must not collapse it: the context
+      // menu that follows is for the whole selection.
+      if (e.button === 2 && inMultiSelection) {
+        return;
+      }
+
       setMouseDown(true);
 
       // Stop the browser starting its own text selection for this drag.
@@ -190,6 +223,7 @@ export function Cell({
       shouldEnterEditMode,
       cursorMode,
       isActive,
+      inMultiSelection,
       disabledKeyboardInteractions,
       setCursorMode,
       setMouseDown,
@@ -285,7 +319,7 @@ export function Cell({
       onMouseUp={handleMouseUp}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
-      onContextMenu={onContextMenu}
+      onContextMenu={handleContextMenu}
     >
       {children}
     </CellWrapper>
