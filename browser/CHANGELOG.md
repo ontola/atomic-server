@@ -4,6 +4,19 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Someone given a chat, or anything else, out of a drive they can't open sees
+  all of it. A list answered from the local database was trusted whenever it
+  was non-empty, but only a drive synced to this device has its whole list
+  there: the guest's own messages and the ones present when they joined were
+  shown as the entire chat, and a reload asked the same database again. For a
+  drive this device hasn't synced the server is now asked once per list per
+  session, and anything only the local database knows (a write not yet
+  confirmed) is kept.
+- Things shared with you out of someone else's drive update live and notify
+  you. The app only listened to the drive you had open, so a guest in a shared
+  chat never received new messages from the host, and got no notifications for
+  them. Everything in "Shared with me" is now subscribed for as long as the app
+  runs (`Store.subscribeLive`).
 - An app asking to use one of your accounts (Google Calendar, Clockify and so
   on) now asks in a dialog instead of a bar above the app, in plainer words:
   which app, which account, and that you approve it on the next page, on the

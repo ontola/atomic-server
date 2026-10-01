@@ -325,6 +325,10 @@ export class Collection {
    */
   private _assemblingPage = false;
   private static legacyQueryServers = new WeakMap<Store, Set<string>>();
+  /** Pages of unsynced drives the server has answered this session. Its
+   * members were written to the local DB as they loaded and live updates keep
+   * it current, so the local answer is whole from then on. */
+  private static completedByServer = new WeakMap<Store, Set<string>>();
   private legacyQuery = false;
   private legacyMembers?: Promise<string[]>;
 
@@ -945,6 +949,24 @@ export class Collection {
     // here. The cold-load case pays at most one extra OPFS wait
     // before the server fetch fires.
     if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
+      // Only a drive synced into this client has its whole membership here.
+      // Anything else holds what this client happened to fetch or create: a
+      // guest in a chatroom shared from someone else's drive had their own
+      // messages and the ones present when they joined, and trusting that
+      // hid every later message from the host, on every reload. Asked once
+      // per page per session, not on every mount.
+      if (
+        this.store.serverConnected &&
+        !this.store.hasCompletedDriveSyncFor(
+          this.params.drive ?? this.store.getDrive(),
+        ) &&
+        !Collection.completedByServer
+          .get(this.store)
+          ?.has(this.buildSubject(page))
+      ) {
+        await this.completeFromServer(page);
+      }
+
       return;
     }
 
@@ -982,6 +1004,41 @@ export class Collection {
     if (this.store.serverConnected) {
       await this.fetchPageFromServer(page).catch(() => undefined);
     }
+  }
+
+  /**
+   * Replace a page the local DB answered with the server's, keeping any member
+   * only the local DB knows: a write the server hasn't acknowledged yet must
+   * not vanish because the server answered first. When the server can't be
+   * reached, the local page stands.
+   */
+  private async completeFromServer(page: number): Promise<void> {
+    const local = this.pages.get(page)?.props.members ?? [];
+
+    try {
+      await this.fetchPageFromServer(page);
+    } catch {
+      return;
+    }
+
+    const answered =
+      Collection.completedByServer.get(this.store) ?? new Set<string>();
+    answered.add(this.buildSubject(page));
+    Collection.completedByServer.set(this.store, answered);
+
+    const fetched = this.pages.get(page);
+
+    if (!fetched) return;
+
+    const members = fetched.props.members ?? [];
+    const localOnly = local.filter(s => !members.includes(s));
+
+    if (localOnly.length === 0) return;
+
+    const total = (this._totalMembers ?? members.length) + localOnly.length;
+    this.writePageMembers(fetched, [...members, ...localOnly], total);
+    this.setPage(page, fetched);
+    this._totalMembers = total;
   }
 
   /**
