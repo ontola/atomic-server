@@ -915,7 +915,9 @@ export function useChatMessages(
       setTotal(count);
       setMessages(members);
 
-      if (visible === CHAT_PAGE_SIZE && members.length > 0) {
+      // An empty chat is remembered too, so reopening it does not flash the
+      // loader every time while the server answers "no messages".
+      if (visible === CHAT_PAGE_SIZE) {
         writeTail(tailKey, { total: count, messages: members });
       }
     };
@@ -930,7 +932,7 @@ export function useChatMessages(
 
   return {
     messages,
-    loading: !ready && messages.length === 0,
+    loading: !ready && messages.length === 0 && !remembered,
     invalidate: invalidateCollection,
     /** Messages that exist but are not listed yet (older than the window). */
     olderCount: Math.max(0, total - messages.length),
