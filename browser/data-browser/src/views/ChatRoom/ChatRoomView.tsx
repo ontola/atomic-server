@@ -904,12 +904,23 @@ export function useChatMessages(
       const count = collection.totalMembers;
       const members: string[] = [];
 
-      for (let i = Math.max(0, count - visible); i < count; i++) {
-        const member = await collection.getMemberWithIndex(i);
+      try {
+        // Re-read the count each step: the collection can refresh with fewer
+        // members while we await, and an index past the end throws.
+        for (
+          let i = Math.max(0, count - visible);
+          i < collection.totalMembers;
+          i++
+        ) {
+          const member = await collection.getMemberWithIndex(i);
 
-        if (member) {
-          members.push(member);
+          if (member) {
+            members.push(member);
+          }
         }
+      } catch {
+        // The collection changed under us; its next refresh extracts again.
+        return;
       }
 
       setTotal(count);
