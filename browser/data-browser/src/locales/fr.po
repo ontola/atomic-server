@@ -1189,10 +1189,6 @@ msgid "Show canvas help"
 msgstr "Afficher l'aide sur la toile"
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Switch to draw"
-msgstr "Passer en mode dessin"
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
 msgstr "Gomme"
 
@@ -3590,12 +3586,6 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Checking your {0} account…"
 msgstr ""
-
-#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
-#~ msgstr ""
-
-#~ msgid "Sign in to your {0} account"
-#~ msgstr ""
 
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
@@ -6161,9 +6151,6 @@ msgstr ""
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Forgot it? Restore from {0}"
 msgstr ""
-
-#~ msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
-#~ msgstr ""
 
 #. 0: action.label(ctx)
 #: src/actions/deriveTools.ts
@@ -9497,18 +9484,6 @@ msgstr ""
 msgid "Less than 1% used"
 msgstr ""
 
-#~ msgid "Sign in to connect an account."
-#~ msgstr ""
-
-#~ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-#~ msgstr ""
-
-#~ msgid "Use existing connection"
-#~ msgstr ""
-
-#~ msgid "Connect an account"
-#~ msgstr ""
-
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Could not set up this importer: {0}"
@@ -10075,6 +10050,7 @@ msgid "Account and app menu"
 msgstr ""
 
 #: src/chunks/RTE/ImagePicker.tsx
+#: src/views/Canvas/CanvasPage.tsx
 msgid "Choose an image"
 msgstr ""
 
@@ -10178,4 +10154,69 @@ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in again to open your account on this device."
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Could not read that image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas text"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: circle strokes to select them, then move or scale"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: place a picture"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Place image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Delete selection"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press <0>Delete</0> to remove"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type; tap existing text to edit it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: pick a picture, then move or scale it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
 msgstr ""

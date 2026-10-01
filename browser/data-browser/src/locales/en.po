@@ -1189,10 +1189,6 @@ msgid "Show canvas help"
 msgstr "Show canvas help"
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Switch to draw"
-msgstr "Switch to draw"
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
 msgstr "Eraser"
 
@@ -3590,12 +3586,6 @@ msgstr "Enter your agent secret to unlock this drive on this device."
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Checking your {0} account…"
 msgstr "Checking your {0} account…"
-
-#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
-#~ msgstr "To restore your account, sign in to your {0} account first, then come back here."
-
-#~ msgid "Sign in to your {0} account"
-#~ msgstr "Sign in to your {0} account"
 
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
@@ -6172,9 +6162,6 @@ msgstr "Cloud Vault had nothing for this workspace:"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Forgot it? Restore from {0}"
 msgstr "Forgot it? Restore from {0}"
-
-#~ msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
-#~ msgstr "Your backup is kept by your {0} account. Connect this device to it to restore."
 
 #. 0: action.label(ctx)
 #: src/actions/deriveTools.ts
@@ -9508,18 +9495,6 @@ msgstr "{0} encrypted object{1} stored in {2} · {3}."
 msgid "Less than 1% used"
 msgstr "Less than 1% used"
 
-#~ msgid "Sign in to connect an account."
-#~ msgstr "Sign in to connect an account."
-
-#~ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-#~ msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-
-#~ msgid "Use existing connection"
-#~ msgstr "Use existing connection"
-
-#~ msgid "Connect an account"
-#~ msgstr "Connect an account"
-
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Could not set up this importer: {0}"
@@ -10093,6 +10068,7 @@ msgid "Account and app menu"
 msgstr "Account and app menu"
 
 #: src/chunks/RTE/ImagePicker.tsx
+#: src/views/Canvas/CanvasPage.tsx
 msgid "Choose an image"
 msgstr "Choose an image"
 
@@ -10197,3 +10173,68 @@ msgstr "Unlocking {0}…"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in again to open your account on this device."
 msgstr "Sign in again to open your account on this device."
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Could not read that image"
+msgstr "Could not read that image"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas text"
+msgstr "Canvas text"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen"
+msgstr "Pen"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen tool"
+msgstr "Pen tool"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser tool"
+msgstr "Eraser tool"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: circle strokes to select them, then move or scale"
+msgstr "Lasso: circle strokes to select them, then move or scale"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso tool"
+msgstr "Lasso tool"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type"
+msgstr "Text: tap the canvas and type"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text tool"
+msgstr "Text tool"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: place a picture"
+msgstr "Image: place a picture"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Place image"
+msgstr "Place image"
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Delete selection"
+msgstr "Delete selection"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press <0>Delete</0> to remove"
+msgstr "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press <0>Delete</0> to remove"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type; tap existing text to edit it"
+msgstr "Text: tap the canvas and type; tap existing text to edit it"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: pick a picture, then move or scale it"
+msgstr "Image: pick a picture, then move or scale it"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
+msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"

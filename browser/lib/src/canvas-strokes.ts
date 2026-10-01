@@ -1,11 +1,31 @@
 import type { JSONArray, JSONValue, JSONObject } from './value.js';
 
-/** Single pen stroke on a canvas (matches Flutter `StrokeData` JSON). */
+/**
+ * One element on a canvas. A plain pen stroke matches Flutter's `StrokeData`
+ * JSON. Text and image elements reuse that same shape (`path` holds a single
+ * anchor point, `width` is a hairline) and add optional fields, so an older
+ * reader that only knows strokes still parses the list and draws a speck
+ * instead of failing.
+ */
 export type CanvasStroke = {
   color: number;
   width: number;
   path: [number, number][];
+  /** Absent for a pen stroke. */
+  kind?: 'text' | 'image';
+  /** `kind: 'text'`: the text, `\n` separates lines. */
+  text?: string;
+  /** `kind: 'text'`: font size in canvas units. */
+  size?: number;
+  /** `kind: 'image'`: the picture as a data URL. */
+  src?: string;
+  /** `kind: 'image'`: drawn size in canvas units. */
+  w?: number;
+  h?: number;
 };
+
+/** Stroke width stored on text and image elements. */
+export const ELEMENT_HAIRLINE_WIDTH = 0.01;
 
 export const DEFAULT_STROKE_WIDTH = 10;
 
@@ -37,11 +57,24 @@ export function parseCanvasStrokes(raw: JSONValue | undefined): CanvasStroke[] {
 }
 
 export function strokeToJson(stroke: CanvasStroke): JSONObject {
-  return {
+  const json: JSONObject = {
     color: stroke.color,
     width: stroke.width,
     path: stroke.path,
   };
+
+  if (stroke.kind === 'text') {
+    json.kind = 'text';
+    json.text = stroke.text ?? '';
+    json.size = stroke.size ?? 24;
+  } else if (stroke.kind === 'image' && stroke.src) {
+    json.kind = 'image';
+    json.src = stroke.src;
+    json.w = stroke.w ?? 100;
+    json.h = stroke.h ?? 100;
+  }
+
+  return json;
 }
 
 function strokeFromJson(item: unknown): CanvasStroke | undefined {
@@ -83,7 +116,28 @@ function strokeFromJson(item: unknown): CanvasStroke | undefined {
     return undefined;
   }
 
-  return { color, width, path: points };
+  const base: CanvasStroke = { color, width, path: points };
+
+  if (obj.kind === 'text' && typeof obj.text === 'string') {
+    return {
+      ...base,
+      kind: 'text',
+      text: obj.text,
+      size: typeof obj.size === 'number' ? obj.size : 24,
+    };
+  }
+
+  if (obj.kind === 'image' && typeof obj.src === 'string') {
+    return {
+      ...base,
+      kind: 'image',
+      src: obj.src,
+      w: typeof obj.w === 'number' ? obj.w : 100,
+      h: typeof obj.h === 'number' ? obj.h : 100,
+    };
+  }
+
+  return base;
 }
 
 /** Dark-mode stroke color (invert HSL lightness), matching Flutter. */

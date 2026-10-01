@@ -2,6 +2,7 @@ import { useDarkMode } from '@helpers/useDarkMode';
 import {
   canvas,
   DEFAULT_STROKE_WIDTH,
+  ELEMENT_HAIRLINE_WIDTH,
   enableLoro,
   parseCanvasStrokes,
   ResourceEvents,
@@ -12,14 +13,34 @@ import {
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { drawCanvasStrokes, screenToCanvas } from './canvas-draw';
+import {
+  drawCanvasStrokes,
+  drawSelectionOverlay,
+  HANDLE_RADIUS,
+  onCanvasImageLoaded,
+  screenToCanvas,
+} from './canvas-draw';
+import {
+  elementBounds,
+  lassoSelect,
+  TEXT_FONT_FAMILY,
+  TEXT_LINE_HEIGHT,
+  transformSelection,
+  unionBounds,
+} from './canvas-elements';
+import { resizeImageFile } from '@helpers/resizeImage';
+import { errorHandler } from '../../handlers/errorHandler';
 import {
   FaCircleInfo,
   FaEraser,
   FaExpand,
+  FaFont,
+  FaImage,
   FaPen,
   FaRotateLeft,
   FaRotateRight,
+  FaTrash,
+  FaVectorSquare,
 } from 'react-icons/fa6';
 import {
   Dialog,
@@ -70,6 +91,63 @@ const PEN_COLORS = [
  * call site so the visual radius is constant regardless of zoom.
  */
 const ERASE_SCREEN_RADIUS = 15;
+
+type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
+
+/** Screen-pixel radius around a selection corner that grabs the scale handle. */
+const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 14;
+/** Font size of a new text element, in screen pixels at the current zoom. */
+const NEW_TEXT_SCREEN_SIZE = 28;
+const PEN_SEEN_KEY = 'atomic-canvas-pen-seen';
+const MIN_SCALE = 0.05;
+const MAX_SCALE = 30;
+
+type TextEdit = {
+  /** Index of the element being edited, null for a new one. */
+  index: number | null;
+  x: number;
+  y: number;
+  size: number;
+  color: number;
+  text: string;
+};
+
+type TransformGesture = {
+  pointerId: number;
+  mode: 'move' | 'scale';
+  start: [number, number];
+  anchor: [number, number];
+  corner: [number, number];
+  base: CanvasStroke[];
+  selection: number[];
+  moved: boolean;
+};
+
+function readPenSeen(): boolean {
+  try {
+    return localStorage.getItem(PEN_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function fileToDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageSize(src: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error('Could not read that image'));
+    img.src = src;
+  });
+}
 
 type ScrubState = {
   pointerId: number;
@@ -128,7 +206,17 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [prevColor, setPrevColor] = useState(PEN_COLORS[1]);
   const [penWidth, setPenWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [prevWidth, setPrevWidth] = useState(3);
-  const [eraserMode, setEraserMode] = useState(false);
+  const [tool, setTool] = useState<Tool>('pen');
+  const eraserMode = tool === 'eraser';
+  const [selection, setSelection] = useState<number[]>([]);
+  const [lassoPath, setLassoPath] = useState<[number, number][] | null>(null);
+  const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
+  // A pen / stylus has been seen on this device: one finger then pans
+  // instead of drawing, because the pen is the drawing tool.
+  const [penDetected, setPenDetected] = useState(readPenSeen);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const textFieldRef = useRef<HTMLTextAreaElement>(null);
+  const textOpen = textEdit !== null;
 
   // Wheel events (pan AND zoom) are ignored if the current wheel session
   // started before the canvas was mounted — that's how we detect macOS
@@ -233,6 +321,27 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const currentStrokeRef = useRef(currentStroke);
   const previewStrokesRef = useRef(previewStrokes);
   const eraserModeRef = useRef(eraserMode);
+  const toolRef = useRef(tool);
+  const selectionRef = useRef(selection);
+  /** Element count when the selection was made; a different count means the
+   *  strokes changed underneath it, so the indices no longer mean the same. */
+  const selectionLengthRef = useRef(0);
+  const lassoPathRef = useRef(lassoPath);
+  const lassoPointerRef = useRef<number | null>(null);
+  const transformRef = useRef<TransformGesture | null>(null);
+  const textEditRef = useRef<TextEdit | null>(null);
+  const penDetectedRef = useRef(penDetected);
+  const penContactRef = useRef(false);
+  const touchesRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{
+    dist: number;
+    scale: number;
+    wx: number;
+    wy: number;
+  } | null>(null);
+  /** True from the second finger down until every finger is up, so the
+   *  fingers left over after a pinch never start a stroke. */
+  const gestureActiveRef = useRef(false);
   const isPanningRef = useRef(false);
   const panStartRef = useRef<{
     x: number;
@@ -294,6 +403,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   currentStrokeRef.current = currentStroke;
   previewStrokesRef.current = previewStrokes;
   eraserModeRef.current = eraserMode;
+  toolRef.current = tool;
+  selectionRef.current = selection;
+  lassoPathRef.current = lassoPath;
+  textEditRef.current = textEdit;
+  penDetectedRef.current = penDetected;
 
   const reloadStrokesFromResource = useCallback((res: Resource) => {
     setStrokes(parseCanvasStrokes(res.get(canvas.properties.strokeData)));
@@ -424,11 +538,62 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.y,
       darkMode,
     );
+
+    const list = previewStrokesRef.current ?? strokesRef.current;
+    const selected = unionBounds(
+      selectionRef.current
+        .filter(i => list[i])
+        .map(i => elementBounds(list[i])),
+    );
+
+    drawSelectionOverlay(
+      ctx,
+      lassoPathRef.current,
+      selected,
+      scaleRef.current,
+      offsetRef.current.x,
+      offsetRef.current.y,
+      '#3b82f6',
+    );
   }, [darkMode]);
 
   useEffect(() => {
     paint();
-  }, [paint, strokes, currentStroke, scale, offset, previewStrokes]);
+  }, [
+    paint,
+    strokes,
+    currentStroke,
+    scale,
+    offset,
+    previewStrokes,
+    selection,
+    lassoPath,
+  ]);
+
+  // Focus the text field only after the tap that opened it has finished: the
+  // browser moves focus to the canvas as the press ends, which would blur a
+  // field focused any earlier and close it empty.
+  useEffect(() => {
+    if (!textOpen) return;
+
+    const id = window.setTimeout(() => textFieldRef.current?.focus(), 60);
+
+    return () => window.clearTimeout(id);
+  }, [textOpen]);
+
+  // Images decode asynchronously; repaint when one is ready.
+  useEffect(() => onCanvasImageLoaded(paint), [paint]);
+
+  // Drop a selection once the strokes changed under it (an undo, a remote
+  // edit): its indices would point at other elements.
+  useEffect(() => {
+    if (
+      selectionRef.current.length > 0 &&
+      strokes.length !== selectionLengthRef.current
+    ) {
+      setSelection([]);
+    }
+  }, [strokes]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -947,10 +1112,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
    */
   const trackCursorForPreview = useCallback((e: React.PointerEvent) => {
     if (
+      e.pointerType === 'touch' ||
       isPanningRef.current ||
       drawingPointerRef.current !== null ||
       erasingPointerRef.current !== null ||
-      eraserModeRef.current
+      toolRef.current !== 'pen'
     ) {
       setCursorPos(null);
 
@@ -965,7 +1131,388 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   }, []);
 
+  // ──────────────── Selection: lasso, move, scale, delete ──────────────────
+
+  /** Write a whole new element list as one undoable step. */
+  const commitReplace = useCallback(
+    async (next: CanvasStroke[], pre: CanvasStroke[]) => {
+      pushUndoSnapshot(pre);
+      setSaving(true);
+      setSaveError(undefined);
+
+      try {
+        await enableLoro();
+        resource.replaceListItems(
+          canvas.properties.strokeData,
+          next.map(strokeToJson),
+        );
+        await resource.save();
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [pushUndoSnapshot, resource],
+  );
+
+  const selectElements = useCallback((indices: number[], length: number) => {
+    selectionLengthRef.current = length;
+    selectionRef.current = indices;
+    setSelection(indices);
+  }, []);
+
+  const deleteSelection = useCallback(() => {
+    const picked = new Set(selectionRef.current);
+
+    if (picked.size === 0) return;
+
+    const pre = strokesRef.current;
+    const next = pre.filter((_, i) => !picked.has(i));
+
+    selectElements([], next.length);
+    setStrokes(next);
+    void commitReplace(next, pre);
+  }, [commitReplace, selectElements]);
+
+  /** The topmost element under a point (a tap), or -1. */
+  const hitTestAt = (x: number, y: number): number => {
+    const reach = 12 / scaleRef.current;
+    const list = strokesRef.current;
+
+    for (let i = list.length - 1; i >= 0; i--) {
+      const el = list[i];
+
+      if (el.kind) {
+        const b = elementBounds(el);
+
+        if (x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY) return i;
+
+        continue;
+      }
+
+      const radius = reach + el.width / 2;
+
+      if (el.path.some(([px, py]) => Math.hypot(x - px, y - py) < radius)) {
+        return i;
+      }
+    }
+
+    return -1;
+  };
+
+  const startLassoOrTransform = (
+    e: React.PointerEvent,
+    x: number,
+    y: number,
+  ) => {
+    const el = canvasRef.current;
+
+    if (!el) return;
+
+    const list = strokesRef.current;
+    const picked = selectionRef.current.filter(i => list[i]);
+    const bounds = unionBounds(picked.map(i => elementBounds(list[i])));
+
+    if (bounds) {
+      const rect = el.getBoundingClientRect();
+      const s = scaleRef.current;
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const corners: [number, number][] = [
+        [bounds.minX, bounds.minY],
+        [bounds.maxX, bounds.minY],
+        [bounds.minX, bounds.maxY],
+        [bounds.maxX, bounds.maxY],
+      ];
+      const cornerIndex = corners.findIndex(
+        ([cx, cy]) =>
+          Math.hypot(
+            sx - (cx * s + offsetRef.current.x),
+            sy - (cy * s + offsetRef.current.y),
+          ) <= HANDLE_HIT_RADIUS,
+      );
+      const pad = 8 / s;
+      const inside =
+        x >= bounds.minX - pad &&
+        x <= bounds.maxX + pad &&
+        y >= bounds.minY - pad &&
+        y <= bounds.maxY + pad;
+
+      if (cornerIndex >= 0 || inside) {
+        transformRef.current = {
+          pointerId: e.pointerId,
+          mode: cornerIndex >= 0 ? 'scale' : 'move',
+          start: [x, y],
+          anchor: corners[3 - Math.max(cornerIndex, 0)],
+          corner: corners[Math.max(cornerIndex, 0)],
+          base: list,
+          selection: picked,
+          moved: false,
+        };
+        el.setPointerCapture(e.pointerId);
+
+        return;
+      }
+    }
+
+    selectElements([], list.length);
+    lassoPointerRef.current = e.pointerId;
+    setLassoPath([[x, y]]);
+    el.setPointerCapture(e.pointerId);
+  };
+
+  /** The element list a transform gesture currently describes. */
+  const transformedStrokes = (
+    g: TransformGesture,
+    x: number,
+    y: number,
+  ): CanvasStroke[] => {
+    if (g.mode === 'move') {
+      return transformSelection(
+        g.base,
+        g.selection,
+        1,
+        0,
+        0,
+        x - g.start[0],
+        y - g.start[1],
+      );
+    }
+
+    const dx = g.corner[0] - g.anchor[0];
+    const dy = g.corner[1] - g.anchor[1];
+    const len2 = dx * dx + dy * dy || 1;
+    const factor = Math.min(
+      50,
+      Math.max(0.05, ((x - g.anchor[0]) * dx + (y - g.anchor[1]) * dy) / len2),
+    );
+
+    return transformSelection(
+      g.base,
+      g.selection,
+      factor,
+      g.anchor[0],
+      g.anchor[1],
+      0,
+      0,
+    );
+  };
+
+  // ──────────────── Text tool ──────────────────────────────────────────────
+
+  const commitText = async () => {
+    const edit = textEditRef.current;
+
+    if (!edit) return;
+
+    textEditRef.current = null;
+    setTextEdit(null);
+    setPreviewStrokes(null);
+
+    const text = edit.text.replace(/\s+$/, '');
+    const pre = strokesRef.current;
+
+    if (edit.index === null) {
+      if (!text) return;
+
+      const element: CanvasStroke = {
+        color: edit.color,
+        width: ELEMENT_HAIRLINE_WIDTH,
+        path: [[edit.x, edit.y]],
+        kind: 'text',
+        text,
+        size: edit.size,
+      };
+
+      setStrokes(prev => [...prev, element]);
+      await pushStrokeToServer(element, pre);
+
+      return;
+    }
+
+    const old = pre[edit.index];
+
+    if (!old || text === old.text) return;
+
+    const next = text
+      ? pre.map((el, i) => (i === edit.index ? { ...el, text } : el))
+      : pre.filter((_, i) => i !== edit.index);
+
+    setStrokes(next);
+    await commitReplace(next, pre);
+  };
+
+  const startText = (x: number, y: number) => {
+    const hit = hitTestAt(x, y);
+    const existing = hit >= 0 ? strokesRef.current[hit] : undefined;
+
+    if (existing?.kind === 'text') {
+      // Hide the element while its text is edited in place.
+      setPreviewStrokes(strokesRef.current.filter((_, i) => i !== hit));
+      setTextEdit({
+        index: hit,
+        x: existing.path[0][0],
+        y: existing.path[0][1],
+        size: existing.size ?? 24,
+        color: existing.color,
+        text: existing.text ?? '',
+      });
+
+      return;
+    }
+
+    setTextEdit({
+      index: null,
+      x,
+      y,
+      size: NEW_TEXT_SCREEN_SIZE / scaleRef.current,
+      color: penColor,
+      text: '',
+    });
+  };
+
+  // ──────────────── Image tool ─────────────────────────────────────────────
+
+  const handleImageFile = async (file: File) => {
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    try {
+      const resized = await resizeImageFile(file, {
+        maxSize: 1280,
+        quality: 0.8,
+      });
+      const src = await fileToDataUrl(resized);
+      const natural = await imageSize(src);
+      const s = scaleRef.current;
+      const screenW = Math.min(natural.w, container.clientWidth * 0.5);
+      const w = screenW / s;
+      const h = (w * natural.h) / natural.w;
+      const cx = (container.clientWidth / 2 - offsetRef.current.x) / s;
+      const cy = (container.clientHeight / 2 - offsetRef.current.y) / s;
+      const element: CanvasStroke = {
+        color: 0xff000000,
+        width: ELEMENT_HAIRLINE_WIDTH,
+        path: [[cx - w / 2, cy - h / 2]],
+        kind: 'image',
+        src,
+        w,
+        h,
+      };
+      const pre = strokesRef.current;
+
+      viewTouchedRef.current = true;
+      setStrokes([...pre, element]);
+      // Hand the new image straight to the lasso so it can be placed.
+      setTool('lasso');
+      selectElements([pre.length], pre.length + 1);
+      await pushStrokeToServer(element, pre);
+    } catch (err) {
+      errorHandler(err);
+    }
+  };
+
+  // ──────────────── Pointer flow: pan / pinch / draw / erase ───────────────
+
+  const notePen = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'pen' || penDetectedRef.current) return;
+
+    penDetectedRef.current = true;
+    setPenDetected(true);
+
+    try {
+      localStorage.setItem(PEN_SEEN_KEY, '1');
+    } catch {
+      // Remembering the pen is a convenience only.
+    }
+  };
+
+  /** Drop whatever the current pointer was doing without saving it. */
+  const abortActiveTool = () => {
+    if (drawingPointerRef.current !== null) {
+      drawingPointerRef.current = null;
+      setCurrentStroke(null);
+    }
+
+    if (erasingPointerRef.current !== null) {
+      erasingPointerRef.current = null;
+      erasedIndicesRef.current = new Set();
+      setPreviewStrokes(null);
+    }
+
+    if (lassoPointerRef.current !== null) {
+      lassoPointerRef.current = null;
+      setLassoPath(null);
+    }
+
+    if (transformRef.current) {
+      transformRef.current = null;
+      setPreviewStrokes(null);
+    }
+
+    isPanningRef.current = false;
+    panStartRef.current = null;
+    setPanMode(isPanModeRef.current ? 'ready' : 'idle');
+  };
+
+  const startPan = (e: React.PointerEvent) => {
+    isPanningRef.current = true;
+    setPanMode('panning');
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      ox: offsetRef.current.x,
+      oy: offsetRef.current.y,
+    };
+    canvasRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const startPinch = () => {
+    const container = containerRef.current;
+    const [a, b] = [...touchesRef.current.values()];
+
+    if (!container || !a || !b) return;
+
+    const rect = container.getBoundingClientRect();
+    const mx = (a.x + b.x) / 2 - rect.left;
+    const my = (a.y + b.y) / 2 - rect.top;
+
+    pinchRef.current = {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      scale: scaleRef.current,
+      wx: (mx - offsetRef.current.x) / scaleRef.current,
+      wy: (my - offsetRef.current.y) / scaleRef.current,
+    };
+  };
+
+  /** Two fingers: zoom by the change in distance, pan with the midpoint,
+   *  keeping the canvas point first under the fingers under them. */
+  const movePinch = () => {
+    const container = containerRef.current;
+    const pinch = pinchRef.current;
+    const [a, b] = [...touchesRef.current.values()];
+
+    if (!container || !pinch || !a || !b || pinch.dist < 1) return;
+
+    const rect = container.getBoundingClientRect();
+    const mx = (a.x + b.x) / 2 - rect.left;
+    const my = (a.y + b.y) / 2 - rect.top;
+    const next = Math.min(
+      MAX_SCALE,
+      Math.max(
+        MIN_SCALE,
+        (pinch.scale * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.dist,
+      ),
+    );
+
+    setScale(next);
+    setOffset({ x: mx - pinch.wx * next, y: my - pinch.wy * next });
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
+    notePen(e);
     viewTouchedRef.current = true;
     // Drawing / erasing starts — hide the hover preview; the stroke itself
     // is the feedback.
@@ -977,16 +1524,45 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
-    if (e.button === 1 || (e.button === 0 && isPanModeRef.current)) {
-      isPanningRef.current = true;
-      setPanMode('panning');
-      panStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        ox: offsetRef.current.x,
-        oy: offsetRef.current.y,
-      };
+    // Any tap on the canvas ends a text edit (its blur commits it).
+    if (textEditRef.current) {
+      void commitText();
+
+      return;
+    }
+
+    if (e.pointerType === 'pen') {
+      penContactRef.current = true;
+
+      // The pen takes over from a finger that was panning.
+      if (isPanningRef.current) abortActiveTool();
+    } else if (e.pointerType === 'touch') {
+      // Palm rejection: ignore fingers while the pen touches the screen.
+      if (penContactRef.current) return;
+
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       el.setPointerCapture(e.pointerId);
+
+      if (touchesRef.current.size >= 2) {
+        abortActiveTool();
+        gestureActiveRef.current = true;
+        startPinch();
+
+        return;
+      }
+
+      if (gestureActiveRef.current) return;
+
+      // With a pen around, a finger moves the canvas; without one it draws.
+      if (penDetectedRef.current) {
+        startPan(e);
+
+        return;
+      }
+    }
+
+    if (e.button === 1 || (e.button === 0 && isPanModeRef.current)) {
+      startPan(e);
 
       return;
     }
@@ -1005,10 +1581,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.y,
     );
 
-    if (eraserModeRef.current) {
+    if (toolRef.current === 'eraser') {
       erasingPointerRef.current = e.pointerId;
       el.setPointerCapture(e.pointerId);
       eraseAt(x, y);
+
+      return;
+    }
+
+    if (toolRef.current === 'lasso') {
+      startLassoOrTransform(e, x, y);
+
+      return;
+    }
+
+    if (toolRef.current === 'text') {
+      startText(x, y);
 
       return;
     }
@@ -1023,7 +1611,18 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    notePen(e);
     trackCursorForPreview(e);
+
+    if (e.pointerType === 'touch' && touchesRef.current.has(e.pointerId)) {
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (gestureActiveRef.current) {
+        if (touchesRef.current.size >= 2) movePinch();
+
+        return;
+      }
+    }
 
     if (isPanningRef.current && panStartRef.current) {
       const dx = e.clientX - panStartRef.current.x;
@@ -1060,6 +1659,26 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       return;
     }
 
+    const gesture = transformRef.current;
+
+    if (gesture && gesture.pointerId === e.pointerId) {
+      gesture.moved = true;
+      setPreviewStrokes(transformedStrokes(gesture, x, y));
+
+      return;
+    }
+
+    if (lassoPointerRef.current === e.pointerId && lassoPathRef.current) {
+      const path = lassoPathRef.current;
+      const last = path[path.length - 1];
+
+      if (Math.hypot(x - last[0], y - last[1]) > 2 / scaleRef.current) {
+        setLassoPath([...path, [x, y]]);
+      }
+
+      return;
+    }
+
     if (
       drawingPointerRef.current !== e.pointerId ||
       !currentStrokeRef.current
@@ -1080,6 +1699,23 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   };
 
   const finishStroke = (e: React.PointerEvent) => {
+    if (e.pointerType === 'pen') {
+      penContactRef.current = false;
+    } else if (e.pointerType === 'touch') {
+      touchesRef.current.delete(e.pointerId);
+
+      if (touchesRef.current.size < 2) pinchRef.current = null;
+
+      if (gestureActiveRef.current) {
+        canvasRef.current?.releasePointerCapture?.(e.pointerId);
+
+        // The gesture is over once the last finger lifts.
+        if (touchesRef.current.size === 0) gestureActiveRef.current = false;
+
+        return;
+      }
+    }
+
     if (isPanningRef.current) {
       isPanningRef.current = false;
       panStartRef.current = null;
@@ -1093,6 +1729,45 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       erasingPointerRef.current = null;
       canvasRef.current?.releasePointerCapture(e.pointerId);
       void finishErase();
+
+      return;
+    }
+
+    const gesture = transformRef.current;
+
+    if (gesture && gesture.pointerId === e.pointerId) {
+      transformRef.current = null;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+
+      const next = previewStrokesRef.current;
+      setPreviewStrokes(null);
+
+      // A release without a drag leaves the strokes as they were.
+      if (gesture.moved && next && e.type !== 'pointercancel') {
+        setStrokes(next);
+        void commitReplace(next, gesture.base);
+      }
+
+      return;
+    }
+
+    if (lassoPointerRef.current === e.pointerId) {
+      lassoPointerRef.current = null;
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+
+      const path = lassoPathRef.current ?? [];
+      const list = strokesRef.current;
+      setLassoPath(null);
+
+      if (e.type === 'pointercancel') return;
+
+      if (path.length < 4) {
+        // A tap picks the element under it.
+        const hit = hitTestAt(path[0][0], path[0][1]);
+        selectElements(hit >= 0 ? [hit] : [], list.length);
+      } else {
+        selectElements(lassoSelect(path, list), list.length);
+      }
 
       return;
     }
@@ -1212,6 +1887,24 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z redo.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(e.target)) return;
+
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        selectionRef.current.length > 0
+      ) {
+        e.preventDefault();
+        deleteSelection();
+
+        return;
+      }
+
+      if (e.key === 'Escape' && selectionRef.current.length > 0) {
+        selectElements([], strokesRef.current.length);
+
+        return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         if (e.shiftKey) {
           e.preventDefault();
@@ -1226,7 +1919,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     window.addEventListener('keydown', onKeyDown);
 
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, deleteSelection, selectElements]);
 
   // Help dialog — shows the keyboard / gesture cheat-sheet that used to
   // live in an always-visible footer hint. Triggered by the info button at
@@ -1369,7 +2062,13 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     [],
   );
 
-  const handleEraserToggle = useCallback(() => setEraserMode(m => !m), []);
+  const chooseTool = (next: Tool) => {
+    if (textEditRef.current) void commitText();
+
+    setTool(next);
+    selectElements([], strokesRef.current.length);
+    setLassoPath(null);
+  };
 
   // ──────────────── Zoom scrub gesture (Flutter parity) ────────────────────
   //
@@ -1551,8 +2250,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         ref={containerRef}
         $dark={darkMode}
         $panMode={panMode}
-        $eraser={eraserMode}
+        $tool={tool}
         $previewCursor={cursorPos !== null}
+        data-pen-detected={penDetected}
       >
         <DrawCanvas
           ref={canvasRef}
@@ -1565,7 +2265,30 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           }}
           onPointerUp={finishStroke}
           onPointerCancel={finishStroke}
+          onContextMenu={e => e.preventDefault()}
         />
+        {textEdit && (
+          <TextEditor
+            ref={textFieldRef}
+            value={textEdit.text}
+            rows={textEdit.text.split('\n').length}
+            aria-label='Canvas text'
+            onChange={e => setTextEdit({ ...textEdit, text: e.target.value })}
+            onBlur={() => void commitText()}
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            style={{
+              left: textEdit.x * scale + offset.x,
+              top: textEdit.y * scale + offset.y,
+              fontSize: textEdit.size * scale,
+              color: colorIntToHex(textEdit.color),
+            }}
+          />
+        )}
         {cursorPos && (
           <CursorPreview
             style={{
@@ -1580,6 +2303,20 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           />
         )}
         <RemoteCursors cursors={cursors} scale={scale} offset={offset} />
+        <input
+          ref={imageInputRef}
+          type='file'
+          accept='image/*'
+          hidden
+          aria-label='Choose an image'
+          onChange={e => {
+            const file = e.target.files?.[0];
+
+            e.target.value = '';
+
+            if (file) void handleImageFile(file);
+          }}
+        />
         <BottomToolbar>
           <CircleButton
             type='button'
@@ -1591,12 +2328,58 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
           <CircleButton
             type='button'
-            title={eraserMode ? 'Switch to draw' : 'Eraser'}
-            $active={eraserMode}
-            onClick={handleEraserToggle}
+            title='Pen'
+            aria-label='Pen tool'
+            $active={tool === 'pen'}
+            onClick={() => chooseTool('pen')}
           >
-            {eraserMode ? <FaPen /> : <FaEraser />}
+            <FaPen />
           </CircleButton>
+          <CircleButton
+            type='button'
+            title='Eraser'
+            aria-label='Eraser tool'
+            $active={tool === 'eraser'}
+            onClick={() => chooseTool('eraser')}
+          >
+            <FaEraser />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Lasso: circle strokes to select them, then move or scale'
+            aria-label='Lasso tool'
+            $active={tool === 'lasso'}
+            onClick={() => chooseTool('lasso')}
+          >
+            <FaVectorSquare />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Text: tap the canvas and type'
+            aria-label='Text tool'
+            $active={tool === 'text'}
+            onClick={() => chooseTool('text')}
+          >
+            <FaFont />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Image: place a picture'
+            aria-label='Place image'
+            onClick={() => imageInputRef.current?.click()}
+          >
+            <FaImage />
+          </CircleButton>
+          {selection.length > 0 && (
+            <CircleButton
+              type='button'
+              title='Delete selection'
+              aria-label='Delete selection'
+              onClick={deleteSelection}
+            >
+              <FaTrash />
+            </CircleButton>
+          )}
           <ColorCircleButton
             type='button'
             title='Pen color (tap to swap with previous, drag to pick from fan)'
@@ -1700,6 +2483,19 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
                   Tap the eraser button, then drag across strokes to remove them
                 </li>
                 <li>
+                  Lasso: draw a loop around strokes (or tap one) to select them,
+                  drag inside the box to move, drag a corner to scale, and press{' '}
+                  <kbd>Delete</kbd> to remove
+                </li>
+                <li>
+                  Text: tap the canvas and type; tap existing text to edit it
+                </li>
+                <li>Image: pick a picture, then move or scale it</li>
+                <li>
+                  Touch: two fingers pan and zoom. Once a pen has been seen, one
+                  finger pans as well; without a pen one finger draws
+                </li>
+                <li>
                   Tap the colour or width button to swap with the previous
                   choice; press &amp; drag to open the picker fan
                 </li>
@@ -1756,7 +2552,7 @@ const SaveStatus = styled.span<{ $error?: boolean }>`
 const CanvasArea = styled.div<{
   $dark: boolean;
   $panMode: string;
-  $eraser: boolean;
+  $tool: Tool;
   $previewCursor: boolean;
 }>`
   position: relative;
@@ -1770,7 +2566,7 @@ const CanvasArea = styled.div<{
       ? 'grab'
       : p.$panMode === 'panning'
         ? 'grabbing'
-        : p.$eraser
+        : p.$tool === 'eraser'
           ? 'cell'
           : // Hide the OS cursor only when the in-canvas preview circle is
             // showing — otherwise crosshair stays so the user isn't left
@@ -1807,6 +2603,24 @@ const DrawCanvas = styled.canvas`
   height: 100%;
 `;
 
+/** In-place text field over the canvas, sized to match the drawn text. */
+const TextEditor = styled.textarea`
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed ${p => p.theme.colors.main};
+  background: transparent;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  min-width: 2ch;
+  field-sizing: content;
+  font-family: ${TEXT_FONT_FAMILY};
+  line-height: ${TEXT_LINE_HEIGHT};
+`;
+
 const HelpList = styled.ul`
   margin: 0;
   padding-left: 1.25rem;
@@ -1840,6 +2654,8 @@ const BottomToolbar = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px;
+  max-width: calc(100% - 16px);
+  overflow-x: auto;
   background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 32px;
