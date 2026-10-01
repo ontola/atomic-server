@@ -63,6 +63,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   back to the server when there is none. New `useBlobObjectUrl` hook in
   `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
 
+- The "Could not set up your account passkey" message now also names the request that failed and its HTTP status, so a report says whether the session, the challenge or the credential was refused.
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
   account is signed in, shows both agents, and lets the user stay signed in or
