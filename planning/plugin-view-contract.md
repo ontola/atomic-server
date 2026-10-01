@@ -274,6 +274,44 @@ Three packages, published from `browser/`, MIT like the rest:
 The grid core is also what makes the table reusable outside Atomic, which Joep
 asked about on 29 September: the same core plus a non-Atomic data adapter.
 
+## What it costs
+
+The frame boundary is what makes third-party UI safe, and it is not free. Not
+measured yet; these follow from how the frame works.
+
+- **Data duplication.** The host store holds the rows and the frame holds its
+  own copy, sent through postMessage (structured clone). With windowed
+  collections that copy is the visible window; without them the whole table
+  is in memory twice. Every change is serialized once more on its way in.
+- **Loading time.** Each view is its own document: a view token round trip,
+  its own JS, and its own copy of the kit, fonts and any framework (React
+  twice if the plugin uses React). A first open is slower than a native tab.
+- **Rendering and interaction.** Host-drawn UI (menus, dialogs, pickers) is an
+  async round trip, so it appears a frame later. Drag and drop cannot cross
+  the frame edge (no dragging a card into the sidebar). Forwarded keys arrive
+  after the fact, so the host cannot stop a browser default inside the frame.
+  The frame is its own scroll container and does not size itself.
+- **Complexity.** Every capability is a versioned protocol kept forever: host
+  side, frame side, validation, security review and tests, doubled across two
+  hosts until step 0. Web components for the kit are a second copy of our
+  React components to maintain. Errors inside a null-origin frame are harder
+  to debug.
+- **Fit and finish.** Theme, focus, i18n and undo match only as far as the
+  contract carries them, so small seams remain.
+
+What follows from this:
+
+- **Our own views stay native.** Kanban as a plugin runs beside the real one
+  as a conformance test, not as its replacement, unless the numbers below say
+  it is close enough.
+- **Measure before deciding**, on the Kanban port: time to first render of a
+  plugin tab compared with the native tab, memory on a 10k-row table, time
+  from right-click to menu, and frame rate while dragging.
+- **Mitigations in the contract:** windowed collections with deltas (bounds
+  the duplicate), the kit served from the host with immutable caching (one
+  download per release, not per plugin), keeping a frame alive across tab
+  switches, and batching transactions.
+
 ## Kanban as the acceptance test
 
 The imports of `chunks/TablePage/Kanban/` are the work list. Each line is what
@@ -292,9 +330,9 @@ Kanban uses today and what replaces it in the contract.
 | `Tag`, `tagColours`, `ValueComp`, `InputStyles`, `IconButton`, `Loader`, `SkeletonButton` | `@tomic/ui` and `@tomic/tokens` |
 | `rowDefaults`, `useCreateRow`, `useAllMembers` | `atomic.transaction` create with the view's defaults; a `members` read |
 
-Done means: Kanban ships as a first-party plugin in the same release format a
-third party would use, behind a flag, and the existing Kanban e2e specs pass
-against it unchanged. Anything we had to special-case for it is a gap in the
+Done means: Kanban runs as a first-party plugin in the same release format a
+third party would use, beside the native Kanban (which stays the default), and
+the existing Kanban e2e specs pass against it unchanged. Anything we had to special-case for it is a gap in the
 contract and gets fixed there.
 
 ### What Kanban does not prove
