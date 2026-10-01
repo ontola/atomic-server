@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React, { createRef } from 'react';
 import {
   cleanup,
@@ -147,6 +147,16 @@ describe('searchLoadedExternal', () => {
 });
 
 describe('class picker', () => {
+  // The first render in this file is where styled-components builds its
+  // stylesheet, jsdom parses it and the picker's modules run for the first
+  // time. Under CI load that one-time cost put whichever test ran first over
+  // vitest's 5 s default, though the test itself takes a few milliseconds.
+  // Paid here, under the hook's own timeout.
+  beforeAll(() => {
+    show(storeWithFetchedClasses(), { searchValue: '' });
+    cleanup();
+  });
+
   it('shows a fetched external class for a partial name, marked with its origin', () => {
     fixture.serverResults = [LOCAL_CLASS];
     const { onSelect } = show(storeWithFetchedClasses(), {
