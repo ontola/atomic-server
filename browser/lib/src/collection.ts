@@ -342,6 +342,7 @@ export class Collection {
     this.preferServer = !!options.preferServer;
 
     if (!noFetch) {
+      store.registerBulkRefreshable(this);
       // Route the initial fetch through `refresh()` rather than calling
       // `fetchPage(0)` directly. `refresh()` sets `_refreshInFlight`,
       // which `applyResourceChange` reads to know whether a late-

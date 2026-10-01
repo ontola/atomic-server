@@ -7113,6 +7113,33 @@ export class Store {
     });
   }
 
+  private bulkRefreshables = new Set<WeakRef<{ refresh(): Promise<void> }>>();
+
+  /** Collections register here so that a bulk pull, which stores resources in
+   *  the database worker without announcing each one, can tell them to ask the
+   *  local database again. Held weakly: a collection nobody uses is not kept
+   *  alive for it. */
+  public registerBulkRefreshable(collection: {
+    refresh(): Promise<void>;
+  }): void {
+    this.bulkRefreshables.add(new WeakRef(collection));
+  }
+
+  /** Resources were stored without a notification each (see
+   *  `WSClient.applyPulledStates`): re-run the queries that are still alive. */
+  public notifyBulkApplied(): void {
+    for (const ref of this.bulkRefreshables) {
+      const collection = ref.deref();
+
+      if (!collection) {
+        this.bulkRefreshables.delete(ref);
+        continue;
+      }
+
+      collection.refresh().catch(() => undefined);
+    }
+  }
+
   /** Lets subscribers know that a resource has been changed. */
   private async notify(resource: Resource): Promise<void> {
     // A React snapshot read may initialize a missing resource. Other mounted

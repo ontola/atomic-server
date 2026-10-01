@@ -89,6 +89,8 @@ const SYNC_PROBE_DELAY_MS = 2000;
 // failure mode is a real server hang or stuck WS, not transient slowness.
 /** Envelopes verified per database call, and the pause between calls. */
 const ENVELOPE_SLICE = 50;
+/** Entries in one SYNC_PUSH chunk from which it counts as a bulk pull. */
+const BULK_PULL_MIN_ENTRIES = 50;
 const ENVELOPE_SLICE_GAP_MS = 150;
 /** Resources indexed for search per database call. */
 const SEARCH_INDEX_SLICE = 100;
@@ -1458,7 +1460,11 @@ export class WSClient {
           const workerDb = this.store.getClientDb();
           let entries = msg.entries;
 
+          // Only for a real pull. A handful of resources arriving is a live
+          // change that mounted views are waiting on, so it takes the path
+          // that announces each one.
           if (
+            entries.length >= BULK_PULL_MIN_ENTRIES &&
             typeof workerDb?.applyStateUpdates === 'function' &&
             !workerDb.initError
           ) {
@@ -1471,6 +1477,7 @@ export class WSClient {
                 this.store.resources.has(e.subject),
               );
               this.scheduleBackgroundImport();
+              this.pulledInBulk = true;
               workerDb
                 .applyStateUpdates(
                   direct.map(e => e.subject),
@@ -1511,8 +1518,16 @@ export class WSClient {
           if (msg.last) {
             const drive = canonicalizeScheme(msg.drive);
             const count = msg.entries.length;
-            const finish = () =>
+
+            const finish = () => {
               this.store.finishDriveSync(drive, count, Date.now());
+
+              if (this.pulledInBulk) {
+                this.pulledInBulk = false;
+                this.store.notifyBulkApplied();
+              }
+            };
+
             const clientDb = this.store.getClientDb();
 
             // "Synced" is what lets a collection believe its local answer,
@@ -1882,6 +1897,7 @@ export class WSClient {
     return run;
   }
 
+  private pulledInBulk = false;
   private pendingEnvelopes: Array<{ subject: string; json: string }> = [];
   private envelopeDrain: ReturnType<typeof setTimeout> | undefined;
 
