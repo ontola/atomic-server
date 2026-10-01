@@ -28,6 +28,7 @@ import {
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
+import { useHostUI } from './hostUI';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -97,6 +98,8 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
+  const hostUI = useHostUI({ appTitle, frame: frameRef, table });
+  const { handle: handleUI, forwardKey } = hostUI;
 
   // Which plugin renders it. Resolved here rather than by each caller: a
   // table tab and an app page both need it, and two copies would drift.
@@ -168,6 +171,8 @@ function AppFrameSession({
         : originalSession;
       const message = data as Record<string, unknown>;
 
+      if (forwardKey(message)) return;
+
       if (message.type === '__atomic_plugin_error') {
         const failure: AppError = {
           message: String(message.message ?? 'Something went wrong.'),
@@ -190,6 +195,15 @@ function AppFrameSession({
       }
 
       if (!isHostRequest(data)) return;
+
+      if (
+        handleUI(
+          data as unknown as Parameters<typeof handleUI>[0],
+          session.post,
+        )
+      ) {
+        return;
+      }
 
       if (data.op === 'proxyConnect') {
         if (!isPlatformId(data.platform)) {
@@ -251,7 +265,7 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src]);
+  }, [store, app, drive, table, src, handleUI, forwardKey]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
@@ -367,6 +381,7 @@ function AppFrameSession({
           </Row>
         </ErrorBar>
       )}
+      {hostUI.element}
       {connectAsk && (
         <ConnectDialog
           app={appTitle}

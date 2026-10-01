@@ -10298,3 +10298,8 @@ msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pa
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
 msgstr "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+
+#. 0: appTitle
+#: src/chunks/AppPage/hostUI.tsx
+msgid "Asked by {0}"
+msgstr "Asked by {0}"

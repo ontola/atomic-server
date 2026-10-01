@@ -35,6 +35,41 @@ window.addEventListener('message', event => {
   }
 });
 
+/** Requests that wait on the person, so they get no timeout. */
+const ASKS_THE_PERSON = new Set(['confirm', 'menu', 'share', 'proxyConnect']);
+
+/** A MouseEvent or `{ x, y }`, as a point in this frame. */
+function point(at) {
+  if (at && typeof at.clientX === 'number') return { x: at.clientX, y: at.clientY };
+
+  return at;
+}
+
+/**
+ * Keys this view did not handle go up to the host, so its shortcuts (search,
+ * Escape) still work while focus is in here. Only Escape and keys held with
+ * Ctrl, Cmd or Alt: plain typing stays in this frame. A view that handles a
+ * key itself calls `preventDefault()` and the host never sees it.
+ */
+window.addEventListener('keydown', event => {
+  if (event.defaultPrevented || event.isComposing) return;
+  if (event.key !== 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+
+  window.parent.postMessage(
+    {
+      type: 'atomic.view.key',
+      version: 1,
+      key: event.key,
+      code: event.code,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+    },
+    '*',
+  );
+});
+
 function send(op, payload) {
   const id = ++nextId;
 
@@ -42,11 +77,16 @@ function send(op, payload) {
     // A host that never answers would otherwise leave the plugin waiting
     // forever. Allow the host's 30s database-leader / websocket recovery to
     // finish before abandoning a cold-start query after a page reload.
-    const timer = setTimeout(() => {
-      if (pending.delete(id)) {
-        reject(new Error(`The host did not answer ${op} in time.`));
-      }
-    }, 60000);
+    //
+    // Not for a question the person answers: they may take as long as they
+    // like, and a confirm that rejected while still on screen would be a lie.
+    const timer = ASKS_THE_PERSON.has(op)
+      ? undefined
+      : setTimeout(() => {
+          if (pending.delete(id)) {
+            reject(new Error(`The host did not answer ${op} in time.`));
+          }
+        }, 60000);
     pending.set(id, { resolve, reject, timer });
     window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
   });
@@ -181,6 +221,55 @@ export const store = {
    * 2 request signature: method, full URL, timestamp and body hash), so a
    * copied capability is useless outside this frame.
    */
+  /**
+   * Host UI. The page around this frame draws these with its own components,
+   * so they look like the rest of Atomic and can reach past this frame's
+   * edges. Each names this app to the person, so it is clear who is asking.
+   */
+  ui: {
+    /** Asks a yes/no question in a host dialog. Resolves to true or false. */
+    async confirm({ title, body, confirmLabel, danger = false }) {
+      return send('confirm', { title, body, confirmLabel, danger });
+    },
+
+    /** A short notice in the host's corner. `kind`: success, error or info. */
+    async toast(text, { kind = 'info' } = {}) {
+      return send('toast', { text, kind });
+    },
+
+    /**
+     * A menu at `at`, a point in this frame such as the MouseEvent of a
+     * right-click. `items` are `{ id, label, disabled }` or 'divider'.
+     * Resolves to the chosen item's id, or null when dismissed.
+     */
+    async menu({ at, items }) {
+      return send('menu', { at: point(at), items });
+    },
+
+    /**
+     * Atomic's own menu for a resource (open, share, delete, and whatever
+     * the host adds later), at `at`.
+     */
+    async resourceMenu(subject, { at }) {
+      return send('resourceMenu', { subject, at: point(at) });
+    },
+
+    /** Atomic's share dialog for `subject`. Resolves once it is closed. */
+    async share(subject) {
+      return send('share', { subject });
+    },
+
+    /** Opens `subject` in the host, leaving this view. */
+    async openResource(subject) {
+      return send('openResource', { subject });
+    },
+
+    /** `{ locale, placement }`: the person's language, and 'page' or 'tab'. */
+    async environment() {
+      return send('environment', {});
+    },
+  },
+
   proxy: {
     /**
      * One provider call. `path` is the provider path (after the proxy's

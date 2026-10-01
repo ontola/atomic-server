@@ -199,6 +199,55 @@ test.describe('apps', () => {
     // The whole point of reporting it: somewhere to go next.
     await expect(alert.getByRole('button', { name: 'Fix it' })).toBeVisible();
   });
+
+  test("an app uses the host's own confirm, menu and shortcuts", async ({
+    page,
+  }) => {
+    await newApp(page);
+    await setAppSource(page, HOST_UI_APP);
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const said = app.getByRole('status');
+    await expect(app.getByRole('button', { name: 'Delete' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // A confirm the host draws, named after the app, not a bare confirm().
+    await app.getByRole('button', { name: 'Delete' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByRole('heading', { name: 'Delete this item?' }),
+    ).toBeVisible();
+    await expect(dialog).toContainText('Asked by');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(said).toHaveText('kept');
+
+    await app.getByRole('button', { name: 'Delete' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Confirm' })
+      .click();
+    await expect(said).toHaveText('confirmed');
+
+    // A menu at the click, drawn by the host so it is not clipped by the frame.
+    await app.getByRole('button', { name: 'Options' }).click();
+    await page.getByRole('menuitem', { name: 'Rename' }).click();
+    await expect(said).toHaveText('chose rename');
+
+    // Dismissing answers null rather than leaving the app waiting.
+    await app.getByRole('button', { name: 'Options' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(said).toHaveText('chose null');
+
+    // A host shortcut still works while focus is inside the app.
+    await app.getByRole('button', { name: 'Options' }).focus();
+    await page.keyboard.press('Control+k');
+    await expect(
+      page.getByPlaceholder('Search for resources...'),
+    ).toBeVisible();
+  });
 });
 
 /**
@@ -299,3 +348,37 @@ async function setAppSource(
     throw new Error('could not find the app’s entry point');
   }, source);
 }
+
+/**
+ * An app that asks the host for UI and says what came back, so the test can
+ * read the answer from inside the frame.
+ */
+const HOST_UI_APP = `export async function view({ root, store }) {
+  const said = document.createElement('p');
+  said.setAttribute('role', 'status');
+  const button = (label, onClick) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    root.append(b);
+  };
+  button('Delete', async () => {
+    const ok = await store.ui.confirm({
+      title: 'Delete this item?',
+      body: 'It goes to the trash.',
+      danger: true,
+    });
+    said.textContent = ok ? 'confirmed' : 'kept';
+  });
+  button('Options', async event => {
+    const id = await store.ui.menu({
+      at: event,
+      items: [
+        { id: 'rename', label: 'Rename' },
+        { id: 'duplicate', label: 'Duplicate' },
+      ],
+    });
+    said.textContent = 'chose ' + id;
+  });
+  root.append(said);
+}`;

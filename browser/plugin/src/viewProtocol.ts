@@ -24,7 +24,18 @@ export type ViewOperation =
   /** Connection references (never credentials) delegated to this app. */
   | 'proxyConnections'
   /** Ask the person, in host UI, to connect a proxy platform for this app. */
-  | 'proxyConnect';
+  | 'proxyConnect'
+  /**
+   * Host UI. The host draws these itself: a frame cannot draw outside its own
+   * box, and a share dialog or a confirm should look like the host's own.
+   */
+  | 'confirm'
+  | 'toast'
+  | 'menu'
+  | 'resourceMenu'
+  | 'share'
+  | 'openResource'
+  | 'environment';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -80,6 +91,13 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'proxyCapability',
       'proxyConnections',
       'proxyConnect',
+      'confirm',
+      'toast',
+      'menu',
+      'resourceMenu',
+      'share',
+      'openResource',
+      'environment',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&
@@ -100,3 +118,38 @@ export const packagedViewOperations = {
   subscribe: 'subscribe',
   unsubscribe: 'unsubscribe',
 } as const satisfies Record<string, ViewOperation>;
+
+/**
+ * A key press the view did not handle, passed up so the host's own shortcuts
+ * (search, undo, Escape) keep working while focus is inside the frame.
+ * A notification: the host does not answer it.
+ */
+export interface ViewKeyEvent {
+  type: 'atomic.view.key';
+  version: 1;
+  key: string;
+  code: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+export function isViewKeyEvent(value: unknown): value is ViewKeyEvent {
+  if (!value || typeof value !== 'object') return false;
+  const event = value as ViewKeyEvent;
+
+  return (
+    event.type === 'atomic.view.key' &&
+    event.version === 1 &&
+    typeof event.key === 'string' &&
+    event.key.length > 0 &&
+    event.key.length <= 32 &&
+    typeof event.code === 'string' &&
+    event.code.length <= 32 &&
+    typeof event.ctrlKey === 'boolean' &&
+    typeof event.metaKey === 'boolean' &&
+    typeof event.shiftKey === 'boolean' &&
+    typeof event.altKey === 'boolean'
+  );
+}

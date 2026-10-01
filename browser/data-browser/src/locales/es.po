@@ -10280,3 +10280,8 @@ msgstr ""
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
 msgstr ""
+
+#. 0: appTitle
+#: src/chunks/AppPage/hostUI.tsx
+msgid "Asked by {0}"
+msgstr "Solicitado por {0}"

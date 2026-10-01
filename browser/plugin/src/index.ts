@@ -28,10 +28,12 @@ export type {
 export {
   VIEW_PROTOCOL_VERSION,
   isViewRequest,
+  isViewKeyEvent,
   viewRequest,
   packagedViewOperations,
 } from './viewProtocol.js';
 export type {
+  ViewKeyEvent,
   ViewOperation,
   ViewRequest,
   ViewResponse,
