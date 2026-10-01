@@ -111,7 +111,7 @@ msgid "AI Agents"
 msgstr "AI Agents"
 
 #: src/chunks/AI/ConfigEditorDialog.tsx
-#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -3591,15 +3591,11 @@ msgstr "Enter your agent secret to unlock this drive on this device."
 msgid "Checking your {0} account…"
 msgstr "Checking your {0} account…"
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "To restore your account, sign in to your {0} account first, then come back here."
-msgstr "To restore your account, sign in to your {0} account first, then come back here."
+#~ msgid "To restore your account, sign in to your {0} account first, then come back here."
+#~ msgstr "To restore your account, sign in to your {0} account first, then come back here."
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in to your {0} account"
-msgstr "Sign in to your {0} account"
+#~ msgid "Sign in to your {0} account"
+#~ msgstr "Sign in to your {0} account"
 
 #. 0: text
 #: src/chunks/TablePage/TableHeading.tsx
@@ -4243,7 +4239,7 @@ msgstr "Pairing code copied."
 msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
-#: src/chunks/AppPage/AppFrame.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -5194,7 +5190,7 @@ msgstr "Sign out and remove this device’s copy of your encrypted backup"
 msgid "Sign out & forget this device"
 msgstr "Sign out & forget this device"
 
-#. 0: account.email; 1: PRODUCT_NAME
+#. 0: accountAddress(account); 1: PRODUCT_NAME
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr "Manage {0} on {1}"
@@ -6178,10 +6174,8 @@ msgstr "Cloud Vault had nothing for this workspace:"
 msgid "Forgot it? Restore from {0}"
 msgstr "Forgot it? Restore from {0}"
 
-#. 0: PRODUCT_NAME
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
-msgstr "Your backup is kept by your {0} account. Connect this device to it to restore."
+#~ msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+#~ msgstr "Your backup is kept by your {0} account. Connect this device to it to restore."
 
 #. 0: action.label(ctx)
 #: src/actions/deriveTools.ts
@@ -6951,6 +6945,7 @@ msgstr "Continue with passkey"
 msgid "Could not update your passkey. Please try again."
 msgstr "Could not update your passkey. Please try again."
 
+#: src/chunks/AppPage/ConnectDialog.tsx
 #: src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr "Use another account"
@@ -9514,22 +9509,17 @@ msgstr "{0} encrypted object{1} stored in {2} · {3}."
 msgid "Less than 1% used"
 msgstr "Less than 1% used"
 
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Sign in to connect an account."
-msgstr "Sign in to connect an account."
+#~ msgid "Sign in to connect an account."
+#~ msgstr "Sign in to connect an account."
 
-#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
-msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+#~ msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+#~ msgstr "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
 
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Use existing connection"
-msgstr "Use existing connection"
+#~ msgid "Use existing connection"
+#~ msgstr "Use existing connection"
 
-#: src/chunks/AppPage/AppFrame.tsx
-msgid "Connect an account"
-msgstr "Connect an account"
+#~ msgid "Connect an account"
+#~ msgstr "Connect an account"
 
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
@@ -10122,6 +10112,117 @@ msgstr "Textual Description"
 msgid "Sign out of this device."
 msgstr "Sign out of this device."
 
+#. 0: PRODUCT_NAME; 1: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account is enough to open your identity on a new device. {1} holds a key for that. Turn it off to rely only on your passkey or recovery code."
+msgstr "Signing in to your {0} account is enough to open your identity on a new device. {1} holds a key for that. Turn it off to rely only on your passkey or recovery code."
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Only your passkey or recovery code opens your identity. {0} cannot."
+msgstr "Only your passkey or recovery code opens your identity. {0} cannot."
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
+msgstr "This backup is sealed in this browser only. {0} is not holding a copy, so a new device could not get you back in."
+
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Connect {0}"
+msgstr "Connect {0}"
+
+#. 0: platform
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "<0/> wants to use your {0} account."
+msgstr "<0/> wants to use your {0} account."
+
+#. 0: proxySite
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "You approve this on the next page, at {0}."
+msgstr "You approve this on the next page, at {0}."
+
+#. 0: app
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "{0} never sees your password."
+msgstr "{0} never sees your password."
+
+#. 0: platform
+#. 0: PRODUCT_NAME
+#: src/chunks/AppPage/ConnectDialog.tsx
+#: src/helpers/managed/recovery.ts
+msgid "{0} account"
+msgstr "{0} account"
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Use this account"
+msgstr "Use this account"
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Use an account you already connected, or connect another one."
+msgstr "Use an account you already connected, or connect another one."
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not use this account."
+msgstr "Could not use this account."
+
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Could not start connecting."
+msgstr "Could not start connecting."
+
+#. 0: when
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Connected {0}."
+msgstr "Connected {0}."
+
+#. 0: apps
+#: src/chunks/AppPage/ConnectDialog.tsx
+msgid "Used by {0}."
+msgstr "Used by {0}."
+
+#: src/helpers/managed/recovery.ts
+msgid "Sign in again to unlock your account on this device."
+msgstr "Sign in again to unlock your account on this device."
+
+#: src/helpers/managed/recovery.ts
+msgid "Your account could not unlock this backup."
+msgstr "Your account could not unlock this backup."
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "That sign-in expired. Pick an option to start again."
+msgstr "That sign-in expired. Pick an option to start again."
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "Could not reach your account. Check your connection and try again."
+msgstr "Could not reach your account. Check your connection and try again."
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlocking {0}…"
+msgstr "Unlocking {0}…"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in again to open your account on this device."
+msgstr "Sign in again to open your account on this device."
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed a message while you were away"
+msgstr "You missed a message while you were away"
+
+#. 0: count
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "You missed {0} messages while you were away"
+msgstr "You missed {0} messages while you were away"
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Not now"
+msgstr "Not now"
+
+#: src/components/Notifications/MessageNotifier.tsx
+msgid "Show new messages as system notifications on this device?"
+msgstr "Show new messages as system notifications on this device?"
+
 #: src/components/Notifications/NotificationList.tsx
 msgid "Loading notifications"
 msgstr "Loading notifications"
@@ -10155,20 +10256,3 @@ msgstr "{0} replied to you in {1}"
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} replies to you in {2}"
 msgstr "{0}: {1} replies to you in {2}"
-
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "You missed a message while you were away"
-msgstr "You missed a message while you were away"
-
-#. 0: count
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "You missed {0} messages while you were away"
-msgstr "You missed {0} messages while you were away"
-
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "Not now"
-msgstr "Not now"
-
-#: src/components/Notifications/MessageNotifier.tsx
-msgid "Show new messages as system notifications on this device?"
-msgstr "Show new messages as system notifications on this device?"

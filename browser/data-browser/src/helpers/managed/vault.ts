@@ -724,6 +724,9 @@ export async function backupDrive({
   };
 }
 
+/** Matches `MAX_URL_BATCH` in the control plane's vault API. */
+const DOWNLOAD_URL_BATCH = 64;
+
 /**
  * Restore a drive from its vault into this device's store.
  *
@@ -762,13 +765,21 @@ export async function restoreDrive({
     };
   }
 
-  const { downloads } = await api<{ downloads: DownloadUrl[] }>(
-    `/cloud-vault/${drivePseudonym}/download-urls`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ object_ids: objects.map(o => o.object_id) }),
-    },
-  );
+  // The control plane signs at most DOWNLOAD_URL_BATCH objects per request,
+  // and a drive with a longer history refused to restore at all.
+  const downloads: DownloadUrl[] = [];
+
+  for (let i = 0; i < objects.length; i += DOWNLOAD_URL_BATCH) {
+    const batch = objects.slice(i, i + DOWNLOAD_URL_BATCH);
+    const answer = await api<{ downloads: DownloadUrl[] }>(
+      `/cloud-vault/${drivePseudonym}/download-urls`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ object_ids: batch.map(o => o.object_id) }),
+      },
+    );
+    downloads.push(...answer.downloads);
+  }
 
   // Preserve the server's ordering: `download-urls` answers per request and is
   // not required to echo the order back.

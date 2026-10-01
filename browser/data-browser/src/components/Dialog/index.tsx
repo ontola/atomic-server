@@ -44,6 +44,8 @@ export interface InternalDialogProps {
   instantClose?: boolean;
   disableLightDismiss?: boolean;
   width?: CSS.Property.Width;
+  /** Id of the element that names the dialog, usually its title's heading. */
+  labelledBy?: string;
 }
 
 export enum DialogSlot {
@@ -106,6 +108,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   width,
   instantClose = false,
   disableLightDismiss = false,
+  labelledBy,
   onClose,
   onClosed,
 }) => {
@@ -265,6 +268,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       $width={width}
       data-top-level={isTopLevel}
       closedby={disableLightDismiss ? 'none' : 'closerequest'}
+      aria-labelledby={labelledBy}
     >
       <StyledInnerDialog ref={innerDialogRef}>
         <PopoverContainer>

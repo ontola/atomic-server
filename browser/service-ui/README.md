@@ -14,3 +14,9 @@ Canonical copy lives here instead of separate product-name constants per app.
 Build before building either consumer: `pnpm --dir browser/service-ui build`.
 The workspace build does this in dependency order. The paired SaaS checkout uses
 a file dependency, like its existing `@tomic/lib` and `@tomic/edit-mode` dependencies.
+
+`AccountSignIn` is every way into an Atomic account (Google, passkey, email
+link), used by the portal's sign-in page, its homepage signup panel and the
+app's sign-in and restore steps, so no screen offers a different set. Hosts
+pass the actions; `--service-on-accent`, `--service-border`,
+`--service-input-bg` and `--service-radius` theme it further.
