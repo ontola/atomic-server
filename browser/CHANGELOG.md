@@ -4,6 +4,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Signed in to a hosted account, the app now links its identity to that
+  account (`/api/agent-link`), once per session and only after the identity
+  check has settled on it. Services that only ever see a signature, like the
+  integration proxy, can then tell which account a request is for, also when
+  the account has no drive or paid plan. An account service without agent
+  links, an email that was never confirmed, or an identity linked to another
+  account are left alone. Builds that know no account service make no
+  requests for it.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
