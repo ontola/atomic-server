@@ -571,7 +571,7 @@ export class AtomicServer {
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
     /**
-     * Where failed e2e shards leave their traces, for `e2eTestResults` to
+     * Where failed e2e shards leave their traces, for `failedTestResults` to
      * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
      */
     @argument() resultsKey: string = '',
@@ -2291,7 +2291,7 @@ export class AtomicServer {
 
   /**
    * Keeps failed shards' `test-results` (traces, screenshots,
-   * `error-context.md`) in a cache volume under `key`, for `e2eTestResults`.
+   * `error-context.md`) in a cache volume under `key`, for `failedTestResults`.
    *
    * They used to leave only through the netlify report, and with
    * `NETLIFY_TOKEN` unset they were discarded with the container. A failure
@@ -2335,12 +2335,16 @@ export class AtomicServer {
   }
 
   /**
+   * Named without a digit on purpose: Dagger's CLI kebab-cases `e2eTestResults`
+   * to something other than `e2e-test-results` (as with `--e2e-mode`), and
+   * the workflow's call failed with "unknown command" (run 36895753311).
+   *
    * The traces `ci`/`endToEnd` kept for failed shards under `resultsKey`,
    * one folder per shard. Empty when nothing failed. main-ci.yml exports
    * this on failure and uploads it as an artifact.
    */
   @func()
-  async e2eTestResults(@argument() resultsKey: string): Promise<Directory> {
+  async failedTestResults(@argument() resultsKey: string): Promise<Directory> {
     const safeKey = resultsKey.replace(/[^A-Za-z0-9._-]/g, '_');
 
     return dag
