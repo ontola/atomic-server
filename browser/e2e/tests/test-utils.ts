@@ -2307,9 +2307,9 @@ export async function acceptInvite(page: Page) {
   // plugin.spec.ts's install flow.
   await inDialog(
     page,
-    async (dialog, closeDialog) => {
+    async dialog => {
       await expect(
-        dialog.getByRole('heading', { name: 'Agent created!' }),
+        dialog.getByRole('heading', { name: 'This is your account' }),
       ).toBeVisible();
       await expect(dialog.getByLabel('Agent Name')).toHaveCount(0);
       await dialog
@@ -2320,14 +2320,18 @@ export async function acceptInvite(page: Page) {
       ).toBeVisible();
       await page.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(
-        dialog.getByRole('heading', { name: 'Agent created!' }),
+        dialog.getByRole('heading', { name: 'This is your account' }),
       ).toBeVisible();
       await expect(page.locator('html')).not.toHaveAttribute(
         'data-duplicate-invite-acceptance',
         'true',
       );
       await dialog.getByRole('button', { name: 'Copy to clipboard' }).click();
-      await closeDialog('Continue');
+      // The shared secret step carries its own confirm button, not a footer.
+      await dialog
+        .getByRole('button', { name: "Yes, I've stored it safely" })
+        .click();
+      await expect(dialog).toBeHidden({ timeout: 40000 });
     },
     40000,
   );
