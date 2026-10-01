@@ -2741,14 +2741,26 @@ const BottomToolbar = styled.div<{ $lift: number }>`
   max-width: calc(100% - 16px);
   overflow-x: auto;
 
-  @media (max-width: 900px) {
-    --canvas-button-size: 36px;
-    gap: 2px;
-  }
   background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 32px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+
+  /* Phones: a flat bar attached to the bottom and both sides. */
+  @media (max-width: 900px) {
+    --canvas-button-size: 36px;
+    gap: 2px;
+    left: 0;
+    right: 0;
+    transform: none;
+    bottom: ${p => p.$lift}px;
+    max-width: none;
+    justify-content: space-evenly;
+    border-radius: 0;
+    border-width: 1px 0 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.12);
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  }
 `;
 
 interface CircleButtonProps {
@@ -2757,6 +2769,10 @@ interface CircleButtonProps {
 
 const CircleButton = styled.button<CircleButtonProps>`
   flex: none;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  min-width: var(--canvas-button-size);
+  min-height: var(--canvas-button-size);
   width: var(--canvas-button-size);
   height: var(--canvas-button-size);
   border-radius: 50%;
@@ -2794,6 +2810,10 @@ const colorIntToHex = (c: number): string =>
 
 const ColorCircleButton = styled.button<{ $color: number }>`
   flex: none;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  min-width: var(--canvas-button-size);
+  min-height: var(--canvas-button-size);
   width: var(--canvas-button-size);
   height: var(--canvas-button-size);
   border-radius: 50%;
@@ -2813,6 +2833,10 @@ const ColorCircleButton = styled.button<{ $color: number }>`
  */
 const WidthCircleButton = styled.button`
   flex: none;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  min-width: var(--canvas-button-size);
+  min-height: var(--canvas-button-size);
   width: var(--canvas-button-size);
   height: var(--canvas-button-size);
   border-radius: 50%;
