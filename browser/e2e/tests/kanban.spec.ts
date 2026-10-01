@@ -516,12 +516,7 @@ test.describe('kanban', () => {
     await boardTab.click();
     await expect(page.getByTestId('menu-item-duplicate')).toBeVisible();
 
-    // Change type Kanban → Table: the board is replaced by the table grid.
-    await page.getByTestId('menu-item-kind-table').click();
-    await expect(page.getByTestId('kanban-board')).toHaveCount(0);
-
-    // Duplicate the (now table) Board view → a "Board copy" tab appears.
-    await boardTab.click();
+    // Duplicate the Board view → a "Board copy" tab appears.
     await page.getByTestId('menu-item-duplicate').click();
     const copyTab = page.getByRole('tab', { name: 'Board copy' });
     await expect(copyTab).toBeVisible();
@@ -529,6 +524,14 @@ test.describe('kanban', () => {
     // Duplication persists the view before navigating to it. Wait for that
     // navigation so the click opens the active tab's menu.
     await expect(copyTab).toHaveAttribute('aria-selected', 'true');
+
+    // Change type Kanban → Table on the copy. "Change this view to" is only
+    // offered while another view of the type remains (#1902), which the
+    // original Board view now is.
+    await copyTab.click();
+    await page.getByTestId('menu-item-kind-table').click();
+    await expect(page.getByTestId('kanban-board')).toHaveCount(0);
+
     // Delete the copy via its tab menu + confirmation dialog.
     await copyTab.click();
     await page.getByTestId('menu-item-delete').click();
