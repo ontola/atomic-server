@@ -2676,10 +2676,12 @@ const CursorPreview = styled.div`
      bottom of the canvas doesn't paint the preview over a button. */
 `;
 
+/* Out of flow: the canvas is sized from its area, so it must not also prop the
+   area open (otherwise the area never shrinks when the window does). */
 const DrawCanvas = styled.canvas`
+  position: absolute;
+  inset: 0;
   display: block;
-  width: 100%;
-  height: 100%;
 `;
 
 /** In-place text field over the canvas, sized to match the drawn text. */
