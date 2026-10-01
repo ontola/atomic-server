@@ -42,7 +42,6 @@ import { errorHandler } from '../../handlers/errorHandler';
 import {
   FaCircleInfo,
   FaEraser,
-  FaExpand,
   FaFont,
   FaImage,
   FaPen,
@@ -242,6 +241,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const { upload } = useUpload(resource);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const textFieldRef = useRef<HTMLTextAreaElement>(null);
+  // Pixels the toolbar is lifted so the app's bottom navigation bar never
+  // covers it (see the effect below).
+  const [toolbarLift, setToolbarLift] = useState(0);
   const textOpen = textEdit !== null;
 
   // Wheel events (pan AND zoom) are ignored if the current wheel session
@@ -595,6 +597,41 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     selection,
     lassoPath,
   ]);
+
+  // The canvas area is sized from the viewport height the browser reports,
+  // which on tablets and phones can be taller than what is visible. Measure
+  // the real overlap with the navigation bar instead of trusting that sum.
+  useEffect(() => {
+    const area = containerRef.current;
+
+    if (!area) return;
+
+    const update = () => {
+      const nav = document.querySelector('div[aria-label="navigation"]');
+      const a = area.getBoundingClientRect();
+      const n = nav?.getBoundingClientRect();
+      // Only a bar along the bottom edge can cover the toolbar.
+      const covers = n && n.top > a.top + a.height / 2;
+
+      setToolbarLift(covers ? Math.max(0, Math.round(a.bottom - n.top)) : 0);
+    };
+
+    update();
+
+    const ro = new ResizeObserver(update);
+    const later = window.setTimeout(update, 500);
+
+    ro.observe(area);
+    window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(later);
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
+  }, []);
 
   // Focus the text field only after the tap that opened it has finished: the
   // browser moves focus to the canvas as the press ends, which would blur a
@@ -2353,7 +2390,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           onResourcePicked={subject => void placeImage(subject)}
           onNewFilePicked={file => void uploadAndPlaceImage(file)}
         />
-        <BottomToolbar>
+        <BottomToolbar $lift={toolbarLift}>
           <CircleButton
             type='button'
             title='Canvas help'
@@ -2463,13 +2500,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           </CircleButton>
           <CircleButton
             type='button'
-            title='Zoom to fit (tap) — drag horizontally to zoom-scrub'
+            title='Zoom level: tap to fit everything, drag sideways to zoom'
+            aria-label='Zoom level'
             onPointerDown={onZoomPointerDown}
             onPointerMove={onZoomPointerMove}
             onPointerUp={onZoomPointerUp}
             onPointerCancel={onZoomPointerCancel}
           >
-            <FaExpand />
+            <ZoomLabel>{Math.round(scale * 100)}%</ZoomLabel>
           </CircleButton>
         </BottomToolbar>
         {overlayMode !== 'closed' && (
@@ -2544,8 +2582,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
                   after an undo; drag over one and release to restore it
                 </li>
                 <li>
-                  Tap the zoom button to fit all strokes; drag left/right to
-                  zoom continuously
+                  Tap the zoom button (it shows the zoom level) to fit all
+                  strokes; drag left/right to zoom continuously
                 </li>
                 <li>
                   <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+
@@ -2657,6 +2695,13 @@ const TextEditor = styled.textarea`
   line-height: ${TEXT_LINE_HEIGHT};
 `;
 
+/** The current zoom as a percentage, shown on the zoom button. */
+const ZoomLabel = styled.span`
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+`;
+
 const HelpList = styled.ul`
   margin: 0;
   padding-left: 1.25rem;
@@ -2680,9 +2725,9 @@ const HelpList = styled.ul`
  * layout: floating, centered, rounded, theme-aware background with a soft
  * shadow. Compact widths just shrink the gap; the desktop pill survives.
  */
-const BottomToolbar = styled.div`
+const BottomToolbar = styled.div<{ $lift: number }>`
   position: absolute;
-  bottom: ${p => p.theme.size(2)};
+  bottom: calc(${p => p.theme.size(2)} + ${p => p.$lift}px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -2690,8 +2735,16 @@ const BottomToolbar = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px;
+  /* Buttons keep their size and stay round; a toolbar wider than the screen
+     scrolls sideways instead of squeezing them. */
+  --canvas-button-size: 44px;
   max-width: calc(100% - 16px);
   overflow-x: auto;
+
+  @media (max-width: 900px) {
+    --canvas-button-size: 36px;
+    gap: 2px;
+  }
   background: ${p => p.theme.colors.bg};
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 32px;
@@ -2703,8 +2756,9 @@ interface CircleButtonProps {
 }
 
 const CircleButton = styled.button<CircleButtonProps>`
-  width: 44px;
-  height: 44px;
+  flex: none;
+  width: var(--canvas-button-size);
+  height: var(--canvas-button-size);
   border-radius: 50%;
   border: none;
   background: ${p => (p.$active ? p.theme.colors.main : 'transparent')};
@@ -2739,8 +2793,9 @@ const colorIntToHex = (c: number): string =>
   `#${(c >>> 0).toString(16).padStart(8, '0').slice(2)}`;
 
 const ColorCircleButton = styled.button<{ $color: number }>`
-  width: 44px;
-  height: 44px;
+  flex: none;
+  width: var(--canvas-button-size);
+  height: var(--canvas-button-size);
   border-radius: 50%;
   background: ${p => colorIntToHex(p.$color)};
   border: 2px solid ${p => p.theme.colors.bg2};
@@ -2757,8 +2812,9 @@ const ColorCircleButton = styled.button<{ $color: number }>`
  * stroke width. Tap cycles. D2 replaces this with the fan.
  */
 const WidthCircleButton = styled.button`
-  width: 44px;
-  height: 44px;
+  flex: none;
+  width: var(--canvas-button-size);
+  height: var(--canvas-button-size);
   border-radius: 50%;
   border: none;
   background: transparent;

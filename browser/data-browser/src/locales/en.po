@@ -1214,10 +1214,6 @@ msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Redo (Ctrl+Shift+Z)"
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
-msgstr "Zoom to fit (tap) — drag horizontally to zoom-scrub"
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Canvas controls"
 msgstr "Canvas controls"
 
@@ -4015,10 +4011,6 @@ msgstr "Tap <0>Undo</0> / <1>Redo</1> to step through edits; drag the undo butto
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
 msgstr "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Tap the zoom button to fit all strokes; drag left/right to zoom continuously"
-msgstr "Tap the zoom button to fit all strokes; drag left/right to zoom continuously"
 
 #: src/views/Drive/DrivePage.tsx
 msgid "A short description given to the AI Agent, use this to tell it what this drive is about, link important resources etc."
@@ -10238,3 +10230,15 @@ msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pa
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
 msgstr "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level: tap to fit everything, drag sideways to zoom"
+msgstr "Zoom level: tap to fit everything, drag sideways to zoom"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level"
+msgstr "Zoom level"
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+msgstr "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
