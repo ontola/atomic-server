@@ -65,7 +65,6 @@ import {
 import { currentWheelSessionStartedAt } from '@helpers/wheelSession';
 import {
   archiveBranch,
-  BRANCH_GRACE_MS,
   bootstrapUndoSteps,
   cloneStrokes,
   loadCanvasHistory,
@@ -86,6 +85,10 @@ import { RemoteCursors, useCanvasPresence } from './CanvasPresence';
  * canvas scale. Matches Flutter's `_onZoomScrubDelta` ratio.
  */
 const ZOOM_SCRUB_PX_PER_2X = 150;
+const ZOOM_MIN = 0.05;
+const ZOOM_MAX = 30;
+/** Hints that belong to a held button linger this long after release. */
+const HINT_LINGER_MS = 100;
 
 /**
  * Pen-color swatches and stroke widths — match Flutter `fan_helpers.dart` so
@@ -877,7 +880,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       hoveredBranchIdRef.current = null;
       setHoveredBranchId(null);
       setPreviewStrokes(null);
-    }, BRANCH_GRACE_MS);
+    }, HINT_LINGER_MS);
   }, []);
 
   // Clear a pending grace timer on unmount / canvas navigation.
@@ -1069,12 +1072,27 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   );
 
   /** Hover / click on branch tiles during the post-release grace window. */
-  const onBranchHover = useCallback((id: string | null) => {
-    hoveredBranchIdRef.current = id;
-    setHoveredBranchId(id);
-    const branch = id ? branchesRef.current.find(b => b.id === id) : undefined;
-    setPreviewStrokes(branch ? branch.strokes : null);
-  }, []);
+  const onBranchHover = useCallback(
+    (id: string | null) => {
+      // Hovering a tile keeps the panel open; leaving it restarts the short wait.
+      if (id) {
+        if (graceTimerRef.current !== undefined) {
+          window.clearTimeout(graceTimerRef.current);
+          graceTimerRef.current = undefined;
+        }
+      } else {
+        openGraceWindow();
+      }
+
+      hoveredBranchIdRef.current = id;
+      setHoveredBranchId(id);
+      const branch = id
+        ? branchesRef.current.find(b => b.id === id)
+        : undefined;
+      setPreviewStrokes(branch ? branch.strokes : null);
+    },
+    [openGraceWindow],
+  );
 
   const onBranchPick = useCallback(
     async (id: string) => {
@@ -2166,11 +2184,32 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     dragged: boolean;
   } | null>(null);
 
+  // The scale bar shows while the zoom button is held, so people find out they
+  // can hold it, and goes away a moment after release.
+  const [zoomHintShown, setZoomHintShown] = useState(false);
+  const zoomHintTimerRef = useRef<number | undefined>(undefined);
+
+  const showZoomHint = useCallback(() => {
+    window.clearTimeout(zoomHintTimerRef.current);
+    setZoomHintShown(true);
+  }, []);
+
+  const hideZoomHintSoon = useCallback(() => {
+    window.clearTimeout(zoomHintTimerRef.current);
+    zoomHintTimerRef.current = window.setTimeout(
+      () => setZoomHintShown(false),
+      HINT_LINGER_MS,
+    );
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(zoomHintTimerRef.current), []);
+
   const onZoomPointerDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
       const container = containerRef.current;
       if (!container) return;
       e.preventDefault();
+      showZoomHint();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
       const containerW = container.clientWidth;
@@ -2188,7 +2227,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         dragged: false,
       };
     },
-    [],
+    [showZoomHint],
   );
 
   const onZoomPointerMove = useCallback(
@@ -2228,12 +2267,13 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (!z || z.pointerId !== e.pointerId) return;
       (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       zoomScrubRef.current = null;
+      hideZoomHintSoon();
 
       if (!z.dragged) {
         handleZoomToFitRef.current();
       }
     },
-    [],
+    [hideZoomHintSoon],
   );
 
   const onZoomPointerCancel = useCallback(
@@ -2241,8 +2281,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       const z = zoomScrubRef.current;
       if (!z || z.pointerId !== e.pointerId) return;
       zoomScrubRef.current = null;
+      hideZoomHintSoon();
     },
-    [],
+    [hideZoomHintSoon],
   );
 
   /** Zoom to fit: compute the bounding box of all strokes, scale to fit
@@ -2515,6 +2556,15 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             <ZoomLabel>{Math.round(scale * 100)}%</ZoomLabel>
           </CircleButton>
         </BottomToolbar>
+        {zoomHintShown && (
+          <ZoomHint $lift={toolbarLift} aria-hidden>
+            <span>{Math.round(scale * 100)}%</span>
+            <ZoomTrack>
+              <ZoomTick style={{ left: `${zoomFraction(1) * 100}%` }} />
+              <ZoomFill style={{ width: `${zoomFraction(scale) * 100}%` }} />
+            </ZoomTrack>
+          </ZoomHint>
+        )}
         {overlayMode !== 'closed' && (
           <HistoryScrubOverlay
             step={scrubStep}
@@ -2703,6 +2753,58 @@ const TextEditor = styled.textarea`
 `;
 
 /** The current zoom as a percentage, shown on the zoom button. */
+/** Where a zoom level sits on the bar: logarithmic, like the drag itself. */
+const zoomFraction = (z: number): number =>
+  Math.min(
+    1,
+    Math.max(0, Math.log(z / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN)),
+  );
+
+const ZoomHint = styled.div<{ $lift: number }>`
+  position: absolute;
+  bottom: calc(${p => p.theme.size(2)} + 64px + ${p => p.$lift}px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: ${p => p.theme.colors.text};
+  pointer-events: none;
+`;
+
+const ZoomTrack = styled.div`
+  position: relative;
+  width: 180px;
+  height: 4px;
+  border-radius: 2px;
+  background: ${p => p.theme.colors.bg2};
+`;
+
+const ZoomFill = styled.div`
+  height: 100%;
+  border-radius: 2px;
+  background: ${p => p.theme.colors.main};
+`;
+
+/** Marks 100% on the bar. */
+const ZoomTick = styled.div`
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  background: ${p => p.theme.colors.textLight};
+`;
+
 const ZoomLabel = styled.span`
   font-size: 0.7rem;
   font-weight: 600;
