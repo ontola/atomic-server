@@ -8,6 +8,7 @@ import {
   clearManagedAccountBinding,
   evaluateIdentityReconciliation,
   evaluateServerReconciliation,
+  linkAgentToAccount,
   localAgentWorkspace,
   logoutManagedSession,
   PRODUCT_NAME,
@@ -296,6 +297,10 @@ export function IdentityReconcileGate({
       // drive (zero-scan pairing — no manual "Sync now"). Fire-and-forget:
       // routing hints only, must never delay or gate the app.
       void syncDeviceDirectory(store.getDrive(), store.getAgent());
+      // Tell the account which identity it now uses, so services that only
+      // see a signature (the integration proxy) can tell whose account it is.
+      // Fire-and-forget too: it never throws, and tries once per session.
+      void linkAgentToAccount(store.getAgent());
 
       setConflict(null);
       setChecking(false);
