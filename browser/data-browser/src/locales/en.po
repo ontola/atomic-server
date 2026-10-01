@@ -10713,3 +10713,15 @@ msgstr "Discard upload"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your profile picture could not be uploaded. You can add it later in your profile."
+msgstr "Your profile picture could not be uploaded. You can add it later in your profile."
+
+#: src/components/ProfileForm.tsx
+msgid "Use your full name and a picture so people recognize you. You can change both later in your profile."
+msgstr "Use your full name and a picture so people recognize you. You can change both later in your profile."
+
+#: src/views/InvitePage.tsx
+msgid "Account created"
+msgstr "Account created"
