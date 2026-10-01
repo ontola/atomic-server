@@ -1870,7 +1870,6 @@ msgid "Copied error to clipboard"
 msgstr "Copied error to clipboard"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
-#: src/chunks/TablePage/QuickFilterField.tsx
 #: src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
@@ -10254,20 +10253,3 @@ msgstr "{0} replied to you in {1}"
 #: src/components/Notifications/NotificationList.tsx
 msgid "{0}: {1} replies to you in {2}"
 msgstr "{0}: {1} replies to you in {2}"
-
-#: src/chunks/TablePage/QuickFilterField.tsx
-msgid "Find rows"
-msgstr "Find rows"
-
-#: src/chunks/TablePage/QuickFilterField.tsx
-msgid "Find rows…"
-msgstr "Find rows…"
-
-#: src/chunks/TablePage/QuickFilterField.tsx
-msgid "Find rows containing text"
-msgstr "Find rows containing text"
-
-#. 0: quickFilterQuery
-#: src/chunks/TablePage/TableResource.tsx
-msgid "No rows show “{0}”."
-msgstr "No rows show “{0}”."
