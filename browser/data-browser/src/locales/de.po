@@ -10284,7 +10284,11 @@ msgstr ""
 
 #. 0: appTitle
 #. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
 #: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
 #: src/components/HostUI/hostUIDialogs.tsx
 msgid "Asked by {0}"
 msgstr "Gefragt von {0}"

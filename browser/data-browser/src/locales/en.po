@@ -10302,7 +10302,11 @@ msgstr "Tap the zoom button (it shows the zoom level) to fit all strokes; drag l
 
 #. 0: appTitle
 #. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
 #: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
 #: src/components/HostUI/hostUIDialogs.tsx
 msgid "Asked by {0}"
 msgstr "Asked by {0}"

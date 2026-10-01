@@ -342,6 +342,7 @@ export function useHostUI({
             key={String(ask.id)}
             show
             allowedMimes={ask.accept ? new Set(ask.accept) : undefined}
+            note={<AskedBy>Asked by {appTitle}</AskedBy>}
             onResourcePicked={subject => finish(ask, subject)}
             onNewFilePicked={file => upload(ask, file)}
             onShowChange={show => {
@@ -352,6 +353,7 @@ export function useHostUI({
         {ask?.kind === 'form' && (
           <AppFormDialog
             key={String(ask.id)}
+            appTitle={appTitle}
             ask={ask.form}
             parent={ask.parent}
             onSaved={subject => finish(ask, subject)}
