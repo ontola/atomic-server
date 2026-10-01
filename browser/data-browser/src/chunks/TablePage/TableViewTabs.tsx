@@ -2,7 +2,6 @@ import {
   dataBrowser,
   Property,
   useResource,
-  useResources,
   useString,
   useTitle,
 } from '@tomic/react';
@@ -44,11 +43,6 @@ import {
   VIEW_KIND_ICONS,
   ViewKind,
 } from './tableViewKinds';
-import {
-  canChangeViewType,
-  canDeleteView,
-  viewTypeKey,
-} from './viewTypeChoice';
 import { QuickAddDialog } from './QuickAddDialog';
 import type { QuickAddSpec } from './quickAdd';
 import { QuickFilterField } from './QuickFilterField';
@@ -60,11 +54,7 @@ interface TableViewTabsProps {
   activeView: string | undefined;
   setActiveView: (subject: string) => void;
   createView: (kind?: ViewKind | string, label?: string) => void;
-  setViewKind: (
-    subject: string,
-    kind: ViewKind | string,
-    label?: string,
-  ) => void;
+  setViewKind: (subject: string, kind: ViewKind | string) => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
   viewName: string;
@@ -126,7 +116,6 @@ export function TableViewTabs({
   // A table with no saved views yet still shows one implicit "Default View" tab.
   const tabs = views.length > 0 ? views : [undefined];
   const apps = appsForClass(useDriveApps(useStore().getDrive()), rowClass);
-  const typesBySubject = useViewTypes(views);
 
   return (
     <Bar>
@@ -140,12 +129,7 @@ export function TableViewTabs({
             canWrite={canWrite}
             onSelect={() => subject && setActiveView(subject)}
             onRename={renameView}
-            createView={createView}
             setViewKind={setViewKind}
-            canChangeType={
-              !!subject && canChangeViewType(subject, typesBySubject)
-            }
-            canDelete={!subject || canDeleteView(subject, typesBySubject)}
             apps={apps}
             duplicateView={duplicateView}
             deleteView={deleteView}
@@ -175,32 +159,6 @@ export function TableViewTabs({
         />
       </Actions>
     </Bar>
-  );
-}
-
-/**
- * Each saved view's type (built-in kind or app subject), live, so the tab menu
- * knows which choices would leave a type with no view left (#1806).
- */
-function useViewTypes(views: string[]): Map<string, string> {
-  // `useResources` wants a stable array; the tab list's identity may not be.
-  const key = views.join('\n');
-  const stableViews = useMemo(() => (key ? key.split('\n') : []), [key]);
-  const resources = useResources(stableViews);
-
-  return useMemo(
-    () =>
-      new Map(
-        stableViews.map(s => [
-          s,
-          viewTypeKey(
-            resources.get(s)?.get(dataBrowser.properties.viewKind) as
-              | string
-              | undefined,
-          ),
-        ]),
-      ),
-    [stableViews, resources],
   );
 }
 
@@ -308,10 +266,7 @@ function ViewTab({
   canWrite,
   onSelect,
   onRename,
-  createView,
   setViewKind,
-  canChangeType,
-  canDelete,
   apps,
   duplicateView,
   deleteView,
@@ -325,16 +280,7 @@ function ViewTab({
   canWrite: boolean;
   onSelect: () => void;
   onRename: (name: string) => void;
-  createView: (kind?: ViewKind | string, label?: string) => void;
-  setViewKind: (
-    subject: string,
-    kind: ViewKind | string,
-    label?: string,
-  ) => void;
-  /** Another view of this one's type remains, so changing it hides nothing. */
-  canChangeType: boolean;
-  /** False for the last table view while other views exist. */
-  canDelete: boolean;
+  setViewKind: (subject: string, kind: ViewKind | string) => void;
   /** Resolved once by the tab bar rather than once per tab. */
   apps: DriveApp[];
   duplicateView: (subject: string) => void;
@@ -347,7 +293,6 @@ function ViewTab({
   const [title] = useTitle(resource);
   const [storedKind] = useString(resource, dataBrowser.properties.viewKind);
   const currentKind = normalizeViewKind(storedKind);
-  const ownType = viewTypeKey(storedKind);
   const name = subject ? title || 'Untitled view' : (fallbackName ?? 'View');
   const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
 
@@ -394,10 +339,6 @@ function ViewTab({
           id: 'delete',
           label: 'Delete',
           icon: <FaTrash />,
-          disabled: !canDelete,
-          helper: canDelete
-            ? undefined
-            : 'The last table view stays, so the rows can always be seen as a table.',
           onClick: () => setShowDelete(true),
         },
         // Only on the active tab: `setQuickAdd` writes to the active view, so
@@ -415,63 +356,28 @@ function ViewTab({
               },
             ]
           : []),
-        // Picking a type adds a view of it next to this one (#1806): the user
-        // should always be able to switch between all the applicable views,
-        // so no choice here takes one away. Same list as the `+` tab.
         DIVIDER,
         {
-          id: 'add-view',
-          label: 'Add a view',
+          id: 'view-type',
+          label: 'View type',
           header: true,
           onClick: () => undefined,
         },
-        ...VIEW_KINDS.map(kind => {
-          const Icon = VIEW_KIND_ICONS[kind];
-
-          return {
-            id: `add-${kind}`,
-            label: VIEW_KIND_LABELS[kind],
-            icon: <Icon />,
-            onClick: () => createView(kind),
-          };
-        }),
-        ...apps.map(app => ({
-          id: `add-${app.subject}`,
-          label: app.name,
-          icon: <FaWindowMaximize />,
-          onClick: () => createView(app.subject, app.name),
+        ...VIEW_KINDS.map(kind => ({
+          id: `kind-${kind}`,
+          label: VIEW_KIND_LABELS[kind],
+          icon: kind === currentKind ? <FaCheck /> : undefined,
+          onClick: () => setViewKind(subject, kind),
         })),
-        // Changing this view in place, only while another view of its type
-        // remains — so the last table view can never be converted away.
-        ...(canChangeType
-          ? [
-              DIVIDER,
-              {
-                id: 'change-view',
-                label: 'Change this view to',
-                header: true,
-                onClick: () => undefined,
-              },
-              ...VIEW_KINDS.filter(kind => kind !== ownType).map(kind => {
-                const Icon = VIEW_KIND_ICONS[kind];
-
-                return {
-                  id: `kind-${kind}`,
-                  label: VIEW_KIND_LABELS[kind],
-                  icon: <Icon />,
-                  onClick: () => setViewKind(subject, kind),
-                };
-              }),
-              ...apps
-                .filter(app => app.subject !== ownType)
-                .map(app => ({
-                  id: `kind-${app.subject}`,
-                  label: app.name,
-                  icon: <FaWindowMaximize />,
-                  onClick: () => setViewKind(subject, app.subject, app.name),
-                })),
-            ]
-          : []),
+        // An app is another way of looking at these rows, chosen the same way
+        // as a built-in kind. It is set on this view only — the table's own
+        // Table tab is untouched, and no app becomes the default.
+        ...apps.map(app => ({
+          id: `kind-${app.subject}`,
+          label: app.name,
+          icon: app.subject === storedKind ? <FaCheck /> : undefined,
+          onClick: () => setViewKind(subject, app.subject),
+        })),
       ]
     : [];
 

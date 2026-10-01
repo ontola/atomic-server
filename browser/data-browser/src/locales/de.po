@@ -3627,8 +3627,9 @@ msgstr ""
 msgid "Rename"
 msgstr ""
 
-#~ msgid "View type"
-#~ msgstr ""
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "View type"
+msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
@@ -10251,16 +10252,4 @@ msgstr ""
 #. 0: quickFilterQuery
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
-msgstr ""
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "The last table view stays, so the rows can always be seen as a table."
-msgstr ""
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add a view"
-msgstr ""
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Change this view to"
 msgstr ""

@@ -3627,8 +3627,9 @@ msgstr "Click to add a value"
 msgid "Rename"
 msgstr "Rename"
 
-#~ msgid "View type"
-#~ msgstr "View type"
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "View type"
+msgstr "View type"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
@@ -10270,15 +10271,3 @@ msgstr "Find rows containing text"
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
 msgstr "No rows show “{0}”."
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "The last table view stays, so the rows can always be seen as a table."
-msgstr "The last table view stays, so the rows can always be seen as a table."
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Add a view"
-msgstr "Add a view"
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Change this view to"
-msgstr "Change this view to"

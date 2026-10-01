@@ -281,31 +281,3 @@ test.describe('calendar grid alignment', () => {
     }
   });
 });
-
-test.describe('choosing a view type from a tab (#1806)', () => {
-  test.beforeEach(before);
-
-  test('adds a Calendar view next to the only Table view', async ({ page }) => {
-    await createTableFromDialog(page, { name: 'Content plan' });
-
-    // Save the implicit tab as a real Table view, so it has a menu.
-    await page.getByRole('button', { name: 'Add view' }).click();
-    await page.getByTestId('menu-item-table').click();
-    const tableTab = page.getByRole('tab', { name: 'Table', exact: true });
-    await expect(tableTab).toHaveAttribute('aria-selected', 'true');
-
-    // Clicking the active tab opens its menu. The only table view cannot be
-    // changed in place; Calendar there adds a view instead.
-    await tableTab.click();
-    await expect(page.getByTestId('menu-item-kind-calendar')).toHaveCount(0);
-    await page.getByTestId('menu-item-add-calendar').click();
-
-    await expect(page.getByTestId('calendar-view')).toBeVisible();
-    await expect(page.getByRole('tab')).toHaveText(['Table', 'Calendar']);
-
-    // The table layout is one click away.
-    await tableTab.click();
-    await expect(page.getByTestId('calendar-view')).toHaveCount(0);
-    await expect(tableTab).toHaveAttribute('aria-selected', 'true');
-  });
-});

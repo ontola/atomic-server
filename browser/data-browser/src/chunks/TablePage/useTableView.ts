@@ -48,12 +48,6 @@ import {
   normalizeViewKind,
   VIEW_KIND_LABELS,
 } from './tableViewKinds';
-import {
-  canChangeViewType,
-  canDeleteView,
-  nameAfterTypeChange,
-  viewTypeKey,
-} from './viewTypeChoice';
 
 const DEFAULT_SORT: TableSorting = { prop: DEFAULT_SORT_PROP, sortDesc: false };
 
@@ -106,16 +100,8 @@ export interface UseTableViewResult {
   setActiveView: (subject: string) => void;
   /** Create a new (empty) view of the given kind, link it, and switch to it. */
   createView: (kind?: ViewKind | string, label?: string) => void;
-  /**
-   * Change a view's renderer kind in place — only when another view of its
-   * current type remains (#1806); otherwise a new view is added instead. A
-   * default name ("All pieces", "Table") becomes the new type's `label`.
-   */
-  setViewKind: (
-    subject: string,
-    kind: ViewKind | string,
-    label?: string,
-  ) => void;
+  /** Change a view's renderer kind (table/kanban/calendar/timer). */
+  setViewKind: (subject: string, kind: ViewKind | string) => void;
   /** Copy a view (its config) into a new "<name> copy" view and switch to it. */
   duplicateView: (subject: string) => void;
   /** Remove a view from the table and destroy its resource. */
@@ -955,51 +941,11 @@ export function useTableView(
     [ensureView],
   );
 
-  /** Each saved view's type, read as the tabs show it right now. */
-  const readViewTypes = useCallback(
-    (): Map<string, string> =>
-      new Map(
-        (views as string[]).map(s => [
-          s,
-          viewTypeKey(
-            store.getResourceLoading(s).get(dataBrowser.properties.viewKind) as
-              | string
-              | undefined,
-          ),
-        ]),
-      ),
-    [views, store],
-  );
-
   const setViewKind = useCallback(
-    (subject: string, kind: ViewKind | string, label?: string) => {
-      const typesBySubject = readViewTypes();
-
-      // Changing the only view of a type makes that type unreachable — for
-      // the last table view, the rows' own layout. Add a view instead and
-      // leave this one as it is (#1806).
-      if (!canChangeViewType(subject, typesBySubject)) {
-        createView(kind, label);
-
-        return;
-      }
-
+    (subject: string, kind: ViewKind | string) => {
       void (async () => {
         const v = store.getResourceLoading(subject);
-        const fromType = typesBySubject.get(subject)!;
-        const fromApp = appViewOf(fromType);
-        const newName = nameAfterTypeChange(
-          v.get(core.properties.name) as string | undefined,
-          fromType,
-          label ?? VIEW_KIND_LABELS[normalizeViewKind(kind)],
-          fromApp ? store.getResourceLoading(fromApp).title : undefined,
-        );
-
         await v.set(dataBrowser.properties.viewKind, kind, false);
-
-        if (newName !== undefined) {
-          await v.set(core.properties.name, newName, false);
-        }
 
         // Switching an existing tab to a dashboard needs one to show; keep
         // any it already names, so switching away and back loses nothing.
@@ -1021,7 +967,7 @@ export function useTableView(
         await v.save();
       })().catch(() => undefined);
     },
-    [store, table, createDashboardResource, createView, readViewTypes],
+    [store, table, createDashboardResource],
   );
 
   const duplicateView = useCallback(
@@ -1084,12 +1030,6 @@ export function useTableView(
 
   const deleteView = useCallback(
     (subject: string) => {
-      // The last table view stays while other views exist: without it the
-      // rows' own layout is gone (#1806). The tab menu disables this too.
-      if (!canDeleteView(subject, readViewTypes())) {
-        return;
-      }
-
       void (async () => {
         const next = (views as string[]).filter(v => v !== subject);
         await table.set(dataBrowser.properties.tableViews, next, false);
@@ -1113,7 +1053,7 @@ export function useTableView(
         await store.getResourceLoading(subject).destroy();
       })().catch(() => undefined);
     },
-    [views, table, defaultViewSubject, activeView, store, readViewTypes],
+    [views, table, defaultViewSubject, activeView, store],
   );
 
   return {
