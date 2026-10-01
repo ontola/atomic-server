@@ -13,6 +13,7 @@ import {
   useTableEditorContext,
 } from './TableEditorContext';
 import { FaUpRightAndDownLeftFromCenter } from 'react-icons/fa6';
+import { isInMultiSelection } from './helpers/selectionBounds';
 import { IconButton } from '@components/IconButton/IconButton';
 import { KeyboardInteraction } from './helpers/keyboardHandlers';
 import { CSSVar } from '@helpers/CSSVar';
@@ -45,6 +46,8 @@ export interface CellProps {
 
 interface IndexCellProps extends CellProps {
   onExpand: (rowIndex: number) => void;
+  /** Rendered before the expand button, e.g. a row-select tick box. */
+  Extra?: React.ComponentType<{ index: number }>;
 }
 
 export function Cell({
@@ -80,12 +83,38 @@ export function Cell({
     registerEventListener,
     disabledKeyboardInteractions,
     setMouseDown,
+    openSelectionMenu,
   } = useTableEditorContext();
 
   const isActive = rowIndex === selectedRow && columnIndex === selectedColumn;
   const isActiveCorner =
     rowIndex === multiSelectCornerRow &&
     columnIndex === multiSelectCornerColumn;
+
+  const inMultiSelection = isInMultiSelection(
+    cursorMode,
+    selectedRow,
+    selectedColumn,
+    multiSelectCornerRow,
+    multiSelectCornerColumn,
+    rowIndex,
+    columnIndex,
+  );
+
+  // Right-clicking inside a multi-cell selection acts on all of it, so it
+  // opens the selection's own menu rather than the cell's.
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (inMultiSelection) {
+        openSelectionMenu(e);
+
+        return;
+      }
+
+      onContextMenu?.(e);
+    },
+    [inMultiSelection, openSelectionMenu, onContextMenu],
+  );
 
   const handleMouseUp = useCallback(() => {
     setMouseDown(false);
@@ -140,6 +169,12 @@ export function Cell({
         return;
       }
 
+      // A right-click inside the selection must not collapse it: the context
+      // menu that follows is for the whole selection.
+      if (e.button === 2 && inMultiSelection) {
+        return;
+      }
+
       setMouseDown(true);
 
       // Stop the browser starting its own text selection for this drag.
@@ -188,6 +223,7 @@ export function Cell({
       shouldEnterEditMode,
       cursorMode,
       isActive,
+      inMultiSelection,
       disabledKeyboardInteractions,
       setCursorMode,
       setMouseDown,
@@ -283,7 +319,7 @@ export function Cell({
       onMouseUp={handleMouseUp}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
-      onContextMenu={onContextMenu}
+      onContextMenu={handleContextMenu}
     >
       {children}
     </CellWrapper>
@@ -293,6 +329,7 @@ export function Cell({
 export function IndexCell({
   children,
   onExpand,
+  Extra,
   ...props
 }: React.PropsWithChildren<IndexCellProps>): JSX.Element {
   const { markings } = useTableEditorContext();
@@ -301,6 +338,7 @@ export function IndexCell({
 
   return (
     <StyledIndexCell role='rowheader' {...props} hasMarking={!!marking}>
+      {Extra && <Extra index={props.rowIndex} />}
       <IconButton
         title='Open resource'
         onClick={() => onExpand(props.rowIndex)}
@@ -316,18 +354,43 @@ const IndexNumber = styled.span``;
 
 const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
   justify-content: flex-end !important;
+  gap: 0.4rem;
   color: ${p => p.theme.colors.textLight};
 
-  & button {
+  /* Pinned left, so it doesn't move when the number swaps for the expand
+     button under a hovering or tapping pointer. */
+  & [data-row-select] {
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+  }
+
+  & [data-row-select]:not([data-active='true']) {
     display: none;
   }
 
-  &:hover ${IndexNumber}, &:focus-within ${IndexNumber} {
+  /* No hover on touch: without this there'd be no way to start selecting. */
+  @media (hover: none) {
+    & [data-row-select] {
+      display: flex !important;
+    }
+  }
+
+  &:hover [data-row-select],
+  &:focus-within [data-row-select] {
+    display: flex;
+  }
+
+  & > button {
     display: none;
   }
 
-  &:not([data-hasmarking='true']):hover button,
-  &:not([data-hasmarking='true']):focus-within button {
+  &:hover ${IndexNumber}, &:is(:focus, :has(> button:focus)) ${IndexNumber} {
+    display: none;
+  }
+
+  &:not([data-hasmarking='true']):hover > button,
+  &:not([data-hasmarking='true']):is(:focus, :has(> button:focus)) > button {
     display: ${p => (p.hasMarking ? 'none' : 'block')};
   }
 `;

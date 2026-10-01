@@ -22,6 +22,12 @@ export interface AggregateTarget {
 }
 
 export interface TablePageContextType {
+  /** Rows ticked in the row header, by subject ("select mode" while non-empty). */
+  selectedRows: ReadonlySet<string>;
+  toggleRowSelected: (subject: string) => void;
+  clearRowSelection: () => void;
+  /** Deletes every ticked row, as one undo step. */
+  deleteSelectedRows: () => Promise<void>;
   tableSubject: string;
   tableClassSubject: string;
   sorting: TableSorting;
@@ -92,6 +98,10 @@ export interface TablePageContextType {
 }
 
 export const TablePageContext = createContext<TablePageContextType>({
+  selectedRows: new Set(),
+  toggleRowSelected: () => undefined,
+  clearRowSelection: () => undefined,
+  deleteSelectedRows: async () => undefined,
   tableSubject: unknownSubject,
   tableClassSubject: unknownSubject,
   sorting: {
