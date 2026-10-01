@@ -74,6 +74,8 @@ vi.mock('../../helpers/managed/deviceLink', () => ({
 }));
 vi.mock('../../helpers/managed/session', () => ({
   getManagedAccount: async () => state.account,
+  accountAddress: (account: { email: string; address?: string }) =>
+    account.address ?? account.email,
 }));
 vi.mock('../../helpers/managedServer', () => ({
   fetchManagedInfo: async () => null,

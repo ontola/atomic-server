@@ -4,6 +4,43 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Notifications are less noisy. The Notifications page shows one row per
+  conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
+  titles as they are now, in your language. Coming back to the window while
+  already on the conversation reads what arrived while you were away, and after
+  you missed something the app offers system notifications once, instead of
+  only a checkbox in Settings.
+- The Notifications page shows placeholder rows while it loads, instead of a
+  blank page that could flash "Nothing yet" before the list arrived.
+- An app asking to use one of your accounts (Google Calendar, Clockify and so
+  on) now asks in a dialog instead of a bar above the app, in plainer words:
+  which app, which account, and that you approve it on the next page, on the
+  integration proxy's site. If you already connected that account, the dialog
+  lists it with when it was connected and which apps use it, and "Use this
+  account" gives it to the app without leaving the page. A failure stays in
+  the dialog so you can try again; the app hears `cancelled` if you close it.
+  Tests that looked for the `Connect an account` group should look for the
+  dialog named `Connect <platform>`; "Use existing connection" is now "Use
+  this account".
+
+- Signing in to a hosted account can now be enough to open your identity on a
+  new device (#277). When the account service offers assisted recovery
+  (`assisted_recovery` in `GET /api/auth/providers`), a new account's backup is
+  wrapped by the account alone, so onboarding asks for no passkey and shows no
+  recovery code, and the sign-in and restore steps unlock it by themselves
+  after a recent sign-in. Existing backups get the extra wrapper the next time
+  a passkey or recovery code opens them. The sign-in and restore steps now
+  offer the same account options as the portal's sign-in page (Google when
+  configured, passkey, email link), from one shared `AccountSignIn` component
+  in `@tomic/service-ui`. Builds that know no account service (the FOSS
+  release, self-hosted nodes) show none of it and make no requests for it.
+  Account recovery has a "Let Atomic help me recover" switch: off removes the
+  assisted wrapper, so only a passkey or recovery code opens the identity. A
+  wrapper records which service key made it (`kdf_params.key_id`); after the
+  service rotates its key, the next unlock re-wraps with the new one. Accounts
+  may now have an `acct_` id apart from their address: backups and bindings
+  keep using the id, and the app shows `address` from `GET /api/me`.
+
 - Agents, Skills and MCP servers are edited in a dialog again. Their lists stay
   on the AI settings page, but creating or editing one opens a dialog with the
   form and Cancel / Save buttons, instead of swapping the list for the form

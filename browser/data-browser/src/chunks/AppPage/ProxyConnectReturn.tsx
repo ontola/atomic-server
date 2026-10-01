@@ -8,9 +8,9 @@ import { ProxyConnections } from '@helpers/proxyConnections';
  *
  * The integration proxy only returns to `/app/integrations`, with
  * `integration_state`. When that state is a handoff this browser started for
- * an app (`AppFrame`'s connect bar), this takes over the page before any route
- * renders — so no route's own return handling sees it — redeems the code
- * signed with the user key (which makes the user the connection's owner),
+ * an app (`AppFrame`'s connect dialog), this takes over the page before any
+ * route renders — so no route's own return handling sees it — redeems the
+ * code signed with the user key (which makes the user the connection's owner),
  * delegates the connection to the app, and goes back to the app, which then
  * finds the connection by reference. Any other page load renders `children`
  * untouched.
