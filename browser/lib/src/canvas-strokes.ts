@@ -17,7 +17,7 @@ export type CanvasStroke = {
   text?: string;
   /** `kind: 'text'`: font size in canvas units. */
   size?: number;
-  /** `kind: 'image'`: the picture as a data URL. */
+  /** `kind: 'image'`: subject of the uploaded File resource. */
   src?: string;
   /** `kind: 'image'`: drawn size in canvas units. */
   w?: number;

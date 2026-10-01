@@ -18,6 +18,7 @@ type Element = {
   text?: string;
   path: [number, number][];
   w?: number;
+  src?: string;
 };
 
 /** Elements of the currently-open canvas, read from the live Store. */
@@ -224,12 +225,17 @@ test.describe('canvas touch and tools', () => {
       'base64',
     );
 
+    await page.getByRole('button', { name: 'Place image' }).click();
     await page
-      .getByLabel('Choose an image', { exact: true })
+      .getByLabel('Upload', { exact: true })
       .setInputFiles({ name: 'dot.png', mimeType: 'image/png', buffer: png });
 
     await expect.poll(async () => (await elements(page)).length).toBe(1);
-    expect((await elements(page))[0]).toMatchObject({ kind: 'image' });
+    // The element points at the uploaded File resource instead of holding it.
+    const [image] = await elements(page);
+
+    expect(image).toMatchObject({ kind: 'image' });
+    expect(image.src).not.toMatch(/^data:/);
     await expect(
       page.getByRole('button', { name: 'Delete selection' }),
     ).toBeVisible();

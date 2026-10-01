@@ -10068,7 +10068,6 @@ msgid "Account and app menu"
 msgstr "Account and app menu"
 
 #: src/chunks/RTE/ImagePicker.tsx
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Choose an image"
 msgstr "Choose an image"
 
@@ -10224,10 +10223,6 @@ msgid "Delete selection"
 msgstr "Delete selection"
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press <0>Delete</0> to remove"
-msgstr "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press <0>Delete</0> to remove"
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Text: tap the canvas and type; tap existing text to edit it"
 msgstr "Text: tap the canvas and type; tap existing text to edit it"
 
@@ -10238,3 +10233,8 @@ msgstr "Image: pick a picture, then move or scale it"
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
 msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
+
+#. 0: ' '
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+msgstr "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"

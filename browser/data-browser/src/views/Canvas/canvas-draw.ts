@@ -9,6 +9,10 @@ import {
 const imageCache = new Map<string, HTMLImageElement>();
 const imageListeners = new Set<() => void>();
 
+type ImageResolver = (subject: string) => Promise<string | undefined>;
+
+let imageResolver: ImageResolver | undefined;
+
 /** Called when an image element finishes decoding, so the canvas repaints. */
 export function onCanvasImageLoaded(listener: () => void): () => void {
   imageListeners.add(listener);
@@ -16,14 +20,48 @@ export function onCanvasImageLoaded(listener: () => void): () => void {
   return () => imageListeners.delete(listener);
 }
 
+/**
+ * How image elements find their picture. An element's `src` is the subject of
+ * an uploaded File resource; the resolver turns it into something an
+ * `<img>` can load (a local blob URL, else the download URL).
+ */
+export function setCanvasImageResolver(
+  resolver: ImageResolver | undefined,
+): void {
+  imageResolver = resolver;
+}
+
+function loadImage(src: string, url: string): HTMLImageElement {
+  const img = new Image();
+
+  img.onload = () => imageListeners.forEach(l => l());
+  img.src = url;
+  imageCache.set(src, img);
+
+  return img;
+}
+
+/** Show a picture for `src` straight away, before its upload has settled. */
+export function primeCanvasImage(src: string, url: string): void {
+  loadImage(src, url);
+}
+
 function cachedImage(src: string): HTMLImageElement | undefined {
   let img = imageCache.get(src);
 
   if (!img) {
-    img = new Image();
-    img.onload = () => imageListeners.forEach(l => l());
-    img.src = src;
-    imageCache.set(src, img);
+    if (/^(data|blob|https?):/.test(src)) {
+      img = loadImage(src, src);
+    } else {
+      // Claim the slot so a repaint does not start a second lookup.
+      imageCache.set(src, new Image());
+      void imageResolver?.(src).then(url => {
+        if (url) loadImage(src, url);
+        else imageCache.delete(src);
+      });
+
+      return undefined;
+    }
   }
 
   return img.complete && img.naturalWidth > 0 ? img : undefined;

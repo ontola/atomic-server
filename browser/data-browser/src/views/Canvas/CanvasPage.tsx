@@ -1,9 +1,13 @@
 import { useDarkMode } from '@helpers/useDarkMode';
 import {
+  blobHashHex,
   canvas,
   DEFAULT_STROKE_WIDTH,
   ELEMENT_HAIRLINE_WIDTH,
   enableLoro,
+  hexToBytes,
+  isBlobSubject,
+  server,
   parseCanvasStrokes,
   ResourceEvents,
   strokeToJson,
@@ -18,7 +22,9 @@ import {
   drawSelectionOverlay,
   HANDLE_RADIUS,
   onCanvasImageLoaded,
+  primeCanvasImage,
   screenToCanvas,
+  setCanvasImageResolver,
 } from './canvas-draw';
 import {
   elementBounds,
@@ -28,7 +34,10 @@ import {
   transformSelection,
   unionBounds,
 } from './canvas-elements';
-import { resizeImageFile } from '@helpers/resizeImage';
+import { useStore, type Store } from '@tomic/react';
+import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import { useUpload } from '../../hooks/useUpload';
+import { imageMimeTypes } from '../../helpers/filetypes';
 import { errorHandler } from '../../handlers/errorHandler';
 import {
   FaCircleInfo,
@@ -98,9 +107,42 @@ type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
 const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 14;
 /** Font size of a new text element, in screen pixels at the current zoom. */
 const NEW_TEXT_SCREEN_SIZE = 28;
+const FILE_BLOB_PROPERTY = 'https://atomicdata.dev/properties/blob';
 const PEN_SEEN_KEY = 'atomic-canvas-pen-seen';
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 30;
+
+/** The bytes this device already has for a File resource, else the server's
+ *  download URL: something an `<img>` can load. */
+async function resolveImageUrl(
+  store: Store,
+  subject: string,
+): Promise<string | undefined> {
+  const file = await store.getResource(subject);
+  const blob = file.get(FILE_BLOB_PROPERTY);
+  const clientDb = store.getClientDb?.();
+
+  if (typeof blob === 'string' && isBlobSubject(blob) && clientDb) {
+    const hash = blobHashHex(blob);
+    const bytes = hash ? await clientDb.getBlob(hexToBytes(hash)) : null;
+
+    if (bytes) return URL.createObjectURL(new Blob([bytes as BlobPart]));
+  }
+
+  const url = file.get(server.properties.downloadUrl);
+
+  return typeof url === 'string' ? url : undefined;
+}
+
+function loadImageSize(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error('Could not read that image'));
+    img.src = url;
+  });
+}
 
 type TextEdit = {
   /** Index of the element being edited, null for a new one. */
@@ -129,24 +171,6 @@ function readPenSeen(): boolean {
   } catch {
     return false;
   }
-}
-
-function fileToDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function imageSize(src: string): Promise<{ w: number; h: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-    img.onerror = () => reject(new Error('Could not read that image'));
-    img.src = src;
-  });
 }
 
 type ScrubState = {
@@ -189,6 +213,7 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 
 export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [darkMode] = useDarkMode();
+  const store = useStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -214,7 +239,8 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // A pen / stylus has been seen on this device: one finger then pans
   // instead of drawing, because the pen is the drawing tool.
   const [penDetected, setPenDetected] = useState(readPenSeen);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const { upload } = useUpload(resource);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const textFieldRef = useRef<HTMLTextAreaElement>(null);
   const textOpen = textEdit !== null;
 
@@ -580,6 +606,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     return () => window.clearTimeout(id);
   }, [textOpen]);
+
+  // An image element's `src` is an uploaded File resource. Resolve it to the
+  // bytes this device already has, else the server's download URL.
+  useEffect(() => {
+    setCanvasImageResolver(subject => resolveImageUrl(store, subject));
+
+    return () => setCanvasImageResolver(undefined);
+  }, [store]);
 
   // Images decode asynchronously; repaint when one is ready.
   useEffect(() => onCanvasImageLoaded(paint), [paint]);
@@ -1374,18 +1408,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
   // ──────────────── Image tool ─────────────────────────────────────────────
 
-  const handleImageFile = async (file: File) => {
+  /** Place an existing File resource on the canvas, in the middle of the
+   *  view, and hand it to the lasso so it can be moved and scaled. */
+  const placeImage = async (src: string) => {
     const container = containerRef.current;
 
     if (!container) return;
 
     try {
-      const resized = await resizeImageFile(file, {
-        maxSize: 1280,
-        quality: 0.8,
-      });
-      const src = await fileToDataUrl(resized);
-      const natural = await imageSize(src);
+      const url = await resolveImageUrl(store, src);
+
+      if (!url) throw new Error('That file has no image to show');
+
+      const natural = await loadImageSize(url);
+
+      primeCanvasImage(src, url);
+
       const s = scaleRef.current;
       const screenW = Math.min(natural.w, container.clientWidth * 0.5);
       const w = screenW / s;
@@ -1405,13 +1443,18 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
       viewTouchedRef.current = true;
       setStrokes([...pre, element]);
-      // Hand the new image straight to the lasso so it can be placed.
       setTool('lasso');
       selectElements([pre.length], pre.length + 1);
       await pushStrokeToServer(element, pre);
     } catch (err) {
       errorHandler(err);
     }
+  };
+
+  const uploadAndPlaceImage = async (file: File) => {
+    const [subject] = await upload([file]);
+
+    if (subject) await placeImage(subject);
   };
 
   // ──────────────── Pointer flow: pan / pinch / draw / erase ───────────────
@@ -2303,19 +2346,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           />
         )}
         <RemoteCursors cursors={cursors} scale={scale} offset={offset} />
-        <input
-          ref={imageInputRef}
-          type='file'
-          accept='image/*'
-          hidden
-          aria-label='Choose an image'
-          onChange={e => {
-            const file = e.target.files?.[0];
-
-            e.target.value = '';
-
-            if (file) void handleImageFile(file);
-          }}
+        <FilePickerDialog
+          show={imagePickerOpen}
+          onShowChange={setImagePickerOpen}
+          allowedMimes={imageMimeTypes}
+          onResourcePicked={subject => void placeImage(subject)}
+          onNewFilePicked={file => void uploadAndPlaceImage(file)}
         />
         <BottomToolbar>
           <CircleButton
@@ -2366,7 +2402,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             type='button'
             title='Image: place a picture'
             aria-label='Place image'
-            onClick={() => imageInputRef.current?.click()}
+            onClick={() => setImagePickerOpen(true)}
           >
             <FaImage />
           </CircleButton>
