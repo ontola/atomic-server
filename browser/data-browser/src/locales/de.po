@@ -10058,3 +10058,86 @@ msgstr ""
 #: src/views/DriveUnavailable.tsx
 msgid "Technical details"
 msgstr ""
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "See and edit the current Agent / User (u)"
+msgstr ""
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Change client settings (t)"
+msgstr ""
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "App menu"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image <0/>"
+msgstr ""
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description <0/>"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Add child"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this resource."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Scope search to resource"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "To restore your account, sign in to your {0} account first, then come back here."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your {0} account"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out. You can get back in on this device with your passkey."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to connect an account."
+msgstr ""
+
+#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Use existing connection"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Connect an account"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "The last table view stays, so the rows can always be seen as a table."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a view"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Change this view to"
+msgstr ""
+
+#~ msgid "Enter your recovery code to show your secret or add a passkey on this device. Your existing recovery code will keep working."
+#~ msgstr "Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger Wiederherstellungscode bleibt gültig."

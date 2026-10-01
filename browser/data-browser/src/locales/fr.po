@@ -10058,3 +10058,284 @@ msgstr ""
 #: src/views/DriveUnavailable.tsx
 msgid "Technical details"
 msgstr ""
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "See and edit the current Agent / User (u)"
+msgstr "Voir et modifier l'agent / l'utilisateur actuel (u)"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "Change client settings (t)"
+msgstr "Modifier les paramètres du client (t)"
+
+#: src/components/SideBar/AppMenu.tsx
+msgid "App menu"
+msgstr "Menu de l'application"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Choose an image <0/>"
+msgstr "Choisir une image <0/>"
+
+#: src/chunks/RTE/ImagePicker.tsx
+msgid "Textual Description <0/>"
+msgstr "Description textuelle <0/>"
+
+#: src/actions/resourceActions.tsx
+msgid "Add child"
+msgstr "Ajouter un enfant"
+
+#: src/actions/resourceActions.tsx
+msgid "Create a new resource under this resource."
+msgstr "Créer une nouvelle ressource sous cette ressource."
+
+#: src/actions/resourceActions.tsx
+msgid "Scope search to resource"
+msgstr "Étendue de la recherche à la ressource"
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "To restore your account, sign in to your {0} account first, then come back here."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in to your {0} account"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Sign out. You can get back in on this device with your passkey."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to connect an account."
+msgstr ""
+
+#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to use your{0} <0/> account through{1} {2}. The proxy keeps the connection under your account; this app may use it until you revoke that."
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Use existing connection"
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Connect an account"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "The last table view stays, so the rows can always be seen as a table."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a view"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Change this view to"
+msgstr ""
+
+#~ msgid "<0/> Create New Agent"
+#~ msgstr "<0/> Créer un nouvel agent"
+
+#~ msgid "<0/> Read"
+#~ msgstr "<0/> Lire"
+
+#~ msgid "<0/> Write"
+#~ msgstr "<0/> Écrire"
+
+#~ msgid "<0/> Enable skills"
+#~ msgstr "<0/> Activer les compétences"
+
+#~ msgid "<0/> Use Default Model"
+#~ msgstr "<0/> Utiliser le modèle par défaut"
+
+#~ msgid "AI Settings"
+#~ msgstr "Paramètres de l'IA"
+
+#~ msgid "AI Settings Tabs"
+#~ msgstr "Onglets des paramètres de l'IA"
+
+#~ msgid "<0/> Create New Skill"
+#~ msgstr "<0/> Créer une nouvelle compétence"
+
+#~ msgid "<0/> Add Reference"
+#~ msgstr "<0/> Ajouter une référence"
+
+#~ msgid "<0/> Add New Server"
+#~ msgstr "<0/> Ajouter un nouveau serveur"
+
+#~ msgid "<0/> Add header"
+#~ msgstr "<0/> Ajouter un en-tête"
+
+#~ msgid "User Settings"
+#~ msgstr "Paramètres utilisateur"
+
+#~ msgid "AtomicServer"
+#~ msgstr "AtomicServer"
+
+#~ msgid "User settings"
+#~ msgstr "Paramètres utilisateur"
+
+#~ msgid "<0/> Save"
+#~ msgstr "<0/> Enregistrer"
+
+#~ msgid "Go the the User Settings page"
+#~ msgstr "Aller à la page des paramètres utilisateur"
+
+#~ msgid "Invite text (optional)"
+#~ msgstr "Texte d'invitation (facultatif)"
+
+#~ msgid "<0/> Show token usage in chats"
+#~ msgstr "<0/> Afficher l’utilisation des jetons dans les discussions"
+
+#~ msgid "<0/> Generate AI Chat titles"
+#~ msgstr "<0/> Générer des titres de chat IA"
+
+#~ msgid "(Tip) Choose a cheap and fast model"
+#~ msgstr "(Conseil) Choisissez un modèle bon marché et rapide"
+
+#~ msgid "Change what model is used for generative features"
+#~ msgstr "Modifier le modèle utilisé pour les fonctionnalités génératives"
+
+#~ msgid "Link copied to clipboard"
+#~ msgstr "Lien copié dans le presse-papiers"
+
+#~ msgid "No object generated: could not parse the response."
+#~ msgstr "Aucun objet généré : impossible d'analyser la réponse."
+
+#~ msgid "First"
+#~ msgstr "Premier"
+
+#~ msgid "Reply"
+#~ msgstr "Répondre"
+
+#~ msgid "Second"
+#~ msgstr "Deuxième"
+
+#~ msgid "Hello"
+#~ msgstr "Bonjour"
+
+#~ msgid "<0/> RAG, Automatically provide context from your knowledge base based on your prompt."
+#~ msgstr "<0/> RAG, Fournit automatiquement le contexte de votre base de connaissances en fonction de votre invite."
+
+#~ msgid "<0/> Enable AI Features"
+#~ msgstr "<0/> Activer les fonctionnalités de l’IA"
+
+#~ msgid "Copy link"
+#~ msgstr "Copier le lien"
+
+#~ msgid "Enable AIChats panel"
+#~ msgstr "Activer le panneau AIChats"
+
+#~ msgid "Atomic Assistant"
+#~ msgstr "Assistant Atomique"
+
+#~ msgid "Something went wrong"
+#~ msgstr "Quelque chose s'est mal passé"
+
+#~ msgid "Also use for chat titles and follow-up prompts"
+#~ msgstr "Utiliser également pour les titres de chat et les invites de suivi"
+
+#~ msgid "Connect a model to use Atomic Assistant"
+#~ msgstr "Connecter un modèle pour utiliser Atomic Assistant"
+
+#~ msgid "No custom classes found on the current drive."
+#~ msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
+
+#~ msgid "by {0}"
+#~ msgstr "par {0}"
+
+#~ msgid "Are you sure you want to uninstall this plugin?"
+#~ msgstr "Voulez-vous vraiment désinstaller ce plugin ?"
+
+#~ msgid "Uninstall Plugin"
+#~ msgstr "Désinstaller le plugin"
+
+#~ msgid "No code verifier found"
+#~ msgstr "Aucun vérificateur de code trouvé"
+
+#~ msgid "Connected to {0}"
+#~ msgstr "Connecté à {0}"
+
+#~ msgid "My Drive"
+#~ msgstr "Mon lecteur"
+
+#~ msgid "Invalid value"
+#~ msgstr "Valeur invalide"
+
+#~ msgid "Invalid Slug"
+#~ msgstr "Slug invalide"
+
+#~ msgid "Invalid Number"
+#~ msgstr "Nombre invalide"
+
+#~ msgid "Invalid URI"
+#~ msgstr "URI invalide"
+
+#~ msgid "Show follow up prompts in chats"
+#~ msgstr "Afficher les invites de suivi dans les chats"
+
+#~ msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
+#~ msgstr "Utilise un petit modèle pour générer une invite de suivi basée sur le dernier message dans le chat."
+
+#~ msgid "Websocket Connected"
+#~ msgstr "Websocket connecté"
+
+#~ msgid "Websocket Closing"
+#~ msgstr "Fermeture du websocket"
+
+#~ msgid "Websocket Closed"
+#~ msgstr "Websocket fermé"
+
+#~ msgid "Websocket Connecting..."
+#~ msgstr "Connexion au websocket..."
+
+#~ msgid "The update's identifier does not match the existing plugin."
+#~ msgstr "L'identifiant de la mise à jour ne correspond pas au plugin existant."
+
+#~ msgid "Change Version"
+#~ msgstr "Changer de version"
+
+#~ msgid "New Permissions"
+#~ msgstr "Nouvelles autorisations"
+
+#~ msgid "Your config is not fully compatible with the new version."
+#~ msgstr "Votre configuration n'est pas entièrement compatible avec la nouvelle version."
+
+#~ msgid "Apply"
+#~ msgstr "Appliquer"
+
+#~ msgid "Please fill in all fields"
+#~ msgstr "Veuillez remplir tous les champs"
+
+#~ msgid "Failed to install plugin"
+#~ msgstr "Échec de l'installation du plugin"
+
+#~ msgid "Add Plugin"
+#~ msgstr "Ajouter un plugin"
+
+#~ msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+#~ msgstr "Utilisez OpenRouter (modèles cloud) ou Ollama (modèles locaux). Au moins un fournisseur doit être connecté avant de pouvoir continuer."
+
+#~ msgid "Disable page transition animations"
+#~ msgstr "Désactiver les animations de transition de page"
+
+#~ msgid "Last Modified"
+#~ msgstr "Dernière modification"
+
+#~ msgid "Show Commit"
+#~ msgstr "Afficher le Commit"
+
+#~ msgid "<0/>{0} Enable keyboard drag & drop in sidebar"
+#~ msgstr "<0/>{0} Activer le glisser-déposer au clavier dans la barre latérale"
+
+#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
+#~ msgstr "<0/> Ce document doit être mis à jour vers le nouveau format afin de pouvoir être modifié."
+
+#~ msgid "Enter your recovery code to show your secret or add a passkey on this device. Your existing recovery code will keep working."
+#~ msgstr "Saisissez votre code de récupération pour afficher votre secret ou ajouter une clé d’accès sur cet appareil. Votre code de récupération actuel restera valide."
