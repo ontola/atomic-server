@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
   drawCanvasStrokes,
+  drawSelectionHalo,
   drawSelectionOverlay,
   HANDLE_RADIUS,
   onCanvasImageLoaded,
@@ -579,6 +580,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         .map(i => elementBounds(list[i])),
     );
 
+    drawSelectionHalo(
+      ctx,
+      selectionRef.current.filter(i => list[i]).map(i => list[i]),
+      scaleRef.current,
+      offsetRef.current.x,
+      offsetRef.current.y,
+      '#3b82f6',
+    );
     drawSelectionOverlay(
       ctx,
       lassoPathRef.current,

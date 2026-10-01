@@ -1,6 +1,7 @@
 import type { CanvasStroke } from '@tomic/lib';
 import { adjustStrokeColorForDarkMode } from '@tomic/lib';
 import {
+  elementBounds,
   TEXT_FONT_FAMILY,
   TEXT_LINE_HEIGHT,
   type Bounds,
@@ -136,6 +137,11 @@ function drawStroke(
     return;
   }
 
+  ctx.stroke(strokePath(stroke));
+}
+
+/** The smoothed outline of a stroke's points. */
+function strokePath(stroke: CanvasStroke): Path2D {
   const path = new Path2D();
   const [x0, y0] = stroke.path[0];
   path.moveTo(x0, y0);
@@ -146,7 +152,7 @@ function drawStroke(
     path.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
   }
 
-  ctx.stroke(path);
+  return path;
 }
 
 function drawText(
@@ -166,7 +172,61 @@ function drawText(
   });
 }
 
-export const HANDLE_RADIUS = 9;
+export const HANDLE_RADIUS = 11;
+
+/**
+ * A glow behind every selected element, so a selection reads at a glance and
+ * not only through the box around it. Painted underneath what is already on
+ * the canvas.
+ */
+export function drawSelectionHalo(
+  ctx: CanvasRenderingContext2D,
+  elements: CanvasStroke[],
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+  accent: string,
+): void {
+  if (elements.length === 0) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-over';
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = accent;
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const el of elements) {
+    if (el.path.length === 0) continue;
+
+    if (el.kind === 'text' || el.kind === 'image') {
+      const b = elementBounds(el);
+      const pad = 4 / scale;
+
+      ctx.fillRect(
+        b.minX - pad,
+        b.minY - pad,
+        b.maxX - b.minX + pad * 2,
+        b.maxY - b.minY + pad * 2,
+      );
+    } else if (el.path.length === 1) {
+      const [x, y] = el.path[0];
+
+      ctx.beginPath();
+      ctx.arc(x, y, el.width / 2 + 5 / scale, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 10 screen pixels wider than the stroke itself, at any zoom.
+      ctx.lineWidth = el.width + 10 / scale;
+      ctx.stroke(strokePath(el));
+    }
+  }
+
+  ctx.restore();
+}
 
 /** Lasso loop and selection box, painted in screen space on top. */
 export function drawSelectionOverlay(
@@ -201,10 +261,17 @@ export function drawSelectionOverlay(
     const x1 = selected.maxX * scale + offsetX;
     const y1 = selected.maxY * scale + offsetY;
 
-    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#fff';
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = accent;
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.restore();
 
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+
+    // Solid accent handles with a white ring: easy to see and to grab.
     for (const [hx, hy] of [
       [x0, y0],
       [x1, y0],
@@ -213,7 +280,10 @@ export function drawSelectionOverlay(
     ]) {
       ctx.beginPath();
       ctx.arc(hx, hy, HANDLE_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = accent;
       ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#fff';
       ctx.stroke();
     }
   }
