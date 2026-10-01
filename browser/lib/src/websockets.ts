@@ -100,6 +100,10 @@ function getError(msg: { message: string; code: number }): AtomicError {
 /** How long `authenticate` waits for the server's `CHALLENGE` before signing
  *  a timestamp-only proof (a server that predates the frame never sends it). */
 const CHALLENGE_WAIT_MS = 300;
+
+/** Presence updates held for a not-yet-sent subscribe; the heartbeat repeats
+ *  the latest state, so a long backlog is never worth keeping. */
+const MAX_HELD_PRESENCE_UPDATES = 16;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 const connectionFailedMessage = (url: URL): string =>
@@ -228,6 +232,11 @@ export class WSClient {
   private openPromise: Promise<void>;
 
   private authenticatedWith: string | undefined;
+  /** Drives whose `PRESENCE_SUBSCRIBE` is deferred behind `authenticate()` and
+   *  not on the wire yet, with the presence updates produced meanwhile. The
+   *  server only relays updates from current subscribers, so an update sent
+   *  ahead of its subscribe frame is dropped; these go out right behind it. */
+  private pendingPresence = new Map<string, Uint8Array[]>();
   private isAuthenticating = false;
 
   private _closed = false;
@@ -788,10 +797,15 @@ export class WSClient {
    *  read access at subscribe time, so subscribing pre-auth would get
    *  refused for any non-public drive. */
   public subscribePresence(drive: string): void {
+    if (!this.pendingPresence.has(drive)) this.pendingPresence.set(drive, []);
+
     // authPromise initially resolves even before authentication starts.
     // Kick off authentication instead of treating that promise as readiness.
     void this.authenticate()
       .then(() => {
+        const held = this.pendingPresence.get(drive);
+        this.pendingPresence.delete(drive);
+
         if (
           this.readyState !== WebSocket.OPEN ||
           !this.authenticatedWith ||
@@ -801,13 +815,19 @@ export class WSClient {
         this.ws.send(
           'PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }),
         );
+
+        // `held` is gone when a withdrawn or repeated subscribe got here first.
+        for (const update of held ?? []) this.sendPresenceUpdate(drive, update);
       })
       .catch(() => {
         // authenticate() reports the handshake failure. Never subscribe after it.
+        this.pendingPresence.delete(drive);
       });
   }
 
   public unsubscribePresence(drive: string): void {
+    this.pendingPresence.delete(drive);
+
     if (this.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -817,7 +837,29 @@ export class WSClient {
 
   /** Broadcast presence bytes for `drive` as an `EPHEMERAL` frame. */
   public sendPresenceUpdate(drive: string, update: Uint8Array): void {
+    // Authenticated but not yet subscribed: the subscribe frame is a promise
+    // callback away, and the server drops updates from non-subscribers.
+    const held = this.pendingPresence.get(drive);
+
+    if (
+      held &&
+      this.readyState === WebSocket.OPEN &&
+      this.isAuthenticatedAsCurrentAgent()
+    ) {
+      if (held.length >= MAX_HELD_PRESENCE_UPDATES) held.shift();
+      held.push(update);
+
+      return;
+    }
+
     this.sendEphemeral(EphemeralKind.PRESENCE, drive, update);
+  }
+
+  private isAuthenticatedAsCurrentAgent(): boolean {
+    return (
+      !!this.authenticatedWith &&
+      this.authenticatedWith === this.store.getAgent()?.subject
+    );
   }
 
   /** One `EPHEMERAL (0x40)` frame; `kind` says which channel. The agent
@@ -828,11 +870,7 @@ export class WSClient {
     // Ephemera are transient: sending old cursor/presence data after a
     // handshake (or under the previous identity) is incorrect. The next
     // live update will publish once authentication has completed.
-    if (
-      !this.authenticatedWith ||
-      this.authenticatedWith !== this.store.getAgent()?.subject
-    )
-      return;
+    if (!this.isAuthenticatedAsCurrentAgent()) return;
     this.sendBinary(encodeEphemeral(kind, subject, '', update));
   }
 
