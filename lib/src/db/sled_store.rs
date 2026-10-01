@@ -30,7 +30,6 @@ pub struct SledStore {
     blobs: sled::Tree,
     search_postings: sled::Tree,
     search_docs: sled::Tree,
-    search_doc_tokens: sled::Tree,
     search_trigrams: sled::Tree,
     envelopes: sled::Tree,
     outbox: sled::Tree,
@@ -63,7 +62,6 @@ impl SledStore {
         let blobs = db.open_tree(Tree::Blobs)?;
         let search_postings = db.open_tree(Tree::SearchPostings)?;
         let search_docs = db.open_tree(Tree::SearchDocs)?;
-        let search_doc_tokens = db.open_tree(Tree::SearchDocTokens)?;
         let search_trigrams = db.open_tree(Tree::SearchTrigrams)?;
         let envelopes = db.open_tree(Tree::Envelopes)?;
         let outbox = db.open_tree(Tree::Outbox)?;
@@ -86,7 +84,6 @@ impl SledStore {
             blobs,
             search_postings,
             search_docs,
-            search_doc_tokens,
             search_trigrams,
             envelopes,
             outbox,
@@ -116,7 +113,6 @@ impl SledStore {
             Tree::Blobs => &self.blobs,
             Tree::SearchPostings => &self.search_postings,
             Tree::SearchDocs => &self.search_docs,
-            Tree::SearchDocTokens => &self.search_doc_tokens,
             Tree::SearchTrigrams => &self.search_trigrams,
             Tree::Envelopes => &self.envelopes,
             Tree::Outbox => &self.outbox,
@@ -205,7 +201,6 @@ impl KvStore for SledStore {
         let mut batch_blobs = sled::Batch::default();
         let mut batch_search_postings = sled::Batch::default();
         let mut batch_search_docs = sled::Batch::default();
-        let mut batch_search_doc_tokens = sled::Batch::default();
         let mut batch_search_trigrams = sled::Batch::default();
         let mut batch_envelopes = sled::Batch::default();
         let mut batch_outbox = sled::Batch::default();
@@ -228,7 +223,6 @@ impl KvStore for SledStore {
                 Tree::Blobs => &mut batch_blobs,
                 Tree::SearchPostings => &mut batch_search_postings,
                 Tree::SearchDocs => &mut batch_search_docs,
-                Tree::SearchDocTokens => &mut batch_search_doc_tokens,
                 Tree::SearchTrigrams => &mut batch_search_trigrams,
                 Tree::Envelopes => &mut batch_envelopes,
                 Tree::Outbox => &mut batch_outbox,
@@ -306,9 +300,6 @@ impl KvStore for SledStore {
         self.search_docs
             .apply_batch(batch_search_docs)
             .map_err(|e| format!("Failed to apply search_docs batch: {}", e))?;
-        self.search_doc_tokens
-            .apply_batch(batch_search_doc_tokens)
-            .map_err(|e| format!("Failed to apply search_doc_tokens batch: {}", e))?;
         self.search_trigrams
             .apply_batch(batch_search_trigrams)
             .map_err(|e| format!("Failed to apply search_trigrams batch: {}", e))?;

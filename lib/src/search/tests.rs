@@ -428,3 +428,138 @@ async fn index_resource_roundtrip() {
     let hits = query(&store, "RoundtripName", &opts_parents(&drive)).unwrap();
     assert_eq!(subjects(&hits), vec!["atomic:fts-roundtrip".to_string()]);
 }
+
+fn plain(store: &Db, drive: &str, subject: &str, name: &str, description: &str) -> Resource {
+    let _ = store;
+    let mut resource = Resource::new(subject.into());
+    resource
+        .set_unsafe(urls::NAME.into(), Value::String(name.into()))
+        .unwrap();
+    resource
+        .set_unsafe(urls::DESCRIPTION.into(), Value::String(description.into()))
+        .unwrap();
+    resource
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    resource
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    resource
+}
+
+fn apply_index(store: &Db, resource: &Resource) -> crate::db::trees::Transaction {
+    let mut tx = crate::db::trees::Transaction::new();
+    index_resource(store, resource, &mut tx).unwrap();
+    let ops = tx.clone();
+    store.apply_transaction(&mut tx).unwrap();
+    ops
+}
+
+fn count_ops(tx: &crate::db::trees::Transaction, tree: crate::db::trees::Tree) -> usize {
+    tx.iter().filter(|op| op.tree == tree).count()
+}
+
+/// A document of one title and one description word keeps its postings small:
+/// the key ends in an 8-byte id, not the subject, and the term frequency takes
+/// one byte.
+#[tokio::test]
+#[timeout(120000)]
+async fn postings_are_keyed_by_a_short_document_id() {
+    use crate::db::trees::Tree;
+    let (store, drive) = setup_store("shortkeys").await;
+    let r = plain(&store, &drive, "did:ad:fts-short", "Zebrafish", "grazing");
+    apply_index(&store, &r);
+
+    // The store already holds the bootstrap resources; look at ours only.
+    let mut seen = 0;
+    for pair in store.kv.iter_tree(Tree::SearchPostings) {
+        let (key, val) = pair.unwrap();
+        let token = super::keys::token_from_posting_key(&key, super::keys::Field::Title)
+            .or_else(|| super::keys::token_from_posting_key(&key, super::keys::Field::Description));
+        if matches!(token.as_deref(), Some("zebrafish" | "grazing")) {
+            // field (1) + token + 0x00 + 8-byte id
+            assert_eq!(key.len(), 1 + token.unwrap().len() + 1 + 8);
+            assert_eq!(val.len(), 1);
+            seen += 1;
+        }
+    }
+    assert_eq!(seen, 2);
+}
+
+/// Re-indexing an unchanged resource writes its document row and nothing
+/// else; an edit writes only the postings that changed.
+#[tokio::test]
+#[timeout(120000)]
+async fn reindex_writes_only_changed_postings() {
+    use crate::db::trees::Tree;
+    let (store, drive) = setup_store("diff").await;
+    let before = plain(&store, &drive, "did:ad:fts-diff", "Quartz", "river stones");
+    let first = apply_index(&store, &before);
+    assert_eq!(count_ops(&first, Tree::SearchPostings), 3);
+
+    let again = apply_index(&store, &before);
+    assert_eq!(count_ops(&again, Tree::SearchPostings), 0);
+    assert_eq!(count_ops(&again, Tree::SearchDocs), 1);
+
+    let after = plain(&store, &drive, "did:ad:fts-diff", "Quartz", "river pebbles");
+    let edit = apply_index(&store, &after);
+    // One posting removed ("stones"), one added ("pebbles").
+    assert_eq!(count_ops(&edit, Tree::SearchPostings), 2);
+
+    let opts = opts_parents(&drive);
+    assert!(subjects(&query(&store, "stones", &opts).unwrap()).is_empty());
+    assert_eq!(
+        subjects(&query(&store, "pebbles", &opts).unwrap()),
+        vec!["atomic:fts-diff".to_string()]
+    );
+    assert_eq!(
+        subjects(&query(&store, "quartz", &opts).unwrap()),
+        vec!["atomic:fts-diff".to_string()]
+    );
+}
+
+/// Trigram rows exist only for terms a one-edit lookup can reach (12+
+/// characters), and a typo in such a term is still found through them.
+#[tokio::test]
+#[timeout(120000)]
+async fn trigrams_cover_long_terms_only() {
+    use crate::db::trees::Tree;
+    let (store, drive) = setup_store("trigrams").await;
+    let short = plain(&store, &drive, "did:ad:fts-tri-short", "avocado", "toast");
+    let first = apply_index(&store, &short);
+    assert_eq!(count_ops(&first, Tree::SearchTrigrams), 0);
+
+    let long = plain(
+        &store,
+        &drive,
+        "did:ad:fts-tri-long",
+        "internationalization",
+        "",
+    );
+    apply_index(&store, &long);
+    assert!(store.kv.len(Tree::SearchTrigrams).unwrap() > 0);
+
+    let hits = query(&store, "internationalizaton", &opts_parents(&drive)).unwrap();
+    assert_eq!(subjects(&hits), vec!["atomic:fts-tri-long".to_string()]);
+}
+
+/// Removing a resource's text drops every posting and the document row.
+#[tokio::test]
+#[timeout(120000)]
+async fn emptied_resource_leaves_no_postings() {
+    use crate::db::trees::Tree;
+    let (store, drive) = setup_store("emptied").await;
+    let r = plain(&store, &drive, "did:ad:fts-empty", "Marmot", "burrow");
+    let postings_before = store.kv.len(Tree::SearchPostings).unwrap();
+    let docs_before = store.kv.len(Tree::SearchDocs).unwrap();
+    apply_index(&store, &r);
+    assert_eq!(
+        store.kv.len(Tree::SearchPostings).unwrap(),
+        postings_before + 2
+    );
+
+    let blank = plain(&store, &drive, "did:ad:fts-empty", "", "");
+    apply_index(&store, &blank);
+    assert_eq!(store.kv.len(Tree::SearchPostings).unwrap(), postings_before);
+    assert_eq!(store.kv.len(Tree::SearchDocs).unwrap(), docs_before);
+}

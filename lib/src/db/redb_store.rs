@@ -27,7 +27,17 @@ fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8
 /// redb kept writing both into their v3 tables, so a store from before
 /// this fix can hold rows in an older key layout. Both are caches that
 /// rebuild on the next query, so dropping them is safe.
-const STALE_TABLES: [&str; 2] = ["members_index_v3", "watched_queries_v3"];
+///
+/// The search layout moved to v2 (document ids in the postings, no separate
+/// token list); the v1 tables are rebuilt into it and only take up room.
+const STALE_TABLES: [&str; 6] = [
+    "members_index_v3",
+    "watched_queries_v3",
+    "search_postings_v1",
+    "search_docs_v1",
+    "search_doc_tokens_v1",
+    "search_trigrams_v1",
+];
 
 fn create_all_tables(tx: &redb::WriteTransaction) {
     for tree in Tree::ALL {
