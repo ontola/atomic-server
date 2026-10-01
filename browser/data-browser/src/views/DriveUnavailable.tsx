@@ -40,6 +40,9 @@ export function DriveUnavailable({
       // Peer links may have dropped while nothing was open; wake them too.
       resumePeerLinks(store);
       await store.fetchResourceFromServer(subject);
+    } catch {
+      // Still unreachable: this screen already says so. A local-only subject
+      // that isn't stored throws here on every attempt.
     } finally {
       setRetrying(false);
     }
@@ -48,7 +51,8 @@ export function DriveUnavailable({
   useEffect(() => {
     const timer = setInterval(() => {
       resumePeerLinks(store);
-      void store.fetchResourceFromServer(subject);
+      // A failed attempt is the expected case here, not an error to report.
+      store.fetchResourceFromServer(subject).catch(() => undefined);
     }, RETRY_EVERY_MS);
 
     return () => clearInterval(timer);
