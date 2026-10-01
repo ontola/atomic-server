@@ -504,6 +504,41 @@ export function GettingStartedFlow({
     );
   }
 
+  /**
+   * The account signed in here, when its agent is not the one `agentSubject`
+   * names. A pasted secret may simply be another identity the person owns (an
+   * older agent, or a local node's), and using it means ending this account's
+   * session, which signs them out of the portal too. That is never done
+   * without asking (IDENTITY_RECONCILE_SCENARIOS.md scenario 4).
+   */
+  async function findSecretConflict(
+    agentSubject: string,
+  ): Promise<SecretAccountConflict | null> {
+    try {
+      return secretAccountConflict(await getRecoverySecret(), agentSubject);
+    } catch {
+      // No session, or the control plane is unreachable: nothing to replace.
+      return null;
+    }
+  }
+
+  /**
+   * The user chose the pasted secret over the signed-in account. The reconcile
+   * gate would otherwise bounce them straight back here, so the account
+   * session is the stale thing now: end it, and say which account that was.
+   */
+  async function releaseConflictingPortalSession(
+    conflict: SecretAccountConflict,
+  ) {
+    try {
+      clearManagedAccountBinding();
+      await logoutManagedSession();
+      toast(`Signed out of ${conflict.email}.`);
+    } catch {
+      // Already gone, or the control plane is unreachable: nothing to release.
+    }
+  }
+
   async function handleSignInWithSecret(
     secret: string,
     confirmed?: SecretAccountConflict,
@@ -895,41 +930,6 @@ export function GettingStartedFlow({
       );
     } finally {
       setLoading(false);
-    }
-  }
-
-  /**
-   * The account signed in here, when its agent is not the one `agentSubject`
-   * names. A pasted secret may simply be another identity the person owns (an
-   * older agent, or a local node's), and using it means ending this account's
-   * session, which signs them out of the portal too. That is never done
-   * without asking (IDENTITY_RECONCILE_SCENARIOS.md scenario 4).
-   */
-  async function findSecretConflict(
-    agentSubject: string,
-  ): Promise<SecretAccountConflict | null> {
-    try {
-      return secretAccountConflict(await getRecoverySecret(), agentSubject);
-    } catch {
-      // No session, or the control plane is unreachable: nothing to replace.
-      return null;
-    }
-  }
-
-  /**
-   * The user chose the pasted secret over the signed-in account. The reconcile
-   * gate would otherwise bounce them straight back here, so the account
-   * session is the stale thing now: end it, and say which account that was.
-   */
-  async function releaseConflictingPortalSession(
-    conflict: SecretAccountConflict,
-  ) {
-    try {
-      clearManagedAccountBinding();
-      await logoutManagedSession();
-      toast(`Signed out of ${conflict.email}.`);
-    } catch {
-      // Already gone, or the control plane is unreachable: nothing to release.
     }
   }
 
