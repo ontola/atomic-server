@@ -1288,6 +1288,26 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     void commitReplace(next, pre);
   }, [commitReplace, selectElements]);
 
+  /** Recolor the selected strokes and text as one undoable step. */
+  const recolorSelection = useCallback(
+    (color: number) => {
+      const picked = new Set(selectionRef.current);
+
+      if (picked.size === 0) return;
+
+      const pre = strokesRef.current;
+      const next = pre.map((el, i) =>
+        picked.has(i) && el.kind !== 'image' ? { ...el, color } : el,
+      );
+
+      if (next.every((el, i) => el === pre[i])) return;
+
+      setStrokes(next);
+      void commitReplace(next, pre);
+    },
+    [commitReplace],
+  );
+
   /** The topmost element under a point (a tap), or -1. */
   const hitTestAt = (x: number, y: number): number => {
     const reach = 12 / scaleRef.current;
@@ -2140,6 +2160,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         if (type === 'color') {
           setPenColor(prevColor);
           setPrevColor(penColor);
+          recolorSelection(prevColor);
         } else {
           setPenWidth(prevWidth);
           setPrevWidth(penWidth);
@@ -2154,6 +2175,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       if (type === 'color' && pickedColor !== null) {
         setPrevColor(penColor);
         setPenColor(pickedColor);
+        recolorSelection(pickedColor);
       } else if (type === 'width' && pickedWidth !== null) {
         setPrevWidth(penWidth);
         setPenWidth(pickedWidth);
@@ -2166,6 +2188,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       penWidth,
       prevColor,
       prevWidth,
+      recolorSelection,
     ],
   );
 
