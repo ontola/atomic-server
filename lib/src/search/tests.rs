@@ -159,6 +159,10 @@ async fn indexes_loro_document_body() {
         )
         .unwrap();
     resource.insert_propval_raw(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+    store
+        .add_resource_opts(&resource, false, false, false)
+        .await
+        .unwrap();
     let mut tx = crate::db::trees::Transaction::new();
     index_resource(&store, &resource, &mut tx).unwrap();
     store.apply_transaction(&mut tx).unwrap();
@@ -422,6 +426,10 @@ async fn index_resource_roundtrip() {
             Value::AtomicUrl(drive.clone().into()),
         )
         .unwrap();
+    store
+        .add_resource_opts(&resource, false, false, false)
+        .await
+        .unwrap();
     let mut tx = crate::db::trees::Transaction::new();
     index_resource(&store, &resource, &mut tx).unwrap();
     store.apply_transaction(&mut tx).unwrap();
@@ -447,7 +455,10 @@ fn plain(store: &Db, drive: &str, subject: &str, name: &str, description: &str) 
     resource
 }
 
-fn apply_index(store: &Db, resource: &Resource) -> crate::db::trees::Transaction {
+async fn apply_index(store: &Db, resource: &Resource) -> crate::db::trees::Transaction {
+    // The row too: a search entry whose resource is gone is not listed.
+    // Editing an indexed resource again finds its row already there.
+    let _ = store.add_resource_opts(resource, false, false, false).await;
     let mut tx = crate::db::trees::Transaction::new();
     index_resource(store, resource, &mut tx).unwrap();
     let ops = tx.clone();
@@ -468,7 +479,7 @@ async fn postings_are_keyed_by_a_short_document_id() {
     use crate::db::trees::Tree;
     let (store, drive) = setup_store("shortkeys").await;
     let r = plain(&store, &drive, "did:ad:fts-short", "Zebrafish", "grazing");
-    apply_index(&store, &r);
+    apply_index(&store, &r).await;
 
     // The store already holds the bootstrap resources; look at ours only.
     let mut seen = 0;
@@ -494,15 +505,15 @@ async fn reindex_writes_only_changed_postings() {
     use crate::db::trees::Tree;
     let (store, drive) = setup_store("diff").await;
     let before = plain(&store, &drive, "did:ad:fts-diff", "Quartz", "river stones");
-    let first = apply_index(&store, &before);
+    let first = apply_index(&store, &before).await;
     assert_eq!(count_ops(&first, Tree::SearchPostings), 3);
 
-    let again = apply_index(&store, &before);
+    let again = apply_index(&store, &before).await;
     assert_eq!(count_ops(&again, Tree::SearchPostings), 0);
     assert_eq!(count_ops(&again, Tree::SearchDocs), 1);
 
     let after = plain(&store, &drive, "did:ad:fts-diff", "Quartz", "river pebbles");
-    let edit = apply_index(&store, &after);
+    let edit = apply_index(&store, &after).await;
     // One posting removed ("stones"), one added ("pebbles").
     assert_eq!(count_ops(&edit, Tree::SearchPostings), 2);
 
@@ -526,7 +537,7 @@ async fn trigrams_cover_long_terms_only() {
     use crate::db::trees::Tree;
     let (store, drive) = setup_store("trigrams").await;
     let short = plain(&store, &drive, "did:ad:fts-tri-short", "avocado", "toast");
-    let first = apply_index(&store, &short);
+    let first = apply_index(&store, &short).await;
     assert_eq!(count_ops(&first, Tree::SearchTrigrams), 0);
 
     let long = plain(
@@ -536,7 +547,7 @@ async fn trigrams_cover_long_terms_only() {
         "internationalization",
         "",
     );
-    apply_index(&store, &long);
+    apply_index(&store, &long).await;
     assert!(store.kv.len(Tree::SearchTrigrams).unwrap() > 0);
 
     let hits = query(&store, "internationalizaton", &opts_parents(&drive)).unwrap();
@@ -552,14 +563,63 @@ async fn emptied_resource_leaves_no_postings() {
     let r = plain(&store, &drive, "did:ad:fts-empty", "Marmot", "burrow");
     let postings_before = store.kv.len(Tree::SearchPostings).unwrap();
     let docs_before = store.kv.len(Tree::SearchDocs).unwrap();
-    apply_index(&store, &r);
+    apply_index(&store, &r).await;
     assert_eq!(
         store.kv.len(Tree::SearchPostings).unwrap(),
         postings_before + 2
     );
 
     let blank = plain(&store, &drive, "did:ad:fts-empty", "", "");
-    apply_index(&store, &blank);
+    apply_index(&store, &blank).await;
     assert_eq!(store.kv.len(Tree::SearchPostings).unwrap(), postings_before);
     assert_eq!(store.kv.len(Tree::SearchDocs).unwrap(), docs_before);
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn destroy_commit_removes_parent_and_children_from_index() {
+    let (store, drive) = setup_store("destroy_cascade").await;
+    let parent = note(&store, &drive, "CascadeParentUnique").await;
+    let child = note(&store, &parent, "CascadeChildUnique").await;
+    let grandchild = note(&store, &child, "CascadeGrandchildUnique").await;
+
+    let mut resource = store.get_resource(&parent.as_str().into()).await.unwrap();
+    resource.destroy(&store).await.unwrap();
+
+    for (q, id) in [
+        ("CascadeParentUnique", &parent),
+        ("CascadeChildUnique", &child),
+        ("CascadeGrandchildUnique", &grandchild),
+    ] {
+        let hits = query(&store, q, &opts_parents(&drive)).unwrap();
+        assert!(
+            !subjects(&hits).contains(id),
+            "destroyed {q} still searchable: {:?}",
+            subjects(&hits)
+        );
+    }
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn entry_without_a_resource_is_not_listed() {
+    let (store, drive) = setup_store("orphan").await;
+    let id = note(&store, &drive, "OrphanEntryUnique").await;
+    assert!(
+        subjects(&query(&store, "OrphanEntryUnique", &opts_parents(&drive)).unwrap()).contains(&id)
+    );
+
+    // Drop only the resource row, as an interrupted write would leave it.
+    let mut tx = crate::db::trees::Transaction::new();
+    tx.push(crate::db::trees::Operation::remove_resource(
+        &crate::identifiers::canonicalize_scheme(&id),
+    ));
+    store.apply_transaction(&mut tx).unwrap();
+
+    let hits = query(&store, "OrphanEntryUnique", &opts_parents(&drive)).unwrap();
+    assert!(
+        !subjects(&hits).contains(&id),
+        "entry without a resource still listed: {:?}",
+        subjects(&hits)
+    );
 }
