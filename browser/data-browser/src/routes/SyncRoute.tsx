@@ -2311,6 +2311,31 @@ function SyncPage() {
                   <CommitPropertyList entry={entry} />
 
                   {entry.error && <ErrorText>{entry.error}</ErrorText>}
+                  {/* A failed upload that can never land (its parent or drive
+                      is gone) otherwise retries forever and keeps "Changes
+                      pending" up. Discarding drops only the queued upload;
+                      the copy on this device stays. */}
+                  {entry.status === 'failed' &&
+                    entry.direction === 'outgoing' &&
+                    store.outbox.hasPending(entry.subject) && (
+                      <DiscardRow>
+                        <Button
+                          subtle
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                'Stop uploading this change? It stays on this device but will not reach the server.',
+                              )
+                            ) {
+                              store.outbox.discard(entry.subject);
+                              setCommitLog(store.getCommitLog());
+                            }
+                          }}
+                        >
+                          Discard upload
+                        </Button>
+                      </DiscardRow>
+                    )}
                 </CommitCard>
               ))}
             </LogList>
@@ -3253,6 +3278,12 @@ const DestroyBadge = styled.span`
   border-radius: ${p => p.theme.radius};
   background: ${p => p.theme.colors.warning}22;
   color: ${p => p.theme.colors.warning};
+`;
+
+const DiscardRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
 `;
 
 const ErrorText = styled.div`
