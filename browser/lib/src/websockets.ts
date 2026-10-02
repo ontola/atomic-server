@@ -2023,6 +2023,9 @@ export class WSClient {
     if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
+    // Server-only mode (no OPFS / Web Locks): there is no local state to
+    // reconcile, and computing it would only fail, once per call.
+    if (this.store.getClientDb()?.initError) return;
 
     const current = this.connectionGuard();
 
