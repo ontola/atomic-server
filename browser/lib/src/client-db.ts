@@ -243,7 +243,11 @@ const STEAL_SETTLE_WAIT_MS = 15_000;
 // is alive at all. A tab the browser froze or discarded keeps its lock and
 // answers nothing, so without this every call would wait out the 30s deadline
 // below and the page would sit empty with no error.
-const LEADER_LIVENESS_CHECK_MS = 5_000;
+const LEADER_LIVENESS_CHECK_MS = 1_000;
+
+// A live leader answers a ping from its main thread in milliseconds, so this
+// is generous; a slow worker does not delay the answer, only a dead tab does.
+const LEADER_PROBE_WAIT_MS = 1_000;
 
 // The same wait, for the case where nothing was stolen because we already own
 // the lock and our own leader init is simply still running. Nothing is
@@ -1360,9 +1364,7 @@ export class ClientDbWorker {
     try {
       const pingedAt = Date.now();
       this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
-      await new Promise(resolve =>
-        setTimeout(resolve, LEADER_ELECTION_WAIT_MS),
-      );
+      await new Promise(resolve => setTimeout(resolve, LEADER_PROBE_WAIT_MS));
 
       if (
         this.destroyed ||

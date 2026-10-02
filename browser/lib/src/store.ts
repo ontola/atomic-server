@@ -65,7 +65,7 @@ import { LoroLoader } from './loro-loader.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
-const LOCAL_READ_DEADLINE_MS = 3_000;
+const LOCAL_READ_DEADLINE_MS = 1_000;
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
@@ -3716,8 +3716,8 @@ export class Store {
       }
     }
 
-    // With a server to ask, a local read that has not answered in a few
-    // seconds (a busy worker, a leader tab that stopped answering) is treated
+    // With a server to ask, a local read that has not answered in a
+    // second (a busy worker, a leader tab that stopped answering) is treated
     // as no database: the server is asked instead of the page sitting on a
     // placeholder. Offline, the local database is the only source, so it is
     // awaited as long as it takes.

@@ -34,9 +34,9 @@ it('asks the server when the local database does not answer in time', async () =
   store.injectFetch(fetch);
 
   const loading = store.getResource(subject);
-  await vi.advanceTimersByTimeAsync(1_000);
+  await vi.advanceTimersByTimeAsync(500);
   expect(fetch).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(2_100);
+  await vi.advanceTimersByTimeAsync(700);
   const resource = await loading;
 
   expect(fetch).toHaveBeenCalled();
