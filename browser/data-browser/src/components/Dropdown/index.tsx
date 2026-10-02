@@ -158,6 +158,26 @@ export const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
   item.label.toLowerCase().includes(query) ||
   (item.keywords ?? []).some(keyword => keyword.toLowerCase().includes(query));
 
+/**
+ * How well an item matches a filter query, lower is better: a label starting
+ * with the query beats one with a word starting with it, which beats a keyword
+ * hit, which beats the query appearing mid-word. Typing "re" should put
+ * "Reload" and "Restart" above "Add icon" (a keyword match).
+ */
+const matchRank = (item: MenuItemMinimial, query: string): number => {
+  const label = item.label.toLowerCase();
+
+  if (label.startsWith(query)) return 0;
+
+  if (label.split(/\s+/).some(word => word.startsWith(query))) return 1;
+
+  if ((item.keywords ?? []).some(k => k.toLowerCase().startsWith(query))) {
+    return 2;
+  }
+
+  return label.includes(query) ? 3 : 4;
+};
+
 export function DropdownMenu({
   items,
   Trigger,
@@ -215,7 +235,15 @@ export function DropdownMenu({
     }
 
     // Dividers are dropped while filtering.
-    return items.filter(item => isItem(item) && matchesQuery(item, search));
+    return items
+      .filter(item => isItem(item) && matchesQuery(item, search))
+      .map((item, i) => ({ item, i }))
+      .sort(
+        (a, b) =>
+          matchRank(a.item as MenuItemMinimial, search) -
+            matchRank(b.item as MenuItemMinimial, search) || a.i - b.i,
+      )
+      .map(({ item }) => item);
   }, [items, searchable, search]);
 
   // A matching section header alone isn't a match: nothing to pick under it.
