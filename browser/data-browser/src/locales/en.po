@@ -10381,3 +10381,11 @@ msgstr "Change this view to"
 #: src/routes/DemoRoute.tsx
 msgid "Demo setup finished after stall"
 msgstr "Demo setup finished after stall"
+
+#: src/routes/SyncRoute.tsx
+msgid "Stop uploading this change? It stays on this device but will not reach the server."
+msgstr "Stop uploading this change? It stays on this device but will not reach the server."
+
+#: src/routes/SyncRoute.tsx
+msgid "Discard upload"
+msgstr "Discard upload"
