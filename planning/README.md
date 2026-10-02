@@ -174,6 +174,7 @@ Not top-level plans. Indexed so they do not go missing.
 | [`app-setup.md`](./app-setup.md) | Typed app setup checklist: shared JSON Schema input contract, generic setup form, assistant handoff. |
 | [`plugin-secrets.md`](./plugin-secrets.md) | **Built** (2026-08-21, encrypted at rest 2026-08-22). Host-side `secret:<name>` substitution for plugin fetch. |
 | [`plugin-runtime-convergence.md`](./plugin-runtime-convergence.md) | **Proposal** (2026-09-18, #1546). One plugin host across JS and WASM worlds. |
+| [`view-catalogs.md`](./view-catalogs.md) | **Notes, not decided** (2026-10-02). Where plugin views come from today (drive apps, `/plugin-list`, `/plugin-catalog`) and how the catalogs could feed the #1899 view registry. |
 | [`durable-after-commit.md`](./durable-after-commit.md) | **Design** (2026-09-29, #1851). Durable, queued JS `afterCommit` for user-installed plugins on tables showing their view; reads #1850's change list, writes through #1788's row grant. Nothing built. |
 | [`devonian-reconnect.md`](./devonian-reconnect.md) | Task note: concurrent route resumes consuming one PKCE verifier. The Devonian demo it touched has been removed. |
 | [`account-ai-credits.md`](./account-ai-credits.md) | Included AI for SaaS accounts; contract lives in atomic-saas. |
