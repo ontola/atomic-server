@@ -2044,6 +2044,14 @@ impl Db {
         Ok(out)
     }
 
+    /// Whether `host` (no port) has a Drive mapping in this store: bound by
+    /// hand through `/bind-drive`, or installed by a control plane through
+    /// [`Self::sync_drive_mappings`]. Either way the server answers for it.
+    pub fn has_drive_mapping(&self, host: &str) -> bool {
+        let key = drive_mapping_key(host);
+        !key.is_empty() && matches!(self.kv.get(Tree::DriveMapping, key.as_bytes()), Ok(Some(_)))
+    }
+
     /// Returns the full Drive DID for a given host (domain/subdomain).
     pub async fn get_drive_did(&self, host: &str) -> AtomicResult<Option<Subject>> {
         let key = drive_mapping_key(host);
@@ -5244,6 +5252,25 @@ mod drive_mapping_tests {
             .await
             .unwrap()
             .is_some());
+    }
+
+    /// A vanity name the control plane routed here is a host this server
+    /// answers for, whatever suffix it sits under; a released one is not.
+    #[tokio::test]
+    async fn mapped_hosts_are_served_here() {
+        let store = Db::init_temp("drive_mapping_served").await.unwrap();
+        assert!(!store.has_drive_mapping("ontola.atomic.place"));
+
+        store
+            .sync_drive_mappings(&desired(&[("ontola.atomic.place", "did:ad:ontola")]))
+            .unwrap();
+        assert!(store.has_drive_mapping("ontola.atomic.place"));
+        assert!(store.has_drive_mapping("Ontola.Atomic.Place"));
+        assert!(!store.has_drive_mapping("evil.atomic.place"));
+        assert!(!store.has_drive_mapping(""));
+
+        store.sync_drive_mappings(&desired(&[])).unwrap();
+        assert!(!store.has_drive_mapping("ontola.atomic.place"));
     }
 
     /// Hostnames are case-insensitive, but the `Host` header is echoed in
