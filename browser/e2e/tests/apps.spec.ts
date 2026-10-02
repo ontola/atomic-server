@@ -241,12 +241,27 @@ test.describe('apps', () => {
     await page.keyboard.press('Escape');
     await expect(said).toHaveText('chose null');
 
-    // A host shortcut still works while focus is inside the app.
+    // A key the app leaves alone reaches the host's own key listeners, as if
+    // pressed on the frame. Checked at the listener rather than through a
+    // Ctrl shortcut: on the CI runner a Ctrl chord opens nothing even
+    // outside a frame, so the shortcut would test the runner, not this.
+    await page.evaluate(() => {
+      const w = window as unknown as { hostKeys: string[] };
+      w.hostKeys = [];
+      document.addEventListener('keydown', e => {
+        if ((e.target as Element | null)?.tagName === 'IFRAME')
+          w.hostKeys.push(e.key);
+      });
+    });
     await app.getByRole('button', { name: 'Options' }).focus();
-    await page.keyboard.press('Control+k');
-    await expect(
-      page.getByPlaceholder('Search for resources...'),
-    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { hostKeys: string[] }).hostKeys,
+        ),
+      )
+      .toContain('Escape');
   });
 
   test("an app asks through the host's form and pickers, and queries sorted", async ({
@@ -272,7 +287,7 @@ test.describe('apps', () => {
 
     // A Store-shaped query: the app's rows, sorted by name, newest call wins.
     await app.getByRole('button', { name: 'List' }).click();
-    await expect(said).toHaveText('Apple, Zebra');
+    await expect(said).toHaveText('Apple, Zebra', { timeout: 20_000 });
 
     // The pickers answer null when the person backs out.
     await app.getByRole('button', { name: 'Pick' }).click();
@@ -483,16 +498,26 @@ const PICKERS_APP = `export async function view({ root, store }) {
     said.textContent = made ? 'made a row' : 'no row';
   });
   button('List', async () => {
-    const rows = await store.query({
-      property: parent,
-      value: table,
-      sortBy: name,
-      pageSize: 10,
-      page: 0,
-    });
-    const titles = [];
-    for (const row of rows) titles.push((await store.getResource(row)).get(name));
-    said.textContent = titles.join(', ');
+    try {
+      // The index catches up just after a write; ask until both rows are in.
+      let rows = [];
+      for (let i = 0; i < 20; i++) {
+        rows = await store.query({
+          property: parent,
+          value: table,
+          sortBy: name,
+          pageSize: 10,
+          page: 0,
+        });
+        if (rows.length === 2) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
+      const titles = [];
+      for (const row of rows) titles.push((await store.getResource(row)).get(name));
+      said.textContent = titles.join(', ');
+    } catch (e) {
+      said.textContent = 'list failed: ' + e.message;
+    }
   });
   button('Pick', async () => {
     said.textContent = 'picked ' + (await store.ui.pickResource({ isA: rowClass, title: 'Choose a row' }));
