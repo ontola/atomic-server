@@ -274,11 +274,17 @@ export async function enableCloudSyncForDrive(params: {
   store.setServerUrl(httpOrigin);
   setServer(httpOrigin);
 
-  if (!(await store.waitForServerConnected(20_000))) {
+  // Force a fresh socket. `setServerUrl` opens none when this device was
+  // disconnected by hand (a flag that survives reloads), and reuses a socket
+  // left over from an earlier attempt at the same node. Either way the wait
+  // used to run out its 20 seconds with nothing to say why.
+  await store.reconnect(20_000).catch((error: unknown) => {
     throw new Error(
-      'Timed out connecting to the Cloud Server node. Retry setup.',
+      `Could not connect to the Cloud Server node: ${
+        error instanceof Error ? error.message : String(error)
+      } Retry setup.`,
     );
-  }
+  });
 
   await promoteLocalOnly();
 
