@@ -12,6 +12,7 @@ import {
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
 import {
+  appChanges,
   handleRequest,
   isHostRequest,
   isWithinApp,
@@ -34,6 +35,7 @@ import {
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
+import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -172,6 +174,8 @@ function AppFrameSession({
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
+    // Per frame: `undo` reverts what this frame applied, nothing older.
+    const changes = appChanges(store, drive, app);
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -268,7 +272,7 @@ function AppFrameSession({
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post);
+      void answer(store, app, drive, table, data, session.post, changes);
     });
     bridgeRef.current = bridge;
 
@@ -443,6 +447,7 @@ async function answer(
   table: string | undefined,
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
+  changes: ViewChanges,
 ): Promise<void> {
   try {
     post({
@@ -454,6 +459,7 @@ async function answer(
         request,
         table,
         proxyHost(store, app, drive),
+        changes,
       ),
     });
   } catch (e) {

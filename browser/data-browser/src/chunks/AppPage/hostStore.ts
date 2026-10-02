@@ -2,6 +2,7 @@ import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import type { ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
   core,
@@ -86,8 +87,22 @@ export async function handleRequest(
    * Absent where the host cannot (no signed-in agent, or a host without it).
    */
   proxy?: ProxyHost,
+  /** This frame's `apply` and `undo` history. */
+  changes?: ViewChanges,
 ): Promise<unknown> {
   switch (request.op) {
+    case 'apply':
+      if (!changes) throw new Error('This host cannot apply changes.');
+
+      return await changes.apply(
+        (request as unknown as { intents?: unknown }).intents,
+      );
+
+    case 'undo':
+      if (!changes) throw new Error('This host cannot undo changes.');
+
+      return await changes.undo();
+
     case 'app':
       return app;
 
@@ -245,6 +260,46 @@ export async function handleRequest(
         `This app asked for something the host does not do: ${request.op}`,
       );
   }
+}
+
+/**
+ * `store.apply` and `store.undo` for one app frame: written as the app, and
+ * only under the app, like every other write it makes.
+ */
+export function appChanges(
+  store: Store,
+  drive: string,
+  app: string,
+): ViewChanges {
+  return new ViewChanges(store, {
+    authorize: subject => refuseOutsideApp(store, subject, app),
+    writes: {
+      create: async ({ parent, isA, propVals }) =>
+        (
+          await writeAsApp(store, drive, app, {
+            op: 'create',
+            parent,
+            isA,
+            propVals,
+          })
+        ).subject,
+      set: async (subject, propVals) => {
+        await writeAsApp(store, drive, app, { op: 'save', subject, propVals });
+        await refresh(store, subject);
+      },
+      remove: async (subject, properties) => {
+        await writeAsApp(store, drive, app, {
+          op: 'remove',
+          subject,
+          properties,
+        });
+        await refresh(store, subject);
+      },
+      destroy: async subject => {
+        await writeAsApp(store, drive, app, { op: 'destroy', subject });
+      },
+    },
+  });
 }
 
 /**

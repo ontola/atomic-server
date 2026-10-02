@@ -37,7 +37,11 @@ export type ViewOperation =
   | 'openResource'
   | 'environment'
   /** Atomic's own form for a new resource of a class. */
-  | 'form';
+  | 'form'
+  /** Several writes as one change, in the intent format `run()` returns. */
+  | 'apply'
+  /** Reverts the view's latest `apply`. */
+  | 'undo';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -101,6 +105,8 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'openResource',
       'environment',
       'form',
+      'apply',
+      'undo',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

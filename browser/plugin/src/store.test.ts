@@ -58,6 +58,8 @@ const methods = (object: object) =>
     .sort();
 
 const shared = [
+  'apply',
+  'undo',
   'getContext',
   'getResource',
   'newResource',

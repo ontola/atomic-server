@@ -1,3 +1,4 @@
+import type { Intent } from '@tomic/lib';
 import { viewRequest, type ViewOperation } from './viewProtocol';
 
 /**
@@ -208,6 +209,27 @@ export class ViewStore {
       subject: context.subject ?? context.resource?.subject ?? '',
       agent: context.agent || undefined,
     };
+  }
+
+  /**
+   * Several writes as one change, in the intent format a plugin's `run()`
+   * returns. Refer to a resource created in the same call as
+   * `local:<localId>`. All of it is checked before anything is written; if a
+   * write still fails, the ones before it are rolled back. Resolves to the
+   * subjects the creates got, by `localId`. At most 200 intents.
+   */
+  public apply(
+    intents: Intent[],
+  ): Promise<{ subjects: Record<string, string> }> {
+    return this.call('apply', { intents });
+  }
+
+  /**
+   * Reverts this view's latest `apply`. False when there is nothing to undo.
+   * Rejects, changing nothing, when someone changed those values since.
+   */
+  public undo(): Promise<boolean> {
+    return this.call('undo', {});
   }
 
   /**

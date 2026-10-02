@@ -377,9 +377,13 @@ Each step lands on its own.
       undo, `presence`, `schema`.
   - [x] `query` takes `CollectionBuilder`'s names: `filters`, `sortBy`,
         `sortDesc`, `pageSize`, `page` (`helpers/extensions/viewQuery.ts`).
+  - [x] `apply` (intents, checked first, rolled back on failure) and `undo`
+        for a view's own changes (`helpers/extensions/viewApply.ts`).
   - [ ] Deltas instead of re-querying on change.
-  - [ ] Declared capabilities in the manifest, as Android and iOS declare
-        what an app uses (see the docs' "How this compares to a phone").
+  - [x] `edit-schema` capability: a packaged view may write the classes,
+        properties and ontology of what it shows. Drive apps not yet: their
+        writes are signed by the app's key, so that needs server-side rights.
+  - [ ] Plugins adding tools to the host's assistant.
 - [ ] **4. Kanban as a plugin**, behind a flag, against the existing e2e
       specs.
 - [ ] **5. UI kit.** `@tomic/tokens`, `@tomic/ui` web components including

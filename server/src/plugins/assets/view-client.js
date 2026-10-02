@@ -222,6 +222,23 @@ export const store = {
   },
 
   /**
+   * Several writes as one change: `[{ op: 'create', localId, parent, isA, set },
+   * { op: 'set', subject, set }, { op: 'remove', subject, properties },
+   * { op: 'destroy', subject }]`, the format a plugin's `run()` returns. Refer
+   * to something created in the same call as `local:<localId>`. All of it is
+   * checked before anything is written, and a failed write rolls back the
+   * ones before it. Resolves to `{ subjects }`, the new subjects by `localId`.
+   */
+  async apply(intents) {
+    return send('apply', { intents });
+  },
+
+  /** Reverts this view's latest `apply`. False when there is nothing to undo. */
+  async undo() {
+    return send('undo', {});
+  },
+
+  /**
    * Calls back with the fresh resource whenever `subject` changes, until the
    * returned function runs.
    *

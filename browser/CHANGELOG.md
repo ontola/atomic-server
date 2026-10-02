@@ -17,6 +17,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   object. Packaged plugin views get `store.ui` too. `query` takes `filters`,
   `sortBy`, `sortDesc`, `pageSize` and `page`. `RPCClient` keeps working but
   is deprecated.
+- Plugin views and apps can make several writes as one change with
+  `store.apply(intents)`, in the same intent format a plugin's `run()`
+  returns. Everything is checked before anything is written, a failed write
+  rolls back the ones before it, and `store.undo()` reverts the latest change.
+- A plugin can declare the `edit-schema` capability so its view may change
+  the classes and properties of what it shows without asking each time.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while

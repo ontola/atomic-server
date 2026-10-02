@@ -289,6 +289,31 @@ test.describe('apps', () => {
     await page.keyboard.press('Escape');
     await expect(said).toHaveText('file null');
   });
+
+  test('an app makes several writes as one change, and undoes it', async ({
+    page,
+  }) => {
+    await newApp(page);
+    await setAppSource(page, APPLY_APP);
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const said = app.getByRole('status');
+    await expect(app.getByRole('button', { name: 'Apply' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // Two linked rows in one call: the second points at the first.
+    await app.getByRole('button', { name: 'Apply' }).click();
+    await expect(said).toHaveText('2 rows, linked');
+
+    // A bad value anywhere means nothing is written.
+    await app.getByRole('button', { name: 'Bad apply' }).click();
+    await expect(said).toContainText('refused, still 2 rows');
+
+    await app.getByRole('button', { name: 'Undo' }).click();
+    await expect(said).toHaveText('undone, 0 rows');
+  });
 });
 
 /**
@@ -469,4 +494,44 @@ const PICKERS_APP = `export async function view({ root, store }) {
   });
   root.append(said);
   void apple;
+}`;
+
+const APPLY_APP = `export async function view({ root, store }) {
+  const name = 'https://atomicdata.dev/properties/name';
+  const parent = 'https://atomicdata.dev/properties/parent';
+  const description = 'https://atomicdata.dev/properties/description';
+  const { table, rowClass } = await store.getData();
+  const said = document.createElement('p');
+  said.setAttribute('role', 'status');
+  const rows = () => store.query({ property: parent, value: table });
+  const button = (label, onClick) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    root.append(b);
+  };
+  button('Apply', async () => {
+    const { subjects } = await store.apply([
+      { op: 'create', localId: 'a', parent: table, isA: [rowClass], set: { [name]: 'First' } },
+      { op: 'create', localId: 'b', parent: table, isA: [rowClass], set: { [name]: 'Second', [description]: 'local:a' } },
+    ]);
+    const second = await store.getResource(subjects.b);
+    said.textContent = (await rows()).length + ' rows, ' + (second.get(description) === subjects.a ? 'linked' : 'not linked');
+  });
+  button('Bad apply', async () => {
+    try {
+      await store.apply([
+        { op: 'create', localId: 'c', parent: table, isA: [rowClass], set: { [name]: 'Third' } },
+        { op: 'sudo', subject: table },
+      ]);
+      said.textContent = 'applied';
+    } catch (e) {
+      said.textContent = 'refused, still ' + (await rows()).length + ' rows';
+    }
+  });
+  button('Undo', async () => {
+    const undone = await store.undo();
+    said.textContent = (undone ? 'undone, ' : 'nothing, ') + (await rows()).length + ' rows';
+  });
+  root.append(said);
 }`;

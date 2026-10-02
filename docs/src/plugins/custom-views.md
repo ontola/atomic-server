@@ -84,9 +84,31 @@ await page.save();
 | `store.search(text, { isA?, parents?, limit? })` | `string[]` | Full-text search, `limit` 1 to 50 (default 20). |
 | `store.subscribe(subject, resource => ...)` | unsubscribe function | Called with the fresh resource on every change. |
 
+| `store.apply(intents)` | `{ subjects }` | Several writes as one change. See below. |
+| `store.undo()` | `true`, or `false` when there is nothing to undo | Reverts this view's latest `apply`. |
+
 A `ViewResource` has `subject`, `title`, `props`, `get(property)`, `set(property, value)`, `remove(property)`, `getClasses()`, `hasClasses(...classes)`, `save()` and `destroy()`. Like in `@tomic/lib`, `set` and `remove` only stage a change; `save()` sends what changed since the last save.
 
 `query` and `search` leave out anything this view may not read: a list of subjects already says what exists.
+
+### Several writes as one change
+
+A form builder adds a question by creating a Property, adding it to a class and placing it on a page. Saved one by one, a failure halfway leaves a broken form. `store.apply` takes them together, in the same intent format a plugin's `run()` returns:
+
+```ts
+const { subjects } = await store.apply([
+  { op: 'create', localId: 'q', parent: ontology, isA: [PROPERTY], set: { [SHORTNAME]: 'age', [DATATYPE]: INTEGER } },
+  { op: 'set', subject: rowClass, set: { [RECOMMENDS]: [...current, 'local:q'] } },
+]);
+subjects.q; // the new Property
+```
+
+- **Checked first.** Every value is checked against its property, and every write against this view's access, before anything is written. A problem anywhere means nothing is written.
+- **Rolled back.** If a write still fails (the network, the server), the writes before it are reverted and the call rejects.
+- **Undoable.** `store.undo()` reverts the latest `apply` as one step, up to 20 back. It refuses, changing nothing, when someone changed those values since.
+- **Limits.** At most 200 intents. `destroy` intents run last and are not rolled back; an `apply` that deletes something cannot be undone.
+
+Refer to a resource created in the same call as `local:<localId>`.
 
 ### Access control
 
@@ -103,6 +125,8 @@ Writes (`save`, `destroy`, `newResource`) follow the same rules for write access
 
 > [!NOTE]
 > Writes that target plugin resources are always blocked, regardless of permissions. A plugin cannot modify itself or any other plugin resource.
+
+A plugin whose view edits schema (a form builder, a table editor) can declare the `edit-schema` capability next to `custom-view`. Once granted at install, its view may write the classes of the resource it shows (and, for a table, the class of its rows), the properties those classes list, and anything in their ontology, without a Write Request each time. A class that sits directly in a drive grants only itself and its properties, never the drive.
 
 Drive apps follow a stricter rule: they read what the signed-in person can read, and write only under their own app resource, signed by the app's own agent.
 
@@ -136,7 +160,7 @@ The contract borrows from how Android and iOS let apps use what the system offer
 - **System pickers instead of broad access.** Like Android's document picker or iOS's photo picker, `store.ui.pickResource` and `pickFile` let the person choose one thing, without the plugin being able to list everything.
 - **Asking at the moment of use.** Reading or writing outside the plugin's scope asks the person then, like a runtime permission, and they can make it permanent.
 - **System sheets for system actions.** `share`, `resourceMenu` and `confirm` are the Data Browser's own, like a share sheet or an action sheet, so they behave the same in every plugin.
-- **Declared capabilities.** The `custom-view` permission in the manifest is the start of a manifest that declares what a plugin will use, as an Android manifest or iOS entitlements do.
+- **Declared capabilities.** A plugin declares what it will use in its manifest (`custom-view`, `edit-schema`), as an Android manifest or iOS entitlements do, and the person approves it once at install.
 
 ### Legacy `RPCClient`
 

@@ -5,6 +5,7 @@ import {
   type ViewRequest,
 } from '@tomic/plugin';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { canViewAccess, type ViewPolicy } from '@helpers/extensions/viewPolicy';
@@ -19,6 +20,7 @@ import {
   server,
   type JSONArray,
   type JSONValue,
+  type ApplyHost,
   type Resource,
   type Store,
 } from '@tomic/react';
@@ -65,7 +67,15 @@ interface ConstructorArgs {
  * type. Pickers stay on the legacy path: those already answer with the
  * resource, which old plugins rely on and `store.ui` reduces to its subject.
  */
-const STORE_OPS = new Set(['create', 'save', 'destroy', 'query', 'search']);
+const STORE_OPS = new Set([
+  'create',
+  'save',
+  'destroy',
+  'query',
+  'search',
+  'apply',
+  'undo',
+]);
 const LEGACY_PICKERS = new Set(['pickResource', 'pickFile']);
 
 export class LegacyViewAdapter {
@@ -84,6 +94,8 @@ export class LegacyViewAdapter {
   public forwardKey: ConstructorArgs['forwardKey'];
 
   private bridge: FrameBridge;
+  /** This frame's `apply` and `undo` history. */
+  private changes: ViewChanges;
 
   constructor({
     context,
@@ -101,6 +113,17 @@ export class LegacyViewAdapter {
   }: ConstructorArgs) {
     this.handleUI = handleUI;
     this.forwardKey = forwardKey;
+    this.changes = new ViewChanges(store, {
+      authorize: async subject => {
+        const target = await this.store.getResource(subject);
+
+        if (target.hasClasses(server.classes.plugin))
+          throw new Error('Plugin cannot edit plugin resources');
+
+        await this.ensureWrite(subject);
+      },
+      writes: storeWrites(store),
+    });
     this.context = context;
     this.store = store;
     this.iFrame = iFrame;
@@ -174,8 +197,37 @@ export class LegacyViewAdapter {
   }
 
   /** Whether this view may write `subject` without asking the person. */
-  public mayWrite(subject: string): Promise<boolean> {
-    return canViewAccess(this.store, subject, this.policy, 'write');
+  public async mayWrite(subject: string): Promise<boolean> {
+    if (await canViewAccess(this.store, subject, this.policy, 'write'))
+      return true;
+
+    return this.grants().includes('edit-schema') && this.inSchema(subject);
+  }
+
+  private grants(): string[] {
+    const grants = this.pluginResource.get(server.properties.grants);
+
+    return Array.isArray(grants) ? grants.map(String) : [];
+  }
+
+  /**
+   * Whether `subject` is part of the schema of what this view shows: one of
+   * its classes, a property they list, or something in their ontology. A
+   * class that sits in no ontology (directly in a drive) grants only itself
+   * and its properties, never the drive around it.
+   */
+  private async inSchema(subject: string): Promise<boolean> {
+    const scope = await schemaScope(this.store, this.context.resource);
+    let current: string | undefined = subject;
+
+    for (let depth = 0; current && depth < 12; depth++) {
+      if (scope.has(current)) return true;
+      const resource: Resource = await this.store.getResource(current);
+      const parent: unknown = resource.get(core.properties.parent);
+      current = typeof parent === 'string' ? parent : undefined;
+    }
+
+    return false;
   }
 
   /**
@@ -190,6 +242,19 @@ export class LegacyViewAdapter {
     const args = request.args;
 
     switch (request.op) {
+      case 'apply':
+        if (makesPlugin(args.intents))
+          throw new Error('Plugin cannot create plugin resources');
+
+        post({ result: await this.changes.apply(args.intents) });
+
+        return;
+
+      case 'undo':
+        post({ result: await this.changes.undo() });
+
+        return;
+
       case 'create': {
         const parent =
           typeof args.parent === 'string'
@@ -638,4 +703,83 @@ function entriesToJSONRecord(
       return [key, value as JSONValue];
     }),
   ) as Record<string, JSONValue>;
+}
+
+/** Writes signed by the person, as every other packaged-view write is. */
+function storeWrites(store: Store): ApplyHost {
+  return {
+    create: async ({ parent, isA, propVals }) => {
+      const resource = await store.newResource({ parent, isA, propVals });
+      await resource.save();
+
+      return resource.subject;
+    },
+    set: async (subject, propVals) => {
+      const resource = await store.getResource(subject);
+
+      for (const [property, value] of Object.entries(propVals))
+        await resource.set(property, value);
+
+      await resource.save();
+    },
+    remove: async (subject, properties) => {
+      const resource = await store.getResource(subject);
+      properties.forEach(property => resource.remove(property));
+      await resource.save();
+    },
+    destroy: async subject => {
+      await (await store.getResource(subject)).destroy();
+    },
+  };
+}
+
+/** Whether any intent would make something a plugin. */
+function makesPlugin(intents: unknown): boolean {
+  if (!Array.isArray(intents)) return false;
+
+  return intents.some(intent => {
+    const values = (intent as { set?: Record<string, unknown> })?.set;
+    const isA = [
+      ...((intent as { isA?: unknown[] })?.isA ?? []),
+      ...((values?.[core.properties.isA] as unknown[] | undefined) ?? []),
+    ];
+
+    return isA.includes(server.classes.plugin);
+  });
+}
+
+/** The classes a page is, or holds as rows, with their properties and ontologies. */
+async function schemaScope(
+  store: Store,
+  page: { subject: string; props: Record<string, JSONValue> },
+): Promise<Set<string>> {
+  const isA = page.props[core.properties.isA];
+  const rows = page.props[core.properties.classtype];
+  const classes = [
+    ...(Array.isArray(isA) ? isA : []),
+    ...(typeof rows === 'string' ? [rows] : []),
+  ].filter((c): c is string => typeof c === 'string');
+  const scope = new Set<string>();
+
+  for (const subject of classes) {
+    const cls = await store.getResource(subject);
+
+    if (cls.error) continue;
+    scope.add(subject);
+
+    for (const property of [
+      ...cls.getSubjects(core.properties.requires),
+      ...cls.getSubjects(core.properties.recommends),
+    ])
+      scope.add(property);
+
+    const parent = cls.get(core.properties.parent);
+
+    if (typeof parent === 'string') {
+      const ontology = await store.getResource(parent);
+      if (ontology.hasClasses(core.classes.ontology)) scope.add(parent);
+    }
+  }
+
+  return scope;
 }

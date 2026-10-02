@@ -136,7 +136,12 @@ export type CapabilityName =
   | 'full-drive-access'
   | 'extended-fuel'
   | 'extended-memory'
-  | 'custom-view';
+  | 'custom-view'
+  /**
+   * A custom view may change the classes and properties of what it shows
+   * (their ontology) without asking each time.
+   */
+  | 'edit-schema';
 
 /** Either the bare name or the name with the reason shown at review. */
 export type DeclaredCapability =
@@ -304,6 +309,7 @@ const CAPABILITIES: CapabilityName[] = [
   'extended-fuel',
   'extended-memory',
   'custom-view',
+  'edit-schema',
 ];
 const IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -658,6 +664,14 @@ export function validateManifest(raw: unknown): PluginManifest {
     if (!seenCapabilities.has('custom-view'))
       throw new Error('view entrypoint requires the custom-view capability');
   }
+
+  // Only a view's host enforces it, so without a view it would be a grant
+  // that reads as power and does nothing.
+  if (
+    seenCapabilities.has('edit-schema') &&
+    !seenCapabilities.has('custom-view')
+  )
+    throw new Error('edit-schema requires the custom-view capability');
 
   const accepts = list(entry.accepts, 'accepts').map(value => {
     const accept = object(value, 'accepts entry');
