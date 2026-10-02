@@ -43,6 +43,10 @@ import {
   type MergeForkOptions,
 } from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
+import { withDeadline } from './withDeadline.js';
+
+/** How long a save the server already acknowledged waits on the local mirror. */
+const LOCAL_MIRROR_AFTER_ACK_DEADLINE_MS = 3_000;
 import {
   DERIVED_BY_SERVER,
   SERVER_MANAGED_PROPS,
@@ -3438,7 +3442,16 @@ export class Resource<C extends OptionalClass = any> {
       // The server acknowledgement does not make the OPFS cache durable.
       // Explicit saves must survive an immediate reload for existing resources
       // too (for example a dashboard block renamed in its config dialog).
-      await this.persistToClientDb();
+      // The server holds the commit now, so the local mirror is a cache: a
+      // reload refetches what it lacks. Failing `save()` here told the caller
+      // a durable change had failed, and a retry made a duplicate (a second
+      // canvas, a second comments folder). A local database that is stuck
+      // behind another tab gets a short wait, then the save reports success.
+      await withDeadline(
+        this.persistToClientDb(),
+        LOCAL_MIRROR_AFTER_ACK_DEADLINE_MS,
+        false,
+      );
       this.commitError = undefined;
 
       return 'persisted';
