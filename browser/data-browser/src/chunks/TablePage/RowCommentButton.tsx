@@ -68,9 +68,21 @@ function SessionRowComments({
 }): JSX.Element | null {
   const resource = useResource(rowKey, NEW_RESOURCE_OPTS);
 
-  return resource.new || resource.subject.startsWith('_new:') ? null : (
+  return rowIsCommentable(resource) ? (
     <RowCommentBubble subject={resource.subject} />
-  );
+  ) : null;
+}
+
+/**
+ * Whether a row exists to comment on: saved, not a draft. Develop pre-mints
+ * draft rows with their final subject, so the old `_new:` key is not enough
+ * on its own; an unsaved resource is `new` until its first save.
+ */
+export function rowIsCommentable(row: {
+  new: boolean;
+  subject: string;
+}): boolean {
+  return !row.new && !row.subject.startsWith('_new:');
 }
 
 /** Matches TableNewRow: resolve the placeholder locally, never fetch it. */

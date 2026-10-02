@@ -8,6 +8,7 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import { modelMessagesWithToolRecovery } from './toolHistory';
+import { usageMetadata } from './usageMetadata';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
   type AIAgent,
@@ -118,21 +119,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     const originalStream = result.toUIMessageStream({
       originalMessages: transformedMessages,
       generateMessageId: this.idGenerator,
-      messageMetadata: ({ part }) => {
-        // Each tool step resends the whole context, so the summed usage below
-        // is far above the real context size. The last step's input is what
-        // the next request will start from, so that is what compaction uses.
-        if (part.type === 'finish-step') {
-          return { contextTokens: part.usage.inputTokens };
-        }
-
-        if (part.type === 'finish') {
-          return {
-            inputTokensUsed: part.totalUsage.inputTokens,
-            outputTokensUsed: part.totalUsage.outputTokens,
-          };
-        }
-      },
+      messageMetadata: ({ part }) => usageMetadata(part),
       onError: error => {
         if (error instanceof Error) return error.message;
         if (error && typeof error === 'object' && 'message' in error)
