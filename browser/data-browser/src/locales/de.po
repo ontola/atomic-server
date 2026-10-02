@@ -10363,3 +10363,7 @@ msgstr ""
 #: src/routes/DemoRoute.tsx
 msgid "Demo setup finished after stall"
 msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+msgstr ""
