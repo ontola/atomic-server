@@ -256,7 +256,11 @@ export function DropdownMenu({
       menu.style.maxHeight = `${Math.max(0, Math.min(window.innerHeight * 0.8, visibleHeight - 16))}px`;
     }
 
-    const menuRect = menu.getBoundingClientRect();
+    // Layout size, not getBoundingClientRect: the open transition scales the
+    // menu (`scale: 0.95`), and a rect measured mid-transition is 5% too
+    // small. The menu would then end up that much too low once it settled,
+    // and nothing re-positions it (a ResizeObserver ignores transforms).
+    const menuRect = { width: menu.offsetWidth, height: menu.offsetHeight };
 
     if (anchorPoint) {
       const left =
