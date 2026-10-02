@@ -124,7 +124,7 @@ does not start automatically in GitHub Actions.
 | Trigger | Main pipeline |
 |---|---|
 | PR event or feature-branch push | No automatic repository CI |
-| Push to `develop` | Full, gates staging |
+| Push to `develop` | Full for the latest tip; a newer push cancels the previous run and only the current successful tip can deploy to staging |
 | Push of a `v*` tag | Full, gates release |
 | Manual `workflow_dispatch` on a temporary integration branch | Full |
 
@@ -142,6 +142,11 @@ This intentionally means one premerge batch run and one postmerge `develop`
 run. Reusing a premerge result for staging would require proving that the
 merged tree is identical and changing the deployment gate; that is outside
 this temporary scheduling change.
+
+Develop uses latest-wins concurrency. A new push cancels the prior Main run;
+the staging workflow checks the successful run's SHA against the current
+develop tip before deploying. This avoids spending Mancave time on a commit
+that has already been superseded and avoids deploying a stale success.
 
 `main.yml` keeps the full suite for every dispatched ref, avoiding an
 accidental light run that could be mistaken for release evidence. The
