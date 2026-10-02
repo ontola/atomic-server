@@ -122,6 +122,16 @@ type ConnectionStateCallback = (connected: boolean) => void;
 type SyncStatusCallback = (status: StoreSyncStatus) => void;
 type CommitLogCallback = (entries: CommitLogEntry[]) => void;
 
+export interface RepeatedCommitFailure {
+  subject: string;
+  error: Error;
+  failures: number;
+  /** Origin the writes are sent to. */
+  server: string;
+}
+
+type RepeatedCommitFailureCallback = (failure: RepeatedCommitFailure) => void;
+
 type ServerURLCallback = (serverURL: string) => void;
 type DriveCallback = (drive: string) => void;
 
@@ -302,6 +312,11 @@ export enum StoreEvents {
    * Use `store.on(StoreEvents.Indexing, driveSubject, callback)`.
    */
   Indexing = 'indexing',
+  /**
+   * A queued write has failed several drains in a row and is still being
+   * retried. Meant for error reporting, not for the user.
+   */
+  CommitRepeatedlyFailing = 'commit-repeatedly-failing',
 }
 
 export interface ImportJsonADOptions {
@@ -377,6 +392,7 @@ type StoreEventHandlers = {
   [StoreEvents.CommitLogChanged]: CommitLogCallback;
   [StoreEvents.ResourceUpdated]: ResourceCallback;
   [StoreEvents.Error]: ErrorCallback;
+  [StoreEvents.CommitRepeatedlyFailing]: RepeatedCommitFailureCallback;
   /** Only used via `on(Indexing, drive, cb)`; not emitted through EventManager. */
   [StoreEvents.Indexing]: IndexingStatusCallback;
 };
@@ -1378,6 +1394,14 @@ export class Store {
           const code = e instanceof AtomicError ? e.code : undefined;
 
           return isUnrecoverableCommitError(msg, code);
+        },
+        onRepeatedFailure: (entry, e) => {
+          this.eventManager.emit(StoreEvents.CommitRepeatedlyFailing, {
+            subject: entry.subject,
+            error: e instanceof Error ? e : new Error(String(e)),
+            failures: entry.failures ?? 0,
+            server: this.getServerUrl(),
+          });
         },
         onBlocked: (entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
