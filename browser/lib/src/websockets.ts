@@ -1665,6 +1665,23 @@ export class WSClient {
     this.sendBinary(encodeSub(this.wireSubject(subject)));
   }
 
+  /** A `SUB` for one resource, held via {@link Store.subscribeLive}. */
+  public subscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) return;
+    if (this.store.isLocalOnlySubject(subject)) return;
+    if (
+      this.store.getAgent()?.subject &&
+      this.authenticatedWith !== this.store.getAgent()?.subject
+    )
+      return;
+    this.sendBinary(encodeSub(this.wireSubject(subject)));
+  }
+
+  public unsubscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) return;
+    this.sendBinary(encodeUnsub(this.wireSubject(subject)));
+  }
+
   public unsubscribeAgentProfile(subject: string): void {
     if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
     this.sendBinary(encodeUnsub(this.wireSubject(subject)));
@@ -1678,6 +1695,12 @@ export class WSClient {
     for (const subject of this.store.subscribers.keys()) {
       if (this.store.getWebSocketForSubject(subject) === this) {
         this.subscribeAgentProfile(subject);
+      }
+    }
+
+    for (const subject of this.store.liveSubjects.keys()) {
+      if (this.store.getWebSocketForSubject(subject) === this) {
+        this.subscribeResource(subject);
       }
     }
 

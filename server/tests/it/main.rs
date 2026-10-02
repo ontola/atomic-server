@@ -28,4 +28,5 @@ mod ws_errors;
 mod ws_fragmented;
 mod ws_get;
 mod ws_get_unauthorized_latency;
+mod ws_parent_fanout;
 mod ws_unsub;
