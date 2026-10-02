@@ -91,9 +91,14 @@ export class RPCClient {
     }) as Promise<Resource>;
   }
 
-  public query(property: string, value: string): Promise<Resource[]> {
+  /**
+   * Subjects whose `property` is `value`, leaving out what this view may not
+   * read. Packaged hosts used to refuse this call, so nothing relied on the
+   * `Resource[]` it was once typed as.
+   */
+  public query(property: string, value: string): Promise<string[]> {
     return this.callFunction(MessageType.QUERY, { property, value }) as Promise<
-      Resource[]
+      string[]
     >;
   }
 

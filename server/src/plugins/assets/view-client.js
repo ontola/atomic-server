@@ -233,7 +233,9 @@ export const store = {
   subscribe(subject, handler) {
     const listener = event => {
       if (event.source === window.parent && event.data?.type === 'atomic.view.change' && event.data.version === 1 && event.data.subject === subject) {
-        store.getResource(subject).then(handler, () => undefined);
+        // Apps written before the resource was passed along ignore it; a
+        // failed read (the subject was just destroyed) still notifies them.
+        store.getResource(subject).then(handler, () => handler());
       }
     };
 

@@ -18,7 +18,7 @@ function frame() {
   };
   const reply = (data: unknown) =>
     listeners.forEach(listener =>
-      listener({ source: parent, data } as MessageEvent),
+      listener({ source: parent, data } as unknown as MessageEvent),
     );
 
   return { window, reply, parent };
@@ -178,4 +178,30 @@ it('hands a subscriber the fresh resource when its subject changes', async () =>
   await Promise.resolve();
 
   expect(seen).toEqual(['Renamed']);
+});
+
+it('still notifies a drive app when the changed resource cannot be read', async () => {
+  const f = frame();
+  vi.stubGlobal('window', f.window);
+  const store = driveAppStore(f);
+  const calls: unknown[] = [];
+  store.subscribe('https://x.dev/row', (resource: unknown) =>
+    calls.push(resource),
+  );
+  f.reply({
+    type: 'atomic.view.change',
+    version: 1,
+    subject: 'https://x.dev/row',
+  });
+  const get = f.parent.postMessage.mock.calls.at(-1)![0];
+  expect(get.op).toBe('get');
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: get.id,
+    error: 'gone',
+  });
+  await new Promise(r => setTimeout(r, 0));
+
+  expect(calls).toEqual([undefined]);
 });
