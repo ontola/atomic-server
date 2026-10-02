@@ -256,6 +256,89 @@ describe('WSClient handshake', () => {
     client.close();
   });
 
+  /** Frames in send order, reduced to what the presence ordering needs. */
+  const presenceFrames = (socket: FakeWebSocket) =>
+    socket.sent
+      .filter(
+        frame =>
+          frame[0] === Tag.EPHEMERAL ||
+          new TextDecoder().decode(frame).startsWith('PRESENCE_SUBSCRIBE '),
+      )
+      .map(frame =>
+        frame[0] === Tag.EPHEMERAL
+          ? `update:${[...(decodeEphemeral(frame.subarray(1))?.payload ?? [])]}`
+          : 'subscribe',
+      );
+
+  it('puts PRESENCE_SUBSCRIBE before a presence update sent right after it', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    socket.receive(encodeChallenge('presence-order'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+
+    client.subscribePresence('did:ad:drive');
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([1]));
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([2]));
+    await vi.waitFor(() =>
+      expect(presenceFrames(socket)).toEqual([
+        'subscribe',
+        'update:1',
+        'update:2',
+      ]),
+    );
+    // Once subscribed, updates go straight out.
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([3]));
+    expect(presenceFrames(socket).at(-1)).toBe('update:3');
+    client.close();
+  });
+
+  it('subscribes before the rebroadcast that follows authentication', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(store, 'getPresenceSubjects').mockReturnValue(['did:ad:drive']);
+    vi.spyOn(store, '__rebroadcastPresence').mockImplementation(() =>
+      client.sendPresenceUpdate('did:ad:drive', new Uint8Array([7])),
+    );
+    socket.receive(encodeChallenge('presence-reconnect'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+    await vi.waitFor(() =>
+      expect(presenceFrames(socket)).toEqual(['subscribe', 'update:7']),
+    );
+    client.close();
+  });
+
+  it('drops a held presence update when the subscription is withdrawn', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    socket.receive(encodeChallenge('presence-withdrawn'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+
+    client.subscribePresence('did:ad:drive');
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([1]));
+    client.unsubscribePresence('did:ad:drive');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(presenceFrames(socket)).not.toContain('update:1');
+    client.close();
+  });
+
   it('signs the AUTH proof for `{origin}#{nonce}` once a CHALLENGE arrived', async ({
     expect,
   }) => {

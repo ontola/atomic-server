@@ -18,6 +18,11 @@ import {
 import { Button } from '../components/Button';
 import * as Sentry from '@sentry/react';
 import type { DemoSetupStep } from '../chunks/Demo/startDemo';
+import {
+  lateFinishContext,
+  stallContext,
+  type StepStarts,
+} from '../chunks/Demo/demoSetupReport';
 import { localAgentIsDisposable } from '../helpers/managed/reconcile';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { withDeadline } from '../helpers/withDeadline';
@@ -32,7 +37,10 @@ import { paths } from './paths';
 // this, say so and offer a way out rather than spin forever: a phone in an
 // in-app browser once sat on the spinner with nothing reported (Sentry
 // ATOMIC-BROWSER-1G). The step it was on is sent along, so the next such
-// report says where it stopped.
+// report says where it stopped. A stall fires at a fixed deadline, so setup
+// that is merely slow reports the same as setup that is stuck: the report
+// carries how long each step took, and a run that does finish afterwards
+// says so in a second report.
 const STALLED_AFTER_MS = 45_000;
 
 const STEP_LABELS: Record<DemoSetupStep, string> = {
@@ -45,6 +53,8 @@ const STEP_LABELS: Record<DemoSetupStep, string> = {
 type DemoRun = {
   startedAt: number;
   step?: DemoSetupStep;
+  /** When each step began, in ms since `startedAt`. */
+  stepStarts: StepStarts;
   error?: Error;
   done: boolean;
   reported: boolean;
@@ -90,13 +100,29 @@ async function signedInDrive(
   );
 }
 
+/** Setup went on past the stall notice and finished: say how long it took. */
+function reportLateFinish(): void {
+  if (!run?.reported) return;
+
+  const { tags, extra } = lateFinishContext(
+    run.stepStarts,
+    Date.now() - run.startedAt,
+  );
+
+  Sentry.captureMessage('Demo setup finished after stall', {
+    level: 'info',
+    tags,
+    extra,
+  });
+}
+
 function startRun(
   store: Store,
   currentDrive: string | undefined,
   onReady: (manifest: { welcomeDoc: string }) => void,
   onSignedIn: (target: string) => void,
 ): void {
-  run = { startedAt: Date.now(), done: false, reported: false };
+  run = { startedAt: Date.now(), stepStarts: {}, done: false, reported: false };
   // Someone with an account who follows "Try the app" wants their own
   // workspace, not a scripted one built next to it.
   signedInDrive(store, currentDrive)
@@ -119,11 +145,18 @@ function startRun(
         // Visible in a performance trace, to see which step a slow start spent
         // its time in.
         performance.mark(`demo.${step}`);
-        updateRun({ step });
+        updateRun({
+          step,
+          stepStarts: {
+            ...run?.stepStarts,
+            [step]: Date.now() - (run?.startedAt ?? Date.now()),
+          },
+        });
       });
     })
     .then(result => {
       updateRun({ done: true });
+      reportLateFinish();
       if (typeof result === 'string') onSignedIn(result);
       else onReady(result);
     })
@@ -213,9 +246,16 @@ const DemoRoute: React.FC = () => {
         setStalled(true);
         if (run.reported) return;
         run.reported = true;
+        const { tags, extra } = stallContext(
+          run.stepStarts,
+          Date.now() - run.startedAt,
+          document.visibilityState,
+        );
+
         Sentry.captureMessage('Demo setup stalled', {
           level: 'warning',
-          tags: { demo_step: run.step ?? 'loading' },
+          tags: { demo_step: run.step ?? 'loading', ...tags },
+          extra,
         });
       },
       Math.max(0, STALLED_AFTER_MS - (Date.now() - run!.startedAt)),

@@ -125,6 +125,7 @@ msgstr "Agents IA"
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -1557,6 +1558,7 @@ msgstr "Erreur : atomic:node:<node-id> attendu"
 #: src/helpers/managed/deviceLink.ts
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr "Cet appareil"
 
@@ -3610,10 +3612,6 @@ msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Rename"
-msgstr ""
-
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "View type"
 msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
@@ -6385,6 +6383,7 @@ msgid "Checking cloud…"
 msgstr ""
 
 #: src/helpers/managed/driveHostingState.ts
+#: src/views/DriveUnavailable.tsx
 msgid "Server"
 msgstr ""
 
@@ -10289,4 +10288,88 @@ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+msgstr ""
+
+#. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Asked by {0}"
+msgstr "Demandé par {0}"
+
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Choose a resource"
+msgstr "Choisir une ressource"
+
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Choose"
+msgstr "Choisir"
+
+#: src/views/DriveUnavailable.tsx
+msgid "This drive isn't connected to a server, so it syncs directly between devices. Open it on a device that has it, and it will arrive here."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "This device can't reach the drive's server, and it hasn't kept a copy of it. It will open as soon as the server answers."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "No server"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Your other devices"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "No device with this drive is reachable."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "The server isn't reachable."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Retrying…"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Retry now"
+msgstr ""
+
+#. 0: ' '
+#: src/views/DriveUnavailable.tsx
+msgid "<0/>{0} Retrying automatically every 10 seconds."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "This drive isn't on this device yet"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "<0>Sync anytime with a server.</0> Once the drive's owner connects it to a server, it opens on any device, even when the others are closed."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Technical details"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "The last table view stays, so the rows can always be seen as a table."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a view"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Change this view to"
+msgstr ""
+
+#: src/routes/DemoRoute.tsx
+msgid "Demo setup finished after stall"
 msgstr ""
