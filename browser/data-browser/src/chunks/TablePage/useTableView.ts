@@ -589,10 +589,16 @@ export function useTableView(
         const from = liveViewParam.current;
 
         // A table with no saved views shows one implicit Table tab, and that
-        // tab disappears the moment a real view exists. So adding an app to a
-        // fresh table would take the table away — the one thing an extra way
-        // of looking at rows must never do. Give it back explicitly first.
-        if (appViewOf(kind) && views.length === 0 && !defaultViewSubject) {
+        // tab disappears the moment a real view exists. So adding a Calendar,
+        // a Kanban or an app to a fresh table would take the table away — the
+        // one thing an extra way of looking at rows must never do. Give it back
+        // explicitly first. A dashboard does this itself in `createViewResource`.
+        if (
+          kind !== DEFAULT_VIEW_KIND &&
+          kind !== 'dashboard' &&
+          views.length === 0 &&
+          !defaultViewSubject
+        ) {
           await createViewResource(
             VIEW_KIND_LABELS[DEFAULT_VIEW_KIND],
             DEFAULT_VIEW_KIND,
