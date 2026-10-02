@@ -3176,7 +3176,7 @@ export class Store {
     if (!this._serverConnected && !opts.serverOnly) {
       searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
-      return kvResults;
+      return this.withoutDestroyed(kvResults);
     }
 
     // Merge with hosted `/search` (same KV engine) so OPFS lag still
@@ -3195,7 +3195,20 @@ export class Store {
     const results = searchResource.get(server.properties.results) ?? [];
     searchDebug('[search] server search returned', results.length);
 
-    return [...new Set([...kvResults, ...results])].slice(0, opts.limit ?? 30);
+    return this.withoutDestroyed([
+      ...new Set([...kvResults, ...results]),
+    ]).slice(0, opts.limit ?? 30);
+  }
+
+  /**
+   * Search answers come from two indexes (local and hosted) that can both lag
+   * a destroy: the hosted one until the outbox delivered it, the local one
+   * until a stale push re-wrote the row. A subject this store knows was
+   * destroyed would only render as a "was destroyed" error row, so it never
+   * reaches the caller.
+   */
+  private withoutDestroyed(subjects: string[]): string[] {
+    return subjects.filter(subject => !this.isDestroyed(subject));
   }
 
   public async semanticSearch(
