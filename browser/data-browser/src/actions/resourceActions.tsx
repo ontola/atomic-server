@@ -442,6 +442,7 @@ export const resourceActions: ActionDefinition[] = [
     // Only for the resource in view: reloading is a debugging aid for the page
     // you are looking at, not something to offer on every sidebar row.
     available: ctx => ctx.subject === ctx.currentSubject,
+    searchOnly: true,
     run: async ctx => {
       // HTTP, not the WebSocket (which may serve a cached or delta answer),
       // and the local Loro doc is replaced by the server's.

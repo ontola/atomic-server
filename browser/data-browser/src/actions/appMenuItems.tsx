@@ -25,9 +25,8 @@ export const OPEN_FEEDBACK_EVENT = 'atomic-open-feedback';
  * `create` are the two ways to start something new, shown in the More menu
  * of pages that are not a resource (settings, notifications), where a
  * resource's own actions do not apply. `find` are places in the app, the
- * "Go to" group at the bottom of every More menu: listed, not hidden behind
- * the filter, since a hidden item is only found by someone who already
- * knows it is there.
+ * "Go to" group of the More menu: hidden by default to keep the list short,
+ * found through the filter. `maintenance` (restart) is hidden the same way.
  */
 export function useAppMenuItems(): {
   create: DropdownItem[];
@@ -68,12 +67,19 @@ export function useAppMenuItems(): {
   ];
 
   const find: DropdownItem[] = [
-    { id: 'app-go-to', label: 'Go to', header: true, onClick: () => undefined },
+    {
+      id: 'app-go-to',
+      label: 'Go to',
+      header: true,
+      searchOnly: true,
+      onClick: () => undefined,
+    },
     {
       id: 'app-open-settings',
       label: 'Open settings',
       icon: <FaGear />,
       keywords: ['preferences', 'theme', 'language'],
+      searchOnly: true,
       onClick: () => navigate(paths.appSettings),
     },
     {
@@ -81,6 +87,7 @@ export function useAppMenuItems(): {
       label: 'Switch drive',
       icon: <FaRightLeft />,
       keywords: ['workspace', 'drives'],
+      searchOnly: true,
       onClick: () => {
         // The switcher lives in the sidebar header: show the sidebar, then
         // open it there.
@@ -97,6 +104,7 @@ export function useAppMenuItems(): {
       label: 'Open sync settings',
       icon: <FaArrowsRotate />,
       keywords: ['sync', 'devices', 'backup', 'cloud', 'server'],
+      searchOnly: true,
       onClick: () => navigate(paths.sync),
     },
     {
@@ -104,6 +112,7 @@ export function useAppMenuItems(): {
       label: 'Open user settings',
       icon: <FaUser />,
       keywords: ['account', 'profile', 'agent'],
+      searchOnly: true,
       onClick: () => navigate(paths.agentSettings),
     },
     {
@@ -111,6 +120,7 @@ export function useAppMenuItems(): {
       label: 'Give feedback',
       icon: <FaCommentDots />,
       keywords: ['bug', 'report', 'feedback'],
+      searchOnly: true,
       onClick: () => window.dispatchEvent(new Event(OPEN_FEEDBACK_EVENT)),
     },
     {
@@ -118,6 +128,7 @@ export function useAppMenuItems(): {
       label: 'Show notifications',
       icon: <FaBell />,
       keywords: ['inbox', 'mentions'],
+      searchOnly: true,
       onClick: () => navigate(paths.notifications),
     },
   ];
@@ -129,6 +140,7 @@ export function useAppMenuItems(): {
       helper: 'Reload the whole app, as if you opened it again.',
       icon: <FaPowerOff />,
       keywords: ['reload', 'refresh', 'relaunch'],
+      searchOnly: true,
       onClick: () => window.location.reload(),
     },
   ];

@@ -239,6 +239,7 @@ export function ResourceContextMenu({
       helper: action.helper(ctx),
       icon: action.icon?.(ctx),
       keywords: action.keywords,
+      searchOnly: true,
       onClick: () => runAction(action, ctx),
     });
   }

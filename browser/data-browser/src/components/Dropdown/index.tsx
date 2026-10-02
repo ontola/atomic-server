@@ -204,7 +204,14 @@ export function DropdownMenu({
   const filteredItems = useMemo(() => {
     if (!searchable || !search) {
       // Search-only items surface exclusively through the filter query.
-      return items.filter(item => !isItem(item) || !item.searchOnly);
+      // Dropping them can strand a divider at the end or double one up.
+      return items
+        .filter(item => !isItem(item) || !item.searchOnly)
+        .filter(
+          (item, i, all) =>
+            isItem(item) ||
+            (i > 0 && i < all.length - 1 && all[i - 1] !== DIVIDER),
+        );
     }
 
     // Dividers are dropped while filtering.
