@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The More menu has two new actions, "Reload resource" (fetches the resource you
+  are viewing from the server again) and "Restart app" (reloads the whole app).
+  They and the "Go to" items (settings, drives, feedback) no longer clutter the
+  list: type in the menu's filter to find them.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
