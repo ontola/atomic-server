@@ -1380,14 +1380,9 @@ export class Store {
           return isUnrecoverableCommitError(msg, code);
         },
         onBlocked: (entry, e) => {
-          const msg = e instanceof Error ? e.message : String(e);
-          // Stopped retrying, but the entry stays queued + visible. Tell the
-          // user once; a fresh edit (`markDirty`) re-arms it automatically.
-          this.notifyError(
-            new Error(
-              `Could not sync ${entry.subject.slice(0, 60)}… — ${msg} ` +
-                `Not retrying; edit again once you have access.`,
-            ),
+          this.notifyBlockedSync(
+            entry.subject,
+            e instanceof Error ? e.message : String(e),
           );
         },
       });
@@ -4755,6 +4750,51 @@ export class Store {
     };
 
     return propery;
+  }
+
+  /** Drives whose "not enrolled" refusal was already reported this session. */
+  private _notifiedRefusedDrives = new Set<string>();
+
+  /**
+   * Tell the person a write stopped syncing. The entry stays queued and
+   * visible, and a fresh edit re-arms it.
+   *
+   * A node refusing a whole drive as "not enrolled" is one condition, not one
+   * per resource: every create and every comment in that drive is refused the
+   * same way, and a toast for each buried the person under errors that name
+   * resources they never see. Say it once per drive, in terms of the drive,
+   * and say what happens to their edits.
+   */
+  private notifyBlockedSync(subject: string, message: string): void {
+    if (isNotEnrolledMessage(message)) {
+      // The refusal names the drive it refuses; that is the same for every
+      // resource in it, where a resource's own drive may not be known yet.
+      const drive =
+        /Drive (\S+) is not enrolled/.exec(message)?.[1] ??
+        this.driveOf(this.normalizeSubject(subject)) ??
+        subject;
+
+      if (this._notifiedRefusedDrives.has(drive)) return;
+
+      this._notifiedRefusedDrives.add(drive);
+      this.notifyError(
+        new Error(
+          `This server does not host this workspace (${message.trim()}) ` +
+            `Your changes are kept on this device and are not being sent. ` +
+            `Ask the server's operator to enrol the workspace, or turn on ` +
+            `browser-only sync for it in the sync settings.`,
+        ),
+      );
+
+      return;
+    }
+
+    this.notifyError(
+      new Error(
+        `Could not sync ${subject.slice(0, 60)}… — ${message} ` +
+          `Not retrying; edit again once you have access.`,
+      ),
+    );
   }
 
   /**
