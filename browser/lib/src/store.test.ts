@@ -926,6 +926,33 @@ describe('Store', () => {
     expect(results).toEqual([subject]);
   });
 
+  it('drops destroyed subjects from local search answers', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://atomicdata.dev' });
+    const alive = 'https://atomicdata.dev/search-alive';
+    const gone = 'https://atomicdata.dev/search-gone';
+    const fakeClientDb = {
+      isReady: true,
+      isInitialized: true,
+      initError: undefined,
+      waitForReady: async () => true,
+      search: async () => [gone, alive],
+      removeResource: async () => undefined,
+    };
+
+    store.setClientDb(
+      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
+    );
+    store.removeResource(gone);
+
+    const results = await store.search('anything', {
+      parents: 'https://atomicdata.dev/test-drive',
+    });
+
+    expect(results).toEqual([alive]);
+  });
+
   it('excludes subjects with a pending outbox entry from the VV sync state (F1 interim)', async ({
     expect,
   }) => {
