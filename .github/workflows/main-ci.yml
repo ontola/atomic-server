@@ -117,7 +117,7 @@ jobs:
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: e2e-test-results --results-key ${{ github.run_id }}-${{ github.run_attempt }} export --path e2e-test-results
+          args: failed-test-results --results-key ${{ github.run_id }}-${{ github.run_attempt }} export --path e2e-test-results
       - name: Upload e2e traces of failed tests
         if: failure()
         uses: actions/upload-artifact@v4

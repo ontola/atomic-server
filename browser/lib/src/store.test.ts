@@ -742,10 +742,17 @@ describe('Store', () => {
   it('accepts a custom fetch implementation', async ({ expect }) => {
     const testResourceSubject = 'https://atomicdata.dev';
 
+    // Both requests are answered locally: the test is about which fetch the
+    // store uses, and waiting on the real atomicdata.dev made it flaky in CI.
+    const answer = async () =>
+      new Response(JSON.stringify({ '@id': testResourceSubject }), {
+        headers: { 'Content-Type': 'application/ad+json' },
+      });
+    const globalFetch = vi.fn(answer);
+    vi.stubGlobal('fetch', globalFetch);
     const customFetch = vi.fn(
-      async (url: RequestInfo | URL, options: RequestInit | undefined) => {
-        return fetch(url, options);
-      },
+      async (_url: RequestInfo | URL, _options: RequestInit | undefined) =>
+        answer(),
     );
 
     const store = new Store();
@@ -763,6 +770,7 @@ describe('Store', () => {
     });
 
     expect(customFetch.mock.calls).toHaveLength(1);
+    vi.unstubAllGlobals();
   });
 
   it('creates new resources using store.newResource()', async ({ expect }) => {

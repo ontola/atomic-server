@@ -8,6 +8,7 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import { modelMessagesWithToolRecovery } from './toolHistory';
+import { usageMetadata } from './usageMetadata';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
   type AIAgent,
@@ -118,14 +119,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     const originalStream = result.toUIMessageStream({
       originalMessages: transformedMessages,
       generateMessageId: this.idGenerator,
-      messageMetadata: ({ part }) => {
-        if (part.type === 'finish') {
-          return {
-            inputTokensUsed: part.totalUsage.inputTokens,
-            outputTokensUsed: part.totalUsage.outputTokens,
-          };
-        }
-      },
+      messageMetadata: ({ part }) => usageMetadata(part),
       onError: error => {
         if (error instanceof Error) return error.message;
         if (error && typeof error === 'object' && 'message' in error)

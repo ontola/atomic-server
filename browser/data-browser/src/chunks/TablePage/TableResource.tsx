@@ -26,6 +26,7 @@ import {
 } from '@chunks/TablePage/helpers/useTableHistory';
 import {
   TablePageContext,
+  type RowSource,
   type TablePageContextType,
 } from '@chunks/TablePage/tablePageContext';
 import { TableNewRow, TableRow } from '@chunks/TablePage/TableRow';
@@ -55,6 +56,7 @@ import { TableFilterBar } from './TableFilterBar';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
+import { RowCommentButton } from './RowCommentButton';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
 import { DashboardView } from './Dashboard/DashboardView';
@@ -972,6 +974,25 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [memberCount, newRowSubjects],
   );
 
+  // See `TablePageContextType.rowSource`. The SAME index→row mapping the grid
+  // renders with, for the same reason `handleDeleteRow` repeats it: members
+  // come from the collection, session rows from `newRowSubjects`. A session row
+  // keeps its `_new:` key for its whole life here — materializing does not turn
+  // it into a member — so resolving everything through the collection would
+  // address the wrong row.
+  const rowSource = useCallback(
+    (index: number): RowSource | undefined => {
+      if (index < memberCount) {
+        return { kind: 'member', collection, index };
+      }
+
+      const key = newRowSubjects[index - memberCount];
+
+      return key ? { kind: 'session', key } : undefined;
+    },
+    [collection, memberCount, newRowSubjects],
+  );
+
   const [showExpandedRowDialog, setShowExpandedRowDialog] = useState(false);
   const [expandedRowSubject, setExpandedRowSubject] = useState<string>();
 
@@ -1017,6 +1038,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       updateDerivedColumn,
       removeDerivedColumn,
       addItemsToHistoryStack,
+      rowSource,
     }),
     [
       resource.subject,
@@ -1046,6 +1068,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       updateDerivedColumn,
       removeDerivedColumn,
       addItemsToHistoryStack,
+      rowSource,
     ],
   );
 
@@ -1312,6 +1335,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onRowExpand={handleRowExpand}
               onInsertRowBelow={handleInsertRowBelow}
               onSelectedCellChange={handleSelectedCellChange}
+              RowHeaderAddonComponent={RowCommentButton}
               HeadingComponent={TableHeading}
               NewColumnButtonComponent={NewColumnButton}
               FooterComponent={TableTotalsFooter}

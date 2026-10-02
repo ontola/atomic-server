@@ -239,6 +239,16 @@ const LEADER_ELECTION_WAIT_MS = 2_000;
 // server. Ends early on success or on a definite failure.
 const STEAL_SETTLE_WAIT_MS = 15_000;
 
+// A follower whose request has gone unanswered this long asks the leader if it
+// is alive at all. A tab the browser froze or discarded keeps its lock and
+// answers nothing, so without this every call would wait out the 30s deadline
+// below and the page would sit empty with no error.
+const LEADER_LIVENESS_CHECK_MS = 1_000;
+
+// A live leader answers a ping from its main thread in milliseconds, so this
+// is generous; a slow worker does not delay the answer, only a dead tab does.
+const LEADER_PROBE_WAIT_MS = 1_000;
+
 // The same wait, for the case where nothing was stolen because we already own
 // the lock and our own leader init is simply still running. Nothing is
 // contended there, so the message this cap produces has to say so: see the
@@ -362,11 +372,16 @@ export class ClientDbWorker {
   }
 
   async init(baseUrl?: string): Promise<void> {
+    this.baseUrl = baseUrl;
     if (this.initPromise) return this.initPromise;
     this.initPromise = this.doInit(baseUrl);
 
     return this.initPromise;
   }
+
+  private baseUrl: string | undefined;
+  private lastLeaderAnnounceAt = 0;
+  private probingLeader = false;
 
   private async doInit(baseUrl?: string): Promise<void> {
     if (!this.workerUrl) {
@@ -731,6 +746,8 @@ export class ClientDbWorker {
         break;
 
       case 'leader-announce':
+        this.lastLeaderAnnounceAt = Date.now();
+
         if (this.role !== 'leader') {
           // Recover from a prior `'failed'` state if a leader finally
           // announces itself (the stale tab woke up, or a fresh tab took
@@ -1332,6 +1349,40 @@ export class ClientDbWorker {
     });
   }
 
+  /**
+   * A request to the leader has gone unanswered. Ping it: a live leader
+   * answers from its main thread within milliseconds, even while busy. If
+   * nothing answers it is a ghost (frozen or discarded tab holding the lock),
+   * so take the lock. Taking it replays the calls that are safe to repeat and
+   * fails the rest with a retryable error, through `resumeAfterLeaderChange`.
+   */
+  private async reclaimFromSilentLeader(): Promise<void> {
+    if (this.probingLeader || this.role !== 'follower' || !this.bc) return;
+
+    this.probingLeader = true;
+
+    try {
+      const pingedAt = Date.now();
+      this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
+      await new Promise(resolve => setTimeout(resolve, LEADER_PROBE_WAIT_MS));
+
+      if (
+        this.destroyed ||
+        this.role !== 'follower' ||
+        this.lastLeaderAnnounceAt >= pingedAt
+      ) {
+        return;
+      }
+
+      console.warn(
+        '[ClientDb] the leader tab stopped answering; taking over the local database',
+      );
+      this.requestLeaderLock(this.baseUrl, true);
+    } finally {
+      this.probingLeader = false;
+    }
+  }
+
   private sendToLeader(
     msg: Record<string, unknown>,
     retries = 1,
@@ -1350,7 +1401,13 @@ export class ClientDbWorker {
       // "peer closed" event — the pending entry sits forever.
       // Handoffs settle these entries through onLeaderChanged below. Keep a
       // deadline as well for a leader that stays alive but stops answering.
+      const liveness = setTimeout(() => {
+        if (this.pending.has(id)) void this.reclaimFromSilentLeader();
+      }, LEADER_LIVENESS_CHECK_MS);
+
       const timer = setTimeout(() => {
+        clearTimeout(liveness);
+
         if (this.pending.has(id)) {
           this.pending.delete(id);
           reject(
@@ -1365,6 +1422,7 @@ export class ClientDbWorker {
         onLeaderChanged: () => {
           this.pending.delete(id);
           clearTimeout(timer);
+          clearTimeout(liveness);
           // Reads, flush, and content-addressed blob writes are safe to
           // repeat. A general write may have committed before its reply was
           // lost, and worker-local peer sessions cannot move across tabs.
@@ -1389,10 +1447,12 @@ export class ClientDbWorker {
         },
         resolve: (data: unknown) => {
           clearTimeout(timer);
+          clearTimeout(liveness);
           resolve(data);
         },
         reject: (e: Error) => {
           clearTimeout(timer);
+          clearTimeout(liveness);
           reject(e);
         },
       });
