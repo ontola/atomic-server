@@ -37,6 +37,7 @@ function api(existing: boolean, finishStatus = 204) {
       return Response.json({ credential_ids: existing ? ['AQ'] : [] });
     if (path.endsWith('/start'))
       return Response.json({
+        ceremony: 'cer-1',
         publicKey: {
           challenge: 'Ag',
           rpId: 'localhost',
@@ -71,6 +72,15 @@ it('reuses a login credential and never transmits PRF results', async () => {
     signature: 'BA',
     userHandle: 'BQ',
   });
+});
+it('sends the ceremony id back in a header, for a device without the cookie', async () => {
+  api(true);
+  await accountPasskey(salt);
+  const [path, init] = vi.mocked(managedFetch).mock.calls.at(-1)!;
+  expect(path).toBe('/passkeys/use/finish');
+  expect((init!.headers as Record<string, string>)['X-Passkey-Ceremony']).toBe(
+    'cer-1',
+  );
 });
 it('registers one discoverable credential with the server challenge and only attestation data', async () => {
   api(false);
