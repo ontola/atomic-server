@@ -299,20 +299,28 @@ test.describe('apps', () => {
 
     const app = page.frameLocator('iframe[title="App"]');
     const said = app.getByRole('status');
-    await expect(app.getByRole('button', { name: 'Apply' })).toBeVisible({
+    await expect(
+      app.getByRole('button', { name: 'Apply', exact: true }),
+    ).toBeVisible({
       timeout: 60_000,
     });
 
     // Two linked rows in one call: the second points at the first.
-    await app.getByRole('button', { name: 'Apply' }).click();
-    await expect(said).toHaveText('2 rows, linked');
+    await app.getByRole('button', { name: 'Apply', exact: true }).click();
+    await expect(said).toHaveText('2 rows, linked', {
+      timeout: 20_000,
+    });
 
     // A bad value anywhere means nothing is written.
     await app.getByRole('button', { name: 'Bad apply' }).click();
-    await expect(said).toContainText('refused, still 2 rows');
+    await expect(said).toContainText('refused, still 2 rows', {
+      timeout: 20_000,
+    });
 
     await app.getByRole('button', { name: 'Undo' }).click();
-    await expect(said).toHaveText('undone, 0 rows');
+    await expect(said).toHaveText('undone, 0 rows', {
+      timeout: 20_000,
+    });
   });
 });
 
@@ -503,7 +511,17 @@ const APPLY_APP = `export async function view({ root, store }) {
   const { table, rowClass } = await store.getData();
   const said = document.createElement('p');
   said.setAttribute('role', 'status');
-  const rows = () => store.query({ property: parent, value: table });
+  // The table's index catches up just after a write; ask until it says
+  // what we expect, or give its last answer.
+  const rows = async expected => {
+    let found = [];
+    for (let i = 0; i < 20; i++) {
+      found = await store.query({ property: parent, value: table });
+      if (found.length === expected) break;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    return found;
+  };
   const button = (label, onClick) => {
     const b = document.createElement('button');
     b.textContent = label;
@@ -511,12 +529,16 @@ const APPLY_APP = `export async function view({ root, store }) {
     root.append(b);
   };
   button('Apply', async () => {
-    const { subjects } = await store.apply([
-      { op: 'create', localId: 'a', parent: table, isA: [rowClass], set: { [name]: 'First' } },
-      { op: 'create', localId: 'b', parent: table, isA: [rowClass], set: { [name]: 'Second', [description]: 'local:a' } },
-    ]);
-    const second = await store.getResource(subjects.b);
-    said.textContent = (await rows()).length + ' rows, ' + (second.get(description) === subjects.a ? 'linked' : 'not linked');
+    try {
+      const { subjects } = await store.apply([
+        { op: 'create', localId: 'a', parent: table, isA: [rowClass], set: { [name]: 'First' } },
+        { op: 'create', localId: 'b', parent: table, isA: [rowClass], set: { [name]: 'Second', [description]: 'local:a' } },
+      ]);
+      const second = await store.getResource(subjects.b);
+      said.textContent = (await rows(2)).length + ' rows, ' + (second.get(description) === subjects.a ? 'linked' : 'not linked');
+    } catch (e) {
+      said.textContent = 'apply failed: ' + e.message;
+    }
   });
   button('Bad apply', async () => {
     try {
@@ -526,12 +548,16 @@ const APPLY_APP = `export async function view({ root, store }) {
       ]);
       said.textContent = 'applied';
     } catch (e) {
-      said.textContent = 'refused, still ' + (await rows()).length + ' rows';
+      said.textContent = 'refused, still ' + (await rows(2)).length + ' rows';
     }
   });
   button('Undo', async () => {
-    const undone = await store.undo();
-    said.textContent = (undone ? 'undone, ' : 'nothing, ') + (await rows()).length + ' rows';
+    try {
+      const undone = await store.undo();
+      said.textContent = (undone ? 'undone, ' : 'nothing, ') + (await rows(0)).length + ' rows';
+    } catch (e) {
+      said.textContent = 'undo failed: ' + e.message;
+    }
   });
   root.append(said);
 }`;

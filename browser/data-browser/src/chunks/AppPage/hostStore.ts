@@ -223,7 +223,7 @@ export async function handleRequest(
       const subject = required(request.subject, 'subject');
 
       await refuseOutsideApp(store, subject, app);
-      await writeAsApp(store, drive, app, { op: 'destroy', subject });
+      await destroyAsApp(store, drive, app, subject);
 
       return { subject };
     }
@@ -274,15 +274,18 @@ export function appChanges(
   return new ViewChanges(store, {
     authorize: subject => refuseOutsideApp(store, subject, app),
     writes: {
-      create: async ({ parent, isA, propVals }) =>
-        (
-          await writeAsApp(store, drive, app, {
-            op: 'create',
-            parent,
-            isA,
-            propVals,
-          })
-        ).subject,
+      create: async ({ parent, isA, propVals }) => {
+        const { subject } = await writeAsApp(store, drive, app, {
+          op: 'create',
+          parent,
+          isA,
+          propVals,
+        });
+        // Into this store, so a query right after already lists it.
+        await refresh(store, subject);
+
+        return subject;
+      },
       set: async (subject, propVals) => {
         await writeAsApp(store, drive, app, { op: 'save', subject, propVals });
         await refresh(store, subject);
@@ -295,9 +298,7 @@ export function appChanges(
         });
         await refresh(store, subject);
       },
-      destroy: async subject => {
-        await writeAsApp(store, drive, app, { op: 'destroy', subject });
-      },
+      destroy: subject => destroyAsApp(store, drive, app, subject),
     },
   });
 }
@@ -341,6 +342,23 @@ async function writeAsApp(
   }
 
   return (await response.json()) as { subject: string };
+}
+
+/**
+ * Destroys as the app, then forgets the resource here too.
+ *
+ * Like `refresh`: the write bypassed this store, so its copy (and the local
+ * database's, which answers queries) still held the resource, and a query
+ * right after listed what the app had just deleted.
+ */
+async function destroyAsApp(
+  store: Store,
+  drive: string,
+  app: string,
+  subject: string,
+): Promise<void> {
+  await writeAsApp(store, drive, app, { op: 'destroy', subject });
+  store.removeResource(subject);
 }
 
 /**
