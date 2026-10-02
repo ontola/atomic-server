@@ -22,7 +22,7 @@ function setup(local = true) {
     getAgent: vi.fn(() => ({ subject: agentSubject })),
     setServerUrl: vi.fn(),
     getResource: vi.fn(async () => ({})),
-    waitForServerConnected: vi.fn(async () => true),
+    reconnect: vi.fn(async () => {}),
     promoteLocalDrive: vi.fn(async () => {}),
     getSyncStatus: vi.fn(() => ({ serverConnected: true })),
   };
@@ -72,10 +72,8 @@ describe('Cloud Server setup', () => {
     store.setServerUrl.mockImplementation((url: string) => {
       actualOrigin = url;
     });
-    store.waitForServerConnected.mockImplementation(async () => {
+    store.reconnect.mockImplementation(async () => {
       expect(actualOrigin).toBe('https://cloud.example');
-
-      return true;
     });
     await enableCloudSyncForDrive(args);
     expect(store.promoteLocalDrive).toHaveBeenCalledWith(drive);
@@ -83,8 +81,12 @@ describe('Cloud Server setup', () => {
 
   it('leaves a local drive unpromoted when connection fails', async () => {
     const { args, store } = setup();
-    store.waitForServerConnected.mockResolvedValue(false);
-    await expect(enableCloudSyncForDrive(args)).rejects.toThrow(/Timed out/);
+    store.reconnect.mockRejectedValue(
+      new Error('Reconnect to https://cloud.example timed out after 20000ms.'),
+    );
+    await expect(enableCloudSyncForDrive(args)).rejects.toThrow(
+      /Cloud Server node: Reconnect to https:\/\/cloud.example timed out/,
+    );
     expect(store.promoteLocalDrive).not.toHaveBeenCalled();
   });
 
