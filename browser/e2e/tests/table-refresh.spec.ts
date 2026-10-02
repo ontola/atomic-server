@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { before } from './session-fixtures';
 // oxlint-disable no-await-in-loop
 import { test, expect } from './session-fixtures';
@@ -9,6 +10,35 @@ import {
   waitForClientDbReady,
   waitForSynced,
 } from './test-utils';
+
+/**
+ * The table's title after a reload. When it never shows, say what the page
+ * was showing instead: the CI log keeps this line and drops the page
+ * snapshot, and a reload that stays blank (the splash, an error, a half-built
+ * table) is otherwise one more red with no cause. On develop's run 4926 the
+ * tenth reload never showed the title in all three attempts, and nothing in
+ * the log said why.
+ */
+async function expectTableAfterReload(page: Page, reload: number) {
+  try {
+    await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
+  } catch (error) {
+    const state = await page
+      .evaluate(() => ({
+        url: location.href,
+        readyState: document.readyState,
+        // The splash stays in the document once the app is up; only its
+        // class says whether it is still in front.
+        splash: document.getElementById('boot-splash')?.className,
+        text: document.body.innerText.replace(/\s+/g, ' ').slice(0, 300),
+        sync: window.store?.getSyncStatus?.(),
+      }))
+      .catch(e => `page unreadable: ${String(e)}`);
+    console.log(`reload #${reload}: no table title`, JSON.stringify(state));
+
+    throw error;
+  }
+}
 
 /**
  * Regression: refreshing a Table's page must not grow the child-row count.
@@ -47,7 +77,7 @@ test.describe('table refresh', () => {
     for (let i = 0; i < 10; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
 
-      await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
+      await expectTableAfterReload(page, i + 1);
       // The regression is monotonic ROW GROWTH; under-render mid-mount is a
       // separate concern. Wait for the count to land at-or-below the
       // baseline (it can briefly read 0 or 1 before the new-row placeholder
@@ -108,7 +138,7 @@ test.describe('table refresh', () => {
     for (let i = 0; i < 8; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
 
-      await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
+      await expectTableAfterReload(page, i + 1);
 
       // Wait for the table's collection to settle: server's `/query`
       // index lookup completed AND `totalMembers` is stable for two

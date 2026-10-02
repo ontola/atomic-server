@@ -111,6 +111,9 @@ type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
 const FAN_DRAG_THRESHOLD = 10;
 
 /** Screen-pixel radius around a selection corner that grabs the scale handle. */
+/** Finger wobble below this still counts as a tap on the color/size buttons. */
+const FAN_DRAG_THRESHOLD = 10;
+
 const HANDLE_HIT_RADIUS = HANDLE_RADIUS + 14;
 /** Font size of a new text element, in screen pixels at the current zoom. */
 const NEW_TEXT_SCREEN_SIZE = 28;
