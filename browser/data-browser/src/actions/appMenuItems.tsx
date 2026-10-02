@@ -4,6 +4,7 @@ import {
   FaCommentDots,
   FaGear,
   FaPlus,
+  FaPowerOff,
   FaRightLeft,
   FaUser,
 } from 'react-icons/fa6';
@@ -31,6 +32,7 @@ export const OPEN_FEEDBACK_EVENT = 'atomic-open-feedback';
 export function useAppMenuItems(): {
   create: DropdownItem[];
   find: DropdownItem[];
+  maintenance: DropdownItem[];
 } {
   const navigate = useNavigateWithTransition();
   const { drive, setSideBarLocked } = useSettings();
@@ -120,5 +122,16 @@ export function useAppMenuItems(): {
     },
   ];
 
-  return { create, find };
+  const maintenance: DropdownItem[] = [
+    {
+      id: 'app-restart',
+      label: 'Restart app',
+      helper: 'Reload the whole app, as if you opened it again.',
+      icon: <FaPowerOff />,
+      keywords: ['reload', 'refresh', 'relaunch'],
+      onClick: () => window.location.reload(),
+    },
+  ];
+
+  return { create, find, maintenance };
 }

@@ -14,6 +14,7 @@ import {
   FaPencil,
   FaPlay,
   FaPlus,
+  FaRotateRight,
   FaRegStar,
   FaShare,
   FaStar,
@@ -427,6 +428,28 @@ export const resourceActions: ActionDefinition[] = [
         console.error('[delete] destroy failed for', ctx.subject, error);
         toast.error(`Could not delete: ${detail}`);
       }
+    },
+  },
+  {
+    id: 'reload',
+    scope: 'resource',
+    section: 'maintenance',
+    label: () => 'Reload resource',
+    helper: () =>
+      'Fetch this resource from the server again, replacing the local copy.',
+    keywords: ['refresh', 'refetch', 'sync', 'stale'],
+    icon: () => <FaRotateRight />,
+    // Only for the resource in view: reloading is a debugging aid for the page
+    // you are looking at, not something to offer on every sidebar row.
+    available: ctx => ctx.subject === ctx.currentSubject,
+    run: async ctx => {
+      // HTTP, not the WebSocket (which may serve a cached or delta answer),
+      // and the local Loro doc is replaced by the server's.
+      await ctx.store.fetchResourceFromServer(ctx.subject, {
+        forceOverride: true,
+        noWebSocket: true,
+      });
+      toast.success('Resource reloaded');
     },
   },
 ];
