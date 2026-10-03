@@ -75,3 +75,17 @@ export async function deviceHasDriveData(
     return false;
   }
 }
+
+/**
+ * Whether a server can answer queries about this drive. Not for a local-only
+ * drive (the demo workspace, a browser-only drive), and not on an origin with
+ * no node behind it, where `/query` gets the app's HTML instead of data.
+ */
+export function driveHasServer(
+  store: Pick<Store, 'getServerUrl' | 'isLocalOnlyDrive'>,
+  drive: string,
+): boolean {
+  return (
+    !store.isLocalOnlyDrive(drive) && !isOriginWithoutNode(store.getServerUrl())
+  );
+}
