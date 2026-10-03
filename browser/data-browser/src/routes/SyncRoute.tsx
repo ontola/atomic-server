@@ -906,11 +906,27 @@ function SyncPage() {
       }
     };
 
-    const onFocus = () => void refreshAccount();
+    let lastRefresh = 0;
+
+    const throttled = () => {
+      // Window focus fires constantly; the account rarely changes under us.
+      if (Date.now() - lastRefresh < 30_000) return;
+      lastRefresh = Date.now();
+      void refreshAccount();
+    };
+
+    const onFocus = () => throttled();
+
+    const onAgentChanged = () => {
+      lastRefresh = Date.now();
+      void refreshAccount();
+    };
+
+    lastRefresh = Date.now();
 
     void refreshAccount();
     window.addEventListener('focus', onFocus);
-    const unsubscribe = store.on(StoreEvents.AgentChanged, onFocus);
+    const unsubscribe = store.on(StoreEvents.AgentChanged, onAgentChanged);
 
     return () => {
       cancelled = true;
@@ -932,7 +948,10 @@ function SyncPage() {
 
     const poll = () =>
       fetchManagedInfo(serverUrl).then(info => {
-        if (!cancelled) setManagedInfo(info);
+        if (!cancelled)
+          setManagedInfo(prev =>
+            JSON.stringify(prev) === JSON.stringify(info) ? prev : info,
+          );
       });
 
     void poll();
@@ -1063,13 +1082,16 @@ function SyncPage() {
       .catch(() => {});
   }, []);
 
+  const cloudSyncAvailable = isCloudSyncAvailable(managedInfo);
+  const hasManagedAccount = managedAccount !== null;
+
   // Does the active drive already have a Cloud Server enrollment? Drives the
   // Cloud Server CTA below. Skips entirely when no control plane is
   // reachable (pure self-hosted), so the CTA never shows there.
   useEffect(() => {
     const drive = status.drive;
 
-    if (!drive || !isCloudSyncAvailable(managedInfo)) {
+    if (!drive || !cloudSyncAvailable) {
       setCloudEnrollment(null);
 
       return;
@@ -1088,7 +1110,7 @@ function SyncPage() {
     return () => {
       cancelled = true;
     };
-  }, [status.drive, status.serverUrl, managedInfo, managedAccount]);
+  }, [status.drive, status.serverUrl, cloudSyncAvailable, hasManagedAccount]);
 
   useEffect(() => {
     const refresh = () => setStatus(store.getSyncStatus());

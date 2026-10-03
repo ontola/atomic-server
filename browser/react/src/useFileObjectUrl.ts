@@ -9,6 +9,39 @@ import { useStore } from './hooks.js';
 
 const BLOB = 'https://atomicdata.dev/properties/blob';
 
+// Object URLs are cached per (database, blob) so remounting an avatar-style
+// image is instant instead of re-reading the blob and re-decoding a fresh URL
+// each visit. Bounded, evicting (and revoking) the least recently used.
+const MAX_CACHED_URLS = 64;
+const urlCache = new Map<string, { db: unknown; url: string }>();
+
+function cachedUrl(db: unknown, blobDid: string): string | undefined {
+  const hit = urlCache.get(blobDid);
+
+  if (!hit || hit.db !== db) return undefined;
+
+  urlCache.delete(blobDid);
+  urlCache.set(blobDid, hit);
+
+  return hit.url;
+}
+
+function cacheUrl(db: unknown, blobDid: string, url: string): void {
+  const previous = urlCache.get(blobDid);
+
+  if (previous) URL.revokeObjectURL(previous.url);
+  urlCache.delete(blobDid);
+  urlCache.set(blobDid, { db, url });
+
+  if (urlCache.size > MAX_CACHED_URLS) {
+    const oldest = urlCache.keys().next().value as string;
+    const evicted = urlCache.get(oldest);
+
+    if (evicted) URL.revokeObjectURL(evicted.url);
+    urlCache.delete(oldest);
+  }
+}
+
 /**
  * Returns a `blob:` object URL for the file's bytes when they are available
  * locally in the WASM clientDb (e.g. just-uploaded files, or anything cached
@@ -50,8 +83,9 @@ export function useBlobObjectUrl(
   useEffect(() => {
     if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return;
 
-    let revoked: string | undefined;
     let cancelled = false;
+
+    if (cachedUrl(clientDb, blobDid)) return;
 
     (async () => {
       try {
@@ -61,11 +95,13 @@ export function useBlobObjectUrl(
         const bytes = await clientDb.getBlob(hash);
         if (cancelled) return;
 
-        if (bytes) {
-          revoked = URL.createObjectURL(new Blob([bytes as BlobPart]));
-        }
+        const url = bytes
+          ? URL.createObjectURL(new Blob([bytes as BlobPart]))
+          : undefined;
 
-        setResolved({ blobDid, clientDb, url: revoked });
+        if (url) cacheUrl(clientDb, blobDid, url);
+
+        setResolved({ blobDid, clientDb, url });
       } catch {
         if (!cancelled) setResolved({ blobDid, clientDb });
       }
@@ -73,11 +109,14 @@ export function useBlobObjectUrl(
 
     return () => {
       cancelled = true;
-      if (revoked) URL.revokeObjectURL(revoked);
     };
   }, [blobDid, clientDb]);
 
   if (!blobDid || !isBlobSubject(blobDid) || !clientDb) return fallbackUrl;
+
+  const cached = cachedUrl(clientDb, blobDid);
+
+  if (cached) return cached;
 
   // A result for the previous resource/database must never leak into this render.
   if (resolved?.blobDid !== blobDid || resolved.clientDb !== clientDb) {

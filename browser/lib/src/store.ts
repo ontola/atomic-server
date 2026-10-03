@@ -1274,6 +1274,80 @@ export class Store {
   }
 
   /**
+   * Reconcile `drive` with the connected server and wait until that server's
+   * inventory covers everything held locally (the drive root included).
+   * Unlike `promoteLocalDrive`, which only kicks the reconcile off, this
+   * resolves once the server provably has the drive, so a caller can report
+   * "connected" honestly. Applies to a drive that was already synced
+   * elsewhere too: switching servers alone never copies anything.
+   * Throws when the server does not catch up within `timeoutMs`.
+   */
+  public async syncDriveToServerAndVerify(
+    drive: string,
+    timeoutMs = 60_000,
+  ): Promise<void> {
+    const normalized = this.normalizeSubject(drive);
+    const open = (candidate: WSClient | undefined) =>
+      candidate?.readyState === WebSocket.OPEN ? candidate : undefined;
+    const ws =
+      open(this.getDefaultWebSocket()) ??
+      open(this.getWebSocketForSubject(normalized));
+    const db = this.getClientDb();
+
+    if (!ws || !db) {
+      throw new AtomicError(
+        'Connect to a server before syncing this workspace.',
+        ErrorType.Server,
+      );
+    }
+
+    this.unregisterLocalOnlyDrive(normalized);
+    this.subscribeWebSocket(normalized);
+
+    const deadline = Date.now() + timeoutMs;
+    let lastProblem = 'The server has not received this workspace yet.';
+
+    while (Date.now() < deadline) {
+      await ws.resyncDrive(normalized);
+      await db.flush();
+
+      try {
+        const remote = await ws.driveInventory(drive, '');
+        const local = await db.getVersionVectorsForDrive(drive);
+        const remoteBySubject = new Map(remote.map(i => [i.subject, i.vv]));
+
+        if (!remoteBySubject.has(drive)) {
+          lastProblem = 'The server is still missing this workspace root.';
+        } else {
+          const missing = Object.entries(local).filter(([subject, vv]) => {
+            const have = remoteBySubject.get(subject);
+
+            return (
+              !have ||
+              Object.entries(vv).some(
+                ([peer, counter]) => (have[peer] ?? 0) < counter,
+              )
+            );
+          });
+
+          if (missing.length === 0) return;
+
+          lastProblem = `The server is still missing ${missing.length} item(s).`;
+        }
+      } catch (e) {
+        lastProblem = e instanceof Error ? e.message : String(e);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2_000));
+    }
+
+    throw new AtomicError(
+      `Cloud Server did not finish receiving this workspace. ${lastProblem}`,
+      ErrorType.Server,
+    );
+  }
+
+  /**
    * Whether a subject belongs to a local-only drive. Resolution mirrors
    * the server's rights check: the resource's stable `drive` propval
    * first, the in-memory parent chain as fallback. Best-effort — a

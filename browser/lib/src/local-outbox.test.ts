@@ -472,6 +472,19 @@ describe('a commit naming a class the server lacks', () => {
   });
 });
 
+describe('a commit whose parent the server lacks', () => {
+  const MESSAGE =
+    'Parent of atomic:kfyvO_ (atomic:5JhFDF6v) not found: Resource not found. ' +
+    'DID Resource atomic:5JhFDF6v not found locally';
+
+  it('blocks but is not terminal, so the edit is kept and not re-sent', ({
+    expect,
+  }) => {
+    expect(isUnrecoverableCommitError(MESSAGE, undefined)).toBe(true);
+    expect(isTerminalCommitError(MESSAGE, undefined)).toBe(false);
+  });
+});
+
 describe('a stale Loro write rejected by the causality guard', () => {
   const MESSAGE =
     "Commit's Loro update produced no state changes — its writes were silently dropped by LWW against stored state.";

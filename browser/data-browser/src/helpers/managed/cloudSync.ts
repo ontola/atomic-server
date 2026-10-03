@@ -280,14 +280,14 @@ export async function enableCloudSyncForDrive(params: {
     );
   }
 
-  await promoteLocalOnly();
+  // Agent first: the drive's commits are signed by it, and a node that can
+  // resolve the signer before the drive arrives has nothing to defer.
+  if (agentWasLocalOnly) await store.promoteLocalDrive(agentSubject);
 
-  async function promoteLocalOnly() {
-    // Agent first: the drive's commits are signed by it, and a node that can
-    // resolve the signer before the drive arrives has nothing to defer.
-    if (agentWasLocalOnly) await store.promoteLocalDrive(agentSubject);
-    if (wasLocalOnly) await store.promoteLocalDrive(drive);
-  }
+  // Also for a drive that was already synced elsewhere: switching servers
+  // copies nothing, and reporting success without this left the node without
+  // the drive root, so every later commit was refused as "Parent not found".
+  await store.syncDriveToServerAndVerify(drive);
 
   return { ok: true, httpOrigin, replicated: false };
 }
