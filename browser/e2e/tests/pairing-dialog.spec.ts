@@ -198,7 +198,10 @@ test.describe('pairing by pasting a code', () => {
       JSON.parse(localStorage.getItem('atomic-peers') ?? '[]'),
     );
     expect(stored).toContainEqual(
-      expect.objectContaining({ nodeId: NODE, label: 'Tablet' }),
+      expect.objectContaining({
+        nodeId: NODE.replace('did:ad:', 'atomic:'),
+        label: 'Tablet',
+      }),
     );
   });
 });

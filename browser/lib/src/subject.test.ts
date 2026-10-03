@@ -1,20 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
   asSubject,
+  blobSubjectFromDownloadUrl,
   extractDidSubject,
   InvalidSubjectError,
   isDidSubject,
   isHttpSubject,
+  isIdentifierHttpEndpoint,
+  isIdentifierPathForm,
+  isIdentifierResolutionPath,
   isValidSubject,
+  isAtomicIdentifier,
+  isLegacyAtomicLink,
   subjectsReferToSameResource,
+  emitSubjectForCaps,
+  CAP_CANONICAL_SCHEME,
   tryAsSubject,
   type Subject,
 } from './subject.js';
 
 describe('subject', () => {
   describe('isValidSubject', () => {
-    it('accepts DID subjects', () => {
+    it('accepts Atomic identifier subjects', () => {
       expect(isValidSubject('did:ad:abc')).toBe(true);
+      expect(isValidSubject('atomic:abc')).toBe(true);
+      expect(isValidSubject('atomic:agent:pk')).toBe(true);
+      expect(isAtomicIdentifier('atomic://pair?v=1')).toBe(false);
+      expect(isLegacyAtomicLink('atomic://pair?v=1')).toBe(true);
     });
 
     it('accepts http(s) URL subjects', () => {
@@ -67,21 +79,52 @@ describe('subject', () => {
 
   describe('extractDidSubject / subjectsReferToSameResource', () => {
     it('returns a DID unchanged, stripping query and fragment', () => {
-      expect(extractDidSubject('did:ad:abc')).toBe('did:ad:abc');
+      expect(extractDidSubject('did:ad:abc')).toBe('atomic:abc');
+      expect(extractDidSubject('atomic:abc')).toBe('atomic:abc');
       expect(extractDidSubject('did:ad:abc?drive=did:ad:drive')).toBe(
-        'did:ad:abc',
+        'atomic:abc',
       );
     });
 
-    it('extracts a DID from the HTTP path form and the /did endpoint', () => {
+    it('extracts an identifier from the HTTP path form and resolver endpoints', () => {
       expect(extractDidSubject('https://example.com/did:ad:abc')).toBe(
-        'did:ad:abc',
+        'atomic:abc',
+      );
+      expect(extractDidSubject('https://example.com/atomic:abc')).toBe(
+        'atomic:abc',
       );
       expect(
         extractDidSubject(
           'https://example.com/did?subject=' + encodeURIComponent('did:ad:abc'),
         ),
-      ).toBe('did:ad:abc');
+      ).toBe('atomic:abc');
+      expect(
+        extractDidSubject(
+          'https://example.com/resource?subject=' +
+            encodeURIComponent('atomic:abc'),
+        ),
+      ).toBe('atomic:abc');
+      expect(
+        extractDidSubject(
+          'https://example.com/atomic?subject=' +
+            encodeURIComponent('atomic:abc'),
+        ),
+      ).toBe('atomic:abc');
+    });
+
+    it('classifies identifier resolution paths without treating did:key as Atomic', () => {
+      expect(isIdentifierHttpEndpoint('/did')).toBe(true);
+      expect(isIdentifierHttpEndpoint('/resource')).toBe(true);
+      expect(isIdentifierHttpEndpoint('/atomic')).toBe(true);
+      expect(isIdentifierHttpEndpoint('/diddle')).toBe(false);
+      expect(isIdentifierPathForm('/atomic:abc')).toBe(true);
+      expect(isIdentifierPathForm('/did:ad:abc')).toBe(true);
+      expect(isIdentifierPathForm('/did:ad:ab/c+d==')).toBe(true);
+      expect(isIdentifierPathForm('/did:key:abc')).toBe(false);
+      expect(isIdentifierPathForm('/atomic://pair')).toBe(false);
+      expect(isIdentifierPathForm('/foo/atomic:abc')).toBe(false);
+      expect(isIdentifierResolutionPath('/did?subject=atomic:abc')).toBe(true);
+      expect(isIdentifierResolutionPath('/search')).toBe(false);
     });
 
     it('does not treat ordinary HTTP resources as DIDs', () => {
@@ -89,6 +132,12 @@ describe('subject', () => {
         extractDidSubject('https://atomicdata.dev/ontology/core'),
       ).toBeUndefined();
       expect(extractDidSubject('/relative')).toBeUndefined();
+    });
+
+    it('treats atomic:x and did:ad:x as the same resource', () => {
+      expect(subjectsReferToSameResource('atomic:abc', 'did:ad:abc')).toBe(
+        true,
+      );
     });
 
     it('treats https://host/did:ad:x and did:ad:x as the same resource', () => {
@@ -120,5 +169,54 @@ describe('subject', () => {
         ),
       ).toBe(false);
     });
+
+    it('emits atomic: only when the peer listed canonical-scheme', () => {
+      expect(emitSubjectForCaps('atomic:abc', [CAP_CANONICAL_SCHEME])).toBe(
+        'atomic:abc',
+      );
+      expect(emitSubjectForCaps('did:ad:abc', [CAP_CANONICAL_SCHEME])).toBe(
+        'atomic:abc',
+      );
+      expect(emitSubjectForCaps('atomic:abc', [])).toBe('did:ad:abc');
+      expect(emitSubjectForCaps('did:ad:abc', ['commit-ok-slim'])).toBe(
+        'did:ad:abc',
+      );
+    });
+  });
+});
+
+describe('blobSubjectFromDownloadUrl', () => {
+  const hash = 'ab'.repeat(32);
+
+  it('finds the blob behind a content-addressed download URL', () => {
+    expect(
+      blobSubjectFromDownloadUrl(`https://example.com/download/files/${hash}`),
+    ).toBe(`atomic:blob:${hash}`);
+    expect(
+      blobSubjectFromDownloadUrl(
+        `http://localhost:9883/download/files/${hash.toUpperCase()}?w=400`,
+      ),
+    ).toBe(`atomic:blob:${hash}`);
+    expect(blobSubjectFromDownloadUrl(`/download/files/${hash}`)).toBe(
+      `atomic:blob:${hash}`,
+    );
+  });
+
+  it('ignores every other URL', () => {
+    expect(
+      blobSubjectFromDownloadUrl(
+        'https://atomicdata.dev/download/files/1726139217600-photo.jpg',
+      ),
+    ).toBeUndefined();
+    expect(
+      blobSubjectFromDownloadUrl(`https://example.com/files/${hash}`),
+    ).toBeUndefined();
+    expect(
+      blobSubjectFromDownloadUrl(`https://example.com/download/files/${hash}0`),
+    ).toBeUndefined();
+    expect(blobSubjectFromDownloadUrl('blob:https://example.com/abc')).toBe(
+      undefined,
+    );
+    expect(blobSubjectFromDownloadUrl('')).toBeUndefined();
   });
 });

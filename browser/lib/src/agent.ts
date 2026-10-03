@@ -1,3 +1,9 @@
+import {
+  agentSubject,
+  canonicalIdentifier,
+  canonicalizeScheme,
+  toLegacyScheme,
+} from './subject.js';
 import { Client } from './client.js';
 import {
   decodeSecret,
@@ -11,6 +17,7 @@ import { decodeB64 } from './base64.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
   AGENT_VAULT_PROOF_MESSAGE,
+  aiChatsFolderCert,
   encodeGenesisCert,
   privateDriveCert,
   privateDriveSubject as derivePrivateDriveSubject,
@@ -47,6 +54,8 @@ export class Agent implements AgentInterface {
    * session still knows which drive is its home.
    */
   public privateDrive?: string;
+  /** Stable chat-folder subjects computed before storing non-extractable keys. */
+  public aiChatsFolders: Record<string, string> = {};
   /**
    * The agent's Cloud Vault proof: its signature over
    * {@link AGENT_VAULT_PROOF_MESSAGE}, base64url. Same story as
@@ -108,6 +117,8 @@ export class Agent implements AgentInterface {
           agent.privateDrive =
             await Agent.privateDriveSubjectFromSecret(secretB64);
           agent.vaultProof = await Agent.vaultProofFromSecret(secretB64);
+          agent.aiChatsFolders =
+            await Agent.aiChatsFoldersFromSecret(secretB64);
 
           resolve(agent);
         })
@@ -135,6 +146,38 @@ export class Agent implements AgentInterface {
     const provider = new SubtleCryptoProvider(keyPair);
 
     return new Agent(provider, subject, initialDrive);
+  }
+
+  /**
+   * A new agent whose private key exists only in memory and can never be
+   * read out: a WebCrypto Ed25519 key generated non-extractable. Its subject
+   * is `atomic:agent:<public key>`. For a short-lived signer, such as a
+   * plugin frame's key (ontola/atomic-plugins#54), that must not outlive the
+   * page or be copied by script.
+   *
+   * Throws when this environment's WebCrypto has no Ed25519 (older Safari
+   * and Android WebViews, ontola/atomic-server#1688) rather than falling back
+   * to an extractable JavaScript key, which would defeat the point.
+   */
+  public static async generateNonExtractable(): Promise<Agent> {
+    let keyPair: CryptoKeyPair;
+
+    try {
+      keyPair = (await globalThis.crypto.subtle.generateKey(
+        { name: 'Ed25519' },
+        false,
+        ['sign', 'verify'],
+      )) as CryptoKeyPair;
+    } catch (e) {
+      throw new AtomicError(
+        `This browser cannot make a non-extractable Ed25519 key (WebCrypto Ed25519 is missing; see atomic-server#1688): ${(e as Error)?.message ?? e}`,
+        ErrorType.Client,
+      );
+    }
+
+    const provider = new SubtleCryptoProvider(keyPair);
+
+    return new Agent(provider, agentSubject(await provider.getPublicKey()));
   }
 
   /**
@@ -220,6 +263,48 @@ export class Agent implements AgentInterface {
     this.privateDrive = subject;
 
     return subject;
+  }
+
+  public async aiChatsFolderSubject(drive: string): Promise<string> {
+    drive = canonicalIdentifier(drive);
+    const cached =
+      this.aiChatsFolders[drive] ?? this.aiChatsFolders[toLegacyScheme(drive)];
+
+    if (cached) {
+      return (this.aiChatsFolders[drive] = canonicalizeScheme(cached));
+    }
+
+    if (!this.#cryptoProvider.signsDeterministically) {
+      throw new AtomicError(
+        'Sign in again to initialize the shared AI Chats folder on this device.',
+        ErrorType.Client,
+      );
+    }
+
+    const cert = aiChatsFolderCert(decodeB64(await this.getPublicKey()), drive);
+    const subject = subjectForSignature(
+      await this.signBytes(encodeGenesisCert(cert)),
+    );
+    this.aiChatsFolders[drive] = subject;
+
+    return subject;
+  }
+
+  /** Precompute canonical and legacy-home folders while the raw key is available. */
+  public static async aiChatsFoldersFromSecret(
+    secret: string,
+  ): Promise<Record<string, string>> {
+    const agent = Agent.fromSecret(secret, 'js');
+    const drives = new Set([
+      await agent.privateDriveSubject(),
+      agent.initialDrive,
+    ]);
+
+    for (const drive of drives) {
+      if (drive) await agent.aiChatsFolderSubject(drive);
+    }
+
+    return agent.aiChatsFolders;
   }
 
   /**

@@ -12,7 +12,7 @@
  *  1. the resource itself — is the content still readable by the re-signed-in
  *     agent at all;
  *  2. the local ClientDb encryption key — sign-out deletes the session copy of
- *     the DbKey and keeps a wrapped copy that only the agent's private key can
+ *     the DbKey and keeps a wrapped copy that only the agent's secret can
  *     unwrap (see `helpers/localDbKey.ts`). If sign-in fails to unwrap it, the
  *     worker generates a fresh key, the old encrypted OPFS file can no longer
  *     be opened, and the cache silently empties even though the server still
@@ -24,6 +24,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   before,
+  clickAccountMenuItem,
   getCurrentSubject,
   getDevDriveSecret,
   newResource,
@@ -66,7 +67,9 @@ const test = base.extend({
 });
 
 const SESSION_KEY_PREFIX = 'atomic.clientdb.session-key.';
-const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key.';
+// New sign-ins write only the v2 (secret envelope) record; the v1 prefix
+// `atomic.clientdb.wrapped-key.` is legacy.
+const WRAPPED_KEY_PREFIX = 'atomic.clientdb.wrapped-key-v2.';
 
 /**
  * Read raw `idb-keyval` records straight out of IndexedDB.
@@ -139,7 +142,7 @@ async function signOut(page: Page) {
     dialog.accept();
   });
 
-  await page.locator('a[href$="/app/agent"]').click();
+  await clickAccountMenuItem(page, 'Profile');
   await page.click('[data-test="sign-out"]');
   await expect(
     page.getByRole('button', { name: 'Create account' }),
@@ -171,8 +174,10 @@ async function signInAgain(page: Page, secret: string) {
   await expect(
     page.getByRole('heading', { name: 'Your data is on another device' }),
   ).toBeHidden({ timeout: 15000 });
-  await expect(page.locator('a[href$="/app/agent"]')).toBeVisible();
-  await expect(page).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/);
+  await expect(
+    page.locator('[data-testid="account-menu-trigger"][data-signed-in="true"]'),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/);
 }
 
 test.describe('sign-out / sign-in round trip', () => {

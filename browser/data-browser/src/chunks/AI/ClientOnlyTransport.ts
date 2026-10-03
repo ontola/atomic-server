@@ -1,5 +1,6 @@
 // @wc-ignore-file
 import {
+  generateText,
   stepCountIs,
   streamText,
   type ChatTransport,
@@ -7,6 +8,7 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import { modelMessagesWithToolRecovery } from './toolHistory';
+import { usageMetadata } from './usageMetadata';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
   type AIAgent,
@@ -22,11 +24,14 @@ import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
+import { createHostedModel } from '@helpers/managed/ai';
+import { hostedVoiceModel } from './hostedVoiceModel';
 
 export type Modalities = 'text' | 'image';
 
 export interface ClientOnlyTransportOptions {
   openRouterAPIKey?: string;
+  openRouterZdr?: boolean;
   ollamaURL?: string;
   selectedAgent: AIAgent;
   model: AIModelIdentifier;
@@ -60,6 +65,32 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     this.options = options;
   }
 
+  /** Use the configured personal provider when present, otherwise SaaS credits. */
+  public async runLiveTask(
+    messages: AtomicUIMessage[],
+    abortSignal: AbortSignal,
+  ) {
+    const prepared = await this.options.addContextToMessages(
+      trimToLastSummary(messages),
+    );
+    const result = await generateText({
+      model: this.options.openRouterAPIKey
+        ? this.getModel(this.options.model)
+        : hostedVoiceModel(),
+      messages: await modelMessagesWithToolRecovery(prepared),
+      system: `${await this._prepareSystemPrompt(this.options.selectedAgent.systemPrompt)}\nYou are handling a delegated request from a live voice conversation. Use the latest user request and its corrections. Perform only requested actions. Return a brief factual result suitable for speech, including whether actions actually succeeded.`,
+      tools: this.options.tools,
+      abortSignal,
+      maxRetries: 0,
+      stopWhen: stepCountIs(8),
+    });
+
+    return (
+      result.text ||
+      'The task finished without a spoken result. Check the chat before repeating any action.'
+    );
+  }
+
   public async sendMessages({
     abortSignal,
     ...options
@@ -78,21 +109,17 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
-      stopWhen: stepCountIs(1000),
+      stopWhen: stepCountIs(
+        this.options.model.provider === AIProvider.Hosted ? 8 : 1000,
+      ),
+      maxRetries: this.options.model.provider === AIProvider.Hosted ? 0 : 2,
       ...this.getParameters(agent, this.options.model),
     });
 
     const originalStream = result.toUIMessageStream({
       originalMessages: transformedMessages,
       generateMessageId: this.idGenerator,
-      messageMetadata: ({ part }) => {
-        if (part.type === 'finish') {
-          return {
-            inputTokensUsed: part.totalUsage.inputTokens,
-            outputTokensUsed: part.totalUsage.outputTokens,
-          };
-        }
-      },
+      messageMetadata: ({ part }) => usageMetadata(part),
       onError: error => {
         if (error instanceof Error) return error.message;
         if (error && typeof error === 'object' && 'message' in error)
@@ -112,6 +139,9 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   }
 
   private getModel(model: AIModelIdentifier) {
+    if (model.provider === AIProvider.Hosted)
+      return createHostedModel(model.id);
+
     if (
       model.provider === AIProvider.OpenRouter &&
       this.options.openRouterAPIKey
@@ -122,6 +152,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
         apiKey: this.options.openRouterAPIKey,
         compatibility: 'strict',
         extraBody: {
+          ...(this.options.openRouterZdr ? { provider: { zdr: true } } : {}),
           modalities,
           plugins: [{ id: 'context-compression' }],
         },
@@ -142,6 +173,9 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   }
 
   private getParameters(agent: AIAgent, model: AIModelIdentifier) {
+    if (model.provider === AIProvider.Hosted)
+      return { temperature: agent.temperature };
+
     if (model.provider === AIProvider.Ollama) {
       // We can't check if Ollama supports specific parameters, so we just return all of them.
       return {

@@ -30,13 +30,11 @@ async function editorPlainText(page: Page): Promise<string> {
 test.describe('documents', async () => {
   test.beforeEach(before);
 
-  // FLAKY (dagger CI, intermittent on remote): multi-context CRDT sync
-  // via the WS hub. Page2 sometimes doesn't see the page1 deletion of
-  // "New paragraph" within 15s — pattern is `Locator: locator('text=New
-  // paragraph')` Expected: not visible / Received: visible. Likely
-  // exceeds the loro broadcast budget under dagger CPU contention.
-  // Investigate: bump the assertion to `waitForFunction` polling on the
-  // store's loro-doc state instead of DOM text.
+  // This used to fail about one loaded round in ten, and the cause was not
+  // the CRDT sync it looked like: the delete step selected a trailing empty
+  // paragraph, so nothing was deleted and the assertion below reported it as
+  // a sync failure. Measured from the DOM at the moment of failure, and fixed
+  // at the selection. See the comment on the delete step.
   // Full suite only — do not tag `@smoke`. Folder create is the light cover.
   test('create document, edit, page title, websockets', async ({
     page,
@@ -66,7 +64,7 @@ test.describe('documents', async () => {
     const editor = page.getByLabel('Rich Text Editor');
 
     await editor.fill('/heading');
-    await expect(page.getByText('Heading 1')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Heading 1' })).toBeVisible();
     await page.keyboard.press('Enter');
     // The command changes the document structure asynchronously. Type only
     // once its heading exists, rather than racing that selection transition.
@@ -128,10 +126,30 @@ test.describe('documents', async () => {
     // headless chromium on Linux (dagger CI) treats it as a no-op, so the
     // paragraph stayed and the cross-tab "not visible" assertion timed
     // out. Re-select-then-Backspace deletes the selection deterministically
-    // on every platform. Select the paragraph node instead of locating it by
-    // text: a remote cursor decoration can split "New paragraph" across text
-    // nodes and make Playwright's text locator miss visibly rendered content.
-    await page2.getByLabel('Rich Text Editor').locator('p').last().selectText();
+    // on every platform.
+    //
+    // Pick the paragraph by its text rather than by position. The editor
+    // sometimes carries a trailing empty paragraph, and then `.last()` is that
+    // empty one: `selectText()` leaves the selection collapsed, Backspace
+    // removes the empty paragraph instead of the typed one, and the whole
+    // "New paragraph" survives — which the next assertion reports 15s later as
+    // a sync failure in the window that never deleted anything.
+    //
+    // `hasText` matches on the element's text content, so it still finds the
+    // paragraph when a remote cursor decoration splits the text across nodes,
+    // which is why this does not go back to a plain text locator.
+    const typedParagraph = page2
+      .getByLabel('Rich Text Editor')
+      .locator('p')
+      .filter({ hasText: syncText })
+      .last();
+    // Fail here, naming the real problem, rather than 15s later on a deletion
+    // that was never attempted.
+    await expect(
+      typedParagraph,
+      'The typed paragraph was not found, so there is nothing to delete',
+    ).toBeVisible();
+    await typedParagraph.selectText();
     await page2.keyboard.press('Backspace');
 
     // Loro CRDT sync between two browser contexts goes through the server's
@@ -237,6 +255,39 @@ test.describe('documents', async () => {
     // persisted into the doc), and it carries the peer's color via inline style.
     await expect(remoteCursor).toHaveCount(1);
     await expect(remoteCursor).toHaveAttribute('style', /border-color/);
+  });
+
+  test('formatting toolbar formats text and can be hidden', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await newResource('document', page);
+    await editTitle(`Toolbar Doc ${timestamp()}`, page);
+
+    const editor = page.getByLabel('Rich Text Editor');
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+    await expect(toolbar).toBeVisible();
+
+    await editor.click();
+    await page.keyboard.type('Toolbar text');
+    await page.keyboard.press('ControlOrMeta+a');
+    await toolbar.getByTitle('Toggle bold').click();
+    await expect(editor.locator('strong')).toHaveText('Toolbar text');
+
+    await toolbar.getByTitle('Bullet list').click();
+    await expect(editor.locator('ul li')).toHaveText('Toolbar text');
+
+    // Hiding is remembered across page loads.
+    await toolbar.getByTitle(/^Hide toolbar/).click();
+    await expect(toolbar).not.toBeVisible();
+    await page.reload();
+    await expect(editor).toBeVisible({ timeout: 30000 });
+    await expect(toolbar).not.toBeVisible();
+
+    await page.getByTitle('Show formatting toolbar').click();
+    await expect(toolbar).toBeVisible();
   });
 
   test('opens a v1 document and migrates it silently into the editor', async ({

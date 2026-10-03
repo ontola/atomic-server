@@ -5,6 +5,8 @@ import { Resource, normalizeLoroChangeTimestampMs } from './resource.js';
 import { Store } from './store.js';
 import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
+import { isCommitSubject } from './commit.js';
+import { core } from './ontologies/core.js';
 
 /**
  * Strips `did:ad:commit:` subjects from a member list. Commit resources don't
@@ -17,8 +19,28 @@ import { dataBrowser } from './ontologies/dataBrowser.js';
  * side index. The proper fix is upstream — see TODO.
  */
 function filterIndexLeakage(subjects: string[]): string[] {
-  return subjects.filter(s => !s.startsWith('did:ad:commit:'));
+  return subjects.filter(s => !isCommitSubject(s));
 }
+
+/**
+ * How long a query waits for the local database to finish becoming ready
+ * before asking the server instead.
+ *
+ * `waitForReady` waits for the WASM worker AND for the bootstrap seed, and the
+ * seed is the whole bundled ontology: seventy-odd properties first, so later
+ * resources parse with the right datatypes, then everything else. Measured on
+ * a four-core box running four Playwright workers, that wait was 0.3 to 16s
+ * routinely and **91 seconds** in the round that failed, with the worker
+ * already initialized the whole time. An app's view asked its table for its
+ * rows, the answer arrived 98 seconds later, and the page sat empty: the row
+ * was on the server and in the local index all along.
+ *
+ * So the wait is bounded and the server answers when it runs out — which is
+ * what a client with no local database does anyway, and the server is
+ * authoritative. Three seconds is what {@link Collection.fetchPage} already
+ * gives the socket a few lines down.
+ */
+const LOCAL_DB_READY_GRACE_MS = 3000;
 
 /**
  * How a {@link PropVal} compares the resource's value to the filter value.
@@ -288,6 +310,11 @@ export class Collection {
   private _aggregates: AggregateOutcome[] = [];
 
   private _waitForReady: Promise<void>;
+  /** One in-flight fetch per page. A virtualized list mounts several rows from
+   * the same missing page in one render; without sharing this promise, every
+   * row starts the same local query and the competing hydrations can leave the
+   * page unresolved for all of their consumers. */
+  private _pageFetches = new Map<number, Promise<void>>();
   /**
    * True while `fetchPage` is hydrating members into the store. Query
    * hydration fires `ResourceUpdated` for every row; `useCollection`
@@ -297,6 +324,9 @@ export class Collection {
    * the ordered page.
    */
   private _assemblingPage = false;
+  private static legacyQueryServers = new WeakMap<Store, Set<string>>();
+  private legacyQuery = false;
+  private legacyMembers?: Promise<string[]>;
 
   public constructor(
     store: Store,
@@ -395,8 +425,19 @@ export class Collection {
     const page = Math.floor(index / this.pageSize);
 
     if (!this.pages.has(page)) {
-      this._waitForReady = this.fetchPage(page);
-      await this._waitForReady;
+      let fetch = this._pageFetches.get(page);
+
+      if (!fetch) {
+        fetch = this.fetchPage(page).finally(() => {
+          if (this._pageFetches.get(page) === fetch) {
+            this._pageFetches.delete(page);
+          }
+        });
+        this._pageFetches.set(page, fetch);
+      }
+
+      this._waitForReady = fetch;
+      await fetch;
     }
 
     // `fetchPage` short-circuits without populating `pages` when there's
@@ -414,6 +455,7 @@ export class Collection {
 
   public clearPages(): void {
     this.pages = new Map();
+    this.legacyMembers = undefined;
     this._memberIndex.clear();
     this._queriedMembers.clear();
     // Note: `_optimisticAdds` is preserved on `clearPages` — they
@@ -594,7 +636,7 @@ export class Collection {
     // Commit subjects leak into `parent=` indexes on both server and client.
     // `filterIndexLeakage` strips them at iteration; mirror that here so we
     // don't even consider treating one as a member.
-    if (subject.startsWith('did:ad:commit:')) return 'unchanged';
+    if (isCommitSubject(subject)) return 'unchanged';
 
     // `_new:` is the placeholder subject the store assigns before async
     // signing renames the resource to its real DID. The placeholder is UI
@@ -871,6 +913,18 @@ export class Collection {
       return;
     }
 
+    // A foreign HTTP authority has not replicated its complete index into
+    // this client's OPFS. Neither an empty nor a partially cached local set
+    // answers its query, and its HTTP availability is independent of our
+    // home server's WebSocket handshake.
+    if (
+      new URL(this.server).origin !== new URL(this.store.getServerUrl()).origin
+    ) {
+      await this.fetchPageFromServer(page);
+
+      return;
+    }
+
     // The worker may still be attaching after agent-key initialization.
     // An expected database is different from an app that opted out of OPFS;
     // share the resource loader's bounded attachment wait before going remote.
@@ -950,11 +1004,33 @@ export class Collection {
       return 'no-db';
     }
 
-    // Wait for WASM DB to be ready (important on initial page load).
+    // Wait for WASM DB to be ready (important on initial page load), but only
+    // for so long: see {@link LOCAL_DB_READY_GRACE_MS}. Running out is not an
+    // error, it just means this query is answered by the server, which the
+    // `'no-db'` below already arranges.
     const clientDb = this.store.getClientDb();
 
     if (clientDb && !clientDb.isReady) {
-      await clientDb.waitForReady();
+      let ranOut: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        await Promise.race([
+          clientDb.waitForReady(),
+          new Promise<void>(resolve => {
+            ranOut = setTimeout(resolve, LOCAL_DB_READY_GRACE_MS);
+          }),
+        ]);
+      } finally {
+        clearTimeout(ranOut);
+      }
+
+      // Running out of patience only helps because the server can answer
+      // instead. With no server to ask, this database is the only source this
+      // query has, so it is worth every second it takes — an offline page that
+      // asked nobody would render as if the drive were empty.
+      if (!clientDb.isReady && !this.store.serverConnected) {
+        await clientDb.waitForReady();
+      }
     }
 
     if (!clientDb || !clientDb.isReady) {
@@ -1218,7 +1294,117 @@ export class Collection {
     return 'ok';
   }
 
+  /** Old nodes have no drive or multi-filter query support. Fetch the base
+   * match set, then apply scope, AND filters, sorting and pagination here. */
+  private async fetchLegacyPage(page: number): Promise<void> {
+    this.legacyMembers ??= this.loadLegacyMembers();
+    const subjects = [...(await this.legacyMembers)];
+
+    if (subjects.length === 0) {
+      this.setEmptyPage(page);
+
+      return;
+    }
+
+    this.finishLocalDbPage(
+      page,
+      { subjects, count: subjects.length },
+      this.params.drive,
+    );
+  }
+
+  private async loadLegacyMembers(): Promise<string[]> {
+    if (this.params.aggregation || this.params.expression_filters?.length) {
+      throw new Error(
+        'This legacy server does not support query expressions or aggregation',
+      );
+    }
+
+    const raw = new Collection(
+      this.store,
+      this.server,
+      {
+        ...this.params,
+        drive: undefined,
+        filters: undefined,
+        sort_by: undefined,
+        sort_desc: undefined,
+        include_nested: true,
+        page_size: '500',
+      },
+      true,
+    );
+    await raw.fetchPageFromServer(0);
+    const candidates = await raw.getAllMembers();
+    const subjects: string[] = [];
+    const drive = this.params.drive;
+
+    const inDrive = async (subject: string): Promise<boolean> => {
+      const seen = new Set<string>();
+      let current: string | undefined = subject;
+
+      while (current) {
+        if (current === drive) return true;
+        if (seen.has(current)) return false;
+        seen.add(current);
+        const ancestor = await this.store.getResource(current);
+        if (ancestor.error) throw ancestor.error;
+        current = ancestor.get(core.properties.parent) as string | undefined;
+      }
+
+      return false;
+    };
+
+    for (const subject of candidates) {
+      // A direct parent query is already scoped when the parent is the drive.
+      if (
+        drive &&
+        !(
+          this.params.property === core.properties.parent &&
+          this.params.value === drive
+        ) &&
+        !(await inDrive(subject))
+      )
+        continue;
+      const filters = this.params.filters ?? [];
+
+      if (filters.length || this.params.sort_by) {
+        const resource = await this.store.getResource(subject);
+        if (resource.error) throw resource.error;
+        if (
+          !filters.every(filter => {
+            const entries = filter.property
+              ? ([[filter.property, resource.get(filter.property)]] as const)
+              : Object.entries(resource.getPropVals());
+
+            return entries.some(([property, value]) =>
+              filter.value === undefined
+                ? value !== undefined
+                : constraintMatches(
+                    resource,
+                    property,
+                    filter.value,
+                    filter.operator,
+                  ),
+            );
+          })
+        )
+          continue;
+      }
+
+      subjects.push(subject);
+    }
+
+    return subjects;
+  }
+
   private async fetchPageFromServer(page: number): Promise<void> {
+    if (
+      this.legacyQuery ||
+      (/^https?:\/\//.test(this.params.drive ?? '') &&
+        Collection.legacyQueryServers.get(this.store)?.has(this.server))
+    )
+      return this.fetchLegacyPage(page);
     const subject = this.buildSubject(page);
     const resource =
       await this.store.fetchResourceFromServer<Collections.Collection>(subject);
@@ -1228,6 +1414,21 @@ export class Collection {
     }
 
     if (resource.error) {
+      // Negotiate only on the explicit unsupported-parameter response.
+      if (
+        new URL(subject).searchParams.has('drive') &&
+        /^https?:\/\//.test(this.params.drive ?? '') &&
+        resource.error.message.endsWith('Invalid query param: drive')
+      ) {
+        this.legacyQuery = true;
+        const servers =
+          Collection.legacyQueryServers.get(this.store) ?? new Set<string>();
+        servers.add(this.server);
+        Collection.legacyQueryServers.set(this.store, servers);
+
+        return this.fetchPageFromServer(page);
+      }
+
       throw new Error(
         `Invalid collection: resource has error: ${resource.error}`,
       );

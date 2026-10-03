@@ -30,7 +30,7 @@ extension's OPFS database.
 
 ## Product Boundary
 
-The extension follows the Atomic SaaS local-first tiers instead of creating a
+The extension follows Atomic Place's local-first tiers instead of creating a
 new server requirement:
 
 | Tier | Atomic Assistant behavior |

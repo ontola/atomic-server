@@ -2,6 +2,14 @@
 import { core, dataBrowser, Resource, server, Store } from '@tomic/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// `fileContentsToTiptapJson` and `convertFileToDocument` reach the Markdown
+// parser and the collaborative editor schema through `await import`, so under
+// vitest the cost of transforming those chunks lands inside a test's own
+// budget rather than in module setup. On a loaded runner that is far past the
+// 5 s default: one CI run here spent 273 s importing across the suite, and the
+// first test below timed out at 5 s with nothing wrong with the work itself.
+vi.setConfig({ testTimeout: 30_000 });
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

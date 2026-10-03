@@ -5,6 +5,7 @@ import {
   inDialog,
   pickTotal,
   waitForGridMounted,
+  waitForSynced,
 } from './test-utils';
 
 /** Creates an Issue Tracker table (Board + All issues views, no timestamps). */
@@ -175,9 +176,24 @@ test.describe('timer view', () => {
       row(page, 'Frontend').getByTestId('timer-cell-action'),
     ).toHaveAttribute('data-running', 'true');
 
-    // The setting lives on the View, so it survives a reload.
+    // The setting lives on the View, so it survives a reload — but only once
+    // the write has gone out. `uncheck()` above returns when the checkbox has
+    // rendered, not when the View resource has been saved, and reloading on
+    // top of that outbox is the race `apps.spec.ts` documents. Under four
+    // local Playwright workers this failed here every time, the box still
+    // checked through twelve polls:
+    //
+    //     expect(locator).not.toBeChecked() failed
+    //     12 × locator resolved to <input checked data-testid="timer-exclusive">
+    //
+    await waitForSynced(page);
     await page.reload();
-    await expect(page.getByTestId('timer-exclusive')).not.toBeChecked();
+    // Reading it back is local-first, so the View arrives on the client
+    // database's schedule rather than the server's; the same read costs
+    // seconds under load elsewhere in this suite.
+    await expect(page.getByTestId('timer-exclusive')).not.toBeChecked({
+      timeout: 30_000,
+    });
   });
 
   test('the active view is in the URL', async ({ page }) => {
@@ -246,9 +262,14 @@ test.describe('timer view', () => {
     const stopped = await entry.getByTestId('derived-duration').textContent();
 
     // Duration is stored on the View by the template, not built into the timer:
-    // turning this view into a plain table keeps the column, while the
-    // genuinely timer-specific Start/Stop column goes away.
+    // turning a timer view into a plain table keeps the column, while the
+    // genuinely timer-specific Start/Stop column goes away. The only Timer view
+    // can't be converted in place (#1902), so convert a copy of it.
     await page.getByRole('tab', { name: 'Timer' }).click();
+    await page.getByTestId('menu-item-duplicate').click();
+    const copyTab = page.getByRole('tab', { name: 'Timer copy' });
+    await expect(copyTab).toHaveAttribute('aria-selected', 'true');
+    await copyTab.click();
     await page.getByTestId('menu-item-kind-table').click();
     await expect(page.getByTestId('timer-new-input')).toHaveCount(0);
 

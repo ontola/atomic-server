@@ -1,5 +1,4 @@
-import { useEffect, useId, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useId, useState } from 'react';
 import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
 import { FaPlus, FaPen, FaTrash } from 'react-icons/fa6';
@@ -12,6 +11,7 @@ import { AgentSkill, useSkillsConfig } from './skills/skill';
 import Field from '@components/forms/Field';
 import { Input } from '@components/forms/InputStyles';
 import { stringToSlug } from '@helpers/stringToSlug';
+import { ConfigEditorDialog } from './ConfigEditorDialog';
 
 // Helper function to generate a unique ID
 const generateId = () => {
@@ -28,22 +28,10 @@ const defaultNewSkill: AgentSkill = {
   references: [],
 };
 
-interface SkillsConfigTabProps {
-  actionPortalElement: HTMLElement | null;
-  onActionsVisibleChange: (visible: boolean) => void;
-}
-
-export const SkillsConfigTab = ({
-  actionPortalElement,
-  onActionsVisibleChange,
-}: SkillsConfigTabProps) => {
+export const SkillsConfigTab = () => {
   const { userSkills, saveUserSkills } = useSkillsConfig();
   const [editingSkill, setEditingSkill] = useState<AgentSkill | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
-  useEffect(() => {
-    return () => onActionsVisibleChange(false);
-  }, [onActionsVisibleChange]);
 
   const handleSaveSkill = () => {
     if (!editingSkill) return;
@@ -62,9 +50,6 @@ export const SkillsConfigTab = ({
         );
 
     saveUserSkills(newSkills);
-    setEditingSkill(null);
-    setIsCreating(false);
-    onActionsVisibleChange(false);
   };
 
   const handleDeleteSkill = (skillToDelete: AgentSkill) => {
@@ -83,90 +68,83 @@ export const SkillsConfigTab = ({
       },
     });
     setIsCreating(true);
-    onActionsVisibleChange(true);
   };
 
   const handleEditSkill = (skill: AgentSkill) => {
     setEditingSkill({ ...skill });
     setIsCreating(false);
-    onActionsVisibleChange(true);
   };
 
-  const handleCancel = () => {
+  const handleDialogClosed = () => {
     setEditingSkill(null);
     setIsCreating(false);
-    onActionsVisibleChange(false);
   };
 
   return (
-    <>
-      {editingSkill ? (
-        <Column>
-          <SkillForm skill={editingSkill} onChange={setEditingSkill} />
-        </Column>
-      ) : (
-        <Column>
-          <SkillsList role='list' aria-label='AI Skills'>
-            {userSkills.map(skill => (
-              <SkillItem key={skill.meta.id}>
-                <Row center gap='1rem'>
-                  <Checkbox
-                    checked={!skill.meta.disabled}
-                    onChange={checked => {
-                      const newSkills = userSkills.map(s =>
-                        s.meta.id === skill.meta.id
-                          ? { ...s, meta: { ...s.meta, disabled: !checked } }
-                          : s,
-                      );
-                      saveUserSkills(newSkills);
-                    }}
-                  />
-                  <Column gap='0'>
-                    <strong>{skill.meta.name}</strong>
-                    <SubtleText>{skill.meta.description}</SubtleText>
-                  </Column>
-                </Row>
-                <Row>
-                  <IconButton
-                    title='Edit Skill'
-                    onClick={() => handleEditSkill(skill)}
-                  >
-                    <FaPen />
-                  </IconButton>
-                  <IconButton
-                    title='Delete Skill'
-                    color='alert'
-                    onClick={() => handleDeleteSkill(skill)}
-                  >
-                    <FaTrash />
-                  </IconButton>
-                </Row>
-              </SkillItem>
-            ))}
-            {userSkills.length === 0 && (
-              <SubtleText>No custom skills created yet.</SubtleText>
-            )}
-          </SkillsList>
-
-          <CreateButton onClick={handleCreateNewSkill}>
-            <FaPlus title='' /> Create New Skill
-          </CreateButton>
-        </Column>
-      )}
-      {editingSkill &&
-        actionPortalElement &&
-        createPortal(
-          <>
-            <Button subtle onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveSkill}>
-              {isCreating ? 'Create Skill' : 'Save Changes'}
-            </Button>
-          </>,
-          actionPortalElement,
+    <Column>
+      <SkillsList role='list' aria-label='AI Skills'>
+        {userSkills.map(skill => (
+          <SkillItem key={skill.meta.id}>
+            <Row center gap='1rem'>
+              <Checkbox
+                checked={!skill.meta.disabled}
+                onChange={checked => {
+                  const newSkills = userSkills.map(s =>
+                    s.meta.id === skill.meta.id
+                      ? { ...s, meta: { ...s.meta, disabled: !checked } }
+                      : s,
+                  );
+                  saveUserSkills(newSkills);
+                }}
+              />
+              <Column gap='0'>
+                <strong>{skill.meta.name}</strong>
+                <SubtleText>{skill.meta.description}</SubtleText>
+              </Column>
+            </Row>
+            <Row>
+              <IconButton
+                title='Edit Skill'
+                onClick={() => handleEditSkill(skill)}
+              >
+                <FaPen />
+              </IconButton>
+              <IconButton
+                title='Delete Skill'
+                color='alert'
+                onClick={() => handleDeleteSkill(skill)}
+              >
+                <FaTrash />
+              </IconButton>
+            </Row>
+          </SkillItem>
+        ))}
+        {userSkills.length === 0 && (
+          <SubtleText>No custom skills created yet.</SubtleText>
         )}
-    </>
+      </SkillsList>
+
+      <CreateButton onClick={handleCreateNewSkill}>
+        <FaPlus title='' />
+        <span>Create New Skill</span>
+      </CreateButton>
+
+      <ConfigEditorDialog
+        open={!!editingSkill}
+        title={isCreating ? 'New Skill' : 'Edit Skill'}
+        saveLabel={isCreating ? 'Create Skill' : 'Save Changes'}
+        canSave={
+          !!editingSkill?.meta.name.trim() &&
+          !!editingSkill?.meta.description.trim()
+        }
+        onSave={handleSaveSkill}
+        onClosed={handleDialogClosed}
+      >
+        {editingSkill && (
+          <SkillForm skill={editingSkill} onChange={setEditingSkill} />
+        )}
+      </ConfigEditorDialog>
+    </Column>
   );
 };
 
@@ -298,7 +276,8 @@ const SkillForm = ({ skill, onChange }: SkillFormProps) => {
             onChange({ ...skill, references: newRefs });
           }}
         >
-          <FaPlus /> Add Reference
+          <FaPlus />
+          <span>Add Reference</span>
         </Button>
       </Field>
     </Column>

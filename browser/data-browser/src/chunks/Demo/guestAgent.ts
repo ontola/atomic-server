@@ -1,4 +1,10 @@
-import { Agent, JSCryptoProvider, core, type Store } from '@tomic/react';
+import {
+  Agent,
+  JSCryptoProvider,
+  agentSubject,
+  core,
+  type Store,
+} from '@tomic/react';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
 
 /**
@@ -21,7 +27,7 @@ export async function ensureAgentForDemo(store: Store): Promise<boolean> {
   }
 
   const keys = await Agent.generateKeyPair();
-  const subject = `did:ad:agent:${keys.publicKey}`;
+  const subject = agentSubject(keys.publicKey);
   const agent = new Agent(new JSCryptoProvider(keys.privateKey), subject);
 
   store.setAgent(agent);

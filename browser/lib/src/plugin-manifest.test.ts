@@ -166,15 +166,15 @@ it('validates action schemas and operation references without extending capabili
   const raw = JSON.parse(
     readFileSync(
       new URL(
-        '../../../integrations/github-issues/manifest.fixture.json',
+        '../../../testdata/plugin-for-testing/manifest.json',
         import.meta.url,
       ),
       'utf8',
     ),
   );
   expect(validateManifest(raw).actions?.map(a => a.name)).toEqual([
-    'get_issue',
-    'create_issue',
+    'get_record',
+    'create_record',
   ]);
   expect(() =>
     validateManifest({
@@ -210,4 +210,38 @@ it('validates action schemas and operation references without extending capabili
       ],
     }),
   ).toThrow();
+});
+
+describe('a declared config', () => {
+  const config = {
+    key: 'pets',
+    properties: {
+      table: { type: 'string', description: 'Table the pets are written to' },
+      properties: { type: 'object' },
+    },
+    required: ['table'],
+  };
+
+  it('is kept as the plugin wrote it', () => {
+    expect(validateManifest({ schemaVersion: 1, config }).config).toEqual(
+      config,
+    );
+  });
+
+  it('is absent when the plugin declared none', () => {
+    expect(validateManifest({ schemaVersion: 1 }).config).toBeUndefined();
+  });
+
+  it('is rejected when it could not be checked against', () => {
+    for (const broken of [
+      { ...config, required: ['undeclared'] },
+      { ...config, key: 'not a key' },
+      { ...config, properties: { table: { type: 'number' } } },
+      { ...config, properties: { table: { type: 'string', unknown: 1 } } },
+      { ...config, schema: 'https://remote/schema' },
+    ])
+      expect(() =>
+        validateManifest({ schemaVersion: 1, config: broken }),
+      ).toThrow();
+  });
 });

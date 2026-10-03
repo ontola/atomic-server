@@ -1,9 +1,17 @@
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Agent, JSCryptoProvider, core, useStore } from '@tomic/react';
+import {
+  Agent,
+  JSCryptoProvider,
+  agentPublicKey,
+  agentSubject,
+  core,
+  useStore,
+} from '@tomic/react';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { isOriginWithoutNode } from '../helpers/originNode';
+import { isRunningInTauri } from '../helpers/tauri';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { reopenRestoredDrive } from '../helpers/driveData';
@@ -68,6 +76,11 @@ interface NewIdentitySectionProps {
    * Resolves with the plaintext code to show the user once. The fallback for
    * devices without passkey support, or when the user asks for it. */
   onBackupWithCode?: (secret: string) => Promise<string>;
+  /** Back the secret up under the signed-in account alone (assisted
+   * recovery). Resolves true when that worked, which ends onboarding with
+   * nothing to register or save; false moves on to the passkey and code
+   * step. */
+  onBackupWithAccount?: (secret: string) => Promise<boolean>;
 }
 
 interface IdentityData {
@@ -97,6 +110,7 @@ export function NewIdentitySection({
   offerRecoveryBackup = false,
   onBackupWithPasskey,
   onBackupWithCode,
+  onBackupWithAccount,
 }: NewIdentitySectionProps) {
   const store = useStore();
   const { setAgent, setDrive } = useSettings();
@@ -121,15 +135,9 @@ export function NewIdentitySection({
    * this device can't do passkeys, or the user asked for a code instead. */
   const [useCodeFallback, setUseCodeFallback] = useState(false);
 
-  useEffect(() => {
-    if (autoStart) {
-      handleCreate();
-    }
-  }, []);
-
   // ─── Step: Create Identity ───────────────────────────────────────────────
 
-  async function handleCreate() {
+  const handleCreate = async () => {
     // React StrictMode replays mount effects. A second key generation would
     // replace the active agent while the first identity is still onboarding.
     if (creatingIdentity.current) return;
@@ -140,7 +148,7 @@ export function NewIdentitySection({
 
     try {
       const agentKeys = await Agent.generateKeyPair();
-      const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+      const agentDID = agentSubject(agentKeys.publicKey);
       const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
       const newAgent = new Agent(agentProvider, agentDID);
 
@@ -154,7 +162,10 @@ export function NewIdentitySection({
       // guest uses; `enableCloudSyncForDrive` lifts it when a node is
       // assigned. Registered right after `setAgent` and before anything
       // async, so no consumer can mount `useResource(agent)` and fetch first.
-      if (getManagedPortalUrl() || isOriginWithoutNode(store.getServerUrl())) {
+      if (
+        !isRunningInTauri() &&
+        (getManagedPortalUrl() || isOriginWithoutNode(store.getServerUrl()))
+      ) {
         store.registerLocalOnlyDrive(agentDID);
         store.registerLocalOnlyDrive(await newAgent.privateDriveSubject());
       }
@@ -174,7 +185,13 @@ export function NewIdentitySection({
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  useEffect(() => {
+    if (autoStart) {
+      handleCreate();
+    }
+  }, []);
 
   // ─── Step: Profile → private drive (automatic) ───────────────────────────
 
@@ -203,7 +220,7 @@ export function NewIdentitySection({
       const agentResource = store.getResourceLoading(identity.agentSubject, {
         newResource: true,
       });
-      const publicKey = identity.agentSubject.replace('did:ad:agent:', '');
+      const publicKey = agentPublicKey(identity.agentSubject) ?? '';
 
       await agentResource.set(core.properties.publicKey, publicKey);
       await agentResource.set(core.properties.isA, [core.classes.agent]);
@@ -242,6 +259,19 @@ export function NewIdentitySection({
 
       if (onAfterCreate) {
         await onAfterCreate(resource.subject);
+      }
+
+      // Signing in is enough to get back in: nothing for the person to
+      // register or write down, and the secret is still revealable from
+      // Settings, so skip straight to the workspace.
+      if (
+        offerRecoveryBackup &&
+        onBackupWithAccount &&
+        (await onBackupWithAccount(finalSecret))
+      ) {
+        await finishWithoutSecretStep(resource.subject);
+
+        return;
       }
 
       setStep(
@@ -287,13 +317,15 @@ export function NewIdentitySection({
    * be a second thing to store. With no backup, the reveal + verify steps
    * stay — it really is the only copy.
    */
-  async function finishWithoutSecretStep() {
-    if (identity?.driveSubject) {
-      setDrive(identity.driveSubject);
+  async function finishWithoutSecretStep(
+    driveSubject = identity?.driveSubject,
+  ) {
+    if (driveSubject) {
+      setDrive(driveSubject);
       // An earlier lookup can have cached "not found" before creation.
       // Read the now-persisted drive and profile before opening the workspace.
-      await reopenRestoredDrive(store, identity.driveSubject);
-      if (navigateToDrive) navigate(constructOpenURL(identity.driveSubject));
+      await reopenRestoredDrive(store, driveSubject);
+      if (navigateToDrive) navigate(constructOpenURL(driveSubject));
     }
 
     onDone();
@@ -463,7 +495,7 @@ export function NewIdentitySection({
             setUseCodeFallback(true);
           }}
           onGenerate={handleGenerateRecoveryCode}
-          onContinue={finishWithoutSecretStep}
+          onContinue={() => finishWithoutSecretStep()}
           onSkip={() => {
             setError(undefined);
             setStep('secret');

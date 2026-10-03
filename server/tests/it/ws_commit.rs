@@ -72,7 +72,7 @@ async fn ws_commit_syncs_to_subscriber() -> AtomicResult<()> {
     // `WsClient` lists `commit-ok-slim` in its HELLO, so the ack is the bare
     // commit id, not the commit JSON; `post_commit` returns it either way.
     assert!(
-        commit_id.starts_with("did:ad:commit:") || commit_id.contains("/commits/"),
+        atomic_lib::identifiers::is_commit_id(&commit_id) || commit_id.contains("/commits/"),
         "COMMIT_OK should carry the server's commit id, got {commit_id}"
     );
     assert!(

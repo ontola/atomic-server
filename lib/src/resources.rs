@@ -13,7 +13,7 @@ use crate::{
     Atom, Storelike, Subject,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 use ulid::Ulid;
 
@@ -127,6 +127,42 @@ impl Resource {
         propvals.get(urls::GENESIS).map(|v| v.to_string())
     }
 
+    /// Take the value `snapshot` holds for each of `props` that this resource
+    /// has no value for. Returns how many were added.
+    ///
+    /// For propvals parsed with `skip_unknown_props`: a property whose
+    /// definition the store cannot resolve is dropped by the parser, while the
+    /// Loro snapshot next to it still holds the value. Without this the stored
+    /// row silently loses it, and a reader of that row sees less than the
+    /// document says. Only the named properties are taken, so a caller that
+    /// left one out on purpose keeps it out.
+    pub fn restore_props_from_snapshot(&mut self, props: &[String], snapshot: &[u8]) -> usize {
+        let present: HashSet<String> = self
+            .propvals
+            .keys()
+            .map(|key| crate::identifiers::canonicalize_scheme(key))
+            .collect();
+        let wanted: HashSet<String> = props
+            .iter()
+            .map(|prop| crate::identifiers::canonicalize_scheme(prop))
+            .filter(|prop| !present.contains(prop))
+            .collect();
+        if wanted.is_empty() {
+            return 0;
+        }
+        let Some(from_snapshot) = Self::propvals_from_loro_update(snapshot) else {
+            return 0;
+        };
+        let mut added = 0;
+        for (prop, value) in from_snapshot {
+            if wanted.contains(&crate::identifiers::canonicalize_scheme(&prop)) {
+                self.propvals.insert(prop, value);
+                added += 1;
+            }
+        }
+        added
+    }
+
     /// The propvals a Loro update materializes to, or `None` when it does not
     /// import.
     pub(crate) fn propvals_from_loro_update(update: &[u8]) -> Option<PropVals> {
@@ -153,17 +189,21 @@ impl Resource {
     /// the result per subject (the cert never changes for a resource).
     pub fn genesis_signer(&self) -> Option<String> {
         let subject = self.get_subject().to_string();
-        // Agent DIDs are identity-based (`did:ad:agent:<pubkey>`), not
-        // cert-based; plain URL resources have no cert-DID binding at all.
-        let signature = subject.strip_prefix("did:ad:")?;
-        if subject.starts_with("did:ad:agent:") {
+        // Agent identifiers are identity-based (`atomic:agent:<pubkey>`), not
+        // cert-based; plain URL resources have no cert binding at all.
+        if crate::identifiers::is_agent_id(&subject) {
+            return None;
+        }
+        let signature = crate::identifiers::identifier_body(&subject)?;
+        if signature.contains(':') {
             return None;
         }
         let cert_b64 = self.get(urls::GENESIS).ok()?.to_string();
         let cert_bytes = crate::agents::decode_base64(&cert_b64).ok()?;
         let cert = crate::genesis::GenesisCert::decode(&cert_bytes).ok()?;
         // Binds the cert (and thus its signer) to this exact subject.
-        cert.verify(signature).ok()?;
+        // Verify the stored bytes: re-encoding would rewrite a v2 header.
+        cert.verify_signed_bytes(&cert_bytes, signature).ok()?;
         Some(cert.signer_did())
     }
 
@@ -660,13 +700,16 @@ impl Resource {
                         // Check write right
                         Ok(parent)
                     }
-                    Err(_err) => Err(format!(
-                        "Parent of {} ({}) not found: {}",
-                        self.get_subject(),
-                        parent_val,
-                        _err
-                    )
-                    .into()),
+                    Err(err) => Err(crate::errors::AtomicError {
+                        message: format!(
+                            "Parent of {} ({}) not found: {}",
+                            self.get_subject(),
+                            parent_val,
+                            err
+                        ),
+                        error_type: err.error_type.clone(),
+                        subject: err.subject.clone(),
+                    }),
                 }
             }
             Err(e) => Err(format!("Parent of {} not found: {}", self.get_subject(), e).into()),
@@ -719,6 +762,30 @@ impl Resource {
     /// Useful if you want to iterate over all Atoms / Properties.
     pub fn get_propvals(&self) -> &PropVals {
         &self.propvals
+    }
+
+    /// The subject of every class this resource's `isA` names, whatever the
+    /// encoding. Unlike [`Resource::get_classes`] this reads what is already
+    /// here and fetches nothing.
+    ///
+    /// A row written by a local commit carries `isA` as a `ResourceArray`; one
+    /// rebuilt from a Loro doc, or written by a client that pins no datatype,
+    /// reads back as an `AtomicUrl`, a plain `String`, or a `String` holding
+    /// the JSON array. They all name the same class, and `Value::to_subjects`
+    /// errors on the scalar shapes, so a caller that reaches for it lets an
+    /// encoding decide class membership. Reach for this instead.
+    ///
+    /// A resource without `isA` has no classes, which is not an error.
+    pub fn class_subjects(&self) -> Vec<String> {
+        self.propvals
+            .get(urls::IS_A)
+            .and_then(|is_a| is_a.to_reference_index_strings())
+            .unwrap_or_default()
+    }
+
+    /// Whether [`Resource::class_subjects`] contains `class`.
+    pub fn has_class(&self, class: &str) -> bool {
+        self.class_subjects().iter().any(|c| c == class)
     }
 
     /// True for resources whose `loroUpdate` is a *signed payload*, not a CRDT
@@ -1275,7 +1342,7 @@ impl Resource {
             .signature
             .as_ref()
             .ok_or("No signature generated for genesis commit")?;
-        let did_subject = Subject::from_raw(&format!("did:ad:{}", signature), None);
+        let did_subject = Subject::from_raw(&crate::identifiers::resource_subject(signature), None);
 
         // Update both the resource and the commit subject to the real DID
         self.subject = did_subject.clone();
@@ -1319,7 +1386,7 @@ impl Resource {
             let commit_id = commit
                 .signature
                 .as_ref()
-                .map(|sig| format!("did:ad:commit:{}", sig));
+                .map(|sig| crate::identifiers::commit_subject(sig));
             crate::client::post_commit(&commit, store).await?;
             self.subject = subject.clone();
             // Stamp lastCommit so subsequent saves do not mis-detect genesis.
@@ -1338,7 +1405,7 @@ impl Resource {
             let commit_id = commit
                 .signature
                 .as_ref()
-                .map(|sig| format!("did:ad:commit:{}", sig));
+                .map(|sig| crate::identifiers::commit_subject(sig));
             crate::client::post_commit(&commit, store).await?;
             if let Some(id) = commit_id {
                 self.propvals

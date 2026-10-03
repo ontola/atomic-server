@@ -46,7 +46,7 @@ export function ServiceIcon({
   kind,
   active = false,
 }: {
-  kind: 'vault' | 'server';
+  kind: 'vault' | 'server' | 'ai';
   active?: boolean;
 }) {
   return (
@@ -58,6 +58,8 @@ export function ServiceIcon({
       <svg viewBox='0 0 24 24' width='20' height='20' fill='currentColor'>
         {kind === 'vault' ? (
           <path d='M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zm2 0h6V7a3 3 0 0 0-6 0z' />
+        ) : kind === 'ai' ? (
+          <path d='M10 2l1.9 5.6L17.5 9.5l-5.6 1.9L10 17l-1.9-5.6L2.5 9.5l5.6-1.9zM18 13l.95 2.55L21.5 16.5l-2.55.95L18 20l-.95-2.55L14.5 16.5l2.55-.95z' />
         ) : (
           <path d='M7 19a5 5 0 0 1-1-9.9 6 6 0 0 1 11.7-1.6A5.8 5.8 0 0 1 18 19z' />
         )}
@@ -72,3 +74,9 @@ export function ServiceGroup({
 }: HTMLAttributes<HTMLDivElement>) {
   return <div {...props} className={`atomic-service-group ${className}`} />;
 }
+
+export {
+  AccountSignIn,
+  ACCOUNT_SIGN_IN_COPY,
+  type AccountSignInCopy,
+} from './AccountSignIn';

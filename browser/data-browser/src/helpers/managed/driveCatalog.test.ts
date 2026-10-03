@@ -12,6 +12,15 @@ const remote = {
 };
 
 describe('account drive catalog', () => {
+  it('lists a drive once when the lists spell it differently', () => {
+    expect(
+      catalogSubjects(['atomic:home', 'did:ad:gone'], {
+        drives: [{ drive_subject: 'did:ad:home' }],
+        removed: ['atomic:gone'],
+      } as never),
+    ).toEqual(['atomic:home']);
+  });
+
   it('shows both indexes, deduplicates, and never resurrects removed entries', () => {
     expect(
       catalogSubjects(

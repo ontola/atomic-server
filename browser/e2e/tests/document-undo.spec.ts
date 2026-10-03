@@ -52,6 +52,38 @@ async function typeSeparateEdits(page: Page, chunks: string[]) {
   await page.waitForTimeout(1_500);
 }
 
+/**
+ * Presses undo until `text` is gone, and reports how many presses it took.
+ *
+ * One undo step is one merged run of Loro ops, not one typed chunk. A save
+ * seals the pending ops with a commit message, and a sealed change can no
+ * longer merge with what follows, so a burst typed in ~150ms still ends up
+ * split over several undo entries. Measured on this spec, a single press
+ * removed between 1 and 14 characters, and once only the trailing space.
+ * Assert that undo and redo pair up, not how much one press covers.
+ */
+async function undoUntilGone(page: Page, text: string): Promise<number> {
+  let presses = 0;
+
+  await expect(async () => {
+    await page.keyboard.press(undoShortcut);
+    presses++;
+    // The sync plugin reflects the undo into ProseMirror a frame or two
+    // later; without this the next retry presses again for nothing.
+    await page.waitForTimeout(500);
+    expect(await editorText(page)).not.toContain(text);
+  }).toPass({ timeout: 30_000 });
+
+  return presses;
+}
+
+async function redoTimes(page: Page, times: number) {
+  for (let i = 0; i < times; i++) {
+    await page.keyboard.press(redoShortcut);
+    await page.waitForTimeout(500);
+  }
+}
+
 async function visitDataViewAndReturn(page: Page, documentTitle: string) {
   const editor = page.getByLabel('Rich Text Editor');
   await page.getByTestId('editable-title').click();
@@ -88,9 +120,8 @@ test.describe('document undo', () => {
     await visitDataViewAndReturn(page, documentTitle);
     await expect(editor).toContainText('[view-three]', { timeout: 30_000 });
     await editor.focus();
-    await page.keyboard.press(undoShortcut);
-    await expect(editor).not.toContainText('[view-three]');
-    await page.keyboard.press(redoShortcut);
+    const presses = await undoUntilGone(page, '[view-three]');
+    await redoTimes(page, presses);
     await expect(editor).toContainText('[view-three]');
     expect(await editorText(page)).toBe(savedText);
     await waitForSynced(page);
@@ -109,12 +140,11 @@ test.describe('document undo', () => {
     await typeSeparateEdits(page, chunks);
     const savedText = await editorText(page);
 
-    await page.keyboard.press(undoShortcut);
-    await expect(editor).not.toContainText('[redo-three]');
+    const presses = await undoUntilGone(page, '[redo-three]');
     await visitDataViewAndReturn(page, documentTitle);
     await expect(editor).not.toContainText('[redo-three]', { timeout: 30_000 });
     await editor.focus();
-    await page.keyboard.press(redoShortcut);
+    await redoTimes(page, presses);
     await expect(editor).toContainText('[redo-three]');
     expect(await editorText(page)).toBe(savedText);
     await waitForSynced(page);

@@ -312,7 +312,9 @@ async fn e2e_presence_crosses_the_link_without_being_stored() {
         .expect("the presence channel must stay open");
 
     assert_eq!(received.drive, pair.drive);
-    assert_eq!(received.agent, "did:ad:agent:someone");
+    // Sent as `did:ad:`; the receiving peer listed `canonical-scheme`, so
+    // the frame it gets carries the canonical spelling.
+    assert_eq!(received.agent, "atomic:agent:someone");
     assert_eq!(received.payload, payload);
 
     let after = pair.db_b.all_resources(true).count();

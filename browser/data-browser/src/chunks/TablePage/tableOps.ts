@@ -11,9 +11,11 @@ import { parseDerivedColumnSpecs } from './derivedColumns';
 import {
   buildViewPropVals,
   createColumnOnClass,
+  specRowDefaults,
   type TableColumnSpec,
   type TableViewSpec,
 } from './createTableFromSpec';
+import { readRowDefaults } from './rowDefaults';
 
 /** What a caller needs to know about one column of a table. */
 export interface TableColumnInfo {
@@ -258,6 +260,16 @@ export async function addTableColumns(
     if (result.tags) {
       tags[column.name] = result.tags;
     }
+  }
+
+  const defaults = specRowDefaults(opts.columns, created, tags);
+
+  if (Object.keys(defaults).length > 0) {
+    await opts.table.set(dataBrowser.properties.tableRowDefaults, {
+      ...readRowDefaults(opts.table),
+      ...defaults,
+    });
+    await opts.table.save();
   }
 
   const views =

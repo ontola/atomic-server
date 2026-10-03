@@ -34,7 +34,12 @@ test.describe('document typing', () => {
       const resource = subject
         ? window.store?.resources.get(subject)
         : undefined;
-      const root = resource?.getLoroDoc()?.getMap('doc');
+      // `LoroMap.get` answers `{}`, so walking the tree needs a shape to walk.
+      // Only `get` is used here; the node is handed to `getPrototypeOf` after.
+      type LoroNode = { get(key: string | number): LoroNode | undefined };
+      const root = resource?.getLoroDoc()?.getMap('doc') as
+        | LoroNode
+        | undefined;
       const paragraph = root?.get('children')?.get(0);
       const text = paragraph?.get('children')?.get(0);
       if (!text) throw new Error('Document LoroText did not initialize');

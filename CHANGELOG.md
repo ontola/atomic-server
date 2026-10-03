@@ -7,6 +7,106 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- New default ontology `notifications` (`lib/defaults/notifications.json`):
+  the `Inbox` and `Notification` classes, and an `inbox` property the private
+  drive points to its Inbox with.
+
+- Removed range-based set reconciliation (RBSR, `lib/src/sync/rbsr.rs`). The
+  server rebuilt a drive's whole inventory for every `RBSR_FP` round trip, so
+  the descent cost more than the one full version-vector `SYNC` it replaced.
+  `RBSR_FP` is now answered with `{"drive","unsupported":true}` and no
+  fingerprints, which makes an older browser fall back to the full `SYNC`
+  immediately. `RBSR_ITEMS` stays as the drive inventory, and a `SYNC` with
+  `subjects` is still honoured. The `rbsr` capability is no longer advertised.
+
+- The server raises its own file-descriptor soft limit to its hard limit at
+  startup. It already budgeted HTTP connections against the soft limit and kept
+  a reserve, but HTTP is not the only tenant of that pool: the database, Iroh's
+  QUIC sockets and every open websocket draw on it too, so on a stock soft limit
+  of 1024 the process can run out while the HTTP budget still looks healthy.
+  Staging did, for twenty-three minutes, with 2,655 `error accepting connection:
+  No file descriptors available`, Iroh unable to bind its hairpin probe, and a
+  panic at the tail. A process may raise its own soft limit as far as the hard
+  limit without privileges, and the connection budget is computed from whatever
+  is in force afterwards, so a refused raise is logged and not fatal.
+
+- Publishing a plugin release that is already recorded on the server (the
+  same zip, uploaded by someone else) now grants the new publisher read on
+  the `Release` and its package File. Before, their Installation could not
+  resolve the release and activation failed with a 401.
+
+- Version 2 request signatures (ontola/atomic-plugins#54). A request sent
+  with `x-atomic-signature-version: 2` is checked against
+  `atomic-request-v2\n{METHOD}\n{full URL}\n{timestamp ms}\n{sha-256 hex of
+  the body}` instead of v1's `"{url} {timestamp}"`, so a captured proof can
+  no longer be replayed with a different method or body within its five
+  minutes. v2 is opt-in: a request without the header is checked as v1
+  exactly as before, and a v2 request that fails is refused, never retried as
+  v1. `/app-agent` and `/plugin-view-token` accept v2 (they do not require it
+  yet); every other endpoint refuses a v2 signature with a 401 that says to
+  sign with v1, as do an unknown version and a v2 header without the
+  `x-atomic-*` headers. Cookies and WebSocket `AUTH` stay v1. `atomic_lib`
+  exports `request_signature_message_v2`, `RequestBinding` and
+  `client::get_authentication_headers_v2`; shared test vectors live in
+  `lib/src/authentication_v2_vectors.json`.
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
+  previous `did:ad:` spelling is accepted forever and names the same
+  resource. New genesis certificates still encode the v1 header byte
+  (`0x01`) so `GenesisCert` literals in downstream crates keep compiling;
+  `GenesisCert::new_v2` canonicalizes parent/drive strings to `atomic:`.
+  Decode accepts a `0x02` header. Existing v1 certificates and the
+  personal-drive singleton stay v1. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
+  endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes
+  subjects and identifier-shaped values on write and on query filters.
+  Opening a pre-rename database rewrites leftover `did:ad:` keys in every
+  subject-keyed tree (resources, snapshots, DID mapping keys and hint
+  values, envelopes, tombstones, the outbox), streaming each tree, and
+  rebuilds indexes. A v2 certificate that carries a `did:ad:` string is
+  refused on decode; a v1 certificate's parent and drive are compared with
+  the resource in one spelling. Sync advertises `canonical-scheme` and
+  emits `did:ad:` to peers that do not list it on every frame that names a
+  subject, over WebSocket and Iroh alike; a client canonicalizes what an
+  old server echoes back. The in-memory store keys resources canonically
+  (#1584).
+
+- The causality guard no longer refuses a commit whose writes lost an honest
+  race. It asked whether the merge kept what the commit sent, which an unseeded
+  client and a client that simply lost to a newer peer both answer no, so a
+  client with a perfectly good doc was told to refetch and retry, and could only
+  resend the same bytes. It now asks what it means to ask: whether the incoming
+  update's version vector carries any peer the stored state also has. A doc
+  seeded from the server does, however far behind it has fallen, and losing
+  last-writer-wins from there is accepted. A doc built from scratch does not,
+  and its vanished writes are still refused, as before. The version comes from
+  the blob header via `update_range`, so the check costs a parse and not a
+  second document build.
+
+- A causality rejection now names the writes it dropped. The error a client
+  gets when its Loro update lost every write to LWW reports each mismatching
+  property as `sent <x>, stored <y>`, in place of the full list of values sent
+  and the bare list of stored keys. Which write lost, and to what, previously
+  lived only in the server's own `[causality-guard] rejecting` log line. The
+  `Commit's Loro update produced no state changes` prefix that
+  `classify_commit_error` and the client outbox match on is unchanged, and so
+  is the condition for accepting or rejecting a commit.
+
+- Fix: a stale authentication proof no longer fails a request that needed no
+  authentication. A browser keeps its proof in the `atomic_session` cookie, and
+  until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
+  is the ordinary state of any tab left open. Every request such a tab made was
+  answered 401, public ones included: on staging one tab polling the public
+  `GET /server` endpoint produced 4,215 rejections, all carrying the same
+  `signed at` timestamp. An HTTP request, and the headers a socket is opened
+  with, now treat a proof that has aged out as no proof at all and continue as
+  the public agent, leaving the rights check to decide whether that matters for
+  what was asked. A signature that does not verify is still refused outright,
+  and so is a stale proof in an `AUTH` frame or a peer handshake, where the
+  caller asked to be authenticated and is owed the answer
+  (`get_agent_from_auth_values_or_public` beside the existing
+  `get_agent_from_auth_values_and_check`).
+
 - Sentry no longer records every server error twice. `sentry_actix` captures a
   handler's 5xx with the request attached, and `tracing_actix_web` separately
   logs "Error encountered while processing the incoming HTTP request" at
@@ -17,6 +117,24 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `default_event_filter`, so background work reports as before and the stdout
   log line is unchanged (`server/src/trace.rs`).
 
+- Plugin install path, three fixes after the runtime convergence (#1571):
+  - A publish refused for claiming the wrong `world` used to have already
+    stored the package bytes and cached the release record. The claim is now
+    checked before the first write, so a refusal leaves nothing behind
+    (`POST /plugin-release-package`).
+  - A JS plugin whose Installation could not be read, or whose `grants` could
+    not be, ran with everything its own manifest declared. Only a legacy draft
+    with no Installation still reads the manifest; anything else grants nothing
+    and logs why. Reading which classes a resource has also went through
+    `Value::to_subjects`, which errors on the scalar `isA` encodings, so an
+    encoding alone could widen a plugin's grants. `Resource::class_subjects`
+    and `Resource::has_class` are the one encoding-tolerant reader, shared
+    with `ClassExtender`.
+  - An Installation's `release` is declared an `atomicURL` and now holds one.
+    The browser's two zip paths dropped the `Release` subject the publish
+    response carries and stored the bare `blake3:` id, which meant writing the
+    property with datatype validation switched off. `release::resolve` still
+    accepts a bare id, for Installations written before this.
 - `atomic_lib`: a signed destroy commit now removes the resource (and its
   cascade-deleted children, Loro snapshot, index and search rows) in the same
   redb transaction that stores its envelope and commit row. `Db::apply_commit`
@@ -236,7 +354,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Improve browser database durability and resource save-state handling.
 - Isolate E2E shard state and simplify local test tooling; full develop CI passes on the release base.
 
-- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by Atomic SaaS ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
+- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by the managed signaling service ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
 
 ## [v0.41.0-beta.6] - 2026-09-09
 

@@ -14,6 +14,7 @@ import { useUpload } from '../hooks/useUpload';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
 import {
+  accountAddress,
   getManagedAccount,
   PRODUCT_NAME,
   safePortalUrl,
@@ -165,10 +166,10 @@ export function AgentProfileHeader({ subject }: { subject: string }) {
             href={portalUrl ? `${portalUrl}/dashboard` : undefined}
             target='_blank'
             rel='noopener noreferrer'
-            title={`Manage ${account.email} on ${PRODUCT_NAME}`}
+            title={`Manage ${accountAddress(account)} on ${PRODUCT_NAME}`}
             data-test='account-email'
           >
-            {account.email}
+            {accountAddress(account)}
             <FaArrowUpRightFromSquare aria-hidden />
           </AccountLink>
         ) : null}

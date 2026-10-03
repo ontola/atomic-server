@@ -208,10 +208,11 @@ pub async fn delocalize_filter_value(
         return unchanged;
     }
 
-    match Subject::delocalize(raw, store.get_base_domain().as_deref()) {
-        Some(internal) => Value::String(internal),
-        None => unchanged,
-    }
+    let rewritten = match Subject::delocalize(raw, store.get_base_domain().as_deref()) {
+        Some(internal) => internal,
+        None => raw.to_string(),
+    };
+    Value::String(crate::identifiers::canonicalize_scheme(&rewritten))
 }
 
 /// Dynamic resource used for ordering, filtering and querying content.
@@ -1606,7 +1607,7 @@ mod test {
             .await
             .unwrap();
 
-        // Query again - should now find the DID message
+        // Query again - should now find the message under its canonical ID.
         let result = store.query(&q).await.unwrap();
         assert_eq!(
             result.subjects.len(),
@@ -1615,8 +1616,8 @@ mod test {
         );
         assert_eq!(
             result.subjects[0].as_str(),
-            "did:ad:TestSignatureHere123",
-            "The DID subject should be returned"
+            "atomic:TestSignatureHere123",
+            "The canonical subject should be returned"
         );
     }
 }

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "accepts": [
+    {
+      "as": "text",
+      "multiple": true
+    }
+  ]
+}

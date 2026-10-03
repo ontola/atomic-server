@@ -118,6 +118,14 @@ Performance is the honest limit: an interpreted hook on every read of a class is
 slower than a compiled one. Fuel per call and per-class scoping bound the damage;
 document it and let people move hot hooks to Rust.
 
+**Widened for `afterCommit` only (#1851).** Michiel decided (ontola/atomic-plugins#177,
+questions 4–7) that user-installed plugins may export `afterCommit`, scoped to
+tables where their view is installed. That is not this inline hook: it is a
+durable, queued notification carrying a page of the per-table change list
+(#1850), run as an ordinary extension-world run whose writes follow the view's
+row grant (#1788). `onResourceGet` and `beforeCommit` stay `server-extension`
+only. Design: [durable-after-commit.md](durable-after-commit.md).
+
 ### 5. `run` for wasm components (extension world)
 
 Let a wasip2 component export `run(input) -> verdict`. Then triggers, cron,
@@ -186,7 +194,7 @@ Rules:
 | --- | --- | --- |
 | Zip upload | `Plugin` resource + `pluginFile` commit hook (`server/src/plugins/plugin.rs`) | `scoped/<drive>/` on disk |
 | Catalog JS | `/plugin-catalog` → `/plugin-package/{id}` → `createPlugin` (`routes/IntegrationStore.tsx:151`) | copied into a `plugin-script` resource, not pinned to the release |
-| Bundled integrations | hardcoded list in `IntegrationDiscovery.tsx:45` | app code |
+| Bundled integrations | hardcoded list in `IntegrationDiscovery.tsx` (history: replaced by the remote atomic-plugins catalog in PR #1549) | app code |
 | Global server extension | files in `global/` | disk |
 
 The catalog (`plugin-release/v1`, `plugin-catalog/v1`) lives in the `PluginMeta`
@@ -346,7 +354,8 @@ this branch's wider check covers `Installation` as well as `Plugin`.
   `release::publish_release`.
 - [ ] Bundled integrations still come from the hardcoded browser list.
 - [ ] Global server extensions do not yet accept Release URLs.
-- [ ] Steps 4 and 5 (JS class extenders, wasm `run`) not started.
+- [ ] Steps 4 and 5 (JS class extenders, wasm `run`) not started. The
+  extension-world `afterCommit` is designed in [durable-after-commit.md](durable-after-commit.md) (#1851).
 - [ ] The `plugin-script` drafts created from the old catalog are not yet
   migrated to Installations (second bullet of "Migration" above).
 
@@ -355,3 +364,41 @@ Decision recorded: a wasip2 release whose component exports class URLs is
 where it runs drive-scoped exactly as legacy zips did. Only the operator's
 `global/` directory is server-scoped. A JS `server-extension` release is
 refused through an Installation until step 4 exists.
+
+## Follow-up (2026-09-19)
+
+Three things the convergence left behind, fixed together after it merged.
+
+- **A refused publish used to leave its bytes behind.** `publish_package` stored
+  the zip and cached the release record, and only then did the handler compare
+  the caller's claimed `world` with the component's. The claim now goes into
+  `publish_package`, which checks it straight after reading the manifest and
+  before the first write, so a refusal stores nothing. `expect_world` reads the
+  world from the manifest rather than from the release, because at that point
+  there is no release yet.
+- **Unreadable grants used to widen to the declared set.** `installation_grants`
+  fell back to what the manifest declares whenever any step of the lookup
+  failed, which is the one direction a fallback must not take: the declared set
+  is what the plugin asked for. Only the absence of an Installation (a legacy
+  draft) still reads the manifest; an Installation that cannot be read, or whose
+  grants cannot be, now grants nothing and logs it. The class check also used
+  `Value::to_subjects`, which errors on the scalar `isA` encodings, so an
+  encoding could hand a plugin the declared set. Both readers now go through
+  `Resource::class_subjects`, one implementation shared with `ClassExtender`.
+- **`release` is an atomicURL that held bare ids.** Every publish records a
+  `Release` resource and the publish response carries its subject, but the two
+  zip paths in the browser threw the subject away and stored the `blake3:` id,
+  which meant writing the property with datatype validation switched off.
+  `publishZipRelease` now returns `subject` and the callers pass it, so the
+  property holds what it is declared to hold and nothing skips validation.
+  `release::resolve` still accepts a bare id, because Installations written
+  before this carry one and must keep running.
+
+One known consequence of the third: an Installation whose `release` is a URL is
+resolved with a read check, which a bare id skipped. `/releases/<id>` is keyed
+on the content hash but parented to whichever drive published first, so an agent
+who publishes byte-identical bytes on a second drive gets that first drive's
+Release resource back and may not be able to read it. They now get a rights
+error at install time instead of installing from a record they cannot see. The
+deeper wart, that a content-addressed subject is parented to one drive, is
+untouched.

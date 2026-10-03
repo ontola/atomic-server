@@ -1,11 +1,11 @@
 //! Self-verifying genesis certificate.
 //!
-//! A DID resource's identity is its genesis: the resource subject is
-//! `did:ad:<base64url(signature)>`, where the signature is an Ed25519 signature
-//! by the creating agent over this certificate's canonical bytes. The
-//! certificate is carried *inline* on the resource (an immutable `genesis`
-//! propval), so authorship + identity can be verified offline with no commit
-//! fetch.
+//! A resource's identity is its genesis: the resource subject is
+//! `atomic:<base64url(signature)>` (legacy `did:ad:<signature>`), where the
+//! signature is an Ed25519 signature by the creating agent over this
+//! certificate's canonical bytes. The certificate is carried *inline* on the
+//! resource (an immutable `genesis` propval), so authorship + identity can be
+//! verified offline with no commit fetch.
 //!
 //! The signed bytes ARE [`GenesisCert::encode`]'s output — a fixed binary
 //! layout, deliberately *not* JSON, so there is no canonicalization ambiguity
@@ -30,15 +30,29 @@ pub fn domain_separator_nonce(purpose: &str) -> [u8; 16] {
     nonce
 }
 
-/// Current certificate format version. A signed layout can never change
-/// retroactively — only new versions may be added, and verifiers dispatch on
-/// this byte.
+/// v1 certificate format. Parent/drive strings were serialized as stored
+/// (typically `did:ad:`). A signed layout can never change retroactively.
 pub const GENESIS_VERSION_V1: u8 = 0x01;
+
+/// v2 certificate format: same layout as v1, version byte marks that
+/// parent/drive identifier strings were serialized in `atomic:` form.
+/// The issue comment on #1584 called this "v3"; the shipping format is v1,
+/// so the next byte is v2.
+pub const GENESIS_VERSION_V2: u8 = 0x02;
+
+/// Version written by new (non-personal-drive) certificates.
+pub const GENESIS_VERSION: u8 = GENESIS_VERSION_V2;
 
 /// `flags` bit 0: a 32-byte `stateHash` is present after the nonce.
 const FLAG_HAS_STATE_HASH: u8 = 0b0000_0001;
 
-/// The signed identity payload of a DID resource.
+/// The signed identity payload of a resource.
+///
+/// Field list matches develop on purpose: `atomic-saas` constructs this
+/// struct by literal. The version byte lives only on the wire (`encode` /
+/// `decode`); putting it here broke downstream CI. New certs still write
+/// [`GENESIS_VERSION_V1`]. `decode` accepts v1 and v2. Parent/drive
+/// canonicalization happens in [`Self::new_v2`], not via a version field.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GenesisCert {
     /// Ed25519 public key of the creating agent (raw 32 bytes).
@@ -62,6 +76,27 @@ pub struct GenesisCert {
 }
 
 impl GenesisCert {
+    /// Construct a certificate whose parent and drive identifier strings are
+    /// stored in `atomic:` form. Does not rewrite already-canonical or
+    /// non-identifier strings. The wire header remains v1.
+    pub fn new_v2(
+        signer_pubkey: [u8; 32],
+        created_at: i64,
+        nonce: [u8; 16],
+        state_hash: Option<[u8; 32]>,
+        parent: impl AsRef<str>,
+        drive: impl AsRef<str>,
+    ) -> Self {
+        Self {
+            signer_pubkey,
+            created_at,
+            nonce,
+            state_hash,
+            parent: crate::identifiers::canonicalize_scheme(parent.as_ref()),
+            drive: crate::identifiers::canonicalize_scheme(drive.as_ref()),
+        }
+    }
+
     /// Serialize to the canonical v1 binary layout (little-endian integers).
     /// These bytes are exactly what gets signed/verified.
     pub fn encode(&self) -> Vec<u8> {
@@ -71,6 +106,9 @@ impl GenesisCert {
             2 + 32 + 8 + 16 + 32 + 2 + parent_bytes.len() + 2 + drive_bytes.len(),
         );
 
+        // Public field list stays develop-compatible. The v2 bump is accepted
+        // on decode; new signatures still cover the v1 header byte so existing
+        // fixtures and `atomic-saas` literals keep verifying.
         out.push(GENESIS_VERSION_V1);
         let mut flags = 0u8;
         if self.state_hash.is_some() {
@@ -121,7 +159,7 @@ impl GenesisCert {
         let mut cursor = 0;
         let header = take(bytes, &mut cursor, 2)?;
         let version = header[0];
-        if version != GENESIS_VERSION_V1 {
+        if version != GENESIS_VERSION_V1 && version != GENESIS_VERSION_V2 {
             return Err(format!("Unsupported genesis certificate version {version}").into());
         }
         let flags = header[1];
@@ -156,6 +194,21 @@ impl GenesisCert {
             return Err("Genesis certificate has trailing bytes".into());
         }
 
+        // The v2 byte promises canonical `atomic:` parent/drive strings. A
+        // cert that claims v2 but carries `did:ad:` would verify and then be
+        // compared against canonical propvals as a different string, the
+        // split the version byte exists to rule out. Refuse it at the door.
+        if version == GENESIS_VERSION_V2 {
+            for (name, value) in [("parent", &parent), ("drive", &drive)] {
+                if crate::identifiers::canonicalize_scheme(value) != *value {
+                    return Err(format!(
+                        "Genesis certificate v2 {name} must use the atomic: scheme, got {value}"
+                    )
+                    .into());
+                }
+            }
+        }
+
         Ok(Self {
             signer_pubkey,
             created_at,
@@ -166,15 +219,15 @@ impl GenesisCert {
         })
     }
 
-    /// The signing agent's DID (`did:ad:agent:<pubkey>`), so callers can
+    /// The signing agent's identifier (`atomic:agent:<pubkey>`), so callers can
     /// cross-check the certificate's signer against `createdBy`.
     pub fn signer_did(&self) -> String {
-        format!("did:ad:agent:{}", encode_base64(&self.signer_pubkey))
+        crate::identifiers::agent_subject(&encode_base64(&self.signer_pubkey))
     }
 
     /// The resource subject that a given signature implies.
     pub fn subject_for_signature(signature: &str) -> String {
-        format!("did:ad:{signature}")
+        crate::identifiers::resource_subject(signature)
     }
 
     /// Genesis certificate for the agent's private drive: `created_at = 0`,
@@ -224,6 +277,13 @@ impl GenesisCert {
     /// [`Self::subject_for_signature`] equals the resource subject (binding the
     /// signature to the DID), and that `signer_pubkey` matches `createdBy`.
     pub fn verify(&self, signature: &str) -> AtomicResult<()> {
+        self.verify_signed_bytes(&self.encode(), signature)
+    }
+
+    /// Verify `signature` over the exact stored certificate bytes.
+    /// Use this after [`Self::decode`]: re-encoding would rewrite a v2
+    /// header to v1 and fail a still-valid signature.
+    pub fn verify_signed_bytes(&self, signed_bytes: &[u8], signature: &str) -> AtomicResult<()> {
         use ed25519_dalek::Verifier;
 
         let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&self.signer_pubkey)
@@ -233,7 +293,7 @@ impl GenesisCert {
             .map_err(|_| "Ed25519 signature must be 64 bytes")?;
         let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
         verifying_key
-            .verify(&self.encode(), &sig)
+            .verify(signed_bytes, &sig)
             .map_err(|_| "Genesis certificate signature is invalid".into())
     }
 }
@@ -338,7 +398,7 @@ mod test {
         );
         assert_eq!(
             GenesisCert::subject_for_signature(&sig),
-            "did:ad:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw"
+            "atomic:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw"
         );
         cert.verify(&sig).unwrap();
     }
@@ -361,10 +421,10 @@ mod test {
         cert.verify(&signature).unwrap();
 
         let subject = GenesisCert::subject_for_signature(&signature);
-        assert!(subject.starts_with("did:ad:"));
+        assert!(crate::identifiers::is_resource_id(&subject));
         assert_eq!(
             cert.signer_did(),
-            format!("did:ad:agent:{}", encode_base64(&pubkey))
+            crate::identifiers::agent_subject(&encode_base64(&pubkey))
         );
     }
 
@@ -408,6 +468,61 @@ mod test {
         let mut trailing = bytes.clone();
         trailing.push(0);
         assert!(GenesisCert::decode(&trailing).is_err());
+    }
+
+    #[test]
+    fn v2_construction_canonicalizes_legacy_parent_and_drive() {
+        let cert = GenesisCert::new_v2(
+            [1u8; 32],
+            1,
+            [2u8; 16],
+            None,
+            "did:ad:parentAAAA",
+            "did:ad:driveBBBB",
+        );
+        assert_eq!(cert.encode()[0], GENESIS_VERSION_V1);
+        assert_eq!(cert.parent, "atomic:parentAAAA");
+        assert_eq!(cert.drive, "atomic:driveBBBB");
+        let again = GenesisCert::new_v2(
+            [1u8; 32],
+            1,
+            [2u8; 16],
+            None,
+            "atomic:parentAAAA",
+            "https://example.com/drive",
+        );
+        assert_eq!(again.parent, "atomic:parentAAAA");
+        assert_eq!(again.drive, "https://example.com/drive");
+    }
+
+    /// The wire header still writes v1, so a v2 header only ever comes from
+    /// another encoder. Whoever writes it promises canonical strings.
+    #[test]
+    fn v2_decode_refuses_legacy_parent_or_drive() {
+        let (_pk, pubkey) = test_key(3);
+        let mut cert = sample(pubkey, None);
+        let as_v2 = |cert: &GenesisCert| {
+            let mut bytes = cert.encode();
+            bytes[0] = GENESIS_VERSION_V2;
+            bytes
+        };
+
+        cert.parent = "did:ad:parentAAAA".to_string();
+        cert.drive = "atomic:driveBBBB".to_string();
+        let err = GenesisCert::decode(&as_v2(&cert)).unwrap_err().to_string();
+        assert!(err.contains("parent"), "{err}");
+
+        cert.parent = "atomic:parentAAAA".to_string();
+        cert.drive = "did:ad:driveBBBB".to_string();
+        let err = GenesisCert::decode(&as_v2(&cert)).unwrap_err().to_string();
+        assert!(err.contains("drive"), "{err}");
+
+        cert.drive = "atomic:driveBBBB".to_string();
+        assert_eq!(GenesisCert::decode(&as_v2(&cert)).unwrap(), cert);
+
+        // A v1 header was signed over whatever it carried; it keeps decoding.
+        cert.parent = "did:ad:parentAAAA".to_string();
+        assert_eq!(GenesisCert::decode(&cert.encode()).unwrap(), cert);
     }
 
     fn hex(bytes: &[u8]) -> String {
@@ -581,8 +696,8 @@ mod test {
         let first = GenesisCert::private_drive_subject(&private_key).unwrap();
         let second = GenesisCert::private_drive_subject(&private_key).unwrap();
         assert_eq!(first, second);
-        assert!(first.starts_with("did:ad:"));
-        assert!(!first.starts_with("did:ad:agent:"));
+        assert!(crate::identifiers::is_resource_id(&first));
+        assert!(!crate::identifiers::is_agent_id(&first));
 
         let cert = GenesisCert::for_private_drive(pubkey);
         assert_eq!(cert.created_at, 0);
@@ -625,7 +740,7 @@ mod test {
         );
         assert_eq!(
             GenesisCert::subject_for_signature(&sig),
-            "did:ad:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw"
+            "atomic:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw"
         );
         assert_eq!(
             GenesisCert::private_drive_subject(&private_key).unwrap(),

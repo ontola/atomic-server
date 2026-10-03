@@ -74,9 +74,11 @@ fork review diff) are recorded in their owning plans, not here.
    [`plugins.md`](./plugins.md).
 
 ## Active
+- [`atomic:` identifier scheme](atomic-scheme.md) — #1584: canonical `atomic:` scheme, dual-accept `did:ad:`, genesis v2.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
 - [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.
 - [Assistant-authored websites](./assistant-websites.md) — prototype merged with #1500; plugin abstraction audit and remaining SaaS deployment work.
+- [Notifications](./notifications.md) — proposal 2026-09-28: the server delivers into the Inbox, a follow model, and kinds for invites, access requests, new and changed resources and meetings.
 
 Remaining work, not "this file exists."
 
@@ -94,19 +96,17 @@ browser flow; standalone recovery remains self-managed.
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |
 | [`cloud-subscription-panel.md`](./cloud-subscription-panel.md) | **Partial.** Profile and link-invite steps shipped. Remaining: SaaS email invitation to drive authorization in one journey, invitation usage limits, paid-seat approval, real seat counts, 50 GB pool. |
 | [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461. Shard isolation and harness simplification landed (#1463, #1465, #1472); worker matrix, repeated zero-retry acceptance and budgets remain. |
-| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** `@smoke` tag, `test-e2e:light` and the Dagger mode exist; the light suite is about 15 tests against a 25 to 35 target. |
+| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** Automatic PR and feature-branch CI is paused; full Main runs on selected integration batches, `develop`, and tags. `@smoke` and Dagger light mode remain available locally. |
 | [`e2e-diagnostic-hygiene.md`](./e2e-diagnostic-hygiene.md) | **Mostly done.** Collector lifecycles shipped. Remaining: pre-release noise pass, pending-upload placeholder, full strict rerun, catalog flows. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Feedback and React error capture verified on staging. Remaining: independent email receipt check, private source-map upload, backend synthetic reporting. |
 | [`passkey-local-drive-unlock.md`](./passkey-local-drive-unlock.md) | **Fix shipped.** Remaining: original-tab NotFound after sign-out, physical passkey verification, deploy. |
 | [`desktop-pkarr-restore.md`](./desktop-pkarr-restore.md) | **Discovery shipped** (beta.6). Remaining: private-drive enrollment policy (product decision), signed-in private fetch, packaged-build missing text. |
 | [`google-calendar-import-gaps.md`](./google-calendar-import-gaps.md) | **Active audit.** All-day ranges implemented; remaining Google import fidelity work, formats and recurrence integration checklist. |
 | [`extension-architecture.md`](./extension-architecture.md) | **Migration in progress.** Shared view protocol, scope policy and installation identity resolution are implemented; package activation and legacy UI signing remain. Apps contain data/views, connections synchronize sources, automations act; one extension lifecycle and host API, with phased convergence of packaged views, source-as-data apps, JS integrations and Reflector, retaining a separate privileged server-extension boundary. |
-| [`mt940.md`](./mt940.md) | **Pilot implemented.** Sandboxed MT940 import, exact amounts, balance checks, nested table and repeat detection; real bunq sample validated locally; exact-decimal aggregation remains. |
-| [`notion-sync.md`](./notion-sync.md) | **Pilot implemented.** Sandboxed Notion rows, property renames and table/board view mappings; OAuth and named database selection implemented; live OAuth verification and broader parity remain. |
-| [`github-issues-pilot.md`](./github-issues-pilot.md) | **In progress.** Sandboxed GitHub issues ↔ kanban, background sync and code-first automations; live Ontola sandbox flow verified; generated-query snapshot bug fixed. |
+| [`github-issues-pilot.md`](./github-issues-pilot.md) | **Moved to atomic-plugins (PR #1549).** Pilot record: sandboxed GitHub issues ↔ kanban, background sync and code-first automations. The provider and its tests now live in [atomic-plugins](https://github.com/ontola/atomic-plugins); this repo keeps the runtime, catalog discovery and install. |
+| [`plugin-view-contract.md`](./plugin-view-contract.md) | **In progress.** What plugin views need to be as capable as the table editor or Kanban: data, host services, environment, UI kit. Host services for drive apps landed first. |
 | [`plugin-model-review.md`](./plugin-model-review.md) | **In progress.** Implemented authority/manifest checks, immutable releases, recovery journals and store UI; remaining connection lifecycle and provider certification. |
-| [`connector-scale.md`](./connector-scale.md) | **Active.** GitHub/Notion sync, searchable discovery, optional assistant-led automations, offline evidence and compatible upgrade coverage are implemented; Notion OAuth picker implemented. Shared FOSS authorization transport and host retrieval implemented; SaaS deployment, live OAuth/canaries, migrations and third-party evidence remain open. |
-| [`clockify.md`](./clockify.md) | **Import pilot implemented; live validation pending.** Personal completed entries into Time Tracker through the sandbox; shared per-drive time/project/person schema, reviewed proposals, then two-way sync. |
+| [`connector-scale.md`](./connector-scale.md) | **Partly moved (PR #1549).** Discovery, install, authorization transport and host retrieval stay here; the GitHub and other providers, offline evidence and certification moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). SaaS deployment, live OAuth/canaries, migrations and third-party evidence remain open. |
 | [`schema-catalog.md`](./schema-catalog.md) | **Pilot in progress; catalog proposed.** Shared task properties in templates and GitHub table selection; schema discovery, contribution and evolution; connects frozen releases, templates, import mappings, and JSON Schema compatibility. |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` (`Tree::Envelopes` exists; nothing blocks it). `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05 with only `ChannelTransport`; outbox port and the four `sync_drive_with_peer*` variants are open. |
@@ -141,7 +141,7 @@ browser flow; standalone recovery remains self-managed.
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; nothing on `develop`. `defineSchema` + frozen `did:ad:` schemas are in PR #1262, a draft last touched 2026-09-01. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
-| [`api-plugins.md`](./api-plugins.md) | **Exploratory, off `develop`** — rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. LocalThought catalog/connect and Syncables typed imports are implemented on `codex/localthought-api-plugins`; live verification awaits proxy #25. |
+| [`api-plugins.md`](./api-plugins.md) | **Exploratory; providers moved to atomic-plugins (PR #1549).** Rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. The WASM Syncables path is removed (#1618), so LocalThought connect/sync is broken until its proxy calls move into the plugin iframe. |
 | [`mcp-endpoint.md`](./mcp-endpoint.md) | **Proposal.** Atomic as an MCP server. Local stdio signs as the user; remote HTTP is read-only until issued-agent writes. Does not wait on #1310; remote auth is the #1275 AS shape. |
 
 ### Explorations with no code
@@ -172,6 +172,15 @@ Not top-level plans. Indexed so they do not go missing.
 | [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. Phases 1–3 unstarted. |
 | [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists ([`mcp-endpoint.md`](./mcp-endpoint.md), #1347 merged 2026-09-18). |
 | [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries the two open query-index entries (gap 1), M8 from the pairing field test, the unreproduced Safari fork query and the e2e harness traps from the #1500 pass. |
+| [`app-setup.md`](./app-setup.md) | Typed app setup checklist: shared JSON Schema input contract, generic setup form, assistant handoff. |
+| [`plugin-secrets.md`](./plugin-secrets.md) | **Built** (2026-08-21, encrypted at rest 2026-08-22). Host-side `secret:<name>` substitution for plugin fetch. |
+| [`plugin-runtime-convergence.md`](./plugin-runtime-convergence.md) | **Proposal** (2026-09-18, #1546). One plugin host across JS and WASM worlds. |
+| [`durable-after-commit.md`](./durable-after-commit.md) | **Design** (2026-09-29, #1851). Durable, queued JS `afterCommit` for user-installed plugins on tables showing their view; reads #1850's change list, writes through #1788's row grant. Nothing built. |
+| [`devonian-reconnect.md`](./devonian-reconnect.md) | Task note: concurrent route resumes consuming one PKCE verifier. The Devonian demo it touched has been removed. |
+| [`account-ai-credits.md`](./account-ai-credits.md) | Included AI for SaaS accounts; contract lives in atomic-saas. |
+| [`ai-chat-draft-persistence.md`](./ai-chat-draft-persistence.md) | **Diagnosed, not fixed** (2026-08-24). AI chats are lost while the model is still generating. |
+| [`live-conversations.md`](./live-conversations.md) | Push-to-talk voice chat with OpenRouter and SaaS credits. |
+| [`dart-sdk-package.md`](./dart-sdk-package.md) | **Proposal** (2026-09-18). Publish `flutter/lib/atomic/` as a Dart SDK package. |
 
 Closed decisions, as-built records, closed explorations and fixed notes live
 in [`completed/`](./completed/): the five decisions above, the 2026-07 sync

@@ -24,7 +24,15 @@ pub const PACKAGE_MAX_BYTES: usize = 50 * 1024 * 1024;
 
 pub const JSON_AD: &str = "application/ad+json";
 
-/// `reference` is a release id (`blake3:…`) or the URL of a `Release` resource.
+/// `reference` is the URL of a `Release` resource, which is what an
+/// Installation's `release` is declared to hold, or a bare release id
+/// (`blake3:…`).
+///
+/// The bare id reads this node's release cache and no resource, so it answers
+/// for a release that was never recorded. Every publish records a `Release`
+/// now and nothing writes a bare id any more, so the branch is here for
+/// Installations written before that; keeping it is what lets them keep
+/// running.
 ///
 /// The returned release is validated for shape but not yet compared with any
 /// pinned id; that is the caller's decision.
@@ -158,14 +166,22 @@ async fn remote_package(db: &Db, release: &Resource) -> AtomicResult<Option<Stri
 /// the extended classes read from the component itself), the bytes stored
 /// content-addressed. Returns the release id, the release and the manifest.
 /// Publishing identical bytes twice yields the same id.
+///
+/// `claimed_world` is what the caller believes the package is. Every reason to
+/// refuse is checked before the first write, so a refused publish leaves
+/// nothing behind: the blob and the cached release record are only written
+/// once the package is going to be published. Callers with nothing to claim
+/// pass `None`.
 pub async fn publish_package(
     db: &Db,
     bytes: &[u8],
+    claimed_world: Option<&str>,
 ) -> AtomicResult<(String, PluginRelease, Manifest)> {
     use atomic_lib::db::plugin_release::RUNTIME_WASIP2;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec()))
         .map_err(|e| AtomicError::from(format!("Body is not a zip archive: {e}")))?;
     let manifest = crate::plugins::wasm::describe_package(db, &mut zip).await?;
+    expect_world(&manifest, claimed_world)?;
     let package = store_package(db, bytes).await?;
     let release = PluginRelease {
         source: None,
@@ -215,8 +231,9 @@ fn package_file_subject(package: &str) -> Subject {
 /// Installation's `release` can point at a URL (and another server can fetch
 /// it) instead of a bare id. A wasip2 release's zip gets a `File` resource
 /// under the same drive, reused when the same bytes were uploaded before.
-/// Idempotent: a release that is already recorded is left as it is, including
-/// its publisher. Returns the resource's subject.
+/// Idempotent: a release that is already recorded keeps its drive and its
+/// publisher, and a later publisher of the same release is granted read on it
+/// and on its package File. Returns the resource's subject.
 pub async fn record_release(
     db: &Db,
     id: &str,
@@ -226,11 +243,23 @@ pub async fn record_release(
     origin: &str,
 ) -> AtomicResult<Subject> {
     let subject = release_subject(id);
-    if db.get_resource(&subject).await.is_ok() {
+    if let Ok(existing) = db.get_resource(&subject).await {
+        // The record lives under the first publisher's drive. Anyone else who
+        // publishes the same release holds the same bytes, so they may read
+        // it too; without this their Installation, which resolves the release
+        // as its signer, is refused.
+        if let Some(publisher) = publisher {
+            if let Some(file) = string_value(&existing, urls::PACKAGE) {
+                if let Ok(file) = db.get_resource(&file.as_str().into()).await {
+                    grant_read(db, file, publisher).await?;
+                }
+            }
+            grant_read(db, existing, publisher).await?;
+        }
         return Ok(subject);
     }
     let package_file = match &release.package {
-        Some(package) => Some(ensure_package_file(db, package, drive, origin).await?),
+        Some(package) => Some(ensure_package_file(db, package, drive, publisher, origin).await?),
         None => None,
     };
     let mut resource = Resource::new(subject.to_string());
@@ -252,16 +281,40 @@ pub async fn record_release(
     Ok(subject)
 }
 
-/// The `File` resource for a stored package blob, created when missing.
+/// Adds `agent` to the resource's `read` rights, when it is not there yet.
+async fn grant_read(db: &Db, mut resource: Resource, agent: &str) -> AtomicResult<()> {
+    let mut readers = match resource.get(urls::READ) {
+        Ok(value) => value.to_subjects(None)?,
+        Err(_) => Vec::new(),
+    };
+    if readers.iter().any(|reader| reader == agent) {
+        return Ok(());
+    }
+    readers.push(agent.to_string());
+    resource.set_unsafe(
+        urls::READ.into(),
+        Value::ResourceArray(readers.iter().map(|r| r.as_str().into()).collect()),
+    )?;
+    resource.save_locally(db).await?;
+    Ok(())
+}
+
+/// The `File` resource for a stored package blob, created when missing. An
+/// existing File may sit in another drive (the same bytes were uploaded
+/// there); the publisher is then granted read on it.
 async fn ensure_package_file(
     db: &Db,
     package: &str,
     drive: &str,
+    publisher: Option<&str>,
     origin: &str,
 ) -> AtomicResult<String> {
     let subject = package_file_subject(package);
     if let Ok(existing) = db.get_resource(&subject).await {
         if string_value(&existing, urls::INTERNAL_ID).as_deref() == Some(package) {
+            if let Some(publisher) = publisher {
+                grant_read(db, existing, publisher).await?;
+            }
             return Ok(subject.to_string());
         }
     }
@@ -275,7 +328,7 @@ async fn ensure_package_file(
     file.set_unsafe(urls::INTERNAL_ID.into(), Value::String(package.into()))?;
     file.set_unsafe(
         urls::BLOB.into(),
-        Value::AtomicUrl(format!("did:ad:blob:{package}").into()),
+        Value::AtomicUrl(atomic_lib::identifiers::blob_subject(package).into()),
     )?;
     file.set_unsafe(urls::FILESIZE.into(), Value::Integer(size))?;
     file.set_unsafe(
@@ -459,15 +512,14 @@ pub async fn is_listed(db: &Db, id: &str) -> bool {
 
 /// Refuses a publish whose caller believes the package is one world when the
 /// component says another, rather than mislabeling it.
-pub fn expect_world(
-    release: &PluginRelease,
-    manifest: &Manifest,
-    claimed: Option<&str>,
-) -> AtomicResult<()> {
+///
+/// Read from the manifest rather than from the release, so that
+/// [`publish_package`] can ask before it has anything to store.
+pub fn expect_world(manifest: &Manifest, claimed: Option<&str>) -> AtomicResult<()> {
+    let actual = world_name(manifest.world);
     match claimed {
-        Some(claimed) if claimed != release.world => Err(AtomicError::from(format!(
-            "the package is a {} (its component extends {} classes), not a {claimed}",
-            release.world,
+        Some(claimed) if claimed != actual => Err(AtomicError::from(format!(
+            "the package is a {actual} (its component extends {} classes), but the publish claimed {claimed}",
             manifest.entrypoints.class_urls().len()
         ))),
         _ => Ok(()),

@@ -32,6 +32,12 @@ Three consequences that keep being forgotten:
 - **A secret restores who you are, not what you have.** Signing in on a new
   device gets you an identity and an empty workspace. Something still has to
   carry the data.
+- **Connecting another device is optional.** After trying available recovery,
+  browser/Tauri sign-in opens a writable derived private home and offers a
+  device/backup nudge. Creating that home does not mean old content was
+  recovered. Foreign workspace links never synthesize a replacement. The
+  Flutter login still uses `resume_app_session` and its needs-sync screen;
+  it has no browser private-home materialization path yet.
 - **Connecting is not pushing.** Connecting to a device fetches a workspace
   you lack; it never offers the one you have. A workspace made before you
   connected anywhere exists in exactly one place until someone pushes it.
@@ -64,6 +70,11 @@ Rules of thumb:
   in a footnote, never in the headline.
 - **A state is not an error.** No device connected, unreachable, data
   elsewhere — these are normal, and read as normal.
+- **An unreadable workspace has unknown sync and backup status.** A failed
+  read does not establish that another device has the data. The browser's
+  `syncSummary` reports the failed read; Flutter's device settings currently has
+  no corresponding workspace-status summary, only connection controls and
+  operation errors.
 
 ## 3. The paths
 
@@ -208,3 +219,12 @@ Rust inspection is available for a future matching confirmation step there.
 ### Account recovery after code sign-in
 
 The browser/Tauri Account recovery card offers recovery-code unlock independently of passkeys, including after a WebAuthn failure. A portal session plus the existing recovery code can add a passkey without replacing the code or older passkeys. Each passkey uses its own PRF salt. Flutter has no corresponding envelope-management card yet.
+
+### One set of account sign-in options
+
+Every screen that signs in to the account (the portal's sign-in page and its
+homepage panel, the app's sign-in and restore steps) renders the same
+`AccountSignIn` from `@tomic/service-ui`: Google, passkey, email link. The app
+adds only what the portal cannot do, pasting an agent secret. Native builds that
+cannot hold the account cookie link the device with a code instead. Flutter has
+no account sign-in yet.

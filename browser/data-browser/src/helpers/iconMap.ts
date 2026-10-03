@@ -14,6 +14,8 @@ import {
   FaAtom,
   FaBook,
   FaGlobe,
+  FaPlug,
+  FaGrip,
   FaClock,
   FaComment,
   FaCube,
@@ -75,7 +77,12 @@ const iconMap = new Map<string, IconType>([
  * their shortname instead.
  */
 const classShortnameIconMap = new Map<string, IconType>([
+  ['plugin-script', FaPlug],
   ['website-project', FaGlobe],
+  // The launcher grid rather than the puzzle piece a new app gets as its
+  // placeholder emoji: that one already belongs to plugins and installations
+  // here, and an app sits next to both in the sidebar.
+  ['app', FaGrip],
 ]);
 
 export function getIconForClass(

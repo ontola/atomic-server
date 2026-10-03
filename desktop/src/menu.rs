@@ -1,5 +1,7 @@
+#[cfg(target_os = "macos")]
+use tauri::menu::AboutMetadata;
 use tauri::{
-  menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu},
+  menu::{Menu, PredefinedMenuItem, Submenu},
   AppHandle, Runtime,
 };
 
@@ -46,7 +48,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         authors: Some(vec!["Joep Meindertsma".into()]),
         copyright: Some("MIT License".into()),
         license: Some("MIT".into()),
-        website: Some("https://atomicserver.eu".into()),
+        website: Some("https://atomic.place".into()),
         ..Default::default()
       }),
     )?;

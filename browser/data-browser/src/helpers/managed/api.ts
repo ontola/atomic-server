@@ -1,3 +1,31 @@
+import { ManagedReadCache } from './readCache';
+
+const metadataReads = new ManagedReadCache();
+
+// A portal sign-in in another tab can replace the cookie session. Never
+// carry cached identity metadata across a return to this app.
+const resetMetadataReads = () => metadataReads.invalidate();
+const windowEvents = ['focus', 'pageshow', 'storage'] as const;
+
+if (typeof window !== 'undefined') {
+  for (const event of windowEvents) {
+    window.addEventListener?.(event, resetMetadataReads);
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', resetMetadataReads);
+}
+
+import.meta.hot?.dispose(() => {
+  for (const event of windowEvents) {
+    window.removeEventListener(event, resetMetadataReads);
+  }
+
+  document.removeEventListener('visibilitychange', resetMetadataReads);
+  metadataReads.invalidate();
+});
+
 declare global {
   interface Window {
     __ATOMIC_MANAGED__?: { portalUrl?: string };
@@ -285,6 +313,8 @@ export function setManagedDeviceToken(
   token: string | null,
   linkedPortalUrl?: string,
 ): void {
+  metadataReads.invalidate();
+
   try {
     if (token) {
       localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token);
@@ -320,8 +350,10 @@ export function setManagedDeviceToken(
  * would be one endpoint failing only on desktop and Android, which is close to
  * the worst bug to be handed.
  *
- * `credentials: 'include'` stays for the browser-on-our-origin case; the two
- * mechanisms coexist and the server prefers the cookie when both arrive.
+ * Linked devices use a bearer token and omit browser cookies. Sending
+ * credentialed cross-origin requests from the native WebView fails CORS even
+ * after the portal has approved a valid device link. Unlinked browsers still
+ * include their control-plane cookie.
  */
 export async function managedFetch(
   path: string,
@@ -334,9 +366,9 @@ export async function managedFetch(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  return fetch(`${getManagedApiBase()}${path}`, {
+  return metadataReads.fetch(`${getManagedApiBase()}${path}`, {
     ...init,
-    credentials: 'include',
+    credentials: token ? 'omit' : 'include',
     headers,
   });
 }

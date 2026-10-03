@@ -1,13 +1,15 @@
+import { canonicalIdentifier } from '@tomic/lib';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
-import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
+import { atomicWasmSource, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
-import { managedFetch } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
+import { getAccountProviders } from './accountProviders';
 
 export type RecoveryWrapperInput = {
-  wrapper_type: 'webauthn-prf' | 'recovery-code';
+  wrapper_type: 'webauthn-prf' | 'recovery-code' | 'atomic-assisted';
   /** Empty for `webauthn-prf`: the authenticator's PRF output *is* the KEK. */
   kdf_algorithm: string;
   kdf_params: Record<string, unknown>;
@@ -40,7 +42,10 @@ export type RecoverySecretInput = {
 };
 
 export type RecoverySecret = {
+  /** The account key this backup is bound to. */
   owner_email: string;
+  /** The address to show for that account, from newer control planes. */
+  owner_address?: string;
   agent_subject: string;
   drive_subject?: string | null;
   encrypted_secret: string;
@@ -54,6 +59,42 @@ export type RecoverySecret = {
   created_at: number;
   updated_at: number;
 };
+
+/**
+ * Backups saved before the `did:ad:` → `atomic:` rename carry the legacy
+ * spelling of the same agent, and so do secrets exported before it, so
+ * compare identities, not strings. Every check of "is this the account's
+ * agent" goes through here: a strict comparison makes one agent look like
+ * two, and the reconcile gate then switches identities and signs out.
+ */
+export function sameAgent(a: string, b: string): boolean {
+  return canonicalIdentifier(a) === canonicalIdentifier(b);
+}
+
+/** A pasted secret that opens a different agent than the signed-in account's. */
+export type SecretAccountConflict = {
+  email: string;
+  accountAgent: string;
+  secretAgent: string;
+};
+
+/**
+ * Whether signing in with `secretAgent` would replace the account that is
+ * signed in here. Using it means ending that account's session, which also
+ * signs the user out of the portal, so the caller has to ask first.
+ */
+export function secretAccountConflict(
+  stored: Pick<RecoverySecret, 'owner_email' | 'agent_subject'> | null,
+  secretAgent: string,
+): SecretAccountConflict | null {
+  if (!stored || sameAgent(stored.agent_subject, secretAgent)) return null;
+
+  return {
+    email: stored.owner_email,
+    accountAgent: stored.agent_subject,
+    secretAgent,
+  };
+}
 
 const RECOVERY_FORMAT_VERSION = 1;
 const ENVELOPE_V2_FORMAT_VERSION = 2;
@@ -192,45 +233,9 @@ async function deriveRecoveryKey(
   );
 }
 
-export async function buildEncryptedRecoverySecret({
-  secret,
-  password,
-  agentSubject,
-  driveSubject,
-}: {
-  secret: string;
-  password: string;
-  agentSubject: string;
-  driveSubject?: string | null;
-}): Promise<RecoverySecretInput> {
-  const salt = randomBytes(SALT_BYTES);
-  const nonce = randomBytes(NONCE_BYTES);
-  const key = await deriveRecoveryKey(password, salt, ['encrypt']);
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce },
-    key,
-    new TextEncoder().encode(secret),
-  );
-
-  return {
-    agent_subject: agentSubject,
-    drive_subject: driveSubject ?? null,
-    encrypted_secret: bytesToBase64(new Uint8Array(ciphertext)),
-    encryption_algorithm: 'AES-GCM',
-    kdf_algorithm: 'PBKDF2',
-    kdf_params: {
-      hash: KDF_HASH,
-      iterations: KDF_ITERATIONS,
-    },
-    salt: bytesToBase64(salt),
-    nonce: bytesToBase64(nonce),
-    format_version: RECOVERY_FORMAT_VERSION,
-  };
-}
-
 /**
- * Reverse of {@link buildEncryptedRecoverySecret}: derive the AES-GCM key from
- * the recovery password + stored salt, then decrypt the agent secret. Throws a
+ * Decrypt a legacy v1 envelope: derive the AES-GCM key from the recovery
+ * password + stored salt, then decrypt the agent secret. Throws a
  * friendly error on a wrong password (AES-GCM auth-tag failure).
  */
 export async function decryptRecoverySecret(
@@ -259,7 +264,9 @@ export async function decryptRecoverySecret(
 // --- Envelope v2 (DEK + recovery-code wrapper via Argon2id) ---
 
 type Argon2WasmModule = {
-  default: (init?: { module_or_path: string }) => Promise<unknown>;
+  default: (init?: {
+    module_or_path: string | WebAssembly.Module;
+  }) => Promise<unknown>;
   argon2idDeriveKey: (
     secret: string,
     salt: Uint8Array,
@@ -294,7 +301,7 @@ async function loadArgon2Wasm(): Promise<Argon2WasmModule> {
         const loaded = (await import(
           /* @vite-ignore */ url
         )) as LoadedWasmModule;
-        await loaded.default({ module_or_path: wasmBinaryUrl() });
+        await loaded.default({ module_or_path: await atomicWasmSource() });
 
         if (typeof loaded.argon2idDeriveKey !== 'function') {
           throw new Error(
@@ -794,6 +801,7 @@ export async function buildEnvelopeWithPasskeyAndCode({
   });
   const recoveryCode = generateRecoveryCode();
   const codeWrapper = await wrapDekWithCode(sealed.dek, recoveryCode);
+  const assisted = await tryWrapDekWithAssisted(sealed.dek, agentSubject);
 
   return {
     recoveryCode,
@@ -801,7 +809,7 @@ export async function buildEnvelopeWithPasskeyAndCode({
       agentSubject,
       driveSubject,
       sealed,
-      wrappers: [passkeyWrapper, codeWrapper],
+      wrappers: [passkeyWrapper, codeWrapper, ...assisted],
     }),
   };
 }
@@ -823,6 +831,7 @@ export async function buildEnvelopeV2({
   const sealed = await sealSecret(secret);
   const recoveryCode = generateRecoveryCode();
   const wrapper = await wrapDekWithCode(sealed.dek, recoveryCode);
+  const assisted = await tryWrapDekWithAssisted(sealed.dek, agentSubject);
 
   return {
     recoveryCode,
@@ -830,19 +839,287 @@ export async function buildEnvelopeV2({
       agentSubject,
       driveSubject,
       sealed,
-      wrappers: [wrapper],
+      wrappers: [wrapper, ...assisted],
     }),
   };
+}
+
+// --- Assisted recovery: signing in to the account unlocks the identity ---
+//
+// The control plane holds a service key and hands a signed-in account the
+// key-encryption key for one of its wrappers (see atomic-saas
+// `src/assisted_recovery.rs`). Wrapping and unwrapping stay here, so the DEK
+// and the secret never leave the browser. Unlocking needs a sign-in from the
+// last half hour; an older session gets `FreshSignInRequiredError`.
+
+const ASSISTED_WRAPPER = 'atomic-assisted';
+
+/** The account's sign-in is too old to unlock the identity; sign in again. */
+export class FreshSignInRequiredError extends Error {
+  constructor() {
+    super('Sign in again to unlock your account on this device.');
+    this.name = /* @wc-ignore */ 'FreshSignInRequiredError';
+  }
+}
+
+/** Whether this deployment can unlock an identity for a signed-in account. */
+export async function isAssistedRecoveryAvailable(): Promise<boolean> {
+  return (await getAccountProviders()).assisted_recovery;
+}
+
+async function assistedKey(
+  agentSubject: string,
+  salt: string,
+  usage: KeyUsage[],
+): Promise<{ key: CryptoKey; keyId?: string; rotate: boolean }> {
+  const response = await managedFetch('/recovery-secret/assisted-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_subject: agentSubject, salt }),
+  });
+
+  if (!response.ok) {
+    const body = await response
+      .json()
+      .catch(() => null as { error_code?: string } | null);
+
+    if (body?.error_code === 'fresh_sign_in_required') {
+      throw new FreshSignInRequiredError();
+    }
+
+    throw new Error(
+      `Could not reach your ${PRODUCT_NAME} account to unlock this backup.`,
+    );
+  }
+
+  const { key, key_id, rotate } = (await response.json()) as {
+    key: string;
+    key_id?: string;
+    rotate?: boolean;
+  };
+
+  return {
+    key: await crypto.subtle.importKey(
+      'raw',
+      base64ToBytes(key),
+      'AES-GCM',
+      false,
+      usage,
+    ),
+    keyId: key_id,
+    // The wrapper was made with a service key that has since been rotated.
+    rotate: rotate === true,
+  };
+}
+
+async function wrapDekWithAssisted(
+  dek: Uint8Array<ArrayBuffer>,
+  agentSubject: string,
+): Promise<RecoveryWrapperInput> {
+  const salt = bytesToBase64(randomBytes(SALT_BYTES));
+  const { key, keyId } = await assistedKey(agentSubject, salt, ['encrypt']);
+  const wrapNonce = randomBytes(NONCE_BYTES);
+  const wrappedDek = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: wrapNonce },
+    key,
+    dek,
+  );
+
+  return {
+    wrapper_type: ASSISTED_WRAPPER,
+    kdf_algorithm: 'hmac-sha256',
+    // Which service key made it, so it still opens after a rotation.
+    kdf_params: keyId ? { key_id: keyId } : {},
+    salt,
+    wrapped_dek: bytesToBase64(new Uint8Array(wrappedDek)),
+    wrap_nonce: bytesToBase64(wrapNonce),
+    label: `${PRODUCT_NAME} account`,
+  };
+}
+
+/** The assisted wrapper when this deployment offers it, else nothing. Never
+ * throws: a backup without it still works with its passkey or code. */
+async function tryWrapDekWithAssisted(
+  dek: Uint8Array<ArrayBuffer>,
+  agentSubject: string,
+): Promise<RecoveryWrapperInput[]> {
+  try {
+    if (!(await isAssistedRecoveryAvailable())) return [];
+
+    return [await wrapDekWithAssisted(dek, agentSubject)];
+  } catch {
+    return [];
+  }
+}
+
+export function hasAssistedWrapper(recovery: RecoverySecret): boolean {
+  return (
+    recovery.format_version >= 2 &&
+    recovery.wrappers.some(w => w.wrapper_type === ASSISTED_WRAPPER)
+  );
+}
+
+/**
+ * The backup for a signed-in account that nobody has to type or tap anything
+ * for: the DEK is wrapped only by the account's assisted key. Throws when the
+ * deployment does not offer assisted recovery, so the caller can fall back to
+ * a passkey or a recovery code.
+ */
+export async function buildEnvelopeWithAssisted({
+  secret,
+  agentSubject,
+  driveSubject,
+}: {
+  secret: string;
+  agentSubject: string;
+  driveSubject?: string | null;
+}): Promise<RecoverySecretInput> {
+  if (!(await isAssistedRecoveryAvailable())) {
+    throw new Error('Assisted recovery is not available here.');
+  }
+
+  const sealed = await sealSecret(secret);
+  const wrapper = await wrapDekWithAssisted(sealed.dek, agentSubject);
+
+  return envelopeRequest({
+    agentSubject,
+    driveSubject,
+    sealed,
+    wrappers: [wrapper],
+  });
+}
+
+/** Unlock with the account alone. Needs a recent sign-in. */
+export async function decryptEnvelopeWithAssisted(
+  recovery: RecoverySecret,
+): Promise<string> {
+  const wrapper = recovery.wrappers.find(
+    w => w.wrapper_type === ASSISTED_WRAPPER,
+  );
+
+  if (!wrapper)
+    throw new Error('This backup cannot be unlocked by signing in.');
+
+  const { key, rotate } = await assistedKey(
+    recovery.agent_subject,
+    wrapper.salt,
+    ['decrypt'],
+  );
+
+  return openWithDekKey(
+    recovery,
+    wrapper,
+    key,
+    'Your account could not unlock this backup.',
+    // Re-wrap with the current service key; the new wrapper replaces this one.
+    rotate
+      ? dek => addAssistedWrapperInBackground(recovery, dek, true)
+      : undefined,
+  );
+}
+
+/** The DEK behind the assisted wrapper, for adding another way in. */
+async function assistedDek(recovery: RecoverySecret): Promise<ArrayBuffer> {
+  const wrapper = recovery.wrappers.find(
+    w => w.wrapper_type === ASSISTED_WRAPPER,
+  );
+
+  if (!wrapper)
+    throw new Error('This backup cannot be unlocked by signing in.');
+
+  const { key } = await assistedKey(recovery.agent_subject, wrapper.salt, [
+    'decrypt',
+  ]);
+
+  try {
+    return await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes(wrapper.wrap_nonce) },
+      key,
+      base64ToBytes(wrapper.wrapped_dek),
+    );
+  } catch {
+    throw new Error('Your account could not unlock this backup.');
+  }
+}
+
+/**
+ * Turn assisted recovery on or off for the signed-in account. Off removes the
+ * assisted wrapper from the stored backup straight away; on lets the next
+ * unlock with a passkey or recovery code add it again.
+ */
+export async function setAssistedRecovery(enabled: boolean): Promise<void> {
+  const response = await managedFetch('/recovery-secret/assisted', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Could not change this setting in your ${PRODUCT_NAME} account.`,
+    );
+  }
+}
+
+/**
+ * After a passkey or a recovery code opened a backup: add the assisted
+ * wrapper, so on the next device signing in is enough. In the background and
+ * best-effort; the unlock that just happened never waits on it.
+ */
+function addAssistedWrapperInBackground(
+  recovery: RecoverySecret,
+  dek: Uint8Array<ArrayBuffer>,
+  replace = false,
+): void {
+  if (
+    recovery.format_version !== 2 ||
+    (hasAssistedWrapper(recovery) && !replace)
+  )
+    return;
+
+  void (async () => {
+    if (!(await isAssistedRecoveryAvailable())) return;
+    // The wrapper is appended to the signed-in account's backup, so only
+    // when that account is the one owning this backup.
+    const account = await getManagedAccount().catch(() => null);
+
+    if (
+      !account ||
+      account.email !== recovery.owner_email ||
+      account.assisted_recovery_off
+    )
+      return;
+
+    const wrapper = await wrapDekWithAssisted(dek, recovery.agent_subject);
+    const response = await managedFetch('/recovery-secret/wrappers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_subject: recovery.agent_subject,
+        encrypted_secret: recovery.encrypted_secret,
+        nonce: recovery.nonce,
+        wrapper,
+      }),
+    });
+
+    if (response.ok)
+      cacheRecoverySecret((await response.json()) as RecoverySecret);
+  })().catch(() => undefined);
 }
 
 /** Whether this backup can be unlocked by a passkey / by a typed code. */
 export function envelopeWrapperKinds(recovery: RecoverySecret): {
   hasPasskey: boolean;
   hasCode: boolean;
+  /** Signing in to the account opens it (assisted recovery). */
+  hasAccount: boolean;
 } {
   return {
     hasPasskey: recovery.wrappers.some(w => w.wrapper_type === 'webauthn-prf'),
     hasCode: recovery.wrappers.some(w => w.wrapper_type === 'recovery-code'),
+    hasAccount: recovery.wrappers.some(
+      w => w.wrapper_type === 'atomic-assisted',
+    ),
   };
 }
 
@@ -851,11 +1128,13 @@ async function openWithDekKey(
   wrapper: RecoveryWrapper,
   wrapKey: CryptoKey,
   wrongKeyMessage: string,
+  onDek?: (dek: Uint8Array<ArrayBuffer>) => void,
 ): Promise<string> {
   let plaintext: ArrayBuffer;
+  let dek: ArrayBuffer;
 
   try {
-    const dek = await crypto.subtle.decrypt(
+    dek = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: base64ToBytes(wrapper.wrap_nonce) },
       wrapKey,
       base64ToBytes(wrapper.wrapped_dek),
@@ -871,6 +1150,8 @@ async function openWithDekKey(
   } catch {
     throw new Error(wrongKeyMessage);
   }
+
+  onDek?.(new Uint8Array(dek));
 
   return new TextDecoder().decode(plaintext);
 }
@@ -973,6 +1254,7 @@ export async function decryptEnvelopeWithPasskey(
     wrapper,
     key,
     'That passkey could not unlock this backup.',
+    dek => addAssistedWrapperInBackground(recovery, dek),
   );
 }
 
@@ -1001,7 +1283,13 @@ export async function decryptEnvelopeV2(
     wrapper.kdf_params,
   );
 
-  return openWithDekKey(recovery, wrapper, wrapKey, 'Wrong recovery code');
+  return openWithDekKey(
+    recovery,
+    wrapper,
+    wrapKey,
+    'Wrong recovery code',
+    dek => addAssistedWrapperInBackground(recovery, dek),
+  );
 }
 
 /**
@@ -1115,7 +1403,7 @@ export async function unifyAccountPasskey(
 
   if (
     !recovery ||
-    recovery.agent_subject !== agentSubject ||
+    !sameAgent(recovery.agent_subject, agentSubject) ||
     recovery.format_version !== 2
   ) {
     throw new Error(
@@ -1148,6 +1436,13 @@ export async function unifyAccountPasskey(
         'Wrong recovery code. Use the recovery code saved for this account, not your agent secret.',
       );
     }
+  } else if (
+    hasAssistedWrapper(recovery) &&
+    !recovery.wrappers.some(w => w.wrapper_type === 'webauthn-prf')
+  ) {
+    // Only the account opens this backup so far: a recent sign-in is enough
+    // to reach the DEK and add the passkey next to it.
+    dek = await assistedDek(recovery);
   } else {
     const { wrapper, key } = await unlockPasskeyWrapper(recovery);
     dek = await crypto.subtle.decrypt(
@@ -1158,8 +1453,8 @@ export async function unifyAccountPasskey(
   }
 
   const { wrapper } = await wrapDekWithPasskey(new Uint8Array(dek), {
-    userName: recovery.owner_email,
-    userDisplayName: recovery.owner_email,
+    userName: recovery.owner_address ?? recovery.owner_email,
+    userDisplayName: recovery.owner_address ?? recovery.owner_email,
     createNew,
   });
   if (!wrapper.kdf_params.account_passkey)
@@ -1206,7 +1501,7 @@ export async function addPasskeyWrapper(
   // rather than overwriting a newer envelope with a cached version.
   const recovery = await getRecoverySecret();
 
-  if (!recovery || recovery.agent_subject !== agentSubject) {
+  if (!recovery || !sameAgent(recovery.agent_subject, agentSubject)) {
     throw new Error(
       'Sign in to the account holding this backup before adding a passkey.',
     );
@@ -1386,12 +1681,61 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
   return saved;
 }
 
+const pendingRecoveryReads = new Map<string, Promise<RecoverySecret | null>>();
+const recoveryReadCooldowns = new Map<string, number>();
+
 export async function getRecoverySecret(): Promise<RecoverySecret | null> {
-  if (!(await getManagedAccount())) return null;
+  const account = await getManagedAccount();
+  if (!account) return null;
+  // Reconciliation, the drive catalog and Vault can all ask during one render.
+  // Share only an in-flight read: a later call must see newly saved wrappers.
+  const key = JSON.stringify([getManagedApiBase(), account.email]);
+  const now = Date.now();
+
+  for (const [readKey, until] of recoveryReadCooldowns) {
+    if (until <= now) recoveryReadCooldowns.delete(readKey);
+  }
+
+  if (recoveryReadCooldowns.has(key)) {
+    throw new Error('Could not load encrypted recovery backup.');
+  }
+
+  const pending = pendingRecoveryReads.get(key);
+  if (pending) return pending;
+  const request = fetchRecoverySecret(key);
+  pendingRecoveryReads.set(key, request);
+
+  try {
+    return await request;
+  } finally {
+    if (pendingRecoveryReads.get(key) === request)
+      pendingRecoveryReads.delete(key);
+  }
+}
+
+async function fetchRecoverySecret(
+  key: string,
+): Promise<RecoverySecret | null> {
   // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
   // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
   // (PUT) above; 204/401/404 all mean "no recovery secret stored".
   const response = await managedFetch(`/recovery-secret`, {});
+
+  if (response.status === 429) {
+    // A failed read is unknown, never "no backup". Stop callers from hammering
+    // the endpoint between renders, while keeping successful reads fresh.
+    const retryAfter = response.headers.get(/* @wc-ignore */ 'Retry-After');
+    const seconds = retryAfter ? Number(retryAfter) : NaN;
+    const deadline = Number.isFinite(seconds)
+      ? Date.now() + seconds * 1000
+      : Date.parse(retryAfter ?? '');
+    recoveryReadCooldowns.set(
+      key,
+      Number.isFinite(deadline) && deadline > Date.now()
+        ? deadline
+        : Date.now() + 60_000,
+    );
+  }
 
   if (
     response.status === 204 ||
@@ -1434,7 +1778,7 @@ function cacheRecoverySecret(secret: RecoverySecret): void {
     // Keyed by agent, so a shared machine accumulates one entry per account
     // rather than each sign-in evicting the last.
     const others = readCachedBackups().filter(
-      entry => entry.agent_subject !== secret.agent_subject,
+      entry => !sameAgent(entry.agent_subject, secret.agent_subject),
     );
     localStorage.setItem(
       RECOVERY_CACHE_KEY,
@@ -1464,7 +1808,9 @@ export function readCachedBackups(): RecoverySecret[] {
     if (legacy) {
       const parsed = JSON.parse(legacy) as RecoverySecret;
 
-      if (!entries.some(e => e.agent_subject === parsed.agent_subject)) {
+      if (
+        !entries.some(e => sameAgent(e.agent_subject, parsed.agent_subject))
+      ) {
         entries.push(parsed);
       }
 
@@ -1499,7 +1845,7 @@ export function forgetCachedRecoverySecret(agentSubject?: string): void {
     }
 
     const remaining = readCachedBackups().filter(
-      entry => entry.agent_subject !== agentSubject,
+      entry => !sameAgent(entry.agent_subject, agentSubject),
     );
     localStorage.setItem(RECOVERY_CACHE_KEY, JSON.stringify(remaining));
   } catch {
@@ -1523,7 +1869,7 @@ export async function getUnlockableRecoverySecret(
 
     if (
       fromServer &&
-      (!agentSubject || fromServer.agent_subject === agentSubject)
+      (!agentSubject || sameAgent(fromServer.agent_subject, agentSubject))
     ) {
       return fromServer;
     }
@@ -1535,7 +1881,7 @@ export async function getUnlockableRecoverySecret(
 
   return (
     (agentSubject
-      ? cached.find(entry => entry.agent_subject === agentSubject)
+      ? cached.find(entry => sameAgent(entry.agent_subject, agentSubject))
       : cached.at(-1)) ?? null
   );
 }

@@ -21,6 +21,9 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
+import { DIVIDER, DropdownMenu } from './Dropdown';
+import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
+import { useAppMenuItems } from '../actions/appMenuItems';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
@@ -43,7 +46,12 @@ import {
 } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
-import { LabelButton } from './NavBarButton';
+import {
+  ButtonArea,
+  LabelButton,
+  NAV_BUTTON_HEIGHT,
+  NAV_BUTTON_RADIUS,
+} from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -81,10 +89,27 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
     commit: true,
   });
   const canCreateTags = useCanWrite(drive);
+  // Tags sit in the More menu until a resource has some: most never do, and a
+  // Tags button on every page was one more thing in a crowded bar. Choosing it
+  // there (the `tags` action) shows the button with its picker open.
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === resource.subject)
+        setOpen(true);
+    };
+
+    window.addEventListener(OPEN_TAGS_EVENT, onOpen);
+
+    return () => window.removeEventListener(OPEN_TAGS_EVENT, onOpen);
+  }, [resource.subject]);
 
   useEffect(() => {
     getResourcesDrive(resource, store).then(setDriveSubject);
   }, [resource, store]);
+
+  if (tags.length === 0 && !open) return null;
 
   const handleNewTag = (newTag: string) => {
     // Tag creation finishes asynchronously; append to the live resource
@@ -104,6 +129,8 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   return (
     <>
       <TagSelectPopover
+        open={open}
+        onOpenChange={setOpen}
         tags={driveTags}
         selectedTags={tags}
         setSelectedTags={setTags}
@@ -225,6 +252,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
   const { isOpen: aiOpen, setIsOpen } = useAISidebar();
+  const appMenu = useAppMenuItems();
   const hasAiChanges = !!contextResource && changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
@@ -335,14 +363,21 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
           </NavIconButton>
         </WideOnly>
       )}
-      <NavIconButton
-        color='textLight'
+      {/* Labelled, with its shortcut: as a bare magnifier among the bar's
+       * icons it went unnoticed in user testing (#1807). Collapses to the icon
+       * with the other labels when the bar gets tight. */}
+      <SearchButton
         type='button'
-        title={`Search (${shortcuts.search})`}
+        $iconOnly={iconOnly}
+        title={`Search (${displayShortcut(shortcuts.search)})`}
+        aria-label='Search'
         onClick={() => openSearchOverlay()}
+        data-testid='navbar-search'
       >
         <FaMagnifyingGlass />
-      </NavIconButton>
+        <span>Search</span>
+        <Kbd>{displayShortcut(shortcuts.search)}</Kbd>
+      </SearchButton>
       <VerticalDivider />
       <CrumbGroup $iconOnly={iconOnly}>
         {parent && <DirectParent subject={parent} />}
@@ -400,6 +435,16 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             />
           </>
         )}
+        {/* Pages that are not a resource (settings, notifications) still get
+         * a More menu: starting something new, and finding places in the app.
+         * Only the resource's own actions are left out. */}
+        {!contextResource && (
+          <DropdownMenu
+            isMainMenu
+            items={[...appMenu.create, DIVIDER, ...appMenu.find]}
+            Trigger={ParentContextMenuTrigger}
+          />
+        )}
       </ButtonArea>
     </NavBarWrapper>
   );
@@ -407,12 +452,15 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
 
 /** Comments panel toggle showing the live comment count at the icon. */
 function CommentsButton({ subject }: { subject: string }): JSX.Element {
-  const { togglePanel, activePanel } = useRightPanel();
+  const { togglePanel, activePanel, commentSubject } = useRightPanel();
   const { count, hasUnseen } = useCommentCount(subject);
 
   return (
     <CommentsLabelButton
-      $active={activePanel === 'comments'}
+      // The panel can be showing a thread from *inside* the page — a table
+      // row's. This button is about the page's own thread, and clicking it
+      // brings the panel back to that rather than closing the row's.
+      $active={activePanel === 'comments' && !commentSubject}
       onClick={() => togglePanel('comments')}
       data-testid='navbar-comments-button'
       data-unseen={hasUnseen ? '' : undefined}
@@ -451,12 +499,45 @@ const NavBarWrapper = styled.nav`
  * hover like {@link LabelButton} so left and right feel like one set.
  */
 const NavIconButton = styled(IconButton)`
+  height: ${NAV_BUTTON_HEIGHT};
+  border-radius: ${NAV_BUTTON_RADIUS};
+
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
       color: ${p => p.theme.colors.text};
     }
   }
+`;
+
+const SearchButton = styled(LabelButton)<{ $iconOnly: boolean }>`
+  /* Narrow bars keep only the icon; the label and hint return when there is
+   * room. */
+  @container breadcrumb-bar (max-width: 600px) {
+    & > span,
+    & > kbd {
+      display: none;
+    }
+  }
+
+  ${p =>
+    p.$iconOnly &&
+    css`
+      & > span,
+      & > kbd {
+        display: none;
+      }
+    `}
+`;
+
+const Kbd = styled.kbd`
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  padding: 0 0.3rem;
+  margin-inline-start: 0.25rem;
 `;
 
 const VerticalDivider = styled.div`
@@ -501,29 +582,6 @@ const WideOnly = styled.span`
   @container breadcrumb-bar (max-width: 600px) {
     display: none;
   }
-`;
-
-const ButtonArea = styled.div<{ $iconOnly: boolean }>`
-  display: flex;
-  margin-left: auto;
-  color: ${p => p.theme.colors.textLight};
-  gap: ${p => p.theme.size(1)};
-  align-items: center;
-  flex-shrink: 0;
-
-  @container breadcrumb-bar (max-width: 600px) {
-    gap: 0;
-  }
-
-  /* Icon-only once the bar can no longer fit the labels (measured in JS, not a
-   * fixed breakpoint). */
-  ${p =>
-    p.$iconOnly &&
-    css`
-      & > * > span {
-        display: none;
-      }
-    `}
 `;
 
 const CommentsLabelButton = styled(LabelButton)`

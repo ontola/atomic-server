@@ -52,6 +52,12 @@ afterEach(() => {
   inTauri.value = false;
 });
 
+// Every test here starts with `freshApi()`, which is `vi.resetModules()`
+// followed by a dynamic import, so each one re-transforms and re-imports the
+// module's whole graph rather than sharing one cached copy. That costs
+// milliseconds on a quiet machine and far more than the 5s default when the
+// test threads are oversubscribed, as they are on the shared runner. Same
+// budget and same reason as `convertFileToDocument.test.ts`.
 describe('safePortalUrl', () => {
   it('accepts absolute https URLs, trimming trailing slashes', async () => {
     const { safePortalUrl } = await freshApi();
@@ -97,7 +103,7 @@ describe('safePortalUrl', () => {
     expect(safePortalUrl(null)).toBeUndefined();
     expect(safePortalUrl(undefined)).toBeUndefined();
   });
-});
+}, 60000);
 
 describe('rememberManagedPortalUrl', () => {
   it('remembers a safe portal and serves it as the API base', async () => {
@@ -138,7 +144,7 @@ describe('rememberManagedPortalUrl', () => {
     expect(api.getRememberedManagedPortalUrl()).toBeNull();
     expect(api.getManagedApiBase()).toBe('/api');
   });
-});
+}, 60000);
 
 describe('a linked device', () => {
   it('keeps the token bound when runtime configuration names another portal', async () => {
@@ -173,7 +179,7 @@ describe('a linked device', () => {
     const api = await freshApi();
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ ok: true } as Response);
+      .mockResolvedValue(Response.json({}));
 
     api.setManagedDeviceToken('sess', PORTAL);
     api.rememberManagedPortalUrl(OTHER);
@@ -183,6 +189,7 @@ describe('a linked device', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(`${PORTAL}/api/me`);
     expect((init!.headers as Headers).get('Authorization')).toBe('Bearer sess');
+    expect(init!.credentials).toBe('omit');
   });
 
   it('still accepts the same origin from a node, trailing slash or not', async () => {
@@ -241,7 +248,7 @@ describe('a linked device', () => {
 
     expect(api.getLinkedPortalOrigin()).toBeNull();
   });
-});
+}, 60000);
 
 describe('browser control-plane routing', () => {
   beforeEach(() => {
@@ -268,6 +275,18 @@ describe('browser control-plane routing', () => {
     expect(api.getManagedApiBase()).toBe('http://localhost:3030/api');
   });
 
+  it('keeps cookie credentials for an unlinked browser session', async () => {
+    vi.stubEnv('VITE_MANAGED_API_BASE', 'http://localhost:3030/api');
+    const api = await freshApi();
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({}));
+
+    await api.managedFetch('/me');
+
+    expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include');
+  });
+
   it('uses a discovered portal in the browser', async () => {
     const api = await freshApi();
     api.rememberManagedPortalUrl(PORTAL);
@@ -281,4 +300,23 @@ describe('browser control-plane routing', () => {
     expect(api.hasManagedApi()).toBe(true);
     expect(api.getManagedApiBase()).toBe(`${PORTAL}/api`);
   });
+}, 60000);
+
+it('refreshes shared metadata when returning from the portal or unlinking', async () => {
+  const events = new EventTarget();
+  vi.stubGlobal('window', events);
+  const api = await freshApi();
+  api.rememberManagedPortalUrl(PORTAL);
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async () => Response.json({ email: 'a@example.com' }));
+  await api.managedFetch('/me');
+  await api.managedFetch('/me');
+  expect(fetch).toHaveBeenCalledTimes(1);
+  events.dispatchEvent(new Event('focus'));
+  await api.managedFetch('/me');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  api.setManagedDeviceToken(null);
+  await api.managedFetch('/me');
+  expect(fetch).toHaveBeenCalledTimes(3);
 });

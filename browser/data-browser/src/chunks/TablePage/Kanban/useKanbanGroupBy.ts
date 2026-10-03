@@ -34,7 +34,8 @@ function isSelectProperty(property: Property): boolean {
  * first select/enum property already on the class is adopted. If the class has
  * no enum property at all, a "Status" one (Todo/Doing/Done) is created and
  * adopted — the user opted into silent creation. Creation runs once per mount
- * and only for writers.
+ * and only for writers. `onCreated` hears about that property and its tags, so
+ * the board can make Todo where new rows start.
  */
 export function useKanbanGroupBy(
   tableClass: Resource,
@@ -42,8 +43,19 @@ export function useKanbanGroupBy(
   viewGroupBy: string | undefined,
   setViewGroupBy: (property: string) => void,
   canWrite: boolean,
+  onCreated?: (
+    property: string,
+    tagsByName: Record<string, string>,
+  ) => Promise<void>,
 ): UseKanbanGroupByResult {
   const store = useStore();
+  // Read at creation time rather than listed as an effect dependency: a new
+  // callback identity must not re-run the create-once effect.
+  const onCreatedRef = useRef(onCreated);
+
+  useEffect(() => {
+    onCreatedRef.current = onCreated;
+  }, [onCreated]);
   const [creating, setCreating] = useState(false);
   // Guards the create-once side effect against React re-runs / double-invoke.
   const creationStartedRef = useRef(false);
@@ -90,7 +102,7 @@ export function useKanbanGroupBy(
 
     void (async () => {
       try {
-        const { subject } = await createSelectPropertyOnClass(
+        const { subject, tags } = await createSelectPropertyOnClass(
           store,
           tableClass,
           {
@@ -99,6 +111,7 @@ export function useKanbanGroupBy(
           },
         );
         setViewGroupBy(subject);
+        await onCreatedRef.current?.(subject, tags).catch(() => undefined);
       } finally {
         setCreating(false);
       }

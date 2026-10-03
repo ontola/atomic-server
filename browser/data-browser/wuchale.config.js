@@ -29,6 +29,13 @@ export default defineConfig({
   adapters: {
     main: jsx({
       loader: 'react',
+      // Tests never reach the vite plugin, so the CLI (`pnpm
+      // clean-translations`) must skip them too; otherwise the two extract
+      // different catalogs and every dev-server start rewrites them.
+      files: {
+        include: ['src/**/*.{js,ts,jsx,tsx}'],
+        ignore: ['**/*.d.ts', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+      },
       heuristic: ({ msgStr, details }) => {
         const [msg] = msgStr;
 

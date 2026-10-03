@@ -15,6 +15,47 @@
 > the team and free to edit anything. No server involvement, no mock
 > layer: real resources flowing through the production code paths.
 
+## Starting the demo: one loading screen
+
+From the click on "Try Atomic" to the workspace there is one screen: the
+boot splash from `data-browser/index.html`, the orbiting mark from
+atomic.place's hero. It lives outside `#root`, and `helpers/bootSplash.ts`
+decides when it leaves. Every other page drops it after its first render;
+`/app/demo` keeps it up until the welcome document has its content, then
+fades it out while the app fades in. Started from inside the app, the demo
+brings the splash back. Errors and a stalled setup hide it, because they
+need to be read.
+
+What used to show in between, and why it no longer does:
+- A blank page while `IdentityReconcileGate` asked the account server for a
+  session (a cold cross-origin request, 1.2 s). The gate skips `/app/demo`,
+  `index.tsx` preconnects to the account server, and concurrent
+  `getManagedAccount()` calls share one request.
+- "Checking local storage…" from the onboarding shell. The storage check is
+  now a step of `startDemoWorkspace`, after the guest identity exists.
+- "Setting up your demo…" with its own spinner. Only shown on error.
+
+Speed:
+- `index.html` starts `WebAssembly.compileStreaming` for the atomic wasm
+  before the app's JavaScript loads. The ClientDb worker and the main-thread
+  users (database key wrapping, recovery KDF) share that one compiled module
+  (`compiledAtomicWasm()` in `wasmUrls.ts`); each used to download the 7 MB
+  binary for itself.
+- `/app/demo` defers the anonymous database (`deferAnonymous`): the guest's
+  own encrypted database is the only one opened.
+
+- The build emits `/prefetch.json` (entry chunk, its imports and CSS, both
+  wasm files). atomic.place's portal (`portal/src/warmApp.ts` in
+  atomic-saas) fetches those into the HTTP cache when its page is idle on a
+  fast connection, and when a pointer or focus reaches a link into the app.
+  Same site, so the app reads them from cache: click to workspace about
+  4.0 s → 2.4 s on production. Chromium does not reuse the JS and CSS
+  (module scripts send `Origin`, and the app varies on it); the wasm, the
+  bulk, it does.
+
+After the reveal, the director waits 1.2 s before anyone moves, and Mara
+types at 50 ms a letter instead of 35.
+
 ## Why this is cheap here
 
 Three existing properties make "entirely client-side" natural:
@@ -250,10 +291,42 @@ and loses the property that the demo ships entirely as static assets.
 | Demo template | `data-browser/src/chunks/Demo/demoWorkspace.ts` | JSON-AD starter data + persona agents + lorodoc seeds |
 | Director | `data-browser/src/chunks/Demo/DemoDirector.ts` | scenario runner: steps → applyIncoming / presence writes |
 | Entry | `data-browser/src/chunks/Demo/startDemo.ts`, `routes/DemoRoute.tsx` | `/app/demo` and the onboarding choice |
+| Demo bar | `data-browser/src/components/DemoExitButton.tsx` (`DemoActionsBar`), `components/Navigation.tsx` | top bar while the current drive is a demo drive, including on the template gallery |
+| Demo detection | `data-browser/src/chunks/Templates/demoSession.ts` (`demoForDrive`) | the one rule for "in a demo": current drive = interactive demo drive or template preview drive |
 
 The v1 TODO list (local-only drive flag, presence inject hook, client-side
 template apply, director, onboarding choice, live verification) shipped in
 full and was removed from this document on 2026-09-15.
+
+## Demo bar and the step to templates (Joep, September 2026)
+
+- The interactive demo is not a template: it is gone from the template
+  gallery (`chunks/Templates/catalog.ts`). It is reached from "Try the live
+  demo" on the welcome screen and `/app/demo`.
+- The next step out of the demo is choosing a template.
+- **One setup bar** (`components/SetupBar.tsx`) for every setup step: the
+  step's title on the left, actions on the right, secondary before primary.
+  Titles are hidden on phones; long labels shorten there.
+  - Demo: "Demo workspace", **Leave demo** (guest → start screen, account →
+    personal drive) and **Choose a template** (the gallery, demo kept open).
+  - Template preview: "Preview: <drive name>", **Back to templates** and
+    **Use this template**.
+  - Gallery (`routes/NewDriveRoute.tsx`): "Choose a template", with **Back to
+    the demo** / **Back to the preview**, or **Close** for a user with a drive.
+  - Naming step: "Name your drive", with one back: **Back to the preview** when
+    a preview is open, otherwise **Back to templates**.
+  `DriveTemplateSetup` takes `renderBar`; the new-drive dialog omits it and
+  keeps its inline title and back button.
+- It used to vanish: the check read the template-preview record first and
+  fell back to the demo manifest only when there was none, so a stale preview
+  record (a closed tab, "Use this template" abandoned) hid the demo's bar.
+  `demoForDrive` matches each record on its own.
+- The demo drive is cleaned up when the user creates their own drive from the
+  gallery (`routes/NewDriveRoute.tsx`). The cleanup never removes the current
+  agent: a guest's profile is a row in the demo's Team table, and deleting it
+  broke every later write ("Resource has no store").
+- A deleted demo or preview page reached through history says so and offers
+  the current drive or the gallery (`views/ErrorPage.tsx`).
 
 ## v2 content feedback (Joep, July 2026) — BUILT
 

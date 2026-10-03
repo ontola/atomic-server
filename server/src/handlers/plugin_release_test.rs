@@ -61,7 +61,9 @@ async fn a_private_release_is_served_to_a_reader_of_its_drive_only() {
     let f = fixture("plugin_package_private").await;
     let db = &f.appstate.store;
     let origin = f.appstate.config.get_origin();
-    let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+    let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+        .await
+        .unwrap();
     let subject = release::record_release(db, &id, &published, &f.drive, None, &origin)
         .await
         .unwrap();
@@ -225,7 +227,7 @@ async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
     assert_eq!(entry["name"], "Example");
     assert_eq!(entry["emoji"], "🧪");
     assert_eq!(entry["description"], "An example");
-    assert_eq!(entry["publisher"], "did:ad:publisher");
+    assert_eq!(entry["publisher"], "atomic:publisher");
     assert_eq!(entry["domains"], serde_json::json!(["education"]));
     assert_eq!(
         entry["standards"],
@@ -260,4 +262,87 @@ async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
     )
     .await;
     assert_eq!(no_zip.status(), 400);
+}
+
+/// A publish is refused before it writes anything, so a rejected request
+/// leaves no package bytes and no cached release on the node. `test-plugin.zip`
+/// extends classes, which makes it a `server-extension`, so claiming it is an
+/// `extension` is the refusal to provoke.
+#[actix_rt::test]
+async fn a_publish_that_claims_the_wrong_world_stores_nothing() {
+    let f = fixture("plugin_package_wrong_world").await;
+    let db = &f.appstate.store;
+    let hash = blake3::hash(TEST_PLUGIN_ZIP);
+
+    let err = release::publish_package(db, TEST_PLUGIN_ZIP, Some("extension"))
+        .await
+        .expect_err("a package that extends classes is not an extension")
+        .to_string();
+    assert!(err.contains("server-extension"), "{err}");
+    assert!(err.contains("claimed extension"), "{err}");
+
+    assert!(
+        !db.has_blob(hash.as_bytes()).await.unwrap(),
+        "a refused publish must not leave the package bytes behind"
+    );
+
+    // The release id is the content hash, so publishing the same bytes in
+    // another store names the record this one must not hold.
+    let other = fixture("plugin_package_wrong_world_reference").await;
+    let (id, _, _) = release::publish_package(&other.appstate.store, TEST_PLUGIN_ZIP, None)
+        .await
+        .unwrap();
+    assert!(
+        db.get_plugin_release(&id).is_err(),
+        "a refused publish must not leave a cached release behind"
+    );
+
+    // Without a claim the same bytes publish, which is what makes the refusal
+    // the world check rather than anything about the zip.
+    let (published, _, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+        .await
+        .unwrap();
+    assert_eq!(published, id);
+    assert!(db.has_blob(hash.as_bytes()).await.unwrap());
+}
+
+/// A release is recorded once per server, under the drive of whoever
+/// published it first. Someone else uploading the same zip to their own drive
+/// gets that same `Release` back, and their Installation resolves it as them:
+/// without a read right of their own, activation was refused with a 401 and
+/// the install never finished.
+#[actix_rt::test]
+async fn publishing_a_recorded_release_again_lets_the_new_publisher_read_it() {
+    let f = fixture("plugin_package_second_publisher").await;
+    let db = &f.appstate.store;
+    let origin = f.appstate.config.get_origin();
+    let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+        .await
+        .unwrap();
+    let first = release::publish_release(db, &published, &f.drive, None, &origin, None)
+        .await
+        .unwrap();
+    let url = first.subject.resolve(&origin);
+
+    let second_publisher = atomic_lib::identifiers::agent_subject("second-publisher");
+    let as_second = atomic_lib::agents::ForAgent::AgentSubject(second_publisher.clone().into());
+    assert!(
+        release::resolve(db, &url, &as_second).await.is_err(),
+        "the first publisher's drive is private"
+    );
+
+    let second = release::publish_release(
+        db,
+        &published,
+        "atomic:second-publishers-drive",
+        Some(&second_publisher),
+        &origin,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(second.subject, first.subject, "one record per release");
+
+    let resolved = release::resolve(db, &url, &as_second).await.unwrap();
+    assert_eq!(resolved.id().unwrap(), id);
 }

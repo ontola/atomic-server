@@ -8,6 +8,8 @@ import {
   parseVerdict,
   describePlugin,
   errorMessageFromResponse,
+  pluginConfigFor,
+  pluginConfigProblems,
   pluginSchema,
   recordRun,
   runPlugin,
@@ -15,11 +17,10 @@ import {
   type ApplyReport,
   type EnsuredSchema,
   type RunPlan,
+  type JSONObject,
   type RunTrigger,
   type Verdict,
   type PluginManifest,
-  server,
-  useStore,
   type Store,
 } from '@tomic/react';
 // Bundle the worker and its shared @tomic/lib chunks. A ?url import copies
@@ -62,84 +63,10 @@ export function pluginClassesFor(
   return resolving;
 }
 
-/**
- * The plugin class of a drive, if it already has one.
- *
- * Read-only: rendering a context menu must not bring a schema into existence.
- * Resolved into React state, because a module cache read during render never
- * re-renders when it later fills.
- *
- * Re-resolves when the drive's ontology changes, so a drive that gains plugin
- * classes — from a plugin created in this tab, or synced from elsewhere — shows
- * the action without a reload.
- */
-export function usePluginClass(drive: string | undefined): string | undefined {
-  return useDriveClass(drive, 'plugin-script');
-}
-
-/** The drive's App class, once resolved. Absent while looking up. */
-export function useAppClass(drive: string | undefined): string | undefined {
-  return useDriveClass(drive, 'app');
-}
-
-/**
- * One of the drive's plugin classes, by shortname.
- *
- * Resolved in state rather than read during render: filling a module cache
- * re-renders nothing, so a page that asked during render would decide the
- * class does not exist and never look again.
- */
-function useDriveClass(
-  drive: string | undefined,
-  shortname: 'plugin-script' | 'app',
-): string | undefined {
-  const store = useStore();
-  const [pluginClass, setPluginClass] = useState<string>();
-
-  useEffect(() => {
-    if (!drive) {
-      setPluginClass(undefined);
-
-      return;
-    }
-
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-
-    const resolve = () =>
-      findSchema(store, drive, pluginSchema())
-        .then(schema => {
-          if (!cancelled) setPluginClass(schema.classes?.[shortname]);
-        })
-        .catch(() => {
-          if (!cancelled) setPluginClass(undefined);
-        });
-
-    (async () => {
-      const driveResource = await store.getResource(drive);
-      const ontology = driveResource.get(server.properties.defaultOntology) as
-        | string
-        | undefined;
-
-      if (cancelled) return;
-
-      await resolve();
-
-      if (ontology && !cancelled) {
-        unsubscribe = store.subscribe(ontology, () => {
-          void resolve();
-        });
-      }
-    })().catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [store, drive, shortname]);
-
-  return pluginClass;
-}
+// The drive's plugin and app class lookups live beside this file so they can be
+// unit tested: this module bundles the plugin worker, which a test environment
+// cannot transform.
+export { usePluginClass, useAppClass } from './useDriveClass';
 
 /**
  * The source a new plugin starts with.
@@ -349,6 +276,8 @@ export function usePluginManifest(source: string | undefined): PluginManifest {
 
 export interface PreparedRun {
   schemas?: Record<string, string>;
+  /** Exactly what `run()` was given, so preview and run can be compared. */
+  config?: JSONObject;
   source?: string;
   plan: RunPlan;
   trigger: RunTrigger;
@@ -385,23 +314,47 @@ export async function prepareRun(
     ? await pluginClassesFor(store, target.drive)
     : undefined;
   const instance = target ? await store.getResource(target.plugin) : undefined;
-  const schemas = (
-    schema ? instance?.get(schema.properties['plugin-schemas']) : undefined
-  ) as Record<string, string> | undefined;
+  const stored = schema
+    ? instance?.get(schema.properties['plugin-schemas'])
+    : undefined;
+  const schemas = stored as Record<string, string> | undefined;
+  // One config for every way a plugin is started. Preview, a manual run and a
+  // scheduled one all go through here, so none of them can hand `run()` a
+  // different `ctx.config` — or none at all — than the others.
+  const config = pluginConfigFor(
+    {
+      schemas: stored,
+      connection: schema
+        ? instance?.get(schema.properties['plugin-connection'])
+        : undefined,
+    },
+    declaration.config,
+  );
+  // Checked before the sandbox starts: a plugin cannot report a config field it
+  // never received well enough to be worth letting it try.
+  const misconfigured = pluginConfigProblems(config, declaration.config);
 
-  const { verdict, timedOut } = serverPlaced
-    ? await runOnServer(store, source, trigger, target!, schemas)
-    : await runPlugin(
-        source,
-        { trigger, schemas },
-        {
-          createWorker: () => new PluginWorker() as never,
-        },
-      );
+  const stopped: { verdict: Verdict; timedOut: boolean } = {
+    verdict: { intents: [], problems: misconfigured },
+    timedOut: false,
+  };
+
+  const { verdict, timedOut } =
+    misconfigured.length > 0
+      ? stopped
+      : serverPlaced
+        ? await runOnServer(store, source, trigger, target!, schemas, config)
+        : await runPlugin(
+            source,
+            { trigger, schemas, config },
+            {
+              createWorker: () => new PluginWorker() as never,
+            },
+          );
 
   const plan = await planVerdict(verdict, planHostFromStore(store));
 
-  return { plan, trigger, timedOut, serverPlaced, source, schemas };
+  return { plan, trigger, timedOut, serverPlaced, source, schemas, config };
 }
 
 /**
@@ -448,11 +401,12 @@ async function runOnServer(
   trigger: RunTrigger,
   target: { plugin: string; drive: string },
   schemas?: Record<string, string>,
+  config?: JSONObject,
 ): Promise<{ verdict: Verdict; timedOut: boolean }> {
   const body = await executeServerPlugin(store, {
     ...target,
     source,
-    input: { trigger, schemas },
+    input: { trigger, schemas, config },
   });
 
   if (body.error || !body.verdict) {

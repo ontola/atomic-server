@@ -89,11 +89,11 @@ version = "0.32"
 
 [features]
 config = ["directories", "toml"]
-## Core Db with encoding support (BTreeMapStore included).
+## Core Db on redb (a file natively, memory in tests, OPFS in WASM).
 ## Does NOT pull in sled — works in WASM.
-db = ["rmp-serde"]
-## Db with redb backend (works in WASM with InMemoryBackend, future OPFS).
-db-redb = ["db", "redb", "chacha20poly1305"]
+db = ["rmp-serde", "redb", "chacha20poly1305"]
+## Kept so existing dependents keep building; `db` now includes redb.
+db-redb = ["db"]
 ## Full Db with sled backend and migrations. Implies `db`.
 ## Does NOT work in WASM.
 db-sled = ["db", "sled", "bincode1"]

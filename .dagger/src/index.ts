@@ -10,6 +10,7 @@ import {
   Platform,
   Service,
   CacheSharingMode,
+  CacheVolume,
 } from '@dagger.io/dagger';
 import { overrideE2eBudget } from './e2e-budget';
 
@@ -34,6 +35,14 @@ const TOUCH_WORKSPACE_SOURCES = [
 ];
 
 /**
+ * One stamp per module process, so every call inside one `ci()` shares it.
+ * Stamping per call gave each `wasmBuild()`/`jsBuild()` caller its own graph,
+ * so Dagger could not dedupe them: one run built wasm seven times, all fighting
+ * over the same target volume's cargo lock.
+ */
+const RUN_STAMP = new Date().toISOString();
+
+/**
  * Runs the touch above on every pipeline run. A `withExec` is a cached layer
  * keyed on its inputs, and the Rust sources are the same bytes across many
  * commits, so the touch was replayed from cache with its old mtimes. Any
@@ -45,7 +54,7 @@ const TOUCH_WORKSPACE_SOURCES = [
  */
 function touchWorkspaceSources(container: Container): Container {
   return container
-    .withEnvVariable('ATOMIC_TOUCH_RUN', new Date().toISOString())
+    .withEnvVariable('ATOMIC_TOUCH_RUN', RUN_STAMP)
     .withExec(TOUCH_WORKSPACE_SOURCES);
 }
 
@@ -158,6 +167,52 @@ function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
 }
 
 /**
+ * Prints where a shard's time went: seconds per spec file and per shard, in the
+ * last lines of the shard's log. The shards are contiguous slices of the test
+ * list, cut by test count, so a heavy file sits in whichever slice it lands in.
+ * With these numbers `PWTEST_SHARD_WEIGHTS` can be set from measurements
+ * instead of guessed. Never fails the shard: a missing report prints nothing.
+ */
+const E2E_TIMING_SUMMARY = [
+  "const fs = require('fs');",
+  'let report;',
+  "try { report = JSON.parse(fs.readFileSync('/test-results.json', 'utf8')); } catch { process.exit(0); }",
+  'const files = new Map();',
+  'let tests = 0;',
+  'const walk = suite => {',
+  '  for (const spec of suite.specs || []) for (const test of spec.tests) {',
+  '    tests++;',
+  '    const ms = test.results.reduce((sum, result) => sum + result.duration, 0);',
+  '    files.set(spec.file, (files.get(spec.file) || [0, 0]).map((v, i) => v + (i ? 1 : ms)));',
+  '  }',
+  '  for (const child of suite.suites || []) walk(child);',
+  '};',
+  'for (const suite of report.suites) walk(suite);',
+  'let total = 0;',
+  'for (const [, [ms]] of files) total += ms;',
+  "console.log('E2E-TIMING shard=' + process.argv[1] + ' tests=' + tests + ' test-seconds=' + Math.round(total / 1000));",
+  'for (const [file, [ms, count]] of [...files].sort((a, b) => b[1][0] - a[1][0]))',
+  "  console.log('E2E-TIMING shard=' + process.argv[1] + ' ' + String(Math.round(ms / 1000)).padStart(5) + 's ' + String(count).padStart(3) + ' tests ' + file);",
+].join(' ');
+
+/**
+ * Shard sizes, in tests, for `PWTEST_SHARD_WEIGHTS`, keyed by shard count.
+ *
+ * Playwright cuts the test list into contiguous slices of equal test count, but
+ * the tests differ in cost: with equal counts, run 4783 (one worker per shard)
+ * took 30.3, ~22.9, 27.1 and 26.5 min, and a shard's minutes are its
+ * `E2E-TIMING test-seconds`. These sizes come from the per-file timings of all
+ * four shards on run 4790: costed per test in suite order, they put every
+ * shard within 2252 to 2279 s of that run. Weights are proportions, so a
+ * growing suite keeps the same split. Re-measure from the `E2E-TIMING` lines
+ * when it drifts. Playwright wants the weights separated by ":" and one per
+ * shard, so only a shard count with an entry here is weighted.
+ */
+const E2E_SHARD_WEIGHTS: Record<number, string> = {
+  4: '62:90:84:79',
+};
+
+/**
  * `bash -c` payload for one Playwright shard.
  *
  * The log label must be safe inside a double-quoted `echo`. The previous
@@ -176,8 +231,14 @@ function e2eShardRunScript(
   return (
     'set -o pipefail; ' +
     `echo "e2e mode grep=${grepLabel} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+    (E2E_SHARD_WEIGHTS[shardCount]
+      ? `export PWTEST_SHARD_WEIGHTS=${E2E_SHARD_WEIGHTS[shardCount]}; `
+      : '') +
+    'export PLAYWRIGHT_JSON_OUTPUT_NAME=/test-results.json; ' +
     `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
-    'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0'
+    'echo ${PIPESTATUS[0]} > /test-exit-code; ' +
+    `node -e ${JSON.stringify(E2E_TIMING_SUMMARY)} ${shardIndex}/${shardCount} 2>&1 | tee -a /test-output.log; ` +
+    'exit 0'
   );
 }
 
@@ -200,16 +261,14 @@ function condenseErrorContext(body: string): string {
 }
 
 const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
-  // 4 shards × 2 workers ≈ 8 browsers. `ci()` runs endToEnd concurrently with
-  // clippy/nextest/flutter/vitest, so the box carries those browsers AND their
-  // four optimized atomic-servers AND cargoBuildJobs=8 AND a 6-wide nextest at the
-  // same time. Earlier 3-worker runs produced 12 browsers and the suite
-  // failed accordingly — including a chromium killed outright ("Target page,
-  // context or browser has been closed"), which is starvation, not a race.
-  // Raise this only alongside the cargo/nextest widths it shares the host with.
+  // Four browser workers total, one per shard/server. At eight, full develop
+  // runs repeatedly exhausted settings-save and app-creation waits while the
+  // same journeys passed in focused runs. The full local suite also passed
+  // with two workers and no retries. Keep browser headroom alongside the
+  // Rust, WASM and frontend jobs instead of widening every interaction wait.
   mancave: {
     e2eShardCount: 4,
-    e2ePlaywrightWorkers: '2',
+    e2ePlaywrightWorkers: '1',
     // Back to the suite's own documented default (playwright.config.ts): three
     // attempts catch a genuinely flaky path while a real regression still
     // fails all three. This branch dropped it to 1 for runtime, and that trade
@@ -276,6 +335,8 @@ export class AtomicServer {
    *  `hostKnobs` so a light E2E job cannot change nextest width mid-`ci()`. */
   private e2eRun: E2eRunKnobs = e2eRunKnobs('hosted', 'full');
   private e2eCloneSessions = false;
+  /** Suffix for the Rust `target/` cache volumes, one per CI runner. */
+  private targetCacheSuffix = '';
 
   constructor(
     @argument({
@@ -312,8 +373,31 @@ export class AtomicServer {
       ],
     })
     source: Directory,
+    /**
+     * The CI runner's name. Mancave runs several runner processes on one
+     * Dagger engine, and cache volumes are engine-wide, so two jobs from
+     * different branches shared each `target/` volume at the same time. The
+     * per-run touch cannot protect that: a build another branch finishes
+     * after this run's touch is newer than this run's sources, and cargo
+     * reuses it (run 4533 failed to compile `server` against another
+     * branch's `atomic_lib`). One volume per runner means one job at a time
+     * per volume again. Registry and pnpm caches are content-addressed and
+     * stay shared. `Mancave`, the original runner, keeps the old names so its
+     * warm caches survive.
+     */
+    @argument() cacheNamespace: string = '',
   ) {
     this.source = source;
+    const namespace = cacheNamespace.trim();
+    this.targetCacheSuffix =
+      namespace === '' || namespace === 'Mancave'
+        ? ''
+        : `-${namespace.replace(/[^A-Za-z0-9_.-]/g, '-')}`;
+  }
+
+  /** A Rust `target/` cache volume, private to this CI runner. */
+  private targetCache(name: string): CacheVolume {
+    return dag.cacheVolume(`${name}${this.targetCacheSuffix}`);
   }
 
   /**
@@ -486,6 +570,11 @@ export class AtomicServer {
     @argument() playwrightRetries: number = -1,
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /**
+     * Where failed e2e shards leave their traces, for `failedTestResults` to
+     * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
+     */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -498,7 +587,7 @@ export class AtomicServer {
 
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.rustFmt()]);
+    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
     // Rust clippy/test still share the `rust-target` cache mount — keep
     // them serialized (parallel cargo contended the target lock for
@@ -514,6 +603,7 @@ export class AtomicServer {
         playwrightRetries,
         '',
         playwrightCloneSessions,
+        resultsKey,
       ),
       this.jsTest(),
       this.jsTestIntegration(),
@@ -538,6 +628,82 @@ export class AtomicServer {
   }
 
   @func()
+  async jsTypecheck(): Promise<string> {
+    // A first attempt at this (#1590) ran `pnpm run typecheck` here, passed
+    // on a checkout, and failed sixty seconds into its first CI run. Nothing
+    // it reported was a type error: `jsSource()` does not lay the tree out
+    // the way a checkout does. The three differences it hit are handled
+    // below, each one reproduced and then re-checked against a replica of
+    // this container's paths. A clean `tsc` in a checkout proves nothing
+    // about this function, so validate a change to it the same way, or by
+    // dispatching `main.yml` on a branch.
+    const depsContainer = this.jsSource()
+      // 1. `data-browser/tsconfig.json` maps `@repo-lib-defaults/*` to
+      //    `../../lib/defaults/*`, which is repo-root `lib/defaults`. The
+      //    browser mounts at /app, so that lands on /lib/defaults, where
+      //    `jsSource()` places only `tasks.json`, and bootstrap.ts's ten
+      //    imports came back TS2307. Mount the directory itself. As with the
+      //    genesis vectors mounted beside it, staying a level below /lib
+      //    leaves the OS libraries alone.
+      .withDirectory('/lib/defaults', this.source.directory('lib/defaults'));
+
+    return (
+      depsContainer
+        .withWorkdir('/app')
+        // 2. Packages reached through node_modules need a `dist`. Building
+        //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
+        //    `@tomic/edit-mode/react` unresolvable. All five build from
+        //    TypeScript alone, so this stays in the cheap static tier beside
+        //    lint and `cargo fmt`: no WASM, no Rust.
+        .withExec([
+          'pnpm',
+          '--filter',
+          '@tomic/lib',
+          '--filter',
+          '@tomic/react',
+          '--filter',
+          '@tomic/plugin',
+          '--filter',
+          '@tomic/service-ui',
+          '--filter',
+          '@tomic/edit-mode',
+          'build',
+        ])
+        .withExec([
+          'pnpm',
+          '--filter=!@tomic/data-browser',
+          'run',
+          '-r',
+          '--parallel',
+          'typecheck',
+        ])
+        // 3. data-browser is the one package that reaches repo-root
+        //    `integrations`, and those files import
+        //    `../../browser/lib/src/index.js`, which here is /browser: the
+        //    symlink `jsSource()` makes so integration tsconfigs can find
+        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
+        //    prefix it is handed, so compiling data-browser as /app while its
+        //    own imports arrive as /browser produces two unrelated
+        //    declarations of every type in `lib`, which is the wall of
+        //    "Store is not assignable to Store" the first attempt hit.
+        //    Naming the project by its /browser path puts both ends on one
+        //    prefix. A workdir cannot do this: the kernel resolves the
+        //    symlink, so `process.cwd()` would be /app again.
+        .withExec([
+          'pnpm',
+          '--filter',
+          '@tomic/data-browser',
+          'exec',
+          'tsc',
+          '--noEmit',
+          '-p',
+          '/browser/data-browser/tsconfig.json',
+        ])
+        .stdout()
+    );
+  }
+
+  @func()
   async jsTest(): Promise<string> {
     const depsContainer = this.jsBuild();
 
@@ -559,38 +725,8 @@ export class AtomicServer {
           '--test',
           'data-browser/scripts/integration-mcp.test.mjs',
         ])
-        // Provider certification shares the integration and browser mounts.
-        .withWorkdir('/')
-        .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
-        .withExec([
-          'node',
-          '/integrations/tooling/certify.mjs',
-          '--layer',
-          'js',
-          '--output',
-          '/integration-certification',
-        ])
         .stdout()
     );
-  }
-
-  /** Export offline provider evidence; live provider writes are never run here. */
-  @func()
-  integrationCertificationReport(): Directory {
-    return this.jsBuild()
-      .withDirectory('/integrations', this.source.directory('integrations'))
-      .withExec(['ln', '-s', '/app', '/browser'])
-      .withWorkdir('/')
-      .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
-      .withExec([
-        'node',
-        '/integrations/tooling/certify.mjs',
-        '--layer',
-        'js',
-        '--output',
-        '/integration-certification',
-      ])
-      .directory('/integration-certification');
   }
 
   /**
@@ -604,8 +740,11 @@ export class AtomicServer {
     // by the rust/wasm lanes. A Locked mount here used to serialize pub get /
     // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
     // the step that merely ran `flutter pub get`).
-    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
-    const flutterRustTarget = dag.cacheVolume('flutter-plugin-rust-target');
+    // The volume is still mounted Shared, so its Cargo locks live inside it
+    // (see the symlinks below). A fresh name keeps older branches, which
+    // mount it with private locks, out of this cache.
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo-shared-locks-v1');
+    const flutterRustTarget = this.targetCache('flutter-plugin-rust-target');
     const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
     const flutterRustup = dag.cacheVolume('flutter-rustup');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
@@ -670,6 +809,22 @@ export class AtomicServer {
         .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
           sharing: CacheSharingMode.Shared,
         })
+        // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
+        // in CARGO_HOME, outside the shared volume, so two runs on one engine
+        // unpacked the same crate at once and failed with
+        // "failed to unpack package ... .cargo-ok: File exists".
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache',
+          '/root/.cargo/.package-cache',
+        ])
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache-mutate',
+          '/root/.cargo/.package-cache-mutate',
+        ])
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
@@ -716,10 +871,6 @@ export class AtomicServer {
           this.source.directory('plugin-runtime'),
         )
         .withDirectory('/code/wasm', this.source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          this.source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
@@ -734,7 +885,7 @@ export class AtomicServer {
         .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache(
           '/code/target',
-          dag.cacheVolume('rust-wasm-target-v3'),
+          this.targetCache('rust-wasm-target-v3'),
         )
         .with(touchWorkspaceSources)
         .withWorkdir('/code/wasm')
@@ -783,10 +934,6 @@ export class AtomicServer {
         .withDirectory('/code/desktop', this.source.directory('desktop'))
         .withDirectory('/code/wasm', this.source.directory('wasm'))
         .withDirectory(
-          '/code/integrations/localthought/syncables',
-          this.source.directory('integrations/localthought/syncables'),
-        )
-        .withDirectory(
           '/code/plugin-examples',
           this.source.directory('plugin-examples'),
         )
@@ -795,7 +942,7 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
+        .withMountedCache('/code/target', this.targetCache('rust-slim-target-v3'))
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
@@ -1022,11 +1169,33 @@ export class AtomicServer {
     );
   }
 
-  /** Extracts the unique deploy URL from netlify output */
+  /**
+   * Extracts the unique deploy URL from netlify output.
+   *
+   * Says which of the two failures happened, because they need opposite
+   * responses and for weeks they printed the same sentence. `netlifyDeploy`
+   * exits 0 with a skip message when `NETLIFY_AUTH_TOKEN` is empty, so an
+   * unset secret and a parse miss both arrived as "Deploy URL not found" —
+   * which reads like the URL format changed and is the reason nobody noticed
+   * that every failed e2e run on develop was publishing no report at all.
+   *
+   * That report is not a nicety. `playwright.config.ts` records traces with
+   * `retain-on-failure`, and this deploy is the only path that carries them
+   * off the runner: Dagger keeps the traces in its container, which is
+   * discarded when the `ci` call throws. So with the token unset the
+   * per-shard 20k-char log tail is the entire evidence channel for a failed
+   * run, and "which assertion failed" arrives without "why".
+   */
   private extractDeployUrl(netlifyOutput: string): string {
     const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
 
-    return match ? match[0] : 'Deploy URL not found';
+    if (match) return match[0];
+
+    if (netlifyOutput.includes('NETLIFY_AUTH_TOKEN not set')) {
+      return 'no report deployed — NETLIFY_AUTH_TOKEN is empty on this runner, so traces and error-context for this shard were discarded with the container';
+    }
+
+    return 'Deploy URL not found (netlify ran but printed no deploy URL)';
   }
 
   @func()
@@ -1142,10 +1311,9 @@ export class AtomicServer {
       // Integration sources live at the repository root. The browser mounts at
       // /app, and its raw imports resolve these paths from /integrations.
       .withDirectory('/integrations', this.source.directory('integrations'))
-      // Each integrations/*/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Same fix jsTest()/
-      // integrationCertificationReport() already use for this: alias /browser
-      // to the /app mount so those relative paths resolve.
+      // integrations/localthought/tsconfig.json extends the repo-root-relative
+      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
+      // so that relative path resolves.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -1162,6 +1330,14 @@ export class AtomicServer {
         '/lib/src/genesis_test_vectors.json',
         this.source.file('lib/src/genesis_test_vectors.json'),
       )
+      // browser/lib/src/loro-compat.test.ts reads the Rust-written Loro
+      // fixtures and compares the loro-crdt version with Cargo.lock's, both
+      // by repository-root path. Same /lib collision: mount only those.
+      .withDirectory(
+        '/lib/test_files/loro-compat',
+        this.source.directory('lib/test_files/loro-compat'),
+      )
+      .withFile('/Cargo.lock', this.source.file('Cargo.lock'))
       // Tests read shared fixtures directly from the repository-root paths.
       // Include the manifest and planner corpus as well as pairing fixtures.
       .withDirectory('/testdata', this.source.directory('testdata'))
@@ -1169,6 +1345,15 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/tasks.json',
         this.source.file('lib/defaults/tasks.json'),
+      )
+      // browser/e2e/tests/apps.spec.ts serves this checkout's embedded app SDK
+      // as a fixture, read with a plain `readFileSync` at
+      // `../../../server/src/plugins/assets/view-client.js`. From /app/e2e/tests
+      // that resolves to /server/..., and the Rust tree is not mounted here, so
+      // mount just this one file.
+      .withFile(
+        '/server/src/plugins/assets/view-client.js',
+        this.source.file('server/src/plugins/assets/view-client.js'),
       );
 
     return sourceContainer;
@@ -1185,12 +1370,10 @@ export class AtomicServer {
       // Surfaces /app/dev-drive and /app/prunetests in the production
       // build the e2e tests run against. See `devRoutesEnabled()` in
       // data-browser/src/config.ts.
-      buildContainer = buildContainer
-        .withEnvVariable('VITE_E2E', 'true')
-        .withEnvVariable(
-          'VITE_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
-        );
+      buildContainer = buildContainer.withEnvVariable('VITE_E2E', 'true');
+      // Nothing else is baked in: the plugin catalog URL is seeded into
+      // localStorage by playwright, so this bundle is the same one a non-e2e
+      // build produces apart from the dev routes.
     }
 
     return buildContainer.withExec(['pnpm', 'run', 'build']);
@@ -1247,16 +1430,12 @@ export class AtomicServer {
       .withDirectory('/code/desktop', source.directory('desktop'))
       .withDirectory('/code/wasm', source.directory('wasm'))
       .withDirectory(
-        '/code/integrations/localthought/syncables',
-        source.directory('integrations/localthought/syncables'),
-      )
-      .withDirectory(
         '/code/plugin-examples',
         source.directory('plugin-examples'),
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
+      .withMountedCache('/code/target', this.targetCache('rust-target-v3'))
       .with(touchWorkspaceSources)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch', '--locked']);
@@ -1441,6 +1620,12 @@ export class AtomicServer {
           '/code/browser/e2e/tests/fixtures/test-plugin.zip',
           source.file('browser/e2e/tests/fixtures/test-plugin.zip'),
         )
+        // `atomic_lib`'s tests `include_str!` the browser copy of the v2
+        // signature vectors to catch the two copies drifting apart.
+        .withFile(
+          '/code/browser/lib/src/authentication_v2_vectors.json',
+          source.file('browser/lib/src/authentication_v2_vectors.json'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
@@ -1453,16 +1638,12 @@ export class AtomicServer {
         .withDirectory('/code/desktop', source.directory('desktop'))
         .withDirectory('/code/wasm', source.directory('wasm'))
         .withDirectory(
-          '/code/integrations/localthought/syncables',
-          source.directory('integrations/localthought/syncables'),
-        )
-        .withDirectory(
           '/code/plugin-examples',
           source.directory('plugin-examples'),
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
+        .withMountedCache('/code/target', this.targetCache('rust-checks-target-v3'))
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
@@ -1496,6 +1677,15 @@ export class AtomicServer {
         // The musl-cross image needs `/usr/local/musl/bin` (for
         // `x86_64-unknown-linux-musl-gcc`); a hardcoded PATH drop caused
         // "linker not found" while compiling plugin-example tests.
+        //
+        // The install unpacks into a staging directory and renames the binary
+        // into place, because the volume is Shared and two runs on one engine
+        // race on it. `tar` straight into `$BIN_DIR` creates the executable
+        // before it has finished writing it, so the other run's `-x` test
+        // passes, it skips the install, and its `cargo nextest` exec of a
+        // file still open for writing fails with "Text file busy
+        // (os error 26)" before any test body runs. A rename is atomic, so a
+        // concurrent run sees either no binary or a complete one.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
         })
@@ -1523,7 +1713,10 @@ export class AtomicServer {
           'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
             'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
-            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
+            'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
+            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
+            'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
+            'rm -rf "$STAGE"; fi && ' +
             'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
@@ -1751,7 +1944,7 @@ export class AtomicServer {
 
     let runtime = dag
       .container()
-      .from(e2e ? 'node:22-alpine' : 'alpine:latest')
+      .from('alpine:latest')
       .withFile('/atomic-server-bin', atomicServerBinary, {
         permissions: 0o755,
       })
@@ -1762,26 +1955,56 @@ export class AtomicServer {
 
     if (e2e)
       runtime = runtime
-        .withDirectory(
-          '/mock-proxy',
-          this.source.directory('integrations/localthought'),
-        )
-        .withEnvVariable(
-          'ATOMIC_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
-        )
-        .withEnvVariable('TENANT_SECRET', 'bW9jay10ZW5hbnQ.mock-signature')
-        .withEnvVariable(
-          'ATOMIC_INTEGRATION_FRONTEND_ORIGIN',
-          'http://atomic.localhost:9883',
-        )
-        .withEnvVariable('MOCK_FRONTEND_ORIGIN', 'http://atomic.localhost:9883')
-        .withEnvVariable('MOCK_PROXY_HOST', '0.0.0.0')
-        .withExposedPort(19090)
+        // Website publishing is off until the server is given a site origin,
+        // and the website specs then get a "hosting is disabled" toast that
+        // also sits over the preview and swallows clicks meant for it. The
+        // server asks for a separate `.localhost` origin in development; this
+        // is that, and it has to stay outside the API domain.
+        .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
+        // The name the server answers to, which until now was not the name it
+        // is addressed by. `ATOMIC_DOMAIN` above is the dagger hostname, and
+        // the server was given the same string, so its configured origin was
+        // `http://atomic:9883` while every browser-created subject carried
+        // `http://atomic.localhost:9883`. Those two are compared as authorities
+        // in `Subject::from_raw`, where `atomic.localhost:9883` matches neither
+        // `atomic:9883` nor the `.atomic:9883` suffix case, so the server read
+        // its own subjects as somebody else's:
+        //
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic:9883"))
+        //     -> is_local false
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic.localhost:9883"))
+        //     -> is_local true
+        //
+        // Splitting the two lets the server know its own name while dagger
+        // keeps addressing the container as `atomic`. Routing does not move
+        // with it: `map_request_subject` (lib/src/db.rs) only re-routes a host
+        // explicitly bound to a Drive, and `atomic` is not bound, so the
+        // containers that curl `http://atomic:9883` are unaffected.
+        .withEnvVariable('ATOMIC_DOMAIN', 'atomic.localhost')
         .withEntrypoint([
           'sh',
           '-c',
-          'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
+          // Makes `atomic.localhost` resolve inside this container. RFC 6761
+          // gives `.localhost` to loopback, but that is a rule browsers and
+          // Node implement and glibc does not: with `hosts: files dns` the
+          // name does not resolve at all, and anything here that looks it up
+          // fails before a request goes out.
+          //
+          // This is no longer about `plugin.spec.ts:26`. That was fixed by
+          // giving the server its own `ATOMIC_DOMAIN` above, so it reads its
+          // own subjects locally instead of fetching them, and the run after
+          // that change was green on `:26` and `installation-recovery:96`.
+          // What this line covers now is the server resolving any subject
+          // genuinely on another host. That is a wider scope than the SSRF
+          // escape hatch removed alongside it, which reached only five Rust
+          // call sites, so the two were not a pair despite arriving in one
+          // commit.
+          //
+          // Written at start rather than baked in, because the runtime mounts
+          // its own `/etc/hosts` over the image's. The server binds `::`, so
+          // once the name resolves it reaches itself.
+          'echo "127.0.0.1 atomic.localhost" >> /etc/hosts; ' +
+            'exec /atomic-server-bin',
         ]);
 
     // Dagger deduplicates identical services, including their writable state.
@@ -1872,18 +2095,23 @@ export class AtomicServer {
           browserContainer.directory('/app/create-template'),
         )
         .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
-        // Several specs import fixtures and mocks from the repo's integrations
-        // tree (`../../../integrations/...` from /app/e2e/tests), and Playwright
-        // loads every spec file even when a grep selects a subset.
-        .withDirectory('/integrations', this.source.directory('integrations'))
         .withDirectory(
           '/app/node_modules',
           browserContainer.directory('/app/node_modules'),
         )
-        // Raw imports in browser/e2e/tests (e.g. mt940.spec.ts,
-        // devonian-issue-sync.spec.mts) reach into ../../../integrations
-        // relative to /app/e2e/tests, resolving to /integrations here.
-        .withDirectory('/integrations', this.source.directory('integrations'))
+        // playwright.config.ts starts testdata/atomic-plugins-mock/serve.mjs
+        // (../../testdata from /app/e2e) as the suite's plugin catalog.
+        .withDirectory('/testdata', this.source.directory('testdata'))
+        // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
+        // plain `readFileSync` at `../../../server/src/plugins/assets/
+        // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()
+        // mounts it for browser/plugin's unit test, but the specs run here, in a
+        // fresh Playwright image that copies only what is named, so this
+        // container needs its own copy.
+        .withFile(
+          '/server/src/plugins/assets/view-client.js',
+          this.source.file('server/src/plugins/assets/view-client.js'),
+        )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
         .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
@@ -1935,7 +2163,6 @@ export class AtomicServer {
         // It sits after the service binding and the setup probe, so the build
         // layers above stay cached; only the Playwright exec is unique.
         .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
-        .withEnvVariable('ATOMIC_MOCK_INTEGRATION_PROXY', '1')
         .withExec([
           '/bin/bash',
           '-c',
@@ -1967,6 +2194,8 @@ export class AtomicServer {
     @argument() playwrightGrep: string = '',
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /** See `ci()`. */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.e2eCloneSessions = playwrightCloneSessions;
     // Shards × own atomic-server. Count comes from `--host-profile`
@@ -2046,14 +2275,88 @@ export class AtomicServer {
       )
         .filter(Boolean)
         .join('\n\n');
+      const exported = resultsKey
+        ? await this.saveTestResults(resultsKey, failed)
+        : 'none kept (no --results-key)';
       throw new Error(
         `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
-          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
+          `Reports:\n${reportUrls.join('\n')}\n` +
+          `Traces: ${exported}\n\n${tails}` +
           (contexts ? `\n\n${contexts}` : ''),
       );
     }
 
     return reportUrls.join('\n') || 'e2e ok (no report URL)';
+  }
+
+  /**
+   * Keeps failed shards' `test-results` (traces, screenshots,
+   * `error-context.md`) in a cache volume under `key`, for `failedTestResults`.
+   *
+   * They used to leave only through the netlify report, and with
+   * `NETLIFY_TOKEN` unset they were discarded with the container. A failure
+   * that only happens on Mancave then left an assertion message and nothing
+   * else: on 29-30 September a reload that rendered a blank page could only
+   * be described, not diagnosed. `Directory.export` from inside this module
+   * does not help: it writes into the function's own sandbox, not onto the
+   * runner. The `ci` call fails, so it cannot return them either; a second
+   * call reads them back from the volume instead.
+   */
+  private async saveTestResults(
+    key: string,
+    failed: { shard: number; testResults: Directory }[],
+  ): Promise<string> {
+    const safeKey = key.replace(/[^A-Za-z0-9._-]/g, '_');
+    try {
+      let container = dag
+        .container()
+        .from('alpine:latest')
+        .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'));
+
+      for (const r of failed) {
+        container = container.withDirectory(`/in/shard-${r.shard}`, r.testResults);
+      }
+
+      await container
+        .withExec([
+          'sh',
+          '-c',
+          // Keep a week of runs; the volume must not grow without bound.
+          `find /results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + ; ` +
+            `rm -rf /results/${safeKey} && mkdir -p /results/${safeKey} && ` +
+            `cp -r /in/. /results/${safeKey}/`,
+        ])
+        .sync();
+
+      return `kept under ${safeKey}; the workflow uploads them as the e2e-test-results artifact`;
+    } catch (e) {
+      return `could not keep test results: ${e}`;
+    }
+  }
+
+  /**
+   * Named without a digit on purpose: Dagger's CLI kebab-cases `e2eTestResults`
+   * to something other than `e2e-test-results` (as with `--e2e-mode`), and
+   * the workflow's call failed with "unknown command" (run 36895753311).
+   *
+   * The traces `ci`/`endToEnd` kept for failed shards under `resultsKey`,
+   * one folder per shard. Empty when nothing failed. main-ci.yml exports
+   * this on failure and uploads it as an artifact.
+   */
+  @func()
+  async failedTestResults(@argument() resultsKey: string): Promise<Directory> {
+    const safeKey = resultsKey.replace(/[^A-Za-z0-9._-]/g, '_');
+
+    return dag
+      .container()
+      .from('alpine:latest')
+      .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'))
+      .withExec([
+        'sh',
+        '-c',
+        `mkdir -p /out && if [ -d /results/${safeKey} ]; then cp -r /results/${safeKey}/. /out/; fi`,
+      ])
+      .directory('/out');
   }
 
   /**

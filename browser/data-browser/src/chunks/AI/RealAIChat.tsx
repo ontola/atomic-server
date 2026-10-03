@@ -1,3 +1,11 @@
+import {
+  canPurchaseHostedAICredits,
+  HOSTED_AI_USAGE_EVENT,
+} from '@helpers/managed/ai';
+import { getManagedApiBase } from '@helpers/managed/api';
+import { HostedAICredits } from './HostedAICredits';
+import { compactionTokens } from './usageMetadata';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
@@ -9,7 +17,8 @@ import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Button } from '@components/Button';
-import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
+import { ButtonLink } from '@components/ButtonLink';
+import { FaXmark, FaPaperclip, FaFile, FaSliders } from 'react-icons/fa6';
 import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
@@ -23,7 +32,8 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
-import { AISettingsDialog } from './AISettingsDialog';
+import { BasicSelect } from '@components/forms/BasicSelect';
+import { MicrophoneSelect } from '@components/AI/MicrophoneSelect';
 import { MessageContextItem } from './MessageContextItem';
 
 import { ComboBox } from '@components/ComboBox';
@@ -51,9 +61,9 @@ import {
 import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
-import { useGenerativeData } from './useGenerativeData';
 import { useConversationSummary } from './useConversationSummary';
-import { FollowUpPrompt } from './FollowUpPrompt';
+import { Popover } from '@components/Popover';
+import { Trigger as PopoverTrigger } from '@radix-ui/react-popover';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 import { useRAG } from './useRAG';
@@ -63,6 +73,7 @@ import { useAIChanges } from '@components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
+import { LiveConversation } from './LiveConversation';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -131,16 +142,18 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   children,
 }) => {
   const store = useStore();
+  const navigate = useNavigateWithTransition();
+  const [liveActive, setLiveActive] = useState(false);
   const {
     openRouterApiKey,
     showTokenUsage,
-    showFollowUpPrompts,
     ollamaUrl,
     isProviderAvailable,
+    hostedAI,
+    enableIncludedAI,
   } = useAISettings();
 
-  // useChat does not update it's options so we need to use a ref to make it use the latest value.
-  const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
+  // useChat callbacks need refs to read the latest values.
   const autoCompactTokenThresholdRef = useRef<number | null>(null);
   // Use a ref for the guard so the stale onFinish closure sees the current value.
   const isCompactingRef = useRef(false);
@@ -243,7 +256,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       };
     });
 
-    const all = [...openRouterOptions, ...ollamaOptions];
+    const hostedOptions = hostedAI?.enabled
+      ? [
+          {
+            label: 'Included AI',
+            searchLabel: 'included hosted atomic ai',
+            description: 'Uses your account credits',
+            value: `hosted:${hostedAI.model}`,
+          },
+        ]
+      : [];
+    const all = [...hostedOptions, ...openRouterOptions, ...ollamaOptions];
 
     // Surface recently used models at the top. With an empty query the ComboBox
     // shows the options in this order; once the user types, QuickScore re-ranks.
@@ -257,7 +280,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const rest = all.filter(option => !recentRank.has(option.value));
 
     return [...recent, ...rest];
-  }, [openRouterModels, ollamaModels, currencyFormatter, recentModelValues]);
+  }, [
+    openRouterModels,
+    ollamaModels,
+    currencyFormatter,
+    recentModelValues,
+    hostedAI,
+  ]);
 
   const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
@@ -270,13 +299,26 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const fileDragDepth = useRef(0);
-  const { defaultChatModel, setDefaultChatModel } = useAISettings();
+  const {
+    defaultChatModel,
+    setDefaultChatModel,
+    voiceEnabled,
+    transcriptionModel,
+    microphoneId,
+    openRouterZdr,
+  } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
-  const [activeModel, setActiveModel] = useState<AIModelIdentifier>(() => {
+  const [selectedModel, setActiveModel] = useState<AIModelIdentifier>(() => {
     return selectedAgent.model ?? defaultChatModel;
   });
+  // Old saved agents can name a BYOK model even though this SaaS account never
+  // configured a provider. They should work with the included default too.
+  const activeModel =
+    hostedAI?.enabled && !openRouterApiKey && !ollamaUrl
+      ? defaultChatModel
+      : selectedModel;
   const modelContextLength = useModelContextLength(activeModel);
   const vectorIndexing = useVectorIndexStatus();
   const searchDependentIndexing =
@@ -292,14 +334,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // this to block typing (a user must always be able to compose a message, even
   // while a provider is unreachable or still being set up) — only to disable the
   // SEND and to surface a clear reason.
-  const canUseInput = isProviderAvailable(activeModel.provider);
-
-  // Re-opens the provider setup overlay (`AISetupPanel` renders while
-  // `atomic.ai.setupComplete` is false).
-  const [, setSetupComplete] = useLocalStorage(
-    'atomic.ai.setupComplete',
-    false,
-  );
+  const canUseInput =
+    isProviderAvailable(activeModel.provider) &&
+    (activeModel.provider !== AIProvider.Hosted ||
+      Boolean(hostedAI?.remaining_micros));
 
   // Why the last request failed, if it did. A request that dies — an unreachable
   // provider, a rejected key, a model that doesn't exist — used to leave no
@@ -313,32 +351,50 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
   const providerLabel =
-    activeModel.provider === AIProvider.Ollama
-      ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'OpenRouter'
-        : 'the model provider';
+    activeModel.provider === AIProvider.Hosted
+      ? 'Included AI'
+      : activeModel.provider === AIProvider.Ollama
+        ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
+        : activeModel.provider === AIProvider.OpenRouter
+          ? 'OpenRouter'
+          : 'the model provider';
 
   const providerNotice = canUseInput
     ? null
-    : activeModel.provider === AIProvider.Ollama
-      ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-        : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+    : activeModel.provider === AIProvider.Hosted
+      ? 'Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges.'
+      : activeModel.provider === AIProvider.Ollama
+        ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
+        : activeModel.provider === AIProvider.OpenRouter
+          ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+          : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+
+  const creditPurchaseUrl =
+    canPurchaseHostedAICredits(hostedAI) &&
+    activeModel.provider === AIProvider.Hosted
+      ? `${new URL(getManagedApiBase(), window.location.origin).origin}/dashboard`
+      : undefined;
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
-  const { generateFollowUpQuestions } = useGenerativeData();
   const { generateConversationSummary } = useConversationSummary(activeModel);
-  const [agentConfigOpen, setAgentConfigOpen] = useState(false);
-  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const focusModelOnOpen = useRef(false);
+  const focusInputOnClose = useRef(false);
+
+  const openAISettings = () => {
+    setControlsOpen(false);
+
+    return navigate('/app/settings?q=ai');
+  };
+
   // Bumped to move focus into the chat input (e.g. right after picking a model).
   const [inputFocusSignal, setInputFocusSignal] = useState(0);
 
   const { tools: atomicTools } = useAtomicMCPTools({
     editModel: activeModel,
+    hosted: liveActive && !openRouterApiKey,
     onResourceEdited: (originalResource: Resource) => {
       reportAIEdit(originalResource);
     },
@@ -346,6 +402,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const transport = useClientOnlyTransport({
     openRouterAPIKey: openRouterApiKey,
+    openRouterZdr,
     ollamaURL: ollamaUrl,
     selectedAgent,
     model: activeModel,
@@ -393,14 +450,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         );
         onNewMessage(message);
 
-        // A failed request must not spend more quota on follow-ups or compaction.
+        // A failed request must not spend more quota on compaction.
         if (isError) return;
 
-        if (showFollowUpPromptsRef.current && message.role === 'assistant') {
-          generateFollowUpQuestions(_messages).then(setFollowUpQuestions);
-        }
-
-        const inputTokens = message.metadata?.inputTokensUsed ?? 0;
+        const inputTokens = compactionTokens(message.metadata);
         const threshold = autoCompactTokenThresholdRef.current;
 
         if (threshold !== null && inputTokens > threshold) {
@@ -566,8 +619,25 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   );
 
   const handleSubmit = async (inputOverride?: string) => {
+    if (liveActive) return;
     const text = inputOverride || userInput;
     setRequestError(undefined);
+
+    // The composer discloses the hosted provider before the user sends. Do not
+    // upload context or create a message if recording that choice fails.
+    if (activeModel.provider === AIProvider.Hosted && !hostedAI?.consent) {
+      try {
+        await enableIncludedAI();
+      } catch (error) {
+        setRequestError(
+          error instanceof Error
+            ? error.message
+            : 'Could not start included AI. Please try again.',
+        );
+
+        return;
+      }
+    }
 
     if (text.trim() === '/compact') {
       setUserInput('');
@@ -619,7 +689,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     lastRequestErrorRef.current = undefined;
     sendMessage(message);
     setAttachedFiles([]);
-    setFollowUpQuestions([]);
 
     if (chatSubject) {
       setLastUsedAgentForChat(chatSubject, selectedAgent.id);
@@ -679,6 +748,19 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
   }, [defaultChatModel]);
 
+  // Settings can edit or delete an agent while this chat remains open.
+  useOnValueChange(() => {
+    const agent =
+      agents.find(item => item.id === selectedAgent.id) ??
+      getInitialAgent(!chatSubject, chatSubject);
+    setSelectedAgent(agent);
+    setActiveModel(agent.model ?? defaultChatModel);
+  }, [JSON.stringify(agents)]);
+
+  useOnValueChange(() => {
+    if (!voiceEnabled) setLiveActive(false);
+  }, [voiceEnabled]);
+
   const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
@@ -687,7 +769,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
     autoSubmittedRef.current = true;
 
-    if (!canUseInput) {
+    if (
+      !canUseInput ||
+      (activeModel.provider === AIProvider.Hosted && !hostedAI?.consent)
+    ) {
       // Keep an app handoff editable while the user configures a provider.
       // Do not discard the request or attempt a generation without one.
       setUserInput(autoSubmitMessage);
@@ -717,10 +802,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   );
 
   useEffect(() => {
-    showFollowUpPromptsRef.current = showFollowUpPrompts;
-  }, [showFollowUpPrompts]);
-
-  useEffect(() => {
     const percent = selectedAgent.autoCompactThresholdPercent ?? 80;
     autoCompactTokenThresholdRef.current = getAutoCompactTokenThreshold(
       modelContextLength,
@@ -732,7 +813,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     <ChatWindow fullView={fullView} empty={messages.length === 0}>
       {children}
       <ChatMessagesContainer
-        enableAutoScroll={status === 'streaming'}
+        enableAutoScroll={status === 'streaming' || liveActive}
         scrollToCompactTrigger={scrollToCompactTrigger}
         fullView={fullView}
       >
@@ -753,12 +834,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           <AIChatMessage
             key={message.id}
             message={message}
+            hideError={Boolean(
+              requestError &&
+              message.id === messages.at(-1)?.id &&
+              message.metadata?.error === requestError,
+            )}
             onDeleteMessage={deleteMessage}
             onRegenerateMessage={regenerateMessage}
           />
         ))}
       </ChatMessagesContainer>
-      <Column style={{ minWidth: 0 }}>
+      <Column gap='0.5rem' style={{ minWidth: 0 }}>
         {status === 'streaming' && (
           <Row center gap='0.2ch'>
             <GeneratingIndicator text='Generating' />
@@ -779,22 +865,30 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         )}
         {!readonly && (
           <>
-            {followUpQuestions.length > 0 && (
-              <Column gap='0px'>
-                {followUpQuestions.map(question => (
-                  <FollowUpPrompt
-                    key={question}
-                    text={question}
-                    onClick={() => handleSubmit(question)}
-                  />
-                ))}
-              </Column>
-            )}
-            {providerNotice && (
+            {activeModel.provider === AIProvider.Hosted &&
+              hostedAI &&
+              !hostedAI.consent && (
+                <span>
+                  By sending, you enable included AI. Your messages and selected
+                  document context are sent through Atomic to its AI providers.
+                </span>
+              )}
+            {providerNotice && !liveActive && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
-                <Button onClick={() => setSetupComplete(false)}>
-                  Set up a model
+                {creditPurchaseUrl && !hostedAI?.remaining_micros && (
+                  <ButtonLink
+                    href={creditPurchaseUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                  >
+                    Buy AI credits
+                  </ButtonLink>
+                )}
+                <Button onClick={openAISettings}>
+                  {hostedAI?.enabled
+                    ? 'Advanced AI settings'
+                    : 'Set up a model'}
                 </Button>
               </ProviderNotice>
             )}
@@ -803,10 +897,28 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 <span>
                   {`No answer from ${providerLabel}: ${requestError}`}
                 </span>
+                {creditPurchaseUrl &&
+                  /not enough ai credits/i.test(requestError) && (
+                    <ButtonLink
+                      href={creditPurchaseUrl}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    >
+                      Buy AI credits
+                    </ButtonLink>
+                  )}
                 <Button
                   onClick={() => {
                     setRequestError(undefined);
-                    regenerate();
+
+                    if (
+                      activeModel.provider === AIProvider.Hosted &&
+                      !hostedAI?.consent
+                    ) {
+                      void handleSubmit();
+                    } else {
+                      regenerate();
+                    }
                   }}
                 >
                   Try again
@@ -938,22 +1050,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     // Never block typing — only the SEND is gated on an available
                     // provider (the notice above the input explains why).
                     disabled={false}
-                    disableSubmit={!canUseInput}
+                    disableSubmit={!canUseInput || liveActive}
                     hasFiles={attachedFiles.length > 0}
                     onMentionUpdate={handleMentionUpdate}
                     onChange={setUserInput}
                     onSubmit={handleSubmit}
                     onCompact={compact}
                     onEditModel={() => {
-                      const input =
-                        modelSelectContainerRef.current?.querySelector('input');
-
-                      if (input) {
-                        input.focus();
-                        input.select();
-                      }
+                      focusModelOnOpen.current = true;
+                      setControlsOpen(true);
                     }}
-                    onEditAgent={() => setAgentConfigOpen(true)}
+                    onEditAgent={() => openAISettings()}
                     onFileAdded={
                       checkModelSupportsImageInput(activeModel)
                         ? handleFileUpload
@@ -977,55 +1084,218 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                         flex: 1,
                       }}
                     >
-                      <SubtleButton onClick={() => setAgentConfigOpen(true)}>
-                        {selectedAgent.name}
-                      </SubtleButton>
-                      <ModelSelectWrapper ref={modelSelectContainerRef}>
-                        <ComboBox
-                          subtle
-                          selectedItem={`${activeModel.provider}:${activeModel.id}`}
-                          options={combinedModelOptions}
-                          onSelect={value => {
-                            if (!value) return;
-                            const [providerStr, ...idParts] = value.split(':');
-                            const id = idParts.join(':');
-                            const provider =
-                              providerStr === 'openrouter'
-                                ? AIProvider.OpenRouter
-                                : AIProvider.Ollama;
-                            const newModel = { id, provider };
-                            setActiveModel(newModel);
+                      <Popover
+                        open={controlsOpen}
+                        onOpenChange={open => {
+                          setControlsOpen(open);
+                          if (open)
+                            window.dispatchEvent(
+                              new Event(HOSTED_AI_USAGE_EVENT),
+                            );
+                        }}
+                        onOpenAutoFocus={event => {
+                          if (!focusModelOnOpen.current) return;
+                          focusModelOnOpen.current = false;
+                          event.preventDefault();
+                          const input =
+                            modelSelectContainerRef.current?.querySelector(
+                              'input',
+                            );
+                          input?.focus();
+                          input?.select();
+                        }}
+                        onCloseAutoFocus={event => {
+                          if (!focusInputOnClose.current) return;
+                          focusInputOnClose.current = false;
+                          event.preventDefault();
+                          setInputFocusSignal(n => n + 1);
+                        }}
+                        side='top'
+                        Trigger={
+                          <PopoverTrigger asChild>
+                            <IconButton title='AI Chat options'>
+                              <FaSliders />
+                            </IconButton>
+                          </PopoverTrigger>
+                        }
+                      >
+                        <ChatControls>
+                          <strong>AI Chat options</strong>
+                          <ControlLabel>Agent</ControlLabel>
+                          <BasicSelect
+                            aria-label='Chat agent'
+                            value={selectedAgent.id}
+                            onChange={event => {
+                              if (event.target.value === 'settings') {
+                                void openAISettings();
 
-                            // Persist the choice to whichever source the chat reads
-                            // on open (`agent.model ?? defaultChatModel`), so it
-                            // survives refreshes and new chats.
-                            if (selectedAgent.model) {
-                              const updatedAgent = {
-                                ...selectedAgent,
-                                model: newModel,
-                              };
-                              setSelectedAgent(updatedAgent);
-                              saveAgents(
-                                agents.map(a =>
-                                  a.id === updatedAgent.id ? updatedAgent : a,
-                                ),
+                                return;
+                              }
+
+                              const agent = agents.find(
+                                item => item.id === event.target.value,
                               );
-                            } else {
-                              setDefaultChatModel(newModel);
+                              if (agent) handleSelectAgent(agent);
+                            }}
+                          >
+                            {agents.map(agent => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.name}
+                              </option>
+                            ))}
+                            <option value='settings'>AI settings…</option>
+                          </BasicSelect>
+                          {voiceEnabled && (
+                            <>
+                              <ControlLabel>Microphone</ControlLabel>
+                              <MicrophoneSelect />
+                            </>
+                          )}
+                          <ControlLabel>Model</ControlLabel>
+                          {hostedAI?.enabled &&
+                          !openRouterApiKey &&
+                          !ollamaUrl ? (
+                            <span>Included AI · model managed by Atomic</span>
+                          ) : (
+                            <ModelSelectWrapper ref={modelSelectContainerRef}>
+                              <ComboBox
+                                ariaLabel='Model'
+                                selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                                options={combinedModelOptions}
+                                onSelect={value => {
+                                  if (!value) return;
+                                  const [providerStr, ...idParts] =
+                                    value.split(':');
+                                  const id = idParts.join(':');
+                                  const provider =
+                                    providerStr === 'hosted'
+                                      ? AIProvider.Hosted
+                                      : providerStr === 'openrouter'
+                                        ? AIProvider.OpenRouter
+                                        : AIProvider.Ollama;
+                                  const newModel = { id, provider };
+                                  setActiveModel(newModel);
+
+                                  // Persist the choice to whichever source the chat reads
+                                  // on open (`agent.model ?? defaultChatModel`), so it
+                                  // survives refreshes and new chats.
+                                  if (selectedAgent.model) {
+                                    const updatedAgent = {
+                                      ...selectedAgent,
+                                      model: newModel,
+                                    };
+                                    setSelectedAgent(updatedAgent);
+                                    saveAgents(
+                                      agents.map(a =>
+                                        a.id === updatedAgent.id
+                                          ? updatedAgent
+                                          : a,
+                                      ),
+                                    );
+                                  } else {
+                                    setDefaultChatModel(newModel);
+                                  }
+
+                                  // Remember this model so it surfaces at the top next time.
+                                  setRecentModelValues(prev =>
+                                    [
+                                      value,
+                                      ...prev.filter(v => v !== value),
+                                    ].slice(0, 5),
+                                  );
+                                  // Move focus to the chat input so the user can type right away.
+                                  focusInputOnClose.current = true;
+                                  setControlsOpen(false);
+                                }}
+                              />
+                            </ModelSelectWrapper>
+                          )}
+                          {hostedAI?.enabled && (
+                            <HostedAICredits
+                              status={hostedAI}
+                              portalUrl={
+                                new URL(
+                                  getManagedApiBase(),
+                                  window.location.origin,
+                                ).origin
+                              }
+                            />
+                          )}
+                          {showTokenUsage && totalTokensUsed > 0 && (
+                            <TokensUsed>
+                              Tokens used:{' '}
+                              {nummberFormatter.format(usage.input)} input,{' '}
+                              {nummberFormatter.format(usage.output)} output
+                            </TokensUsed>
+                          )}
+                          <SettingsLink
+                            href='/app/settings?section=ai'
+                            onClick={event => {
+                              if (
+                                event.metaKey ||
+                                event.ctrlKey ||
+                                event.shiftKey ||
+                                event.altKey
+                              )
+                                return;
+                              event.preventDefault();
+                              navigate('/app/settings?section=ai');
+                              setControlsOpen(false);
+                            }}
+                          >
+                            AI settings
+                          </SettingsLink>
+                        </ChatControls>
+                      </Popover>
+                      {voiceEnabled && (
+                        <LiveConversation
+                          transcriptionModel={transcriptionModel}
+                          microphoneId={microphoneId}
+                          apiKey={openRouterApiKey}
+                          onConfigure={() => openAISettings()}
+                          messages={messages}
+                          busy={
+                            status === 'streaming' || status === 'submitted'
+                          }
+                          delegate={(history, signal) =>
+                            transport.runLiveTask(history, signal)
+                          }
+                          onActive={setLiveActive}
+                          takeContext={() => {
+                            const context = [
+                              ...externalContextItems,
+                              ...userSelectedContextItems,
+                            ];
+
+                            if (context.length > 0) {
+                              setUserSelectedContextItems([]);
+                              setExternalContextItems([]);
                             }
 
-                            // Remember this model so it surfaces at the top next time.
-                            setRecentModelValues(prev =>
-                              [value, ...prev.filter(v => v !== value)].slice(
-                                0,
-                                5,
-                              ),
+                            return context;
+                          }}
+                          onTranscript={message => {
+                            setMessages(previous =>
+                              previous.some(m => m.id === message.id)
+                                ? previous.map(m =>
+                                    m.id === message.id ? message : m,
+                                  )
+                                : [...previous, message],
                             );
-                            // Move focus to the chat input so the user can type right away.
-                            setInputFocusSignal(n => n + 1);
+                            Promise.resolve(onNewMessage(message)).catch(
+                              error => {
+                                console.error(
+                                  'Could not save voice transcript:',
+                                  error,
+                                );
+                                setRequestError(
+                                  'Could not save the voice transcript.',
+                                );
+                              },
+                            );
                           }}
                         />
-                      </ModelSelectWrapper>
+                      )}
                       {checkModelSupportsImageInput(activeModel) && (
                         <>
                           <input
@@ -1051,23 +1321,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   </AIChatInput>
                 </React.Suspense>
               </Column>
-              {messages.length === 0 && <div></div>}
             </ChatInputWrapper>
-            {showTokenUsage && totalTokensUsed > 0 && (
-              <TokensUsed>
-                Tokens used: {nummberFormatter.format(usage.input)} input,{' '}
-                {nummberFormatter.format(usage.output)} output
-              </TokensUsed>
-            )}
           </>
         )}
       </Column>
-      <AISettingsDialog
-        open={agentConfigOpen}
-        onOpenChange={setAgentConfigOpen}
-        selectedAgent={selectedAgent}
-        onSelectAgent={handleSelectAgent}
-      />
 
       {!readonly && <AISetupPanel />}
     </ChatWindow>
@@ -1128,6 +1385,10 @@ const ChatInputWrapper = styled.div`
   position: relative;
   min-width: 0;
 
+  @media (max-width: 600px) {
+    padding: 0.25rem;
+  }
+
   ${transition('border-color')}
   &:focus-within {
     border-color: ${p => p.theme.colors.main};
@@ -1155,13 +1416,18 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: ${p =>
-    p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
+    p.empty && p.fullView
+      ? 'auto minmax(0, 1fr) auto minmax(0, 1fr)'
+      : 'auto minmax(0, 1fr) auto'};
   /* Unquoted, or the browser discards the declaration and the grid sizes to
      its own content: the 1fr message row has nothing to expand into, so the
      composer stops sitting at the bottom of the panel and slides up under the
      last reply. */
   height: 100%;
+  min-height: 0;
+  min-width: 0;
   width: min(100%, 70rem);
   margin-inline: auto;
   gap: 1rem;
@@ -1171,36 +1437,43 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
     word-break: break-word;
   }
 
-  @media (max-width: 1550px) {
-    height: 90vh;
+  @media (max-width: 600px) {
+    padding: ${p => (p.fullView ? '0.25rem' : 0)};
+    gap: 0.25rem;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 `;
 
-const TokensUsed = styled.p`
+const ChatControls = styled(Column)`
+  padding: 0.75rem;
+  width: min(22rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  gap: 0.5rem;
+  align-items: stretch;
+
+  > button {
+    text-align: left;
+    padding: 0.6rem;
+    border: 1px solid ${p => p.theme.colors.bg2};
+    border-radius: ${p => p.theme.radius};
+  }
+`;
+
+const ControlLabel = styled.span`
   font-size: 0.8rem;
   color: ${p => p.theme.colors.textLight};
 `;
 
-const SubtleButton = styled.button`
-  appearance: none;
-  cursor: pointer;
-  background: none;
-  border: none;
-  color: inherit;
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size(1)};
-  padding-inline: ${p => p.theme.size(2)};
+const SettingsLink = styled.a`
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+`;
 
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex-shrink: 1;
-
-  &:focus-visible,
-  &:hover {
-    background-color: ${p => p.theme.colors.bg1};
-  }
+const TokensUsed = styled.p`
+  margin: 0;
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const ProviderNotice = styled.div`
@@ -1261,7 +1534,7 @@ const HistoricalMessageWrapper = styled.div`
 `;
 
 const ModelSelectWrapper = styled.div`
-  min-width: 14rem;
+  min-width: 0;
   flex: 1.5;
   flex-shrink: 1;
 

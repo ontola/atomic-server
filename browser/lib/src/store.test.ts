@@ -373,21 +373,20 @@ describe('Store', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
-  it('gives an unsaved form a permanent subject before minting its attachment', async ({
+  it('attaches a file to an unsaved form under the subject the form is saved as', async ({
     expect,
   }) => {
     const { store, posted } = await testStore();
     const drive = await store.createDrive('Home');
     store.setDrive(drive.subject);
-    const parent = new Resource('_new:attachment-form', true);
-    parent.setStore(store);
-    store.addResource(parent);
-    await parent.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/Folder'],
-      false,
-    );
-    await parent.set(core.properties.parent, drive.subject, false);
+    // The new-resource form's draft: its subject is final from creation, and
+    // its genesis is signed on save.
+    const parent = await store.newResource({
+      parent: drive.subject,
+      isA: 'https://atomicdata.dev/classes/Folder',
+      deferGenesis: true,
+    });
+    const formSubject = parent.subject;
     (store as unknown as { clientDb: unknown }).clientDb = {
       isReady: true,
       blake3Hash: async () => new Uint8Array(32),
@@ -400,7 +399,8 @@ describe('Store', () => {
       parent.subject,
     );
     const file = store.resources.get(subject)!;
-    expect(parent.subject).toMatch(/^did:ad:/);
+    expect(parent.subject).toMatch(/^atomic:/);
+    expect(parent.subject).toBe(formSubject);
     expect(file.get(core.properties.parent)).toBe(parent.subject);
     expect(parent.new).toBe(true);
     expect(store.outbox.getEntry(file.subject)).toBeUndefined();
@@ -566,6 +566,7 @@ describe('Store', () => {
       resource.subject,
       expect.any(String),
       undefined,
+      undefined,
     );
   });
 
@@ -639,7 +640,9 @@ describe('Store', () => {
         flush: async () => undefined,
         putResourceWithSnapshot,
       } as unknown as Parameters<Store['setClientDb']>[0]);
-      const resource = new Resource('did:ad:persisted-then-added');
+      // Canonical spelling: `persistToClientDb` keys the row by the
+      // resource's own subject, which `addResource` would otherwise rewrite.
+      const resource = new Resource('atomic:persisted-then-added');
       resource.setStore(store);
       await resource.set(core.properties.name, 'Persisted first', false);
       resource.loading = false;
@@ -739,10 +742,17 @@ describe('Store', () => {
   it('accepts a custom fetch implementation', async ({ expect }) => {
     const testResourceSubject = 'https://atomicdata.dev';
 
+    // Both requests are answered locally: the test is about which fetch the
+    // store uses, and waiting on the real atomicdata.dev made it flaky in CI.
+    const answer = async () =>
+      new Response(JSON.stringify({ '@id': testResourceSubject }), {
+        headers: { 'Content-Type': 'application/ad+json' },
+      });
+    const globalFetch = vi.fn(answer);
+    vi.stubGlobal('fetch', globalFetch);
     const customFetch = vi.fn(
-      async (url: RequestInfo | URL, options: RequestInit | undefined) => {
-        return fetch(url, options);
-      },
+      async (_url: RequestInfo | URL, _options: RequestInit | undefined) =>
+        answer(),
     );
 
     const store = new Store();
@@ -760,6 +770,7 @@ describe('Store', () => {
     });
 
     expect(customFetch.mock.calls).toHaveLength(1);
+    vi.unstubAllGlobals();
   });
 
   it('creates new resources using store.newResource()', async ({ expect }) => {
@@ -820,7 +831,9 @@ describe('Store', () => {
   it('resolves aliases correctly', async ({ expect }) => {
     const store = new Store();
     const alias = 'https://atomicdata.dev/alias';
+    // Legacy `did:ad:` in; the store canonicalizes the subject to `atomic:`.
     const did = 'did:ad:123';
+    const canonicalDid = 'atomic:123';
 
     const resource = new Resource(did);
     await resource.set(core.properties.description, 'Identity verified', false);
@@ -832,15 +845,18 @@ describe('Store', () => {
     const gotByAlias = store.getResourceLoading(alias);
     const gotByDID = store.getResourceLoading(did);
 
-    expect(gotByAlias.subject).toBe(did);
-    expect(gotByDID.subject).toBe(did);
+    expect(gotByAlias.subject).toBe(canonicalDid);
+    expect(gotByDID.subject).toBe(canonicalDid);
     expect(gotByAlias).toBe(gotByDID);
   });
 
   it('returns a DID resource fetched by its HTTP path alias', async ({
     expect,
   }) => {
+    // The server still answers with the legacy `did:ad:` spelling; the
+    // store canonicalizes the fetched resource to `atomic:`.
     const did = 'did:ad:ontology123';
+    const canonicalDid = 'atomic:ontology123';
     const httpAlias = `https://example.com/${did}`;
     const store = new Store({ serverUrl: 'https://example.com' });
     store.setServerConnected(true);
@@ -861,9 +877,9 @@ describe('Store', () => {
 
     expect(resource).toBeDefined();
     expect(resource.error).toBeUndefined();
-    expect(resource.subject).toBe(did);
+    expect(resource.subject).toBe(canonicalDid);
     expect(resource.get(core.properties.name)).toBe('My ontology');
-    expect(store.getResourceLoading(httpAlias).subject).toBe(did);
+    expect(store.getResourceLoading(httpAlias).subject).toBe(canonicalDid);
   });
 
   it('normalizes relative subjects to full URLs', async ({ expect }) => {
@@ -879,9 +895,12 @@ describe('Store', () => {
     );
     expect(normalizedFull).toBe('https://myserver.dev/classes?page_size=10');
 
-    // DID should remain unchanged
+    // Canonical Atomic identifiers remain unchanged
+    expect(store.normalizeSubject('atomic:123')).toBe('atomic:123');
+
+    // Legacy `did:ad:` is canonicalized to `atomic:`
     const normalizedDID = store.normalizeSubject('did:ad:123');
-    expect(normalizedDID).toBe('did:ad:123');
+    expect(normalizedDID).toBe('atomic:123');
   });
 
   it('uses ClientDb.search for offline local hits', async ({ expect }) => {

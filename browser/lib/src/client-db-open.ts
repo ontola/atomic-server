@@ -8,11 +8,24 @@
  * existing file stays behind and every open fails with "wrong encryption key
  * for local database", on every page load, forever.
  *
- * That file is a pure cache: everything in it is re-fetchable from the server,
- * and its contents are unreadable anyway once the key is gone. So the fix is to
- * throw it away and start a fresh (still encrypted) one under the current key.
+ * Throwing that file away and starting a fresh one under the current key is
+ * the only way out of that loop, but it is only safe when the key really is
+ * gone. It used to be unconditional, justified as "everything in it is
+ * re-fetchable from the server". That is true of a cache of a server-backed
+ * drive and false of a local-only drive, whose sole copy this file is; and the
+ * key is not always as lost as a failed open suggests, because the per-agent
+ * key has a durable wrapped record that only a sign-in with the agent secret
+ * unwraps. Deleting while that record exists destroys data whose key was about
+ * to come back.
+ *
+ * So the caller decides, via `discardUndecryptable`, and the default is to keep
+ * the file and let the open fail. Callers holding an encrypted database pass
+ * true only when they can show the key is unrecoverable — for the data-browser,
+ * that no wrapped record exists (`helpers/initClientDb.ts`).
  *
  * Deliberately narrow. Deletion requires ALL of:
+ *   - `discardUndecryptable`, the caller's assertion that the key is gone for
+ *     good rather than merely absent from this page load,
  *   - the WASM side tagged the failure with `WRONG_KEY_MARKER` (only the header
  *     key check does that — a corrupt file, an unsupported version, or an
  *     unavailable OPFS produce untagged errors),
@@ -49,6 +62,15 @@ export interface OpenClientDbOptions {
   baseUrl?: string;
   dbName?: string;
   dbKey?: Uint8Array;
+  /**
+   * Whether an undecryptable file may be discarded and recreated.
+   *
+   * Defaults to false: a failed decrypt says the key we have is wrong, not
+   * that the right one is gone, and the file may be the only copy of a
+   * local-only drive. Pass true only having established that no path back to
+   * the key remains.
+   */
+  discardUndecryptable?: boolean;
 }
 
 export interface OpenClientDbResult {
@@ -97,7 +119,7 @@ export function isStorageBlockedDbError(error: unknown): boolean {
  */
 export async function openClientDb(
   wasm: ClientDbWasm,
-  { baseUrl, dbName, dbKey }: OpenClientDbOptions,
+  { baseUrl, dbName, dbKey, discardUndecryptable = false }: OpenClientDbOptions,
 ): Promise<OpenClientDbResult> {
   try {
     return {
@@ -106,6 +128,7 @@ export async function openClientDb(
     };
   } catch (e) {
     if (
+      !discardUndecryptable ||
       !isWrongKeyDbError(e) ||
       !dbName ||
       !dbKey ||

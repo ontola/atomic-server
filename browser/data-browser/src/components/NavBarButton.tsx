@@ -1,4 +1,4 @@
-import { styled } from 'styled-components';
+import { css, styled } from 'styled-components';
 import { transition } from '../helpers/transition';
 
 /**
@@ -8,16 +8,21 @@ import { transition } from '../helpers/transition';
  * cue the left sidebar uses — over a subtle background so the toggled-on
  * state reads clearly.
  */
+export const NAV_BUTTON_HEIGHT = '1.75rem';
+export const NAV_BUTTON_RADIUS = '6px';
+
 export const LabelButton = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 0.5ch;
-  padding: 0.25rem 0.5rem;
-  /* Same height as the bar's IconButtons so every hover shape is the same
-   * rounded square. */
-  height: 2rem;
+  padding: 0 0.5rem;
+  /* Shorter than a regular button, with a tighter corner, so the hover and
+   * active shape sits inside the narrow bar instead of filling it edge to
+   * edge like a pill. The bar's icon buttons use the same shape
+   * (NAV_BUTTON_HEIGHT / NAV_BUTTON_RADIUS). */
+  height: ${NAV_BUTTON_HEIGHT};
   border: none;
-  border-radius: ${p => p.theme.radius};
+  border-radius: ${NAV_BUTTON_RADIUS};
   background: ${p => (p.$active ? p.theme.colors.bg1 : 'transparent')};
   color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.textLight)};
   cursor: pointer;
@@ -47,4 +52,27 @@ export const LabelButton = styled.button<{ $active?: boolean }>`
       background: ${p => p.theme.colors.bg2};
     }
   }
+`;
+
+export const ButtonArea = styled.div<{ $iconOnly: boolean }>`
+  display: flex;
+  margin-left: auto;
+  color: ${p => p.theme.colors.textLight};
+  gap: ${p => p.theme.size(1)};
+  align-items: center;
+  flex-shrink: 0;
+
+  @container breadcrumb-bar (max-width: 600px) {
+    gap: 0;
+  }
+
+  /* Icon-only once the bar can no longer fit the labels (measured in JS, not a
+   * fixed breakpoint). */
+  ${p =>
+    p.$iconOnly &&
+    css`
+      ${LabelButton} > span {
+        display: none;
+      }
+    `}
 `;

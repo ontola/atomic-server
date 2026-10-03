@@ -1,3 +1,5 @@
+import { nodeId } from '@tomic/lib';
+
 /**
  * Property URLs of the `Server` class, served by a node's `/server` endpoint.
  *
@@ -33,11 +35,13 @@ export const peerProps = {
 
 export const NODE_DID_PREFIX = 'did:ad:node:';
 
-/** True for a well-formed `did:ad:node:<64 hex>` node identity. */
+/** True for a well-formed `atomic:node:<64 hex>` / `did:ad:node:<64 hex>`. */
 export function isValidNodeDid(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.startsWith(NODE_DID_PREFIX) &&
-    /^[0-9a-f]{64}$/i.test(value.slice(NODE_DID_PREFIX.length))
-  );
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const hex = nodeId(value)?.split(':')[0];
+
+  return !!hex && /^[0-9a-f]{64}$/i.test(hex);
 }

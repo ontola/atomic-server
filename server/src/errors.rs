@@ -50,6 +50,11 @@ impl Error for AtomicServerError {}
 
 impl ResponseError for AtomicServerError {
     fn status_code(&self) -> StatusCode {
+        if atomic_lib::sync::protocol::classify_commit_error(&self.message)
+            == atomic_lib::sync::protocol::error_code::CAUSALITY_CONFLICT
+        {
+            return StatusCode::CONFLICT;
+        }
         // A managed node refusing enrollment/quota is an expected admission
         // decision, not an internal failure or a request to sign in again.
         if atomic_lib::sync::protocol::classify_commit_error(&self.message)
@@ -223,5 +228,15 @@ mod admission_error_tests {
                 atomic_lib::sync::protocol::error_code::SYNC_REJECTED
             );
         }
+    }
+
+    #[test]
+    fn causality_refusal_is_a_conflict() {
+        let error: AtomicServerError = "Commit's Loro update produced no state changes".into();
+        assert_eq!(error.status_code(), StatusCode::CONFLICT);
+        assert_eq!(
+            atomic_lib::sync::protocol::classify_commit_error(&error.message),
+            atomic_lib::sync::protocol::error_code::CAUSALITY_CONFLICT
+        );
     }
 }

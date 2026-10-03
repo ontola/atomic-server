@@ -22,6 +22,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
   - [Cross compilation](#cross-compilation)
 - [Git policy](#git-policy)
   - [Open a PR](#open-a-pr)
+  - [Merging into `develop`](#merging-into-develop)
   - [Branching](#branching)
   - [Hotfixes](#hotfixes)
 - [Testing](#testing)
@@ -55,7 +56,7 @@ TL;DR Clone the repo and run `cargo run` from each folder (e.g. `cli` or `server
 
 - Run `cargo run` to start the server
 - Go to `browser`, run `pnpm install` (if you haven't already), and run `pnpm dev` to start the browser
-- Visit your `localhost` in your locally running `atomic-data-browser` instance: (e.g. `http://localhost:5173/app/show?subject=http%3A%2F%2Flocalhost`)
+- Visit your `localhost` in your locally running `atomic-data-browser` instance: (e.g. `http://localhost:6747/app/show?subject=http%3A%2F%2Flocalhost`)
 - use `cargo watch -- cargo run` to automatically recompile `atomic-server` when you update JS assets in `browser`
 
 ### IDE setup (VSCode)
@@ -123,6 +124,12 @@ tags as production.
 - Make sure your branch is up to date with `develop`.
 - Open a PR against `develop`.
 - Make sure all relevant tests / lint pass.
+
+### Merging into `develop`
+
+Only the **trekmeester** agent merges pull requests into `develop`. Everyone
+else, human or AI agent, opens PRs and addresses review, but does not merge
+into `develop` themselves.
 
 ### Pre-commit checks
 

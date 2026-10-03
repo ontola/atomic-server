@@ -1,8 +1,14 @@
-import { Dialog, DialogContent, useDialog } from '@components/Dialog';
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  useDialog,
+} from '@components/Dialog';
 import { LocalOllamaDiscovery } from '@components/AI/LocalOllamaDiscovery';
 import React, { Suspense, useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { Column, Row } from '@components/Row';
+import { Column } from '@components/Row';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { AIProvider } from '@components/AI/aiContstants';
 import { OpenRouterLoginButton } from '@components/AI/OpenRouterLoginButton';
@@ -16,6 +22,7 @@ import { DEFAULT_CHAT_MODEL } from '@components/AI/AISettingsContext';
 import type { AIModelIdentifier } from './types';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { useAIAgentConfig } from './AgentConfig';
+import { hasManagedApi } from '@helpers/managed/api';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -63,11 +70,30 @@ const getInitialStep = (hasProvider: boolean): SetupStep => {
   return 'providers';
 };
 
-export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
+/** A new request resets dismissal and any half-finished setup step. */
+export function AISetupPanel({
+  requestId = 0,
+  onDismiss,
+}: {
+  requestId?: number;
+  onDismiss?: () => void;
+}) {
+  // Never interrupt a SaaS chat with onboarding, including while its account
+  // status is loading. Advanced provider setup remains explicitly reachable.
+  if (requestId === 0 && hasManagedApi()) return null;
+
+  return <AISetupPanelSession key={requestId} onDismiss={onDismiss} />;
+}
+
+const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
   onDismiss,
 }) => {
   const [dismissed, setDismissed] = useState(false);
+  const [hostedError, setHostedError] = useState<string>();
+  const [enabling, setEnabling] = useState(false);
   const {
+    hostedAI,
+    enableIncludedAI,
     openRouterApiKey,
     setOpenRouterApiKey,
     ollamaUrl,
@@ -169,13 +195,26 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
   if (step === 'model') {
     return (
       <SetupDialog
+        title='Choose a default model'
+        actions={
+          <>
+            <Button subtle onClick={handleBack}>
+              Back
+            </Button>
+            <Button
+              onClick={handleStartChatting}
+              disabled={!isProviderAvailable(pendingModel.provider)}
+            >
+              Start chatting
+            </Button>
+          </>
+        }
         onDismiss={() => {
           setDismissed(true);
           onDismiss?.();
         }}
       >
         <Panel>
-          <Title>Choose a default model</Title>
           <Subtle>
             This pre-selects a model for built-in agents and new custom agents.
             You can change each agent&apos;s model individually later.
@@ -194,21 +233,8 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
               checked={syncGenFeatures}
               onChange={e => setSyncGenFeatures(e.target.checked)}
             />
-            <label htmlFor='sync-gen-features'>
-              Also use for chat titles and follow-up prompts
-            </label>
+            <label htmlFor='sync-gen-features'>Also use for chat titles</label>
           </CheckboxRow>
-          <ActionsRow>
-            <Button subtle onClick={handleBack}>
-              Back
-            </Button>
-            <Button
-              onClick={handleStartChatting}
-              disabled={!isProviderAvailable(pendingModel.provider)}
-            >
-              Start chatting
-            </Button>
-          </ActionsRow>
         </Panel>
       </SetupDialog>
     );
@@ -216,13 +242,53 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
 
   return (
     <SetupDialog
+      title='Connect a model to use AI chat'
+      actions={
+        <Button onClick={handleContinue} disabled={!hasProvider}>
+          Continue
+        </Button>
+      }
       onDismiss={() => {
         setDismissed(true);
         onDismiss?.();
       }}
     >
       <Panel>
-        <Title>Connect a model to use Atomic Assistant</Title>
+        {hostedAI?.enabled && (
+          <Column>
+            <strong>AI included with your account</strong>
+            <span>{`${Math.floor(hostedAI.remaining_micros / 1000)} of ${Math.floor(hostedAI.allowance_micros / 1000)} credits remaining this month, shared across your drives.`}</span>
+            <Subtle>
+              Prompts and selected document content pass through Atomic and our
+              AI provider. Atomic does not save prompt or response content in
+              the AI service. Your own provider and local models remain
+              available below.
+            </Subtle>
+            <Button
+              disabled={enabling || hostedAI.remaining_micros === 0}
+              onClick={async () => {
+                setEnabling(true);
+                setHostedError(undefined);
+
+                try {
+                  await enableIncludedAI();
+                  setSetupComplete(true);
+                } catch (error) {
+                  setHostedError(
+                    error instanceof Error
+                      ? error.message
+                      : 'Could not enable included AI.',
+                  );
+                }
+
+                setEnabling(false);
+              }}
+            >
+              Use included AI
+            </Button>
+            {hostedError && <span role='alert'>{hostedError}</span>}
+          </Column>
+        )}
         <Subtle>
           Use OpenRouter (cloud models) or Ollama (local models). At least one
           provider must be connected before you can continue.
@@ -275,9 +341,6 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
             </ProviderSection>
           </OutlinedSection>
         </ProvidersGrid>
-        <Button onClick={handleContinue} disabled={!hasProvider}>
-          Continue
-        </Button>
       </Panel>
     </SetupDialog>
   );
@@ -286,8 +349,14 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
 /** Use the app-wide portal, backdrop, focus management and dismissal rules. */
 function SetupDialog({
   children,
+  title,
+  actions,
   onDismiss,
-}: React.PropsWithChildren<{ onDismiss: () => void }>) {
+}: React.PropsWithChildren<{
+  title: string;
+  actions: React.ReactNode;
+  onDismiss: () => void;
+}>) {
   const [dialogProps, showDialog] = useDialog({ onCancel: onDismiss });
   useEffect(() => {
     showDialog();
@@ -295,7 +364,11 @@ function SetupDialog({
 
   return (
     <Dialog {...dialogProps} width='36rem'>
+      <DialogTitle>
+        <h1>{title}</h1>
+      </DialogTitle>
       <DialogContent>{children}</DialogContent>
+      <DialogActions>{actions}</DialogActions>
     </Dialog>
   );
 }
@@ -304,12 +377,6 @@ const Panel = styled(Column)`
   width: 100%;
   min-width: 0;
   gap: 1rem;
-`;
-
-const ActionsRow = styled(Row)`
-  justify-content: flex-end;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 `;
 
 const ProvidersGrid = styled(Column)`
@@ -362,11 +429,6 @@ const FullWidthField = styled(InputWrapper)`
     width: 100%;
     min-width: 0;
   }
-`;
-
-const Title = styled.h3`
-  margin: 0;
-  font-size: 1rem;
 `;
 
 const Subtle = styled.p`

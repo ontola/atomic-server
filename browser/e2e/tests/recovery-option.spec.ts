@@ -58,37 +58,32 @@ test('does not offer account recovery when the signed-in account has no backup',
   ).toBeVisible();
 });
 
-test('managed welcome goes to the portal instead of standalone onboarding', async ({
+test('a managed node sends account creation to the portal', async ({
   page,
 }) => {
-  const welcomeFrames: string[] = [];
-  await page.exposeFunction('reportStandaloneWelcome', () =>
-    welcomeFrames.push('shown'),
+  await page.route('**/server', route =>
+    route.fulfill({
+      json: {
+        'https://atomicdata.dev/properties/server/managed': true,
+        'https://atomicdata.dev/properties/server/portalUrl': new URL(
+          process.env.FRONTEND_URL || 'http://localhost:6747',
+        ).origin,
+      },
+    }),
   );
-  await page.addInitScript(() => {
-    new MutationObserver(() => {
-      if (
-        [...document.querySelectorAll('button')].some(button =>
-          button.textContent?.includes('Try the live demo'),
-        )
-      ) {
-        (
-          window as unknown as { reportStandaloneWelcome: () => void }
-        ).reportStandaloneWelcome();
-      }
-    }).observe(document, { childList: true, subtree: true });
-  });
-  await page.route('**/dashboard', route =>
-    route.fulfill({ contentType: 'text/html', body: '<h1>Portal drives</h1>' }),
+  await page.route('**/signin', route =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<h1>Portal sign in</h1>',
+    }),
   );
   await page.goto(
     `${process.env.FRONTEND_URL || 'http://localhost:6747'}/app/welcome`,
   );
+  const createAccount = page.getByRole('button', { name: 'Create account' });
+  await expect(createAccount).toBeEnabled();
+  await createAccount.click();
   await expect(
-    page.getByRole('heading', { name: 'Portal drives' }),
+    page.getByRole('heading', { name: 'Portal sign in' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Try the live demo' }),
-  ).toHaveCount(0);
-  expect(welcomeFrames).toEqual([]);
 });

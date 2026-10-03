@@ -3,8 +3,14 @@ import { styled, css } from 'styled-components';
 
 import { FaTriangleExclamation } from 'react-icons/fa6';
 
-import type { JSX } from 'react';
+import { lazy, Suspense, type JSX } from 'react';
 import { getMessageForErrorType } from '@tomic/react';
+
+const FeedbackButton = lazy(() =>
+  import('./SideBar/FeedbackButton').then(module => ({
+    default: module.FeedbackButton,
+  })),
+);
 
 export const errorLookStyle = css`
   color: ${props => props.theme.colors.alert};
@@ -26,9 +32,14 @@ export const SimpleErrorBlock = styled.div`
 export interface ErrorBlockProps {
   error: Error;
   showTrace?: boolean;
+  showReport?: boolean;
 }
 
-export function ErrorBlock({ error, showTrace }: ErrorBlockProps): JSX.Element {
+export function ErrorBlock({
+  error,
+  showTrace,
+  showReport = true,
+}: ErrorBlockProps): JSX.Element {
   return (
     <ErrorLookBig>
       <BiggerText>
@@ -47,6 +58,11 @@ export function ErrorBlock({ error, showTrace }: ErrorBlockProps): JSX.Element {
           </>
         )}
       </Pre>
+      {showReport && (
+        <Suspense fallback={null}>
+          <FeedbackButton reportError={error} />
+        </Suspense>
+      )}
     </ErrorLookBig>
   );
 }

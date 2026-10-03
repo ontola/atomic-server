@@ -1,4 +1,4 @@
-import { FeedbackMenuItem } from '../components/SideBar/FeedbackMenuItem';
+import { FeedbackButton } from '../components/SideBar/FeedbackButton';
 import { DialogGlobalContextProvider } from '../components/Dialog/DialogGlobalContextProvider';
 import * as React from 'react';
 import { Resource } from '@tomic/react';
@@ -30,7 +30,11 @@ function CrashPage({
     <StyledMain>
       <ContainerWide resource={resource?.subject}>
         <Column>
-          {children ? children : <ErrorBlock error={error} showTrace />}
+          {children ? (
+            children
+          ) : (
+            <ErrorBlock error={error} showTrace showReport={false} />
+          )}
           <Row>
             {clearError && <Button onClick={clearError}>Clear error</Button>}
             <Button
@@ -44,7 +48,7 @@ function CrashPage({
               Try Again
             </Button>
             <DialogGlobalContextProvider>
-              <FeedbackMenuItem floating />
+              <FeedbackButton reportError={error} />
             </DialogGlobalContextProvider>
           </Row>
         </Column>

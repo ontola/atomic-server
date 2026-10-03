@@ -132,7 +132,7 @@ impl Agent {
     /// Derives the public key from the private key.
     pub fn new_from_private_key(name: Option<&str>, private_key: &str) -> AtomicResult<Agent> {
         let keypair = generate_public_key(private_key);
-        let did_string = format!("did:ad:agent:{}", keypair.public);
+        let did_string = crate::identifiers::agent_subject(&keypair.public);
         let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
@@ -149,7 +149,7 @@ impl Agent {
     /// This will not be able to write, because there is no private key.
     pub fn new_from_public_key(public_key: &str) -> AtomicResult<Agent> {
         verify_public_key(public_key)?;
-        let did_string = format!("did:ad:agent:{}", public_key);
+        let did_string = crate::identifiers::agent_subject(public_key);
         let subject = crate::Subject::from_raw(&did_string, None);
 
         Ok(Agent {
@@ -341,7 +341,7 @@ pub fn migrate_legacy_agent_subject(subject: &str) -> String {
         };
         if let Some(pubkey) = path.strip_prefix("/agents/") {
             if !pubkey.is_empty() {
-                return format!("did:ad:agent:{}", pubkey);
+                return crate::identifiers::agent_subject(pubkey);
             }
         }
         return subject.to_string();
@@ -354,7 +354,7 @@ pub fn migrate_legacy_agent_subject(subject: &str) -> String {
         .and_then(|(_, path)| path.strip_prefix("agents/"))
     {
         if !pubkey.is_empty() {
-            return format!("did:ad:agent:{}", pubkey);
+            return crate::identifiers::agent_subject(pubkey);
         }
     }
     subject.to_string()
@@ -373,9 +373,7 @@ pub fn legacy_agent_pubkey(subject: &str) -> Option<String> {
     if migrated == subject {
         return None;
     }
-    migrated
-        .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
-        .map(|k| k.to_string())
+    crate::identifiers::agent_public_key(&migrated).map(|k| k.to_string())
 }
 
 impl From<Agent> for ForAgent {
@@ -450,7 +448,7 @@ mod test {
         // Legacy HTTP subject is automatically migrated to did:ad:agent:
         assert_eq!(
             agent.subject,
-            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            "atomic:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
     }
 
@@ -461,7 +459,7 @@ mod test {
         // Legacy HTTP subject should be migrated to did:ad:agent:
         assert_eq!(
             agent.subject.to_string(),
-            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            "atomic:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
         let secret = agent.build_secret().unwrap();
         let agent2 = Agent::from_secret(&secret).unwrap();
@@ -474,7 +472,7 @@ mod test {
             migrate_legacy_agent_subject(
                 "http://localhost:9883/agents/RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
             ),
-            "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
+            "atomic:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg="
         );
         assert_eq!(
             migrate_legacy_agent_subject("did:ad:agent:somepubkey"),
@@ -482,7 +480,7 @@ mod test {
         );
         assert_eq!(
             migrate_legacy_agent_subject("https://example.com/agents/pubkey123"),
-            "did:ad:agent:pubkey123"
+            "atomic:agent:pubkey123"
         );
     }
 
@@ -495,13 +493,13 @@ mod test {
     fn migrates_internal_agent_subjects_from_a_migrated_store() {
         assert_eq!(
             migrate_legacy_agent_subject("internal:/agents/pubkey123"),
-            "did:ad:agent:pubkey123"
+            "atomic:agent:pubkey123"
         );
         // Tenant drives address agents under a subdomain. An agent is its key,
         // globally, so the same key is the same agent.
         assert_eq!(
             migrate_legacy_agent_subject("internal:tenant:/agents/pubkey123"),
-            "did:ad:agent:pubkey123"
+            "atomic:agent:pubkey123"
         );
     }
 
@@ -516,11 +514,11 @@ mod test {
 
         assert_eq!(
             migrate_legacy_agent_subject(&format!("internal:/agents/{key}")),
-            format!("did:ad:agent:{key}")
+            crate::identifiers::agent_subject(key)
         );
         assert_eq!(
             migrate_legacy_agent_subject(&format!("https://atomicdata.dev/agents/{key}")),
-            format!("did:ad:agent:{key}")
+            crate::identifiers::agent_subject(key)
         );
         // Both legacy spellings of one identity must land on the same DID,
         // which is the whole point: grants and sign-in have to agree.
@@ -547,7 +545,9 @@ mod test {
         ] {
             let out = migrate_legacy_agent_subject(subject);
             assert!(
-                out == subject || !out.starts_with("did:ad:agent:") || subject.contains("/agents/"),
+                out == subject
+                    || !crate::identifiers::is_agent_id(&out)
+                    || subject.contains("/agents/"),
                 "{subject} was rewritten to {out}"
             );
         }

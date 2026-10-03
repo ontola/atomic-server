@@ -1,4 +1,5 @@
 import { hasBrowserAPI } from './hasBrowserAPI.js';
+import { isAgentSubject } from './subject.js';
 
 const ATOMIC_SERVER_VERSION_HEADER = 'X-Atomic-Server-Version';
 const MIN_DID_AUTH_SERVER_MINOR = 40;
@@ -11,7 +12,7 @@ export function shouldSkipDidAuthForLegacyServer(
   url: string,
   agentSubject?: string,
 ): boolean {
-  if (!agentSubject?.startsWith('did:ad:agent:')) {
+  if (!agentSubject || !isAgentSubject(agentSubject)) {
     return false;
   }
 

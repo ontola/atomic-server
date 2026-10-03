@@ -27,12 +27,16 @@ This document might not be entirely up to date. If you need anything that is not
 
 ## Disclosure And Navigation UI
 
+- `src/components/AtomicLink.tsx` - Resource and app links; overlays can provide `ResourceLinkNavigationContext` to dismiss after resource navigation, including activating the current resource.
+
 - `src/components/Tabs.tsx` - Radix-based tabs with config-driven tab lists, panel children, rounded variant, and error styling.
 - `src/components/Collapse.tsx` - Animated expand/collapse wrapper, used in the Details component.
 - `src/components/Details.tsx` - Disclosure component similar to `<details>`, with a caret row or custom title control.
 - `src/components/ScrollArea.tsx` - Themed Radix scroll area; also exports `ScrollViewPort` for nested viewport needs.
 - `src/components/ChatMessagesContainer.tsx` - Stick-to-bottom scroll container for chat-like message lists (auto-scrolls on new content unless the user scrolled up). Used by the AI chat and ChatRoom views.
 - `src/components/RightPanel/RightPanel.tsx` - Resizable drawer docked to the right of the screen; combine with `RightPanelContext` so panels (AI sidebar, Comments) are mutually exclusive.
+- `src/components/PanelLayout.tsx` - Shared animated width slot, transition timing and floating-panel backdrop for the left sidebar and right panels. Width transitions pause while resizing.
+- `src/components/SideBar/SideBarPanel.tsx` - Collapsible sidebar section with a header that supports mouse, pen and touch height resizing. Uses a stable height preference key; header actions remain separate from the drag/toggle target.
 
 ## Resource Views
 

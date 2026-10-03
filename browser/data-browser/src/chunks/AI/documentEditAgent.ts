@@ -6,6 +6,7 @@ import { useStore, type Store } from '@tomic/react';
 import type { JSONContent } from '@tiptap/core';
 import { z } from 'zod';
 import { useGetModel } from './useModel';
+import { hostedVoiceModel } from './hostedVoiceModel';
 import type { AIModelIdentifier } from './types';
 import { applyPatchedJsonToLoroDocCollaborative } from '@chunks/RTE/applyPatchedJsonToLoroDocCollaborative';
 import {
@@ -216,6 +217,7 @@ async function generatePatchCompilerText(
   const abortController = new AbortController();
 
   const { text } = await generateText({
+    maxRetries: 0,
     model,
     system: EDIT_PROMPT,
     prompt: userPrompt,
@@ -388,7 +390,10 @@ async function runDocumentEdit(
   return `Document edit successful for ${subject}`;
 }
 
-export function useDocumentEditAgent(editModel: AIModelIdentifier) {
+export function useDocumentEditAgent(
+  editModel: AIModelIdentifier,
+  hosted = false,
+) {
   const store = useStore();
   const getModel = useGetModel();
 
@@ -400,7 +405,7 @@ export function useDocumentEditAgent(editModel: AIModelIdentifier) {
   ) =>
     runDocumentEdit(
       store,
-      getModel,
+      hosted ? () => hostedVoiceModel() : getModel,
       editModel,
       subject,
       instruction,

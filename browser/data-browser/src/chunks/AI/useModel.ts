@@ -4,13 +4,15 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { AIProvider } from '@components/AI/aiContstants';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import type { LanguageModel } from 'ai';
+import { createHostedModel } from '@helpers/managed/ai';
 
-const createOpenRouterProvider = (openRouterApiKey: string) => {
+const createOpenRouterProvider = (openRouterApiKey: string, zdr: boolean) => {
   return createOpenRouter({
     apiKey: openRouterApiKey,
     compatibility: 'strict',
     extraBody: {
       transforms: ['middle-out'],
+      ...(zdr ? { provider: { zdr: true } } : {}),
     },
   });
 };
@@ -24,19 +26,26 @@ const createOllamaProvider = (ollamaUrl: string) => {
 export function useGetModel(): (
   identifier: AIModelIdentifier,
 ) => LanguageModel | undefined {
-  const { openRouterApiKey, ollamaUrl, isProviderAvailable } = useAISettings();
+  const { openRouterApiKey, ollamaUrl, isProviderAvailable, openRouterZdr } =
+    useAISettings();
 
   return (identifier: AIModelIdentifier): LanguageModel | undefined => {
     if (!isProviderAvailable(identifier.provider)) {
       return undefined;
     }
 
+    if (identifier.provider === AIProvider.Hosted)
+      return createHostedModel(identifier.id);
+
     if (identifier.provider === AIProvider.OpenRouter) {
       if (!openRouterApiKey) {
         return undefined;
       }
 
-      return createOpenRouterProvider(openRouterApiKey)(identifier.id);
+      return createOpenRouterProvider(
+        openRouterApiKey,
+        openRouterZdr,
+      )(identifier.id);
     }
 
     if (identifier.provider === AIProvider.Ollama) {

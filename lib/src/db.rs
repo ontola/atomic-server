@@ -1,18 +1,17 @@
 //! Persistent, ACID compliant, threadsafe to-disk store.
-//! Powered by Sled - an embedded database.
+//! Powered by redb (sled only to migrate old stores).
 
 pub mod app_agent;
 pub mod blob_backend;
-pub mod btreemap_store;
-#[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+mod canonical_scheme;
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod compaction;
 mod encoding;
-#[cfg(feature = "db-redb")]
 pub mod encrypted_backend;
 pub mod kv_store;
 #[cfg(feature = "db-sled")]
 mod migrations;
-#[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
+#[cfg(all(feature = "db", target_arch = "wasm32"))]
 pub mod opfs_backend;
 pub mod plugin_meta;
 pub mod plugin_release;
@@ -21,7 +20,6 @@ pub mod plugin_secret;
 pub mod plugin_trigger;
 pub(crate) mod prop_val_sub_index;
 mod query_index;
-#[cfg(feature = "db-redb")]
 pub mod redb_store;
 pub mod website;
 // `PropVal` is half of `QueryFilter`'s public surface: without it a caller
@@ -482,10 +480,77 @@ fn default_sync_policy() -> Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>
 }
 
 impl Db {
+    /// A `Db` over `kv` with every other field at its default. Not usable
+    /// until [`Db::open`] has run.
+    fn from_kv(path: std::path::PathBuf, kv: Arc<dyn KvStore>, base_domain: Option<String>) -> Db {
+        Db {
+            path,
+            blob_backend: None,
+            kv,
+            default_agent: Arc::new(Mutex::new(None)),
+            node_key: Arc::new(std::sync::OnceLock::new()),
+            endpoints: vec![],
+            class_extenders: Arc::new(RwLock::new(vec![])),
+            on_commit: None,
+            db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
+            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
+            subject_locks: Default::default(),
+            plugin_locks: Default::default(),
+            base_domain,
+            sync_policy: default_sync_policy(),
+            envelope_retention: Arc::new(RwLock::new(Default::default())),
+            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// The steps every backend runs once its KV is ready.
+    async fn open(self) -> AtomicResult<Db> {
+        self.add_class_extender(crate::collections::get_collection_class_extender())?;
+
+        // Load persisted watched-queries (if any) into the in-memory map
+        // before bootstrap, so any filter-matching commits during bootstrap
+        // see the right state.
+        self.migrate_canonical_scheme_if_needed()?;
+        self.populate_watched_queries_cache()?;
+
+        // Runs on every open, but only writes when the embedded defaults
+        // (`lib/defaults/*.json` + base models) changed since this store was
+        // last seeded: `bootstrap` compares a fingerprint of them against the
+        // one stored in `Tree::PluginMeta` and adds what is missing.
+        crate::populate::bootstrap(&self)
+            .await
+            .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        crate::search::maybe_rebuild_search_index(&self)?;
+        Ok(self)
+    }
+
     /// Persist already-admitted replica state, including independently created
     /// duplicate import identities. Keep both subjects available for review;
     /// authoring paths must still enforce identity uniqueness.
     pub async fn persist_replicated_resource(&self, resource: &Resource) -> AtomicResult<()> {
+        self.persist_replicated(resource, None).await
+    }
+
+    /// [`Self::persist_replicated_resource`] with the CRDT snapshot the caller
+    /// already holds. The row, its snapshot and its index entries land in one
+    /// transaction, and the stored snapshot keeps the caller's history instead
+    /// of a doc re-seeded from the propvals (which would carry a fresh peer id
+    /// and merge badly with the real one).
+    pub async fn persist_replicated_resource_with_snapshot(
+        &self,
+        resource: &Resource,
+        snapshot: Vec<u8>,
+    ) -> AtomicResult<()> {
+        self.persist_replicated(resource, Some(snapshot)).await
+    }
+
+    async fn persist_replicated(
+        &self,
+        resource: &Resource,
+        snapshot: Option<Vec<u8>>,
+    ) -> AtomicResult<()> {
         // Review validation holds this same identity lock while reading all
         // copies. Replica changes must not land halfway through that review.
         let _identity_guard = if let Some((parent, id)) = crate::import_identity::identity(resource)
@@ -501,7 +566,7 @@ impl Db {
         } else {
             None
         };
-        self.persist_resource_projection(resource, false, true, true)
+        self.persist_resource_projection(resource, false, true, true, snapshot)
             .await
     }
 
@@ -511,12 +576,16 @@ impl Db {
         check_required_props: bool,
         update_index: bool,
         overwrite_existing: bool,
+        snapshot: Option<Vec<u8>>,
     ) -> AtomicResult<()> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
-        let existing = self.get_propvals(&subject_str).ok();
+        let existing = self
+            .get_propvals_canonical(&subject_str)
+            .ok()
+            .map(|(_, pv)| pv);
         if !overwrite_existing && existing.is_some() {
             return Err(format!(
                 "Failed to add: '{}', already exists, should not be overwritten.",
@@ -531,61 +600,38 @@ impl Db {
         let mut transaction = Transaction::new();
 
         if update_index {
-            // Persist DID routing hint if available
-            if let Subject::Did {
-                drive_hint: Some(hint),
-                ..
-            } = &subject
-            {
-                transaction.push(Operation {
-                    tree: Tree::DidMapping,
-                    method: Method::Insert,
-                    key: subject_str.as_bytes().to_vec(),
-                    val: Some(hint.as_bytes().to_vec()),
-                });
-            }
-
+            // Every atom is removed and filed again, not only the changed
+            // ones. Identical re-puts from a tab are already skipped before
+            // they reach here (`Store.persistState`).
+            //
+            // Evict against the state that is going away, not the one
+            // replacing it. Whether an entry belongs in a watched query's
+            // member list, and under which sort key it was filed, are facts
+            // about the old values: asking the new resource instead makes a
+            // row edited out of a filtered view skip the one delete it needs.
             if let Some(pv) = existing {
-                let subject = resource.get_subject();
-                // Evict against the state that is going away, not the one
-                // replacing it. Whether an entry belongs in a watched query's
-                // member list — and under which sort key it was filed — are
-                // facts about the old values. Handing over the new resource
-                // asks instead whether the *new* values still match, and a row
-                // edited out of a filtered view answers no, so the entry that
-                // needs deleting is the one deletion is skipped for. The row
-                // then stays listed in that view until the index is rebuilt.
-                let old = Resource::from_propvals(pv.clone(), subject.clone());
-                for (prop, val) in pv.iter() {
-                    let remove_atom = crate::Atom::new(subject.clone(), prop.into(), val.clone());
-                    self.remove_atom_from_index(&remove_atom, &old, &mut transaction)
-                        .map_err(|e| {
-                            format!("Failed to remove atom from index {}. {}", remove_atom, e)
-                        })?;
+                let old = Resource::from_propvals(pv, resource.get_subject().clone());
+                for atom in old.to_atoms() {
+                    self.remove_atom_from_index(&atom, &old, &mut transaction)
+                        .map_err(|e| format!("Failed to remove atom from index {}. {}", atom, e))?;
                 }
             }
-            for a in resource.to_atoms() {
-                self.add_atom_to_index(&a, resource, &mut transaction)
-                    .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
+            for atom in resource.to_atoms() {
+                self.add_atom_to_index(&atom, resource, &mut transaction)
+                    .map_err(|e| format!("Failed to add atom to index {}. {}", atom, e))?;
             }
             crate::search::index_resource(self, resource, &mut transaction)?;
         }
         // The snapshot in `Tree::LoroSnapshots` is the authoritative CRDT
-        // state. Derive and
-        // persist it here UNCONDITIONALLY for every CRDT resource — in the
-        // same transaction as the `Tree::Resources` write — so the invariant
-        // holds that every resource blob is paired with a current snapshot.
-        // (The old code only wrote the snapshot when the propvals lacked a
-        // `loroUpdate`, so any resource that had been through `apply_state_doc`
-        // — i.e. every sync import — had its snapshot write silently skipped.)
-        // The `loroUpdate` propval is stripped from the `Tree::Resources`
-        // blob: that blob is a pure derived projection, not a second home for
-        // the CRDT state. Commits are native (immutable, not CRDT) — they get
-        // no snapshot and keep their `loroUpdate` payload in the blob.
-        let mut propvals = resource.get_propvals().clone();
+        // state. Store it for every CRDT resource in the same transaction as
+        // the `Tree::Resources` row, so every row is paired with a current
+        // snapshot. Commits are native (immutable, not CRDT): they get no
+        // snapshot and keep their `loroUpdate` payload in the row.
         if !subject.is_commit_did() {
-            let snapshot = resource.build_state_doc()?.export_snapshot();
-            propvals.remove(crate::urls::LORO_UPDATE);
+            let snapshot = match snapshot {
+                Some(snapshot) => snapshot,
+                None => resource.build_state_doc()?.export_snapshot(),
+            };
             transaction.push(Operation {
                 tree: Tree::LoroSnapshots,
                 method: Method::Insert,
@@ -593,15 +639,10 @@ impl Db {
                 val: Some(snapshot),
             });
         }
-
-        // Persist the resource data in the same transaction
-        let resource_bin = encode_propvals(&propvals)?;
-        transaction.push(Operation {
-            tree: Tree::Resources,
-            method: Method::Insert,
-            key: subject_str.as_bytes().to_vec(),
-            val: Some(resource_bin),
-        });
+        // The row (a projection without `loroUpdate`), its DID routing hint
+        // and the removal of other identifier spellings: the same write a
+        // commit makes.
+        self.add_resource_tx(resource, &mut transaction)?;
         self.apply_transaction(&mut transaction)?;
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
@@ -696,118 +737,19 @@ impl Db {
         migrations::migrate_maybe(&sled_store, base_domain.as_deref())
             .map_err(|e| format!("Error during migration of database: {:?}", e))?;
 
-        let store = Db {
-            path: path.into(),
-            blob_backend: None,
-            kv: Arc::new(sled_store),
-            default_agent: Arc::new(Mutex::new(None)),
-            node_key: Arc::new(std::sync::OnceLock::new()),
-            endpoints: vec![],
-            class_extenders: Arc::new(RwLock::new(vec![])),
-
-            on_commit: None,
-            db_events: tokio::sync::broadcast::channel(64).0,
-            ephemeral_events: tokio::sync::broadcast::channel(32).0,
-            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
-            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
-            subject_locks: Default::default(),
-            plugin_locks: Default::default(),
-            base_domain,
-            sync_policy: default_sync_policy(),
-            envelope_retention: Arc::new(RwLock::new(Default::default())),
-            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        store.add_class_extender(crate::collections::get_collection_class_extender())?;
-
-        // Load persisted watched-queries (if any) into the in-memory map
-        // before bootstrap, so any filter-matching commits during bootstrap
-        // see the right state.
-        store.populate_watched_queries_cache()?;
-
-        // Runs on every open, but only writes when the embedded defaults
-        // (`lib/defaults/*.json` + base models) changed since this store was
-        // last seeded: `bootstrap` compares a fingerprint of them against the
-        // one stored in `Tree::PluginMeta` and adds what is missing.
-        crate::populate::bootstrap(&store)
+        Db::from_kv(path.into(), Arc::new(sled_store), base_domain)
+            .open()
             .await
-            .map_err(|e| format!("Failed to populate base models. {}", e))?;
-        crate::search::maybe_rebuild_search_index(&store)?;
-        Ok(store)
-    }
-
-    /// Creates a Db backed by an in-memory BTreeMap store.
-    /// Useful for tests and WASM targets.
-    pub async fn init_memory(base_domain: Option<String>) -> AtomicResult<Db> {
-        let store = Db {
-            path: std::path::PathBuf::new(),
-            blob_backend: None,
-            kv: Arc::new(btreemap_store::BTreeMapStore::new()),
-            default_agent: Arc::new(Mutex::new(None)),
-            node_key: Arc::new(std::sync::OnceLock::new()),
-            endpoints: vec![],
-            class_extenders: Arc::new(RwLock::new(vec![])),
-
-            on_commit: None,
-            db_events: tokio::sync::broadcast::channel(64).0,
-            ephemeral_events: tokio::sync::broadcast::channel(32).0,
-            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
-            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
-            subject_locks: Default::default(),
-            plugin_locks: Default::default(),
-            base_domain,
-            sync_policy: default_sync_policy(),
-            envelope_retention: Arc::new(RwLock::new(Default::default())),
-            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        store.add_class_extender(crate::collections::get_collection_class_extender())?;
-
-        store.populate_watched_queries_cache()?;
-        crate::populate::bootstrap(&store)
-            .await
-            .map_err(|e| format!("Failed to populate base models. {}", e))?;
-        crate::search::maybe_rebuild_search_index(&store)?;
-        Ok(store)
     }
 
     /// Creates a Db backed by redb with an in-memory backend.
     /// Useful for WASM targets where redb provides proper B-tree indexing.
     /// Can be upgraded to OPFS persistence in the future.
-    #[cfg(feature = "db-redb")]
     pub async fn init_redb(base_domain: Option<String>) -> AtomicResult<Db> {
         let redb_store = redb_store::RedbStore::new_memory()?;
-
-        let store = Db {
-            path: std::path::PathBuf::new(),
-            blob_backend: None,
-            kv: Arc::new(redb_store),
-            default_agent: Arc::new(Mutex::new(None)),
-            node_key: Arc::new(std::sync::OnceLock::new()),
-            endpoints: vec![],
-            class_extenders: Arc::new(RwLock::new(vec![])),
-
-            on_commit: None,
-            db_events: tokio::sync::broadcast::channel(64).0,
-            ephemeral_events: tokio::sync::broadcast::channel(32).0,
-            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
-            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
-            subject_locks: Default::default(),
-            plugin_locks: Default::default(),
-            base_domain,
-            sync_policy: default_sync_policy(),
-            envelope_retention: Arc::new(RwLock::new(Default::default())),
-            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        store.add_class_extender(crate::collections::get_collection_class_extender())?;
-
-        store.populate_watched_queries_cache()?;
-        crate::populate::bootstrap(&store)
+        Db::from_kv(std::path::PathBuf::new(), Arc::new(redb_store), base_domain)
+            .open()
             .await
-            .map_err(|e| format!("Failed to populate base models. {}", e))?;
-        crate::search::maybe_rebuild_search_index(&store)?;
-        Ok(store)
     }
 
     /// Creates a Db backed by redb with file-based persistent storage.
@@ -815,7 +757,7 @@ impl Db {
     ///
     /// Runs the default [`compaction::CompactionPolicy`] on the file before
     /// serving it; `init_redb_file_with_policy` takes another.
-    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
     pub async fn init_redb_file(
         path: &std::path::Path,
         base_domain: Option<String>,
@@ -836,7 +778,7 @@ impl Db {
     /// compacted before any table is read. A compaction failure (including
     /// redb refusing because of a live transaction) is logged and the store
     /// opens as it was; it never fails startup.
-    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
     pub async fn init_redb_file_with_policy(
         path: &std::path::Path,
         base_domain: Option<String>,
@@ -904,29 +846,7 @@ impl Db {
         let (redb_store, compaction) =
             redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
 
-        let store = Db {
-            path: path.to_path_buf(),
-            blob_backend: None,
-            kv: Arc::new(redb_store),
-            default_agent: Arc::new(Mutex::new(None)),
-            node_key: Arc::new(std::sync::OnceLock::new()),
-            endpoints: vec![],
-            class_extenders: Arc::new(RwLock::new(vec![])),
-
-            on_commit: None,
-            db_events: tokio::sync::broadcast::channel(64).0,
-            ephemeral_events: tokio::sync::broadcast::channel(32).0,
-            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
-            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
-            subject_locks: Default::default(),
-            plugin_locks: Default::default(),
-            base_domain,
-            sync_policy: default_sync_policy(),
-            envelope_retention: Arc::new(RwLock::new(Default::default())),
-            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        store.add_class_extender(crate::collections::get_collection_class_extender())?;
+        let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 
         // Bookkeeping only: the compaction itself already happened, and
         // failing to note it must not refuse the start.
@@ -936,11 +856,7 @@ impl Db {
             }
         }
 
-        store.populate_watched_queries_cache()?;
-        crate::populate::bootstrap(&store)
-            .await
-            .map_err(|e| format!("Failed to populate base models. {}", e))?;
-        crate::search::maybe_rebuild_search_index(&store)?;
+        let store = store.open().await?;
         store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
         Ok(store)
     }
@@ -949,7 +865,7 @@ impl Db {
     /// can report it after the log line is gone. Durable at once: the
     /// compaction it describes already cost seconds, a 100 ms flush
     /// window is nothing next to it.
-    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
     fn record_compaction(&self, record: &compaction::CompactionRecord) -> AtomicResult<()> {
         let bytes = serde_json::to_vec(record)
             .map_err(|e| format!("Could not serialize the compaction record: {e}"))?;
@@ -961,7 +877,7 @@ impl Db {
     /// The most recent automatic startup compaction of this store's file,
     /// if one ever ran. `None` on a store that was never compacted at
     /// startup, and on the in-memory, OPFS and sled backends.
-    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
     pub fn last_compaction(&self) -> Option<compaction::CompactionRecord> {
         let bytes = self
             .kv
@@ -997,7 +913,7 @@ impl Db {
             .expect("spawn durable-flush thread");
     }
 
-    #[cfg(all(feature = "db-redb", feature = "db-sled", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db", feature = "db-sled", not(target_arch = "wasm32")))]
     async fn migrate_from_sled(
         sled_path: &std::path::Path,
         redb_path: &std::path::Path,
@@ -1059,7 +975,7 @@ impl Db {
                             propvals.insert(
                                 urls::BLOB.to_string(),
                                 Value::AtomicUrl(
-                                    format!("did:ad:blob:{}", hash_hex.clone()).into(),
+                                    crate::identifiers::blob_subject(&hash_hex).into(),
                                 ),
                             );
                             propvals.insert(urls::INTERNAL_ID.to_string(), Value::String(hash_hex));
@@ -1113,44 +1029,16 @@ impl Db {
     /// `encryption_key` (32 bytes) enables at-rest encryption of the OPFS
     /// file; the browser passes a per-agent key so one agent's cache is
     /// unreadable to other sessions on the same origin.
-    #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
+    #[cfg(all(feature = "db", target_arch = "wasm32"))]
     pub async fn init_redb_opfs(
         base_domain: Option<String>,
         filename: &str,
         encryption_key: Option<&[u8; 32]>,
     ) -> AtomicResult<Db> {
         let redb_store = redb_store::RedbStore::new_opfs(filename, encryption_key).await?;
-
-        let store = Db {
-            path: std::path::PathBuf::new(),
-            blob_backend: None,
-            kv: Arc::new(redb_store),
-            default_agent: Arc::new(Mutex::new(None)),
-            node_key: Arc::new(std::sync::OnceLock::new()),
-            endpoints: vec![],
-            class_extenders: Arc::new(RwLock::new(vec![])),
-
-            on_commit: None,
-            db_events: tokio::sync::broadcast::channel(64).0,
-            ephemeral_events: tokio::sync::broadcast::channel(32).0,
-            watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
-            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
-            subject_locks: Default::default(),
-            plugin_locks: Default::default(),
-            base_domain,
-            sync_policy: default_sync_policy(),
-            envelope_retention: Arc::new(RwLock::new(Default::default())),
-            pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
-        };
-
-        store.add_class_extender(crate::collections::get_collection_class_extender())?;
-
-        store.populate_watched_queries_cache()?;
-        crate::populate::bootstrap(&store)
+        Db::from_kv(std::path::PathBuf::new(), Arc::new(redb_store), base_domain)
+            .open()
             .await
-            .map_err(|e| format!("Failed to populate base models. {}", e))?;
-        crate::search::maybe_rebuild_search_index(&store)?;
-        Ok(store)
     }
 
     /// Creates a clone of the store with a different base_domain.
@@ -1162,38 +1050,8 @@ impl Db {
         clone
     }
 
-    /// Create a temporary in-memory Db. Useful for testing.
-    /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
-    /// This variant covers `db` builds without a disk backend (e.g. `ws`
-    /// alone) by running on the same BTreeMap store WASM targets use.
-    #[cfg(all(not(feature = "db-sled"), not(feature = "db-redb")))]
-    pub async fn init_temp(_id: &str) -> AtomicResult<Db> {
-        let store = Db::init_memory(Some("https://localhost".into())).await?;
-        let agent = store.create_agent(None).await?;
-        store.set_default_agent(agent);
-        store.populate().await?;
-        Ok(store)
-    }
-
-    /// Create a temporary Db in `.temp/db/{id}`. Useful for testing.
-    /// Populates the database, creates a default agent, and sets the server_url to "http://localhost/".
-    #[cfg(all(feature = "db-sled", not(feature = "db-redb")))]
-    pub async fn init_temp(id: &str) -> AtomicResult<Db> {
-        let tmp_dir_path = format!(".temp/db/{}", id);
-        let _try_remove_existing = std::fs::remove_dir_all(&tmp_dir_path);
-        let store = Db::init(
-            std::path::Path::new(&tmp_dir_path),
-            Some("https://localhost".into()),
-        )
-        .await?;
-        let agent = store.create_agent(None).await?;
-        store.set_default_agent(agent);
-        store.populate().await?;
-        Ok(store)
-    }
-
     /// Create a temporary Db backed by ReDB. Useful for testing.
-    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
     pub async fn init_temp(id: &str) -> AtomicResult<Db> {
         let tmp_dir_path = format!(".temp/db/{}", id);
         let uploads_path = format!(".temp/db/{}/uploads", id);
@@ -1514,9 +1372,36 @@ impl Db {
     /// already stored locally? Used by managed-node replication to skip drives it
     /// already hosts before resolving/pulling them from a peer.
     pub fn has_resource_locally(&self, subject: &str) -> bool {
+        let key = crate::identifiers::canonicalize_scheme(subject);
         self.kv
-            .contains_key(Tree::Resources, subject.as_bytes())
+            .contains_key(Tree::Resources, key.as_bytes())
             .unwrap_or(false)
+    }
+
+    /// Rewrite `did:ad:` resource / snapshot / mapping keys to `atomic:` on
+    /// open. Idempotent; see [`canonical_scheme::migrate_if_needed`].
+    fn migrate_canonical_scheme_if_needed(&self) -> AtomicResult<()> {
+        canonical_scheme::migrate_if_needed(self)
+    }
+
+    /// The stored Loro snapshot of `subject`, under whichever spelling the
+    /// caller used: normalized to the `pure_id` key writers store it under.
+    pub fn get_loro_snapshot(&self, subject: &Subject) -> Option<Vec<u8>> {
+        self.get_loro_snapshot_bytes(&self.normalize_subject(subject).pure_id())
+    }
+
+    pub(crate) fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        self.kv
+            .get(Tree::LoroSnapshots, key.as_bytes())
+            .ok()
+            .flatten()
+    }
+
+    fn get_did_mapping_hint(&self, subject: &str) -> Option<String> {
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        let bin = self.kv.get(Tree::DidMapping, key.as_bytes()).ok()??;
+        std::str::from_utf8(&bin).ok().map(str::to_string)
     }
 
     /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
@@ -1582,7 +1467,7 @@ impl Db {
                 continue;
             };
 
-            if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+            if let Some(snapshot) = self.get_loro_snapshot_bytes(subject) {
                 row.loro_bytes += snapshot.len() as u64;
             }
 
@@ -1639,7 +1524,9 @@ impl Db {
 
         for resource in self.all_resources(false) {
             if let Ok(p) = resource.get(urls::PARENT) {
-                if p.to_string() != parent {
+                if crate::identifiers::canonicalize_scheme(&p.to_string())
+                    != crate::identifiers::canonicalize_scheme(parent)
+                {
                     continue;
                 }
             } else {
@@ -1780,7 +1667,7 @@ impl Db {
 
     fn should_bypass_drive_routing(subject: &Subject, subject_string: &str) -> bool {
         subject.is_did()
-            || subject_string.starts_with("/did")
+            || crate::identifiers::is_identifier_resolution_path(subject_string)
             || subject_string.starts_with("/bind-drive")
             || subject_string.starts_with("/search")
             || subject_string.starts_with("/upload")
@@ -1799,9 +1686,7 @@ impl Db {
     /// pubkey is standard base64 and contains `/` and `+`, so the whole
     /// remainder is carried across untouched.
     fn legacy_agent_subject(subject: &Subject) -> Option<Subject> {
-        let pubkey = subject
-            .as_str()
-            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)?;
+        let pubkey = subject.agent_public_key()?;
 
         if pubkey.is_empty() {
             return None;
@@ -1879,6 +1764,41 @@ impl Db {
 
         extenders.push(class_extender);
         Ok(())
+    }
+
+    /// Runs one extender's `after_commit` for a commit that is already
+    /// persisted. The caller logs an error and moves on to the next extender;
+    /// see the AFTER APPLY COMMIT HANDLERS block in `apply_commit`.
+    async fn run_after_commit_extender(
+        &self,
+        extender: &ClassExtender,
+        resource: &Resource,
+        commit_response: &CommitResponse,
+        root_subject: &mut Option<String>,
+    ) -> AtomicResult<()> {
+        let Some(handler) = extender.after_commit.as_ref() else {
+            return Ok(());
+        };
+        if !extender.resource_has_extender(resource)? || !extender.can_extend(resource) {
+            return Ok(());
+        }
+
+        let (is_in_scope, cached_root) = extender
+            .check_scope(resource, self, root_subject.take())
+            .await?;
+        *root_subject = cached_root;
+        if !is_in_scope {
+            return Ok(());
+        }
+
+        (handler)(crate::class_extender::CommitExtenderContext {
+            store: self,
+            commit: &commit_response.commit,
+            resource,
+            is_new: commit_response.resource_old.is_none(),
+            changed_props: &commit_response.changed_props,
+        })
+        .await
     }
 
     pub fn get_class_extenders_on_drive(&self, drive_subject: &str) -> Vec<ClassExtender> {
@@ -2205,7 +2125,10 @@ impl Db {
         resource: &Resource,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        for index_atom in atom.to_indexable_atoms() {
+        for mut index_atom in atom.to_indexable_atoms() {
+            // Index by resource identity, even when an older peer sent the
+            // same subject using the legacy identifier scheme.
+            index_atom.subject = index_atom.subject.pure_id().into();
             add_atom_to_valpropsub_index(&index_atom, transaction)?;
             add_atom_to_prop_val_sub_index(&index_atom, transaction)?;
             // Also update the query index to keep collections performant
@@ -2285,7 +2208,8 @@ impl Db {
     ) -> AtomicResult<()> {
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
-        let propvals = resource.get_propvals();
+        let mut propvals = resource.get_propvals().clone();
+        canonical_scheme::canonicalize_propvals(&mut propvals);
 
         // Persist DID routing hint if available
         if let Subject::Did {
@@ -2307,7 +2231,7 @@ impl Db {
         // projection. Commit resources are the exception: a commit's
         // `loroUpdate` is its signed payload and must stay in the blob.
         let resource_bin = if subject.is_commit_did() {
-            encode_propvals(propvals)?
+            encode_propvals(&propvals)?
         } else {
             let mut projection = propvals.clone();
             projection.remove(crate::urls::LORO_UPDATE);
@@ -2433,6 +2357,16 @@ impl Db {
         }
     }
 
+    /// The stored row of `subject`, and the key it is stored under: the
+    /// `atomic:` spelling. Opening a store rewrites every `did:ad:` key
+    /// (`canonical_scheme::migrate_if_needed`) and every write keys by
+    /// [`Subject::pure_id`], so a legacy spelling only needs normalizing.
+    fn get_propvals_canonical(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+        let key = crate::identifiers::canonicalize_scheme(subject);
+        let propvals = self.get_propvals(&key)?;
+        Ok((key, propvals))
+    }
+
     /// A resource built only from its last-committed materialized propvals,
     /// **skipping the Loro snapshot re-decode** that [`Storelike::get_resource`]
     /// performs. That decode decompresses a resource's full CRDT history and can
@@ -2444,18 +2378,15 @@ impl Db {
     /// drive hint) matches `get_resource`, so ids/subjects stay consistent.
     pub fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
-        let subject_str = normalized.pure_id();
-        let propvals = self.get_propvals(&subject_str)?;
+        let (subject_str, propvals) = self.get_propvals_canonical(&normalized.pure_id())?;
 
         let mut res_subject = normalized.clone();
         if let Subject::Did {
             drive_hint: None, ..
         } = &res_subject
         {
-            if let Ok(Some(hint_bin)) = self.kv.get(Tree::DidMapping, subject_str.as_bytes()) {
-                if let Ok(hint) = std::str::from_utf8(&hint_bin) {
-                    res_subject = res_subject.set_drive_hint(hint.to_string());
-                }
+            if let Some(hint) = self.get_did_mapping_hint(&subject_str) {
+                res_subject = res_subject.set_drive_hint(hint);
             }
         }
 
@@ -3227,7 +3158,7 @@ impl Db {
         filter: &query_index::QueryFilter,
         resource: &Resource,
     ) -> bool {
-        if !resource.get_subject().as_str().starts_with("did:") {
+        if !crate::identifiers::is_atomic_identifier(resource.get_subject().as_str()) {
             return true;
         }
         match (resource.get_drive(), self.filter_drive_root(filter)) {
@@ -3418,7 +3349,7 @@ impl Db {
         // everything else gets the stored snapshot attached undecoded.
         if !resource.get_subject().is_commit_did() {
             let pure_id = resource.get_subject().pure_id();
-            if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, pure_id.as_bytes()) {
+            if let Some(snapshot) = self.get_loro_snapshot_bytes(&pure_id) {
                 resource
                     .insert_propval_raw(crate::urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
             }
@@ -3479,35 +3410,40 @@ impl Db {
         let mut subjects: Vec<Subject> = vec![];
         let mut resources: Vec<Resource> = vec![];
         let mut total_count = 0;
+        let mut seen = HashSet::new();
         let rights_cache = std::sync::Mutex::new(RightsCache::default());
+        let base_domain = self.get_base_domain();
 
         let atoms = self.get_index_iterator_for_query(q);
 
-        for (i, atom_res) in atoms.enumerate() {
+        for atom_res in atoms {
             let atom = atom_res?;
             if !q.include_external && !atom.subject.is_local() {
                 continue;
             }
+            let identity = atom.subject.pure_id();
+            if !seen.insert(identity.clone()) {
+                continue;
+            }
+            let subject = Subject::from_raw(&identity, base_domain.as_deref());
+            let index = seen.len() - 1;
 
             total_count += 1;
 
-            if q.offset > i {
+            if q.offset > index {
                 continue;
             }
 
             if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
                 // Sudo without nested bodies needs no per-member work at all.
                 if q.for_agent == ForAgent::Sudo && !q.include_nested {
-                    subjects.push(atom.subject.clone());
+                    subjects.push(subject);
                     continue;
                 }
 
-                match self
-                    .resolve_query_member(&atom.subject, q, &rights_cache)
-                    .await
-                {
+                match self.resolve_query_member(&subject, q, &rights_cache).await {
                     Some(body) => {
-                        subjects.push(atom.subject.clone());
+                        subjects.push(subject);
                         if let Some(resource) = body {
                             resources.push(resource);
                         }
@@ -3880,7 +3816,8 @@ impl Db {
         resource: &Resource,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
-        for index_atom in atom.to_indexable_atoms() {
+        for mut index_atom in atom.to_indexable_atoms() {
+            index_atom.subject = index_atom.subject.pure_id().into();
             transaction.push(Operation::remove_atom_from_reference_index(&index_atom));
             transaction.push(Operation::remove_atom_from_prop_val_sub_index(&index_atom));
 
@@ -3917,13 +3854,10 @@ impl Db {
         // `to_string()` (which may carry `?drive=` params) would miss the
         // row entirely for DID subjects with a drive hint.
         let subject_str = subject.pure_id();
-        if let Ok(found) = self.get_propvals(&subject_str) {
+        if let Ok((found_key, found)) = self.get_propvals_canonical(&subject_str) {
             let resource = Resource::from_propvals(found, subject.clone());
-            transaction.push(Operation::remove_resource(&subject_str));
-            // Remove the Loro snapshot in the same transaction. Without this
-            // the snapshot is orphaned in `Tree::LoroSnapshots` and leaks
-            // forever — only the WS/Iroh DESTROY path cleaned it before.
-            transaction.push(Operation::remove_loro_snapshot(&subject_str));
+            transaction.push(Operation::remove_resource(&found_key));
+            transaction.push(Operation::remove_loro_snapshot(&found_key));
             // Read the drive now, while the resource still exists: a listener
             // reacting to the removal cannot look it up any more.
             let drive = resource.get_drive().or(inherited_drive);
@@ -3947,6 +3881,7 @@ impl Db {
                 self.remove_atom_from_index(&remove_atom, &resource, transaction)?;
             }
             crate::search::unindex_subject(self, &subject_str, transaction)?;
+            crate::search::unindex_subject(self, &found_key, transaction)?;
         } else {
             return Err(format!(
                 "Resource {} could not be deleted, because it was not found in the store.",
@@ -4183,6 +4118,7 @@ impl Storelike for Db {
             check_required_props,
             update_index,
             overwrite_existing,
+            None,
         )
         .await
     }
@@ -4214,7 +4150,7 @@ impl Storelike for Db {
         // never be resolved over the network.
         if commit.destroy.unwrap_or(false) && opts.validate_rights {
             if let Some(sig) = commit.signature.as_ref() {
-                let commit_id = format!("did:ad:commit:{sig}");
+                let commit_id = crate::identifiers::commit_subject(sig);
                 if store.has_resource_locally(&commit_id)
                     && store.has_resource_locally(&commit.subject.pure_id())
                 {
@@ -4525,46 +4461,41 @@ impl Storelike for Db {
         // AFTER APPLY COMMIT HANDLERS
         // Commit has been checked and saved.
         // Here you can add side-effects, such as creating new Commits.
+        //
+        // Nothing below may fail the commit: it is already persisted, so an
+        // error here would tell the client a saved change failed, and it would
+        // retry or show an error for data that did change (#1848). Each
+        // extender's failure is logged and the next extender still runs.
         let resource_after = commit_response
             .resource_new
             .as_ref()
             .or(commit_response.resource_old.as_ref());
 
         if let Some(resource) = resource_after {
-            let extenders = self
-                .class_extenders
-                .read()
-                .map_err(|e| format!("Failed to read class extenders: {}", e))?
-                .clone();
+            // A poisoned lock still holds a usable list; a panic elsewhere is
+            // no reason to skip every after-commit side effect.
+            let extenders = match self.class_extenders.read() {
+                Ok(extenders) => extenders.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            };
             for extender in extenders.iter() {
-                if extender.resource_has_extender(resource)? {
-                    if !extender.can_extend(resource) {
-                        continue;
-                    }
-
-                    let (is_in_scope, cached_root) =
-                        extender.check_scope(resource, self, root_subject).await?;
-
-                    root_subject = cached_root;
-
-                    if !is_in_scope {
-                        continue;
-                    }
-
-                    use crate::class_extender::CommitExtenderContext;
-
-                    let Some(handler) = extender.after_commit.as_ref() else {
-                        continue;
-                    };
-
-                    let fut = (handler)(CommitExtenderContext {
-                        store,
-                        commit: &commit_response.commit,
+                let result = self
+                    .run_after_commit_extender(
+                        extender,
                         resource,
-                        is_new: commit_response.resource_old.is_none(),
-                        changed_props: &commit_response.changed_props,
-                    });
-                    fut.await?;
+                        &commit_response,
+                        &mut root_subject,
+                    )
+                    .await;
+                if let Err(e) = result {
+                    tracing::error!(
+                        extender = extender.id.as_deref().unwrap_or("<anonymous>"),
+                        plugin = extender.subject.as_deref(),
+                        subject = %commit_response.commit.subject,
+                        commit = %commit_response.commit_resource.get_subject(),
+                        error = %e,
+                        "after_commit extender failed; the commit is saved and still succeeds"
+                    );
                 }
             }
         }
@@ -4591,7 +4522,7 @@ impl Storelike for Db {
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
-        if let Ok(propvals) = self.get_propvals(&subject_str) {
+        if let Ok((subject_str, propvals)) = self.get_propvals_canonical(&subject_str) {
             let mut res_subject = normalized.clone();
 
             // If it's a DID and we don't have a hint in the requested subject,
@@ -4600,20 +4531,15 @@ impl Storelike for Db {
                 drive_hint: None, ..
             } = &res_subject
             {
-                if let Ok(Some(hint_bin)) = self.kv.get(Tree::DidMapping, subject_str.as_bytes()) {
-                    if let Ok(hint) = std::str::from_utf8(&hint_bin) {
-                        res_subject = res_subject.set_drive_hint(hint.to_string());
-                    }
+                if let Some(hint) = self.get_did_mapping_hint(&subject_str) {
+                    res_subject = res_subject.set_drive_hint(hint);
                 }
             }
 
             let mut resource = Resource::from_propvals(propvals, res_subject);
             // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
             // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
-            if let Ok(Some(snapshot)) = self.kv.get(
-                crate::db::trees::Tree::LoroSnapshots,
-                subject_str.as_bytes(),
-            ) {
+            if let Some(snapshot) = self.get_loro_snapshot_bytes(&subject_str) {
                 // A snapshot that cannot be read or applied is not fatal: the
                 // read falls back to the (possibly stale) propval projection
                 // stored beside it. It is still worth a warning, because a
@@ -4666,17 +4592,43 @@ impl Storelike for Db {
                 }
             }
             let resolved_url = normalized.resolve(&origin);
+            let path = normalized.path();
 
-            if normalized.is_did() || normalized.path().starts_with("/did") {
-                // If it's an agent DID and not found locally, return a minimal resource
+            if normalized.is_did() || crate::identifiers::is_identifier_resolution_path(&path) {
+                // If it's an agent identifier and not found locally, return a minimal resource
                 // instead of an error. This is important for "just-in-time" agent registration.
-                if normalized.is_agent_did() || normalized.path().starts_with("/did:ad:agent:") {
-                    let lookup = if normalized.path().starts_with('/') {
-                        &normalized.path()[1..]
-                    } else {
-                        &normalized.path()
-                    };
-                    if let Some(pubkey) = lookup.strip_prefix("did:ad:agent:") {
+                if normalized.is_agent_did()
+                    || crate::identifiers::is_agent_id(path.trim_start_matches('/'))
+                {
+                    let lookup = path.strip_prefix('/').unwrap_or(&path);
+                    if let Some(pubkey) = crate::identifiers::agent_public_key(lookup) {
+                        // The same key has been spelled padded, unpadded,
+                        // standard and URL-safe. A profile stored under another
+                        // spelling is this agent: serve it, rather than
+                        // synthesizing an empty twin beside it.
+                        for spelling in crate::identifiers::agent_pubkey_spellings(pubkey)
+                            .into_iter()
+                            .skip(1)
+                        {
+                            let alias = Subject::from_raw(
+                                &crate::identifiers::agent_subject(&spelling),
+                                self.get_base_domain().as_deref(),
+                            );
+                            if self.has_stored_resource(&alias) {
+                                let mut found = self.get_resource(&alias).await?;
+                                found.set_subject(normalized.to_string());
+                                return Ok(found);
+                            }
+                            let legacy_did = Subject::from_raw(
+                                &format!("{}{}", crate::identifiers::DID_AD_AGENT_PREFIX, spelling),
+                                self.get_base_domain().as_deref(),
+                            );
+                            if self.has_stored_resource(&legacy_did) {
+                                let mut found = self.get_resource(&legacy_did).await?;
+                                found.set_subject(normalized.to_string());
+                                return Ok(found);
+                            }
+                        }
                         if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
                             if let Ok(mut resource) = agent.to_resource() {
                                 // A lookup is not creation of an agent. There is
@@ -4701,7 +4653,10 @@ impl Storelike for Db {
                     }
                 }
 
-                if normalized.is_did() || resolved_url.starts_with("/did:") {
+                if normalized.is_did()
+                    || crate::identifiers::is_identifier_path_form(&resolved_url)
+                    || crate::identifiers::is_atomic_identifier(&resolved_url)
+                {
                     return Err(AtomicError::not_found(format!(
                         "DID Resource {} not found locally",
                         resolved_url
@@ -5129,7 +5084,7 @@ mod resolver_tests {
         );
         assert_eq!(
             resolved.subject.as_str(),
-            "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+            "atomic:test-child?drive=".to_string() + drive_did.as_str()
         );
     }
 

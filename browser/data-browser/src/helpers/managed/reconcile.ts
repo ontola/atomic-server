@@ -9,7 +9,7 @@ import {
   getManagedEnrollments,
   type ManagedEnrollmentSummary,
 } from './enrollmentApi';
-import { getRecoverySecret } from './recovery';
+import { getRecoverySecret, sameAgent } from './recovery';
 import { getManagedAccount, type ManagedAccount } from './session';
 
 export type IdentityMismatchReason =
@@ -32,17 +32,19 @@ export type IdentityReconcileResult =
 function activeEnrollmentAgents(
   enrollments: ManagedEnrollmentSummary[],
 ): string[] {
-  const agents = new Set<string>();
+  const agents: string[] = [];
 
   for (const enrollment of enrollments) {
     if (enrollment.status === 'Disabled') continue;
 
-    if (enrollment.agent_subject) {
-      agents.add(enrollment.agent_subject);
+    const subject = enrollment.agent_subject;
+
+    if (subject && !agents.some(agent => sameAgent(agent, subject))) {
+      agents.push(subject);
     }
   }
 
-  return [...agents];
+  return agents;
 }
 
 /**
@@ -80,7 +82,7 @@ export async function evaluateIdentityReconciliation(
     return { ok: true, managedAccount };
   }
 
-  if (recoveryAgent && recoveryAgent !== localAgentSubject) {
+  if (recoveryAgent && !sameAgent(recoveryAgent, localAgentSubject)) {
     return {
       ok: false,
       issue: {
@@ -94,7 +96,7 @@ export async function evaluateIdentityReconciliation(
 
   if (
     enrollmentAgents.length > 0 &&
-    !enrollmentAgents.includes(localAgentSubject)
+    !enrollmentAgents.some(agent => sameAgent(agent, localAgentSubject))
   ) {
     return {
       ok: false,
@@ -107,7 +109,7 @@ export async function evaluateIdentityReconciliation(
     };
   }
 
-  if (bindingAgent && bindingAgent !== localAgentSubject) {
+  if (bindingAgent && !sameAgent(bindingAgent, localAgentSubject)) {
     return {
       ok: false,
       issue: {
@@ -172,10 +174,12 @@ async function resolveHostedDriveOrigin(
 
   const withOrigin = enrollments.filter(
     // A placement is not a hosted copy. Keep the source until the node
-    // reports data, including after an interrupted setup.
+    // reports data, including after an interrupted setup. Only statuses the
+    // node serves count: a Suspended (or unknown) enrollment is off the node's
+    // allowlist, and pointing the drive at it gets every write refused.
     e =>
-      e.status !== 'Disabled' &&
-      e.status !== /* @wc-ignore */ 'Pending' &&
+      (e.status === /* @wc-ignore */ 'Active' ||
+        e.status === /* @wc-ignore */ 'Error') &&
       e.resource_count !== 0 &&
       e.http_origin,
   );
@@ -279,28 +283,41 @@ export type AgentResourceReader = {
 };
 
 /**
- * Whether the device's agent is one nobody would miss: the demo guest, or an
- * identity that never got a workspace. Real accounts get a personal drive
+ * What the device's agent has on it: a workspace (`some`), nothing (`none`,
+ * the demo guest or an identity that never got one), or no answer because its
+ * resource could not be read (`unknown`). Real accounts get a personal drive
  * during onboarding; guests never do (same test `ensureAgentForDemo` uses).
  *
- * This is what decides whether the reconcile gate may swap the agent out
- * silently. It used to swap every time — and a fresh local identity with a
- * workspace on it was replaced, without a word, the moment its owner signed
- * in to the portal with an email that already had one (staging, 2026-09-03).
+ * The reconcile gate needs all three: `unknown` must not be mistaken for
+ * `none`, or an identity that is merely offline would be switched out with
+ * its drives still on it.
+ */
+export async function localAgentWorkspace(
+  store: AgentResourceReader,
+  agentSubject: string,
+): Promise<'some' | 'none' | 'unknown'> {
+  try {
+    const resource = await store.getResource(agentSubject);
+
+    if (resource.error) return 'unknown';
+
+    return resource.get(core.properties.personalDrive) ? 'some' : 'none';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Whether the device's agent is one nobody would miss: the demo guest, or an
+ * identity that never got a workspace. A failed read is not disposable: it
+ * does not establish that the identity has no workspace.
  */
 export async function localAgentIsDisposable(
   store: AgentResourceReader,
   agentSubject: string,
 ): Promise<boolean> {
-  try {
-    const resource = await store.getResource(agentSubject);
-
-    if (resource.error) return true;
-
-    return !resource.get(core.properties.personalDrive);
-  } catch {
-    return true;
-  }
+  // Native first launch and account recovery can race the local node.
+  return (await localAgentWorkspace(store, agentSubject)) === 'none';
 }
 
 export function shortDid(subject: string): string {

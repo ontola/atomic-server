@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useRef } from 'react';
+import { ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
 import { isSafeHref } from '@tomic/react';
 import { styled } from 'styled-components';
 import { constructOpenURL, pathToURL } from '../helpers/navigation';
@@ -7,6 +7,7 @@ import { ErrorLook } from '../components/ErrorLook';
 import { isRunningInTauri } from '../helpers/tauri';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import clsx from 'clsx';
+import { ResourceLinkNavigationContext } from './ResourceLinkNavigationContext';
 import { useIsInRTE } from '@hooks/useIsInRTE';
 import { useCombineRefs } from '@hooks/useCombineRefs';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
@@ -43,6 +44,7 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
   onContextMenu,
   ...props
 }) => {
+  const onResourceOpen = useContext(ResourceLinkNavigationContext);
   const innerRef = useRef<HTMLAnchorElement>(null);
   const combinedRef = useCombineRefs([ref, innerRef]);
   const navigate = useNavigateWithTransition();
@@ -66,7 +68,7 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
 
   let isOnCurrentPage: boolean;
 
-  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+  const handleClick = async (e: React.MouseEvent<HTMLElement>) => {
     if (href) {
       // When there is a regular URL, let the browser handle it
       return;
@@ -81,11 +83,11 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
     }
 
     if (subject) {
-      if (isOnCurrentPage) {
-        return;
+      if (!isOnCurrentPage) {
+        await navigate(constructOpenURL(subject));
       }
 
-      navigate(constructOpenURL(subject));
+      onResourceOpen?.();
     }
   };
 
@@ -151,8 +153,8 @@ export const AtomicLink: React.FC<React.PropsWithChildren<AtomicLinkProps>> = ({
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       href={hrefConstructed}
-      disabled={isOnCurrentPage}
-      tabIndex={isOnCurrentPage || untabbable ? -1 : 0}
+      disabled={isOnCurrentPage && !onResourceOpen}
+      tabIndex={(isOnCurrentPage && !onResourceOpen) || untabbable ? -1 : 0}
       // Tauri always opens `_blank` in new tab, and ignores preventDefault() for some reason.
       // https://github.com/tauri-apps/tauri/issues/1657
       target={isRunningInTauri() && !href ? '' : '_blank'}

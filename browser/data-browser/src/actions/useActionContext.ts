@@ -3,6 +3,7 @@ import {
   useDrive,
   useResource,
   useStore,
+  isAtomicIdentifier,
   type Store,
 } from '@tomic/react';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
@@ -64,8 +65,8 @@ export async function buildActionContext(
       const [allowed] = await resource.canWrite(agent.subject);
       canWrite =
         !!allowed ||
-        (input.subject.startsWith('did:ad:') &&
-          agent.subject.startsWith('did:ad:'));
+        (isAtomicIdentifier(input.subject) &&
+          isAtomicIdentifier(agent.subject));
     }
   }
 

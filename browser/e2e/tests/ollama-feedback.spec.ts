@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { before, FRONTEND_URL } from './test-utils';
+import { before, FRONTEND_URL, openAccountMenu } from './test-utils';
 
 test.beforeEach(async ({ page }) => {
   await page.route('http://localhost:3030/api/me', route =>
@@ -8,9 +8,12 @@ test.beforeEach(async ({ page }) => {
 });
 test.beforeEach(before);
 
-test('feedback uses the sidebar hover background', async ({ page }) => {
-  await page.getByTestId('sidebar').hover();
-  const feedback = page.getByRole('button', { name: 'Feedback', exact: true });
+test('feedback in the account menu highlights on hover', async ({ page }) => {
+  const menu = await openAccountMenu(page);
+  const feedback = menu.getByRole('menuitem', {
+    name: 'Feedback',
+    exact: true,
+  });
   await page.mouse.move(1000, 300);
   const resting = await feedback.evaluate(
     el => getComputedStyle(el).backgroundColor,
@@ -47,6 +50,7 @@ test('settings detects local Ollama and accepts it with one click', async ({
   }
 
   await page.getByText('AI', { exact: true }).click();
+  await page.getByText('Ollama', { exact: true }).click();
   await expect(
     page.getByText('Local Ollama detected', { exact: true }),
   ).toBeVisible();
@@ -72,6 +76,7 @@ test('settings detects local Ollama and accepts it with one click', async ({
   }
 
   await page.getByText('AI', { exact: true }).click();
+  await page.getByText('Ollama', { exact: true }).click();
   await expect(page.locator('#ollama-url')).toHaveValue(
     'http://localhost:11434',
   );

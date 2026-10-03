@@ -27,9 +27,14 @@ pub async fn inspect_workspace(
             .map_err(|e| e.to_string())?;
         let result = async {
             let (mut send, mut recv) = conn.open_bi().await.map_err(|e| e.to_string())?;
+            // Spelled for every responder, like the dial-side AUTH in
+            // `peer::sync_drive_with_peer_using_outcome`.
             let auth = protocol::encode_auth(
                 &store.get_default_agent()?,
-                &peer::auth_subject_for(drive, &remote.to_string()),
+                &peer::auth_subject_for(
+                    &crate::identifiers::to_legacy_scheme(drive),
+                    &remote.to_string(),
+                ),
             )?;
             send.write_u32(auth.len() as u32)
                 .await
@@ -66,8 +71,12 @@ pub async fn inspect_workspace(
                     protocol::tag::UPDATE if authenticated => {
                         let update = protocol::decode_update(&frame[1..])
                             .ok_or("Invalid workspace response")?;
+                        // A responder answers in the scheme this dialer listed;
+                        // this handshake sends no HELLO, so it may come back
+                        // as `did:ad:`. Either spelling names the drive.
                         if update.request_id != 1
-                            || update.subject != drive
+                            || crate::identifiers::canonicalize_scheme(&update.subject)
+                                != crate::identifiers::canonicalize_scheme(drive)
                             || update.loro_bytes.is_empty()
                         {
                             return Err("Unexpected workspace response".into());

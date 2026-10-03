@@ -15,7 +15,7 @@ import { CREATE_APP_DESCRIPTION } from './createAppDescription';
  */
 describe('the app-building instructions', () => {
   it('names the built-in views, so the model can recognise one before rebuilding it', () => {
-    for (const kind of ['kanban', 'table', 'calendar', 'timer']) {
+    for (const kind of ['kanban', 'table', 'calendar', 'timer', 'issues']) {
       expect(CREATE_APP_DESCRIPTION).toContain(kind);
     }
   });

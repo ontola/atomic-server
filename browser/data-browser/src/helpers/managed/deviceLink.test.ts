@@ -61,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   setManagedDeviceToken(null);
+  inTauri.value = false;
 });
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -242,6 +243,14 @@ describe('canHoldProviderCookie', () => {
   it('is true across ports in local development (cookies ignore the port)', () => {
     at('http://localhost:6747/app');
     expect(canHoldProviderCookie('http://localhost:49237')).toBe(true);
+  });
+
+  it('is false in a native development WebView even when its URL matches the portal host', () => {
+    at('http://localhost:6747/app');
+    inTauri.value = true;
+
+    expect(canHoldProviderCookie('http://localhost:49237')).toBe(false);
+    inTauri.value = false;
   });
 
   it('is false for the desktop and Android apps on tauri://localhost', () => {

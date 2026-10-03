@@ -2,10 +2,22 @@ import { isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
-import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
+import {
+  errorMessageFromResponse,
+  signRequest,
+  useResource,
+  useStore,
+  useTitle,
+} from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  appChanges,
+  handleRequest,
+  isHostRequest,
+  isWithinApp,
+  type HostReply,
+} from './hostStore';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -14,6 +26,16 @@ import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 
 import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars } from '@views/PluginView/useCreateThemeVars';
+import { getIntegrationProxy } from '@helpers/integrationProxy';
+import {
+  isPlatformId,
+  ProxyConnections,
+  type ProxyConnection,
+} from '@helpers/proxyConnections';
+import { appAgentOf } from './appAgent';
+import { ConnectDialog } from './ConnectDialog';
+import { useHostUI } from '@components/HostUI/hostUI';
+import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -68,6 +90,11 @@ function AppFrameSession({
   const [entrypoint, setEntrypoint] = useState<string | null>();
   const [problem, setProblem] = useState<string>();
   const [appError, setAppError] = useState<AppError>();
+  // An app asking to connect a proxy platform. Drawn by this page, not the
+  // frame, so only a click the person makes here can navigate away.
+  const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
+  const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  const [appTitle] = useTitle(useResource(app));
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -78,6 +105,14 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
+  const hostUI = useHostUI({
+    writeRoot: app,
+    mayWriteUnder: subject => isWithinApp(store, subject, app),
+    appTitle,
+    frame: frameRef,
+    table,
+  });
+  const { handle: handleUI, forwardKey } = hostUI;
 
   // Which plugin renders it. Resolved here rather than by each caller: a
   // table tab and an app page both need it, and two copies would drift.
@@ -139,6 +174,8 @@ function AppFrameSession({
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
+    // Per frame: `undo` reverts what this frame applied, nothing older.
+    const changes = appChanges(store, drive, app);
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -148,6 +185,8 @@ function AppFrameSession({
         ? viewSession(originalSession, wire.id)
         : originalSession;
       const message = data as Record<string, unknown>;
+
+      if (forwardKey(message)) return;
 
       if (message.type === '__atomic_plugin_error') {
         const failure: AppError = {
@@ -172,6 +211,48 @@ function AppFrameSession({
 
       if (!isHostRequest(data)) return;
 
+      if (
+        handleUI(
+          data as unknown as Parameters<typeof handleUI>[0],
+          session.post,
+        )
+      ) {
+        return;
+      }
+
+      if (data.op === 'proxyConnect') {
+        if (!isPlatformId(data.platform)) {
+          session.post({ id: data.id, error: 'platform is required' });
+
+          return;
+        }
+
+        // One question at a time; a second ask answers the first.
+        const previous = connectAskRef.current;
+        previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
+        const ask: ConnectAsk = {
+          id: data.id,
+          platform: data.platform!,
+          reply: session.post,
+        };
+        connectAskRef.current = ask;
+        setConnectAsk(ask);
+
+        // Offer a connection the person already has for this platform, so
+        // using it for one more app needs no second trip through OAuth. A
+        // proxy that cannot list them still lets them connect a new one.
+        existingConnections(store, data.platform!)
+          .catch((): ProxyConnection[] => [])
+          .then(existing => {
+            if (connectAskRef.current !== ask) return;
+            const withExisting = { ...ask, existing };
+            connectAskRef.current = withExisting;
+            setConnectAsk(withExisting);
+          });
+
+        return;
+      }
+
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
@@ -191,7 +272,7 @@ function AppFrameSession({
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post);
+      void answer(store, app, drive, table, data, session.post, changes);
     });
     bridgeRef.current = bridge;
 
@@ -199,7 +280,7 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src]);
+  }, [store, app, drive, table, src, handleUI, forwardKey]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
@@ -237,6 +318,47 @@ function AppFrameSession({
     return <LoaderBlock />;
   }
 
+  /** Answers `ask`, unless a newer ask took its place and answered it. */
+  const finishAsk = (ask: ConnectAsk, used: ProxyConnection | undefined) => {
+    if (connectAskRef.current?.id !== ask.id) return;
+    ask.reply({
+      id: ask.id,
+      result: used
+        ? {
+            status: 'connected',
+            connectionId: used.connection_id,
+            platform: used.platform,
+          }
+        : { status: 'cancelled' },
+    });
+    connectAskRef.current = undefined;
+    setConnectAsk(undefined);
+  };
+
+  const connect = async (ask: ConnectAsk) => {
+    if (!store.getAgent()) throw new Error('Sign in to connect an account.');
+
+    const appAgent = await appAgentOf(store, { drive, app });
+    const url = await proxyConnections(store).start(
+      { drive, app, appAgent },
+      ask.platform,
+      location.href,
+      await appLabel(store, app),
+    );
+
+    // Closing the dialog meanwhile was a no; leaving now would overrule it.
+    if (connectAskRef.current?.id === ask.id) location.assign(url);
+  };
+
+  const shareExisting = async (connection: ProxyConnection) => {
+    const appAgent = await appAgentOf(store, { drive, app });
+    await proxyConnections(store).delegate(
+      connection.connection_id,
+      appAgent,
+      await appLabel(store, app),
+    );
+  };
+
   const fixIt = () => {
     if (!appError) return;
 
@@ -273,6 +395,18 @@ function AppFrameSession({
             </Button>
           </Row>
         </ErrorBar>
+      )}
+      {hostUI.element}
+      {connectAsk && (
+        <ConnectDialog
+          app={appTitle}
+          platform={platformName(connectAsk.platform)}
+          proxySite={new URL(getIntegrationProxy()).host}
+          existing={connectAsk.existing}
+          onConnect={() => connect(connectAsk)}
+          onUseExisting={shareExisting}
+          onClosed={used => finishAsk(connectAsk, used)}
+        />
       )}
       <Frame
         ref={frameRef}
@@ -313,15 +447,108 @@ async function answer(
   table: string | undefined,
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
+  changes: ViewChanges,
 ): Promise<void> {
   try {
     post({
       id: request.id,
-      result: await handleRequest(store, app, drive, request, table),
+      result: await handleRequest(
+        store,
+        app,
+        drive,
+        request,
+        table,
+        proxyHost(store, app, drive),
+        changes,
+      ),
     });
   } catch (e) {
     post({ id: request.id, error: (e as Error).message });
   }
+}
+
+/** The configured proxy, managed with the signed-in user's key. */
+function proxyConnections(store: ReturnType<typeof useStore>) {
+  return new ProxyConnections(localStorage, getIntegrationProxy(), () =>
+    store.getAgent(),
+  );
+}
+
+/**
+ * Each app's agent, looked up once per page. A failed lookup is forgotten so
+ * the next request tries again (the app may get an identity meanwhile).
+ */
+const appAgents = new Map<string, Promise<string>>();
+
+function cachedAppAgent(
+  store: ReturnType<typeof useStore>,
+  drive: string,
+  app: string,
+): Promise<string> {
+  const key = JSON.stringify([store.getServerUrl(), drive, app]);
+  let found = appAgents.get(key);
+
+  if (!found) {
+    found = appAgentOf(store, { drive, app });
+    found.catch(() => appAgents.delete(key));
+    appAgents.set(key, found);
+  }
+
+  return found;
+}
+
+/** This app's integration-proxy access, or none when signed out. */
+function proxyHost(
+  store: ReturnType<typeof useStore>,
+  app: string,
+  drive: string,
+) {
+  return store.getAgent()
+    ? proxyConnections(store).host(() => cachedAppAgent(store, drive, app))
+    : undefined;
+}
+
+/** The person's own connections for `platform`, most recently used first. */
+async function existingConnections(
+  store: ReturnType<typeof useStore>,
+  platform: string,
+): Promise<ProxyConnection[]> {
+  if (!store.getAgent()) return [];
+  const rows = await proxyConnections(store).list(platform);
+
+  return rows.sort((a, b) =>
+    String(b.last_used_at ?? b.created_at ?? '').localeCompare(
+      String(a.last_used_at ?? a.created_at ?? ''),
+    ),
+  );
+}
+
+/** What a delegation is labelled with at the proxy: the app's name. */
+async function appLabel(
+  store: ReturnType<typeof useStore>,
+  app: string,
+): Promise<string> {
+  try {
+    return (await store.getResource(app)).title || app;
+  } catch {
+    return app;
+  }
+}
+
+/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
+function platformName(id: string) {
+  return id
+    .split('-')
+    .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
+    .join(' ');
+}
+
+interface ConnectAsk {
+  id: number | string;
+  platform: string;
+  reply: (reply: HostReply) => void;
+  /** Connections the person already has for this platform; unset while looking. */
+  existing?: ProxyConnection[];
 }
 
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
@@ -378,7 +605,7 @@ const Frame = styled.iframe`
   background: ${p => p.theme.colors.bg};
 `;
 
-/** Keeps the frame filling whatever is left once the bar has taken its height. */
+/** Keeps the frame filling whatever is left once the error bar has taken its height. */
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;

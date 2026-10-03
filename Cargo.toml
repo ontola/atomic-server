@@ -14,7 +14,7 @@ members = [
   "plugin-runtime",
   "tools/cargo-bin",
 ]
-exclude = ["flutter/rust", "integrations/localthought/syncables"]
+exclude = ["flutter/rust"]
 
 # Debuginfo dominates target/ size: with ~1460 deps (tauri, actix, iroh) the
 # default `debug = true` produces a multi-GB tree per build flavor, and this
@@ -51,4 +51,6 @@ overflow-checks = true
 debug = false
 
 [workspace.metadata.bin]
-wasm-pack = { version = "0.15.0" }
+# Explicit defaults select cargo install in cargo-run-bin. Older global
+# cargo-binstall versions do not support its --root argument.
+wasm-pack = { version = "0.15.0", default-features = true, locked = true }

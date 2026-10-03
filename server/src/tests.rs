@@ -223,25 +223,29 @@ async fn server_tests() {
         "response should be a search resource"
     );
 
-    // Get DID endpoint
-    let req = build_request_authenticated("/did", &appstate);
-    let resp = test::call_service(&app, req.to_request()).await;
-    assert!(resp.status().is_success());
-    let body = get_body(resp);
-    assert!(
-        body.as_str().contains("Resolves a DID"),
-        "response should be the DID endpoint description"
-    );
+    // Identifier resolution endpoints: /resource is canonical; /did and /atomic alias it.
+    for path in ["/did", "/resource", "/atomic"] {
+        let req = build_request_authenticated(path, &appstate);
+        let resp = test::call_service(&app, req.to_request()).await;
+        assert!(resp.status().is_success(), "{path}");
+        let body = get_body(resp);
+        assert!(
+            body.as_str().contains("atomic:"),
+            "response should describe identifier resolution, got: {}",
+            body.as_str()
+        );
+    }
 
-    // Test path-based DID resolution (even if it doesn't exist, we should get a 404 from the store, not a 500 or 401 before getting there)
-    let req = build_request_authenticated("/did:ad:test", &appstate);
-    let resp = test::call_service(&app, req.to_request()).await;
-    // It should be a 404 because did:ad:test doesn't exist, but it confirms it reached the handler correctly
-    assert_eq!(
-        resp.status(),
-        404,
-        "Should be a 404, because `did:ad:test` does not exist"
-    );
+    // Path-form identifiers reach the store (404 if missing), not a 500/401 first.
+    for path in ["/did:ad:test", "/atomic:test"] {
+        let req = build_request_authenticated(path, &appstate);
+        let resp = test::call_service(&app, req.to_request()).await;
+        assert_eq!(
+            resp.status(),
+            404,
+            "Should be a 404, because `{path}` does not exist"
+        );
+    }
 
     // Test Unauthenticated Invite with Public Key
     let issuer_agent = appstate.store.get_default_agent().unwrap();
@@ -474,7 +478,10 @@ async fn test_did_agent_edit() {
 
     // 5. Fetch the agent resource via GET and verify the name change
     let req = test::TestRequest::get()
-        .uri(&format!("/did?subject={}", urlencoding::encode(&agent_did)))
+        .uri(&format!(
+            "/resource?subject={}",
+            urlencoding::encode(&agent_did)
+        ))
         .insert_header(("Accept", "application/ad+json"))
         .to_request();
     let resp = test::call_service(&app, req).await;

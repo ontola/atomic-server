@@ -4,6 +4,346 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Apps can use Atomic's own UI through `store.ui`: a confirm dialog, a toast, a
+  menu at the click, the resource menu, the share dialog and opening a
+  resource. Atomic draws them, names the app that asked, and a menu is no
+  longer cut off at the app's edge. Ctrl/Cmd shortcuts and Escape that an app
+  does not handle now reach Atomic, so search still opens while you are in one.
+- Apps can also let the person pick a resource or a file (uploading one if
+  they like), and open Atomic's own form for a new resource of a class.
+- Plugin views and apps now share one API: `store` from `@tomic/plugin` works
+  like `@tomic/lib`'s Store (`getResource`, `resource.set`, `save`,
+  `newResource`, `query`, `search`, `subscribe`) and drive apps get the same
+  object. Packaged plugin views get `store.ui` too. `query` takes `filters`,
+  `sortBy`, `sortDesc`, `pageSize` and `page`. `RPCClient` keeps working but
+  is deprecated.
+- Plugin views and apps can make several writes as one change with
+  `store.apply(intents)`, in the same intent format a plugin's `run()`
+  returns. Everything is checked before anything is written, a failed write
+  rolls back the ones before it, and `store.undo()` reverts the latest change.
+- A plugin can declare the `edit-schema` capability so its view may change
+  the classes and properties of what it shows without asking each time.
+- Notifications are less noisy. The Notifications page shows one row per
+  conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
+  titles as they are now, in your language. Coming back to the window while
+  already on the conversation reads what arrived while you were away, and after
+  you missed something the app offers system notifications once, instead of
+  only a checkbox in Settings.
+- The Notifications page shows placeholder rows while it loads, instead of a
+  blank page that could flash "Nothing yet" before the list arrived.
+- An app asking to use one of your accounts (Google Calendar, Clockify and so
+  on) now asks in a dialog instead of a bar above the app, in plainer words:
+  which app, which account, and that you approve it on the next page, on the
+  integration proxy's site. If you already connected that account, the dialog
+  lists it with when it was connected and which apps use it, and "Use this
+  account" gives it to the app without leaving the page. A failure stays in
+  the dialog so you can try again; the app hears `cancelled` if you close it.
+  Tests that looked for the `Connect an account` group should look for the
+  dialog named `Connect <platform>`; "Use existing connection" is now "Use
+  this account".
+
+- Signing in to a hosted account can now be enough to open your identity on a
+  new device (#277). When the account service offers assisted recovery
+  (`assisted_recovery` in `GET /api/auth/providers`), a new account's backup is
+  wrapped by the account alone, so onboarding asks for no passkey and shows no
+  recovery code, and the sign-in and restore steps unlock it by themselves
+  after a recent sign-in. Existing backups get the extra wrapper the next time
+  a passkey or recovery code opens them. The sign-in and restore steps now
+  offer the same account options as the portal's sign-in page (Google when
+  configured, passkey, email link), from one shared `AccountSignIn` component
+  in `@tomic/service-ui`. Builds that know no account service (the FOSS
+  release, self-hosted nodes) show none of it and make no requests for it.
+  Account recovery has a "Let Atomic help me recover" switch: off removes the
+  assisted wrapper, so only a passkey or recovery code opens the identity. A
+  wrapper records which service key made it (`kdf_params.key_id`); after the
+  service rotates its key, the next unlock re-wraps with the new one. Accounts
+  may now have an `acct_` id apart from their address: backups and bindings
+  keep using the id, and the app shows `address` from `GET /api/me`.
+
+- Agents, Skills and MCP servers are edited in a dialog again. Their lists stay
+  on the AI settings page, but creating or editing one opens a dialog with the
+  form and Cancel / Save buttons, instead of swapping the list for the form
+  inside the settings section. Save stays disabled until the required fields
+  are filled in.
+- The sidebar's App panel is gone. Its entries (your user page, Notifications,
+  Integrations, Sync, Feedback, About and Install App) now live in a dropdown
+  that opens from the user row at the bottom of the sidebar, with Settings as a
+  gear button beside it. A dot on the row shows unread notifications.
+
+- The role picker next to the email field in the share dialog opens again. A
+  click on it also focused the email field, which closed its option list right
+  after it opened. The email field also asks password managers (Bitwarden,
+  1Password, LastPass, Dashlane) not to fill it, since it holds other people's
+  addresses.
+- Images in documents show again instead of "Failed to load image". An uploaded
+  image's address points at the server, but a browser-only workspace never
+  sends its files there, so the server could not answer it. The editor now shows
+  the copy this browser already holds, as file previews already did, and falls
+  back to the server when there is none. New `useBlobObjectUrl` hook in
+  `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
+
+- The "Could not set up your account passkey" message now also names the request that failed and its HTTP status, so a report says whether the session, the challenge or the credential was refused.
+- The "Demo setup stalled" report now says where the time went. It carries how
+  long each setup step took and whether the tab was in the background, and a
+  demo that does finish after the notice sends a second, informational report
+  with its total time. The notice fires at a fixed 45 seconds, so until now a
+  slow machine and a stuck one looked the same in Sentry (`ATOMIC-BROWSER-1J`).
+
+- Pasting an agent secret that opens a different agent than the signed-in
+  account no longer signs that account out on its own. The app now says which
+  account is signed in, shows both agents, and lets the user stay signed in or
+  use the secret and sign out.
+
+- Starting the demo is one calm screen. From "Try Atomic" to the workspace
+  the page shows only the orbiting mark from atomic.place, instead of a blank
+  page, a "Checking local storage…" card and a "Setting up your demo…"
+  spinner in turn. The workspace fades in once its welcome document has
+  content, and the scripted teammates wait a moment before they start.
+  Setup is also faster: the database's WebAssembly is fetched and compiled
+  once, from the first line of the page, instead of up to twice after the app
+  loaded; the demo opens only the guest's database; and it no longer waits for
+  an account check it does not need.
+- A second tab no longer leaves the local database locked. When a tab takes
+  over the database from a tab that stopped answering (in Firefox, a throttled
+  background tab), the old tab now closes its worker and carries on through the
+  new one. It used to keep the file open, so the new tab failed with
+  "OPFS unavailable: … NoModificationAllowedError" and ran without its local
+  cache, and anything needing that cache, such as creating a drive, failed with
+  "Open this drive with local storage available before disconnecting". Firefox's
+  locked-file error now reads as one plain sentence, and those actions name the
+  database's own reason instead of a disconnect the reader never started.
+- Turning workspace sync off says what is actually in the way. All three of its
+  preconditions used to answer with "Open this drive with local storage
+  available before disconnecting", so someone signed out, or on a server this
+  client holds no live connection to, was told to do something they had already
+  done. Each one now names itself, and a socket that exists but is not open says
+  so rather than leaving the attempt to fail on "WebSocket is not open". The
+  local database is also waited for instead of refused: it attaches a few
+  hundred milliseconds after a page load and again after every sign-in, and a
+  click inside that window was rejected outright.
+- A local-only workspace is recognised whatever spelling its subject is written
+  in. The set of disconnected workspaces is read through the canonical form but
+  was written raw, so a trailing slash or a legacy `did:ad:` identifier could
+  store a key nothing found again, and a resource inside such a workspace could
+  still try to reach the server.
+- One Loro wasm panic no longer turns into an error every few seconds for the
+  rest of a tab's life. Presence gives up the drive's ephemeral store on the
+  first failed call, whichever call it is, including a peer's bytes and the
+  read behind the peer list, and it now stops Loro's own expiry timer while
+  doing so. That timer lives in Loro's JavaScript wrapper and keeps calling
+  into the abandoned store, which is how a single panic anywhere in the shared
+  wasm module produced a long stream of unhandled `RuntimeError: unreachable`
+  reports from `setInterval`.
+- Notifications while the app is open, on the web and in the desktop and
+  Android apps: new chat messages, comments on things you made and replies to
+  you show as a toast, or as a system notification when you're in another tab,
+  window or app. Nothing shows for the conversation you're already looking
+  at. System notifications are switched per device under Settings →
+  Notifications. The desktop and Android apps get them through
+  `tauri-plugin-notification`.
+
+- Notifications page and Inbox: every notification is kept in an Inbox in
+  your private drive, so it's there on all your devices. The sidebar shows
+  Notifications with an unread count; the page lists them newest first, and
+  opening one (or the conversation it's about) marks it read.
+
+- Android app: the back button closes an open sidebar drawer or dialog
+  instead of navigating away underneath it. With nothing open, back works as
+  before (previous page, then leave the app).
+
+- Fix: a table no longer goes to an error screen while one of its columns is
+  still loading. A resource-array cell reads its own property from the store to
+  decide between the select and relation pickers, and asked for that property's
+  form category before the resource had arrived. A property with no datatype
+  yet threw "Unknown datatype: undefined", which reached the page's error
+  boundary and replaced the whole table. An absent datatype now means "no
+  category yet", the cell renders as a relation until the property lands, and a
+  datatype that is present but unrecognised still throws, since that is a real
+  gap rather than a slow fetch.
+
+- `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
+  (they still work). The app no longer creates temporary `_new:` subjects
+  that are renamed on first save: the new-resource form, new-resource dialogs
+  and new table rows all create their resource with `store.newResource()`, so
+  it has its final subject from the start. Use `store.newResource()` (with
+  `deferGenesis: true` for a draft that is filled in before its first save)
+  and read `resource.subject`. `_new:` subjects written by older builds are
+  still read and synced as before.
+
+- `@tomic/lib` answers a stale drive-sync probe (`SYNC_RESEND`) with the full
+  version-vector `SYNC` instead of a range-based set reconciliation over
+  `RBSR_FP` / `RBSR_ITEMS`. The range descent cost the server more than the
+  full exchange. `rbsr.ts` is gone, and `WSClient.rbsrItems` is
+  now `WSClient.driveInventory`.
+
+- A workspace a Cloud Server node refuses ("not enrolled") no longer sits on
+  "Connecting…" with changes pending forever. The server card says the server
+  doesn't host it, and "Sync this workspace with this server" can be turned
+  off even though the server won't answer, keeping it on this device. A
+  suspended Cloud Server enrollment no longer counts as hosted, so the app
+  stops pointing a drive at a node that will refuse it.
+- Fixed opening the app while signed in to atomic.place sending you to sign
+  in again, and signing in with your secret then signing you out of
+  atomic.place. A backup saved before the `did:ad:` → `atomic:` rename names
+  your agent in the old spelling, and the check that compares it with the
+  agent on this device compared the text, so one agent looked like two. The
+  gate then switched identities, and the secret sign-in ended the account
+  session as if the secret belonged to someone else.
+- Fixed a drive restored from Cloud Vault on a new device showing its raw
+  identifier as its title, or being replaced by an empty new workspace. The
+  app kept the answer it had before the restore ("not found") and trusted it
+  over the data the restore had just written, so sign-in could decide there
+  was nothing and create a new home over the restored one.
+- A private workspace the app has to recreate is titled after whoever it
+  belongs to, like the one onboarding and an accepted invitation already
+  make. A returning account on a second device, and a sign-in whose cloud
+  restore did not finish in time, used to land in a workspace called "My
+  drive" moments after proving who they are, which reads like the wrong
+  account. An account with no name set still gets the default.
+- Fixed a private workspace being titled `[i18n-404:1664]`. That title is
+  written when the workspace is made, so it stayed. The app composed it from
+  the translation catalog while still starting up, and the catalog is not
+  always loaded by then; the default is a plain string again, and the name
+  beside it is deliberately kept out of the catalog for the same reason.
+- The Share dialog is one screen: invite people, see who has access and change
+  their role (Can write, Can read, Remove access), see who gets in through a
+  parent folder, and set public access to Off, Read or Write. On hosted Atomic
+  you can type email addresses and an optional message and the invite link is
+  emailed to them; on a self-hosted server the invite link, with its role, is
+  what you copy and send yourself. The title shows the resource's name.
+
+- Fix: a presence announcement carrying something Loro cannot store no longer
+  breaks the tab. A view's presence payload is typed as whatever that view
+  likes, so a callback or a class with methods can travel in it, and Loro
+  answers such a value by panicking rather than erroring: in a browser that
+  arrives as a bare `RuntimeError: unreachable`, and the wasm module is unusable
+  afterwards (a cyclic object corrupts its heap instead). Because the entry is
+  retained and re-sent every ten seconds by the presence heartbeat, storing one
+  turned into an unhandled error on a timer for as long as the tab stayed open.
+  Announcements are now checked before they reach Loro, a refused one names the
+  offending field in the console and leaves the last good entry in place, and a
+  broadcast that fails anyway stops the heartbeat instead of repeating itself.
+
+- Documents and meetings show a formatting toolbar above the text (block type,
+  bold, italic, strikethrough, quote, code, link, lists, image and mention), so
+  new users don't have to know the `/` and `@` commands. It can be hidden, which
+  the browser remembers, and brought back with the small button in its place.
+- Fix: editing a kanban card's title is reliable. A space or Enter typed in
+  the title started a keyboard drag of the card, which swallowed the space,
+  moved focus away and saved a partial title; selecting text with the mouse
+  could start a drag too. The editor also had a different size than the title,
+  so the card resized when editing started and the next click could land on
+  another card and open it. The editor now matches the title's box and wraps
+  like it, opens with the caret under the click, commits on Enter or blur,
+  cancels on Escape, and shows the new title while it saves.
+- AI chat options and the speech settings let you pick the microphone used for
+  voice messages. The agent select in AI chat options is clickable over its
+  whole width again: an inline width left its chevron outside the select.
+- Fix: someone who signs up from an invitation and has no recovery backup can
+  still accept it. The portal opens the restore step for an invitee whenever it
+  cannot rule out an earlier identity, and with nothing to restore that step
+  stopped at "No recovery backup was found". It now offers to create the
+  account, keeping the invitation.
+- Typing `@` in a document lists recently opened resources in that drive, topped up with the drive's own children, instead of "No results found".
+- The sidebar's New button stands out for first-time users. It opens the page
+  for everything you can build (apps, websites, tables, templates), but at rest
+  it is a faint grey line under the tree. Until the New page has been opened
+  once in this browser, it shows in the accent colour on a soft tint and pulses
+  a few times after 20 seconds.
+- Fix: a task added from a table's calendar, grid, quick-add button or paste
+  now starts in the board's Todo lane instead of "No status". Tables carry
+  `table-row-defaults` (property to starting value), which every way of adding
+  a row fills in for what it does not set itself. Templates set it (Todo, Lead,
+  Wishlist, Want to read, Invited), as does a Status column the board creates,
+  and any board lane can be made the default from its header menu.
+- Fix: a table breakdown's "n rows" counts every row in the group. It showed
+  how many rows fed the first statistic, so Project tasks, which sums Estimate,
+  read "0 rows" under each status until tasks had an estimate. And a select
+  option's page counts the rows that use it through its column (a task's
+  Status), not only through `tags`, so Doing no longer reads "0 resources".
+- Move the Connections and Automations buttons above table views into the table's context menu, next to Export to CSV. They open the same dialog as before.
+
+- App frames call the integration proxy directly, with a capability instead of a relay (ontola/atomic-plugins#54; replaces #1657's `proxy` relay and LocalThought's rotating connection codes, which the new proxy no longer issues). A frame makes its own non-extractable Ed25519 key in memory; the page checks that the connection is delegated to the app and signs a capability bound to that key (`integration-proxy-capability-v2`, 10 minutes); each request is signed by the frame key with a version 2 request signature. `store.proxy.request(...)` keeps its shape; it mints a new capability shortly before expiry and once more on a `capability_expired` refusal. View op `proxy` is gone, `proxyCapability` is new. Connecting no longer logs in at the proxy: the page redeems the handoff signed with the user key, which makes the user the connection's owner, then delegates it to the app (also signed). The connect bar offers an existing connection for the same platform, which only adds a delegation. Only apps with their own agent (made with `createApp`) can be given a connection for now; others are told so. Where WebCrypto has no Ed25519 the frame fails with a message saying so. Existing connections are not migrated: connect again.
+- `@tomic/lib`: `signRequest(url, agent, headers, { method, body })` makes a version 2 request signature (ontola/atomic-plugins#54), which also covers the method and the SHA-256 of the body and sends `x-atomic-signature-version: 2`. Without `method` it signs version 1 as before, and a string fourth argument is still the legacy subject. New exports `requestSignatureMessageV2`, `sha256Hex` and `SIGNATURE_VERSION_HEADER`. `Agent.generateNonExtractable()` makes an agent whose Ed25519 key is a non-extractable WebCrypto key, with subject `atomic:agent:<public key>`; where WebCrypto has no Ed25519 it throws instead of falling back to an extractable key.
+- Plugins moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). The Integrations page lists what that catalog publishes (`catalog.json`, fetched at runtime; the URL is configurable under Settings > Integration) instead of plugins compiled into the app and server. The bundled GitHub issues, Notion, Pets, MT940/camt.053, Clockify and Google Calendar (Devonian) integrations, the `devonian` dependency and the `/app/devonian-demo` page are removed. The Todoist lens and the Moneybird administration picker are removed too. LocalThought connect and sync, and the "Show API plugins" toggle, are removed from the app: plugins will run in their own iframe and make proxy calls through the host.
+- Tracker tables get an Issues view: open and closed issues split by the status column (or a boolean column), filtering by title or `#number`, New issue, and Close/Reopen per row. The Issue Tracker template opens it as a tab.
+- Columns whose property has no name are labelled from its shortname, capitalised and with dashes shown as spaces, in the table heading, filter bar, property toggle and summary bar. A name someone typed is still shown exactly as written.
+- An import that stops early (for example at the 5,000-record cap) keeps what it fetched and shows "Synced with issues" instead of failing outright.
+- A plugin run that proposes no changes shows only Close, instead of a disabled "Apply 0 changes" button.
+- Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
+  allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
+  at, say, `http://atomic.localhost:19090` was rejected, and because the value
+  is read during render that rejection replaced any page showing integrations,
+  the settings page included, with "Error loading resource". RFC 6761 gives the
+  whole `.localhost` TLD to loopback and browsers treat those names as secure
+  origins, so they are accepted now, `[::1]` with them.
+
+- Improve AI chat on phones: use the full screen width, keep the composer above the keyboard and the final response line visible as it opens, remove the bottom spacer, reduce padding, use the full message width, add the chat resource menu to its header, and move model selection and token usage into Chat options. Remove generated follow-up suggestions and rename Atomic Assistant to AI chat ([#1591](https://github.com/ontola/atomic-server/issues/1591)).
+
+- Fix: someone joining a drive through a browser invitation is told when the
+  pairing is not getting anywhere. The page showed "Connecting…" and "Waiting
+  for a peer" indefinitely: `WebRtcPeer`'s 60 second pairing timeout only
+  exists on a peer that has built an `RTCPeerConnection`, and the guest is the
+  one waiting for an offer, so it had no timer at all. After 60 seconds without
+  a peer the page now says so and points at what the inviter has to do. The
+  attempt keeps running, so a slow pairing that later succeeds still does.
+- Fix: the editor's slash menu no longer reaches through an unmounted renderer.
+  `onStart` positions the menu again on the next animation frame, which can
+  land after the suggestion was destroyed.
+
+- Fix: someone who opens a chatroom shared from another drive sees the messages
+  in it. The message list is a collection query, and a collection defaults its
+  drive scope to the viewer's active drive. A guest arriving through an invite
+  has their own drive selected, so the query went looking on the wrong drive and
+  answered with nothing, leaving "No messages yet" on a thread that had them.
+  The query now scopes to the drive the thread itself is stamped with, which
+  for a shared thread is the owner's. The same hook backs the comments panel
+  and the meeting chat, so those are fixed with it. Scoping to the thread's
+  subject instead, as this first did, fixed the guest's first read but broke
+  every later one: the local index is keyed by drive, a subject is not a key
+  in it, and the panel then stopped showing messages other people sent while
+  it was open.
+
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`).
+  `did:ad:` is accepted forever and names the same resource. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; a node identifier starts pairing,
+  anything else navigates. The store canonicalizes at `normalizeSubject`.
+  Fetch uses `/resource?subject=` (`/atomic` and `/did` are aliases).
+  Sync lists the `canonical-scheme` capability and sends `did:ad:` to a
+  server that does not advertise it. Blob copy, identity mint, and node
+  pairing accept both spellings (#1584).
+
+- Fix: installing a plugin works again. Since the `Installation` class started
+  requiring `release`, the server refused the commit that creates one with
+  "Property .../properties/release missing", the outbox dropped it as terminal
+  and nothing was installed; both the integration store and a zip upload go
+  through `installRelease`, so neither worked. `store.newResource` signs the
+  genesis commit from the propvals it is handed and holds it until `save()`,
+  so a property set between those two calls is missing from the commit the
+  server validates. `release` is now one of the propvals.
+
+- Fix: opening an AI chat no longer risks taking the page to its error
+  boundary. `useEditor` replaces the tiptap editor when its dependencies change
+  and destroys the old one, which nulls its `commandManager` while its last
+  state stays readable, so `isEmpty` still answers and `commands` throws
+  ("Cannot read properties of null (reading 'commands')"). A prefill arriving
+  in that same breath is what "New automation" and "AI edit" do. Both effects
+  now check `isDestroyed`, and a prefill that is skipped is re-applied to the
+  editor that replaces it.
+
+- Fix: the authentication cookie is refreshed before the proof inside it
+  expires. `setCookieAuthentication` signed a proof once and stored it for a
+  day, and `checkAuthenticationCookie` only asked whether a cookie existed, so
+  a browser went on presenting the same proof for as long as the tab stayed
+  open. Since the server started refusing a proof older than five minutes, that
+  meant cookie-authenticated requests failed five minutes into every session,
+  with nothing re-signing. The cookie now lives no longer than the proof it
+  carries (`AUTH_PROOF_MAX_AGE_MS`), and the freshness check reads the signed
+  timestamp out of the cookie and reports an ageing proof as absent
+  (`AUTH_PROOF_REFRESH_MS`), which is what makes the request path install a
+  fresh one.
+
 - The data-browser no longer reports to Sentry from a dev server. Vite's hot
   reload legitimately throws while swapping modules ("_s is not a function",
   "Cannot access X before initialization", all with `@react-refresh` frames),
@@ -16,6 +356,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: deleting a resource no longer leaves a "Resource with error" row in the sidebar. A `parent=` query keeps answering with a destroyed child for a moment (the answer was computed before the destroy landed, and `Collection.fetchPage` races the local index against the server's `/query`), and every reader that had not itself witnessed the delete put the row back — which is not cosmetic, because rendering the row asks the store for the resource and re-creates the entry the destroy removed. "This subject is destroyed" is now one fact on the `Store` (`isDestroyed` / `clearDestroyed`, the in-memory half of the tombstone `removeResource` already wrote to the local database) instead of a suppression set per reader: `Collection._removedSubjects` and `useChildren`'s `removedRef` are gone, and both read the store. A destroyed subject is never a member of a collection, incoming state for one is refused after the server ack as well as before it, and `getResourceLoading` answers for one from the tombstone instead of firing a request that can only 404. Only creating a resource again under the same subject lifts a tombstone; a stale answer no longer can.
 - Toasts no longer cover the navbar's buttons when the navbar is at the bottom: the toast container is lifted by the navbar's height, so the sidebar toggle, search and context menu stay tappable while a toast is up. The sidebar's 3.8rem `OverlapSpacer`, beneath the App panel, is gone: it dated from the floating-navbar mode and guarded an overlap that cannot happen, since the sidebar's height already excludes the navbar ([#1565](https://github.com/ontola/atomic-server/issues/1565)).
 - The navbar sits at the bottom by default on phones and tablets, so the sidebar toggle, the search button and the context menu stay within thumb reach. The signal is a touch-primary pointer rather than viewport width, so a landscape tablet also gets the bottom bar and a narrow desktop window does not. Desktop keeps the top bar, and a position picked in Settings is untouched ([#1565](https://github.com/ontola/atomic-server/issues/1565)).
+- Fix: a local database that cannot be decrypted is no longer deleted on sight. `openClientDb` discards and recreates an undecryptable OPFS file only when the caller passes the new `discardUndecryptable`, and the data-browser passes it only when no wrapped key record exists for that agent — i.e. when the key is genuinely unrecoverable rather than merely absent from this page load. The old behaviour was unconditional, on the reasoning that the file is a cache whose contents are re-fetchable from the server; that is false for a local-only drive, whose only copy it is. Relatedly, `resolveDbKey` no longer invents a fresh key when an agent has a wrapped key record but no session key (an agent restored from a non-extractable keypair, where no secret enters JS). It returns null and no worker is started, so the store runs server-only until a sign-in with the agent secret or recovery code unwraps the real key — which is what the code's own comment already claimed it did. Minting a key in that state produced exactly the wrong-key open that triggered the delete, so a drive that existed only in the browser could be destroyed with no user action, while its key was still sitting in IndexedDB waiting to be unwrapped. New `discardUndecryptable` option on `ClientDbOptions` and the worker's `init` message, defaulting to off.
+- Fix: `agentVaultProof` verifies that a live signature reproduces itself unless the signer positively declares itself deterministic. It used to double-check only signers that declared `signsDeterministically: false`, so one that said nothing was taken on trust — and a signer that randomizes (WebKit's WebCrypto does, for Ed25519) could have had a non-reproducible signature turned into the key its Cloud Vault backups are wrapped under.
 - Fix: `@tomic/lib` writes the Loro `datatypes` tags in the export path shared by genesis and drain-time signing, after the user's pending ops are sealed into their own commit. The drain used to tag first, which folded a `set()` edit into the tag write's `atomic:system` commit — the canvas undo stack skips that origin, so the first edit of a `json`/reference property after a save could not be undone.
 - Perf: a cold page load asks the local database (OPFS worker) for all the resources a render pass mounts in one round trip instead of one per `useResource`. `Store` coalesces the render-phase cache misses of a tick into a single `getResourcesWithSnapshots` call (chunked at 200 subjects), and a subject asked for twice while a read is pending or in flight shares that read. 50 mounted resources went from 50 worker messages to 1; the tri-state answer (`true` / `false` / no database to ask) and the "ask again once the database attaches" behaviour are unchanged.
 - Fix: deleting a resource while offline no longer loses the delete. `Resource.destroy()` now goes through the durable `LocalOutbox` like every other write: the signed destroy commit is queued (`OutboxEntry.signedDestroy`, persisted in localStorage), the resource is removed locally at once, and the drain POSTs the envelope with the usual backoff and reconnect replay. Online, `await destroy()` still resolves after the server acknowledgement and rejects on a real refusal; offline it resolves with the delete queued. A resource created and deleted before either write reached the server is dropped without a POST, and a server answer that the resource is already gone counts as acknowledged instead of retrying forever. While a delete is queued, incoming state for that subject (a subscription push, a fetch that raced the delete, a stale OPFS row) no longer resurrects it. `Store.hasPendingDestroy(subject)` is new; `LocalOutbox` gains `setDestroyCommit`, `clearDestroy` and `discard`.
@@ -24,8 +366,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: form inputs validate before writing. `InputString` and `InputURI` no longer put an invalid value into the resource while showing an error; all inputs share one validate-then-set hook (`useValidatedInput`) and surface the datatype's actual error message (e.g. "Not an integer") instead of a generic "Invalid value". `ResourceField` now accepts and forwards `commit` / `commitDebounceInterval`, and every input honours `commitDebounceInterval` (Markdown, Number, Boolean, Date, Timestamp, Resource, ResourceArray and FilePicker previously fell back to the 100 ms default). A required field whose value loads after the first render is now flagged correctly.
 - Fix: `Resource.remove()` and `Resource.push()` emit `LocalChange` like `set()` does, so `useValue` / `useArray` re-render when a field is cleared or an item is appended. `useValue`'s setter clears a previously reported validation error when called with `undefined`. `useArray`'s `push` saves through the same debounced scheduler and error handling (`handleValidationError` / `store.notifyError`) as `set`, instead of an immediate `resource.save()` that only logged failures. `StoreContext` no longer defaults to a phantom `Store`: `useStore()` throws when no `<StoreContext.Provider>` is mounted.
 - `@tomic/lib`: one list of server-managed properties (`server-managed-props.ts`) replaces the three copies in `resource.ts` and `store.ts` that had drifted apart; the OPFS cold-load guard now also treats an inline `genesis` certificate as skeleton, not content. One serializer (`Resource.toClientDbJsonAd()`) writes the local-database row from both `Store.addResource` and `Resource.persistToClientDb`, and a durable save now records its write in the store's dedup stamp so the next ingress does not rewrite the same row.
-
-
+- Comment on a table row, like in Notion. Every row's gutter carries a comment bubble: it shows up on hover for a row with nothing on it yet, and stays put — with the count, highlighted while unseen — for a row that has comments. Clicking it opens that row's thread in the Comments panel, headed by the row's title; another row's bubble switches threads, and the same row's closes the panel. A row is a resource of its own, so its thread is the ordinary one (Messages whose `about` points at the row) and needs no setup. The Comments panel can now be aimed at a resource inside the page rather than only at the page's own; the navbar button keeps opening the page's thread.
 - Fix: the fork bar no longer fetches the server root on every resource page.
   It renders above every resource and only returns `null` for a non-fork after
   its hooks have run, so `useResource(originalSubject ?? '')` fired for all of
@@ -36,7 +377,6 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   the `offline-persistence` and `offline-tables` e2e specs fail: they assert on
   unexpected browser console errors, and with the WebSocket disconnected the
   miss surfaced over HTTP as a logged 404 rather than a silent protocol answer.
-
 - The "All versions" link is gone from the version scroller. It pointed at the
   server's `/all-versions` endpoint, which rendered the same history the
   scroller was already showing, paginated and without attribution. Both
@@ -62,7 +402,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Preserve editor selection during remote updates and improve focus, table selection and save-state feedback.
 - Fix deleted sidebar items returning from stale queries.
 
-- Add peer rooms for up to eight simultaneous browsers on the Sync page with WebRTC collaboration, OPFS reconciliation and attachment sync without a Cloud subscription. Discovery defaults to shared Atomic SaaS signaling, independent of the drive’s data node. Export `BrowserPeerSync`, `WebRtcPeer` and `WebRtcTransport` from `@tomic/lib` ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
+- Add peer rooms for up to eight simultaneous browsers on the Sync page with WebRTC collaboration, OPFS reconciliation and attachment sync without a Cloud subscription. Discovery defaults to the shared managed signaling service, independent of the drive’s data node. Export `BrowserPeerSync`, `WebRtcPeer` and `WebRtcTransport` from `@tomic/lib` ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
 - Portal Open links select their workspace; ordinary resource links keep the current drive.
 - Sync distinguishes remote node data from Cloud Server enrollment, explains drive-specific plans, and refreshes account/recovery status after portal sign-in.
 - Account linking explains its purpose without implying another purchase or workspace transfer.

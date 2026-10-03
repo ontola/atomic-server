@@ -150,7 +150,7 @@ const OverlayRoot = styled.div`
 
 const ProgressPill = styled.div`
   position: absolute;
-  bottom: calc(${p => p.theme.size(2)} + 64px);
+  bottom: calc(${p => p.theme.size(2)} + var(--canvas-toolbar-h, 64px));
   left: 50%;
   transform: translateX(-50%);
   display: flex;

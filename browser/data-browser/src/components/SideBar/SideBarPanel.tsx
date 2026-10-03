@@ -1,9 +1,21 @@
 import { styled } from 'styled-components';
+import { FaChevronDown } from 'react-icons/fa6';
 import { Collapse } from '../Collapse';
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
+import { useResizable } from '@hooks/useResizable';
+import { useLocalStorage } from '@hooks/useLocalStorage';
+
+/** Height of one row in a sidebar section; anything shorter shows nothing. */
+const ROW_HEIGHT = 32;
+const MAX_HEIGHT = 1200;
+/** Movement before a press on the header becomes a drag, not a click. */
+const DRAG_THRESHOLD = 6;
 
 export interface SideBarPanelProps {
   title: string;
+  /** Stable, untranslated key for the section's height preference. */
+  heightStorageKey: string;
+  initialHeight?: number;
   actions?: React.ReactNode;
   /** When false, section starts collapsed */
   defaultOpen?: boolean;
@@ -15,28 +27,138 @@ export interface SideBarPanelProps {
 export function SideBarPanel({
   children,
   title,
+  heightStorageKey,
+  initialHeight = 320,
   actions,
   defaultOpen = true,
   embedded = false,
   'data-testid': dataTestId,
 }: React.PropsWithChildren<SideBarPanelProps>): JSX.Element {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useLocalStorage(
+    `${heightStorageKey}.open`,
+    defaultOpen,
+  );
+  const contentRef = useRef<HTMLDivElement>(null);
+  // The last height a drag ended at that showed at least one row. Ending a
+  // drag below that is a request to close the section; opening it again comes
+  // back at this height.
+  const [storedHeight, setStoredHeight] = useLocalStorage(
+    heightStorageKey,
+    initialHeight,
+  );
+  const { size, dragAreaListeners, isDragging, setSize } = useResizable({
+    initialSize: storedHeight,
+    // Free all the way down: the old 60px floor (two rows) left no way to
+    // shrink a section away short of the header's toggle.
+    minSize: 0,
+    maxSize: MAX_HEIGHT,
+    targetRef: contentRef,
+    edge: 'bottom',
+    mode: 'delta',
+    threshold: DRAG_THRESHOLD,
+    // Remembered when a drag ends, so a drag that ends in a close keeps the
+    // height the section had before it.
+    onResizeEnd: height => {
+      if (height >= ROW_HEIGHT) {
+        setStoredHeight(height);
+
+        return;
+      }
+
+      // Close from where the drag left it; the height to reopen at is set
+      // when the section opens again.
+      setOpen(false);
+    },
+  });
+
+  // Dragging a closed section's header opens it and follows the pointer, the
+  // same gesture as resizing an open one: up is taller.
+  const [openingDrag, setOpeningDrag] = useState(false);
+  const suppressToggle = useRef(false);
+
+  const startOpeningDrag = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    const startY = event.clientY;
+    let opened = false;
+    let height = 0;
+
+    const move = (e: PointerEvent) => {
+      const grow = startY - e.clientY;
+      if (!opened && grow < DRAG_THRESHOLD) return;
+
+      if (!opened) {
+        opened = true;
+        suppressToggle.current = true;
+        setOpeningDrag(true);
+        setSize(0);
+        setOpen(true);
+      }
+
+      height = Math.min(MAX_HEIGHT, Math.max(0, grow));
+      setSize(height);
+    };
+
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (!opened) return;
+      setOpeningDrag(false);
+
+      if (height >= ROW_HEIGHT) {
+        setStoredHeight(height);
+      } else {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  };
+
+  const toggle = () => {
+    if (suppressToggle.current) {
+      suppressToggle.current = false;
+
+      return;
+    }
+
+    if (!open) setSize(storedHeight);
+    setOpen(!open);
+  };
 
   return (
     <Wrapper $embedded={embedded} data-testid={dataTestId}>
       <HeaderRow>
         <HeaderButton
           type='button'
-          onClick={() => setOpen(prev => !prev)}
+          onClick={toggle}
           aria-expanded={open}
           aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
+          title={open ? 'Drag to resize' : 'Click or drag to open'}
+          $dragging={isDragging || openingDrag}
+          onPointerDown={
+            open ? dragAreaListeners.onPointerDown : startOpeningDrag
+          }
+          // Always attached: a drag that closes the section re-renders it
+          // closed before the click that ends the drag arrives, and that
+          // click must not open it straight back up.
+          onClickCapture={dragAreaListeners.onClickCapture}
         >
           <PanelTitle>{title}</PanelTitle>
+          <Caret
+            aria-hidden
+            $open={open}
+            $dragging={isDragging || openingDrag}
+          />
         </HeaderButton>
         {actions}
       </HeaderRow>
-      <StyledCollapse open={open} $embedded={embedded}>
-        {children}
+      <StyledCollapse open={open} $embedded={embedded} $instant={openingDrag}>
+        <PanelContent ref={contentRef} style={{ maxHeight: size }}>
+          {children}
+        </PanelContent>
       </StyledCollapse>
     </Wrapper>
   );
@@ -58,7 +180,20 @@ const PanelTitle = styled.span`
   white-space: nowrap;
 `;
 
-const HeaderButton = styled.button`
+/** Shows the section can fold: points down while open, right while closed. */
+const Caret = styled(FaChevronDown)<{ $open: boolean; $dragging: boolean }>`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  color: ${p => p.theme.colors.textLight};
+  opacity: ${p => (p.$dragging ? 1 : 0)};
+  transform: rotate(${p => (p.$open ? 0 : -90)}deg);
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+`;
+
+const HeaderButton = styled.button<{ $dragging: boolean }>`
   background: none;
   border: none;
   margin: 0;
@@ -71,6 +206,25 @@ const HeaderButton = styled.button`
   box-sizing: border-box;
   width: 100%;
   text-align: start;
+  gap: 0.5rem;
+
+  &[aria-expanded='true'] {
+    touch-action: none;
+    user-select: none;
+    cursor: row-resize;
+  }
+
+  &:hover ${Caret}, &:focus-visible ${Caret} {
+    opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    min-height: 44px;
+
+    ${Caret} {
+      opacity: 0.5;
+    }
+  }
 
   &:hover {
     background-color: ${p => p.theme.colors.bg1};
@@ -86,7 +240,17 @@ const HeaderButton = styled.button`
   }
 `;
 
-const StyledCollapse = styled(Collapse)<{ $embedded: boolean }>`
+const PanelContent = styled.div`
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+`;
+
+const StyledCollapse = styled(Collapse)<{
+  $embedded: boolean;
+  $instant: boolean;
+}>`
+  /* Following a drag: the pointer sets the height, not the animation. */
+  ${p => (p.$instant ? 'transition: none;' : '')}
   box-sizing: border-box;
   width: 100%;
   min-width: 0;

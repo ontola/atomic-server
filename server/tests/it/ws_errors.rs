@@ -139,7 +139,7 @@ async fn commit_errors_echo_the_request_id_and_carry_a_code() -> AtomicResult<()
     let ok = genesis_commit_json(&client, &alice, &private_drive, "Fine").await?;
     let commit_id = ws.post_commit(48, &ok).await?;
     assert!(
-        commit_id.starts_with("did:ad:commit:") || commit_id.contains("/commits/"),
+        atomic_lib::identifiers::is_commit_id(&commit_id) || commit_id.contains("/commits/"),
         "{commit_id}"
     );
 

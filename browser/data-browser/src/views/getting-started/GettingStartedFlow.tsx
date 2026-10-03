@@ -17,15 +17,20 @@ import { useSettings } from '../../helpers/AppSettings';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
 import { beat } from '../../helpers/deviceLock';
 import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
-import { connectHostedDrive } from '../../helpers/managed/reconcile';
+import { connectHostedDrive, shortDid } from '../../helpers/managed/reconcile';
 import { deviceHasDriveData } from '../../helpers/driveData';
+import { openPrivateHome } from '../../helpers/openPrivateHome';
+import { privateHomeNudge } from '../../helpers/privateHomeNudge';
 import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
 import { Button } from '../../components/Button';
 import { Column } from '../../components/Row';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
-import { getManagedAccount } from '../../helpers/managed/session';
+import {
+  accountAddress,
+  getManagedAccount,
+} from '../../helpers/managed/session';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import { safePortalUrl } from '../../helpers/managed/api';
 import {
@@ -38,9 +43,15 @@ import {
   restoreFromVault,
 } from '../../helpers/managed/vaultAutoBackup';
 import { isOriginWithoutNode } from '../../helpers/originNode';
+import { isRunningInTauri } from '../../helpers/tauri';
+import { openExternal } from '../../helpers/openExternal';
 import {
   buildEnvelopeV2,
+  buildEnvelopeWithAssisted,
   buildEnvelopeWithPasskeyAndCode,
+  decryptEnvelopeWithAssisted,
+  FreshSignInRequiredError,
+  hasAssistedWrapper,
   saveRecoverySecret,
   getRecoverySecret,
   getUnlockableRecoverySecret,
@@ -49,15 +60,20 @@ import {
   decryptEnvelopeV2,
   decryptEnvelopeWithPasskey,
   envelopeWrapperKinds,
+  secretAccountConflict,
   upgradeToEnvelopeV2,
   type RecoverySecret,
+  type SecretAccountConflict,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
+import {
+  AccountSignInPanel,
+  AccountSignInViaBrowser,
+} from './AccountSignInPanel';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
-import { LinkProviderPanel } from '../../components/Vault/LinkProviderPanel';
 import {
   canHoldProviderCookie,
   getRememberedProvider,
@@ -80,6 +96,7 @@ type Step =
   | 'create'
   | 'restore'
   | 'restore-upgraded'
+  | 'secret-conflict'
   | 'connect-device'
   | 'opening-workspace';
 
@@ -194,22 +211,28 @@ export function GettingStartedFlow({
     new URLSearchParams(window.location.search).get('drive') ||
     new URLSearchParams(window.location.search).get('subject') ||
     undefined;
+  // Only this named, internal destination is accepted; never navigate to an
+  // arbitrary return URL supplied by a link. Adding a passkey needs the local
+  // identity unlocked before the account settings can edit its backup.
+  const returnToAgent =
+    !fromManaged &&
+    !inviteToken &&
+    !nextDrive &&
+    new URLSearchParams(window.location.search).get('return_to') === 'agent';
+  const signInRequested =
+    new URLSearchParams(window.location.search).get('step') === 'signin';
   const [step, setStep] = useState<Step>(
     fromManaged
       ? 'create'
       : inviteToken
         ? 'restore'
-        : nextDrive
+        : nextDrive || returnToAgent || signInRequested
           ? 'signin'
           : initialStep,
   );
-  useEffect(() => {
-    // A configured SaaS app uses the portal as its account entry point.
-    // A direct drive URL already starts at the unlock step above.
-    if (step === 'welcome' && knownPortalUrl) {
-      window.location.replace(new URL('/dashboard', knownPortalUrl).toString());
-    }
-  }, [step, knownPortalUrl]);
+  // Welcome is also the destination for lock, sign-out, recovery and resource
+  // guards. A portal configuration is not a reason to leave an unlock flow.
+  // Account creation and the explicit Back action can still open the portal.
   const [loading, setLoading] = useState(false);
   const [workspaceStage, setWorkspaceStage] = useState<
     'identity' | 'local' | 'backup'
@@ -224,6 +247,10 @@ export function GettingStartedFlow({
   >();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
+  /** A pasted secret for another agent, held until the user says which wins. */
+  const [secretConflict, setSecretConflict] = useState<
+    (SecretAccountConflict & { secret: string }) | null
+  >(null);
   /** Shown only after blur/Enter — every prefix of a valid secret is invalid,
    * so erroring while typing would be constant noise. */
   const [secretError, setSecretError] = useState<string | undefined>();
@@ -249,7 +276,7 @@ export function GettingStartedFlow({
         const account = await getManagedAccount();
 
         if (!cancelled && account?.email) {
-          setManagedUsername(account.email.split('@')[0]);
+          setManagedUsername(accountAddress(account).split('@')[0]);
         }
       } catch {
         // Not signed in to the managed (or unreachable) — continue without a
@@ -345,6 +372,26 @@ export function GettingStartedFlow({
     return recoveryCode;
   }
 
+  // The backup when the account service offers assisted recovery: wrapped by
+  // the account alone, so there is no passkey to register and no code to
+  // save, and signing in on any other device opens it. Resolves false when
+  // the service does not offer it, so the passkey and code step runs as
+  // before.
+  async function backupWithAccount(secret: string): Promise<boolean> {
+    try {
+      const request = await buildEnvelopeWithAssisted({
+        secret,
+        agentSubject: requireAgentSubject(),
+        driveSubject: newDriveSubject.current ?? null,
+      });
+      await saveRecoverySecret(request);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ─── Restore ("Forgot your secret?") ─────────────────────────────────────
   const [restore, setRestore] = useState<RestoreState>({ phase: 'checking' });
   const returnToPortal =
@@ -399,6 +446,303 @@ export function GettingStartedFlow({
    * step. A page reload would do the same and lose the user's place.
    */
   const [restoreAttempt, setRestoreAttempt] = useState(0);
+  /**
+   * Opening the backup with the account alone (assisted recovery), which
+   * runs by itself as soon as a signed-in account's backup allows it.
+   * `needs-sign-in`: the sign-in is too old to unlock with, so the step
+   * offers signing in again next to the passkey and the code.
+   */
+  const [assistedUnlock, setAssistedUnlock] = useState<
+    'idle' | 'trying' | 'needs-sign-in'
+  >('idle');
+
+  /**
+   * The account's own ways in, above the passkey, code and secret: while the
+   * account is unlocking the identity by itself, say so; where there is no
+   * session, or it is too old to unlock with, offer the same sign-in options
+   * as the portal (the shared `AccountSignIn`), which end back here signed in.
+   */
+  function accountSignIn() {
+    if (restore.phase === 'ready' && assistedUnlock === 'trying') {
+      return (
+        <CardSubtitle key='account'>Unlocking {restore.email}…</CardSubtitle>
+      );
+    }
+
+    const offerSignIn =
+      !!knownPortalUrl &&
+      (restore.phase === 'no-session' ||
+        (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
+
+    if (!offerSignIn || !knownPortalUrl) return null;
+
+    const onSignedIn = () => setRestoreAttempt(n => n + 1);
+
+    return (
+      <Column key='account' gap='0.75rem'>
+        {assistedUnlock === 'needs-sign-in' ? (
+          <CardSubtitle>
+            Sign in again to open your account on this device.
+          </CardSubtitle>
+        ) : null}
+        {/* The same options either way; an app that cannot hold the
+            account cookie finishes each one in the system browser. */}
+        {canHoldProviderCookie(knownPortalUrl) ? (
+          <AccountSignInPanel
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        ) : (
+          <AccountSignInViaBrowser
+            portalUrl={knownPortalUrl}
+            disabled={loading}
+            onSignedIn={onSignedIn}
+          />
+        )}
+      </Column>
+    );
+  }
+
+  /**
+   * The account signed in here, when its agent is not the one `agentSubject`
+   * names. A pasted secret may simply be another identity the person owns (an
+   * older agent, or a local node's), and using it means ending this account's
+   * session, which signs them out of the portal too. That is never done
+   * without asking (IDENTITY_RECONCILE_SCENARIOS.md scenario 4).
+   */
+  async function findSecretConflict(
+    agentSubject: string,
+  ): Promise<SecretAccountConflict | null> {
+    try {
+      return secretAccountConflict(await getRecoverySecret(), agentSubject);
+    } catch {
+      // No session, or the control plane is unreachable: nothing to replace.
+      return null;
+    }
+  }
+
+  /**
+   * The user chose the pasted secret over the signed-in account. The reconcile
+   * gate would otherwise bounce them straight back here, so the account
+   * session is the stale thing now: end it, and say which account that was.
+   */
+  async function releaseConflictingPortalSession(
+    conflict: SecretAccountConflict,
+  ) {
+    try {
+      clearManagedAccountBinding();
+      await logoutManagedSession();
+      toast(`Signed out of ${conflict.email}.`);
+    } catch {
+      // Already gone, or the control plane is unreachable: nothing to release.
+    }
+  }
+
+  async function handleSignInWithSecret(
+    secret: string,
+    confirmed?: SecretAccountConflict,
+  ) {
+    setLoading(true);
+    setError(undefined);
+
+    try {
+      const newAgent = await Agent.fromSecret(secret);
+
+      const conflict =
+        confirmed ??
+        (newAgent.subject
+          ? await withDeadline(
+              findSecretConflict(newAgent.subject),
+              SIGN_IN_LOOKUP_TIMEOUT_MS,
+              null,
+            )
+          : null);
+
+      if (conflict && !confirmed) {
+        setSecretConflict({ ...conflict, secret });
+        setStep('secret-conflict');
+
+        return;
+      }
+
+      setSecretConflict(null);
+      setWorkspaceStage('identity');
+      setStep('opening-workspace');
+      setAgent(newAgent);
+      await saveAgentToIDB(secret);
+      // However they got in — passkey, code, or secret — the device is open
+      // again, so start the clock fresh (see deviceLock.ts).
+      beat();
+
+      if (conflict) {
+        await withDeadline(
+          releaseConflictingPortalSession(conflict),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        );
+      }
+
+      if (inviteToken) {
+        navigate(resumeInviteUrl(inviteToken));
+
+        return;
+      }
+
+      // Where this sign-in wants to end up: the drive it came from, or the
+      // account's own. One target, so there is one gate below — an early
+      // return for the guard case is an early return around the gate.
+      //
+      // Bounded, because both lookups below ask a server and neither fetch has
+      // a timeout of its own. On a device that just restored a secret there may
+      // be no server that knows this account — the desktop and Android apps
+      // embed their own node, which answers, but not about an account it has
+      // never seen. That await never settled, so sign-in sat on "Restoring…"
+      // forever on exactly the device that had nothing. Not finding out is
+      // already a handled outcome here (both helpers have a "no" answer), and
+      // it lands on the connect-device step, which is the screen for a device
+      // holding none of your data — including its offer to restore from the
+      // vault.
+      setWorkspaceStage('local');
+      const target =
+        nextDrive ??
+        (await withDeadline(
+          fetchPrivateDriveSubject(store, newAgent),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        ));
+
+      // Resolve hosting before a failed read sends this device to Cloud Vault.
+      const hosted = target
+        ? await connectHostedDrive(store, target, setServer)
+        : false;
+
+      // Check for existing data before creating anything, so a newly writable
+      // home is never mistaken for successful recovery of previous content.
+      const canRead = (subject: string, refresh = hosted) =>
+        withDeadline(
+          deviceHasDriveData(store, subject, { refresh }),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          false,
+        );
+
+      // The home a pre-derivation secret was made for. Its data has not moved
+      // to the derived home yet — that is what materializing below does, by
+      // adopting its drive lists — so the derived subject alone reports "no
+      // data" for an account whose workspace is sitting on the very server
+      // they just authenticated against. Answering "your data is on another
+      // device" there would be false, and it would skip the adoption that
+      // makes it true. Costs nothing for accounts that never had one: a
+      // secret minted after derivation carries no `initialDrive`.
+      const legacyHome = newAgent.initialDrive;
+
+      let hasData =
+        !!target &&
+        ((await canRead(target)) ||
+          (!!legacyHome &&
+            legacyHome !== target &&
+            (await canRead(legacyHome))));
+
+      // A device holding nothing may still be one download from holding
+      // everything: every account on a managed origin gets an encrypted backup
+      // of its drive, so ask the vault before telling the user their data is
+      // on another device. Signing in as the account is what unlocks it — the
+      // key envelope opens with the agent's signature — so this is the first
+      // moment it can happen. Anything short of a restore (no session, no
+      // backup, an empty one, a failure) falls through to the connect-device
+      // step, which still offers the same restore by hand.
+      // Why the vault had nothing, for the connect-device step to show. Five
+      // different situations answer `no-backup`; a screen that says only
+      // "your data is on another device" hides which one this is.
+      let vaultReason: string | undefined;
+
+      if (!hasData && target && !returnToAgent) {
+        setWorkspaceStage('backup');
+        const restored = await withDeadline(
+          restoreFromVault(store, target),
+          VAULT_RESTORE_TIMEOUT_MS,
+          { status: 'no-backup' as const, reason: 'timed out' },
+        );
+
+        if (restored.status === 'restored') {
+          hasData = await canRead(target, false);
+        } else if (restored.status === 'no-backup') {
+          vaultReason = restored.reason;
+        } else {
+          vaultReason = restored.error.message;
+        }
+      }
+
+      // On an origin with no node the account's drive lives only here — a
+      // restored one exactly like one made here, and one whose data has not
+      // arrived yet just as much: it is still the place this identity writes
+      // to. Without this every commit would park in the outbox waiting for a
+      // server that is not coming. The agent's own subject is deliberately
+      // not registered: `fetchPrivateDriveSubject` answers a local-only agent
+      // with its secret's `initialDrive`, which for an account made elsewhere
+      // is that server's URL, and handing that to `setDrive` moves the app.
+      if (target && isOriginWithoutNode(store.getServerUrl())) {
+        store.registerLocalOnlyDrive(target);
+      }
+
+      setDrive(target ?? '');
+
+      // Recover first, but connecting a device is optional for the identity's
+      // own home. A foreign requested workspace must never be synthesized.
+      const home =
+        !hasData && target && !returnToAgent
+          ? await openPrivateHome(store, target, true)
+          : undefined;
+
+      if (home) {
+        if (home === 'created') privateHomeNudge();
+        navigate(constructOpenURL(target!));
+      } else if (hasData) {
+        // The home drive is derived from the key rather than looked up, so
+        // nothing else will ever write it — `fetchPrivateDriveSubject` above
+        // computes the subject but does not materialize it. Signing in is the
+        // one deliberate moment to do it; leaving it to whichever render-time
+        // resolver asked first is what let a bad derivation mint hundreds of
+        // drives instead of one.
+        //
+        // Here it usually finds the drive the gate just read and returns it
+        // untouched — but that path still seeds the switcher list and adopts
+        // drives from an older, pre-derivation home, which is why it runs on
+        // the "we have it" branch rather than only on the "we don't" one. It
+        // must not run before the gate: a drive written a moment ago is not
+        // evidence that this device has the account's data.
+        await withDeadline(
+          store.ensurePrivateDrive().then(() => undefined),
+          SIGN_IN_LOOKUP_TIMEOUT_MS,
+          undefined,
+        );
+
+        // Every account gets a backup, not only the ones onboarding made
+        // here: this is the one moment an existing account is known to be on
+        // a device that holds its data. Not awaited — the first pass seals
+        // the whole drive, and sign-in should not wait on an upload.
+        void ensureVaultBackup(store, target!);
+
+        navigate(
+          returnToAgent ? paths.agentSettings : constructOpenURL(target!),
+        );
+      } else if (returnToAgent) {
+        // Passkey management needs the key, not a downloaded copy of the drive.
+        navigate(paths.agentSettings);
+      } else {
+        setMissingDrive(target);
+        setMissingDriveVaultReason(vaultReason);
+        setStep('connect-device');
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error('Could not parse that secret.'),
+      );
+      setStep('signin');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (step !== 'restore' && step !== 'signin') return;
@@ -423,15 +767,38 @@ export function GettingStartedFlow({
           setRestore({
             phase: 'ready',
             secret,
-            email: account?.email ?? secret.owner_email,
+            email: account
+              ? accountAddress(account)
+              : (secret.owner_address ?? secret.owner_email),
           });
+
+          if (
+            account?.email === secret.owner_email &&
+            hasAssistedWrapper(secret)
+          ) {
+            setAssistedUnlock('trying');
+
+            try {
+              const plaintext = await decryptEnvelopeWithAssisted(secret);
+              if (cancelled) return;
+              await handleSignInWithSecret(plaintext);
+            } catch (err) {
+              if (!cancelled) {
+                setAssistedUnlock(
+                  err instanceof FreshSignInRequiredError
+                    ? 'needs-sign-in'
+                    : 'idle',
+                );
+              }
+            }
+          }
 
           return;
         }
 
         setRestore(
           account?.email
-            ? { phase: 'no-backup', email: account.email }
+            ? { phase: 'no-backup', email: accountAddress(account) }
             : { phase: 'no-session' },
         );
       } catch {
@@ -567,214 +934,6 @@ export function GettingStartedFlow({
   }
 
   /**
-   * Pasting a secret is an explicit "I am this agent". If the control-plane
-   * session belongs to an account whose backup names a *different* agent, the
-   * reconcile gate would bounce the user straight back here
-   * (IDENTITY_RECONCILE_SCENARIOS.md scenario 4) — silently undoing what they
-   * just did, and looking exactly like "I can't sign in".
-   *
-   * That gate exists to converge a *stray* local agent at boot, not to
-   * override a deliberate action. So the stale thing here is the portal
-   * session: end it, and let the secret win.
-   */
-  async function releaseConflictingPortalSession(agentSubject: string) {
-    try {
-      const stored = await getRecoverySecret();
-
-      if (stored && stored.agent_subject !== agentSubject) {
-        clearManagedAccountBinding();
-        await logoutManagedSession();
-        toast(
-          'Signed out of your account here — that secret belongs to a different one.',
-        );
-      }
-    } catch {
-      // No session, or the control plane is unreachable: nothing to release.
-    }
-  }
-
-  async function handleSignInWithSecret(secret: string) {
-    setLoading(true);
-    setError(undefined);
-
-    try {
-      const newAgent = await Agent.fromSecret(secret);
-      setWorkspaceStage('identity');
-      setStep('opening-workspace');
-      setAgent(newAgent);
-      await saveAgentToIDB(secret);
-      // However they got in — passkey, code, or secret — the device is open
-      // again, so start the clock fresh (see deviceLock.ts).
-      beat();
-
-      if (newAgent.subject) {
-        await withDeadline(
-          releaseConflictingPortalSession(newAgent.subject),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          undefined,
-        );
-      }
-
-      if (inviteToken) {
-        navigate(resumeInviteUrl(inviteToken));
-
-        return;
-      }
-
-      // Where this sign-in wants to end up: the drive it came from, or the
-      // account's own. One target, so there is one gate below — an early
-      // return for the guard case is an early return around the gate.
-      //
-      // Bounded, because both lookups below ask a server and neither fetch has
-      // a timeout of its own. On a device that just restored a secret there may
-      // be no server that knows this account — the desktop and Android apps
-      // embed their own node, which answers, but not about an account it has
-      // never seen. That await never settled, so sign-in sat on "Restoring…"
-      // forever on exactly the device that had nothing. Not finding out is
-      // already a handled outcome here (both helpers have a "no" answer), and
-      // it lands on the connect-device step, which is the screen for a device
-      // holding none of your data — including its offer to restore from the
-      // vault.
-      setWorkspaceStage('local');
-      const target =
-        nextDrive ??
-        (await withDeadline(
-          fetchPrivateDriveSubject(store, newAgent),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          undefined,
-        ));
-
-      // Resolve hosting before a failed read sends this device to Cloud Vault.
-      const hosted = target
-        ? await connectHostedDrive(store, target, setServer)
-        : false;
-
-      // A secret restores who you are, not what you have. So the app only
-      // opens once the workspace is here to read: opening one we cannot read
-      // shows an empty shell wearing its name, which reads as data loss.
-      //
-      // Asked before anything writes the drive, deliberately. Materializing it
-      // first — which is what this flow used to do — makes every "do I have my
-      // data?" check answer yes about data the device does not have.
-      const canRead = (subject: string, refresh = hosted) =>
-        withDeadline(
-          deviceHasDriveData(store, subject, { refresh }),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          false,
-        );
-
-      // The home a pre-derivation secret was made for. Its data has not moved
-      // to the derived home yet — that is what materializing below does, by
-      // adopting its drive lists — so the derived subject alone reports "no
-      // data" for an account whose workspace is sitting on the very server
-      // they just authenticated against. Answering "your data is on another
-      // device" there would be false, and it would skip the adoption that
-      // makes it true. Costs nothing for accounts that never had one: a
-      // secret minted after derivation carries no `initialDrive`.
-      const legacyHome = newAgent.initialDrive;
-
-      let hasData =
-        !!target &&
-        ((await canRead(target)) ||
-          (!!legacyHome &&
-            legacyHome !== target &&
-            (await canRead(legacyHome))));
-
-      // A device holding nothing may still be one download from holding
-      // everything: every account on a managed origin gets an encrypted backup
-      // of its drive, so ask the vault before telling the user their data is
-      // on another device. Signing in as the account is what unlocks it — the
-      // key envelope opens with the agent's signature — so this is the first
-      // moment it can happen. Anything short of a restore (no session, no
-      // backup, an empty one, a failure) falls through to the connect-device
-      // step, which still offers the same restore by hand.
-      // Why the vault had nothing, for the connect-device step to show. Five
-      // different situations answer `no-backup`; a screen that says only
-      // "your data is on another device" hides which one this is.
-      let vaultReason: string | undefined;
-
-      if (!hasData && target) {
-        setWorkspaceStage('backup');
-        const restored = await withDeadline(
-          restoreFromVault(store, target),
-          VAULT_RESTORE_TIMEOUT_MS,
-          { status: 'no-backup' as const, reason: 'timed out' },
-        );
-
-        if (restored.status === 'restored') {
-          hasData = await canRead(target, false);
-        } else if (restored.status === 'no-backup') {
-          vaultReason = restored.reason;
-        } else {
-          vaultReason = restored.error.message;
-        }
-      }
-
-      // On an origin with no node the account's drive lives only here — a
-      // restored one exactly like one made here, and one whose data has not
-      // arrived yet just as much: it is still the place this identity writes
-      // to. Without this every commit would park in the outbox waiting for a
-      // server that is not coming. The agent's own subject is deliberately
-      // not registered: `fetchPrivateDriveSubject` answers a local-only agent
-      // with its secret's `initialDrive`, which for an account made elsewhere
-      // is that server's URL, and handing that to `setDrive` moves the app.
-      if (target && isOriginWithoutNode(store.getServerUrl())) {
-        store.registerLocalOnlyDrive(target);
-      }
-
-      // Name the account's drive even when its data hasn't arrived: it is
-      // derived from the key, so it is the one place this identity can write
-      // right away, and the Sync page says "your data is on another device"
-      // about *that* drive, which is true and useful. Only when the drive
-      // cannot be named at all is no drive the honest answer — the value here
-      // otherwise falls back to whatever was last open, or to the default,
-      // which is the server's own root. Showing that as your workspace is how
-      // signing in ends with somebody else's data on screen.
-      setDrive(target ?? '');
-
-      if (hasData) {
-        // The home drive is derived from the key rather than looked up, so
-        // nothing else will ever write it — `fetchPrivateDriveSubject` above
-        // computes the subject but does not materialize it. Signing in is the
-        // one deliberate moment to do it; leaving it to whichever render-time
-        // resolver asked first is what let a bad derivation mint hundreds of
-        // drives instead of one.
-        //
-        // Here it usually finds the drive the gate just read and returns it
-        // untouched — but that path still seeds the switcher list and adopts
-        // drives from an older, pre-derivation home, which is why it runs on
-        // the "we have it" branch rather than only on the "we don't" one. It
-        // must not run before the gate: a drive written a moment ago is not
-        // evidence that this device has the account's data.
-        await withDeadline(
-          store.ensurePrivateDrive().then(() => undefined),
-          SIGN_IN_LOOKUP_TIMEOUT_MS,
-          undefined,
-        );
-
-        // Every account gets a backup, not only the ones onboarding made
-        // here: this is the one moment an existing account is known to be on
-        // a device that holds its data. Not awaited — the first pass seals
-        // the whole drive, and sign-in should not wait on an upload.
-        void ensureVaultBackup(store, target!);
-
-        navigate(constructOpenURL(target!));
-      } else {
-        setMissingDrive(target);
-        setMissingDriveVaultReason(vaultReason);
-        setStep('connect-device');
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err : new Error('Could not parse that secret.'),
-      );
-      setStep('signin');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /**
    * Sign in as soon as the field holds a usable secret.
    *
    * A secret either parses or it doesn't, so a Continue button only adds a
@@ -818,7 +977,7 @@ export function GettingStartedFlow({
 
   return (
     <Shell>
-      {step === 'welcome' && (!createTarget || knownPortalUrl) ? (
+      {step === 'welcome' && !createTarget ? (
         <div role='status' aria-label='Loading account'>
           <Spinner />
         </div>
@@ -831,9 +990,9 @@ export function GettingStartedFlow({
           </OnboardingWrap>
         </Swap>
       ) : step === 'welcome' ? (
-        <Swap key='welcome'>
+        <WelcomeSwap key='welcome'>
           <WelcomeStack>
-            <VisuallyHiddenH1 key='heading'>AtomicServer</VisuallyHiddenH1>
+            <VisuallyHiddenH1 key='heading'>{PRODUCT_NAME}</VisuallyHiddenH1>
             {/* alt='' because the heading above already names the app. */}
             <AtomicServerLogo key='logo' alt='' />
             <ButtonStack key='buttons'>
@@ -910,7 +1069,7 @@ export function GettingStartedFlow({
               <OwnedElsewhere key='elsewhere'>
                 Want a server of your own?{' '}
                 <PlainExternalLink
-                  href='https://atomicserver.eu'
+                  href='https://atomic.place'
                   target='_blank'
                   rel='noreferrer'
                 >
@@ -933,7 +1092,7 @@ export function GettingStartedFlow({
               </CardError>
             ) : null}
           </WelcomeStack>
-        </Swap>
+        </WelcomeSwap>
       ) : step === 'signin' ? (
         <Swap key='signin'>
           <OnboardingWrap>
@@ -960,6 +1119,8 @@ export function GettingStartedFlow({
                   </CardSubtitle>
                 ) : null}
 
+                {accountSignIn()}
+
                 {/* Several accounts on this machine: ask which, rather than
                     guessing and raising a prompt for the wrong one. */}
                 {knownAccounts.length > 1 ? (
@@ -977,7 +1138,7 @@ export function GettingStartedFlow({
                         onClick={() => unlockWithPasskey(account)}
                         data-test='account-choice'
                       >
-                        {account.owner_email}
+                        {account.owner_address ?? account.owner_email}
                       </Button>
                     ))}
                     <OtherWaysLabel>or sign in another way</OtherWaysLabel>
@@ -1063,9 +1224,9 @@ export function GettingStartedFlow({
                         {secretError ?? error?.message}
                       </CardError>
                     ) : null}
-                    {/* A portal URL or session alone does not mean there is a
-                        backup to restore. Wait for the encrypted backup check;
-                        known accounts already have their own picker above. */}
+                    {/* Native installs need a way to link the portal before
+                        the backup check can succeed. Once linked, the restore
+                        step checks whether this account has a backup. */}
                     {knownAccounts.length === 0 &&
                     knownPortalUrl &&
                     restore.phase === 'ready' ? (
@@ -1109,7 +1270,10 @@ export function GettingStartedFlow({
                           if (createTarget.kind === 'portal') {
                             const url = safePortalUrl(createTarget.url);
 
-                            if (url) window.location.assign(url);
+                            if (url) {
+                              if (isRunningInTauri()) void openExternal(url);
+                              else window.location.assign(url);
+                            }
                           } else {
                             setStep('create');
                           }
@@ -1131,7 +1295,7 @@ export function GettingStartedFlow({
                   setError(undefined);
                   setSecretValue('');
 
-                  if (returnToPortal && knownPortalUrl) {
+                  if (returnToPortal && knownPortalUrl && !isRunningInTauri()) {
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
@@ -1177,56 +1341,43 @@ export function GettingStartedFlow({
             <OnboardingCard key='card'>
               <Column gap='1rem'>
                 <CardTitle key='title'>Restore account</CardTitle>
+                {/* Signed out, this is the whole step: the portal's options,
+                    finished in the system browser where this app cannot hold
+                    the account cookie. */}
+                {accountSignIn()}
                 {restore.phase === 'checking' ? (
                   <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
-                ) : restore.phase === 'no-session' ? (
-                  // Two ways to get a session, and only one works per client.
-                  // A page on the portal's own site signs in there and comes
-                  // back with the cookie. The desktop and Android apps, and a
-                  // self-hosted origin, cannot hold that cookie: sending them
-                  // to the portal's sign-in ends with a session in some
-                  // browser and none here — which used to be this screen's
-                  // only advice, with the button missing on top when the
-                  // build knew no portal. They link this device instead, with
-                  // a code approved wherever they are already signed in.
-                  !canHoldProviderCookie(knownPortalUrl) ? (
-                    <Column key='no-session-link' gap='0.75rem'>
+                ) : restore.phase === 'no-session' ? null : restore.phase ===
+                  'no-backup' ? (
+                  inviteToken ? (
+                    // The portal sends an invitee here whenever it cannot rule
+                    // out an earlier identity. With nothing to restore, the
+                    // invitation still wants an account to land in.
+                    <Column key='no-backup-invite' gap='0.75rem'>
                       <p key='copy'>
-                        {`Your backup is kept by your ${PRODUCT_NAME} account. Connect this device to it to restore.`}
+                        {`There is nothing to restore for ${restore.email} yet. Create your account to accept the invitation.`}
                       </p>
-                      <LinkProviderPanel
-                        key='link'
-                        portalUrl={knownPortalUrl}
-                        onLinked={() => setRestoreAttempt(n => n + 1)}
-                      />
+                      <Button
+                        key='create'
+                        type='button'
+                        onClick={() => {
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('from_portal', 'true');
+                          url.searchParams.set('email', restore.email);
+                          // A reload, because the managed create flow is read
+                          // from the URL on mount.
+                          window.location.assign(url.toString());
+                        }}
+                      >
+                        Create account and accept
+                      </Button>
                     </Column>
                   ) : (
-                    <Column key='no-session' gap='0.75rem'>
-                      <p key='copy'>
-                        {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
-                      </p>
-                      {knownPortalUrl && (
-                        <Button
-                          key='signin'
-                          type='button'
-                          onClick={() => {
-                            // `/signin` rather than the root, which is the sales
-                            // page — someone mid-recovery should land on the form.
-                            window.location.assign(
-                              new URL('/signin', knownPortalUrl).toString(),
-                            );
-                          }}
-                        >
-                          {`Sign in to your ${PRODUCT_NAME} account`}
-                        </Button>
-                      )}
-                    </Column>
+                    <p key='no-backup'>
+                      No recovery backup was found for {restore.email}. Account
+                      recovery only works if you enabled it earlier.
+                    </p>
                   )
-                ) : restore.phase === 'no-backup' ? (
-                  <p key='no-backup'>
-                    No recovery backup was found for {restore.email}. Account
-                    recovery only works if you enabled it earlier.
-                  </p>
                 ) : restoreUnlock.showPasskey ? (
                   <Column key='ready-passkey' gap='1rem'>
                     <p key='copy'>
@@ -1344,6 +1495,57 @@ export function GettingStartedFlow({
             </FooterBar>
           </OnboardingWrap>
         </Swap>
+      ) : step === 'secret-conflict' && secretConflict ? (
+        <Swap key='secret-conflict'>
+          <OnboardingWrap>
+            <OnboardingCard key='card'>
+              <Column gap='1rem'>
+                <CardTitle key='title'>
+                  This secret is for a different account
+                </CardTitle>
+                <p key='copy'>
+                  You&apos;re signed in as {secretConflict.email}, but the
+                  secret you entered opens another agent. Using it signs you out
+                  of {secretConflict.email} on {PRODUCT_NAME}.
+                </p>
+                <AgentList key='agents'>
+                  <dt>{secretConflict.email}</dt>
+                  <dd>{shortDid(secretConflict.accountAgent)}</dd>
+                  <dt>This secret</dt>
+                  <dd>{shortDid(secretConflict.secretAgent)}</dd>
+                </AgentList>
+                <Button
+                  key='keep'
+                  type='button'
+                  disabled={loading}
+                  data-test='secret-conflict-keep'
+                  onClick={() => {
+                    setSecretConflict(null);
+                    setSecretValue('');
+                    setStep('signin');
+                  }}
+                >
+                  {`Stay signed in as ${secretConflict.email}`}
+                </Button>
+                <Button
+                  key='replace'
+                  type='button'
+                  subtle
+                  disabled={loading}
+                  data-test='secret-conflict-replace'
+                  onClick={() =>
+                    void handleSignInWithSecret(
+                      secretConflict.secret,
+                      secretConflict,
+                    )
+                  }
+                >
+                  Use this secret and sign out
+                </Button>
+              </Column>
+            </OnboardingCard>
+          </OnboardingWrap>
+        </Swap>
       ) : step === 'restore-upgraded' ? (
         <Swap key='restore-upgraded'>
           <OnboardingWrap>
@@ -1406,6 +1608,9 @@ export function GettingStartedFlow({
                       fromManaged ? backupWithPasskey : undefined
                     }
                     onBackupWithCode={fromManaged ? backupWithCode : undefined}
+                    onBackupWithAccount={
+                      fromManaged ? backupWithAccount : undefined
+                    }
                     onAfterCreate={
                       fromManaged ? enableEncryptedBackup : undefined
                     }
@@ -1422,7 +1627,7 @@ export function GettingStartedFlow({
                 subtle
                 type='button'
                 onClick={() => {
-                  if (knownPortalUrl) {
+                  if (knownPortalUrl && !isRunningInTauri()) {
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
@@ -1449,8 +1654,22 @@ const Swap = styled.div`
   width: 100%;
   animation: ${swapIn} 220ms ease-out;
 
+  /* A packaged macOS WebView can leave entry animations at time zero while
+     its window is not foregrounded. That makes the whole flow transparent. */
+  ${isRunningInTauri() && 'animation: none;'}
+
   @media (prefers-reduced-motion: reduce) {
     animation: none;
+  }
+`;
+
+/* The one step that is a landing, not a form: center it in the viewport.
+   Auto margins (not justify-content) so a phone too short for it still
+   scrolls from the top instead of clipping the logo. Doubled specificity to
+   beat Shell's top-aligning margin reset for its children. */
+const WelcomeSwap = styled(Swap)`
+  && {
+    margin-block: auto;
   }
 `;
 
@@ -1540,6 +1759,25 @@ const PlainExternalLink = styled.a`
   text-decoration: underline;
   /* A link that reads as one thing should wrap as one thing. */
   white-space: nowrap;
+`;
+
+/** The two agents a secret conflict is about, so the choice is concrete. */
+const AgentList = styled.dl`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+
+  & dt {
+    color: ${p => p.theme.colors.textLight};
+  }
+
+  & dd {
+    margin: 0;
+    font-family: monospace;
+    overflow-wrap: anywhere;
+  }
 `;
 
 const OtherWaysLabel = styled.span`

@@ -13,16 +13,18 @@ use crate::{appstate::AppState, errors::AtomicServerResult};
 /// (policies are installed programmatically by an embedder, not via CLI
 /// flags), so an actix-integration test can't exercise the rejection paths.
 async fn resolve_blob_write_admission(store: &Db, hash_hex: &str) -> Result<(), String> {
-    let blob_subject = format!("did:ad:blob:{hash_hex}");
-
+    // Stored values are canonical (`atomic:blob:`): writes canonicalize
+    // them and opening a store rewrites older `did:ad:blob:` values.
     let mut q = Query::new();
     q.property = Some(urls::BLOB.to_string());
-    q.value = Some(Value::AtomicUrl(blob_subject.into()));
-    let result = store.query(&q).await.map_err(|e| e.to_string())?;
+    q.value = Some(Value::AtomicUrl(
+        atomic_lib::identifiers::blob_subject(hash_hex).into(),
+    ));
+    let resources = store.query(&q).await.map_err(|e| e.to_string())?.resources;
 
-    if result.resources.is_empty() {
+    if resources.is_empty() {
         return Err(format!(
-            "No resource references did:ad:blob:{hash_hex} yet — post the commit that \
+            "No resource references atomic:blob:{hash_hex} yet — post the commit that \
              references it before pushing its bytes."
         ));
     }
@@ -34,7 +36,7 @@ async fn resolve_blob_write_admission(store: &Db, hash_hex: &str) -> Result<(), 
     // other, unrelated drive also happens to reference the same hash. A
     // single-result `limit` here would make the verdict depend on iteration
     // order instead of on the actual admission question.
-    let admitted = result.resources.iter().any(|referencing| {
+    let admitted = resources.iter().any(|referencing| {
         let drive = referencing
             .get(urls::DRIVE_PROP)
             .map(|v| v.to_string())
@@ -44,7 +46,7 @@ async fn resolve_blob_write_admission(store: &Db, hash_hex: &str) -> Result<(), 
 
     if !admitted {
         return Err(format!(
-            "did:ad:blob:{hash_hex} is referenced, but no referencing drive is admitted for writes"
+            "atomic:blob:{hash_hex} is referenced, but no referencing drive is admitted for writes"
         ));
     }
 

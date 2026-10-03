@@ -37,6 +37,7 @@ export * from './ontologies/server.js';
 export * from './ontologies/ai.js';
 export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
+export * from './ontologies/notifications.js';
 export * from './ontologies/i18n.js';
 export * from './canvas-strokes.js';
 export * from './agent.js';
@@ -69,16 +70,21 @@ export * from './ontology.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
+export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
-export { ClientDbWorker } from './client-db.js';
+export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
 export {
   attributionForVersion,
   mergeHistoryAttributions,
   parseHistoryAttribution,
 } from './history-attribution.js';
 export type { Attribution, HistoryAttribution } from './history-attribution.js';
-export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+export type {
+  ClientDbOutboxWrite,
+  ClientDbQueryOpts,
+  ClientDbQueryResult,
+} from './client-db.js';
 export {
   LocalOutbox,
   isTerminalCommitErrorMessage,
@@ -192,6 +198,21 @@ export {
   type CreatedApp,
 } from './plugin-app.js';
 export {
+  catalogAppProperties,
+  catalogAppSchema,
+  catalogAppState,
+  compareVersions,
+  fetchCatalogAppModule,
+  installCatalogApp,
+  parseCatalogApp,
+  readInstalledCatalogApps,
+  resolveModuleUrl,
+  subresourceIntegrity,
+  updateCatalogApp,
+  type CatalogApp,
+  type InstalledCatalogApp,
+} from './catalog-app.js';
+export {
   parseManifest,
   validateManifest,
   type CapabilityName,
@@ -203,11 +224,22 @@ export {
   secretsMentionedIn,
   originsMentionedIn,
   type DeclaredSecret,
+  type DeclaredConfig,
+  type DeclaredConfigField,
+  type DeclaredAccept,
+  type DeclaredDestination,
+  DEFAULT_ACCEPT_MAX_BYTES,
+  ACCEPT_MAX_BYTES_CEILING,
   type ManifestRuntime,
   type ManifestWorld,
   type PluginManifest,
   type PluginManifestV2,
 } from './plugin-manifest.js';
+export {
+  pluginConfigFor,
+  pluginConfigProblems,
+  type StoredPluginConfig,
+} from './plugin-config.js';
 export { describePlugin } from './plugin-runner.js';
 
 export {

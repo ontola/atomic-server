@@ -31,6 +31,12 @@ use crate::{appstate::AppState, config::Opts};
 /// The CORS layer: any origin, any method, any header, credentials. It is
 /// wrapped by [`credentials_gate`], which takes the credentials back for
 /// origins that are not this server's own.
+///
+/// "Any header" includes `x-atomic-signature-version`, the version 2 request
+/// signature header (ontola/atomic-plugins#54): `Cors::permissive` echoes
+/// whatever a preflight asks for. If this ever becomes an allowlist, that
+/// header has to be on it; `the_v2_signature_header_passes_a_preflight`
+/// guards it.
 pub(crate) fn any_origin() -> Cors {
     Cors::permissive().expose_headers([crate::serve::SERVER_VERSION_HEADER])
 }
@@ -264,5 +270,46 @@ mod tests {
             .headers()
             .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
             .is_none());
+    }
+
+    /// A browser sending a version 2 request signature names
+    /// `x-atomic-signature-version` in its preflight, from our own origin and
+    /// from a foreign or null-origin frame alike.
+    #[actix_rt::test]
+    async fn the_v2_signature_header_passes_a_preflight() {
+        let appstate = crate::tests::init_test_appstate(&["--domain", "atomicdata.dev"]).await;
+        let app = actix_test::init_service(
+            App::new()
+                .app_data(web::Data::new(appstate))
+                .wrap(any_origin())
+                .wrap(middleware::from_fn(credentials_gate))
+                .route(
+                    "/ping",
+                    web::post().to(|| async { HttpResponse::Ok().body("pong") }),
+                ),
+        )
+        .await;
+        let requested = "content-type, x-atomic-agent, x-atomic-public-key, x-atomic-signature, x-atomic-timestamp, x-atomic-signature-version";
+        for origin in ["https://atomicdata.dev", "https://evil.example", "null"] {
+            let req = actix_test::TestRequest::default()
+                .method(Method::OPTIONS)
+                .uri("/ping")
+                .insert_header((header::ORIGIN, origin))
+                .insert_header((header::ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .insert_header((header::ACCESS_CONTROL_REQUEST_HEADERS, requested))
+                .to_request();
+            let resp = actix_test::call_service(&app, req).await;
+            assert_eq!(resp.status(), StatusCode::OK, "{origin}");
+            let allowed = resp
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_HEADERS)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            assert!(
+                allowed.contains("x-atomic-signature-version"),
+                "{origin}: {allowed}"
+            );
+        }
     }
 }

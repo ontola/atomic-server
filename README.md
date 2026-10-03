@@ -1,32 +1,38 @@
-![AtomicServer](./logo.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./logo-dark.svg">
+  <img alt="Atomic Place" src="./logo.svg">
+</picture>
 
 [![crates.io](https://img.shields.io/crates/v/atomic-server)](https://crates.io/crates/atomic-server)
 [![Discord chat](https://img.shields.io/discord/723588174747533393.svg?logo=discord)](https://discord.gg/a72Rv2P)
 [![MIT licensed](https://img.shields.io/github/license/atomicdata-dev/atomic-server.svg?color=blue&logo=github&logoColor=blue)](./LICENSE)
 [![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/atomicdata-dev/atomic-server)
 
-**Create, share, fetch and model [Atomic Data](https://docs.atomicdata.dev)!
-AtomicServer is a lightweight, yet powerful CMS / Graph Database.
-Demo on [atomicdata.dev](https://atomicdata.dev).
-Docs on [docs.atomicdata.dev](https://docs.atomicdata.dev/atomic-data-overview)**
+**Atomic Place is a local-first workspace for documents, tables, files, chat and apps.**
+It works on your device and can sync through a self-hosted AtomicServer or optional
+[managed services](https://atomic.place). The underlying [Atomic Data](https://docs.atomicdata.dev/atomic-data-overview)
+specification is open.
 
-This repo also includes:
+This repo includes:
 
-- [Atomic Data Browser](/browser/data-browser/README.md), the React front-end for Atomic-Server.
+- **Atomic Place**, the workspace in the [browser](/browser/data-browser), on [desktop](/desktop)
+  and on mobile.
+- **AtomicServer**, the [self-hostable server](/server) for storage, search, sharing and sync.
+- [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
+- [Atomic Data Browser](/browser/data-browser/README.md), the React front-end for Atomic Place.
 - [`@tomic/lib`](/browser/lib/README.md) JS NPM library.
 - [`@tomic/react`](/browser/react/README.md) React NPM library.
 - [`@tomic/svelte`](/browser/svelte/README.md) Svelte NPM library.
 - [`atomic_lib`](lib/README.md) Rust library.
 - [`atomic-cli`](cli/README.md) terminal client.
-- [`flutter`](/flutter) a Dart / Flutter client for Atomic Data, plus AtomicCanvas, a collaborative infinite drawing canvas that syncs peer-to-peer between devices.
-- [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
+- [`flutter`](/flutter) a Dart / Flutter client (with demo app AtomicCanvas)
 
 _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 
-## AtomicServer
+## Atomic Place
 
 <!-- We re-use this table in various places, such as README.md and in the docs repo. Consider this the source. -->
-- 🏠  **Local-first**: works offline in the browser, syncs when you reconnect.
+- 🏠  **Local-first**: works offline in the browser, syncs when you reconnect with [Atomic Sync](https://docs.atomicdata.dev/sync).
 - 🔄  **Real-time collaboration**: live cursors, typing indicators, and following what a teammate is doing.
 - 📄  **Documents**: collaborative rich text, like Google Docs or Notion.
 - 🗄️  **Tables**: strict schema, keyboard navigation, copy / paste. Like Airtable.
@@ -36,7 +42,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 🗂️  **Virtual drive**: mount your drive as a folder in Finder or Explorer (desktop app).
 - ✨  **AI** with [MCP](https://modelcontextprotocol.io/) support, any model via OpenRouter or local Ollama.
 - 🧩  **Apps**: custom screens in plain JavaScript, backed by your own data.
-- 🔌  **Plugins and integrations**: Wasm plugins, and syncing from Notion, GitHub and more.
+- 🔌  **Plugins and integrations**: Wasm plugins, and syncing from GitHub and more.
 - 💬  **Group chat**: channels with attachments, search and replies.
 - 🎥  **Meetings**: video calls with shared notes and presence.
 - 🎨  **Canvas**: an infinite drawing surface, shared live.
@@ -53,7 +59,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 💻  **Runs everywhere**: linux, windows, mac, arm, plus desktop and mobile apps.
 - 📚  **Libraries** for JavaScript, React, Svelte, Rust and Dart / Flutter.
 
-https://private-user-images.githubusercontent.com/2183313/655190495-4310ad43-2595-4cf8-b336-fb8bcc692e79.mp4
+https://github.com/user-attachments/assets/32e82de5-11ca-4c2e-8c25-b293d79f6023
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 import { StoreContext, Store, enableLoro, Client } from '@tomic/react';
 
-import { isDev } from './config';
+import { isDev, isE2E } from './config';
 import { registerHandlers } from './handlers';
 import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
 import { shouldLock } from './helpers/deviceLock';
@@ -16,6 +16,7 @@ import {
 
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
+import { ProxyConnectReturn } from './chunks/AppPage/ProxyConnectReturn';
 import { router } from './routes/Router';
 
 import { errorHandler } from './handlers/errorHandler';
@@ -145,6 +146,7 @@ const store = new Store({
   agent: initalAgent,
   serverUrl,
   connect: !isOriginWithoutNode(serverUrl),
+  requireOnlineWrites: isRunningInTauri(),
 });
 
 const initialDrive = driveStorage.get();
@@ -208,7 +210,12 @@ import { isClientDbEnabled } from './helpers/clientDbMode';
 
 if (isClientDbEnabled()) {
   initClientDb(store, {
-    deferAnonymous: window.location.pathname === '/app/dev-drive',
+    // The demo makes a guest identity straight away, and that identity gets
+    // its own database: opening the anonymous one first only to close it
+    // again cost a second worker and WebAssembly start on every first visit.
+    deferAnonymous:
+      window.location.pathname === '/app/dev-drive' ||
+      window.location.pathname === '/app/demo',
   });
 }
 
@@ -240,6 +247,15 @@ if (isDev()) {
   attachDevtools(store);
 }
 
+// The e2e specs build some fixtures by calling app modules directly. They
+// cannot import them by source path from a built bundle, so an E2E build
+// hands them over on `window`. Awaited here, so they are in place before the
+// first spec can reach the page.
+if (isE2E()) {
+  const { attachE2EModules } = await import('./helpers/e2eModules');
+  await attachE2EModules();
+}
+
 /** Entrypoint of the application. This is where providers go. */
 function App(): JSX.Element {
   // Handle uncaught errors
@@ -265,7 +281,9 @@ function App(): JSX.Element {
   return (
     <StoreContext.Provider value={store}>
       <PerformanceProfiler id='app'>
-        <RouterProvider router={router}></RouterProvider>
+        <ProxyConnectReturn>
+          <RouterProvider router={router}></RouterProvider>
+        </ProxyConnectReturn>
       </PerformanceProfiler>
     </StoreContext.Provider>
   );

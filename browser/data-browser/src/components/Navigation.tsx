@@ -1,9 +1,10 @@
 import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
-import { DemoActionsBar, readDemoDrive } from './DemoExitButton';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { DemoActionsBar } from './DemoExitButton';
+import { SETUP_BAR_HEIGHT } from './SetupBar';
+import { demoForDrive } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
-import { type JSX, useMemo } from 'react';
+import { type JSX, useMemo, useRef } from 'react';
 import { styled } from 'styled-components';
 
 import { OnboardingFeedback } from './OnboardingFeedback';
@@ -13,9 +14,11 @@ import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
+import { useKeepMainRoom } from './RightPanel/useKeepMainRoom';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
+import { MessageNotifier } from './Notifications/MessageNotifier';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -28,6 +31,7 @@ import { ChromeTheme } from '../styling';
 import { paths, pathNames } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 import { isHostedDistribution } from '../helpers/managedServer';
+import { isRunningInTauri } from '../helpers/tauri';
 
 interface NavWrapperProps {
   children: React.ReactNode;
@@ -69,10 +73,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     pathname === `${pathNames.app}${pathNames.invite}` ||
     signedOutHosted;
 
-  const previewBar =
-    !hideGlobalChrome &&
-    (readTemplateDemo()?.drive ?? readDemoDrive()) === drive;
-  const previewHeight = previewBar ? '3.5rem' : '0px';
+  // The setup bar follows one rule: the current drive is a demo drive. Pages
+  // without the app chrome (the template gallery, sign-in, the splash) are
+  // not part of the demo; the gallery renders its own setup bar.
+  const demo = hideGlobalChrome ? undefined : demoForDrive(drive);
+  const previewHeight = demo ? SETUP_BAR_HEIGHT : '0px';
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -86,6 +91,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     [subject, search],
   );
 
+  const contentRef = useRef<HTMLDivElement>(null);
+
   return (
     <RightPanelProvider
       scope={JSON.stringify([agent?.subject, drive, hideGlobalChrome])}
@@ -96,11 +103,14 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {/* The single app-wide resource context menu (right-click). Mounted here
              * so its actions have the AI-sidebar, dialog, and router contexts. */}
             <ResourceContextMenuHost />
+            <KeepMainRoom mainRef={contentRef} />
             {/* Toasts new meeting messages when the meeting panel isn't open. */}
             {!hideGlobalChrome && <MeetingMessageToaster />}
-            {previewBar && (
+            {/* New chat messages, comments and replies: toast or OS notification. */}
+            <MessageNotifier />
+            {demo && (
               <PreviewHeader>
-                <DemoActionsBar />
+                <DemoActionsBar demo={demo} />
               </PreviewHeader>
             )}
             {!hideGlobalChrome && (
@@ -116,7 +126,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
               fullViewportContent={hideGlobalChrome}
             >
               {!hideGlobalChrome && <SideBar />}
-              <Content>{children}</Content>
+              <Content ref={contentRef}>{children}</Content>
               {!hideGlobalChrome && (
                 <HideInPrint>
                   <CommentsPanelMemo />
@@ -135,6 +145,18 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
 }
 
 interface ContentProps {}
+
+/** Closes a side panel when the page between them gets too narrow. A child
+ *  of RightPanelProvider, whose state it reads. */
+function KeepMainRoom({
+  mainRef,
+}: {
+  mainRef: React.RefObject<HTMLDivElement | null>;
+}): null {
+  useKeepMainRoom(mainRef);
+
+  return null;
+}
 
 const Content = styled.div<ContentProps>`
   /* Keep page-local drag overlays below sibling sidebars, including docked
@@ -201,16 +223,18 @@ const SideBarWrapper = styled.div<{
      already visible and nothing scrolls. */
   ${p =>
     p.fullViewportContent
-      ? CalculatedPageHeight.define(`calc(100dvh - var(--keyboard-inset, 0px))`)
+      ? CalculatedPageHeight.define(
+          `min(calc(100dvh - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.previewHeight}))`,
+        )
       : CalculatedPageHeight.define(
-          `calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px))`,
+          `min(calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight}))`,
         )}
   display: flex;
   height: ${CalculatedPageHeight.var()};
   position: fixed;
   ${p => {
     if (p.fullViewportContent) {
-      return 'top: 0;';
+      return `top: ${p.previewHeight};`;
     }
 
     return `top: calc(${p.previewHeight} + ${p.top ? p.theme.heights.breadCrumbBar : '0px'});`;
@@ -219,9 +243,9 @@ const SideBarWrapper = styled.div<{
   right: 0;
 
   opacity: 1;
-  transition: opacity 0.3s ease-out;
+  transition: ${isRunningInTauri() ? 'none' : 'opacity 0.3s ease-out'};
   @starting-style {
-    opacity: 0;
+    opacity: ${isRunningInTauri() ? 1 : 0};
   }
 
   @media print {
@@ -235,6 +259,6 @@ const SideBarWrapper = styled.div<{
 const PreviewHeader = styled.div`
   position: fixed;
   inset: 0 0 auto;
-  height: 3.5rem;
+  height: ${SETUP_BAR_HEIGHT};
   z-index: ${p => p.theme.zIndex.sidebar};
 `;

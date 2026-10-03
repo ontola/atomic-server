@@ -4,12 +4,14 @@
 // React Compiler: plain creation helpers, not components (see DemoDirector.ts).
 'use no memo';
 import {
+  agentPublicKey,
   core,
   dataBrowser,
   canvas,
   commits,
   server,
   classes,
+  Datatype,
   type JSONValue,
   type Resource,
   type Store,
@@ -169,9 +171,11 @@ export async function createDemoMessage(
     isA: [dataBrowser.classes.message, ...(opts.extraClasses ?? [])],
     propVals: {
       [core.properties.description]: opts.text,
-      [DEMO_SPEAKER]: opts.author,
     },
   });
+  // The speaker property is local to the demo and not published on
+  // atomicdata.dev, so validating it would fetch a 404 for every message.
+  await message.set(DEMO_SPEAKER, opts.author, true, Datatype.STRING);
   await message.save();
 
   return message;
@@ -216,18 +220,38 @@ export async function addToOntology(
 /** A guest agent's resource exists nowhere else, so give it a local
  *  profile: a row in the Team table (they really are on the team) whose
  *  subject is the agent DID, so avatars and names resolve offline. */
+const DRIVE_PROPERTY = 'https://atomicdata.dev/properties/drive';
+
+/** What a guest's profile keeps between demo runs. */
+const IDENTITY_PROPERTIES = new Set<string>([
+  core.properties.publicKey,
+  core.properties.name,
+  core.properties.personalDrive,
+  server.properties.drives,
+]);
+
 async function createGuestProfile(
   store: Store,
   agentSubject: string,
   team: DemoManifest['team'],
+  drive: string,
 ): Promise<void> {
   const profile = store.getResourceLoading(agentSubject, {
     newResource: true,
   });
 
+  // A returning guest keeps its identity from run to run, and every run
+  // builds a new Team table with new columns. Their values used to pile up
+  // on the profile: a row of red, unresolvable column ids from demos long
+  // cleaned up, several roles, and a drive that no longer exists. Keep only
+  // what belongs to the identity itself; this run sets the rest again.
+  for (const [property] of profile.getEntries()) {
+    if (!IDENTITY_PROPERTIES.has(property)) profile.remove(property);
+  }
+
   await profile.set(
     core.properties.publicKey,
-    agentSubject.replace('did:ad:agent:', ''),
+    agentPublicKey(agentSubject) ?? '',
   );
   await profile.set(core.properties.isA, [core.classes.agent, team.rowClass]);
   await profile.set(core.properties.name, 'Demo User');
@@ -238,6 +262,10 @@ async function createGuestProfile(
   // sort lands this row at the BOTTOM of the table, not the top.
   await profile.set(commits.properties.createdAt, Date.now(), false);
   await profile.set(core.properties.parent, team.table);
+  // Its row lives in this run's drive. An earlier run left its own, since
+  // deleted, drive here, which the profile showed as "Could not reach the
+  // server".
+  await profile.set(DRIVE_PROPERTY, drive, false);
   // A component may have tried to fetch this agent from the server
   // (404) before the profile existed — clear the error BEFORE the save
   // notifies subscribers, so they re-render with the local profile
@@ -426,7 +454,7 @@ export async function createDemoWorkspace(
   }
 
   if (opts.guest) {
-    await createGuestProfile(store, agent.subject, team);
+    await createGuestProfile(store, agent.subject, team, drive.subject);
   } else {
     await addToSavedDrives(store, drive.subject);
   }

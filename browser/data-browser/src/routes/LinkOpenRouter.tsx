@@ -6,6 +6,8 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import styled from 'styled-components';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { Main } from '@components/Main';
+import { useAISidebar } from '@components/AI/AISidebarContext';
+import { OpenRouterLoginButton } from '@components/AI/OpenRouterLoginButton';
 
 export type LinkOpenRouterSearch = {
   code: string;
@@ -32,7 +34,8 @@ export const LinkOpenRouter = createRoute({
 
 function LinkOpenRouterPage() {
   const [error, setError] = useState<string>();
-  const { setOpenRouterApiKey } = useAISettings();
+  const { setOpenRouterApiKey, openRouterApiKey } = useAISettings();
+  const { setIsOpen } = useAISidebar();
   const { code } = LinkOpenRouter.useSearch();
   const navigate = useNavigateWithTransition();
 
@@ -41,8 +44,24 @@ function LinkOpenRouterPage() {
     localStorage.removeItem(VERIFIER_KEY);
     sessionStorage.setItem('atomic.ai.openSetup', 'true');
 
+    // The sidebar is already mounted by now, so it will not see the flag
+    // above on its own: open it here.
+    setIsOpen(true);
     navigate({ to: pathNames.app });
   });
+
+  // OpenRouter's "return to app" link carries no code, and it can be pressed
+  // after the automatic redirect already linked the account. That is not an
+  // error: carry on to the app with the assistant open.
+  const alreadyLinked = !code && Boolean(openRouterApiKey);
+
+  useEffect(() => {
+    if (!alreadyLinked) return;
+
+    setIsOpen(true);
+    navigate({ to: pathNames.app });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alreadyLinked]);
 
   const codeVerifier = localStorage.getItem(VERIFIER_KEY);
 
@@ -92,14 +111,21 @@ function LinkOpenRouterPage() {
     })();
   }, [code, codeVerifier]);
 
-  const displayError = !codeVerifier ? 'No code verifier found' : error;
+  const displayError = alreadyLinked
+    ? undefined
+    : !code
+      ? 'OpenRouter did not return an authorization code. Try connecting again.'
+      : !codeVerifier
+        ? 'Your OpenRouter login session is missing. Try connecting again in this browser.'
+        : error;
 
   if (displayError) {
     return (
       <Center>
         <div>
           <h1>Error</h1>
-          <p>{displayError}</p>
+          <p role='alert'>{displayError}</p>
+          <OpenRouterLoginButton />
         </div>
       </Center>
     );

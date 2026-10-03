@@ -1,6 +1,7 @@
 import {
   ai,
   dataBrowser,
+  notifications,
   server,
   useCanWrite,
   useChildren,
@@ -10,6 +11,7 @@ import {
   useSubject,
   useTitle,
 } from '@tomic/react';
+import { canonicalizeScheme } from '@tomic/lib';
 import { Fragment, useEffect, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
@@ -79,15 +81,22 @@ export function SideBarDrive({
   // And the AI Chats folder (on the personal drive): chats re-open through
   // the AI sidebar on the resource they were started on.
   const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
+  // And the Inbox (on the personal drive): it opens from Notifications in the
+  // app menu.
+  const [inbox] = useString(driveResource, notifications.properties.inbox);
   const subResources = useMemo(
     () =>
-      allChildren.filter(
-        subject =>
-          subject !== defaultOntology &&
-          subject !== commentsFolder &&
-          subject !== aiChatsFolder,
-      ),
-    [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
+      allChildren.filter(subject => {
+        const canonical = canonicalizeScheme(subject);
+
+        return (
+          canonical !== canonicalizeScheme(defaultOntology ?? '') &&
+          canonical !== canonicalizeScheme(commentsFolder ?? '') &&
+          canonical !== canonicalizeScheme(aiChatsFolder ?? '') &&
+          canonical !== canonicalizeScheme(inbox ?? '')
+        );
+      }),
+    [allChildren, defaultOntology, commentsFolder, aiChatsFolder, inbox],
   );
   const [title] = useTitle(driveResource);
   const isPrivateDrive = useIsPrivateDrive(drive);
@@ -203,6 +212,7 @@ export function SideBarDrive({
                 <QuickCreateRow
                   parent={drive}
                   newResourceButtonTestId='sidebar-new-resource'
+                  highlightUntilUsed
                   onItemClick={onItemClick}
                 />
               </NewResourceRow>
@@ -250,7 +260,7 @@ const DriveTitle = styled.h2`
 
 /**
  * The title and the drive-switcher caret form one segmented control: a
- * shared hairline border, flush inner edges, shared outer rounding, each
+ * flush inner edges, shared outer rounding, each
  * half highlighting on its own hover.
  */
 const TitleButton = styled(Button)<{ current?: boolean }>`
@@ -263,8 +273,7 @@ const TitleButton = styled(Button)<{ current?: boolean }>`
   flex: 1;
   min-width: 0;
   padding: 0.35rem 0.5rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-right: none;
+  border: none;
   border-radius: ${props => props.theme.radius} 0 0
     ${props => props.theme.radius};
 
@@ -287,7 +296,7 @@ const SwitcherButton = styled(IconButton)`
   height: auto;
   width: auto;
   padding-inline: 0.35rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border: none;
   border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
   color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;

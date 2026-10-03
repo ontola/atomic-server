@@ -8,6 +8,7 @@ import {
 } from '@tomic/react';
 import { colorForAgent } from '@components/Presence/AgentAvatar';
 import { PresenceUserTag } from '@components/Presence/PresenceUserTag';
+import { isUnsavedDraft } from './draftRow';
 
 /**
  * What a table session shares about where it is. Identity, not indexes:
@@ -160,17 +161,14 @@ export function useTablePresence(
         return;
       }
 
-      // Session rows: a `_new:` row exists only in this tab, so it can't be
-      // announced. Once materialized the store aliases it to its real
-      // subject, which other sessions do see.
+      // Session rows: a draft exists only in this tab until it is saved, so
+      // it can't be announced before then.
       const local = newRowSubjects[row - memberCount];
-      const resolved = local
-        ? store.getResourceLoading(local).subject
-        : undefined;
+      const draft = local ? store.getResourceLoading(local) : undefined;
 
       announce(
-        resolved && !resolved.startsWith('_new:')
-          ? { row: resolved, column: property }
+        draft && !isUnsavedDraft(draft)
+          ? { row: draft.subject, column: property }
           : undefined,
       );
     },

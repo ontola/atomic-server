@@ -187,7 +187,10 @@ export function VaultPanel({
             ? `Nothing has been backed up to ${PRODUCT_NAME} yet.`
             : `${details.confirmed_objects} encrypted object${
                 details.confirmed_objects === 1 ? '' : 's'
-              } · ${formatBytes(enrollment.used_bytes)} stored in ${PRODUCT_NAME}.`}
+              } stored in ${PRODUCT_NAME} · ${formatShareUsed(
+                enrollment.used_bytes,
+                enrollment.quota_bytes,
+              )}.`}
           {enrollment.last_backup_at
             ? ` Last backup ${formatWhen(enrollment.last_backup_at)}.`
             : ''}
@@ -237,19 +240,19 @@ export function VaultPanel({
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+/**
+ * How full the vault is, as a whole percentage. The byte numbers are
+ * deliberately not shown: the free quota is a limit people grow towards,
+ * not a figure to advertise.
+ */
+function formatShareUsed(usedBytes: number, quotaBytes: number): string {
+  if (!quotaBytes || !usedBytes || usedBytes <= 0) return '0% used';
 
-  const units = ['KB', 'MB', 'GB'];
-  let value = bytes / 1024;
-  let unit = 0;
+  const percent = (usedBytes / quotaBytes) * 100;
 
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
+  if (percent < 1) return 'Less than 1% used';
 
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+  return `${Math.min(100, Math.round(percent))}% used`;
 }
 
 /** Unix seconds → a phrase, because an ISO timestamp answers a question nobody asked. */

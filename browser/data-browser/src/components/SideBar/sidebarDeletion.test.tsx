@@ -19,23 +19,23 @@ import { Store, commits, core, dataBrowser } from '@tomic/lib';
  * mounted afterwards is the case that did not, and in the sidebar those are
  * created constantly — every folder collapsed and expanded makes a new one.
  */
-const DRIVE = 'did:ad:resource:drive';
-const ALICE = 'did:ad:resource:alice';
-const BOB = 'did:ad:resource:bob';
+const DRIVE = 'atomic:resource:drive';
+const ALICE = 'atomic:resource:alice';
+const BOB = 'atomic:resource:bob';
 
 const jsonAd = (subject: string, createdAt: number) =>
   JSON.stringify({
     '@id': subject,
     [core.properties.parent]: DRIVE,
     [core.properties.isA]: [dataBrowser.classes.folder],
-    [core.properties.name]: subject.slice('did:ad:resource:'.length),
+    [core.properties.name]: subject.slice('atomic:resource:'.length),
     [commits.properties.createdAt]: createdAt,
   });
 
 /** A store whose `parent=` query still lists both children, as an answer
  *  produced before the destroy does. */
 function staleAnsweringStore() {
-  const store = new Store({ serverUrl: 'https://example.com' });
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
   store.setDrive(DRIVE);
   store.finishDriveSync(DRIVE, 2, Date.now());
 

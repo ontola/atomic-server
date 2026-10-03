@@ -21,7 +21,10 @@ export type VaultProofSigner = {
   signBytes(data: Uint8Array): Promise<string>;
   /** The proof computed from the raw key at sign-in, if the agent carries it. */
   vaultProof?: string;
-  /** Whether `signBytes` is reproducible. Absent means unknown. */
+  /**
+   * Whether `signBytes` is reproducible. Absent means unknown, which is
+   * treated as "prove it" rather than as a promise — see {@link agentVaultProof}.
+   */
   signsDeterministically?: boolean;
 };
 
@@ -62,7 +65,12 @@ export async function agentVaultProof(
 
   const first = await signer.signBytes(proofMessage);
 
-  if (signer.signsDeterministically === false) {
+  // Only a signer that positively declares itself deterministic is taken at
+  // its word. `false` and "didn't say" both have to reproduce the signature
+  // before it is allowed to become a key: an unknown signer that turns out to
+  // randomize is exactly the case this guard exists for, and trusting silence
+  // is how one would get past it.
+  if (signer.signsDeterministically !== true) {
     const second = await signer.signBytes(proofMessage);
 
     if (second !== first) {
@@ -716,6 +724,9 @@ export async function backupDrive({
   };
 }
 
+/** Matches `MAX_URL_BATCH` in the control plane's vault API. */
+const DOWNLOAD_URL_BATCH = 64;
+
 /**
  * Restore a drive from its vault into this device's store.
  *
@@ -754,13 +765,21 @@ export async function restoreDrive({
     };
   }
 
-  const { downloads } = await api<{ downloads: DownloadUrl[] }>(
-    `/cloud-vault/${drivePseudonym}/download-urls`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ object_ids: objects.map(o => o.object_id) }),
-    },
-  );
+  // The control plane signs at most DOWNLOAD_URL_BATCH objects per request,
+  // and a drive with a longer history refused to restore at all.
+  const downloads: DownloadUrl[] = [];
+
+  for (let i = 0; i < objects.length; i += DOWNLOAD_URL_BATCH) {
+    const batch = objects.slice(i, i + DOWNLOAD_URL_BATCH);
+    const answer = await api<{ downloads: DownloadUrl[] }>(
+      `/cloud-vault/${drivePseudonym}/download-urls`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ object_ids: batch.map(o => o.object_id) }),
+      },
+    );
+    downloads.push(...answer.downloads);
+  }
 
   // Preserve the server's ordering: `download-urls` answers per request and is
   // not required to echo the order back.

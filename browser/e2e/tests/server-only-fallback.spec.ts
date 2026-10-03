@@ -36,9 +36,8 @@ test.describe('server-only fallback (no OPFS / Web Locks)', () => {
 
       if (!drive) throw new Error('no active drive');
 
-      const tmp = await s.createSubject('fb');
       const f = await s.newResource({
-        subject: tmp,
+        deferGenesis: true,
         parent: drive,
         isA: FOLDER,
       });

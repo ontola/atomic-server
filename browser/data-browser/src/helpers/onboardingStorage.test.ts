@@ -57,3 +57,45 @@ it('times out a stalled worker rather than leaving an endless loading screen', a
     vi.useRealTimers();
   }
 });
+
+it('accepts a ready native node without waiting for a browser database', async () => {
+  const store = {
+    waitForClientDb: vi.fn(),
+    getClientDb: vi.fn(),
+    waitForServerConnected: vi.fn().mockResolvedValue(true),
+  };
+  const fetchNode = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ '@id': 'internal:/server' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+
+  await checkOnboardingStorage(store, 'http://localhost:9883', fetchNode);
+
+  expect(store.waitForClientDb).not.toHaveBeenCalled();
+  expect(store.waitForServerConnected).toHaveBeenCalledWith(20_000);
+  expect(fetchNode).toHaveBeenCalledWith(
+    'http://localhost:9883/server',
+    expect.objectContaining({
+      headers: { Accept: 'application/json' },
+    }),
+  );
+});
+
+it('does not allow native onboarding while the node socket is disconnected', async () => {
+  const store = {
+    waitForClientDb: vi.fn(),
+    getClientDb: vi.fn(),
+    waitForServerConnected: vi.fn().mockResolvedValue(false),
+  };
+  const fetchNode = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ '@id': 'internal:/server' }), {
+      status: 200,
+    }),
+  );
+
+  await expect(
+    checkOnboardingStorage(store, 'http://localhost:9883', fetchNode),
+  ).rejects.toThrow('not connected');
+});

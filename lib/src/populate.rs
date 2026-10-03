@@ -290,6 +290,10 @@ const DEFAULT_FILES: &[(&str, &str)] = &[
     ("plugins.json", include_str!("../defaults/plugins.json")),
     ("tasks.json", include_str!("../defaults/tasks.json")),
     ("forks.json", include_str!("../defaults/forks.json")),
+    (
+        "notifications.json",
+        include_str!("../defaults/notifications.json"),
+    ),
     ("i18n.json", include_str!("../defaults/i18n.json")),
 ];
 
@@ -407,7 +411,7 @@ async fn seed_defaults(store: &impl Storelike, fingerprint: &str) -> AtomicResul
     Ok(())
 }
 
-#[cfg(all(test, feature = "db-redb", not(target_arch = "wasm32")))]
+#[cfg(all(test, feature = "db", not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use crate::Db;

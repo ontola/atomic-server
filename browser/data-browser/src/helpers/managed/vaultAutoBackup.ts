@@ -1,5 +1,10 @@
 import { driveDisplayMetadata } from './driveDisplayMetadata';
-import { StoreEvents, isNotFound, type Store } from '@tomic/lib';
+import {
+  StoreEvents,
+  isNotFound,
+  pageRequestSignal,
+  type Store,
+} from '@tomic/lib';
 import {
   VaultSessionEndedError,
   agentVaultProof,
@@ -23,6 +28,7 @@ import { getManagedAccount, onManagedLogout } from './session';
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
+import { reopenRestoredDrive } from '../driveData';
 
 /**
  * Cloud Vault without a button.
@@ -76,6 +82,11 @@ export type VaultAutoBackupDeps = {
   restoreDrive: typeof restoreDrive;
   /** Whether the user switched backup off for this drive on purpose. */
   optedOut: (driveSubject: string) => boolean;
+  /**
+   * Replace the store's copy of a drive the restore just wrote locally (see
+   * `reopenRestoredDrive`). Optional so tests without a database can skip it.
+   */
+  reopenDrive?: (store: Store, driveSubject: string) => Promise<void>;
 };
 
 const OPT_OUT_KEY = 'atomic.vault.optOut';
@@ -146,6 +157,7 @@ const defaultDeps: VaultAutoBackupDeps = {
   recoverDriveKey,
   restoreDrive,
   optedOut: isVaultOptedOut,
+  reopenDrive: reopenRestoredDrive,
 };
 
 /**
@@ -242,6 +254,30 @@ export function onVaultChanged(listener: VaultChangeListener): () => void {
 
 function notifyVaultChanged(driveSubject: string): void {
   for (const listener of vaultChangeListeners) listener(driveSubject);
+}
+
+/**
+ * Whether the account this pass started for is no longer the one signed in.
+ * Another tab can sign in as a different account mid-pass; the shared cookie
+ * then belongs to that account, and the control plane rightly answers that it
+ * has no such enrollment. That is the account changing, not a failed backup.
+ */
+async function accountChangedSince(
+  store: Store,
+  agentSubject: string,
+  deps: VaultAutoBackupDeps,
+): Promise<boolean> {
+  if (store.getAgent()?.subject !== agentSubject) return true;
+
+  try {
+    if (!(await deps.hasAccount())) return true;
+
+    return (
+      !!deps.identityMatches && !(await deps.identityMatches(agentSubject))
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function ensureVaultBackupOnce(
@@ -393,7 +429,11 @@ async function ensureVaultBackupOnce(
     // attempt re-derives both from the control plane.
     enrolled.delete(driveSubject);
 
-    if (signal.aborted || error instanceof VaultSessionEndedError) {
+    if (
+      signal.aborted ||
+      error instanceof VaultSessionEndedError ||
+      (await accountChangedSince(store, agent.subject, deps))
+    ) {
       return {
         status: 'skipped',
         reason: 'backup cancelled by account change',
@@ -441,7 +481,13 @@ export async function restoreFromVault(
 
   if (!agent?.subject) return { status: 'no-backup', reason: 'not signed in' };
 
-  const absentFromNode = isNotFound(store.resources.get(driveSubject)?.error);
+  // Taken before the first request, so its pagehide listener is registered
+  // while this document is still the live one. The catch reads it.
+  const pageSignal = pageRequestSignal();
+
+  const absentFromNode = isNotFound(
+    store.resources.get(store.normalizeSubject(driveSubject))?.error,
+  );
 
   try {
     // Session first: one quick request, against a database wait of up to
@@ -503,6 +549,23 @@ export async function restoreFromVault(
       store.registerLocalOnlyDrive(driveSubject);
     }
 
+    // The import wrote the drive into the local database only. The store
+    // still holds the lookup that found nothing before it: a "not found"
+    // from the node, or "not available locally". Left there, the sign-in
+    // check that follows reads that stale answer, decides the restore
+    // brought nothing and creates an empty "My drive" over it, and the
+    // sidebar shows the drive's bare subject instead of its name.
+    if (outcome.resourcesRestored > 0 && deps.reopenDrive) {
+      try {
+        await deps.reopenDrive(store, driveSubject);
+      } catch (error) {
+        console.warn(
+          '[cloud-vault] reopening the restored drive failed',
+          error,
+        );
+      }
+    }
+
     // The device now holds the drive and the key; later edits here should go
     // back up without a second enrollment round trip.
     enrolled.set(driveSubject, {
@@ -514,7 +577,16 @@ export async function restoreFromVault(
 
     return { status: 'restored', outcome };
   } catch (error) {
-    console.warn('[cloud-vault] restore failed', error);
+    // A discarded document cancels its own in-flight requests, and they land
+    // here as `TypeError: Failed to fetch`, indistinguishable by type from a
+    // control plane that is really unreachable. The page is already gone, so
+    // there is nobody to warn and the warning reads as a defect on every
+    // navigation that happens to interrupt a restore. `Client
+    // .fetchResourceHTTP` draws the same line for reads, and the backup path
+    // above for its own cancellation.
+    if (!pageSignal?.aborted) {
+      console.warn('[cloud-vault] restore failed', error);
+    }
 
     return {
       status: 'failed',

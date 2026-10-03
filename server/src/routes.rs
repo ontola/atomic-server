@@ -80,8 +80,8 @@ fn precompressed_br_available(ctx: &guard::GuardContext<'_>) -> bool {
 }
 
 fn node_id_from_did(node_did: &str) -> Result<&str, &'static str> {
-    let Some(rest) = node_did.strip_prefix("did:ad:node:") else {
-        return Err("Expected nodeId to use did:ad:node:<node-id>");
+    let Some(rest) = atomic_lib::identifiers::node_id(node_did) else {
+        return Err("Expected nodeId to use atomic:node:<node-id>");
     };
     let node_id = rest.split(':').next().unwrap_or(rest);
     if node_id.is_empty() {
@@ -323,6 +323,12 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
         )
         .service(
             web::resource("/plugin-run")
+                // A file handed to an importer travels in the body.
+                .app_data(
+                    web::JsonConfig::default()
+                        .limit(handlers::plugin_run::RUN_JSON_LIMIT)
+                        .error_handler(crate::jsonerrors::json_error_handler),
+                )
                 .route(web::post().to(handlers::plugin_run::handle_plugin_run)),
         )
         .service(

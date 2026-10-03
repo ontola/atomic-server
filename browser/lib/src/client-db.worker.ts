@@ -30,6 +30,8 @@ export type WorkerRequest =
       id: number;
       type: 'init';
       wasmUrl: string;
+      /** The binary behind `wasmUrl`, compiled by the page ahead of time. */
+      wasmModule?: WebAssembly.Module;
       baseUrl?: string;
       /** OPFS file name of the database; the WASM side defaults to the
        *  legacy shared `atomic_data.redb` when omitted. */
@@ -38,6 +40,8 @@ export type WorkerRequest =
       dbKey?: Uint8Array;
       /** Migrate the legacy shared DB into `dbName` before opening. */
       migrateLegacy?: boolean;
+      /** Allow discarding an undecryptable `dbName`; see `client-db-open.ts`. */
+      discardUndecryptable?: boolean;
     }
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
@@ -50,7 +54,12 @@ export type WorkerRequest =
       subject: string;
       jsonAd: string;
       snapshot?: Uint8Array;
+      /** Outbox rows written with the resource and made durable by the same
+       *  flush, so a crash keeps both or neither. */
+      outbox?: OutboxWrite;
     }
+  | { id: number; type: 'outboxEntries'; agent: string }
+  | ({ id: number; type: 'outboxWrite'; durable: boolean } & OutboxWrite)
   | { id: number; type: 'applyCommit'; commitJsonAd: string }
   | { id: number; type: 'applyPeerCommit'; commitJsonAd: string }
   | { id: number; type: 'removeResource'; subject: string }
@@ -128,6 +137,22 @@ export type WorkerRequest =
       segment: number;
     };
 
+/** Outbox rows for one agent; mirrors `ClientDbOutboxWrite` in client-db.ts
+ *  (duplicated, not imported: see the note on shared modules there). */
+interface OutboxWrite {
+  agent: string;
+  puts: Array<{ subject: string; value: string }>;
+  deletes: string[];
+}
+
+function writeOutbox(write: OutboxWrite): void {
+  db!.outboxWrite(
+    write.agent,
+    JSON.stringify(write.puts),
+    JSON.stringify(write.deletes),
+  );
+}
+
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
   | { id: number; type: 'ok'; data?: unknown }
@@ -161,10 +186,12 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
 
       initPromise = doInit(
         msg.wasmUrl,
+        msg.wasmModule,
         msg.baseUrl,
         msg.dbName,
         msg.dbKey,
         msg.migrateLegacy,
+        msg.discardUndecryptable,
       );
 
       return await initPromise;
@@ -187,35 +214,20 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       }> = [];
 
       for (const subject of msg.subjects) {
-        const jsonAd = await db!.getResource(subject);
-        const snapshot = jsonAd ? await db!.getLoroSnapshot(subject) : null;
-        rows.push({ jsonAd: jsonAd ?? null, snapshot: snapshot ?? null });
+        rows.push(await db!.getResourceWithSnapshot(subject));
       }
 
       return rows;
     }
 
     case 'getResourceWithSnapshot': {
-      // Combined getter for the cold-load fast path: every
-      // `fetchResourceWithLocalFallback` used to do two sequential
-      // worker round-trips (one for the JSON-AD, one for the Loro
-      // snapshot). On a page that mounts 30 useResource hooks that's
-      // 60× postMessage cost serially. Returning both in a single
-      // response halves the worker traffic — and the caller already
-      // ignores the snapshot when JSON-AD is null, so the combined
-      // shape doesn't change semantics.
-      //
-      // Both calls MUST be awaited before being placed in the response
-      // object. wasm-bindgen renders `getResource` / `getLoroSnapshot`
-      // as Promise-returning JS functions; embedding a Promise in the
-      // response makes `postMessage` throw "could not be cloned" and
-      // every cold-load OPFS lookup fails — fell back to a much-slower
-      // WS GET path, which is what surfaced as widespread e2e timeouts.
+      // One wasm call reads the stored row and its snapshot, without
+      // decoding the CRDT history on the way (the tab imports the
+      // snapshot into its own doc). One round trip instead of two for
+      // every `fetchResourceWithLocalFallback`.
       await ensureInit();
-      const jsonAd = await db!.getResource(msg.subject);
-      const snapshot = jsonAd ? await db!.getLoroSnapshot(msg.subject) : null;
 
-      return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
+      return db!.getResourceWithSnapshot(msg.subject);
     }
 
     case 'putResource': {
@@ -243,12 +255,22 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     }
 
     case 'putResourceWithSnapshot': {
-      // Atomic write: JSON-AD index entry + (optional) Loro snapshot
-      // in one postMessage. Snapshot omitted for resources without
-      // a Loro doc (e.g. Commit resources).
+      // One transaction: row, index entries and the Loro snapshot as the
+      // tab holds it. Snapshot omitted for resources without a Loro doc
+      // (e.g. Commit resources).
       await ensureInit();
-      await db!.putResource(msg.jsonAd);
-      if (msg.snapshot) db!.putLoroSnapshot(msg.subject, msg.snapshot);
+
+      if (msg.snapshot) {
+        await db!.putResourceWithSnapshot(msg.jsonAd, msg.snapshot);
+      } else {
+        await db!.putResource(msg.jsonAd);
+      }
+
+      // The outbox entry that says this snapshot still has to reach the
+      // server. Both writes commit without fsync, so the one flush below
+      // persists them together: redb rolls back every commit after the last
+      // durable one, so a crash before it keeps neither, never just one.
+      if (msg.outbox) writeOutbox(msg.outbox);
 
       // Per-write redb commits use `Durability::None` — see the periodic
       // `flush()` tick below. Everywhere else that's fine (the periodic
@@ -264,6 +286,29 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       dirty = true;
       db!.flush();
       dirty = false;
+
+      return;
+    }
+
+    case 'outboxEntries': {
+      await ensureInit();
+
+      return db!.outboxEntries(msg.agent) as string[];
+    }
+
+    case 'outboxWrite': {
+      await ensureInit();
+      writeOutbox(msg);
+
+      // Envelopes (a signed genesis or destroy) and offline cursors are
+      // written durably; a plain dirty bit waits for the periodic tick.
+      if (msg.durable) {
+        dirty = true;
+        db!.flush();
+        dirty = false;
+      } else {
+        dirty = true;
+      }
 
       return;
     }
@@ -499,10 +544,12 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 async function doInit(
   wasmUrl: string,
+  wasmModule: WebAssembly.Module | undefined,
   baseUrl?: string,
   dbName?: string,
   dbKey?: Uint8Array,
   migrateLegacy?: boolean,
+  discardUndecryptable?: boolean,
 ): Promise<ClientDbInitTimings> {
   // Dynamic import of the WASM glue code.
   // The URL should point to the directory containing atomic_wasm.js and atomic_wasm_bg.wasm
@@ -513,7 +560,7 @@ async function doInit(
   // instead of left to wasm-bindgen's `import.meta.url` default, which would
   // drop any version query on `wasmUrl` and pair this glue with a binary from
   // a different build — see `wasmBinaryUrl`.
-  await wasm.default({ module_or_path: wasmBinaryUrl(wasmUrl) });
+  await wasm.default({ module_or_path: wasmModule ?? wasmBinaryUrl(wasmUrl) });
   const t2 = performance.now();
 
   // One-time migration of the legacy shared DB file into the per-agent
@@ -536,13 +583,15 @@ async function doInit(
 
   // `ClientDb.open` opens the OPFS-backed database (acquire OPFS handle, open
   // redb, run migrations). `openClientDb` adds one recovery step: an existing
-  // file this agent's key can no longer decrypt is deleted and recreated,
-  // because it is a cache whose contents are unreadable either way. Every
-  // other open failure still propagates.
+  // file this agent's key can no longer decrypt is deleted and recreated — but
+  // only when the caller passed `discardUndecryptable`, having established that
+  // the key is unrecoverable rather than just missing here. Every other open
+  // failure still propagates.
   const opened = await openClientDb(wasm, {
     baseUrl: baseUrl ?? undefined,
     dbName: dbName ?? undefined,
     dbKey: dbKey ?? undefined,
+    discardUndecryptable: discardUndecryptable ?? false,
   });
   db = opened.db;
   const t3 = performance.now();

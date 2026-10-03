@@ -25,34 +25,40 @@ describe('Commit signing primitives', () => {
       'kLh-mxy_lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc-4rlvLZwxSlfxKTISP2BiXLSiz_5NJZrN5XpXJ_Cg';
     const serializedCommitRust =
       '{"https://atomicdata.dev/properties/createdAt":0,"https://atomicdata.dev/properties/isA":["https://atomicdata.dev/classes/Commit"],"https://atomicdata.dev/properties/set":{"https://atomicdata.dev/properties/description":"Some value","https://atomicdata.dev/properties/shortname":"someval"},"https://atomicdata.dev/properties/signature":"kLh-mxy_lgFD6WkbIbhJANgRhyu39USL9up1zCmqU8Jmc-4rlvLZwxSlfxKTISP2BiXLSiz_5NJZrN5XpXJ_Cg","https://atomicdata.dev/properties/signer":"http://localhost/agents/7LsjMW5gOfDdJzK/atgjQ1t20J/rw8MjVg6xwqm+h8U=","https://atomicdata.dev/properties/subject":"https://localhost/new_thing"}';
-    const createdAt = 0;
+    // A legacy `set` commit, serialized and signed by hand: the builder only
+    // produces Loro commits now, but the canonical bytes must still match Rust.
+    const unsigned = {
+      subject,
+      set: {
+        'https://atomicdata.dev/properties/description': 'Some value',
+        'https://atomicdata.dev/properties/shortname': 'someval',
+      },
+      createdAt: 0,
+      signer: agentSubject,
+    };
 
-    const commitBuilder = new CommitBuilder(subject, {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Some value'],
-        ['https://atomicdata.dev/properties/shortname', 'someval'],
-      ]),
-    });
-
-    const commit = await commitBuilder.signAt(agent, createdAt);
-    expect(serializeDeterministically(commit)).to.equal(serializedCommitRust);
-    expect(commit.signature).to.equal(signatureCorrect);
+    const signature = await agent.sign(
+      serializeDeterministically({ ...unsigned }),
+    );
+    expect(signature).to.equal(signatureCorrect);
+    expect(serializeDeterministically({ ...unsigned, signature })).to.equal(
+      serializedCommitRust,
+    );
   });
 
-  it('derives a did:ad subject from the genesis signature', async ({
+  it('derives an atomic: subject from the genesis signature', async ({
     expect,
   }) => {
+    // Legacy `did:ad:` placeholder in; the minted subject is canonical `atomic:`.
     const commitBuilder = new CommitBuilder('did:ad:genesis', {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Genesis value'],
-      ]),
+      loroUpdate: new Uint8Array([1, 2, 3]),
     });
     commitBuilder.setIsGenesis(true);
 
     const commit = await commitBuilder.signAt(agent, 0);
 
     // Subject IS the signature.
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+    expect(commit.subject).to.equal(`atomic:${commit.signature}`);
     expect(commit.isGenesis).toBe(true);
 
     // Serialization omits the subject (it's circular — the subject is
@@ -62,7 +68,7 @@ describe('Commit signing primitives', () => {
     expect(json['https://atomicdata.dev/properties/isGenesis']).toBe(true);
   });
 
-  it('derives a did:ad subject from a temporary _new subject', async ({
+  it('derives an atomic: subject from a temporary _new subject', async ({
     expect,
   }) => {
     const didAgent = new Agent(
@@ -70,15 +76,13 @@ describe('Commit signing primitives', () => {
       'did:ad:agent:TESTAGENT',
     );
     const commitBuilder = new CommitBuilder('_new:01TESTTEMP', {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Genesis value'],
-      ]),
+      loroUpdate: new Uint8Array([1, 2, 3]),
     });
     commitBuilder.setIsGenesis(true);
 
     const commit = await commitBuilder.signAt(didAgent, 0);
 
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+    expect(commit.subject).to.equal(`atomic:${commit.signature}`);
     const json = JSON.parse(serializeDeterministically(commit));
     expect(json['https://atomicdata.dev/properties/subject']).toBeUndefined();
   });
@@ -90,7 +94,7 @@ describe('Commit signing primitives', () => {
     const didAgent = new Agent(new JSCryptoProvider(privateKey), agentDid);
 
     const commitBuilder = new CommitBuilder(agentDid, {
-      set: new Map([['https://atomicdata.dev/properties/name', 'Alice']]),
+      loroUpdate: new Uint8Array([1, 2, 3]),
     });
 
     const commit = await commitBuilder.signAt(didAgent, 0);
@@ -105,9 +109,7 @@ describe('Commit signing primitives', () => {
 
   it('keeps the _new subject for non-did signers', async ({ expect }) => {
     const commitBuilder = new CommitBuilder('_new:01TESTTEMP', {
-      set: new Map([
-        ['https://atomicdata.dev/properties/description', 'Regular value'],
-      ]),
+      loroUpdate: new Uint8Array([1, 2, 3]),
     });
 
     const commit = await commitBuilder.signAt(agent, 0);

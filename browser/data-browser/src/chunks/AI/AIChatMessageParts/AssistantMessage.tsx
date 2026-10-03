@@ -10,17 +10,19 @@ import { ReasoningMessage } from './ReasoningMessage';
 
 interface AssistantMessageProps {
   message: AtomicUIMessage;
+  hideError?: boolean;
 }
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   message,
+  hideError = false,
 }) => {
   return (
     <>
       {/* A turn that failed mid-flight. The metadata was already being written
           on error, but nothing rendered it, so a half-finished answer looked
           like a complete one. */}
-      {message.metadata?.error && (
+      {message.metadata?.error && !hideError && (
         <ErrorNotice role='alert'>{message.metadata.error}</ErrorNotice>
       )}
       {message.parts.map((part, index) => {

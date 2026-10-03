@@ -1,5 +1,11 @@
 import { describe, it } from 'vitest';
-import { core, commits, server } from './index.js';
+import {
+  core,
+  commits,
+  server,
+  isAtomicIdentifier,
+  isCommitSubject,
+} from './index.js';
 import { testStore } from './test-store.js';
 
 /**
@@ -25,10 +31,10 @@ describe('Local-only drives', () => {
     expect(result).toBe('persisted');
     expect(posted).toHaveLength(0);
     expect(store.outbox.size).toBe(0);
-    expect(drive.subject.startsWith('did:ad:')).toBe(true);
+    expect(isAtomicIdentifier(drive.subject)).toBe(true);
 
     const lastCommit = String(drive.get(commits.properties.lastCommit));
-    expect(lastCommit.startsWith('did:ad:commit:')).toBe(true);
+    expect(isCommitSubject(lastCommit)).toBe(true);
     expect(store.resources.has(lastCommit)).toBe(false);
   });
 
@@ -54,7 +60,7 @@ describe('Local-only drives', () => {
 
     await doc.save();
     const first = String(doc.get(commits.properties.lastCommit));
-    expect(first.startsWith('did:ad:commit:')).toBe(true);
+    expect(isCommitSubject(first)).toBe(true);
 
     await doc.set(core.properties.name, 'Welcome aboard');
     await doc.save();

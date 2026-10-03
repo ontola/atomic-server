@@ -1,5 +1,6 @@
 import { Resource, useStore } from '@tomic/react';
 import { useEffect, useMemo } from 'react';
+import { hasUserContent, isUnsavedDraft } from './draftRow';
 import {
   CursorMode,
   useTableEditorContext,
@@ -20,17 +21,16 @@ const MATERIALIZE_DEBOUNCE = 50;
 const MATERIALIZE_FLUSH = 0;
 
 /**
- * Materialize a virtual (`_new:`) row a short while after the user moves off
- * it.
+ * Materialize a draft row a short while after the user moves off it.
  *
  * New rows are held purely locally while the user types ({@link TableNewRow}
- * renders a `_new:` resource and {@link TableCell} never persists it) — no
- * commit, no re-fetch, no remount reaches the cell mid-entry, which is what
- * makes rapid row entry stable. Once the active cell has been on a *different*
- * row for {@link MATERIALIZE_DEBOUNCE}ms, the row is saved: that signs its
- * genesis commit and renames `_new:` → `did:ad:` (the store keeps an alias so
- * the still-mounted `TableNewRow` resolves the same resource — it does not flip
- * to a collection member, see `TableResource`).
+ * renders a draft whose genesis is unsigned, and {@link TableCell} never
+ * persists it) — no commit, no re-fetch, no remount reaches the cell
+ * mid-entry, which is what makes rapid row entry stable. Once the active cell
+ * has been on a *different* row for {@link MATERIALIZE_DEBOUNCE}ms, the row is
+ * saved: that signs its genesis commit under the subject the row already has,
+ * so the still-mounted `TableNewRow` keeps rendering the same resource (it does
+ * not flip to a collection member, see `TableResource`).
  *
  * The row is considered "in use" only while it is BOTH the selected row AND
  * the table is in Edit mode; otherwise the debounce timer runs. So a row
@@ -61,9 +61,7 @@ export function useMaterializeWhenDeselected(
   const scheduler = useMemo(
     () =>
       store.createSaveScheduler(resource, {
-        shouldSave: () =>
-          resource.subject.startsWith('_new:') &&
-          resource.getEntries().length > 2,
+        shouldSave: () => isUnsavedDraft(resource) && hasUserContent(resource),
         onError: () => undefined,
       }),
     [store, resource],

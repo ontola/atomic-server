@@ -95,6 +95,14 @@ interface FancyTableProps<T> {
     column: number | undefined,
   ) => void;
   itemKey?: (index: number) => string;
+  /**
+   * Rendered in every row's gutter, at the start of the row header cell. The
+   * grid knows nothing about rows beyond their index, so a view that can map an
+   * index to a resource passes a component here to hang a per-row affordance
+   * off the row — the table view uses it for the comment bubble. Mount a stable
+   * component type: a new one on every render remounts it for every visible row.
+   */
+  RowHeaderAddonComponent?: React.ComponentType<{ rowIndex: number }>;
   HeadingComponent: TableHeadingComponent<T>;
   NewColumnButtonComponent: React.ComponentType;
   /**
@@ -150,6 +158,7 @@ function FancyTableInner<T>({
   onRowExpand = noop,
   onInsertRowBelow,
   onSelectedCellChange,
+  RowHeaderAddonComponent,
   HeadingComponent,
   NewColumnButtonComponent,
   FooterComponent,
@@ -162,6 +171,7 @@ function FancyTableInner<T>({
     tableRef,
     setCursorMode,
     exitEditMode,
+    emitInteractionsFired,
     cursorMode,
     disabledKeyboardInteractions,
     readOnly,
@@ -229,10 +239,18 @@ function FancyTableInner<T>({
       ) {
         e.preventDefault();
         e.stopPropagation();
+        // First, so an editor that stores on close knows this close is a
+        // cancel and keeps the stored value.
+        emitInteractionsFired([KeyboardInteraction.ExitEditMode]);
         exitEditMode();
       }
     },
-    [cursorMode, disabledKeyboardInteractions, exitEditMode],
+    [
+      cursorMode,
+      disabledKeyboardInteractions,
+      exitEditMode,
+      emitInteractionsFired,
+    ],
   );
 
   // The opt-out above is only ever set *while* such a surface is open. Once it
@@ -345,7 +363,12 @@ function FancyTableInner<T>({
           role='row'
           aria-rowindex={index + 2}
         >
-          <IndexCell rowIndex={index} columnIndex={0} onExpand={onRowExpand}>
+          <IndexCell
+            rowIndex={index}
+            columnIndex={0}
+            onExpand={onRowExpand}
+            RowHeaderAddonComponent={RowHeaderAddonComponent}
+          >
             {index + 1}
           </IndexCell>
           {children({ index })}
@@ -353,7 +376,7 @@ function FancyTableInner<T>({
         </TableRow>
       );
     },
-    [children, onRowExpand],
+    [children, onRowExpand, RowHeaderAddonComponent],
   );
 
   const rowProps = useMemo(() => ({}), []);

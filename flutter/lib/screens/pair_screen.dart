@@ -7,13 +7,43 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../atomic/atomic_client.dart';
 import '../atomic/session.dart';
 
-/// DID prefix for Iroh node identifiers.
+/// Node identifier prefixes (canonical + legacy).
+const _atomicPrefix = 'atomic:';
+const _didAdPrefix = 'did:ad:';
+const _nodePrefix = 'atomic:node:';
 const _nodeDidPrefix = 'did:ad:node:';
 
-/// The `atomic://pair` URI the data-browser and the Tauri apps put in their QR
-/// codes. See `planning/device-pairing.md` and `browser/lib/src/pairing.ts` —
-/// this parser must accept what those produce.
+/// Legacy `atomic://pair` URI. New codes are `atomic:node:{id}?v=1&drives=*`.
 const _pairingUriPrefix = 'atomic://pair?';
+
+bool _isLegacyAtomicLink(String raw) => raw.startsWith('atomic://');
+
+String _toOpaqueAtomic(String raw) => _isLegacyAtomicLink(raw)
+    ? '$_atomicPrefix${raw.substring('atomic://'.length)}'
+    : raw;
+
+String? _opaqueAtomicBody(String raw) {
+  final opaque = _toOpaqueAtomic(raw);
+  if (!opaque.startsWith(_atomicPrefix) || _isLegacyAtomicLink(opaque)) {
+    return null;
+  }
+  return opaque.substring(_atomicPrefix.length).split(RegExp(r'[?#]')).first;
+}
+
+bool _isLegacyPairingUri(String raw) => _opaqueAtomicBody(raw) == 'pair';
+
+bool _isNodeIdentifier(String raw) {
+  final body = raw.startsWith(_atomicPrefix) && !_isLegacyAtomicLink(raw)
+      ? raw.substring(_atomicPrefix.length)
+      : raw.startsWith(_didAdPrefix)
+          ? raw.substring(_didAdPrefix.length)
+          : null;
+  if (body == null) {
+    return false;
+  }
+  final ident = body.split(RegExp(r'[?#]')).first;
+  return ident.startsWith('node:') && ident.length > 'node:'.length;
+}
 
 enum _Step { loading, showQr, syncing, done, error }
 
@@ -61,15 +91,36 @@ class PairScreen extends StatefulWidget {
   static PeerInfo? parsePeerInfo(String input) {
     final trimmed = input.trim();
 
-    if (trimmed.startsWith(_pairingUriPrefix)) {
-      return _parsePairingUri(trimmed);
+    if (_isLegacyPairingUri(trimmed)) {
+      final opaque = _toOpaqueAtomic(trimmed);
+      final qIndex = opaque.indexOf('?');
+      final query = qIndex == -1 ? '' : opaque.substring(qIndex + 1);
+      return _parsePairingUri('$_pairingUriPrefix$query');
+    }
+
+    final opaque = _toOpaqueAtomic(trimmed);
+
+    if (_isNodeIdentifier(opaque.split(RegExp(r'[?#]')).first)) {
+      final ident = opaque.split(RegExp(r'[?#]')).first;
+      final prefix =
+          ident.startsWith(_nodePrefix) ? _nodePrefix : _nodeDidPrefix;
+      var value = ident.substring(prefix.length);
+      if (RegExp(r'^[a-f0-9]{64}$', caseSensitive: false).hasMatch(value)) {
+        final qIndex = opaque.indexOf('?');
+        if (qIndex == -1) {
+          return PeerInfo(value.toLowerCase());
+        }
+        return _parseNodeQuery(value.toLowerCase(), opaque.substring(qIndex + 1));
+      }
     }
 
     var value = trimmed;
     String name = '';
 
-    if (value.startsWith(_nodeDidPrefix)) {
-      value = value.substring(_nodeDidPrefix.length);
+    if (value.startsWith(_nodePrefix) || value.startsWith(_nodeDidPrefix)) {
+      value = value.startsWith(_nodePrefix)
+          ? value.substring(_nodePrefix.length)
+          : value.substring(_nodeDidPrefix.length);
       // Check for :<name> suffix after the 64-char hex
       if (value.length > 64 && value[64] == ':') {
         name = Uri.decodeComponent(value.substring(65));
@@ -98,9 +149,13 @@ class PairScreen extends StatefulWidget {
 
     final node = params['node'];
 
-    if (node == null || !node.startsWith(_nodeDidPrefix)) return null;
-
-    final nodeId = node.substring(_nodeDidPrefix.length);
+    if (node == null) return null;
+    final nodeId = node.startsWith(_nodePrefix)
+        ? node.substring(_nodePrefix.length)
+        : node.startsWith(_nodeDidPrefix)
+            ? node.substring(_nodeDidPrefix.length)
+            : null;
+    if (nodeId == null) return null;
 
     if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(nodeId)) return null;
 
@@ -121,8 +176,24 @@ class PairScreen extends StatefulWidget {
 
   /// Format a QR code value with optional device name.
   static String formatQrValue(String nodeId, String deviceName) {
-    if (deviceName.isEmpty) return '$_nodeDidPrefix$nodeId';
-    return '$_nodeDidPrefix$nodeId:${Uri.encodeComponent(deviceName)}';
+    if (deviceName.isEmpty) return '$_nodePrefix$nodeId';
+    return '$_nodePrefix$nodeId:${Uri.encodeComponent(deviceName)}';
+  }
+
+  static PeerInfo? _parseNodeQuery(String nodeId, String query) {
+    final uri = Uri.parse('atomic:node:$nodeId?$query');
+    final version = uri.queryParameters['v'];
+    if (version != null && version != '1') return null;
+    if (uri.queryParameters.containsKey('secret')) return null;
+    final drives = uri.queryParametersAll['drives']
+        ?.where((d) => d != '*')
+        .toList();
+    return PeerInfo(
+      nodeId,
+      '',
+      uri.queryParameters['url'],
+      drives == null || drives.isEmpty ? null : drives,
+    );
   }
 
   /// Get the local device name from the OS.

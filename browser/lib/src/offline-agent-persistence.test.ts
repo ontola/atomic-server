@@ -18,7 +18,7 @@ describe('Offline Agent Persistence', () => {
 
     const keys = await Agent.generateKeyPair();
     const provider = new JSCryptoProvider(keys.privateKey);
-    const agentSubject = `did:ad:agent:${keys.publicKey}`;
+    const agentSubject = `atomic:agent:${keys.publicKey}`;
     const initialAgent = new Agent(provider, agentSubject);
     store.setAgent(initialAgent);
 

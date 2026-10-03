@@ -26,10 +26,11 @@ import { useDialogGlobalContext } from './DialogGlobalContextProvider';
 import { DIALOG_CONTENT_CONTAINER } from '../../helpers/containers';
 import { CurrentBackgroundColor } from '../../globalCssVars';
 import { timeoutEffect } from '@helpers/timeoutEffect';
+import { useAndroidBack } from '../../helpers/androidBack';
 
-const FeedbackMenuItem = lazy(() =>
-  import('../SideBar/FeedbackMenuItem').then(module => ({
-    default: module.FeedbackMenuItem,
+const FeedbackButton = lazy(() =>
+  import('../SideBar/FeedbackButton').then(module => ({
+    default: module.FeedbackButton,
   })),
 );
 
@@ -43,6 +44,8 @@ export interface InternalDialogProps {
   instantClose?: boolean;
   disableLightDismiss?: boolean;
   width?: CSS.Property.Width;
+  /** Id of the element that names the dialog, usually its title's heading. */
+  labelledBy?: string;
 }
 
 export enum DialogSlot {
@@ -105,6 +108,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   width,
   instantClose = false,
   disableLightDismiss = false,
+  labelledBy,
   onClose,
   onClosed,
 }) => {
@@ -112,7 +116,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const innerDialogRef = useRef<HTMLDivElement>(null);
   const { hasOpenInnerPopup } = useDialogTreeContext();
-  const { isTopLevel } = useDialogGlobalContext(show);
+  const { isTopLevel, isTopLevelNow } = useDialogGlobalContext(show);
 
   useControlLock(show);
 
@@ -128,7 +132,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
         return;
       }
 
-      if (!isTopLevel) {
+      if (!isTopLevelNow()) {
         // Don't react to closing events if the dialog is not on top.
 
         return;
@@ -141,7 +145,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
         cancelDialog();
       }
     },
-    [cancelDialog, isTopLevel, disableLightDismiss],
+    [cancelDialog, isTopLevelNow, disableLightDismiss],
   );
 
   // Prevent native dialog cancel event when disableLightDismiss is true
@@ -159,9 +163,20 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       if (disableLightDismiss) {
         e.preventDefault();
         e.stopPropagation();
-      } else if (isTopLevel && !hasOpenInnerPopup) {
-        // Only handle cancel if we're the top level dialog
-        // The useHotkeys below will call cancelDialog
+      } else {
+        // Left alone, the browser closes the dialog itself, and then
+        // `onClosed` never runs: `inert` stays on <body>, focus is not
+        // restored, and `bindShow` keeps saying "open", so the dialog can't be
+        // shown again. That happened when Escape came right after a stacked
+        // dialog closed, before this one knew it was top level again and the
+        // hotkey below was enabled. The browser only sends `cancel` to the
+        // topmost modal, so close through React here. Calling it after the
+        // hotkey already did is harmless.
+        e.preventDefault();
+
+        if (!hasOpenInnerPopup) {
+          cancelDialog();
+        }
       }
     };
 
@@ -171,12 +186,21 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
     return () => {
       dialog.removeEventListener('cancel', handleCancel, true);
     };
-  }, [disableLightDismiss, isTopLevel, hasOpenInnerPopup]);
+  }, [disableLightDismiss, hasOpenInnerPopup, cancelDialog]);
 
   // Close the dialog when the escape key is pressed
   useHotkeys(
     'esc',
     () => {
+      // `enabled` is a snapshot of the last render, and a dialog stacked on
+      // top of this one may have opened since without React having re-rendered
+      // this one yet. The browser meanwhile sends its `cancel` to the dialog
+      // that really is on top, so answering the keydown here as well closes two
+      // dialogs on one Escape. Ask the live stack instead.
+      if (!isTopLevelNow()) {
+        return;
+      }
+
       if (!disableLightDismiss) {
         cancelDialog();
       }
@@ -185,6 +209,14 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       enabled: show && !hasOpenInnerPopup && isTopLevel,
     },
   );
+
+  // Android back is a close request, like Escape. A dialog that can't be
+  // dismissed still takes it, so back doesn't navigate away underneath it.
+  useAndroidBack(show && isTopLevel, () => {
+    if (!disableLightDismiss && !hasOpenInnerPopup) {
+      cancelDialog();
+    }
+  });
 
   const finishClose = useCallback(() => {
     dialogRef.current?.close();
@@ -236,6 +268,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       $width={width}
       data-top-level={isTopLevel}
       closedby={disableLightDismiss ? 'none' : 'closerequest'}
+      aria-labelledby={labelledBy}
     >
       <StyledInnerDialog ref={innerDialogRef}>
         <PopoverContainer>
@@ -251,7 +284,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
             {show && rootWelcomeChromeHidden && !hideOnboardingFeedback && (
               <DialogFeedback>
                 <Suspense fallback={null}>
-                  <FeedbackMenuItem floating />
+                  <FeedbackButton />
                 </Suspense>
               </DialogFeedback>
             )}

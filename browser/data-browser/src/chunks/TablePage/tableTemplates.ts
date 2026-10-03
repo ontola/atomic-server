@@ -55,7 +55,8 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'issue-tracker',
     title: 'Issue Tracker',
-    description: 'Status, Assignee and Priority, plus a kanban board.',
+    description:
+      'Status, Assignee and Priority, plus a kanban board and an Issues view.',
     rowName: 'Issue',
     icon: FaBug,
     spec: {
@@ -70,6 +71,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           propertySubject: taskSchema.properties.status,
           type: 'select',
           options: ['Todo', 'Doing', 'Blocked', 'Done'],
+          default: 'Todo',
         },
         {
           name: 'Assignee',
@@ -89,6 +91,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           groupByColumn: 'Status',
           default: true,
         },
+        { name: 'Issues', kind: 'issues', groupByColumn: 'Status' },
         { name: 'All issues', kind: 'table' },
       ],
     },
@@ -106,6 +109,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           propertySubject: taskSchema.properties.status,
           type: 'select',
           options: ['Todo', 'Doing', 'Blocked', 'Done'],
+          default: 'Todo',
         },
         {
           name: 'Due date',
@@ -250,6 +254,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           name: 'Stage',
           type: 'select',
           options: ['Lead', 'Contacted', 'Proposal', 'Won', 'Lost'],
+          default: 'Lead',
         },
         { name: 'Value', type: 'decimal' },
         { name: 'Last contact', type: 'date' },
@@ -313,6 +318,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
             'Rejected',
             'Withdrawn',
           ],
+          default: 'Wishlist',
         },
         { name: 'Applied on', type: 'date' },
         { name: 'Link', type: 'text' },
@@ -365,6 +371,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           name: 'Status',
           type: 'select',
           options: ['Want to read', 'Reading', 'Finished', 'Abandoned'],
+          default: 'Want to read',
         },
         { name: 'Rating', type: 'number', description: 'Out of five' },
         { name: 'Finished on', type: 'date' },
@@ -684,6 +691,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           name: 'RSVP',
           type: 'select',
           options: ['Invited', 'Yes', 'No', 'Maybe'],
+          default: 'Invited',
         },
         { name: 'Plus ones', type: 'number' },
         { name: 'Email', type: 'text' },

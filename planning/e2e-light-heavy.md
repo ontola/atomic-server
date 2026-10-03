@@ -1,15 +1,17 @@
 # Light vs heavy E2E, and where unit tests should grow
 
-**Status: partial, updated 2026-09-11.** Tags, `test-e2e:light`, Dagger `--playwright-mode`, and
-`main.yml` gating are in. Remaining: grow `jsTestIntegration`, stop adding
-heavy-only variants as Playwright, then drop redundant heavy specs.
+**Status: partial, scheduling revised 2026-09-23.** Tags, `test-e2e:light`, and
+Dagger `--playwright-mode` remain. Automatic PR and feature-branch CI is paused
+because Mancave queue time exceeded the test time. Full CI runs on `develop`,
+`v*` tags, and explicit dispatches of temporary branches combining PR heads.
+Remaining test-layer work: grow `jsTestIntegration`, stop adding heavy-only
+variants as Playwright, then drop redundant heavy specs.
 
-Yes: split Playwright into a **light** suite that gates feature-branch CI,
-and a **heavy** suite that gates `develop` / tags / releases. Lint, Rust,
-vitest, JS integration, and Flutter stay on **every** run — “partial” means
-fewer browsers, not a thinner backend net. The split only works if the
-cases we drop from the feature-branch gate already have a cheaper test at
-the right layer. Do not shrink E2E first and hope unit tests appear later.
+Playwright has a **light** suite for local diagnostics and a **full** suite
+for integration batches, `develop`, tags, and releases. Lint, Rust, vitest,
+JS integration, and Flutter remain in each Main run. The scheduling change
+reduces how many Main runs are requested; it does not remove test layers from
+a run. Keep cheaper tests for cases that do not require a browser.
 
 Companion: [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) — protocol vs glue
 vs flow. This plan is about *which flow tests run when*, not about abandoning
@@ -27,10 +29,10 @@ The suite is doing two jobs in one job:
    Combinatorics, serial specs, two-browser sessions, website scaffolding,
    perf probes. Another ~140 tests, most of the wall time.
 
-Job 1 belongs on every PR. Job 2 belongs on `develop`, on `v*` tags, and
-whenever someone is about to ship. The missing piece is not more Playwright:
-it is using the layers we already have so job 2 does not have to live in a
-browser.
+Both jobs now run for each manually assembled PR batch, on `develop`, and on
+`v*` tags. PR updates do not start CI automatically while runner capacity is
+limited. The missing piece is not more Playwright: it is using the layers we
+already have so job 2 does not have to live in a browser.
 
 ---
 
@@ -113,75 +115,41 @@ integration tests.
 
 ---
 
-## Implemented model
+## Current CI scheduling
 
-Three layers. **Only Playwright splits.** Lint, Rust, vitest, JS integration,
-and Flutter stay on every run.
+Main runs all its lint, unit, integration, Rust, Flutter, and **full** Playwright
+checks together. Playwright's `@smoke` subset remains available locally but
+does not start automatically in GitHub Actions.
 
-```
-always (any branch / tag / dispatch)
-  jsLint, rustFmt, rustClippy, rustTest, jsTest, jsTestIntegration, flutterTest
+| Trigger | Main pipeline |
+|---|---|
+| PR event or feature-branch push | No automatic repository CI |
+| Push to `develop` | Full, gates staging |
+| Push of a `v*` tag | Full, gates release |
+| Manual `workflow_dispatch` on a temporary integration branch | Full |
 
-e2e light  (@smoke)     feature-branch pushes (today's `on: push` to anything but develop)
-e2e heavy  (full suite) develop, v* tags, and opt-in
-```
+The agent assembles an integration branch from the **exact PR head commits**
+selected for a batch, pushes it, and calls
+`gh workflow run main.yml --ref <batch-branch>`. The branch's push starts no CI; dispatch starts one full Main
+run. Record the batch SHA and run URL, check that the run's `head_sha` equals
+that SHA, and inspect every applicable job. Rebuild and rerun the batch when a
+PR head changes. Merge only the tested heads together; after merge, `develop`
+gets its own full gate before staging. The integration branch never triggers
+staging by itself. Do not treat a green run for a previous batch as evidence
+for a changed batch.
 
-Mechanism: Playwright **tags**, not two folders. A test can be `@smoke` and
-still run in heavy (heavy = unfiltered). Light is `--grep @smoke`. Optional
-later: `@perf` excluded from both default jobs and run on a schedule.
+This intentionally means one premerge batch run and one postmerge `develop`
+run. Reusing a premerge result for staging would require proving that the
+merged tree is identical and changing the deployment gate; that is outside
+this temporary scheduling change.
 
-### CI policy: when full?
+`main.yml` keeps the full suite for every dispatched ref, avoiding an
+accidental light run that could be mistaken for release evidence. The
+`rust-alignment.yml` check runs on `develop` only. These repository workflows
+do not control third-party security checks on PRs.
 
-**Partial by default. Full when we are about to ship, or when someone asks.**
-
-Feature-branch pushes now run the light suite; develop and release validation
-use the full suite according to the policy below. Superseded feature-branch
-runs cancel within their ref; develop and tag runs finish because deployment
-consumes their results. `jsLint` uses installed sources without JS or WASM builds.
-Full Dagger execution and queue timing must still be measured in CI.
-
-| Trigger | Unit / integration / lint | Playwright |
-|---|---|---|
-| Push to a feature branch | always, required | **light**, required |
-| Push to `develop` | always, required | **full**, required (staging deploys from this green) |
-| Push of a stable `v*` tag | always, required | **full**, required (production deploys from this green) |
-| `workflow_dispatch` | always | **full** unless the input says light |
-| PR label / dispatch input `full-e2e` on a feature branch | always | **full** (opt-in, still required for that run) |
-| Local `pnpm test-e2e` | — | full (today) |
-| Local `pnpm test-e2e:light` | — | light |
-
-Never skip the non-Playwright jobs on a “partial” run. Those are the cheap
-net, already parallel with E2E, and they are where protocol bugs belong.
-“Partial CI” means **fewer browsers**, not “skip Rust.”
-
-Do **not**:
-
-- Run light on `develop`. Staging (`deploy_staging.yml`) follows a green
-  Main on `develop`. A subset gate would ship untested offline / table /
-  two-browser paths.
-- Run full E2E as a non-blocking extra job on every feature branch. That
-  keeps Mancave contended and undoes the split.
-- Infer the suite from changed paths (`tables.spec.ts` if `TablePage`
-  changed). Brittle, and agents will get it wrong. Opt-in full on the
-  branch if you touched a heavy-only flow and want the answer before merge.
-- Skip E2E entirely on docs-only commits as a first step. Dagger cache
-  already makes those ~2–12 min. A GHA path filter is an optional later
-  save, not the policy.
-
-**Merge tax.** A light-green feature branch can still turn `develop` red.
-That is the point of the `develop` gate: staging waits, the author (or
-whoever lands) pays the full suite once, not on every push. Use the
-`full-e2e` opt-in when the change is in a heavy-only area (offline tables,
-canvas, vault, website templates) so you find that before merge.
-
-Retries: light `retries=1` (0 locally). Heavy keeps `retries=2` on Mancave
-until the host is less contended. A smaller default job *is* the contention
-fix.
-
-Shards: light **1–2 shards**, not 4. Full keeps current 4 / 2.
-
-Nightly full-on-`develop` is optional later (retries=0, flake hunting). It
-is not required if every `develop` push already runs full.
+Local commands remain `pnpm test-e2e` for full and `pnpm test-e2e:light` for
+the `@smoke` subset. A test can be `@smoke` and still run in full.
 
 ---
 
@@ -310,10 +278,8 @@ The workflow decides the mode; Dagger does not guess the branch.
 
 - `endToEnd` / `ci` take `--playwright-mode light|full` (not `--e2e-mode`:
   Dagger camelCases that to `e2EMode` and the call fails).
-- `main.yml` defaults to `full` on `refs/heads/develop` and all `v*` tags.
-  Feature branches use `light` unless `[full-e2e]` in the commit message or a
-  `full-e2e` PR label requests full. An explicit workflow-dispatch `e2e_mode`
-  overrides the default; release validation still needs the full suite.
+- `main.yml` passes `full` on `develop`, `v*` tags, and manual dispatches of
+  integration branches. Feature-branch pushes and PR events do not trigger it.
 - Light: `--grep @smoke`, two Mancave shards or one hosted shard,
   `PLAYWRIGHT_RETRIES=1`; workers follow the selected Dagger host profile.
 - Full: current command, current shards/retries.
@@ -347,7 +313,8 @@ Optional later, not required for the split to pay off:
 ## Build order
 
 1. [x] Tag the draft smoke list; add `test-e2e:light`.
-2. [x] Wire Dagger + `main.yml` so feature branches run light, `develop`/tags run full.
+2. [x] Wire Dagger with light/full modes; `main.yml` now runs full for
+   `develop`, tags, and dispatched integration batches.
 3. [x] Document the policy in `TESTING_COVERAGE.md`, `browser/e2e/README.md`,
    `AGENTS.md` (cheapest layer first).
 4. For each heavy spec that duplicates a unit file, leave the E2E in heavy

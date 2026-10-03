@@ -103,11 +103,47 @@ export function useTableColumns(
 
   useEffect(() => {
     const props = [...requiredProps, ...recommendedProps];
+    let cancelled = false;
 
-    Promise.all(props.map(prop => store.getProperty(prop))).then(newColumns => {
-      setAllColumns(newColumns);
-    });
-  }, [requiredProps, recommendedProps]);
+    // Settled, not all: `getProperty` throws for a property that will not
+    // load and for one missing a datatype, shortname or description, and
+    // `Promise.all` let any one of those discard every other column. The list
+    // then stayed empty for the life of the page, since this effect only
+    // re-runs when the class's own property lists change. What the user saw
+    // was a table with no columns, Filter and Toggle properties greyed out,
+    // and a kanban stuck on "Setting up the board…", with nothing said
+    // anywhere. Nineteen good columns are worth more than the one that broke.
+    void Promise.allSettled(props.map(prop => store.getProperty(prop))).then(
+      results => {
+        if (cancelled) return;
+
+        const failed = results
+          .map((result, index) =>
+            result.status === 'rejected'
+              ? `${props[index]}: ${result.reason}`
+              : undefined,
+          )
+          .filter(entry => entry !== undefined);
+
+        if (failed.length > 0) {
+          console.error(
+            `[table] ${failed.length} of ${props.length} columns could not be loaded and are missing from this table`,
+            failed,
+          );
+        }
+
+        setAllColumns(
+          results
+            .filter(result => result.status === 'fulfilled')
+            .map(result => result.value),
+        );
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requiredProps, recommendedProps, store]);
 
   // Visible, ordered columns: the view's `view-columns` order filtered to
   // properties that still exist on the class. Empty config → all class

@@ -59,9 +59,12 @@ export type AIMessageContext =
   | AISkillMessageContext;
 
 export type MessageMetadata = {
+  liveVoice?: boolean;
   userContext?: AIMessageContext[];
   serverContext?: string;
   inputTokensUsed?: number;
+  /** Input tokens of the last model step: the context size, not the summed spend. */
+  contextTokens?: number;
   outputTokensUsed?: number;
   error?: string;
   isSummary?: boolean;

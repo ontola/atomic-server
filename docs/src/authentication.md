@@ -125,6 +125,29 @@ headers.set('x-atomic-agent', agent?.subject);
 const response = await fetch(subject, {headers});
 ```
 
+### Version 2: signing the method and body
+
+A version 1 signature covers only the URL and the timestamp, and a server accepts it for five minutes (so it can serve as a cookie or a WebSocket `AUTH`). Anyone who captures a signed `POST` can resend it within that window with a different body.
+A version 2 signature also covers the method and the body. Send the same four headers, plus:
+
+- `x-atomic-signature-version: 2`
+
+and sign this string instead (lines joined with `\n`, no trailing newline):
+
+```text
+atomic-request-v2
+{METHOD, upper case}
+{full URL, including the query}
+{timestamp, the same value as x-atomic-timestamp}
+{lower-case hex SHA-256 of the raw body bytes; of zero bytes if there is no body}
+```
+
+In `@tomic/lib`: `signRequest(url, agent, headers, { method, body })`.
+In `atomic_lib`: `client::get_authentication_headers_v2(method, url, body, agent)`.
+Shared test vectors: `lib/src/authentication_v2_vectors.json`.
+
+A server that sees `x-atomic-signature-version: 2` checks only the version 2 message and never falls back to version 1. AtomicServer accepts version 2 on `/app-agent` and `/plugin-view-token`, and refuses it with a `401` on endpoints that do not yet check the body. Cookies and WebSocket `AUTH` are always version 1. The integration proxy accepts only version 2 (see ontola/atomic-plugins#54).
+
 ## Verifying an Authentication
 
 - If none of the `x-atomic` HTTP headers are present, the server assigns the [PublicAgent](https://atomicdata.dev/agents/publicAgent) to the request. This Agent represents any guest who is not signed in.

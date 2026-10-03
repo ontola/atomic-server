@@ -8,6 +8,8 @@ interface FollowingIndicatorProps extends DropdownTriggerProps {
   following: boolean;
   /** Hover/open chip. Only rendered while `following`. */
   label?: string;
+  /** Show the chip at all; the ring stays either way. */
+  chip?: boolean;
   title?: string;
   ariaLabel?: string;
   /**
@@ -27,6 +29,7 @@ interface FollowingIndicatorProps extends DropdownTriggerProps {
 export function FollowingIndicator({
   following,
   label = 'Following',
+  chip: showChip = true,
   title,
   ariaLabel,
   nativeButton = false,
@@ -37,12 +40,13 @@ export function FollowingIndicator({
   id,
   children,
 }: FollowingIndicatorProps): JSX.Element {
-  const revealed = following && isActive;
-  const chip = following ? (
-    <Clip>
-      <Label>{label}</Label>
-    </Clip>
-  ) : null;
+  const revealed = following && showChip && isActive;
+  const chip =
+    following && showChip ? (
+      <Clip>
+        <Label>{label}</Label>
+      </Clip>
+    ) : null;
 
   if (nativeButton) {
     return (
@@ -57,6 +61,7 @@ export function FollowingIndicator({
         title={following ? undefined : title}
         $following={following}
         $revealed={revealed}
+        $chip={showChip}
         onClick={onClick}
         ref={ref}
       >
@@ -78,6 +83,7 @@ export function FollowingIndicator({
       title={following ? undefined : title}
       $following={following}
       $revealed={revealed}
+      $chip={showChip}
       ref={ref as unknown as React.Ref<HTMLSpanElement>}
       onClick={e => {
         e.preventDefault();
@@ -129,7 +135,11 @@ const revealChip = css`
   }
 `;
 
-const Frame = styled.span<{ $following: boolean; $revealed: boolean }>`
+const Frame = styled.span<{
+  $following: boolean;
+  $revealed: boolean;
+  $chip: boolean;
+}>`
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -152,6 +162,7 @@ const Frame = styled.span<{ $following: boolean; $revealed: boolean }>`
 
   ${p =>
     p.$following &&
+    p.$chip &&
     css`
       &:hover,
       &:focus-visible {

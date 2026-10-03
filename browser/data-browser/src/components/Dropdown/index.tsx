@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
+import { readableColor } from 'polished';
 import { useClickAwayListener } from '../../hooks/useClickAwayListener';
 import { Button } from '../Button';
 import { DropdownTriggerComponent as DropdownTriggerComponent } from './DropdownTrigger';
@@ -67,9 +68,24 @@ interface DropdownMenuProps {
   isMainMenu?: boolean;
   /**
    * Renders a filter input at the top of the menu that narrows the items by
-   * label/keywords while keeping arrow+enter keyboard navigation.
+   * label/keywords while keeping arrow+enter keyboard navigation. On by default.
    */
   searchable?: boolean;
+  /**
+   * Placeholder and accessible name of the filter input. Defaults to "Filter
+   * actions"; name what the menu lists when it isn't actions (columns, say),
+   * so the input doesn't read as a general search box.
+   */
+  searchPlaceholder?: string;
+  searchLabel?: string;
+  /** Shown when the filter query matches nothing. */
+  noMatchText?: string;
+  /**
+   * An item to offer when the filter query matches nothing — for example
+   * "Search the drive for …" when someone typed a page name into a menu that
+   * can't find pages. Selectable with Enter like any other item.
+   */
+  noMatchItem?: (query: string) => MenuItemMinimial;
   bindActive?: (active: boolean) => void;
   /**
    * When set, positions the menu at this viewport point (a right-click / context
@@ -138,7 +154,7 @@ function normalizeItems(items: DropdownItem[]) {
  * clicking outside. Use arrow keys to select items, and open items on Enter.
  * Renders the Dropdown on a place where there is room on screen.
  */
-const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
+export const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
   item.label.toLowerCase().includes(query) ||
   (item.keywords ?? []).some(keyword => keyword.toLowerCase().includes(query));
 
@@ -146,7 +162,11 @@ export function DropdownMenu({
   items,
   Trigger,
   isMainMenu,
-  searchable,
+  searchable = true,
+  searchPlaceholder,
+  searchLabel,
+  noMatchText,
+  noMatchItem,
   bindActive = () => undefined,
   anchorPoint,
 }: DropdownMenuProps): JSX.Element {
@@ -191,9 +211,18 @@ export function DropdownMenu({
     return items.filter(item => isItem(item) && matchesQuery(item, search));
   }, [items, searchable, search]);
 
+  // A matching section header alone isn't a match: nothing to pick under it.
+  const noMatch =
+    searchable &&
+    !!search &&
+    !filteredItems.some(item => isItem(item) && !item.disabled && !item.header);
+
   const normalizedItems = useMemo(
-    () => normalizeItems(filteredItems),
-    [filteredItems],
+    () =>
+      noMatch && noMatchItem
+        ? [noMatchItem(query.trim())]
+        : normalizeItems(filteredItems),
+    [filteredItems, noMatch, noMatchItem, query],
   );
   const hasSelectable = normalizedItems.some(item => !shouldSkip(item));
 
@@ -207,6 +236,104 @@ export function DropdownMenu({
       : selectedIndex;
   // if the keyboard is used to navigate the menu items
   const [useKeys, setUseKeys] = useState(true);
+
+  const positionMenu = useCallback(() => {
+    const menu = dropdownRef.current;
+    const trigger = triggerRef.current;
+
+    if (!menu || !trigger) return;
+
+    const dialog = menu.closest('dialog');
+    const viewport = window.visualViewport;
+    const visibleTop = viewport?.scale === 1 ? viewport.offsetTop : 0;
+    const visibleHeight =
+      viewport?.scale === 1 ? viewport.height : window.innerHeight;
+    const visibleBottom = visibleTop + visibleHeight;
+
+    // Keyboard animation resizes the visual viewport without necessarily
+    // changing CSS viewport units. Keep the menu scrollable inside that area.
+    if (!dialog) {
+      menu.style.maxHeight = `${Math.max(0, Math.min(window.innerHeight * 0.8, visibleHeight - 16))}px`;
+    }
+
+    const menuRect = menu.getBoundingClientRect();
+
+    if (anchorPoint) {
+      const left =
+        anchorPoint.x + menuRect.width > window.innerWidth
+          ? anchorPoint.x - menuRect.width
+          : anchorPoint.x;
+      const preferredTop =
+        anchorPoint.y + menuRect.height > visibleBottom
+          ? anchorPoint.y - menuRect.height
+          : anchorPoint.y;
+
+      menu.style.left = `${Math.max(0, left)}px`;
+      menu.style.top = `${Math.max(visibleTop + 8, Math.min(preferredTop, visibleBottom - menuRect.height - 8))}px`;
+
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+
+    if (dialog) {
+      const dialogRect = dialog.getBoundingClientRect();
+      const relativeTop = triggerRect.y - dialogRect.y;
+      const relativeLeft = triggerRect.x - dialogRect.x;
+      const topPos = relativeTop - menuRect.height;
+
+      menu.style.top = `${topPos < 0 ? relativeTop + triggerRect.height : topPos}px`;
+
+      const leftPos = relativeLeft - menuRect.width;
+      menu.style.left = `${leftPos < 0 ? relativeLeft : relativeLeft - menuRect.width + triggerRect.width}px`;
+
+      return;
+    }
+
+    // Prefer above the trigger; clamp to the visible viewport if the keyboard
+    // has covered the trigger or reduced the available space.
+    const above = triggerRect.y - menuRect.height - MENU_TRIGGER_GAP;
+    const preferredTop =
+      above < visibleTop ? triggerRect.bottom + MENU_TRIGGER_GAP : above;
+    menu.style.top = `${Math.max(visibleTop + 8, Math.min(preferredTop, visibleBottom - menuRect.height - 8))}px`;
+
+    const leftPos = triggerRect.x - menuRect.width;
+    menu.style.left = `${leftPos < 0 ? triggerRect.x : triggerRect.x - menuRect.width + triggerRect.width}px`;
+  }, [anchorPoint]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    let frame = 0;
+
+    const schedulePosition = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(positionMenu);
+    };
+
+    const viewport = window.visualViewport;
+    // Absent in jsdom and very old browsers; the viewport and scroll
+    // listeners below still keep the menu in place there.
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(schedulePosition);
+
+    if (dropdownRef.current) observer?.observe(dropdownRef.current);
+    viewport?.addEventListener('resize', schedulePosition);
+    viewport?.addEventListener('scroll', schedulePosition);
+    window.addEventListener('resize', schedulePosition);
+    window.addEventListener('scroll', schedulePosition, true);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      viewport?.removeEventListener('resize', schedulePosition);
+      viewport?.removeEventListener('scroll', schedulePosition);
+      window.removeEventListener('resize', schedulePosition);
+      window.removeEventListener('scroll', schedulePosition, true);
+    };
+  }, [isActive, positionMenu]);
 
   const handleToggle = useCallback(() => {
     if (isActive) {
@@ -223,7 +350,14 @@ export function DropdownMenu({
         return;
       }
 
-      const menuRect = dropdownRef.current.getBoundingClientRect();
+      positionMenu();
+
+      // Typing in the filter changes which items show. Keep the width the menu
+      // was positioned with, so a longer item (the no-match fallback, say)
+      // wraps instead of pushing the menu past the viewport edge.
+      if (searchable) {
+        dropdownRef.current.style.width = `${dropdownRef.current.getBoundingClientRect().width}px`;
+      }
 
       // The menu is positioned while visibility:hidden, so the entrance
       // transition must start AFTER it becomes visible — one frame later —
@@ -246,80 +380,9 @@ export function DropdownMenu({
         });
       };
 
-      // A right-click / context menu: position at the cursor point with the
-      // usual convention (below-right, flipping left/up when it would overflow
-      // the viewport, clamped to stay on-screen).
-      if (anchorPoint) {
-        const left =
-          anchorPoint.x + menuRect.width > window.innerWidth
-            ? anchorPoint.x - menuRect.width
-            : anchorPoint.x;
-        const top =
-          anchorPoint.y + menuRect.height > window.innerHeight
-            ? anchorPoint.y - menuRect.height
-            : anchorPoint.y;
-
-        dropdownRef.current.style.left = `${Math.max(0, left)}px`;
-        dropdownRef.current.style.top = `${Math.max(0, top)}px`;
-        reveal();
-
-        return;
-      }
-
-      const triggerRect = triggerRef.current.getBoundingClientRect();
-
-      // Check if we're inside a dialog
-      const dialog = dropdownRef.current.closest('dialog');
-
-      // TODO: Use CSS anchor positioning instead.
-      if (dialog) {
-        // For dialogs, use absolute positioning relative to the dialog
-        const dialogRect = dialog.getBoundingClientRect();
-        const relativeTop = triggerRect.y - dialogRect.y;
-        const relativeLeft = triggerRect.x - dialogRect.x;
-
-        const topPos = relativeTop - menuRect.height;
-
-        // If the top is outside of the dialog, render it below
-        if (topPos < 0) {
-          dropdownRef.current.style.top = `${relativeTop + triggerRect.height}px`;
-        } else {
-          dropdownRef.current.style.top = `${topPos}px`;
-        }
-
-        const leftPos = relativeLeft - menuRect.width;
-
-        // If the left is outside of the dialog, render it to the right
-        if (leftPos < 0) {
-          dropdownRef.current.style.left = `${relativeLeft}px`;
-        } else {
-          dropdownRef.current.style.left = `${relativeLeft - menuRect.width + triggerRect.width}px`;
-        }
-      } else {
-        // Prefer opening above the trigger, below when there's no room. A
-        // small gap instead of overlapping the trigger — covering it half-way
-        // made it unclickable for toggling the menu closed.
-        const topPos = triggerRect.y - menuRect.height - MENU_TRIGGER_GAP;
-
-        if (topPos < 0) {
-          dropdownRef.current.style.top = `${triggerRect.bottom + MENU_TRIGGER_GAP}px`;
-        } else {
-          dropdownRef.current.style.top = `${topPos}px`;
-        }
-
-        const leftPos = triggerRect.x - menuRect.width;
-
-        // If the left is outside of the screen, render it to the right
-        if (leftPos < 0) {
-          dropdownRef.current.style.left = `${triggerRect.x}px`;
-        } else {
-          dropdownRef.current.style.left = `${triggerRect.x - menuRect.width + triggerRect.width}px`;
-        }
-      }
-
       reveal();
     });
-  }, [isActive, setIsActive, anchorPoint, searchable]);
+  }, [isActive, handleClose, setIsActive, positionMenu, searchable]);
 
   const handleMouseOverMenu = useCallback(() => {
     setUseKeys(false);
@@ -350,7 +413,13 @@ export function DropdownMenu({
       handleToggle();
       setUseKeys(true);
     },
-    { enabled: !!isMainMenu },
+    // Also while typing: Cmd/Ctrl+M means nothing to a text field, and left to
+    // the browser it minimized the window on a Mac mid-sentence in a document.
+    {
+      enabled: !!isMainMenu,
+      enableOnContentEditable: true,
+      enableOnFormTags: ['INPUT', 'TEXTAREA', 'SELECT'],
+    },
     [isActive],
   );
 
@@ -464,8 +533,8 @@ export function DropdownMenu({
                 <SearchInput
                   ref={searchInputRef}
                   type='text'
-                  placeholder='Filter actions…'
-                  aria-label='Filter actions'
+                  placeholder={searchPlaceholder ?? 'Filter actions…'}
+                  aria-label={searchLabel ?? 'Filter actions'}
                   value={query}
                   onChange={e => {
                     setQuery(e.target.value);
@@ -475,8 +544,8 @@ export function DropdownMenu({
                 />
               </SearchInputWrapper>
             )}
-            {searchable && search && !hasSelectable && (
-              <NoResults>No matching actions</NoResults>
+            {noMatch && (
+              <NoResults>{noMatchText ?? 'No matching actions'}</NoResults>
             )}
             {normalizedItems.map((props, i) => {
               if (!isItem(props)) {
@@ -648,11 +717,17 @@ interface MenuItemStyledProps {
 }
 
 const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
+  --menu-highlight-bg: ${p =>
+    p.theme.colorful ? p.theme.colors.main : p.theme.colors.mainSelectedBg};
+  --menu-highlight-fg: ${p =>
+    p.theme.colorful
+      ? readableColor(p.theme.colors.main)
+      : p.theme.colors.mainSelectedFg};
   /* Transparent so the menu's frosted surface shows through. */
   --menu-item-bg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedBg : 'transparent'};
+    p.selected ? 'var(--menu-highlight-bg)' : 'transparent'};
   --menu-item-fg: ${p =>
-    p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
+    p.selected ? 'var(--menu-highlight-fg)' : p.theme.colors.text};
   align-items: center;
   display: flex;
   gap: 0.5rem;
@@ -668,9 +743,10 @@ const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
     color: var(--menu-item-fg);
   }
 
-  &:hover {
-    --menu-item-bg: ${p => p.theme.colors.mainSelectedBg};
-    --menu-item-fg: ${p => p.theme.colors.mainSelectedFg};
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    --menu-item-bg: var(--menu-highlight-bg);
+    --menu-item-fg: var(--menu-highlight-fg);
 
     @media (prefers-contrast: more) {
       --menu-item-bg: ${p => (p.theme.darkMode ? 'white' : 'black')};
@@ -696,10 +772,17 @@ const ItemDivider = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
 `;
 
+/* Pinned while the list under it scrolls. */
 const SearchInputWrapper = styled.div`
-  padding: 0 0.5rem 0.4rem 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.4rem 0.5rem;
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   margin-bottom: 0.4rem;
+  /* Opaque: the menu's own surface is translucent, and the rows scrolling
+     under the filter must not show through it. */
+  background: ${p => p.theme.colors.bgBody};
 `;
 
 const SearchInput = styled.input`
@@ -728,9 +811,13 @@ const Menu = styled.div<{
   visibility: hidden;
   font-size: 0.9rem;
   overflow: auto;
-  max-height: 80vh;
+  /* A searchable menu lists everything (the resource's actions and the app's
+     places), so it scrolls within a height that leaves the page visible. */
+  max-height: ${p => (p.searchable ? 'min(60vh, 32rem)' : '80vh')};
   ${floatingSurface}
-  padding-top: 0.4rem;
+  /* A searchable menu's pinned filter supplies the top spacing itself, so
+     rows scrolling up disappear under it instead of into a gap above it. */
+  padding-top: ${p => (p.searchable ? '0' : '0.4rem')};
   padding-bottom: 0.4rem;
   /* Focused programmatically on open for keyboard nav; items show selection. */
   outline: none;

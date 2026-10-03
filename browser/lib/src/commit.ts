@@ -2,13 +2,12 @@ import stringify from 'fast-json-stable-stringify';
 // https://github.com/paulmillr/noble-ed25519/issues/38
 
 import { Client } from './client.js';
-import { Resource } from './resource.js';
-import type { Store } from './store.js';
 import { type JSONValue, type JSONArray } from './value.js';
 import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import type { Agent } from './agent.js';
+import { identifierKind } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 
 /** A {@link Commit} without its signature, signer and timestamp */
@@ -37,12 +36,8 @@ export interface CommitBuilderI {
 }
 
 interface CommitBuilderBase {
-  set?: Map<string, JSONValue>;
-  push?: Map<string, Set<JSONValue>>;
   loroUpdate?: Uint8Array;
-  remove?: Set<string>;
   destroy?: boolean;
-  previousCommit?: string;
   isGenesis?: boolean;
 }
 
@@ -54,7 +49,7 @@ type JSONADObject = Record<string, JSONValue>;
 export function commitIdOf(commit: Commit): string | undefined {
   return (
     (commit.id as string | undefined) ??
-    (commit.signature ? `did:ad:commit:${commit.signature}` : undefined)
+    (commit.signature ? `atomic:commit:${commit.signature}` : undefined)
   );
 }
 
@@ -72,7 +67,7 @@ export function commitIdOf(commit: Commit): string | undefined {
  * a folder named "commits" is not mistaken for one.
  */
 export function isCommitSubject(subject: string): boolean {
-  if (subject.startsWith('did:ad:commit:')) return true;
+  if (identifierKind(subject) === 'commit') return true;
 
   if (!subject.startsWith('http://') && !subject.startsWith('https://')) {
     return false;
@@ -85,8 +80,57 @@ export function isCommitSubject(subject: string): boolean {
   }
 }
 
+/**
+ * How far the server's clock is ahead of this device's, in ms. Learned from a
+ * rejection (see {@link learnServerClock}); zero until then.
+ */
+let serverClockOffsetMs = 0;
+
+/** A device clock this far off is broken, not skewed; don't follow it. */
+const MAX_CLOCK_OFFSET_MS = 24 * 60 * 60 * 1000;
+
+const FUTURE_TIMESTAMP_REJECTION = /Timestamp now: (\d+) CreatedAt is: \d+/;
+
+/** Timestamp for signing commits and authentication, in the server's time. */
 export function getTimestampNow(): number {
-  return Math.round(new Date().getTime());
+  return Math.round(Date.now() + serverClockOffsetMs);
+}
+
+/**
+ * Adopts the server's clock from a "timestamp must lie in the past" refusal.
+ *
+ * The server accepts a timestamp at most 10 s ahead of its own clock, so a
+ * device whose clock runs ahead by more than that had every commit and every
+ * authentication refused, and nothing it did could ever sync. The refusal
+ * carries the server's time, so later signatures use that instead. Returns
+ * whether the message was such a refusal.
+ */
+export function learnServerClock(message: string): boolean {
+  const match = FUTURE_TIMESTAMP_REJECTION.exec(message);
+
+  if (!match) return false;
+
+  const offset = Number(match[1]) - Date.now();
+
+  if (!Number.isFinite(offset) || Math.abs(offset) > MAX_CLOCK_OFFSET_MS) {
+    return false;
+  }
+
+  serverClockOffsetMs = offset;
+
+  return true;
+}
+
+/** Whether an error is the server refusing a timestamp from the future. */
+export function isFutureTimestampRefusal(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return FUTURE_TIMESTAMP_REJECTION.test(message);
+}
+
+/** Forget a learned offset. For tests. */
+export function resetServerClock(): void {
+  serverClockOffsetMs = 0;
 }
 
 /** A {@link Commit} without its signature, signer and timestamp */
@@ -94,23 +138,15 @@ export class CommitBuilder {
   // WARNING
   // If you add stuff here, add it to `.clone()!` too!
   private _subject: string;
-  private _set: Map<string, JSONValue>;
-  private _push: Map<string, Set<JSONValue>>;
   private _loroUpdate?: Uint8Array;
-  private _remove: Set<string>;
   private _destroy?: boolean;
-  private _previousCommit?: string;
   private _isGenesis?: boolean;
 
   /** Removes any query parameters from the Subject */
   public constructor(subject: string, base: CommitBuilderBase = {}) {
     this._subject = Client.removeQueryParamsFromURL(subject);
-    this._set = base.set ?? new Map();
-    this._push = base.push ?? new Map();
     this._loroUpdate = base.loroUpdate;
-    this._remove = base.remove ?? new Set();
     this._destroy = base.destroy;
-    this._previousCommit = base.previousCommit;
     this._isGenesis = base.isGenesis;
   }
 
@@ -118,28 +154,12 @@ export class CommitBuilder {
     return this._subject;
   }
 
-  public get set() {
-    return this._set;
-  }
-
-  public get push() {
-    return this._push;
-  }
-
   public get loroUpdate() {
     return this._loroUpdate;
   }
 
-  public get remove() {
-    return this._remove;
-  }
-
   public get destroy() {
     return this._destroy;
-  }
-
-  public get previousCommit() {
-    return this._previousCommit;
   }
 
   public get isGenesis() {
@@ -155,15 +175,6 @@ export class CommitBuilder {
 
   public setDestroy(destroy: boolean): CommitBuilder {
     this._destroy = destroy;
-
-    return this;
-  }
-
-  /**
-   * Optional audit pointer at an earlier envelope. Not a causal gate.
-   */
-  public setPreviousCommit(prev: string): CommitBuilder {
-    this._previousCommit = prev;
 
     return this;
   }
@@ -188,15 +199,9 @@ export class CommitBuilder {
     return this.signAt(agent, getTimestampNow());
   }
 
-  /** Returns true if the CommitBuilder has non-empty changes (set, remove, destroy) */
+  /** Returns true if the CommitBuilder has non-empty changes (loroUpdate, destroy) */
   public hasUnsavedChanges(): boolean {
-    return (
-      this.set.size > 0 ||
-      this.push.size > 0 ||
-      this.destroy ||
-      this.remove.size > 0 ||
-      this.loroUpdate !== undefined
-    );
+    return !!this.destroy || this.loroUpdate !== undefined;
   }
 
   /**
@@ -207,12 +212,8 @@ export class CommitBuilder {
   // Warning: I'm not sure whether this actually solves the issue. Might be a good idea to remove this.
   public clone(): CommitBuilder {
     const base = {
-      set: this.set,
-      push: this.push,
       loroUpdate: this.loroUpdate,
-      remove: this.remove,
       destroy: this.destroy,
-      previousCommit: this.previousCommit,
       isGenesis: this.isGenesis,
     };
 
@@ -222,13 +223,7 @@ export class CommitBuilder {
   public toPlainObject(): CommitBuilderI {
     return {
       subject: this.subject,
-      set: Object.fromEntries(this.set.entries()),
-      push: Object.fromEntries(
-        Array.from(this.push.entries()).map(([k, v]) => [k, Array.from(v)]),
-      ),
-      remove: Array.from(this.remove),
       destroy: this.destroy,
-      previousCommit: this.previousCommit,
       isGenesis: this.isGenesis,
       loroUpdate: this.loroUpdate,
     };
@@ -285,7 +280,7 @@ export class CommitBuilder {
       commitPreSigned.subject === 'did:ad:genesis';
 
     if (isExplicitGenesis && subjectIsPlaceholder) {
-      subject = `did:ad:${signature}`;
+      subject = `atomic:${signature}`;
     }
 
     const commitPostSigned: Commit = {
@@ -490,63 +485,6 @@ export function parseCommitJSON(str: string): Commit {
   }
 }
 
-/** Applies a commit, but does not modify the store */
-export function applyCommitToResource(
-  resource: Resource,
-  commit: Commit,
-): Resource {
-  const { destroy, loroUpdate } = commit;
-
-  if (loroUpdate) {
-    execLoroUpdateCommit(loroUpdate, resource);
-  }
-
-  if (destroy) {
-    resource.clearUnsafe();
-  }
-
-  return resource;
-}
-
-/** Parses a JSON-AD Commit, applies it and adds it (and nested resources) to the store. */
-export function parseAndApplyCommit(jsonAdObjStr: string, store: Store) {
-  const commit = parseCommitJSON(jsonAdObjStr);
-  const { subject, id, destroy, signature } = commit;
-
-  let resource = store.resources.get(subject) as Resource;
-
-  // If the resource doesn't exist in the store, create the resource
-  if (!resource) {
-    resource = new Resource(subject);
-  } else {
-    // Commit has already been applied here, ignore the commit
-    if (resource.appliedCommitSignatures.has(signature)) {
-      return;
-    }
-  }
-
-  resource = applyCommitToResource(resource, commit);
-
-  if (id) {
-    // This is something that the server does, too.
-    resource.setLastCommitValue(id);
-  }
-
-  if (destroy) {
-    store.removeResource(subject);
-
-    return;
-  } else {
-    resource.appliedCommitSignatures.add(signature);
-
-    store.applyIncoming({
-      subject: resource.subject,
-      resource,
-      source: 'ws-sub-push',
-    });
-  }
-}
-
 function parseLoroUpdateValue(value: JSONValue): Uint8Array | undefined {
   if (value === undefined) {
     return undefined;
@@ -559,12 +497,4 @@ function parseLoroUpdateValue(value: JSONValue): Uint8Array | undefined {
   throw new Error(
     `Invalid loroUpdate value, expected base64 string: ${JSON.stringify(value)}`,
   );
-}
-
-/**
- * Imports a Loro CRDT update into the resource's LoroDoc and materializes
- * the changed properties into the resource's propvals so the UI updates.
- */
-function execLoroUpdateCommit(loroUpdate: Uint8Array, resource: Resource) {
-  resource.importLoroUpdate(loroUpdate);
 }

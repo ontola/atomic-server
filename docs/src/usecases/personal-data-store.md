@@ -9,10 +9,13 @@ More and more of our personal information is stored by large corporations who us
 And as cloud consumers, we often don't have the luxury of moving our personal data to a place to where we want it to be.
 Many services don't even provide export functionality, and even if they do, the exports often lack information or are not interoperable with other apps.
 
-Atomic Data could help to re-introduce data ownership.
+Atomic Data re-introduces data ownership.
 Because the specification helps to standardize information, it becomes easier to make data interoperable.
-And even more important: Apps don't need their own back-end - they can use the same personal data store: an Atomic Server (such as [this one](https://github.com/atomicdata-dev/atomic-serverob/master/server/README.md)).
+And even more important: apps don't need their own back-end. They can use the same personal data store.
 
-Realizing this goal requires quite a bit of work, though.
-This specification needs to mature, and we need reliable implementations.
-We also need proper tutorials, libraries and tools that convince developers to use atomic data to power their applications.
+That store is no longer a server you have to run.
+In the [local-first](../local-first.md) model your personal data store is the device in your hand: an encrypted database owned by your key, with every edit signed by you.
+An always-on [AtomicServer](../atomic-server.md), self-hosted or on Atomic Cloud, is a replica of it that stays reachable while your devices sleep and that a browser can talk to.
+Any number of apps, on any of your devices, read and write the same Drives and [sync](../sync.md) with each other.
+
+What still needs work is the developer side: tutorials, published SDKs for every platform, and the ecosystem of apps that makes a shared personal store worth having.

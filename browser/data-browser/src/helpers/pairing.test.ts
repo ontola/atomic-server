@@ -249,6 +249,6 @@ describe('runPairing', () => {
 
     expect(result.ok).toBe(false);
     // The peer is recorded even though the sync failed, so retrying is a tap.
-    expect(readKnownPeers()[0].nodeId).toBe(NODE);
+    expect(readKnownPeers()[0].nodeId).toBe(`atomic:node:${'a'.repeat(64)}`);
   });
 });

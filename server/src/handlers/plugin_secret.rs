@@ -29,7 +29,7 @@ pub struct SetSecretBody {
     pub plugin: String,
     pub name: String,
     pub value: String,
-    /// Exact origins, e.g. `https://api.notion.com`.
+    /// Exact origins, e.g. `https://api.example.com`.
     pub origins: Vec<String>,
 }
 
@@ -226,12 +226,12 @@ mod tests {
     #[test]
     fn an_origin_keeps_scheme_host_and_port_and_nothing_else() {
         assert_eq!(
-            normalize_origin("https://api.notion.com/v1/databases").unwrap(),
-            "https://api.notion.com",
+            normalize_origin("https://api.example.com/v1/databases").unwrap(),
+            "https://api.example.com",
         );
         assert_eq!(
-            normalize_origin("https://api.notion.com/").unwrap(),
-            "https://api.notion.com",
+            normalize_origin("https://api.example.com/").unwrap(),
+            "https://api.example.com",
         );
         assert_eq!(
             normalize_origin("http://localhost:9883").unwrap(),

@@ -62,10 +62,14 @@ impl Drop for OpfsBackend {
 /// Callers use this to degrade to server-only mode with one plain sentence,
 /// instead of surfacing a wasm stack trace on every page load for a condition
 /// the user may well have chosen deliberately.
+///
+/// `NoModificationAllowedError` is Firefox's report of that same conflict, and
+/// is treated the same way for the same reason.
 pub fn is_storage_blocked_error(error: &str) -> bool {
     error.contains("SecurityError")
         || error.contains("NotAllowedError")
         || error.contains("UnknownError")
+        || error.contains("NoModificationAllowedError")
 }
 
 /// The OPFS root directory of this origin.

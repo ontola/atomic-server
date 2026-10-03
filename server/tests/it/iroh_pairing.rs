@@ -7,7 +7,7 @@
 //! /iroh-sync` — the endpoint every browser pairing flow depends on — and
 //! neither represents the desktop-to-desktop pair a user actually has.
 //!
-//! Separate processes are not optional here. `iroh_transport` keeps its router
+//! Separate processes are not optional here. `atomic_lib::sync::peer` keeps its router
 //! and node identity in process globals, so servers sharing a process also
 //! share one Iroh node: "pairing" would be a node dialling itself, and every
 //! co-resident server would advertise the same node id regardless of whose
@@ -96,12 +96,12 @@ impl Drop for PeerServer {
     }
 }
 
-/// Fetch a subject from a server as an anonymous reader. `did:ad:` subjects are
-/// not path segments — they are resolved through `/did?subject=`.
+/// Fetch a subject from a server as an anonymous reader. Identifiers are
+/// not path segments — they are resolved through `/resource?subject=`.
 async fn get_subject_anonymously(base_url: &str, subject: &str) -> reqwest::Response {
     reqwest::Client::new()
         .get(format!(
-            "{base_url}/did?subject={}",
+            "{base_url}/resource?subject={}",
             urlencoding::encode(subject)
         ))
         .header("Accept", "application/ad+json")
@@ -237,7 +237,7 @@ async fn post_iroh_sync(
 /// because a user pasted a pairing code.
 #[tokio::test]
 async fn a_public_drive_reconciles_between_two_servers_over_iroh() {
-    // Both servers are subprocesses, and this process runs none. `iroh_transport`
+    // Both servers are subprocesses, and this process runs none. `atomic_lib::sync::peer`
     // holds the router and node identity in globals, so every server sharing a
     // process also shares one node id — meaning a co-resident server from
     // another test in this suite could be the one A's `/server` advertises,
@@ -281,8 +281,8 @@ async fn a_public_drive_reconciles_between_two_servers_over_iroh() {
 
     let node_a = await_node_id(&url_a).await;
     assert!(
-        node_a.starts_with("did:ad:node:"),
-        "a pairing code carries a node DID, got {node_a}"
+        atomic_lib::identifiers::is_node_id(&node_a),
+        "a pairing code carries a node identifier, got {node_a}"
     );
 
     // A peer is handed only what the requester may read, so pairing before the

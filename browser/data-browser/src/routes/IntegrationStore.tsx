@@ -1,12 +1,14 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
-import { LocalThoughtCatalog } from '../chunks/PluginRuns/LocalThoughtCatalog';
-import { LocalThoughtCallback } from '../chunks/PluginRuns/localThoughtCallback';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
-import {
-  IntegrationDiscovery,
-  visibleBundledIntegrations,
-} from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
+import {
+  CatalogApps,
+  visibleCatalogApps,
+} from '../chunks/PluginRuns/CatalogApps';
+import {
+  hasExperimentalEntries,
+  useIntegrationCatalog,
+} from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -45,7 +47,6 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import type { IntegrationVisibilityKey } from '@helpers/integrationVisibility';
 
 /** One entry of `/plugin-catalog`: a public Listing resource on this server. */
 interface Listing {
@@ -75,16 +76,17 @@ export const IntegrationStoreRoute = createRoute({
 });
 
 function IntegrationStore(): React.JSX.Element {
-  const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
+  // Opened from a workspace: new automations can belong to it.
+  const { workspace } = IntegrationStoreRoute.useSearch();
+  const { showExperimentalPlugins, showApiPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
-    showApiPlugins,
-    showExperimentalPlugins,
-    ready: visibilityReady,
-    saving: visibilitySaving,
-    setVisibility,
-  } = useIntegrationVisibility();
+    entries: catalogEntries,
+    ready: catalogReady,
+    error: catalogEntriesError,
+  } = useIntegrationCatalog();
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
@@ -277,20 +279,21 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   const query = search.trim().toLocaleLowerCase();
-  const bundled = visibleBundledIntegrations(
-    showExperimentalPlugins,
-    showApiPlugins,
-  ).filter(entry =>
-    `${entry.name} ${entry.description} ${entry.capabilities} ${entry.events} ${entry.keywords}`
-      .toLocaleLowerCase()
-      .includes(query),
-  );
+  // Only offer the toggle when the catalog has something behind it: a checkbox
+  // that reveals nothing reads as broken.
+  const hasExperimentalPlugins = hasExperimentalEntries(catalogEntries);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')
       .toLocaleLowerCase()
       .includes(query),
   );
+  const appsShown = visibleCatalogApps(catalogEntries, {
+    query,
+    showExperimental: showExperimentalPlugins,
+    showApi: showApiPlugins,
+  }).length;
+  const nothingToDiscover = catalogReady && !visible?.length && !appsShown;
 
   return (
     <Main>
@@ -329,7 +332,11 @@ function IntegrationStore(): React.JSX.Element {
             <section aria-label='Your automations'>
               <Row center justify='space-between'>
                 <h2>Your automations</h2>
-                <NewAutomation drive={drive} connections={installed} />
+                <NewAutomation
+                  drive={drive}
+                  connections={installed}
+                  workspace={workspace}
+                />
               </Row>
               {automations.length === 0 && <AutomationEmptyState />}
               <Grid>
@@ -342,7 +349,6 @@ function IntegrationStore(): React.JSX.Element {
             </section>
           )}
           <h2>Discover integrations</h2>
-          <LocalThoughtCallback drive={drive} />
           <Input
             aria-label='Search integrations'
             placeholder='Search integrations, domains or standards'
@@ -350,43 +356,39 @@ function IntegrationStore(): React.JSX.Element {
             onChange={event => setSearch(event.target.value)}
           />
           {error && <Card role='alert'>{error}</Card>}
+          {catalogEntriesError && (
+            <Card role='alert'>{catalogEntriesError}</Card>
+          )}
+          {!catalogReady && !catalogEntriesError && (
+            <p>Loading integrations…</p>
+          )}
           {showExperimentalPlugins && catalogError && (
             <Card role='alert'>{catalogError}</Card>
           )}
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {!showApiPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-api-plugins'
-              label='Show API plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
-          {!showExperimentalPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-experimental-plugins'
-              label='Show experimental plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
-          <Grid>
-            {showApiPlugins && (
-              <LocalThoughtCatalog drive={drive} search={search} />
-            )}
-            {bundled.map(entry => (
-              <IntegrationDiscovery
-                key={entry.id}
-                entry={entry}
-                workspace={workspace}
-                drive={drive}
+          {hasExperimentalPlugins && (
+            <CheckboxLabel>
+              <Checkbox
+                checked={showExperimentalPlugins}
+                onChange={value =>
+                  setVisibility('show-experimental-plugins', value)
+                }
               />
-            ))}
-          </Grid>
+              Show experimental plugins
+            </CheckboxLabel>
+          )}
+          {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
+          {drive && (
+            <CatalogApps
+              entries={catalogEntries}
+              drive={drive}
+              query={query}
+              showExperimental={showExperimentalPlugins}
+              showApi={showApiPlugins}
+            />
+          )}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
@@ -532,32 +534,12 @@ function AutomationEmptyState() {
   );
 }
 
-interface PluginVisibilityToggleProps {
-  pluginKey: IntegrationVisibilityKey;
-  label: string;
-  ready: boolean;
-  saving: boolean;
-  setVisibility: (
-    key: IntegrationVisibilityKey,
-    value: boolean,
-  ) => Promise<void>;
-}
-
-function PluginVisibilityToggle({
-  pluginKey,
-  label,
-  ready,
-  saving,
-  setVisibility,
-}: PluginVisibilityToggleProps) {
+function DiscoverEmptyState({ searching }: { searching: boolean }) {
   return (
-    <CheckboxLabel>
-      <Checkbox
-        checked={false}
-        disabled={!ready || saving}
-        onChange={value => void setVisibility(pluginKey, value)}
-      />
-      {label}
-    </CheckboxLabel>
+    <p>
+      {searching
+        ? 'No integrations match your search.'
+        : 'No plugins to show here.'}
+    </p>
   );
 }

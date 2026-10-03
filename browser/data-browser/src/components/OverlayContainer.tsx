@@ -3,7 +3,12 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { displayShortcut, shortcuts } from '../actions/shortcuts';
 import { listShortcutHelp } from '../actions/catalog';
-import { matchActionsForPalette } from '../actions/matchActions';
+import {
+  matchActionsForPalette,
+  PALETTE_MIN_QUERY_LENGTH,
+} from '../actions/matchActions';
+import { useAppMenuItems } from '../actions/appMenuItems';
+import { isItem, matchesQuery, type MenuItemMinimial } from './Dropdown';
 import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
@@ -53,8 +58,11 @@ import {
   openShortcutsOverlay,
   setOverlay,
   subscribeOverlay,
+  pendingSearchOverlayQuery,
+  pendingSearchOverlayScope,
   type OverlayType,
 } from './overlayState';
+import { getRecentResources } from '../helpers/recentResources';
 import { useDocumentText } from '../hooks/useDocumentText';
 import { getSearchResultHint } from '../helpers/searchResultHint';
 
@@ -323,6 +331,7 @@ function parseSearchTags(
 
 type PaletteRow =
   | { kind: 'action'; action: ActionDefinition }
+  | { kind: 'place'; item: MenuItemMinimial }
   | { kind: 'result'; subject: string }
   | { kind: 'aiChat' };
 
@@ -330,7 +339,14 @@ function SearchOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { drive } = useSettings();
   const { privateDrive } = usePrivateDrive();
-  const { scope } = useQueryScopeHandler();
+  const { scope: urlScope } = useQueryScopeHandler();
+  // "Search children" opens this palette limited to one resource; the chip
+  // under the input shows that and can lift it.
+  const [scopeOverride, setScopeOverride] = useState<string | null>(
+    () => pendingSearchOverlayScope() ?? null,
+  );
+  const scope = scopeOverride ?? urlScope;
+  const scopeResource = useResource(scope || undefined);
   const navigate = useNavigateWithTransition();
   const store = useStore();
   const [currentSubject] = useCurrentSubject();
@@ -370,7 +386,7 @@ function SearchOverlay(): JSX.Element {
 
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(pendingSearchOverlayQuery);
   const [selectedIndex, setSelected] = useState(0);
 
   const { searchQuery, tagSubjects } = useMemo(
@@ -393,13 +409,38 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
+  // Nothing typed yet: offer what was opened recently, most recent first,
+  // minus the page already open.
+  const showRecent = !query.trim() && filterIsEmpty && !scope;
+  const listed = showRecent
+    ? getRecentResources(drive)
+        .filter(subject => subject !== currentSubject)
+        .slice(0, 8)
+    : results;
+
   const actionHits = currentSubject
     ? matchActionsForPalette(query, resourceActions, actionCtx)
     : [];
+  // The app's own places and starts (Settings, Switch drive, New resource…),
+  // the same ones the More menu lists, so Cmd+K reaches them from any page.
+  const appMenu = useAppMenuItems();
+  const placeNeedle = query.trim().toLowerCase();
+  const placeHits =
+    placeNeedle.length >= PALETTE_MIN_QUERY_LENGTH
+      ? [...appMenu.create, ...appMenu.find].filter(
+          (item): item is MenuItemMinimial =>
+            isItem(item) &&
+            !item.header &&
+            !item.disabled &&
+            matchesQuery(item, placeNeedle),
+        )
+      : [];
+  const commandCount = actionHits.length + placeHits.length;
   const showAIChatRow = !!privateDrive && query && results.length === 0;
   const rows: PaletteRow[] = [
     ...actionHits.map(action => ({ kind: 'action' as const, action })),
-    ...results.map(subject => ({ kind: 'result' as const, subject })),
+    ...placeHits.map(item => ({ kind: 'place' as const, item })),
+    ...listed.map(subject => ({ kind: 'result' as const, subject })),
     ...(showAIChatRow ? [{ kind: 'aiChat' as const }] : []),
   ];
   const totalItemCount = rows.length;
@@ -429,6 +470,13 @@ function SearchOverlay(): JSX.Element {
 
       runAction(row.action, actionCtx);
       closeOverlay();
+
+      return;
+    }
+
+    if (row.kind === 'place') {
+      closeOverlay();
+      row.item.onClick();
 
       return;
     }
@@ -498,14 +546,13 @@ function SearchOverlay(): JSX.Element {
   // Sync results + index to module state for the preview. Actions are not
   // previewed — an action at selectedIndex 0 must not show results[0].
   useEffect(() => {
-    const actionCount = actionHits.length;
     const resultIndex =
-      selectedIndex >= actionCount &&
-      selectedIndex < actionCount + results.length
-        ? selectedIndex - actionCount
+      selectedIndex >= commandCount &&
+      selectedIndex < commandCount + listed.length
+        ? selectedIndex - commandCount
         : -1;
-    setSearchResults(results, resultIndex);
-  }, [results, selectedIndex, actionHits.length]);
+    setSearchResults(listed, resultIndex);
+  }, [listed, selectedIndex, commandCount]);
 
   return (
     <ErrorBoundary>
@@ -525,6 +572,22 @@ function SearchOverlay(): JSX.Element {
         <ShortcutHint onClick={closeOverlay}>esc</ShortcutHint>
       </OverlayInputWrapper>
 
+      {scope && (
+        <ScopeChip data-testid='search-scope'>
+          <span>Searching in {scopeResource.title}</span>
+          <ScopeClear
+            type='button'
+            title='Search everywhere'
+            aria-label='Search everywhere'
+            onClick={() => {
+              setScopeOverride('');
+              inputRef.current?.focus();
+            }}
+          >
+            ×
+          </ScopeClear>
+        </ScopeChip>
+      )}
       {error ? (
         <ErrorLook style={{ padding: '1rem' }}>{error.message}</ErrorLook>
       ) : (
@@ -548,9 +611,7 @@ function SearchOverlay(): JSX.Element {
             <ResultsList>
               <ResultsArea ref={resultsRef}>
                 <Column gap='0'>
-                  {actionHits.length > 0 && (
-                    <SectionHeading>Actions</SectionHeading>
-                  )}
+                  {commandCount > 0 && <SectionHeading>Actions</SectionHeading>}
                   {actionHits.map((action, index) => (
                     <ActionRow
                       key={action.id}
@@ -571,11 +632,33 @@ function SearchOverlay(): JSX.Element {
                       )}
                     </ActionRow>
                   ))}
-                  {results.length > 0 && actionHits.length > 0 && (
+                  {placeHits.map((item, placeIndex) => {
+                    const index = actionHits.length + placeIndex;
+
+                    return (
+                      <ActionRow
+                        key={item.id}
+                        data-index={index}
+                        data-testid={`palette-action-${item.id}`}
+                        $selected={index === selectedIndex}
+                        onClick={() => {
+                          setSelected(index);
+                          void activateRow({ kind: 'place', item });
+                        }}
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </ActionRow>
+                    );
+                  })}
+                  {showRecent && listed.length > 0 && (
+                    <SectionHeading>Recently opened</SectionHeading>
+                  )}
+                  {!showRecent && listed.length > 0 && commandCount > 0 && (
                     <SectionHeading>Resources</SectionHeading>
                   )}
-                  {results.map((subject, resultIndex) => {
-                    const index = actionHits.length + resultIndex;
+                  {listed.map((subject, resultIndex) => {
+                    const index = commandCount + resultIndex;
 
                     return (
                       <ResultCard
@@ -595,10 +678,8 @@ function SearchOverlay(): JSX.Element {
                   })}
                   {showAIChatRow && (
                     <AIChatRow
-                      data-index={actionHits.length + results.length}
-                      $selected={
-                        selectedIndex === actionHits.length + results.length
-                      }
+                      data-index={commandCount + listed.length}
+                      $selected={selectedIndex === commandCount + listed.length}
                       onClick={async () => {
                         if (!privateDrive) {
                           return;
@@ -958,3 +1039,29 @@ export function OverlayContainer(): JSX.Element | null {
     </>
   );
 }
+
+const ScopeChip = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  font-size: 0.85rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const ScopeClear = styled.button`
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  border-radius: ${p => p.theme.radius};
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+`;

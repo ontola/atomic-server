@@ -71,8 +71,7 @@ pub mod tag {
     pub const CHALLENGE: u8 = 0x42;
     /// Responder → client, the negative answer to a `SYNC` probe:
     /// `[0x38] [drive_utf8]`. The drive hashes differ, so the client should
-    /// reconcile (RBSR over the text frames, then a `SYNC` for the
-    /// differing subjects). The positive answer is `SYNC_OK`. Until
+    /// send its full version-vector `SYNC`. The positive answer is `SYNC_OK`. Until
     /// 2026-09-04 this was the text frame `SYNC_RESEND <drive>` and the
     /// probe itself was the text `SYNC_VV`; both transports now speak the
     /// binary form.
@@ -88,7 +87,9 @@ pub mod tag {
 /// - `auth-max-age`: `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused
 ///   and a failed `AUTH` carries `error_code::AUTH_FAILED`.
 /// - `keepalive`: understands `KEEPALIVE` (0x41); echoes it over WebSocket.
-/// - `rbsr`: answers the `RBSR_FP` / `RBSR_ITEMS` text frames.
+/// - `rbsr` (retired 2026-09, no longer advertised; do not reuse): answered
+///   the `RBSR_FP` range-fingerprint frames. `RBSR_ITEMS` is still answered,
+///   as a drive inventory.
 /// - `pull-from`: `SYNC_DIFF` carries `pullFrom` version vectors.
 /// - `signed-destroy`: on a peer stream, destroys travel as signed `COMMIT`
 ///   frames and a naked `DESTROY` from a peer is ignored.
@@ -113,7 +114,6 @@ pub mod tag {
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
-    "rbsr",
     "pull-from",
     "signed-destroy",
     "unsub",
@@ -124,6 +124,7 @@ pub const CAPABILITIES: &[&str] = &[
     "sync-probe",
     "ephemeral",
     "get-many",
+    "canonical-scheme",
 ];
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
@@ -133,11 +134,16 @@ pub const CAPABILITIES: &[&str] = &[
 /// - `commit-ok-slim`: the client decodes a `COMMIT_OK` whose payload is a
 ///   bare commit id, so the responder need not ship the full commit JSON
 ///   back to the agent that just signed it.
-pub const CLIENT_CAPABILITIES: &[&str] = &["commit-ok-slim"];
+pub const CLIENT_CAPABILITIES: &[&str] = &["commit-ok-slim", "canonical-scheme"];
 
 /// The name of the client capability a responder consults before sending a
 /// slim `COMMIT_OK`.
 pub const CAP_COMMIT_OK_SLIM: &str = "commit-ok-slim";
+
+/// Capability a peer lists when it understands `atomic:` subjects on the wire.
+/// A peer that does not list it receives [`crate::identifiers::to_legacy_scheme`]
+/// subjects. See [`crate::identifiers::emit_subject_for_caps`].
+pub const CAP_CANONICAL_SCHEME: &str = crate::identifiers::CAP_CANONICAL_SCHEME;
 
 /// How often an otherwise-idle live connection sends a `KEEPALIVE`.
 pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
@@ -265,6 +271,9 @@ pub mod error_code {
     /// content is whatever was signed, and no local edit to it could ever
     /// have applied.
     pub const IMMUTABLE_COMMIT: u16 = 10;
+    /// A new Loro write lost against stored state. Preserve the local edit,
+    /// but stop sending the same stale update until it is rebased.
+    pub const CAUSALITY_CONFLICT: u16 = 11;
 }
 
 /// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
@@ -298,6 +307,12 @@ pub struct DecodedError {
 /// `isTerminalCommitErrorMessage` / `isUnrecoverableCommitErrorMessage`
 /// patterns — update both sides together if you add a case.
 pub fn classify_commit_error(message: &str) -> u16 {
+    // A stale Loro write cannot win by resending the same update. Preserve it
+    // client-side for review/rebase instead of retrying indefinitely.
+    if message.contains("Commit's Loro update produced no state changes") {
+        return error_code::CAUSALITY_CONFLICT;
+    }
+
     // Admission refusals are not transport failures. They can recover after
     // enrollment/quota changes, so keep the write but stop unlimited retries.
     if message.contains("is not enrolled for sync on this node")
@@ -1318,8 +1333,8 @@ pub fn encode_sync_probe(drive: &str, drive_hash: &str) -> Vec<u8> {
     )
 }
 
-/// A `SYNC` over only `subjects` (the ones an RBSR descent found
-/// differing): the responder builds version vectors for that set instead
+/// A `SYNC` over only `subjects` (a differing set the client chose): the
+/// responder builds version vectors for that set instead
 /// of walking the drive, and both comparison loops skip anything outside it.
 pub fn encode_sync_filtered(
     drive: &str,
@@ -1360,7 +1375,7 @@ pub struct DecodedSync {
     /// Hash-first probe: only `drive_hash` is meaningful; answer with
     /// `SYNC_OK` or `SYNC_RESEND` rather than a diff.
     pub probe: bool,
-    /// When present, reconcile only these subjects (the RBSR-reduced set).
+    /// When present, reconcile only these subjects.
     pub subjects: Option<Vec<String>>,
 }
 
@@ -1853,6 +1868,10 @@ mod tests {
 
     #[test]
     fn classify_commit_error_matches_known_patterns() {
+        assert_eq!(
+            classify_commit_error("Commit's Loro update produced no state changes — its writes were silently dropped by LWW against stored state."),
+            error_code::CAUSALITY_CONFLICT
+        );
         assert_eq!(
             classify_commit_error("is_genesis: true, but the resource already exists"),
             error_code::GENESIS_COLLISION

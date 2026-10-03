@@ -448,7 +448,7 @@ impl AtomicNfsFs {
 
     // A File requires all of these to be a valid resource (see the upload
     // handler), not just the blob pointer.
-    let mut props = hash_props(&self.store, &hash.to_hex().to_string(), 0);
+    let mut props = hash_props(&self.store, &hash.to_hex(), 0);
     props.push((urls::FILENAME, Value::String(name.to_string())));
     props.push((
       urls::MIMETYPE,
@@ -1011,10 +1011,11 @@ const LINK_EXT: &str = "inetloc";
 /// resolves the embedded `atomic://` URL to the registered desktop app, whose
 /// deep-link handler forwards it to the frontend to navigate to the resource.
 fn link_file_bytes(subject: &str) -> Vec<u8> {
-  let url = xml_escape(&format!(
-    "atomic://open?subject={}",
-    percent_encode(subject)
-  ));
+  let url = xml_escape(&if atomic_lib::identifiers::is_atomic_identifier(subject) {
+    subject.to_string()
+  } else {
+    format!("atomic://open?subject={}", percent_encode(subject))
+  });
   format!(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
      <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
@@ -1109,7 +1110,7 @@ fn hash_props(store: &Db, hash_hex: &str, size: usize) -> Vec<(&'static str, Val
     (urls::INTERNAL_ID, Value::String(hash_hex.to_string())),
     (
       urls::BLOB,
-      Value::AtomicUrl(format!("did:ad:blob:{hash_hex}").into()),
+      Value::AtomicUrl(atomic_lib::identifiers::blob_subject(hash_hex).into()),
     ),
     (urls::FILESIZE, Value::Integer(size as i64)),
     (
@@ -1402,7 +1403,9 @@ fn store_bytes(store: &Db, data: &[u8]) -> Result<Option<Vec<SubResource>>, ()> 
       .kv
       .insert(Tree::Blobs, hash.as_bytes(), bytes)
       .map_err(|_| ())?;
-    refs.push(SubResource::from(format!("did:ad:blob:{}", hash.to_hex())));
+    refs.push(SubResource::from(atomic_lib::identifiers::blob_subject(
+      &hash.to_hex(),
+    )));
   }
 
   Ok(Some(refs))
@@ -2167,7 +2170,7 @@ mod benches {
       "[bench] save {:.0} MiB (1-byte edit, re-chunk+store): {:.3}s -> {:.1} MiB/s",
       mib,
       secs,
-      mib as f64 / secs
+      mib / secs
     );
   }
 

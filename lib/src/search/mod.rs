@@ -239,6 +239,16 @@ pub fn maybe_rebuild_search_index(store: &Db) -> AtomicResult<()> {
     mark_search_ready(store)
 }
 
+/// Drop the FTS trees and rebuild from every stored resource. Used after the
+/// canonical-scheme key rewrite so postings are not left under `did:ad:`.
+pub fn rebuild_search_index(store: &Db) -> AtomicResult<()> {
+    for tree in search_trees() {
+        store.kv.clear_tree(tree)?;
+    }
+    let _ = store.kv.remove(Tree::PluginMeta, SEARCH_INDEX_VERSION_KEY);
+    build_search_index(store)
+}
+
 fn mark_search_ready(store: &Db) -> AtomicResult<()> {
     store
         .kv

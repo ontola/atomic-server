@@ -1,4 +1,3 @@
-import { LocalThoughtSync } from '@chunks/PluginRuns/LocalThoughtSyncPanel';
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
@@ -12,6 +11,7 @@ import {
   server,
   core,
   ai,
+  notifications,
   useArray,
 } from '@tomic/react';
 
@@ -27,6 +27,7 @@ import { FilePage } from './File/FilePage';
 import { ResourcePageDefault } from './ResourcePageDefault';
 import { Spinner } from '../components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
+import { InboxPage } from './InboxPage';
 import { MessagePage } from './MessagePage';
 import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
@@ -265,7 +266,6 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
           {/* And on the original: the forks proposing changes to it. */}
           <PendingForks resource={resource} />
           <ImportResolutionNotice resource={resource} />
-          <LocalThoughtSync resource={resource} />
           <ReturnComponent resource={resource} />
         </Suspense>
       </ErrorBoundary>
@@ -318,6 +318,8 @@ function selectComponent(klass: string | undefined) {
       return MeetingPage;
     case canvas.classes.canvas:
       return CanvasPage;
+    case notifications.classes.inbox:
+      return InboxPage;
     case server.classes.installation:
       return InstallationPage;
     default:

@@ -190,7 +190,7 @@ impl AtomicNode {
     }
 }
 
-#[cfg(all(test, feature = "db-redb"))]
+#[cfg(all(test, feature = "db"))]
 mod tests {
     use super::*;
     use crate::{
@@ -285,7 +285,10 @@ mod tests {
             .unwrap();
         let response = draft.save_as_genesis(alice_node.db()).await.unwrap();
         let subject = response.commit.subject.clone();
-        assert!(subject.as_str().starts_with("did:ad:"), "got {subject}");
+        assert!(
+            crate::identifiers::is_atomic_identifier(subject.as_str()),
+            "got {subject}"
+        );
         assert!(
             bob_node.db().get_resource(&subject).await.is_err(),
             "bob must not see alice's write before ingesting it"

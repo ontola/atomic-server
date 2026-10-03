@@ -250,113 +250,34 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
     existing,
     new Set(specs.map(spec => spec.shortname)),
   );
+
+  // Every term is checked before any is written. A shared or recovered term
+  // bound to the wrong class or datatype refuses the whole schema, and it must
+  // do so before its siblings exist: a refusal that lands after half the terms
+  // were created leaves orphans in the drive's ontology that no list points
+  // at. The checks are independent reads, so they run together.
+  const bindings = await inParallel(specs, spec =>
+    bindOne(store, ontology, drive, listProperty, spec, found, build),
+  );
+
+  // Then the writes. Each new term is a save of its own and on a drive with no
+  // schema every term needs one; in series that was most of the wait between
+  // asking for a plugin and seeing its page. They write different resources
+  // and none reads another's subject, so the order they land in does not
+  // matter.
+  const resolved = await inParallel(bindings, binding =>
+    writeOne(store, ontology, drive, binding),
+  );
+
   const result: Record<string, string> = {};
   const added: string[] = [];
 
-  // Recovering an orphan is one server round-trip per term, and on a drive
-  // that has no schema yet every term takes it. Awaited inside the loop below
-  // that was ~19 sequential queries of ~700ms — 13 of the 14 seconds it took
-  // to create an app, before anything was written. The lookups are
-  // independent reads of different localIds, so make them together and let
-  // the loop consume the answers; creation stays ordered.
-  const orphans = new Map<string, SchemaResource | undefined>();
-  await Promise.all(
-    specs
-      .filter(spec => !spec.subject && !found.has(spec.shortname))
-      .map(async spec => {
-        orphans.set(
-          spec.shortname,
-          await store.findByLocalId(
-            drive,
-            ontology.subject,
-            localIdFor(listProperty, spec.shortname),
-          ),
-        );
-      }),
-  );
-
-  // Resolving is separated from creating so the creates can go out together.
-  // Each term is a save of its own, and on a drive with no schema every term
-  // needs one: 19 saves in a row, which is most of the wait between asking for
-  // a plugin and seeing its page. They write different resources under the
-  // same ontology and none reads another's subject, so the order they land in
-  // does not matter. `slots` keeps the ontology's list in `specs` order all
-  // the same, because that order is what someone reading the ontology sees.
-  const slots: Array<string | undefined> = specs.map(() => undefined);
-  const toCreate: Array<{ index: number; spec: T; localId: string }> = [];
-
+  // Assembled in spec order, so what lands in the ontology does not depend on
+  // which create happened to finish first.
   for (const [index, spec] of specs.entries()) {
-    if (spec.subject) {
-      const shared = await store.getResource(spec.subject);
-      const desired = build(spec);
-      const classes = asList(shared.get(core.properties.isA));
-
-      if (!desired.isA.every(klass => classes.includes(klass))) {
-        throw new Error(`incompatible schema binding: ${spec.subject}`);
-      }
-
-      const datatype = desired.propVals[core.properties.datatype];
-
-      if (datatype && shared.get(core.properties.datatype) !== datatype) {
-        throw new Error(`incompatible property datatype: ${spec.subject}`);
-      }
-
-      slots[index] = spec.subject;
-      continue;
-    }
-
-    const localId = localIdFor(listProperty, spec.shortname);
-    const hit =
-      found.get(spec.shortname) ?? orphans.get(spec.shortname)?.subject;
-
-    if (hit) {
-      const resource = await store.getResource(hit);
-      const desired = build(spec);
-      const datatype = desired.propVals[core.properties.datatype];
-      if (datatype && resource.get(core.properties.datatype) !== datatype)
-        throw new Error(
-          `incompatible recovered schema datatype: ${spec.shortname}`,
-        );
-      await reconcile(store, hit, desired.propVals);
-      slots[index] = hit;
-      continue;
-    }
-
-    toCreate.push({ index, spec, localId });
-  }
-
-  const created = await Promise.all(
-    toCreate.map(async ({ spec, localId }) => {
-      const { isA, propVals } = build(spec);
-      const resource = await store.newResource({
-        parent: ontology.subject,
-        isA,
-        propVals: { ...propVals, [core.properties.localId]: localId },
-      });
-
-      try {
-        await resource.save();
-
-        return resource.subject;
-      } catch (error) {
-        const recovered = await store.findByLocalId(
-          drive,
-          ontology.subject,
-          localId,
-        );
-        if (!recovered) throw error;
-
-        return recovered.subject;
-      }
-    }),
-  );
-
-  for (const [slot, { index }] of toCreate.entries())
-    slots[index] = created[slot];
-
-  for (const [index, spec] of specs.entries()) {
-    const subject = slots[index]!;
+    const subject = resolved[index];
     result[spec.shortname] = subject;
+
     if (!existing.includes(subject) && !added.includes(subject))
       added.push(subject);
   }
@@ -378,6 +299,143 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
   }
 
   return result;
+}
+
+/** What {@link bindOne} decided for a spec, before anything is written. */
+type Binding =
+  /** A shared term, used as is. */
+  | { kind: 'shared'; subject: string }
+  /** An existing term of this schema's, brought in line with the spec. */
+  | { kind: 'recovered'; subject: string; propVals: Record<string, JSONValue> }
+  /** A term that does not exist yet. */
+  | {
+      kind: 'create';
+      localId: string;
+      isA: string[];
+      propVals: Record<string, JSONValue>;
+    };
+
+/**
+ * Decides how one spec is bound — shared term, recovered term, or a new one —
+ * and checks the binding is compatible. Reads only: a refusal here leaves the
+ * drive as it was.
+ */
+async function bindOne<T extends { shortname: string; subject?: string }>(
+  store: SchemaStore,
+  ontology: SchemaResource,
+  drive: string,
+  listProperty: string,
+  spec: T,
+  /** Resolved once for the whole spec by {@link ensureAll}. */
+  found: Map<string, string>,
+  build: (spec: T) => { isA: string[]; propVals: Record<string, JSONValue> },
+): Promise<Binding> {
+  const desired = build(spec);
+  const datatype = desired.propVals[core.properties.datatype];
+
+  if (spec.subject) {
+    const shared = await store.getResource(spec.subject);
+    const classes = asList(shared.get(core.properties.isA));
+
+    if (!desired.isA.every(klass => classes.includes(klass))) {
+      throw new Error(`incompatible schema binding: ${spec.subject}`);
+    }
+
+    if (datatype && shared.get(core.properties.datatype) !== datatype) {
+      throw new Error(`incompatible property datatype: ${spec.subject}`);
+    }
+
+    return { kind: 'shared', subject: spec.subject };
+  }
+
+  const localId = localIdFor(listProperty, spec.shortname);
+  const orphan = found.has(spec.shortname)
+    ? undefined
+    : await store.findByLocalId(drive, ontology.subject, localId);
+  const hit = found.get(spec.shortname) ?? orphan?.subject;
+
+  if (hit) {
+    const resource = await store.getResource(hit);
+
+    if (datatype && resource.get(core.properties.datatype) !== datatype)
+      throw new Error(
+        `incompatible recovered schema datatype: ${spec.shortname}`,
+      );
+
+    return { kind: 'recovered', subject: hit, propVals: desired.propVals };
+  }
+
+  return { kind: 'create', localId, ...desired };
+}
+
+/** Carries out a {@link Binding}, returning the term's subject. */
+async function writeOne(
+  store: SchemaStore,
+  ontology: SchemaResource,
+  drive: string,
+  binding: Binding,
+): Promise<string> {
+  if (binding.kind === 'shared') return binding.subject;
+
+  if (binding.kind === 'recovered') {
+    await reconcile(store, binding.subject, binding.propVals);
+
+    return binding.subject;
+  }
+
+  const { localId, isA, propVals } = binding;
+  const created = await store.newResource({
+    parent: ontology.subject,
+    isA,
+    propVals: { ...propVals, [core.properties.localId]: localId },
+  });
+
+  try {
+    await created.save();
+  } catch (error) {
+    const recovered = await store.findByLocalId(
+      drive,
+      ontology.subject,
+      localId,
+    );
+
+    if (!recovered) throw error;
+
+    return recovered.subject;
+  }
+
+  return created.subject;
+}
+
+/**
+ * Maps with at most `limit` in flight, preserving input order.
+ *
+ * A schema is a handful of terms, but a drive's own ontology can hold far more
+ * than a browser should have in flight at once — and a plugin plan can touch
+ * thousands of rows. If `work` rejects, the returned promise rejects with it;
+ * work already started is not cancelled.
+ */
+export async function inParallel<In, Out>(
+  items: In[],
+  work: (item: In) => Promise<Out>,
+  limit = 8,
+): Promise<Out[]> {
+  const results = new Array<Out>(items.length);
+  let next = 0;
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await work(items[index]);
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  return results;
 }
 
 /**

@@ -210,7 +210,7 @@ pub trait Storelike: Sized + Send + Sync {
     fn set_base_url(&self, _url: &str) {}
 
     /// Returns the full server URL, e.g. "http://localhost:9883" or "https://atomicdata.dev".
-    /// Used by client helpers to route DID resolution requests through the server's \`/did\` endpoint.
+    /// Used by client helpers to route identifier resolution through `/resource`.
     fn get_server_url(&self) -> String {
         self.get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string())

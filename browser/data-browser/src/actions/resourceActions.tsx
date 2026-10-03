@@ -1,5 +1,4 @@
 import toast from 'react-hot-toast';
-import { createWebsite, starterWebsite } from '@chunks/Website/websiteModel';
 import { canvas, core, dataBrowser, forks, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
@@ -18,6 +17,7 @@ import {
   FaRegStar,
   FaShare,
   FaStar,
+  FaTags,
   FaTrash,
   FaTurnUp,
   FaWindowMaximize,
@@ -34,11 +34,11 @@ import {
 } from '../helpers/navigation';
 import { paths } from '../routes/paths';
 import { shortcuts } from './shortcuts';
-import { createPlugin } from '@chunks/PluginRuns/runScript';
-import { createApp } from '@tomic/lib';
-import { handOverAppKey } from '@chunks/AppPage/appAgent';
-import { STARTER_APP_SOURCE } from '@chunks/AppPage/starter';
 import type { ActionContext, ActionDefinition } from './types';
+import { openSearchOverlay } from '../components/overlayState';
+
+/** Asks the resource bar to open its tag picker for `detail` (a subject). */
+export const OPEN_TAGS_EVENT = 'atomic-open-tags';
 
 const getParent = (ctx: ActionContext): string | undefined =>
   ctx.resource.get(core.properties.parent) as string | undefined;
@@ -76,89 +76,6 @@ export const resourceActions: ActionDefinition[] = [
       ctx.subject !== ctx.currentSubject ||
       !ctx.pathname.startsWith(paths.data),
     run: ctx => ctx.navigate(dataURL(ctx.subject)),
-  },
-  {
-    id: 'new-plugin',
-    scope: 'resource',
-    section: 'action',
-    label: () => 'New plugin',
-    helper: () =>
-      'Create a plugin here. It proposes changes that you review before anything is written.',
-    keywords: ['automation', 'script', 'import', 'plugin'],
-    icon: () => <FaPlay />,
-    searchOnly: true,
-    available: ctx => ctx.canWrite && ctx.drive !== undefined,
-    run: async ctx => {
-      const subject = await createPlugin(ctx.store, {
-        parent: ctx.subject,
-        drive: ctx.drive!,
-      });
-
-      ctx.navigate(constructOpenURL(subject));
-    },
-  },
-  {
-    id: 'new-website',
-    scope: 'resource',
-    section: 'action',
-    label: () => 'New website',
-    helper: () =>
-      'Design a website with Assistant, using Atomic documents and tables.',
-    keywords: ['website', 'site', 'publish', 'webpage'],
-    icon: () => <FaWindowMaximize />,
-    searchOnly: true,
-    available: ctx => ctx.canWrite && ctx.drive !== undefined,
-    run: async ctx => {
-      const doc = ctx.resource.hasClasses(dataBrowser.classes.documentV2)
-        ? ctx.subject
-        : undefined;
-      const resource = await createWebsite(
-        ctx.store,
-        ctx.drive!,
-        starterWebsite(doc ? ctx.resource.title : 'My website', doc),
-      );
-      ctx.navigate(constructOpenURL(resource.subject));
-    },
-  },
-  {
-    id: 'new-app',
-    scope: 'resource',
-    section: 'action',
-    label: () => 'New app',
-    helper: () =>
-      'Create an app here: a screen you open, backed by its own data.',
-    keywords: ['app', 'view', 'screen', 'plugin'],
-    icon: () => <FaWindowMaximize />,
-    searchOnly: true,
-    available: ctx => ctx.canWrite && ctx.drive !== undefined,
-    run: async ctx => {
-      const created = await createApp(ctx.store, {
-        drive: ctx.drive!,
-        name: 'New app',
-        // Every app carries a glyph, so a sidebar of them stays scannable.
-        // A placeholder here because nobody has said yet what this one is;
-        // an app built from a description picks its own.
-        emoji: '🧩',
-        source: STARTER_APP_SOURCE,
-      });
-
-      // The node needs the key to write as this app when nobody is present.
-      // Reported rather than thrown: the app exists and works while you are
-      // here either way, it just cannot act on its own yet.
-      try {
-        await handOverAppKey(ctx.store, {
-          drive: ctx.drive!,
-          app: created.app,
-          secret: created.secret,
-        });
-      } catch (e) {
-        toast.error(
-          `This app cannot write on its own: ${(e as Error).message}`,
-        );
-      }
-
-      ctx.navigate(constructOpenURL(created.app));
-    },
   },
   {
     id: 'run-plugin',
@@ -334,8 +251,8 @@ export const resourceActions: ActionDefinition[] = [
     id: 'newChild',
     scope: 'resource',
     section: 'action',
-    label: () => 'Add child',
-    helper: () => 'Create a new resource under this resource.',
+    label: () => 'New resource',
+    helper: () => 'Create a new resource under this one.',
     keywords: ['new', 'create'],
     icon: () => <FaPlus />,
     available: ctx => ctx.canWrite,
@@ -368,10 +285,30 @@ export const resourceActions: ActionDefinition[] = [
     scope: 'resource',
     section: 'action',
     label: () => 'Search children',
-    helper: () => 'Scope search to resource',
+    helper: () => 'Search only inside this resource',
     keywords: ['find', 'filter'],
     icon: () => <FaMagnifyingGlass />,
-    run: ctx => ctx.enableScope(),
+    // The search palette, limited to this resource. It used to navigate to
+    // the search page with a scope parameter that nothing there applied.
+    run: ctx => openSearchOverlay(undefined, ctx.subject),
+  },
+  {
+    id: 'tags',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Tags',
+    helper: () => 'Add or remove tags',
+    keywords: ['tag', 'label'],
+    icon: () => <FaTags />,
+    // Only the open resource has a resource bar to show the picker in.
+    available: ctx => ctx.subject === ctx.currentSubject,
+    // The picker lives in the resource bar, which shows its Tags button only
+    // once a resource has tags. This asks it to show the button with the
+    // picker open (see NavBar's TagSelectPopoverWrapper).
+    run: ctx =>
+      window.dispatchEvent(
+        new CustomEvent(OPEN_TAGS_EVENT, { detail: ctx.subject }),
+      ),
   },
   {
     id: 'share',

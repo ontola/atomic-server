@@ -98,6 +98,46 @@ impl Value {
             _ => {}
         }
     }
+
+    /// Rewrite `did:ad:` → `atomic:` on identifier-shaped values. Returns
+    /// whether anything changed. Used at the store boundary so indexes and
+    /// parent/drive queries key one spelling; signed bytes are never rewritten.
+    pub fn canonicalize_identifier_refs(&mut self) -> bool {
+        match self {
+            Value::AtomicUrl(sub) => {
+                let canonical = crate::identifiers::canonicalize_scheme(&sub.to_string());
+                if canonical != *sub {
+                    *sub = canonical.into();
+                    true
+                } else {
+                    false
+                }
+            }
+            Value::ResourceArray(arr) => {
+                let mut changed = false;
+                for item in arr.iter_mut() {
+                    if let SubResource::Subject(sub) = item {
+                        let canonical = crate::identifiers::canonicalize_scheme(&sub.to_string());
+                        if canonical != *sub {
+                            *sub = canonical.into();
+                            changed = true;
+                        }
+                    }
+                }
+                changed
+            }
+            Value::String(s) if crate::identifiers::is_atomic_identifier(s) => {
+                let canonical = crate::identifiers::canonicalize_scheme(s);
+                if canonical != *s {
+                    *s = canonical;
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
     /// Check if the value `q_val` is present in `val`
     ///
     /// Uses the same reference strings the index is keyed by
@@ -106,14 +146,14 @@ impl Value {
     /// A `String` holding a JSON array of subjects (`["did:…"]`, the legacy
     /// Loro encoding of a `ResourceArray`) names each of its elements.
     pub fn contains_value(&self, q_val: &Value) -> bool {
-        let query_value = q_val.to_string();
+        let query_value = crate::identifiers::canonicalize_scheme(&q_val.to_string());
         match self {
             Value::ResourceArray(_) | Value::String(_) => self
                 .to_reference_index_strings()
                 .unwrap_or_default()
                 .iter()
                 .any(|v| v == &query_value),
-            other => other.to_string() == query_value,
+            other => crate::identifiers::canonicalize_scheme(&other.to_string()) == query_value,
         }
     }
 
@@ -339,6 +379,8 @@ impl Value {
                 .or_else(|| map.values().next())
                 .cloned()
                 .unwrap_or_default(),
+            Value::AtomicUrl(s) => crate::identifiers::canonicalize_scheme(&s.to_string()),
+            Value::String(s) => crate::identifiers::canonicalize_scheme(s),
             other => other.to_string(),
         }
     }
@@ -378,7 +420,11 @@ impl Value {
             // This might result in unnecessarily long strings, sometimes. We may want to shorten them later.
             val => vec![val.to_string()],
         };
-        Some(vals)
+        Some(
+            vals.into_iter()
+                .map(|s| crate::identifiers::canonicalize_scheme(&s))
+                .collect(),
+        )
     }
 }
 
