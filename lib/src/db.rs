@@ -1318,20 +1318,32 @@ impl Db {
         let agent = self.get_default_agent()?;
         let agent_resource = self.get_resource(&agent.subject).await?;
 
-        let subjects = match agent_resource.get(urls::DRIVES) {
+        // Keep legacy Agent.drives entries, then include the private home where
+        // create_drive records new drives. Read both during the migration.
+        let mut subjects = match agent_resource.get(urls::DRIVES) {
             Ok(Value::ResourceArray(arr)) => arr.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             _ => vec![],
         };
-
-        // Fallback: active drive not in agent resource
-        let subjects = if subjects.is_empty() {
-            match self.get_active_drive() {
-                Some(active) => vec![active],
-                None => vec![],
+        if let Ok(personal) = self.private_drive_subject() {
+            if let Ok(home) = self.get_resource(&personal.as_str().into()).await {
+                if !subjects.contains(&personal) {
+                    subjects.push(personal);
+                }
+                if let Ok(Value::ResourceArray(listed)) = home.get(urls::DRIVES) {
+                    for subject in listed {
+                        let subject = subject.to_string();
+                        if !subjects.contains(&subject) {
+                            subjects.push(subject);
+                        }
+                    }
+                }
             }
-        } else {
-            subjects
-        };
+        }
+        if let Some(active) = self.get_active_drive() {
+            if !subjects.contains(&active) {
+                subjects.push(active);
+            }
+        }
 
         let mut drives = Vec::with_capacity(subjects.len());
         for subject in subjects {
@@ -5387,5 +5399,12 @@ mod private_drive_tests {
             listed.iter().any(|s| s == &extra),
             "private drive should list {extra}, got {listed:?}"
         );
+        store.set_active_drive(&personal).unwrap();
+        let drives = store.list_drives().await.unwrap();
+        assert_eq!(drives.len(), 2);
+        assert!(drives.iter().any(|d| d.subject == personal));
+        assert!(drives
+            .iter()
+            .any(|d| d.subject == extra && d.name == "Project"));
     }
 }

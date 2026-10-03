@@ -5,6 +5,7 @@
 - [x] Switch Canvas to the package through its existing public entry points.
 - [x] Test phone layouts, drive operations, failures and disposal during load.
 - [x] Keep optional server/account capabilities explicit.
+- [x] Include drives recorded on the private home in the native drive list; preserve legacy entries.
 - [ ] Extract the pairing screen and parser, with injectable QR scanner support.
 - [ ] Extract secure account session storage and sign-in flow after agreeing the native/web API.
 - [ ] Add a standalone example host and package publishing metadata.
