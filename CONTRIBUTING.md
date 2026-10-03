@@ -16,6 +16,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
 - [Translation \& Internationalization](#translation--internationalization)
 - [Running \& compiling](#running--compiling)
   - [Running locally (with local development browser)](#running-locally-with-local-development-browser)
+  - [Nix and NixOS](#nix-and-nixos)
   - [IDE setup (VSCode)](#ide-setup-vscode)
   - [Using Dagger](#using-dagger)
   - [Improve local compilation speed](#improve-local-compilation-speed)
@@ -58,6 +59,15 @@ TL;DR Clone the repo and run `cargo run` from each folder (e.g. `cli` or `server
 - Go to `browser`, run `pnpm install` (if you haven't already), and run `pnpm dev` to start the browser
 - Visit your `localhost` in your locally running `atomic-data-browser` instance: (e.g. `http://localhost:6747/app/show?subject=http%3A%2F%2Flocalhost`)
 - use `cargo watch -- cargo run` to automatically recompile `atomic-server` when you update JS assets in `browser`
+
+### Nix and NixOS
+
+`flake.nix` provides a development shell and a package. Both need flakes enabled.
+
+- `nix develop` gives you Rust (the version in `rust-toolchain.toml`), Node, pnpm, wasm-pack, wasm-bindgen and wasm-opt. On NixOS the prebuilt versions of those tools that `pnpm` and `wasm-pack` download can't run, so use this shell for the steps above (`cargo run`, `pnpm install`, `pnpm dev`, `pnpm run -r build`).
+- `nix build` (or `nix run`) builds the server in the Nix sandbox. The sandbox can't build the data browser yet, so the result serves the API only, with a placeholder page. Embed a bundle you built in the dev shell with `.override { dataBrowser = /path/to/browser/data-browser/dist; }`.
+- The package leaves out the server-side plugin runtime, because nixpkgs has no `wasm32-wasip2` standard library.
+- `rust-toolchain.toml` and `flake.nix` must agree: the dev shell warns when nixpkgs ships a different Rust version. Update the pin with `nix flake update`.
 
 ### IDE setup (VSCode)
 
