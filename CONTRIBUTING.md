@@ -121,7 +121,8 @@ tags as production.
 
 ### Open a PR
 
-- Make sure your branch is up to date with `develop`.
+- Branch from an up-to-date `develop`. Keeping up with `develop` afterwards is
+  the trekmeester's job (see below), so you don't need to rebase an open PR.
 - Open a PR against `develop`.
 - Make sure all relevant tests / lint pass.
 
@@ -130,6 +131,18 @@ tags as production.
 Only the **trekmeester** agent merges pull requests into `develop`. Everyone
 else, human or AI agent, opens PRs and addresses review, but does not merge
 into `develop` themselves.
+
+The trekmeester also brings PRs up to date with `develop`. When a PR is
+behind or conflicts, it does not wait for the author to rebase: it knows what
+landed on `develop` since the PR branched (renames, moved code, reverted
+approaches), so it is the one best placed to resolve the conflicts. Stacked
+PRs are updated bottom-up, each onto its updated base. Branches that others
+build on (like `feat/*` integration branches) get `develop` merged in rather
+than rebased, so nobody's local checkout is rewritten under them. Every
+conflict it resolved is listed in a PR comment, so the author can check the
+result. The author is only asked when a conflict is a design decision, not a
+mechanical one, or when a check that passed before now fails for a reason
+that is theirs to judge.
 
 ### Pre-commit checks
 
