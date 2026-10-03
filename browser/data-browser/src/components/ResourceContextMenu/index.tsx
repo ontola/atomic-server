@@ -16,13 +16,17 @@ import { useAppMenuItems } from '../../actions/appMenuItems';
 import { useActionContext } from '../../actions/useActionContext';
 import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
-import { RunPluginDialog } from '@chunks/PluginRuns/RunPluginDialog';
-import { usePluginClass } from '@chunks/PluginRuns/runScript';
+import { usePluginClass } from '@chunks/PluginRuns/useDriveClass';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
 
+const RunPluginDialog = lazy(() =>
+  import('@chunks/PluginRuns/RunPluginDialog').then(m => ({
+    default: m.RunPluginDialog,
+  })),
+);
 const ReportAIChatDialog = lazy(() => import('@chunks/AI/ReportAIChatDialog'));
 
 export {
@@ -327,12 +331,14 @@ export function ResourceContextMenu({
         />
       )}
       {pluginRunOpen !== undefined && ctx.drive !== undefined && (
-        <RunPluginDialog
-          resource={ctx.resource}
-          drive={ctx.drive}
-          show={pluginRunOpen}
-          onShowChange={setPluginRunOpen}
-        />
+        <Suspense fallback={null}>
+          <RunPluginDialog
+            resource={ctx.resource}
+            drive={ctx.drive}
+            show={pluginRunOpen}
+            onShowChange={setPluginRunOpen}
+          />
+        </Suspense>
       )}
       {reportChatOpen !== undefined && (
         <Suspense fallback={null}>

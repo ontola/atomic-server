@@ -11,6 +11,7 @@
     "paths": {
       "@tomic/react": ["../react/src/index.ts"],
       "@tomic/lib": ["../lib/src/index.ts"],
+      "@tomic/lib/calendar-recurrence.js": ["../lib/src/calendar-recurrence.ts"],
       "@integration-host/import-records": ["../lib/src/import-records.ts"],
       "@integration-host/plugin-connection": [
         "../lib/src/plugin-connection.ts"

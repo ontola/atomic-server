@@ -92,6 +92,10 @@ it('does not accept an unverified account credential', async () => {
   api(true, 401);
   await expect(accountPasskey(salt)).rejects.toThrow('Could not set up');
 });
+it('says which passkey request failed and with what status', async () => {
+  api(true, 401);
+  await expect(accountPasskey(salt)).rejects.toThrow('(/use/finish: 401)');
+});
 it('does not create a second credential on cancellation', async () => {
   api(true);
   get.mockResolvedValue(null);

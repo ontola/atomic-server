@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { RPCClient } from './rpc';
-import { isViewRequest, viewRequest } from './viewProtocol';
+import { isViewKeyEvent, isViewRequest, viewRequest } from './viewProtocol';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -348,4 +348,128 @@ it('says so plainly where WebCrypto has no Ed25519', async () => {
   }
 
   expect(f.parent.postMessage).not.toHaveBeenCalled();
+});
+
+it('accepts the host UI operations and nothing that merely resembles them', () => {
+  for (const op of [
+    'confirm',
+    'toast',
+    'menu',
+    'resourceMenu',
+    'share',
+    'openResource',
+    'environment',
+  ] as const)
+    expect(isViewRequest(viewRequest(1, op))).toBe(true);
+  expect(isViewRequest({ ...viewRequest(1, 'menu'), op: 'dialog' })).toBe(
+    false,
+  );
+});
+
+it('validates a forwarded key before the host dispatches it', () => {
+  const key = {
+    type: 'atomic.view.key',
+    version: 1,
+    key: 'k',
+    code: 'KeyK',
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+  };
+  expect(isViewKeyEvent(key)).toBe(true);
+  for (const change of [
+    { version: 2 },
+    { key: '' },
+    { key: 'x'.repeat(33) },
+    { ctrlKey: 'yes' },
+    { type: 'atomic.view.request' },
+  ])
+    expect(isViewKeyEvent({ ...key, ...change })).toBe(false);
+});
+
+/** A frame whose listeners are kept by event type, for keyboard tests. */
+function typedFrame() {
+  const listeners = new Map<string, Array<(event: unknown) => void>>();
+  const parent = { postMessage: vi.fn() };
+  const window = {
+    parent,
+    addEventListener: (type: string, listener: (event: unknown) => void) =>
+      listeners.set(type, [...(listeners.get(type) ?? []), listener]),
+    removeEventListener: vi.fn(),
+  };
+  const emit = (type: string, event: unknown) =>
+    listeners.get(type)?.forEach(listener => listener(event));
+
+  return { window, parent, emit };
+}
+
+it('passes up only the keys the host may act on, and none the view handled', () => {
+  const f = typedFrame();
+  generatedStore(f as unknown as ReturnType<typeof frame>);
+  const press = (event: Record<string, unknown>) =>
+    f.emit('keydown', {
+      key: 'k',
+      code: 'KeyK',
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      isComposing: false,
+      ...event,
+    });
+
+  press({});
+  press({ ctrlKey: true, defaultPrevented: true });
+  press({ metaKey: true, isComposing: true });
+  expect(f.parent.postMessage).not.toHaveBeenCalled();
+
+  press({ ctrlKey: true });
+  press({ key: 'Escape', code: 'Escape' });
+  const sent = f.parent.postMessage.mock.calls.map(call => call[0]);
+  expect(sent).toHaveLength(2);
+  expect(sent.every(isViewKeyEvent)).toBe(true);
+  expect(sent[0]).toMatchObject({ key: 'k', ctrlKey: true });
+  expect(sent[1]).toMatchObject({ key: 'Escape', ctrlKey: false });
+});
+
+it('sends a menu at the point clicked and waits on the person with no timeout', async () => {
+  vi.useFakeTimers();
+  const f = frame();
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const store = new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(f.window, setTimeout, clearTimeout);
+
+  const chosen = store.ui.menu({
+    at: { clientX: 12, clientY: 34 },
+    items: [{ id: 'rename', label: 'Rename' }],
+  });
+  const request = f.parent.postMessage.mock.calls[0][0];
+  expect(isViewRequest(request)).toBe(true);
+  expect(request).toMatchObject({
+    op: 'menu',
+    args: { at: { x: 12, y: 34 }, items: [{ id: 'rename' }] },
+  });
+  expect(vi.getTimerCount()).toBe(0);
+
+  // Far longer than any data request may take.
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: request.id,
+    result: 'rename',
+  });
+  expect(await chosen).toBe('rename');
 });

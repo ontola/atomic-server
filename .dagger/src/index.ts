@@ -570,6 +570,11 @@ export class AtomicServer {
     @argument() playwrightRetries: number = -1,
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /**
+     * Where failed e2e shards leave their traces, for `failedTestResults` to
+     * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
+     */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -598,6 +603,7 @@ export class AtomicServer {
         playwrightRetries,
         '',
         playwrightCloneSessions,
+        resultsKey,
       ),
       this.jsTest(),
       this.jsTestIntegration(),
@@ -2188,6 +2194,8 @@ export class AtomicServer {
     @argument() playwrightGrep: string = '',
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /** See `ci()`. */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.e2eCloneSessions = playwrightCloneSessions;
     // Shards × own atomic-server. Count comes from `--host-profile`
@@ -2267,14 +2275,88 @@ export class AtomicServer {
       )
         .filter(Boolean)
         .join('\n\n');
+      const exported = resultsKey
+        ? await this.saveTestResults(resultsKey, failed)
+        : 'none kept (no --results-key)';
       throw new Error(
         `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
-          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
+          `Reports:\n${reportUrls.join('\n')}\n` +
+          `Traces: ${exported}\n\n${tails}` +
           (contexts ? `\n\n${contexts}` : ''),
       );
     }
 
     return reportUrls.join('\n') || 'e2e ok (no report URL)';
+  }
+
+  /**
+   * Keeps failed shards' `test-results` (traces, screenshots,
+   * `error-context.md`) in a cache volume under `key`, for `failedTestResults`.
+   *
+   * They used to leave only through the netlify report, and with
+   * `NETLIFY_TOKEN` unset they were discarded with the container. A failure
+   * that only happens on Mancave then left an assertion message and nothing
+   * else: on 29-30 September a reload that rendered a blank page could only
+   * be described, not diagnosed. `Directory.export` from inside this module
+   * does not help: it writes into the function's own sandbox, not onto the
+   * runner. The `ci` call fails, so it cannot return them either; a second
+   * call reads them back from the volume instead.
+   */
+  private async saveTestResults(
+    key: string,
+    failed: { shard: number; testResults: Directory }[],
+  ): Promise<string> {
+    const safeKey = key.replace(/[^A-Za-z0-9._-]/g, '_');
+    try {
+      let container = dag
+        .container()
+        .from('alpine:latest')
+        .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'));
+
+      for (const r of failed) {
+        container = container.withDirectory(`/in/shard-${r.shard}`, r.testResults);
+      }
+
+      await container
+        .withExec([
+          'sh',
+          '-c',
+          // Keep a week of runs; the volume must not grow without bound.
+          `find /results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + ; ` +
+            `rm -rf /results/${safeKey} && mkdir -p /results/${safeKey} && ` +
+            `cp -r /in/. /results/${safeKey}/`,
+        ])
+        .sync();
+
+      return `kept under ${safeKey}; the workflow uploads them as the e2e-test-results artifact`;
+    } catch (e) {
+      return `could not keep test results: ${e}`;
+    }
+  }
+
+  /**
+   * Named without a digit on purpose: Dagger's CLI kebab-cases `e2eTestResults`
+   * to something other than `e2e-test-results` (as with `--e2e-mode`), and
+   * the workflow's call failed with "unknown command" (run 36895753311).
+   *
+   * The traces `ci`/`endToEnd` kept for failed shards under `resultsKey`,
+   * one folder per shard. Empty when nothing failed. main-ci.yml exports
+   * this on failure and uploads it as an artifact.
+   */
+  @func()
+  async failedTestResults(@argument() resultsKey: string): Promise<Directory> {
+    const safeKey = resultsKey.replace(/[^A-Za-z0-9._-]/g, '_');
+
+    return dag
+      .container()
+      .from('alpine:latest')
+      .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'))
+      .withExec([
+        'sh',
+        '-c',
+        `mkdir -p /out && if [ -d /results/${safeKey} ]; then cp -r /results/${safeKey}/. /out/; fi`,
+      ])
+      .directory('/out');
   }
 
   /**

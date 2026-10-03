@@ -7,7 +7,25 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - The shared sign-in card no longer says "This browser does not support passkeys".
   Where a passkey cannot work it shows no passkey option at all, and the
   portal and the app now decide that the same way.
-
+- Apps can use Atomic's own UI through `store.ui`: a confirm dialog, a toast, a
+  menu at the click, the resource menu, the share dialog and opening a
+  resource. Atomic draws them, names the app that asked, and a menu is no
+  longer cut off at the app's edge. Ctrl/Cmd shortcuts and Escape that an app
+  does not handle now reach Atomic, so search still opens while you are in one.
+- Apps can also let the person pick a resource or a file (uploading one if
+  they like), and open Atomic's own form for a new resource of a class.
+- Plugin views and apps now share one API: `store` from `@tomic/plugin` works
+  like `@tomic/lib`'s Store (`getResource`, `resource.set`, `save`,
+  `newResource`, `query`, `search`, `subscribe`) and drive apps get the same
+  object. Packaged plugin views get `store.ui` too. `query` takes `filters`,
+  `sortBy`, `sortDesc`, `pageSize` and `page`. `RPCClient` keeps working but
+  is deprecated.
+- Plugin views and apps can make several writes as one change with
+  `store.apply(intents)`, in the same intent format a plugin's `run()`
+  returns. Everything is checked before anything is written, a failed write
+  rolls back the ones before it, and `store.undo()` reverts the latest change.
+- A plugin can declare the `edit-schema` capability so its view may change
+  the classes and properties of what it shows without asking each time.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
@@ -66,6 +84,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   the copy this browser already holds, as file previews already did, and falls
   back to the server when there is none. New `useBlobObjectUrl` hook in
   `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
+
+- The "Could not set up your account passkey" message now also names the request that failed and its HTTP status, so a report says whether the session, the challenge or the credential was refused.
+- The "Demo setup stalled" report now says where the time went. It carries how
+  long each setup step took and whether the tab was in the background, and a
+  demo that does finish after the notice sends a second, informational report
+  with its total time. The notice fires at a fixed 45 seconds, so until now a
+  slow machine and a stuck one looked the same in Sentry (`ATOMIC-BROWSER-1J`).
 
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which
@@ -344,6 +369,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: form inputs validate before writing. `InputString` and `InputURI` no longer put an invalid value into the resource while showing an error; all inputs share one validate-then-set hook (`useValidatedInput`) and surface the datatype's actual error message (e.g. "Not an integer") instead of a generic "Invalid value". `ResourceField` now accepts and forwards `commit` / `commitDebounceInterval`, and every input honours `commitDebounceInterval` (Markdown, Number, Boolean, Date, Timestamp, Resource, ResourceArray and FilePicker previously fell back to the 100 ms default). A required field whose value loads after the first render is now flagged correctly.
 - Fix: `Resource.remove()` and `Resource.push()` emit `LocalChange` like `set()` does, so `useValue` / `useArray` re-render when a field is cleared or an item is appended. `useValue`'s setter clears a previously reported validation error when called with `undefined`. `useArray`'s `push` saves through the same debounced scheduler and error handling (`handleValidationError` / `store.notifyError`) as `set`, instead of an immediate `resource.save()` that only logged failures. `StoreContext` no longer defaults to a phantom `Store`: `useStore()` throws when no `<StoreContext.Provider>` is mounted.
 - `@tomic/lib`: one list of server-managed properties (`server-managed-props.ts`) replaces the three copies in `resource.ts` and `store.ts` that had drifted apart; the OPFS cold-load guard now also treats an inline `genesis` certificate as skeleton, not content. One serializer (`Resource.toClientDbJsonAd()`) writes the local-database row from both `Store.addResource` and `Resource.persistToClientDb`, and a durable save now records its write in the store's dedup stamp so the next ingress does not rewrite the same row.
+- Comment on a table row, like in Notion. Every row's gutter carries a comment bubble: it shows up on hover for a row with nothing on it yet, and stays put — with the count, highlighted while unseen — for a row that has comments. Clicking it opens that row's thread in the Comments panel, headed by the row's title; another row's bubble switches threads, and the same row's closes the panel. A row is a resource of its own, so its thread is the ordinary one (Messages whose `about` points at the row) and needs no setup. The Comments panel can now be aimed at a resource inside the page rather than only at the page's own; the navbar button keeps opening the page's thread.
 - Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.
 - A dashboard is reachable from its table: "Add view" offers **Dashboard**, which creates an empty Dashboard as a child of the table and shows it as a tab (`view-kind: dashboard`, `view-dashboard`). Switching an existing tab to Dashboard does the same. The Dashboard stays a resource of its own, so a Drive page or a document can still embed it.
 - Fix: creating a second table column with a name that already exists in the drive's ontology (e.g. two "Status" columns) no longer mints a colliding property shortname that silently corrupts the ontology. A compatible existing property is reused instead; an incompatible one gets a disambiguated shortname (`status-2`) ([#1504](https://github.com/ontola/atomic-server/issues/1504)).

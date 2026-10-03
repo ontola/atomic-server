@@ -326,6 +326,7 @@ export class Collection {
   private _assemblingPage = false;
   private static legacyQueryServers = new WeakMap<Store, Set<string>>();
   private legacyQuery = false;
+  private readonly preferServer: boolean;
   private legacyMembers?: Promise<string[]>;
 
   public constructor(
@@ -333,12 +334,15 @@ export class Collection {
     server: string,
     params: CollectionParams,
     noFetch = false,
+    options: { preferServer?: boolean } = {},
   ) {
     this.store = store;
     this.server = server;
     this.params = params;
+    this.preferServer = !!options.preferServer;
 
     if (!noFetch) {
+      store.registerBulkRefreshable(this);
       // Route the initial fetch through `refresh()` rather than calling
       // `fetchPage(0)` directly. `refresh()` sets `_refreshInFlight`,
       // which `applyResourceChange` reads to know whether a late-
@@ -765,7 +769,11 @@ export class Collection {
       this._memberIndex.set(subject, lastPageIdx);
       this.writePageMembers(
         lastPage,
-        [...members, subject],
+        this.withMemberInSortedPosition(
+          members,
+          subject,
+          this.pages.size === 1,
+        ),
         this._totalMembers,
       );
 
@@ -925,6 +933,23 @@ export class Collection {
       return;
     }
 
+    // A list that grows large is cheaper for the server to sort and page than
+    // for this client to build every member of. Wait briefly for the
+    // connection; without one the local database answers as usual.
+    if (
+      this.preferServer &&
+      (this.store.serverConnected ||
+        (await this.store.waitForServerConnected(3000)))
+    ) {
+      try {
+        await this.fetchPageFromServer(page);
+
+        return;
+      } catch {
+        // Fall through to the local database.
+      }
+    }
+
     // The worker may still be attaching after agent-key initialization.
     // An expected database is different from an app that opted out of OPFS;
     // share the resource loader's bounded attachment wait before going remote.
@@ -982,6 +1007,66 @@ export class Collection {
     if (this.store.serverConnected) {
       await this.fetchPageFromServer(page).catch(() => undefined);
     }
+  }
+
+  /**
+   * A member's sort key, read from the store. `sortOrder` (fractional
+   * sibling-order key) falls back to the creation time, mirroring the server's
+   * query index, so explicitly positioned resources interleave with untouched
+   * ones. Client resources usually lack a materialized `createdAt` propval, so
+   * the genesis Loro change is read directly.
+   */
+  private sortKeyOf(subject: string, sortBy: string): unknown {
+    const isSortOrder = sortBy === dataBrowser.properties.sortOrder;
+    const isCreatedAt = sortBy === commits.properties.createdAt;
+    const resource = this.store.resources.get(subject);
+    let key = resource?.get(sortBy);
+
+    if (typeof key === 'number' && (isSortOrder || isCreatedAt)) {
+      key = isCreatedAt ? normalizeLoroChangeTimestampMs(key) : key;
+    } else if (key === undefined && resource && (isSortOrder || isCreatedAt)) {
+      key = resource.getCreatedAt();
+    }
+
+    return key;
+  }
+
+  /**
+   * `members` with `subject` added: in its sorted place when the collection is
+   * sorted on a key the store can read and the page holds the whole list,
+   * else at the end. A local database that has only some of the members at
+   * load (the rest arrive a moment later) would otherwise list them in the
+   * order they arrive, so a row that belongs between two others ends up first.
+   */
+  private withMemberInSortedPosition(
+    members: string[],
+    subject: string,
+    wholeList: boolean,
+  ): string[] {
+    const sortBy = this.params.sort_by;
+
+    if (!sortBy || !wholeList) return [...members, subject];
+
+    const sortDesc = !!this.params.sort_desc;
+    const key = this.sortKeyOf(subject, sortBy);
+    const keys = members.map(member => this.sortKeyOf(member, sortBy));
+
+    // A member the store does not hold yet has no key to compare against.
+    if (key === undefined || keys.some(k => k === undefined)) {
+      return [...members, subject];
+    }
+
+    let at = members.length;
+
+    while (
+      at > 0 &&
+      compareSortKeys(keys[at - 1], key, members[at - 1]!, subject, sortDesc) >
+        0
+    ) {
+      at -= 1;
+    }
+
+    return [...members.slice(0, at), subject, ...members.slice(at)];
   }
 
   /**
@@ -1094,6 +1179,17 @@ export class Collection {
       return 'no-db';
     }
 
+    // While a drive sync is still pulling data, the local database may hold
+    // only part of the members (a chat of thousands of messages, say). The
+    // server has them all, so let it answer instead of a partial list.
+    if (
+      this.store.serverConnected &&
+      this.store.isDriveSyncPulling() &&
+      !this.store.hasCompletedDriveSyncFor(drive)
+    ) {
+      return 'no-db';
+    }
+
     // Hydrate + sort + setPage must not optimistic-add via ResourceUpdated.
     // Set the flag only around this slice — not the `queryLocalDb` wait
     // above — so a locally created member during the query still lands.
@@ -1164,7 +1260,29 @@ export class Collection {
       this._optimisticAdds.delete(subject);
     }
 
+    // A big collection is sorted from the sort key read out of each member's
+    // JSON, and only the members on the requested page are built into
+    // resources. Building all of them (a chat of thousands of messages) took
+    // tens of seconds to show the first fifty.
+    let jsonBySubject: Map<string, string> | undefined;
+    let jsonSortKeys: Map<string, unknown> | undefined;
+
     if (
+      result.resources &&
+      result.resources.length === result.subjects.length &&
+      result.subjects.length > LAZY_HYDRATE_THRESHOLD &&
+      this.params.sort_by
+    ) {
+      jsonBySubject = new Map(
+        result.subjects.map((subject, i) => [subject, result.resources![i]!]),
+      );
+      jsonSortKeys = sortKeysFromJsonAd(this.params.sort_by, jsonBySubject);
+
+      if (!jsonSortKeys) jsonBySubject = undefined;
+    }
+
+    if (
+      !jsonBySubject &&
       result.resources &&
       result.resources.length === result.subjects.length
     ) {
@@ -1206,24 +1324,14 @@ export class Collection {
       // resources interleave with untouched ones. Client resources usually
       // lack a materialized `createdAt` propval, so read the genesis Loro
       // change directly.
-      const isSortOrder = sortBy === dataBrowser.properties.sortOrder;
-      const isCreatedAt = sortBy === commits.properties.createdAt;
 
       for (const s of result.subjects) {
-        const resource = this.store.resources.get(s);
-        let key = resource?.get(sortBy);
-
-        if (typeof key === 'number' && (isSortOrder || isCreatedAt)) {
-          key = isCreatedAt ? normalizeLoroChangeTimestampMs(key) : key;
-        } else if (
-          key === undefined &&
-          resource &&
-          (isSortOrder || isCreatedAt)
-        ) {
-          key = resource.getCreatedAt();
+        if (jsonSortKeys) {
+          sortKeys.set(s, jsonSortKeys.get(s));
+          continue;
         }
 
-        sortKeys.set(s, key);
+        sortKeys.set(s, this.sortKeyOf(s, sortBy));
       }
 
       // Ordered to match the server, because the same collection can be
@@ -1240,39 +1348,23 @@ export class Collection {
       //     local index happened to yield — stable, but stable at a
       //     different order than the server's, which is exactly the case
       //     where every row shares a value (an unfilled column).
-      result.subjects.sort((a, b) => {
-        const valA = sortKeys.get(a);
-        const valB = sortKeys.get(b);
-        const aMissing = valA === null || valA === undefined;
-        const bMissing = valB === null || valB === undefined;
-
-        let cmp: number;
-
-        if (aMissing && bMissing) {
-          cmp = 0;
-        } else if (aMissing) {
-          cmp = -1;
-        } else if (bMissing) {
-          cmp = 1;
-        } else {
-          cmp =
-            typeof valA === 'number' && typeof valB === 'number'
-              ? valA - valB
-              : String(valA).localeCompare(String(valB));
-        }
-
-        if (cmp === 0) {
-          cmp = a.localeCompare(b);
-        }
-
-        return sortDesc ? -cmp : cmp;
-      });
+      result.subjects.sort((a, b) =>
+        compareSortKeys(sortKeys.get(a), sortKeys.get(b), a, b, sortDesc),
+      );
     }
 
     // Client-side pagination
     const pageSize = parseInt(this.params.page_size, 10);
     const offset = page * pageSize;
     const pageSubjects = result.subjects.slice(offset, offset + pageSize);
+
+    if (jsonBySubject) {
+      for (const subject of pageSubjects) {
+        const json = jsonBySubject.get(subject);
+
+        if (json) this.store.hydrateResourceFromJsonAd(subject, json);
+      }
+    }
 
     // Build a synthetic collection resource from the query result
     const resource = new Resource<Collections.Collection>(
@@ -1454,14 +1546,28 @@ export class Collection {
       (m): m is string => m !== undefined,
     );
     const filteredMembers = filterIndexLeakage(rawMembers);
+    const answeredTotal = resource.props.totalMembers;
 
-    if (filteredMembers.length !== rawMembers.length) {
-      this.writePageMembers(resource, filteredMembers, filteredMembers.length);
+    if (!isNumber(answeredTotal)) {
+      throw new Error('Invalid collection: total-members is not a number');
     }
 
-    this.setPage(page, resource);
+    // The answer is the store's copy of the query resource, shared by every
+    // collection that asks the same question. Members added live are written
+    // into the page, so each collection keeps a page of its own, as the local
+    // database path does. Sharing it made the second collection find the
+    // member already listed, report no change, and never redraw.
+    const own = new Resource<Collections.Collection>(this.buildSubject(page));
+    this.writePageMembers(
+      own,
+      filteredMembers,
+      filteredMembers.length !== rawMembers.length
+        ? filteredMembers.length
+        : answeredTotal,
+    );
+    this.setPage(page, own);
 
-    const totalMembers = resource.props.totalMembers;
+    const totalMembers = own.props.totalMembers;
 
     if (!isNumber(totalMembers)) {
       throw new Error('Invalid collection: total-members is not a number');
@@ -1477,6 +1583,91 @@ function readAggregates(resource: Resource): AggregateOutcome[] {
   const value = resource.get(collections.properties.aggregates);
 
   return Array.isArray(value) ? (value as unknown as AggregateOutcome[]) : [];
+}
+
+/**
+ * Orders two members by their sort keys the way the server does, because the
+ * same collection can be answered by either and the two must not disagree.
+ * A row list that reshuffles depending on which side answered reads as data
+ * changing under you.
+ *
+ *   - Missing values FIRST. The server encodes them as `TAG_NONE` (0x05),
+ *     below every value tag, so they lead an ascending sort.
+ *   - Ties broken by subject. The server's member key is
+ *     `id || sort_key || subject`, so equal sort keys come back in subject
+ *     order.
+ */
+function compareSortKeys(
+  valA: unknown,
+  valB: unknown,
+  subjectA: string,
+  subjectB: string,
+  sortDesc: boolean,
+): number {
+  const aMissing = valA === null || valA === undefined;
+  const bMissing = valB === null || valB === undefined;
+
+  let cmp: number;
+
+  if (aMissing && bMissing) {
+    cmp = 0;
+  } else if (aMissing) {
+    cmp = -1;
+  } else if (bMissing) {
+    cmp = 1;
+  } else {
+    cmp =
+      typeof valA === 'number' && typeof valB === 'number'
+        ? valA - valB
+        : String(valA).localeCompare(String(valB));
+  }
+
+  if (cmp === 0) {
+    cmp = subjectA.localeCompare(subjectB);
+  }
+
+  return sortDesc ? -cmp : cmp;
+}
+
+/** Collections with more members than this are sorted from their JSON and only
+ *  the requested page is built into resources. */
+const LAZY_HYDRATE_THRESHOLD = 200;
+
+/**
+ * The sort key of each member, read from its JSON-AD without building a
+ * resource. `undefined` when a key a resource would derive another way (the
+ * creation time, from the genesis change) is not in the JSON, so the caller
+ * builds the resources instead and gets the same order as before.
+ */
+function sortKeysFromJsonAd(
+  sortBy: string,
+  jsonBySubject: Map<string, string>,
+): Map<string, unknown> | undefined {
+  const derived =
+    sortBy === commits.properties.createdAt ||
+    sortBy === dataBrowser.properties.sortOrder;
+  const keys = new Map<string, unknown>();
+
+  for (const [subject, json] of jsonBySubject) {
+    let value: unknown;
+
+    try {
+      value = (JSON.parse(json) as Record<string, unknown>)[sortBy];
+    } catch {
+      return undefined;
+    }
+
+    if (value === undefined && derived) return undefined;
+
+    keys.set(
+      subject,
+      typeof value === 'number' && sortBy === commits.properties.createdAt
+        ? normalizeLoroChangeTimestampMs(value)
+        : value,
+    );
+  }
+
+  return keys;
 }
 
 export function proxyCollection(collection: Collection): Collection {

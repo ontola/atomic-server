@@ -21,7 +21,10 @@ server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad
-.claude
+# Local Claude Code state stays out; the shared cloud-session hook is tracked.
+**/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
 .antigravitycli
 
 # Release binaries and one-off rustc scratch files at repo root
@@ -54,3 +57,4 @@ node_modules/
 # vite.config.ts runs on every vite / vitest start.
 /browser/data-browser/src/chunks/Website/runtime/search-view.html
 /browser/data-browser/src/chunks/Website/runtime/website-runtime.min.js
+/e2e-test-results

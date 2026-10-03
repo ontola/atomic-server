@@ -202,6 +202,9 @@ const REPEATABLE_RPC_TYPES = new Set([
   'envelopesFor',
   'getAllVersionVectors',
   'getVersionVectorsForDrive',
+  'getDriveSubjects',
+  'indexPendingSearch',
+  'getVersionVectorsForSubjects',
   'outboxEntries',
 ]);
 
@@ -238,6 +241,16 @@ const LEADER_ELECTION_WAIT_MS = 2_000;
 // worker's wasm import + OPFS open, which can take seconds on a cold dev
 // server. Ends early on success or on a definite failure.
 const STEAL_SETTLE_WAIT_MS = 15_000;
+
+// A follower whose request has gone unanswered this long asks the leader if it
+// is alive at all. A tab the browser froze or discarded keeps its lock and
+// answers nothing, so without this every call would wait out the 30s deadline
+// below and the page would sit empty with no error.
+const LEADER_LIVENESS_CHECK_MS = 1_000;
+
+// A live leader answers a ping from its main thread in milliseconds, so this
+// is generous; a slow worker does not delay the answer, only a dead tab does.
+const LEADER_PROBE_WAIT_MS = 1_000;
 
 // The same wait, for the case where nothing was stolen because we already own
 // the lock and our own leader init is simply still running. Nothing is
@@ -362,11 +375,16 @@ export class ClientDbWorker {
   }
 
   async init(baseUrl?: string): Promise<void> {
+    this.baseUrl = baseUrl;
     if (this.initPromise) return this.initPromise;
     this.initPromise = this.doInit(baseUrl);
 
     return this.initPromise;
   }
+
+  private baseUrl: string | undefined;
+  private lastLeaderAnnounceAt = 0;
+  private probingLeader = false;
 
   private async doInit(baseUrl?: string): Promise<void> {
     if (!this.workerUrl) {
@@ -731,6 +749,8 @@ export class ClientDbWorker {
         break;
 
       case 'leader-announce':
+        this.lastLeaderAnnounceAt = Date.now();
+
         if (this.role !== 'leader') {
           // Recover from a prior `'failed'` state if a leader finally
           // announces itself (the stale tab woke up, or a fresh tab took
@@ -844,19 +864,63 @@ export class ClientDbWorker {
    * callers must not follow this with a separate flush RPC, which could race
    * an identity handoff closing the worker.
    */
-  async putResourceWithSnapshot(
+  putResourceWithSnapshot(
     subject: string,
     jsonAd: string,
     snapshot?: Uint8Array,
     outbox?: ClientDbOutboxWrite,
   ): Promise<void> {
-    await this.send({
-      type: 'putResourceWithSnapshot',
-      subject,
-      jsonAd,
-      snapshot,
-      outbox,
+    // Writes made in the same tick leave as one message: a chunk of pushed
+    // resources is applied in a loop, and one transaction per resource made a
+    // 1200-folder first sync keep the worker busy for minutes.
+    return new Promise<void>((resolve, reject) => {
+      this.pendingPuts.push({ jsonAd, snapshot, outbox, resolve, reject });
+
+      if (this.pendingPuts.length === 1) {
+        queueMicrotask(() => this.flushPendingPuts());
+      }
     });
+  }
+
+  private pendingPuts: {
+    jsonAd: string;
+    snapshot?: Uint8Array;
+    outbox?: ClientDbOutboxWrite;
+    resolve: () => void;
+    reject: (e: unknown) => void;
+  }[] = [];
+
+  /** Send the writes queued by {@link putResourceWithSnapshot}. Called before
+   *  any other message too, so the worker sees them in the order they were
+   *  made. */
+  private flushPendingPuts(): void {
+    const batch = this.pendingPuts;
+
+    if (batch.length === 0) return;
+
+    this.pendingPuts = [];
+
+    const message =
+      batch.length === 1
+        ? {
+            type: 'putResourceWithSnapshot',
+            jsonAd: batch[0].jsonAd,
+            snapshot: batch[0].snapshot,
+            outbox: batch[0].outbox,
+          }
+        : {
+            type: 'putResourcesWithSnapshots',
+            items: batch.map(({ jsonAd, snapshot, outbox }) => ({
+              jsonAd,
+              snapshot,
+              outbox,
+            })),
+          };
+
+    this.send(message, true).then(
+      () => batch.forEach(item => item.resolve()),
+      e => batch.forEach(item => item.reject(e)),
+    );
   }
 
   /** The outbox rows stored for `agent`: one JSON value per subject. */
@@ -1084,6 +1148,44 @@ export class ClientDbWorker {
     return versionVectorRecords(r);
   }
 
+  /** The subjects of one drive, without reading any snapshot. */
+  /** Merge and persist pulled resource states inside the worker, without
+   *  building them in this thread. */
+  async applyStateUpdates(
+    subjects: string[],
+    states: Uint8Array[],
+  ): Promise<number> {
+    return (await this.send({
+      type: 'applyStateUpdates',
+      subjects,
+      states,
+    })) as number;
+  }
+
+  /** Add search entries for up to `limit` resources stored without them.
+   *  Resolves to how many were done; 0 means nothing is left. */
+  async indexPendingSearch(limit: number): Promise<number> {
+    return (await this.send({ type: 'indexPendingSearch', limit })) as number;
+  }
+
+  async getDriveSubjects(drive: string): Promise<string[]> {
+    return (await this.send({ type: 'getDriveSubjects', drive })) as string[];
+  }
+
+  /** Version vectors of exactly these subjects. A big drive is read in slices
+   *  of these, so reads queued on the same database worker run between the
+   *  slices instead of behind one long scan. */
+  async getVersionVectorsForSubjects(
+    subjects: string[],
+  ): Promise<Record<string, Record<string, number>>> {
+    const r = await this.send({
+      type: 'getVersionVectorsForSubjects',
+      subjects,
+    });
+
+    return versionVectorRecords(r);
+  }
+
   /**
    * Seal this drive's history into one Cloud Vault object.
    *
@@ -1284,8 +1386,13 @@ export class ClientDbWorker {
 
   /* ---------------------------- Internal send ----------------------------- */
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async send(msg: Record<string, any>): Promise<unknown> {
+  private async send(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    msg: Record<string, any>,
+    isPutBatch = false,
+  ): Promise<unknown> {
+    if (!isPutBatch) this.flushPendingPuts();
+
     // Websocket fanout can call into the DB before init() has resolved
     // (leadership election + leader announce takes a few ticks). Wait for
     // init rather than rejecting — the caller already started init, we just
@@ -1332,6 +1439,40 @@ export class ClientDbWorker {
     });
   }
 
+  /**
+   * A request to the leader has gone unanswered. Ping it: a live leader
+   * answers from its main thread within milliseconds, even while busy. If
+   * nothing answers it is a ghost (frozen or discarded tab holding the lock),
+   * so take the lock. Taking it replays the calls that are safe to repeat and
+   * fails the rest with a retryable error, through `resumeAfterLeaderChange`.
+   */
+  private async reclaimFromSilentLeader(): Promise<void> {
+    if (this.probingLeader || this.role !== 'follower' || !this.bc) return;
+
+    this.probingLeader = true;
+
+    try {
+      const pingedAt = Date.now();
+      this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
+      await new Promise(resolve => setTimeout(resolve, LEADER_PROBE_WAIT_MS));
+
+      if (
+        this.destroyed ||
+        this.role !== 'follower' ||
+        this.lastLeaderAnnounceAt >= pingedAt
+      ) {
+        return;
+      }
+
+      console.warn(
+        '[ClientDb] the leader tab stopped answering; taking over the local database',
+      );
+      this.requestLeaderLock(this.baseUrl, true);
+    } finally {
+      this.probingLeader = false;
+    }
+  }
+
   private sendToLeader(
     msg: Record<string, unknown>,
     retries = 1,
@@ -1350,7 +1491,13 @@ export class ClientDbWorker {
       // "peer closed" event — the pending entry sits forever.
       // Handoffs settle these entries through onLeaderChanged below. Keep a
       // deadline as well for a leader that stays alive but stops answering.
+      const liveness = setTimeout(() => {
+        if (this.pending.has(id)) void this.reclaimFromSilentLeader();
+      }, LEADER_LIVENESS_CHECK_MS);
+
       const timer = setTimeout(() => {
+        clearTimeout(liveness);
+
         if (this.pending.has(id)) {
           this.pending.delete(id);
           reject(
@@ -1365,6 +1512,7 @@ export class ClientDbWorker {
         onLeaderChanged: () => {
           this.pending.delete(id);
           clearTimeout(timer);
+          clearTimeout(liveness);
           // Reads, flush, and content-addressed blob writes are safe to
           // repeat. A general write may have committed before its reply was
           // lost, and worker-local peer sessions cannot move across tabs.
@@ -1389,10 +1537,12 @@ export class ClientDbWorker {
         },
         resolve: (data: unknown) => {
           clearTimeout(timer);
+          clearTimeout(liveness);
           resolve(data);
         },
         reject: (e: Error) => {
           clearTimeout(timer);
+          clearTimeout(liveness);
           reject(e);
         },
       });

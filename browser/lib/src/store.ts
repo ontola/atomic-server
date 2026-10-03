@@ -16,7 +16,10 @@ import {
 } from './history-attribution.js';
 import { ulid } from 'ulidx';
 import type { Agent } from './agent.js';
-import { canonicalDriveHash } from './canonical-drive-hash.js';
+import {
+  canonicalDriveHash,
+  canonicalDriveHashV2,
+} from './canonical-drive-hash.js';
 import {
   removeCookieAuthentication,
   setCookieAuthentication,
@@ -63,6 +66,9 @@ import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
 import { withDeadline } from './withDeadline.js';
+
+/** How long a connected store waits on its local database before asking the server. */
+const LOCAL_READ_DEADLINE_MS = 1_000;
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
@@ -222,8 +228,13 @@ export interface DriveSyncState {
   driveHash: string;
   /** Unique peer IDs across all resources, sorted. Counter arrays are indexed by this. */
   peers: string[];
-  /** subject → counter array (indexed by `peers`). */
+  /** subject → counter array (indexed by `peers`). Empty for a sparse state. */
   resources: Record<string, number[]>;
+  /** Sparse form (`hashVersion` 2): subject → peer → counter, non-zero
+   *  counters only. Set instead of `peers` and `resources`. */
+  vvs?: Record<string, Record<string, number>>;
+  /** Which drive hash `driveHash` is: 1 (dense) or 2 (sparse). */
+  hashVersion?: 1 | 2;
 }
 
 export interface CommitLogPropertySummary {
@@ -514,6 +525,40 @@ function commitLogValuesEqual(
  * Subscribers (components that use the Resource), and for managing the current
  * Agent (User).
  */
+/** How many snapshots one slice of the version-vector read covers. The worker
+ *  answers reads in order, so this is the longest a screen's read can wait
+ *  behind the scan (about 40 ms at 500 on a laptop). */
+const VV_SLICE = 500;
+
+/** Reads a drive's version vectors in slices, so reads queued on the database
+ *  worker run between them. One call for 10k resources held the worker for
+ *  about 0.8 s and the screen's first reads waited that long. */
+async function readDriveVersionVectors(
+  db: ClientDbWorker,
+  drive: string,
+): Promise<Record<string, Record<string, number>>> {
+  if (!db.getDriveSubjects || !db.getVersionVectorsForSubjects) {
+    return db.getVersionVectorsForDrive(drive);
+  }
+
+  const subjects = await db.getDriveSubjects(drive);
+
+  if (subjects.length <= VV_SLICE) {
+    return db.getVersionVectorsForDrive(drive);
+  }
+
+  const all: Record<string, Record<string, number>> = {};
+
+  for (let i = 0; i < subjects.length; i += VV_SLICE) {
+    Object.assign(
+      all,
+      await db.getVersionVectorsForSubjects(subjects.slice(i, i + VV_SLICE)),
+    );
+  }
+
+  return all;
+}
+
 export class Store {
   /** A list of all functions that need to be called when a certain resource is updated */
   public subscribers: Map<string, ResourceCallback[]>;
@@ -675,6 +720,7 @@ export class Store {
   private _serverConnected = false;
   private _serverConnectionError: string | undefined;
   private _driveSyncInProgress = false;
+  private _driveSyncPulling = false;
   /**
    * Saves that a UI layer has scheduled (e.g. `useValue`'s commit
    * debounce) but whose `save()` hasn't run yet. During that window the
@@ -1377,14 +1423,9 @@ export class Store {
           return isUnrecoverableCommitError(msg, code);
         },
         onBlocked: (entry, e) => {
-          const msg = e instanceof Error ? e.message : String(e);
-          // Stopped retrying, but the entry stays queued + visible. Tell the
-          // user once; a fresh edit (`markDirty`) re-arms it automatically.
-          this.notifyError(
-            new Error(
-              `Could not sync ${entry.subject.slice(0, 60)}… — ${msg} ` +
-                `Not retrying; edit again once you have access.`,
-            ),
+          this.notifyBlockedSync(
+            entry.subject,
+            e instanceof Error ? e.message : String(e),
           );
         },
       });
@@ -1882,12 +1923,30 @@ export class Store {
    * version vectors, plus the individual VV data for diff computation.
    * Used by the sync protocol to determine what needs syncing.
    */
-  public async computeDriveSyncState(drive: string): Promise<DriveSyncState> {
+  public async computeDriveSyncState(
+    drive: string,
+    { sparse = false }: { sparse?: boolean } = {},
+  ): Promise<DriveSyncState> {
     // Collect VVs from WASM DB (persisted snapshots)
     let allVVs: Record<string, Record<string, number>> = {};
 
+    // The state is what the server compares against: built from memory alone
+    // (the database not attached yet, or not answering) it claims the client
+    // holds a handful of resources, and the server answers by sending the
+    // whole drive again. Wait for the database, and fail the sync attempt
+    // rather than describe a partial state.
+    if (!this.clientDb && !(await this.waitForClientDb())) {
+      if (this.clientDbExpected) {
+        throw new Error('Local database not attached yet');
+      }
+    }
+
     if (this.clientDb) {
       try {
+        if (!this.clientDb.isReady && !(await this.clientDb.waitForReady())) {
+          throw new Error('Local database is not ready');
+        }
+
         // Scoped to THIS drive via the same parent-index walk the server uses
         // (`collect_drive_subjects`): O(this drive) instead of O(every resource
         // in every drive). It also keeps foreign-drive subjects out of the VV
@@ -1895,10 +1954,10 @@ export class Store {
         // the drive as a pull/remove candidate, so an unscoped VV made every
         // single-drive sync reason about unrelated drives' resources.
         const endVV = perfSpan('clientdb.getVersionVectorsForDrive');
-        allVVs = await this.clientDb.getVersionVectorsForDrive(drive);
+        allVVs = await readDriveVersionVectors(this.clientDb, drive);
         endVV({ count: Object.keys(allVVs).length });
-      } catch {
-        // WASM DB may not be ready yet
+      } catch (e) {
+        throw new Error(`Local database unavailable for sync: ${e}`);
       }
     }
 
@@ -1959,6 +2018,29 @@ export class Store {
       if (this.outbox.hasPending(subject)) {
         delete allVVs[subject];
       }
+    }
+
+    if (sparse) {
+      // Per-resource counters as they are: no peer table, no matrix. Each
+      // resource has a peer of its own, so the dense form below is resources
+      // times peers, and the hash and frame built from it dominated opening a
+      // large drive.
+      const vvs: Record<string, Record<string, number>> = {};
+
+      for (const [subject, vv] of Object.entries(allVVs)) {
+        vvs[subject] = Object.fromEntries(
+          Object.entries(vv).filter(([, counter]) => counter !== 0),
+        );
+      }
+
+      return {
+        drive,
+        driveHash: await canonicalDriveHashV2(vvs),
+        peers: [],
+        resources: {},
+        vvs,
+        hashVersion: 2,
+      };
     }
 
     // Collect unique peer IDs across all resources
@@ -3178,7 +3260,7 @@ export class Store {
     if (!this._serverConnected && !opts.serverOnly) {
       searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
-      return kvResults;
+      return this.withoutDestroyed(kvResults);
     }
 
     // Merge with hosted `/search` (same KV engine) so OPFS lag still
@@ -3197,7 +3279,20 @@ export class Store {
     const results = searchResource.get(server.properties.results) ?? [];
     searchDebug('[search] server search returned', results.length);
 
-    return [...new Set([...kvResults, ...results])].slice(0, opts.limit ?? 30);
+    return this.withoutDestroyed([
+      ...new Set([...kvResults, ...results]),
+    ]).slice(0, opts.limit ?? 30);
+  }
+
+  /**
+   * Search answers come from two indexes (local and hosted) that can both lag
+   * a destroy: the hosted one until the outbox delivered it, the local one
+   * until a stale push re-wrote the row. A subject this store knows was
+   * destroyed would only render as a "was destroyed" error row, so it never
+   * reaches the caller.
+   */
+  private withoutDestroyed(subjects: string[]): string[] {
+    return subjects.filter(subject => !this.isDestroyed(subject));
   }
 
   public async semanticSearch(
@@ -3713,7 +3808,18 @@ export class Store {
       }
     }
 
-    let local = await this.hydrateFromLocalDb(subject);
+    // With a server to ask, a local read that has not answered in a
+    // second (a busy worker, a leader tab that stopped answering) is treated
+    // as no database: the server is asked instead of the page sitting on a
+    // placeholder. Offline, the local database is the only source, so it is
+    // awaited as long as it takes.
+    let local = this._serverConnected
+      ? await withDeadline<boolean | undefined>(
+          this.hydrateFromLocalDb(subject),
+          LOCAL_READ_DEADLINE_MS,
+          undefined,
+        )
+      : await this.hydrateFromLocalDb(subject);
     let hasLocalData = local === true;
 
     /**
@@ -4743,6 +4849,51 @@ export class Store {
     return propery;
   }
 
+  /** Drives whose "not enrolled" refusal was already reported this session. */
+  private _notifiedRefusedDrives = new Set<string>();
+
+  /**
+   * Tell the person a write stopped syncing. The entry stays queued and
+   * visible, and a fresh edit re-arms it.
+   *
+   * A node refusing a whole drive as "not enrolled" is one condition, not one
+   * per resource: every create and every comment in that drive is refused the
+   * same way, and a toast for each buried the person under errors that name
+   * resources they never see. Say it once per drive, in terms of the drive,
+   * and say what happens to their edits.
+   */
+  private notifyBlockedSync(subject: string, message: string): void {
+    if (isNotEnrolledMessage(message)) {
+      // The refusal names the drive it refuses; that is the same for every
+      // resource in it, where a resource's own drive may not be known yet.
+      const drive =
+        /Drive (\S+) is not enrolled/.exec(message)?.[1] ??
+        this.driveOf(this.normalizeSubject(subject)) ??
+        subject;
+
+      if (this._notifiedRefusedDrives.has(drive)) return;
+
+      this._notifiedRefusedDrives.add(drive);
+      this.notifyError(
+        new Error(
+          `This server does not host this workspace (${message.trim()}) ` +
+            `Your changes are kept on this device and are not being sent. ` +
+            `Ask the server's operator to enrol the workspace, or turn on ` +
+            `browser-only sync for it in the sync settings.`,
+        ),
+      );
+
+      return;
+    }
+
+    this.notifyError(
+      new Error(
+        `Could not sync ${subject.slice(0, 60)}… — ${message} ` +
+          `Not retrying; edit again once you have access.`,
+      ),
+    );
+  }
+
   /**
    * This is called when Errors occur in some of the library functions.
    */
@@ -4780,6 +4931,7 @@ export class Store {
 
     if (!connected) {
       this._driveSyncInProgress = false;
+      this._driveSyncPulling = false;
     }
 
     console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
@@ -4931,6 +5083,7 @@ export class Store {
     timestamp: number,
   ): void {
     this._driveSyncInProgress = false;
+    this._driveSyncPulling = false;
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
@@ -4955,6 +5108,7 @@ export class Store {
    */
   public failDriveSync(drive: string, message: string): void {
     this._driveSyncInProgress = false;
+    this._driveSyncPulling = false;
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
     if (drive) {
@@ -4982,6 +5136,17 @@ export class Store {
    * An unknown drive returns false, so the caller falls back to the server.
    * That is the safe direction: a needless `/query` costs a round-trip, while
    * a wrongly-trusted empty silently hides the user's data. */
+  /** True while the server is sending a drive's resources and they are not all
+   *  saved locally yet: the local database may hold only part of the drive. */
+  public isDriveSyncPulling(): boolean {
+    return this._driveSyncPulling;
+  }
+
+  /** The server started sending resources for a drive sync. */
+  public startDriveSyncPull(): void {
+    this._driveSyncPulling = true;
+  }
+
   public hasCompletedDriveSyncFor(drive: string | undefined): boolean {
     if (!drive) return false;
 
@@ -7013,6 +7178,33 @@ export class Store {
         }
       });
     });
+  }
+
+  private bulkRefreshables = new Set<WeakRef<{ refresh(): Promise<void> }>>();
+
+  /** Collections register here so that a bulk pull, which stores resources in
+   *  the database worker without announcing each one, can tell them to ask the
+   *  local database again. Held weakly: a collection nobody uses is not kept
+   *  alive for it. */
+  public registerBulkRefreshable(collection: {
+    refresh(): Promise<void>;
+  }): void {
+    this.bulkRefreshables.add(new WeakRef(collection));
+  }
+
+  /** Resources were stored without a notification each (see
+   *  `WSClient.applyPulledStates`): re-run the queries that are still alive. */
+  public notifyBulkApplied(): void {
+    for (const ref of this.bulkRefreshables) {
+      const collection = ref.deref();
+
+      if (!collection) {
+        this.bulkRefreshables.delete(ref);
+        continue;
+      }
+
+      collection.refresh().catch(() => undefined);
+    }
   }
 
   /** Lets subscribers know that a resource has been changed. */

@@ -28,13 +28,29 @@ export type {
 export {
   VIEW_PROTOCOL_VERSION,
   isViewRequest,
+  isViewKeyEvent,
   viewRequest,
   packagedViewOperations,
 } from './viewProtocol.js';
 export type {
+  ViewKeyEvent,
   ViewOperation,
   ViewRequest,
   ViewResponse,
 } from './viewProtocol.js';
 export { parseSetupDeclaration, validateSetupArguments } from '@tomic/lib';
 export type { SetupDeclaration, SetupField, SetupArguments } from '@tomic/lib';
+export {
+  store,
+  ViewStore,
+  ViewResource,
+  forwardUnhandledKeys,
+} from './store.js';
+export type {
+  MenuItem,
+  MenuPoint,
+  PropValue,
+  QueryArgs,
+  SearchArgs,
+  ViewContext,
+} from './store.js';

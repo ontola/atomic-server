@@ -180,15 +180,19 @@ pub enum CapabilityName {
     ExtendedFuel,
     ExtendedMemory,
     CustomView,
+    /// A custom view may change the classes and properties of what it shows
+    /// (their ontology) without asking each time. Enforced by the view host.
+    EditSchema,
 }
 
 impl CapabilityName {
-    pub const ALL: [CapabilityName; 5] = [
+    pub const ALL: [CapabilityName; 6] = [
         Self::Storage,
         Self::FullDriveAccess,
         Self::ExtendedFuel,
         Self::ExtendedMemory,
         Self::CustomView,
+        Self::EditSchema,
     ];
 
     /// The kebab-case name, as it appears in manifests and grants.
@@ -199,6 +203,7 @@ impl CapabilityName {
             Self::ExtendedFuel => "extended-fuel",
             Self::ExtendedMemory => "extended-memory",
             Self::CustomView => "custom-view",
+            Self::EditSchema => "edit-schema",
         }
     }
 
@@ -459,6 +464,13 @@ impl Manifest {
             if !self.has_capability(CapabilityName::CustomView) {
                 return Err("view entrypoint requires the custom-view capability".into());
             }
+        }
+        // Only a view's host enforces it, so without a view it would be a
+        // grant that reads as power and does nothing.
+        if self.has_capability(CapabilityName::EditSchema)
+            && !self.has_capability(CapabilityName::CustomView)
+        {
+            return Err("edit-schema requires the custom-view capability".into());
         }
         if self.accepts.len() > 8 {
             return Err("at most 8 accepts entries".into());

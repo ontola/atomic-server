@@ -262,9 +262,14 @@ test.describe('timer view', () => {
     const stopped = await entry.getByTestId('derived-duration').textContent();
 
     // Duration is stored on the View by the template, not built into the timer:
-    // turning this view into a plain table keeps the column, while the
-    // genuinely timer-specific Start/Stop column goes away.
+    // turning a timer view into a plain table keeps the column, while the
+    // genuinely timer-specific Start/Stop column goes away. The only Timer view
+    // can't be converted in place (#1902), so convert a copy of it.
     await page.getByRole('tab', { name: 'Timer' }).click();
+    await page.getByTestId('menu-item-duplicate').click();
+    const copyTab = page.getByRole('tab', { name: 'Timer copy' });
+    await expect(copyTab).toHaveAttribute('aria-selected', 'true');
+    await copyTab.click();
     await page.getByTestId('menu-item-kind-table').click();
     await expect(page.getByTestId('timer-new-input')).toHaveCount(0);
 
