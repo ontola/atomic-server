@@ -24,3 +24,20 @@ secure sign-in remain host adapters in this first extraction. A future package
 can extract those implementations without coupling this UI to a native ABI.
 
 Run `flutter analyze` and `flutter test` in this directory.
+
+## Hosted accounts
+
+`AtomicAccountClient` implements the provider device-code flow, origin-bound
+bearer sessions, account/device/hosting discovery, and AES-GCM assisted recovery.
+It has no default provider and makes no request until called. The host owns
+credential storage and must verify the recovered subject against the key before
+installing it. Secrets are never part of an approval URL.
+
+`AtomicAccountLinkDialog` handles approval and cancellation. Supply a URL launcher
+and an installation callback. `AtomicSettingsBackend.signInWithAccount`,
+`accountStatus`, `syncAccount`, and `useLocalProjects` expose this in the shared
+user dialog. Existing manual-secret and peer-only hosts remain supported.
+
+A provider session alone does not prove a workspace is synced. This package does
+not implement Cloud Vault transport; hosts must connect their Atomic runtime to
+the discovered Cloud Server or peer and verify received data.

@@ -74,6 +74,11 @@ Future<void> showSettings(WidgetTester tester, TestBackend backend) async {
 }
 
 void main() {
+  test('canonical peer identifiers match the same legacy node', () {
+    final id = 'a' * 64;
+    expect(isLiveAtomicPeer('atomic:node:$id', {'did:ad:node:$id'}), isTrue);
+  });
+
   testWidgets('Canvas dialog works at phone width and switches/creates drives',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);

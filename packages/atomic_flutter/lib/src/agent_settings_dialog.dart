@@ -190,6 +190,54 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
                       TextButton(
                           onPressed: _loadData, child: const Text('Retry')),
                     ],
+                    if (widget.backend.signInWithAccount != null) ...[
+                      Text(widget.backend.accountStatus ??
+                          'Connect your Atomic account'),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 8, children: [
+                        OutlinedButton.icon(
+                            icon: const Icon(Icons.account_circle_outlined),
+                            label: const Text('Sign in with account'),
+                            onPressed: () async {
+                              try {
+                                await widget
+                                    .backend.signInWithAccount!(context);
+                                await _loadData();
+                              } catch (e) {
+                                if (context.mounted) {
+                                  showErrorSnack(context, '$e');
+                                }
+                              }
+                            }),
+                        if (widget.backend.syncAccount != null)
+                          OutlinedButton(
+                              onPressed: () async {
+                                try {
+                                  await widget.backend.syncAccount!();
+                                  await _loadData();
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    showErrorSnack(context, '$e');
+                                  }
+                                }
+                              },
+                              child: const Text('Sync now')),
+                        if (widget.backend.useLocalProjects != null)
+                          TextButton(
+                              onPressed: () async {
+                                try {
+                                  await widget.backend.useLocalProjects!();
+                                  await _loadData();
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    showErrorSnack(context, '$e');
+                                  }
+                                }
+                              },
+                              child: const Text('Local projects')),
+                      ]),
+                      const Divider(height: 32),
+                    ],
                     _buildThisDeviceCard(theme),
 
                     const SizedBox(height: 16),

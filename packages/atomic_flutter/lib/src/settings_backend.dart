@@ -31,6 +31,10 @@ abstract class AtomicSettingsBackend {
 
   /// Optional capabilities; unavailable actions are not displayed.
   AtomicServerBackend? get servers => null;
+  Future<void> Function(BuildContext context)? get signInWithAccount => null;
+  Future<void> Function()? get syncAccount => null;
+  Future<void> Function()? get useLocalProjects => null;
+  String? get accountStatus => null;
   Future<void> Function()? get signOut => null;
   Future<void> Function(BuildContext context)? get signIn => null;
 }
@@ -51,6 +55,9 @@ abstract class AtomicServerBackend {
 bool isLiveAtomicPeer(String known, Set<String> live) {
   String normalize(String id) {
     var value = id.trim().toLowerCase();
+    if (value.startsWith('atomic:node:')) {
+      value = 'did:ad:node:${value.substring(12)}';
+    }
     if (value.startsWith('did:ad:node:')) {
       value = value.substring(12);
       if (value.length > 64) value = value.substring(0, 64);
