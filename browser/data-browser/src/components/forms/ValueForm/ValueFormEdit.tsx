@@ -5,7 +5,8 @@ import { Button } from '../../Button';
 import { Column, Row } from '../../Row';
 import { ErrMessage } from '../InputStyles';
 import InputSwitcher from '../InputSwitcher';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { discardEdit } from '../../../helpers/discardEdit';
 import { FormValidationContextProvider } from '../formValidation/FormValidationContextProvider';
 
 interface ValueFormEditProps {
@@ -24,10 +25,16 @@ export function ValueFormEdit({
 }: ValueFormEditProps): React.JSX.Element {
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [isFormValid, setIsFormValid] = useState(false);
+  // What the property held when editing started. The inputs write to the
+  // resource as you type, so closing without saving has to put this back, or
+  // the next save of any other property would persist the discarded edit.
+  const [initialValue] = useState(() => resource.get(property.subject));
+  const saved = useRef(false);
 
   const save = async () => {
     try {
       await resource.save();
+      saved.current = true;
       onClose();
       toast.success('Resource saved');
     } catch (e) {
@@ -42,8 +49,13 @@ export function ValueFormEdit({
   };
 
   useEffect(() => {
-    // Refresh the data when the edit form closes.
+    // Refresh the data when the edit form closes. Closing in any way other than
+    // saving (Cancel, Escape) discards what was typed.
     return () => {
+      if (!saved.current) {
+        discardEdit(resource, property.subject, initialValue);
+      }
+
       resource.refresh();
     };
   }, []);
