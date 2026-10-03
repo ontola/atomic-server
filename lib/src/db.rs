@@ -4463,6 +4463,11 @@ impl Storelike for Db {
                     new,
                     &mut transaction,
                 )?;
+                if let Some(old) = &commit_response.resource_old {
+                    if !removal_queued {
+                        query_index::refile_sort_order_entries(store, old, new, &mut transaction)?;
+                    }
+                }
                 crate::search::index_resource(store, new, &mut transaction)?;
             }
             if commit_response.resource_new.is_none() && !removal_queued {
