@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The shared sign-in card no longer says "This browser does not support passkeys".
+  Where a passkey cannot work it shows no passkey option at all, and the
+  portal and the app now decide that the same way.
+
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while

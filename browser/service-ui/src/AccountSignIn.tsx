@@ -9,7 +9,6 @@ import { useRef, type FormEvent, type ReactNode } from 'react';
 export type AccountSignInCopy = {
   google: string;
   passkey: string;
-  passkeyUnavailable: string;
   or: string;
   emailLabel: string;
   send: string;
@@ -34,8 +33,6 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
   en: {
     google: 'Google',
     passkey: 'Sign in with passkey',
-    passkeyUnavailable:
-      'This browser does not support passkeys. Use Google or an email link instead.',
     or: 'or',
     emailLabel: 'Email',
     send: 'Email me a link',
@@ -68,8 +65,6 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
   nl: {
     google: 'Google',
     passkey: 'Inloggen met passkey',
-    passkeyUnavailable:
-      'Deze browser ondersteunt geen passkeys. Gebruik Google of een e-maillink.',
     or: 'of',
     emailLabel: 'E-mail',
     send: 'Stuur me een link',
@@ -183,9 +178,7 @@ export function AccountSignIn({
           <PasskeyMark />
           <span>{copy.passkey}</span>
         </button>
-      ) : (
-        <p className='atomic-signin-hint'>{copy.passkeyUnavailable}</p>
-      )}
+      ) : null}
       <div className='atomic-signin-row'>
         {googleHref ? (
           <a
