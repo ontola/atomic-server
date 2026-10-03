@@ -2380,3 +2380,13 @@ refused subscribe is dropped.
 - The paired SaaS `portal/e2e/onboarding.spec.ts` closes the original context,
   downloads the vault into a fresh browser, verifies the saved document and
   profile, requires a clean console, and budgets metadata reads after reload.
+
+## Flutter account package (draft)
+
+`packages/atomic_flutter/test/account_test.dart` covers device approval, provider
+origin binding, redirect refusal, account/backup mismatch, authenticated discovery,
+AES-GCM envelope compatibility with an independently generated Node fixture,
+tamper rejection, and closing during a pending request. Atomic Audio additionally
+checks isolated native identity installation and actual bidirectional iroh/Loro
+with BLAKE3 files introduced after pairing. Production account approval, Vault
+transport and recovery on a physical device are not covered by these tests.
