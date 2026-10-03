@@ -56,6 +56,7 @@ export const test = base.extend<{
         // signaling, authenticated WebRTC, persistence and reconciliation.
         await installEmptyDiscoveryRoom(context);
         await installAbsentLocalOllama(context);
+        await installStubbedWebSearchMcp(context);
       };
 
       // Depend on context so assertions run BEFORE Playwright closes it. The
@@ -249,6 +250,46 @@ export async function installAbsentLocalOllama(context: BrowserContext) {
       body: JSON.stringify({}),
     }),
   );
+}
+
+/** The hosted web-search MCP server answers from a stub, on every runner alike.
+ *
+ * Opening the AI sidebar connects to the default MCP servers, and the web
+ * search one is a public third-party host. Whatever that host answers is
+ * logged by the browser when it is an error status: its 405 to the optional
+ * GET stream failed "opening AI chat closes the left sidebar at tablet width"
+ * in every attempt of one run, in a spec that has nothing to do with search.
+ * `enableAIForTesting` already stubs the same host for the AI specs; this does
+ * it for every spec, so the suite no longer depends on a service it does not
+ * own. A page route is matched ahead of this context route, so a spec that
+ * registers its own answer keeps it.
+ */
+export async function installStubbedWebSearchMcp(context: BrowserContext) {
+  await context.route('https://mcp.exa.ai/**', async route => {
+    if (route.request().method() !== 'POST') {
+      await route.fulfill({ status: 204 });
+
+      return;
+    }
+
+    const request = route.request().postDataJSON();
+
+    if (request.id === undefined) {
+      await route.fulfill({ status: 202, body: '' });
+
+      return;
+    }
+
+    const result =
+      request.method === 'initialize'
+        ? {
+            protocolVersion: request.params.protocolVersion,
+            capabilities: { tools: {} },
+            serverInfo: { name: 'Test search', version: '1' },
+          }
+        : { tools: [] };
+    await route.fulfill({ json: { jsonrpc: '2.0', id: request.id, result } });
+  });
 }
 
 export async function installEmptyDiscoveryRoom(context: BrowserContext) {
