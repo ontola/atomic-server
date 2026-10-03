@@ -130,7 +130,7 @@
       apps = forAllSystems (pkgs: {
         default = {
           type = "app";
-          program = lib.getExe self.packages.${pkgs.system}.atomic-server;
+          program = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.atomic-server;
         };
       });
 
