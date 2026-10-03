@@ -14,6 +14,12 @@ import { useEffect } from 'react';
  * height. Measured on a Xiaomi 15: `innerHeight` 731 both before and after,
  * while `visualViewport.height` went 731 → 457.
  *
+ * Chrome on Android does honour it, and needs it: by default it only shrinks
+ * the *visual* viewport, which leaves `100dvh` (and so the meeting chat's
+ * composer and the menus) extending under Chrome's own bottom toolbar, where
+ * the toolbar cuts them off. The viewport meta in index.html asks for
+ * `resizes-content`, so there the layout viewport is already the visible area.
+ *
  * Left uncorrected, the browser reveals a focused field by scrolling the
  * *visual* viewport over the too-tall layout — which drags `position: fixed`
  * chrome (the top bar) off the top of the screen. Shrinking the layout means
