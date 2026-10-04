@@ -8,6 +8,13 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 ## UNRELEASED
 
 - A plain `GET /ws` that is not a WebSocket upgrade (a crawler, a pasted URL) now answers 400 instead of 500, so it no longer shows up as an incident in error reporting.
+- A commit is also sent to WebSocket subscribers of the resource's parent. A
+  resource shared out of a drive the recipient can't read (a chatroom) can only
+  be subscribed to on its own, and a new child is a new subject, so its new
+  messages reached neither that subscription nor a drive subscription the
+  recipient could hold. Read rights are checked per subscriber against the
+  resource when it is sent, and a connection already reached through the
+  resource or its drive doesn't get it twice.
 
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private

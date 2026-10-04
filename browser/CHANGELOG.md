@@ -31,6 +31,27 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   are viewing from the server again) and "Restart app" (reloads the whole app).
   They and the "Go to" items (settings, drives, feedback) no longer clutter the
   list: type in the menu's filter to find them.
+- Someone given a chat, or anything else, out of a drive they can't open sees
+  all of it. A list answered from the local database was trusted whenever it
+  was non-empty, but only a drive synced to this device has its whole list
+  there: the guest's own messages and the ones present when they joined were
+  shown as the entire chat, and a reload asked the same database again. For a
+  drive this device hasn't synced the server is now asked once per list per
+  session, and anything only the local database knows (a write not yet
+  confirmed) is kept.
+- Things shared with you out of someone else's drive update live and notify
+  you. The app only listened to the drive you had open, so a guest in a shared
+  chat never received new messages from the host, and got no notifications for
+  them. Everything in "Shared with me" is now subscribed for as long as the app
+  runs (`Store.subscribeLive`).
+- Presence works in things shared out of someone else's drive. Presence was a
+  channel per drive, which a guest given one chat can't read: the server
+  refused them, so host and guest never saw each other there, nor who was
+  typing. A view now also announces in the channel of the shared resource it
+  is in (`Store.presenceScope`: the nearest resource with its own `read`
+  list), and leaves the drive channel alone when it can't read the drive. One
+  tab is one session across channels (`Store.presenceSessionId`), so nobody
+  shows up twice.
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
