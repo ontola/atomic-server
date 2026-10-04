@@ -170,6 +170,22 @@ describe('keeping a replaced identity', () => {
     expect(previous.localOnlyDrives).toEqual(['did:ad:kept', 'did:ad:other']);
   });
 
+  it('finds the stored key when asked for the other spelling of the same agent', async () => {
+    await saveAgentToIDB(await makeSecret(), { adoptOnDevice: false });
+    const { subject } = store.get(AGENT_IDB_KEY) as { subject: string };
+    const key = subject.replace(/^(atomic|did:ad):agent:/, '');
+    const otherSpelling = subject.startsWith('atomic:agent:')
+      ? `did:ad:agent:${key}`
+      : `atomic:agent:${key}`;
+    expect(otherSpelling).not.toBe(subject);
+
+    await archiveStoredAgent(otherSpelling);
+
+    const [previous, ...rest] = await readPreviousIdentities();
+    expect(rest).toEqual([]);
+    expect(previous.subject).toBe(subject);
+  });
+
   it('refuses when the device holds no key for the identity', async () => {
     await expect(archiveStoredAgent('did:ad:agent:missing')).rejects.toThrow();
   });

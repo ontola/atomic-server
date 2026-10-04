@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- A plain `GET /ws` that is not a WebSocket upgrade (a crawler, a pasted URL) now answers 400 instead of 500, so it no longer shows up as an incident in error reporting.
+
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private
   drive points to its Inbox with.
