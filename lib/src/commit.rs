@@ -312,6 +312,10 @@ impl Commit {
             }
         }
         doc.set_property(urls::GENESIS, &crate::values::Value::String(cert_b64))?;
+        let mut with_dependencies = Resource::new(did.to_string());
+        with_dependencies.apply_state_doc(doc)?;
+        crate::schema::dependencies::attach(&mut with_dependencies, store).await?;
+        let doc = with_dependencies.build_state_doc()?;
         // The genesis change carries the creator's subject as its message,
         // exactly as the browser writes it: `createdBy` reads it, and the
         // signed genesis envelope is matched back to this change by it
@@ -1572,6 +1576,13 @@ async fn sign_at(
         for prop in &commitbuilder.remove {
             doc.remove_property(prop)?;
         }
+        // Lower-level SDK writers (including genesis builders) also retrieve
+        // definitions from the local registry and carry them in the signed
+        // payload. This never fetches arbitrary schema URLs.
+        let mut with_dependencies = Resource::new(commitbuilder.subject.to_string());
+        with_dependencies.apply_state_doc(doc)?;
+        crate::schema::dependencies::attach(&mut with_dependencies, store).await?;
+        let doc = with_dependencies.build_state_doc()?;
         // One tokened change per commit, like the browser: history buckets
         // versions by it and the envelope is attributed to it.
         doc.commit_with_message(&format!(

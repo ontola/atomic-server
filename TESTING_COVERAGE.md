@@ -1,3 +1,13 @@
+Automatic schema retrieval (2026-10-04): a signed low-level genesis builder is
+served over authenticated GET to a cold Db; public GET remains denied. The
+native memo test checks exact-body hits, tampered-body rejection and eviction
+under entry/byte pressure. Audio's separate two-process Iroh regression receives
+its schema without registration, then merges note, sampler and instrument edits,
+transfers BLAKE3 files and receives presence. Full native library: 689 passed,
+8 ignored. Browser unit suite: 1127 passed, 1 skipped; the pre-existing live
+server genesis integration remains excluded. No deployed phone/browser test or
+transport-wide denial-of-service audit is claimed.
+
 Schema delivery and migration races (2026-10-04): native schema tests exercise
 actual SYNC_PUSH frames into a cold Db, dependent deltas, authorized rejection
 without SYNC_OK, unauthorized pushes, and private direct schema reads. Native

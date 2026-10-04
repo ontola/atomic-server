@@ -109,6 +109,40 @@ function checkDefinition(
   return resource;
 }
 
+// Entries are memoized only when the same ID AND exact body arrive again.
+// This cache cannot resolve a missing definition and contains no Store handles.
+const verifiedBodies = new Map<
+  string,
+  { text: string; resource: Resource; bytes: number }
+>();
+let cachedBytes = 0;
+const CACHE_ENTRIES = 256;
+const CACHE_BYTES = 4 * 1024 * 1024;
+
+function verifiedDefinition(id: string, text: string): Resource {
+  const hit = verifiedBodies.get(id);
+  if (hit?.text === text) return hit.resource.clone();
+  const body = JSON.parse(text) as Record<string, SchemaValue>;
+  if (canonicalSchemaJson(body) !== text)
+    throw new Error('Schema body is not canonical JSON');
+  const resource = checkDefinition(id, body);
+  const bytes = size(id) + size(text);
+
+  while (
+    verifiedBodies.size >= CACHE_ENTRIES ||
+    cachedBytes + bytes > CACHE_BYTES
+  ) {
+    const key = verifiedBodies.keys().next().value!;
+    cachedBytes -= verifiedBodies.get(key)!.bytes;
+    verifiedBodies.delete(key);
+  }
+
+  verifiedBodies.set(id, { text, resource: resource.clone(), bytes });
+  cachedBytes += bytes;
+
+  return resource;
+}
+
 /** No cache mutation or network I/O. Only reachable, verified definitions return. */
 export function resolveSchemaDependencies(
   doc: LoroDoc,
@@ -126,10 +160,7 @@ export function resolveSchemaDependencies(
     bytes += size(id) + size(text);
     if (bytes > MAX_SCHEMA_BYTES || size(text) > 256 * 1024)
       throw new Error('Schema dependencies exceed byte budget');
-    const body = JSON.parse(text) as Record<string, SchemaValue>;
-    if (canonicalSchemaJson(body) !== text)
-      throw new Error('Schema body is not canonical JSON');
-    attached.set(id, checkDefinition(id, body));
+    attached.set(id, verifiedDefinition(id, text));
   }
 
   const queue = links(
@@ -147,7 +178,7 @@ export function resolveSchemaDependencies(
     const definition = attached.get(id) ?? lookup(id);
     if (!definition) throw new Error(`Missing frozen schema dependency ${id}`);
     const body = definition.getPropVals() as Record<string, SchemaValue>;
-    const checked = checkDefinition(id, body);
+    const checked = attached.has(id) ? definition : checkDefinition(id, body);
     bytes += size(id) + size(canonicalSchemaJson(body));
     if (bytes > MAX_SCHEMA_BYTES)
       throw new Error('Schema dependencies exceed byte budget');

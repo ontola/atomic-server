@@ -119,10 +119,10 @@ because they participate in the hash.
 Reusing an existing Property ID means reusing its meaning. Changes to units,
 meaning or datatype require a new definition and an explicit data migration.
 Do not use display labels as semantic scope changes. Presentation metadata,
-reference-based recursive schemas, a schema catalog, automatic discovery,
+reference-based recursive schemas, a schema catalog, global dependency inventory,
 JSON Schema import/export and a Dart convenience API are follow-up work. Flutter
 can call these Rust APIs through its existing native bridge; this change does
-not yet migrate Atomic Audio's project format.
+provide the Audio migration UI (maintained in the Audio repository).
 
 
 ## Delivery and trust
@@ -151,6 +151,27 @@ wire-level dependency inventory. Limits cover the visible schema payload after
 Loro import; existing transport/frame limits still matter, and these checks do
 not bound every aspect of CRDT history or decompression. This is not a complete
 DoS audit of Loro or the transport.
+
+### Automatic retrieval and repeated edits
+
+`Resource::save` and low-level `CommitBuilder` signing, including genesis,
+attach the reachable definitions from the local registry before signing. A cold
+recipient therefore obtains schemas from its authorized resource transfer;
+there is no separate URL lookup or executable schema loader.
+
+Native and browser resolvers memoize verified inline bodies, capped at 256
+entries and 4 MiB of encoded keys/bodies. A hit requires the exact ID and body.
+Parsing, canonicalization, hashing and shape-definition checks are skipped on
+hits; resource values are still validated on every import. Native parsing occurs
+outside the cache lock. Parsed object memory adds overhead beyond the encoded
+byte cap. An absent attachment cannot be resolved from this process-wide memo
+cache: only the current request and the recipient's admitted store participate
+in resolution. This prevents one drive from learning another drive's schemas
+through memoization. Invalid bodies cannot replace a verified entry.
+
+Keep Classes small and reuse Property IDs across related entity kinds. A note
+Class should not recommend an entire instrument graph: its dependency closure
+would otherwise carry those unused definitions on every new note.
 
 ## Schema migrations
 

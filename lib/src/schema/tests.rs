@@ -745,3 +745,62 @@ async fn cold_commit_validates_attachments_without_registering_them_during_valid
         assert!(sink.get_resource(&id.as_str().into()).await.is_ok());
     }
 }
+
+#[tokio::test]
+async fn builder_authoring_and_authorized_get_retrieve_schemas_automatically() {
+    use crate::{
+        agents::ForAgent,
+        commit::{Commit, CommitBuilder, CommitOpts},
+        sync::{engine, protocol},
+    };
+    let source = Db::init_temp("schema-builder-source").await.unwrap();
+    let (alice, drive) = source.setup("Alice").await.unwrap();
+    let schema = audio();
+    schema.register(&source).await.unwrap();
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set(
+        crate::urls::IS_A.into(),
+        Value::ResourceArray(vec![schema.class_id.clone().into()]),
+    );
+    builder.set(crate::urls::PARENT.into(), Value::AtomicUrl(drive.into()));
+    builder.set(
+        crate::urls::READ.into(),
+        Value::ResourceArray(vec![alice.subject.to_string().into()]),
+    );
+    builder.set(schema.property("tune").unwrap().into(), Value::Float(0.));
+    builder.set(
+        schema.property("envelope").unwrap().into(),
+        Value::Json(json!({"attack":0.01,"release":0.2})),
+    );
+    let commit = Commit::create_did(builder, &alice, &source).await.unwrap();
+    let subject = commit.subject.to_string();
+    crate::runtime::AtomicNode::from_db(source.clone())
+        .apply_local_commit(
+            commit,
+            &CommitOpts {
+                validate_signature: true,
+                validate_schema: true,
+                validate_rights: true,
+                update_index: true,
+                ..CommitOpts::no_validations_no_index()
+            },
+        )
+        .await
+        .unwrap();
+    let frame = protocol::encode_get(1, &subject);
+    let denied = engine::handle_frame_full(&frame, &source, &mut ForAgent::Public).await;
+    assert_eq!(denied.frames[0][0], protocol::tag::ERROR);
+    let answer = engine::handle_frame_full(&frame, &source, &mut ForAgent::from(alice)).await;
+    assert_eq!(answer.frames[0][0], protocol::tag::UPDATE);
+    let update = protocol::decode_update(&answer.frames[0][1..]).unwrap();
+    let cold = Db::init_temp("schema-builder-recipient").await.unwrap();
+    let mut resource = Resource::new(subject);
+    resource
+        .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&update.loro_bytes).unwrap())
+        .unwrap();
+    cold.persist_replicated_resource(&resource).await.unwrap();
+    assert!(cold
+        .get_resource(&schema.class_id.as_str().into())
+        .await
+        .is_ok());
+}

@@ -15,6 +15,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   recipient could hold. Read rights are checked per subscriber against the
   resource when it is sent, and a connection already reached through the
   resource or its drive doesn't get it twice.
+- Low-level resource/genesis builders attach frozen schemas automatically.
+  Native/browser imports memoize exact verified bodies with bounded caches;
+  absent dependencies cannot be supplied by another drive's memo cache.
+
 - Frozen app schemas now travel with resource Loro state over normal sync.
   Receivers verify bounded dependencies before admitting data, reject invalid
   imports without installing definitions, and retain explicit schema versions

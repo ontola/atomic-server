@@ -1,8 +1,11 @@
 //! Frozen definitions travel with the resource that authorizes their transfer.
-//! No remote lookups, code execution, or cache writes occur during validation.
+//! No remote lookups, code execution, or persistent schema writes occur during validation.
 use super::{app, frozen, shape::Shape, Class, Property};
 use crate::{errors::AtomicResult, Resource, Storelike, Value};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::{Arc, Mutex, OnceLock},
+};
 
 pub const ROOT: &str = "atomic:schema-definitions";
 pub const MAX_DEFINITIONS: usize = 512;
@@ -77,6 +80,65 @@ fn check_definition(resource: &Resource) -> AtomicResult<()> {
     Ok(())
 }
 
+// Memoize only bodies supplied by this request, never resolve an absent schema
+// from this process-wide cache. This prevents cross-drive cache disclosure.
+const CACHE_ENTRIES: usize = 256;
+const CACHE_BYTES: usize = 4 * 1024 * 1024;
+#[derive(Default)]
+struct DefinitionCache {
+    entries: VecDeque<(String, String, Arc<Resource>)>,
+    bytes: usize,
+}
+impl DefinitionCache {
+    fn get(&self, id: &str, body: &str) -> Option<Arc<Resource>> {
+        self.entries
+            .iter()
+            .find(|(key, text, _)| key == id && text == body)
+            .map(|(_, _, resource)| resource.clone())
+    }
+    fn insert(&mut self, id: &str, body: &str, resource: Arc<Resource>) {
+        if self.get(id, body).is_some() {
+            return;
+        }
+        let size = id.len() + body.len();
+        if size > CACHE_BYTES {
+            return;
+        }
+        while self.entries.len() >= CACHE_ENTRIES || self.bytes + size > CACHE_BYTES {
+            if let Some((key, text, _)) = self.entries.pop_front() {
+                self.bytes -= key.len() + text.len();
+            }
+        }
+        self.bytes += size;
+        self.entries.push_back((id.into(), body.into(), resource));
+    }
+}
+fn verified_definition(id: &str, body: &str) -> AtomicResult<Arc<Resource>> {
+    static CACHE: OnceLock<Mutex<DefinitionCache>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(resource) = cache
+        .lock()
+        .map_err(|_| "Schema cache lock poisoned")?
+        .get(id, body)
+    {
+        return Ok(resource);
+    }
+    // Parsing/hashing happens outside the shared lock. A corrupt body cannot
+    // replace a verified entry even if it claims the same identifier.
+    let parsed: serde_json::Value = serde_json::from_str(body)?;
+    let resource = app::resource(id, &parsed)?;
+    if serde_jcs::to_string(&parsed)? != body {
+        return Err("Schema body is not canonical JSON".into());
+    }
+    check_definition(&resource)?;
+    let resource = Arc::new(resource);
+    cache
+        .lock()
+        .map_err(|_| "Schema cache lock poisoned")?
+        .insert(id, body, resource.clone());
+    Ok(resource)
+}
+
 pub fn read_doc(doc: &crate::loro::AtomicLoroDoc) -> AtomicResult<Definitions> {
     let map = doc.doc().get_map(ROOT);
     if map.len() > MAX_DEFINITIONS {
@@ -94,13 +156,10 @@ pub fn read_doc(doc: &crate::loro::AtomicLoroDoc) -> AtomicResult<Definitions> {
         if total > MAX_BYTES || body.len() > frozen::MAX_BYTES {
             return Err("Schema dependencies exceed byte budget".into());
         }
-        let parsed: serde_json::Value = serde_json::from_str(body.as_ref())?;
-        let resource = app::resource(&id, &parsed)?;
-        if serde_jcs::to_string(&parsed)? != body.as_ref() {
-            return Err("Schema body is not canonical JSON".into());
-        }
-        check_definition(&resource)?;
-        definitions.insert(id, resource);
+        definitions.insert(
+            id.clone(),
+            (*verified_definition(&id, body.as_ref())?).clone(),
+        );
     }
     Ok(definitions)
 }
@@ -125,12 +184,13 @@ pub async fn resolve(resource: &Resource, store: &impl Storelike) -> AtomicResul
         let definition = if let Some(def) = attached.get(&id) {
             def.clone()
         } else {
-            store
+            let definition = store
                 .get_resource(&id.as_str().into())
                 .await
-                .map_err(|_| format!("Missing frozen schema dependency {id}"))?
+                .map_err(|_| format!("Missing frozen schema dependency {id}"))?;
+            check_definition(&definition)?;
+            definition
         };
-        check_definition(&definition)?;
         total = total
             .saturating_add(id.len())
             .saturating_add(serde_jcs::to_vec(&frozen::body(&definition)?)?.len());
@@ -179,4 +239,30 @@ pub fn validate_data(resource: &Resource, definitions: &Definitions) -> AtomicRe
 pub async fn attach(resource: &mut Resource, store: &impl Storelike) -> AtomicResult<()> {
     let definitions = resolve(resource, store).await?;
     resource.attach_schema_definitions(&definitions)
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    #[test]
+    fn memoization_is_bounded_and_never_trusts_an_id_without_its_body() {
+        let schema = app::AppSchema::define("cache-security", Default::default()).unwrap();
+        let id = &schema.class_id;
+        let body = serde_jcs::to_string(&schema.definitions[id]).unwrap();
+        let first = verified_definition(id, &body).unwrap();
+        let second = verified_definition(id, &body).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+        assert!(verified_definition(id, "{}").is_err());
+        assert!(Arc::ptr_eq(
+            &first,
+            &verified_definition(id, &body).unwrap()
+        ));
+        let mut cache = DefinitionCache::default();
+        for n in 0..1024 {
+            cache.insert(&n.to_string(), &"x".repeat(32 * 1024), first.clone());
+        }
+        assert!(cache.entries.len() <= CACHE_ENTRIES);
+        assert!(cache.bytes <= CACHE_BYTES);
+        assert!(cache.get("0", &"x".repeat(32 * 1024)).is_none());
+    }
 }
