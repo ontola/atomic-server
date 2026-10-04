@@ -11,7 +11,10 @@ import {
 } from '../../helpers/managed/accountProviders';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import { getManagedAccount } from '../../helpers/managed/session';
-import { hasPasskeyApi } from '../../helpers/passkeySupport';
+import {
+  deviceCanUsePasskeys,
+  hasPasskeyApi,
+} from '../../helpers/passkeySupport';
 import {
   approvalUrl,
   awaitDeviceLink,
@@ -27,6 +30,27 @@ import { isRunningInTauri } from '../../helpers/tauri';
 import { CardError } from './chrome';
 
 const EMAIL_POLL_MS = 2000;
+
+/** undefined while the device is still being asked. */
+function usePasskeysOnThisDevice(): boolean | undefined {
+  const [usable, setUsable] = useState<boolean | undefined>(() =>
+    hasPasskeyApi() ? undefined : false,
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    void deviceCanUsePasskeys().then(result => {
+      if (active) setUsable(result);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return usable;
+}
 
 const NO_PROVIDERS: AccountProviders = {
   google: false,
@@ -56,6 +80,7 @@ export function AccountSignInPanel({
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const passkeys = usePasskeysOnThisDevice();
   const signedIn = useRef(onSignedIn);
 
   useEffect(() => {
@@ -145,7 +170,7 @@ export function AccountSignInPanel({
         appleHref={href('apple')}
         githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
-        passkeySupported={hasPasskeyApi()}
+        passkeySupported={passkeys === true}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => void handleEmail(e)}

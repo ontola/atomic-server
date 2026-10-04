@@ -51,7 +51,10 @@ import {
   AccountSignInViaBrowser,
 } from './AccountSignInPanel';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const PORTAL = 'https://portal.example';
 
@@ -128,4 +131,29 @@ it('in the desktop app, signing in in the browser is enough', async () => {
   expect(state.redeem).toHaveBeenCalledWith(PORTAL, 'DC', 'H1', 'V');
   expect(onSignedIn).toHaveBeenCalledOnce();
   state.inTauri = false;
+});
+
+it('offers the passkey only where this device has something to sign in with', async () => {
+  const device = (passkeyPlatformAuthenticator: boolean) =>
+    vi.stubGlobal(
+      'PublicKeyCredential',
+      Object.assign(function () {}, {
+        getClientCapabilities: async () => ({
+          passkeyPlatformAuthenticator,
+          hybridTransport: false,
+        }),
+      }),
+    );
+  const credentials = { create() {}, get() {} };
+  vi.stubGlobal('navigator', { ...navigator, credentials });
+  vi.stubGlobal('isSecureContext', true);
+
+  device(false);
+  await show(<AccountSignInPanel portalUrl={PORTAL} onSignedIn={vi.fn()} />);
+  expect(screen.queryByRole('button', { name: /passkey/i })).toBeNull();
+  cleanup();
+
+  device(true);
+  await show(<AccountSignInPanel portalUrl={PORTAL} onSignedIn={vi.fn()} />);
+  expect(screen.getByRole('button', { name: /passkey/i })).toBeTruthy();
 });
