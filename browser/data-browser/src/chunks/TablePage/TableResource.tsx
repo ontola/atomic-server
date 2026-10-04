@@ -183,7 +183,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
-  } = useTableData(resource, viewSubject);
+  } = useTableData(resource, viewSubject, embedded);
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -1264,6 +1264,13 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 table={resource.subject}
               />
             </AppViewWrapper>
+          ) : viewKind === 'dashboard' && embedded ? (
+            // A dashboard inside a dashboard block would render itself again,
+            // forever. Say so instead of hanging the page.
+            <p>
+              Pick a table, board or calendar view; a dashboard can't be shown
+              inside a dashboard.
+            </p>
           ) : viewKind === 'dashboard' ? (
             <DashboardView dashboard={viewDashboard} />
           ) : viewKind === 'kanban' ? (
