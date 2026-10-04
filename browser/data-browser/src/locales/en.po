@@ -10713,3 +10713,39 @@ msgstr "Discard upload"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+
+#: src/components/MetaSetter.tsx
+msgid "Welcome"
+msgstr "Welcome"
+
+#: src/components/MetaSetter.tsx
+msgid "Account"
+msgstr "Account"
+
+#: src/components/MetaSetter.tsx
+msgid "Server settings"
+msgstr "Server settings"
+
+#: src/components/MetaSetter.tsx
+msgid "Token"
+msgstr "Token"
+
+#: src/components/MetaSetter.tsx
+msgid "Data"
+msgstr "Data"
+
+#: src/components/MetaSetter.tsx
+msgid "Get started"
+msgstr "Get started"
+
+#: src/components/MetaSetter.tsx
+msgid "Invitation"
+msgstr "Invitation"
+
+#: src/components/MetaSetter.tsx
+msgid "Your own place for documents, tables, meetings and chat. Local-first and open source, with optional cloud backup and sync."
+msgstr "Your own place for documents, tables, meetings and chat. Local-first and open source, with optional cloud backup and sync."
+
+#: src/components/MetaSetter.tsx
+msgid "The easiest way to create, share and model Linked Atomic Data."
+msgstr "The easiest way to create, share and model Linked Atomic Data."
