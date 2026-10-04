@@ -10391,3 +10391,23 @@ msgstr "Change this view to"
 #: src/routes/DemoRoute.tsx
 msgid "Demo setup finished after stall"
 msgstr "Demo setup finished after stall"
+
+#: src/actions/resourceActions.tsx
+msgid "Reload resource"
+msgstr "Reload resource"
+
+#: src/actions/resourceActions.tsx
+msgid "Fetch this resource from the server again, replacing the local copy."
+msgstr "Fetch this resource from the server again, replacing the local copy."
+
+#: src/actions/resourceActions.tsx
+msgid "Resource reloaded"
+msgstr "Resource reloaded"
+
+#: src/actions/appMenuItems.tsx
+msgid "Restart app"
+msgstr "Restart app"
+
+#: src/actions/appMenuItems.tsx
+msgid "Reload the whole app, as if you opened it again."
+msgstr "Reload the whole app, as if you opened it again."

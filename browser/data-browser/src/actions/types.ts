@@ -12,7 +12,7 @@ import type { Resource, Store } from '@tomic/react';
 export type ActionScope = 'resource' | 'app';
 
 /** Menus render a divider between consecutive items of different sections. */
-export type ActionSection = 'view' | 'action';
+export type ActionSection = 'view' | 'action' | 'maintenance';
 
 /**
  * Everything an action may need at run time, assembled once per target by
