@@ -157,9 +157,11 @@ test('mobile resource actions keep the menu on screen', async ({ page }) => {
 
     const menuTrigger = page.locator('[data-test="context-menu"]');
     await expect(menuTrigger).toBeVisible();
-    await expect(
-      page.getByTestId('navbar-tags-button').locator('span'),
-    ).toHaveCSS('display', 'none');
+    // Share is always there; Tags only shows once the resource has tags.
+    await expect(page.locator('button[title="Share"] > span')).toHaveCSS(
+      'display',
+      'none',
+    );
 
     const bounds = await menuTrigger.boundingBox();
     expect(bounds).not.toBeNull();
