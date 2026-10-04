@@ -6291,10 +6291,8 @@ msgstr "…or bring it over from another device"
 msgid "Couldn’t reach {0}. Check your connection and try again."
 msgstr "Couldn’t reach {0}. Check your connection and try again."
 
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect to {0}"
-msgstr "Connect to {0}"
+#~ msgid "Connect to {0}"
+#~ msgstr "Connect to {0}"
 
 #: src/routes/History/VersionTitle.tsx
 msgid "Verified"
@@ -6805,9 +6803,8 @@ msgstr "<0>Save this recovery code.</0> It gets you back in on a new device, and
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Could not unlock with a passkey. Use your recovery code instead."
 
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect existing account"
-msgstr "Connect existing account"
+#~ msgid "Connect existing account"
+#~ msgstr "Connect existing account"
 
 #: src/routes/SyncRoute.tsx
 msgid "Error: Sign in before syncing with another device"
@@ -6830,10 +6827,8 @@ msgstr "This drive already has a Server plan. Connecting it uses that plan; you 
 msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
 msgstr "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
 
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
-msgstr "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
+#~ msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
+#~ msgstr "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
 
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
@@ -10391,3 +10386,16 @@ msgstr "Change this view to"
 #: src/routes/DemoRoute.tsx
 msgid "Demo setup finished after stall"
 msgstr "Demo setup finished after stall"
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Connect this app to your existing {0} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace."
+msgstr "Connect this app to your existing {0} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace."
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Sign in on this device instead"
+msgstr "Sign in on this device instead"
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Signed in on another device? Use a code"
+msgstr "Signed in on another device? Use a code"
