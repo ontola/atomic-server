@@ -78,6 +78,7 @@
   - [Querying](core/querying.md)
   - [Paths](core/paths.md)
   - [Schema](schema/intro.md)
+    - [App-defined schemas](schema/app-schemas.md)
     - [Classes](schema/classes.md)
     - [Datatypes](schema/datatypes.md)
     - [Translations & Localization](schema/translations.md)

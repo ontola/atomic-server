@@ -127,7 +127,15 @@ fn rewrite_subject_keys(store: &Db, tree: Tree, values: ValueRewrite) -> AtomicR
         let Some(val) = store.kv.get(tree, &key)? else {
             continue;
         };
-        let (new_val, val_changed) = rewrite_value(&val, values)?;
+        // Frozen bodies are hash-addressed. Move the outer storage key, but
+        // never rewrite references that participate in the content hash.
+        let (new_val, val_changed) = if matches!(values, ValueRewrite::Propvals)
+            && crate::schema::frozen::is_frozen(&key_str.into())
+        {
+            (val.to_vec(), false)
+        } else {
+            rewrite_value(&val, values)?
+        };
         if (key_moved || val_changed) && !matches!(values, ValueRewrite::Identifier) {
             store
                 .kv
@@ -275,4 +283,47 @@ pub fn canonicalize_propvals(propvals: &mut PropVals) -> bool {
         }
     }
     changed
+}
+
+#[cfg(test)]
+mod frozen_tests {
+    use super::*;
+    use crate::{schema::frozen, Resource, Storelike, Value};
+
+    #[tokio::test]
+    async fn migration_moves_frozen_keys_without_rewriting_hashed_references() {
+        let store = Db::init_temp("frozen-migration").await.unwrap();
+        let source = Resource::from_propvals(
+            [(
+                "urn:link".into(),
+                Value::AtomicUrl("did:ad:original".into()),
+            )]
+            .into(),
+            "https://example.com/source".into(),
+        );
+        let frozen = frozen::freeze(&source).unwrap();
+        let legacy = frozen
+            .get_subject()
+            .to_string()
+            .replacen("atomic:", "did:ad:", 1);
+        store
+            .kv
+            .insert(
+                Tree::Resources,
+                legacy.as_bytes(),
+                &encode_propvals(frozen.get_propvals()).unwrap(),
+            )
+            .unwrap();
+        rewrite_subject_keys(&store, Tree::Resources, ValueRewrite::Propvals).unwrap();
+        let loaded = store.get_resource(frozen.get_subject()).await.unwrap();
+        assert_eq!(
+            loaded.get("urn:link").unwrap().to_string(),
+            "did:ad:original"
+        );
+        frozen::verify(&loaded).unwrap();
+        assert!(!store
+            .kv
+            .contains_key(Tree::Resources, legacy.as_bytes())
+            .unwrap());
+    }
 }

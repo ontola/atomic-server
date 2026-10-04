@@ -357,3 +357,5 @@ export {
   prepareAppPackageImport,
 } from './app-package.js';
 export type { AppPackage } from './app-package.js';
+
+export * from './app-schema.js';

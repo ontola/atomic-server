@@ -1,0 +1,10 @@
+{
+  "name": "audio-slice",
+  "fields": {
+    "tune": {"required": true, "shape": {"type": "number", "minimum": -48, "maximum": 48}},
+    "envelope": {"required": true, "shape": {"type": "object", "properties": {
+      "attack": {"type": "number", "minimum": 0, "maximum": 2},
+      "release": {"type": "number", "minimum": 0, "maximum": 4}
+    }, "required": ["attack", "release"]}}
+  }
+}

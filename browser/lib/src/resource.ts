@@ -1,3 +1,5 @@
+import { APP_SHAPE, isFrozenSchema } from './schema-frozen.js';
+import { validateAppValue, type AppShape } from './schema-shape.js';
 import type {
   ImportStatus,
   LoroDoc,
@@ -463,6 +465,8 @@ export class Resource<C extends OptionalClass = any> {
    * Returns undefined if Loro is not loaded.
    */
   public getLoroDoc(): LoroDoc | undefined {
+    if (isFrozenSchema(this.subject)) return undefined;
+
     if (!LoroLoader.isLoaded()) {
       return undefined;
     }
@@ -938,6 +942,12 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
+    if (value === null && this._store?.resources.get(prop)?.get(APP_SHAPE)) {
+      map.set(prop, null);
+
+      return;
+    }
+
     if (value === undefined || value === null) {
       map.delete(prop);
 
@@ -1000,8 +1010,13 @@ export class Resource<C extends OptionalClass = any> {
       // and sidebar `isA` were the visible cases.
       this.writeLoroListInPlace(map, prop, value);
     } else {
-      // Objects: serialize to JSON string.
-      map.set(prop, JSON.stringify(value));
+      if (this._store?.resources.get(prop)?.get(APP_SHAPE)) {
+        const nested = map.setContainer(prop, new LoroLoader.Loro.LoroMap());
+        this.writeJsonToLoroMap(nested, value as JSONObject);
+      } else {
+        // Legacy untyped JSON keeps its existing representation.
+        map.set(prop, JSON.stringify(value));
+      }
     }
   }
 
@@ -2577,6 +2592,9 @@ export class Resource<C extends OptionalClass = any> {
    *  - a local-only drive materializes the commit locally, as before.
    */
   public async destroy(agent?: Agent): Promise<void> {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
+
     if (this.new || this._pendingGenesis) {
       // Never synced (a `_new:` placeholder, or a `store.newResource` whose
       // genesis is still parked on the resource because `save()` never
@@ -2658,6 +2676,8 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Appends a Resource to a ResourceArray */
   public push(propUrl: string, values: JSONArray, unique?: boolean): void {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
 
     if (unique) {
@@ -2699,6 +2719,8 @@ export class Resource<C extends OptionalClass = any> {
    * Used for canvas strokes and other list fields that merge per element across peers.
    */
   public pushListItem(propUrl: string, item: JSONValue): void {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
     this.#cache[propUrl] = [...propVal, item];
     this.#cacheDirty = true;
@@ -2769,6 +2791,8 @@ export class Resource<C extends OptionalClass = any> {
    * `pushListItem`, just batched.
    */
   public replaceListItems(propUrl: string, items: JSONArray): void {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
     this.#cache[propUrl] = [...items];
     this.#cacheDirty = true;
     this._dirty = true;
@@ -2798,7 +2822,9 @@ export class Resource<C extends OptionalClass = any> {
     const { LoroList, LoroMap } = LoroLoader.Loro;
 
     for (const [key, value] of Object.entries(obj)) {
-      if (
+      if (value === null) {
+        map.set(key, null);
+      } else if (
         typeof value === 'string' ||
         typeof value === 'number' ||
         typeof value === 'boolean'
@@ -2850,7 +2876,9 @@ export class Resource<C extends OptionalClass = any> {
     const { LoroList, LoroMap } = LoroLoader.Loro;
 
     for (const item of arr) {
-      if (Array.isArray(item)) {
+      if (item === null) {
+        list.push(null);
+      } else if (Array.isArray(item)) {
         const nested = list.pushContainer(new LoroList());
         this.writeJsonToLoroList(nested, item);
       } else if (item && typeof item === 'object') {
@@ -2942,8 +2970,73 @@ export class Resource<C extends OptionalClass = any> {
     return this._loroUndoManager?.canRedo() ?? false;
   }
 
+  /** Edit one nested object member, preserving its ancestors' CRDT identities.
+   * undefined deletes; JSON null assigns null. Arrays use explicit list APIs. */
+  public async patchJsonPath(
+    prop: string,
+    path: string[],
+    value: JSONValue | undefined,
+  ): Promise<void> {
+    if (isFrozenSchema(this.subject) || !path.length)
+      throw new Error('Invalid JSON path edit');
+    await enableLoro();
+    const candidate = structuredClone(this.get(prop)) as JSONObject;
+    let target = candidate;
+
+    for (const key of path.slice(0, -1)) {
+      if (
+        !target ||
+        typeof target !== 'object' ||
+        Array.isArray(target) ||
+        !Object.hasOwn(target, key)
+      )
+        throw new Error('JSON path parent does not exist');
+      target = target[key] as JSONObject;
+    }
+
+    if (!target || typeof target !== 'object' || Array.isArray(target))
+      throw new Error('JSON path parent is not an object');
+    const leaf = path[path.length - 1];
+    if (value === undefined) delete target[leaf];
+    else
+      Object.defineProperty(target, leaf, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    const shape = this._store?.resources.get(prop)?.get(APP_SHAPE) as
+      | AppShape
+      | undefined;
+    if (!shape)
+      throw new Error('Register the app schema before editing nested fields');
+    validateAppValue(
+      shape,
+      candidate as import('./schema-frozen.js').SchemaValue,
+    );
+    const { LoroMap } = LoroLoader.Loro;
+    let map = this.getLoroDoc()!.getMap('properties').get(prop);
+
+    for (const key of path.slice(0, -1)) {
+      if (!(map instanceof LoroMap))
+        throw new Error('JSON path is not a native object');
+      map = map.get(key);
+    }
+
+    if (!(map instanceof LoroMap))
+      throw new Error('JSON path is not a native object');
+    if (value === undefined) map.delete(leaf);
+    else this.writeJsonToLoroMap(map, { [leaf]: value });
+    this.#cacheDirty = true;
+    this._dirty = true;
+    this.commitLoroEdit();
+    this.eventManager.emit(ResourceEvents.LocalChange, prop, candidate);
+  }
+
   /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
     this.removeUnsafe(propertyUrl);
     this._dirty = true;
     this.eventManager.emit(ResourceEvents.LocalChange, propertyUrl, undefined);
@@ -2961,6 +3054,8 @@ export class Resource<C extends OptionalClass = any> {
    * + `resource.save()`, never this directly.
    */
   public async signChanges(differentAgent?: Agent): Promise<Commit> {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
     const agent = this.store.getAgent() ?? differentAgent;
 
     if (!agent) {
@@ -3306,6 +3401,9 @@ export class Resource<C extends OptionalClass = any> {
   private _inflightSave?: Promise<SaveResult>;
 
   public async save(): Promise<SaveResult> {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
+
     // Two saves running at once each sign their own commit from the same
     // state. For a draft that is two genesis certificates, so two subjects
     // for one resource: the second rename evicts the first, and every alias
@@ -3734,6 +3832,17 @@ export class Resource<C extends OptionalClass = any> {
     /** A trusted built-in datatype: validate and tag without fetching Property metadata. */
     knownDatatype?: Datatype,
   ): Promise<void> {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
+    const shape = this._store?.resources.get(prop)?.get(APP_SHAPE) as
+      | AppShape
+      | undefined;
+    if (shape && value !== undefined)
+      validateAppValue(
+        shape,
+        value as import('./schema-frozen.js').SchemaValue,
+      );
+
     if (value instanceof Uint8Array) {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }

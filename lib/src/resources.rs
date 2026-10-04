@@ -366,6 +366,14 @@ impl Resource {
 
     /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
     pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
+        // Registered app shapes also validate direct/remote writes, not only SDK setters.
+        for (property, value) in &self.propvals {
+            if crate::schema::frozen::is_frozen(&property.as_str().into()) {
+                if let Ok(definition) = store.get_resource(&property.as_str().into()).await {
+                    crate::schema::app::validate_value(&definition, value)?;
+                }
+            }
+        }
         let classvec = self.get_classes(store).await?;
         for class in classvec.iter() {
             tracing::debug!(
@@ -442,9 +450,58 @@ impl Resource {
     /// `sync_loro_changes_to_commit_builder` can export one coherent `loroUpdate`
     /// (e.g. stroke append + `dateEdited` in a single commit).
     pub fn patch_loro_property(&mut self, property: &str, value: Value) -> AtomicResult<()> {
+        if crate::schema::frozen::is_frozen(&self.subject) {
+            return Err("Frozen definitions are immutable".into());
+        }
         self.ensure_materialized()?;
         self.propvals.insert(property.into(), value.clone());
         self.loro().set_property(property, &value)?;
+        Ok(())
+    }
+
+    /// Validate and edit a nested JSON object field without replacing its ancestors.
+    /// `None` removes a member; `Some(Json::Null)` assigns JSON null. Load the
+    /// existing resource before editing so both devices share its Loro history.
+    pub async fn patch_json_path(
+        &mut self,
+        property: &str,
+        path: &[&str],
+        value: Option<serde_json::Value>,
+        store: &impl Storelike,
+    ) -> AtomicResult<()> {
+        if crate::schema::frozen::is_frozen(&self.subject) {
+            return Err("Frozen definitions are immutable".into());
+        }
+        let (leaf, ancestors) = path.split_last().ok_or("JSON path cannot be empty")?;
+        let mut candidate = match self.get(property)? {
+            Value::Json(value) => value.clone(),
+            _ => return Err("JSON path editing requires a JSON property".into()),
+        };
+        let mut target = &mut candidate;
+        for key in ancestors {
+            target = target
+                .as_object_mut()
+                .and_then(|m| m.get_mut(*key))
+                .ok_or("JSON path parent does not exist")?;
+        }
+        let map = target
+            .as_object_mut()
+            .ok_or("JSON path parent is not an object")?;
+        match &value {
+            Some(value) => {
+                map.insert((*leaf).into(), value.clone());
+            }
+            None => {
+                map.remove(*leaf);
+            }
+        }
+        let definition = store.get_resource(&property.into()).await?;
+        let candidate = Value::Json(candidate);
+        crate::schema::app::validate_value(&definition, &candidate)?;
+        self.ensure_materialized()?;
+        self.loro()
+            .patch_json_path(property, path, value.as_ref())?;
+        self.propvals.insert(property.into(), candidate);
         Ok(())
     }
 
@@ -456,6 +513,9 @@ impl Resource {
     /// this, drawing a stroke and then ticking `dateEdited` produces two
     /// undo steps and the user's first undo tap looks like a no-op.
     pub fn patch_loro_property_sys(&mut self, property: &str, value: Value) -> AtomicResult<()> {
+        if crate::schema::frozen::is_frozen(&self.subject) {
+            return Err("Frozen definitions are immutable".into());
+        }
         self.ensure_materialized()?;
         // Flush any pending non-system ops first so they don't get lumped
         // into the sys-tagged commit (which would smuggle a user edit past
@@ -799,7 +859,7 @@ impl Resource {
     /// would make the two sides serialize different bytes. `isA` is present
     /// and stable from the moment the commit resource is built.
     pub(crate) fn is_native(&self) -> bool {
-        if self.subject.is_commit_did() {
+        if self.subject.is_commit_did() || crate::schema::frozen::is_frozen(&self.subject) {
             return true;
         }
         self.propvals
@@ -1093,6 +1153,9 @@ impl Resource {
     /// resources ([`Self::is_native`]) are propval-only and never get a state
     /// doc.
     pub fn remove_propval(&mut self, property_url: &str) -> AtomicResult<()> {
+        if crate::schema::frozen::is_frozen(&self.subject) {
+            return Err("Frozen definitions are immutable".into());
+        }
         if !self.is_native() {
             self.ensure_materialized()?;
             self.loro().remove_property(property_url)?;
@@ -1455,7 +1518,7 @@ impl Resource {
             )
         })?;
         let val = Value::new(value, &fullprop.data_type)?;
-        self.set_unsafe(property_url, val)?;
+        self.set(property_url, val, store).await?;
         Ok(self)
     }
 
@@ -1469,7 +1532,9 @@ impl Resource {
         value: Value,
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
-        let full_prop = store.get_property(&property).await?;
+        let definition = store.get_resource(&property.as_str().into()).await?;
+        crate::schema::app::validate_value(&definition, &value)?;
+        let full_prop = crate::schema::Property::from_resource(definition)?;
         if let Some(allowed) = full_prop.allows_only {
             let error = Err(format!(
                 "Property '{}' does not allow value '{}'. Allowed: {:?}",
@@ -1519,6 +1584,9 @@ impl Resource {
     /// the property being set, the incoming value is consulted so a commit
     /// resource never acquires a doc, not even transiently while it is built.
     pub fn set_unsafe(&mut self, property: String, value: Value) -> AtomicResult<&mut Self> {
+        if crate::schema::frozen::is_frozen(&self.subject) {
+            return Err("Frozen definitions are immutable".into());
+        }
         let is_native = if property == urls::IS_A {
             self.subject.is_commit_did()
                 || value

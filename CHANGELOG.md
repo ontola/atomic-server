@@ -15,6 +15,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   recipient could hold. Read rights are checked per subscriber against the
   resource when it is sent, and a connection already reached through the
   resource or its drive doesn't get it twice.
+- Experimental `schema::app::AppSchema` SDK: define app Classes/Properties as
+  immutable `atomic:frozen:` bundles without an HTTP host, validate nested
+  objects/arrays and edit object paths while preserving sibling Loro maps.
+  Includes Rust/TypeScript interoperability fixtures and an Audio slice example.
+  See [app schemas](docs/src/schema/app-schemas.md); continues the direction of
+  [#1262](https://github.com/ontola/atomic-server/pull/1262) on current identifiers.
 
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private

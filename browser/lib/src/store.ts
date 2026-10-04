@@ -1,3 +1,4 @@
+import { verifyFrozenSchema } from './schema-frozen.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -2643,6 +2644,7 @@ export class Store {
       replaceLoroDocsFromRemote,
     }: AddResourcesOpts = {},
   ): void {
+    verifyFrozenSchema(resource);
     // The resource might be new and not have a store yet. We set it here.
     resource.setStore(this);
 

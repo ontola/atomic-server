@@ -9,6 +9,11 @@
 > Recommendation: **B** — it is the only option whose identity works offline and across hosts without trusting atomicdata.dev, and the write path already tolerates missing schema, so (A) is a policy statement, not a competing mechanism.
 > Blocked PRs: #1316, #1245, #1262, #1209, #1251 (and #1309 sequencing).
 
+> 2026-10-04: this is a historical decision record. Identifiers now use
+> `atomic:frozen:`. The additive SDK implementation is tracked in
+> [app-schema-sdk.md](../app-schema-sdk.md); the code inventory below describes
+> the September baseline, not the current implementation branch.
+
 ## Context
 
 What ships on `develop` today, verified against code.

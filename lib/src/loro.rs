@@ -409,6 +409,40 @@ impl AtomicLoroDoc {
         &self.doc
     }
 
+    /// Edit one object member while retaining ancestor LoroMap identities.
+    /// Arrays are values here; use list operations for positional editing.
+    pub fn patch_json_path(
+        &self,
+        property: &str,
+        path: &[&str],
+        value: Option<&serde_json::Value>,
+    ) -> AtomicResult<()> {
+        let (leaf, ancestors) = path.split_last().ok_or("JSON path cannot be empty")?;
+        let root = self.doc.get_map("properties");
+        let map_at = |map: &loro::LoroMap, key: &str| -> AtomicResult<loro::LoroMap> {
+            match map.get(key) {
+                Some(loro::ValueOrContainer::Container(container)) => container
+                    .into_map()
+                    .map_err(|_| format!("{key} is not an object").into()),
+                _ => Err(format!("Missing object {key}").into()),
+            }
+        };
+        let mut map = map_at(&root, property)?;
+        for key in ancestors {
+            map = map_at(&map, key)?;
+        }
+        if let Some(value) = value {
+            let object = serde_json::Value::Object(
+                [((*leaf).to_string(), value.clone())].into_iter().collect(),
+            );
+            json_value_to_loro_map(&object, &map)?;
+        } else {
+            map.delete(leaf)
+                .map_err(|e| format!("JSON path delete failed: {e}"))?;
+        }
+        Ok(())
+    }
+
     /// Set a property on the root map of the document.
     /// This is the Loro equivalent of a `set` in a commit.
     pub fn set_property(&self, property: &str, value: &Value) -> AtomicResult<()> {
@@ -1113,7 +1147,10 @@ fn json_value_to_loro_map(json: &serde_json::Value, map: &loro::LoroMap) -> Atom
                         .map_err(|e| format!("Loro insert_container error: {e}"))?;
                     json_value_to_loro_map(val, &nested)?;
                 }
-                serde_json::Value::Null => {}
+                serde_json::Value::Null => {
+                    map.insert(key, loro::LoroValue::Null)
+                        .map_err(|e| format!("Loro map insert error: {e}"))?;
+                }
             }
         }
     }
@@ -1154,7 +1191,10 @@ fn json_value_to_loro_list_item(
                 .map_err(|e| format!("Loro push_container error: {e}"))?;
             json_value_to_loro_map(json, &nested)?;
         }
-        serde_json::Value::Null => {}
+        serde_json::Value::Null => {
+            list.push(loro::LoroValue::Null)
+                .map_err(|e| format!("Loro list push error: {e}"))?;
+        }
     }
     Ok(())
 }
@@ -1194,7 +1234,10 @@ fn insert_json_value_into_loro_list(
                 .map_err(|e| format!("Loro insert_container error: {e}"))?;
             json_value_to_loro_map(json, &nested)?;
         }
-        serde_json::Value::Null => {}
+        serde_json::Value::Null => {
+            list.insert(index, loro::LoroValue::Null)
+                .map_err(|e| format!("Loro list insert error: {e}"))?;
+        }
     }
     Ok(())
 }

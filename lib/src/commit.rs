@@ -555,6 +555,9 @@ impl Commit {
     ) -> AtomicResult<CommitResponse> {
         let commit = self;
         let subject = commit.subject.clone();
+        if crate::schema::frozen::is_frozen(&subject) {
+            return Err("Frozen definitions cannot be changed by commits".into());
+        }
 
         if subject.is_did() && crate::identifiers::is_atomic_identifier(subject.as_str()) {
             let pure_id = subject.pure_id();

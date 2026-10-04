@@ -1,14 +1,16 @@
 # JSON Schema compatible, code-first schemas
 
-**Status:** Proposal. Nothing on `develop` (no `defineSchema`/`ensureSchema`
-in `browser/lib/src` or `lib/src`); an implementation of `defineSchema` plus
-frozen `did:ad:` schemas is in flight in PR #1262 (open, branch
-`cursor/did-frozen-schema-b359`: `browser/lib/src/schema.ts`, `freeze.ts`,
-`@tomic/cli schema`). Noted 2026-09-01.
+**Status (2026-10-04):** An additive first SDK is being built on
+`codex/atomic-schema-sdk`; see [app-schema-sdk.md](./app-schema-sdk.md).
+It provides `atomic:frozen:` bundles, bounded nested shapes, local registration
+and object-path CRDT edits in Rust and TypeScript. It does not yet provide full
+JSON Schema import/export, automatic schema discovery or migration. PR #1262
+is the older, unmerged `did:ad:` draft and is not the implementation base.
 
-**Decision (accepted 2026-09-01):** `did:ad:frozen` is the on-ramp and optional
-schema is the write-path policy; #1251 becomes a frozen ontology
-([`completed/schema-routes-decision.md`](./completed/schema-routes-decision.md)).
+**Decision (accepted 2026-09-01):** Content-addressed frozen definitions are the
+on-ramp; optional schema remains the write-path policy. The current spelling is
+`atomic:frozen:`, following the identifier migration. See the historical
+[decision](./completed/schema-routes-decision.md).
 
 ## Goal
 
@@ -19,7 +21,7 @@ The desired workflow:
 
 1. An app declares a JSON Schema-like model in TypeScript, Rust, or another SDK.
 2. Atomic turns that declaration into local Atomic Class and Property resources.
-3. Those schema resources get `did:ad` subjects and are signed like normal data.
+3. Those schema resources get immutable `atomic:frozen:` subjects verified by content hash. Data instances use normal signed commits.
 4. The app can immediately create, validate, render, query, and sync resources
    using those Classes and Properties.
 5. Other devices or apps can resolve the schema from the local store, drive sync,

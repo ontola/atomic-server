@@ -176,6 +176,7 @@ impl Storelike for Store {
         update_index: bool,
         overwrite_existing: bool,
     ) -> AtomicResult<()> {
+        crate::schema::frozen::verify(resource)?;
         if check_required_props {
             resource.check_required_props(self).await?;
         }
@@ -218,9 +219,15 @@ impl Storelike for Store {
             .unwrap()
             .get(&canonical_key(&normalized))
         {
+            crate::schema::frozen::verify(resource)?;
             return Ok(resource.clone());
         }
 
+        if crate::schema::frozen::is_frozen(&normalized) {
+            return Err(
+                "Frozen definition is not registered locally; import its schema bundle".into(),
+            );
+        }
         if let Ok(resource) = self
             .fetch_resource(&subject_str, self.get_default_agent().ok().as_ref())
             .await

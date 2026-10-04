@@ -1,4 +1,9 @@
 //! Structs and models at the core of Atomic Schema (Class, Property, Datatype).
+pub mod app;
+pub mod frozen;
+pub mod shape;
+#[cfg(all(test, feature = "db"))]
+mod tests;
 
 use crate::{datatype::DataType, errors::AtomicResult, urls, Resource, Value};
 use serde::{Deserialize, Serialize};

@@ -690,6 +690,7 @@ impl Db {
         snapshot: Option<Vec<u8>>,
         transaction: &mut Transaction,
     ) -> AtomicResult<()> {
+        crate::schema::frozen::verify(resource)?;
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
@@ -736,7 +737,7 @@ impl Db {
         // the `Tree::Resources` row, so every row is paired with a current
         // snapshot. Commits are native (immutable, not CRDT): they get no
         // snapshot and keep their `loroUpdate` payload in the row.
-        if !subject.is_commit_did() {
+        if !subject.is_commit_did() && !crate::schema::frozen::is_frozen(&subject) {
             let snapshot = match snapshot {
                 Some(snapshot) => snapshot,
                 None => resource.build_state_doc()?.export_snapshot(),
@@ -2311,8 +2312,11 @@ impl Db {
     ) -> AtomicResult<()> {
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
+        crate::schema::frozen::verify(resource)?;
         let mut propvals = resource.get_propvals().clone();
-        canonical_scheme::canonicalize_propvals(&mut propvals);
+        if !crate::schema::frozen::is_frozen(&subject) {
+            canonical_scheme::canonicalize_propvals(&mut propvals);
+        }
 
         // Persist DID routing hint if available
         if let Subject::Did {
@@ -2493,7 +2497,9 @@ impl Db {
             }
         }
 
-        Ok(Resource::from_propvals(propvals, res_subject))
+        let resource = Resource::from_propvals(propvals, res_subject);
+        crate::schema::frozen::verify(&resource)?;
+        Ok(resource)
     }
 
     /// Removes all values from the indexes.
@@ -4645,6 +4651,11 @@ impl Storelike for Db {
             }
 
             let mut resource = Resource::from_propvals(propvals, res_subject);
+            if crate::schema::frozen::is_frozen(resource.get_subject()) {
+                crate::schema::frozen::verify(&resource)?;
+                return Ok(resource);
+            }
+
             // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
             // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
             if let Some(snapshot) = self.get_loro_snapshot_bytes(&subject_str) {
@@ -4677,6 +4688,11 @@ impl Storelike for Db {
             }
             Ok(resource)
         } else {
+            if crate::schema::frozen::is_frozen(&normalized) {
+                return Err(
+                    "Frozen definition is not registered locally; import its schema bundle".into(),
+                );
+            }
             // Resolve the subject to a full URL for network operations
             let origin = self
                 .get_base_domain()

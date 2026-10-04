@@ -1,3 +1,16 @@
+App schemas (2026-10-04): `lib/src/schema/tests.rs` and
+`browser/lib/src/app-schema.test.ts` cover frozen bundle hashes, bounded nested
+validation, mutation/commit rejection, native database reopen, null retention,
+normal browser resource creation/signing and sibling CRDT edits. The shared
+`lib/tests/fixtures/app-schema.json` carries real Rust and TypeScript snapshots:
+both suites merge a native attack edit with a browser release edit and retain
+both. `db::canonical_scheme::frozen_tests` checks legacy key migration preserves
+hashed reference bytes. This is library-level interoperability; no deployed
+phone/browser round trip, automatic schema transfer, Dart API or Audio migration
+is claimed. The general browser suite's existing live-server genesis integration
+test failed against the process already listening on localhost:9883 (missing
+built-in loroUpdate property); the unit suite passes separately.
+
 Date-only values (#1795, 2026-09-25): `browser/data-browser/src/helpers/dates/calendarDate.test.tsx` renders a `date` value through `ValueComp` (row dialog, resource page), the table cell, a min/max aggregate, day and month group headings and the history diff, in Europe/Amsterdam and America/New_York. Each must show the same civil day with no time. The tests set `process.env.TZ` themselves, so they fail on the bug in any CI zone.
 Row dialog fields (#1796, 2026-09-25): `browser/data-browser/src/components/PropVal.test.tsx` checks that the row dialog labels a value with its property's name (or a readable shortname when it has none), with the shortname in the tooltip. The label must not be a link, the property opens in a new tab, and the edited checkbox gets its accessible name from the label. Resource pages keep the linked shortname. `browser/e2e/tests/row-dialog.spec.ts` covers the same in a real Grocery list and runs axe (`label`, `link-name`) on the open dialog. It also covers the `ValueFormEdit` key warning through the browser-diagnostics fixture: that warning only shows with the wuchale transform, which vitest does not run.
 
