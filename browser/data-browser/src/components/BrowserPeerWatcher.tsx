@@ -17,10 +17,17 @@ export function BrowserPeerWatcher() {
       void discoverPeerDrives(store);
     };
 
+    // A closing or reloading tab never runs the cleanup below, and its peer
+    // sessions live in the leader tab's database until that tab closes.
+    // Stop them while the page is going away; the interval resumes them if
+    // it comes back from the back/forward cache.
+    const leave = () => stopPeerLinks(store);
+    window.addEventListener('pagehide', leave);
     const timer = setInterval(resume, 2000);
     resume();
 
     return () => {
+      window.removeEventListener('pagehide', leave);
       clearInterval(timer);
       stopPeerLinks(store);
     };

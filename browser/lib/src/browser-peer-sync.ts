@@ -25,6 +25,48 @@ export function randomPeerToken(): string {
   ).join('');
 }
 
+const BROWSER_SECRET_KEY = 'atomic-peer-browser';
+
+/** Hex chars of a peer id shared by every tab of one browser in one room. */
+const BROWSER_PREFIX_LENGTH = 16;
+
+/**
+ * A peer id whose first {@link BROWSER_PREFIX_LENGTH} hex chars are the same
+ * for every tab of this browser, for this agent and room, and unlinkable
+ * across rooms. Tabs of one browser share one local database, so pairing them
+ * only spends peer sessions (a capped budget that all tabs share).
+ */
+export async function browserPeerId(
+  agent: string,
+  room: string,
+): Promise<string> {
+  let secret: string | null = null;
+
+  try {
+    secret = localStorage.getItem(BROWSER_SECRET_KEY);
+
+    if (!secret) {
+      secret = randomPeerToken();
+      localStorage.setItem(BROWSER_SECRET_KEY, secret);
+    }
+  } catch {
+    // No storage: this tab gets its own prefix and pairs like any browser.
+  }
+
+  if (!secret) return randomPeerToken();
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`${secret}:${agent}:${room}`),
+  );
+  const prefix = Array.from(new Uint8Array(digest), byte =>
+    byte.toString(16).padStart(2, '0'),
+  )
+    .join('')
+    .slice(0, BROWSER_PREFIX_LENGTH);
+
+  return prefix + randomPeerToken().slice(BROWSER_PREFIX_LENGTH);
+}
+
 /** A bounded full mesh: each remote browser has its own authenticated session.
  * Received frames are never rebroadcast; reconciliation catches up persisted state. */
 export class BrowserPeerSync {
@@ -36,7 +78,8 @@ export class BrowserPeerSync {
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopped = false;
   private iceServers: RTCIceServer[] = [];
-  private readonly peerId = randomPeerToken();
+  private peerId = randomPeerToken();
+  private identity?: Promise<string>;
   private readonly agent: Agent;
   private readonly db: ClientDbWorker;
 
@@ -119,7 +162,14 @@ export class BrowserPeerSync {
         return;
       }
 
-      this.send({ type: 'join', room: this.options.room, peer: this.peerId });
+      this.identity ??= browserPeerId(this.agent.subject!, this.options.room);
+      void this.identity
+        .then(id => {
+          if (this.stopped || this.socket !== socket) return;
+          this.peerId = id;
+          this.send({ type: 'join', room: this.options.room, peer: id });
+        })
+        .catch(error => this.options.onStatus?.(String(error)));
     });
     socket.addEventListener('message', event => {
       if (this.socket !== socket || this.stopped) return;
@@ -193,6 +243,12 @@ export class BrowserPeerSync {
       id === this.peerId
     )
       throw new Error('Invalid peer identity');
+    // Another tab of this browser: same database, nothing to sync.
+    if (
+      id.slice(0, BROWSER_PREFIX_LENGTH) ===
+      this.peerId.slice(0, BROWSER_PREFIX_LENGTH)
+    )
+      return;
     if (!this.members.has(id) && this.members.size >= 7)
       throw new Error('Peer room is full');
     this.members.add(id);
