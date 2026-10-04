@@ -312,6 +312,8 @@ test.describe('choosing a view type from a tab (#1806)', () => {
     await tableTab.click();
     await expect(page.getByTestId('calendar-view')).toHaveCount(0);
     await expect(tableTab).toHaveAttribute('aria-selected', 'true');
+  });
+});
 
 /** The civil date `days` after a YYYY-MM-DD key. */
 function addDays(dayKey: string, days: number): string {

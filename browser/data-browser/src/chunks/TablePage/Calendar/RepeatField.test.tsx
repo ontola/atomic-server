@@ -3,7 +3,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
-import type { RepeatParse } from '@tomic/lib';
+import type { RepeatParse } from '@tomic/lib/calendar-recurrence.js';
 import { buildTheme } from '../../../styling';
 import { RepeatField } from './RepeatField';
 

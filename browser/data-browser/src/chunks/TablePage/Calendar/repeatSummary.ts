@@ -6,7 +6,7 @@ import {
   type RepeatAnchor,
   type RepeatParse,
   type RepeatRule,
-} from '@tomic/lib';
+} from '@tomic/lib/calendar-recurrence.js';
 
 /** A civil date at local noon, so no zone can move it to another day. */
 function civil(date: string): Date {

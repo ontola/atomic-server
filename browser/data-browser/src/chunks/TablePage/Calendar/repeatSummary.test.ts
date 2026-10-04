@@ -4,7 +4,7 @@ import {
   parseRecurrence,
   type RepeatAnchor,
   type RepeatRule,
-} from '@tomic/lib';
+} from '@tomic/lib/calendar-recurrence.js';
 import { describeRepeat } from './repeatSummary';
 
 // Thursday 1 October 2026.

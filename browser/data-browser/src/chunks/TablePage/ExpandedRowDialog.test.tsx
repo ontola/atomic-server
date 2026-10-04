@@ -21,11 +21,11 @@ import {
   type Property,
   type Resource,
 } from '@tomic/react';
+import { calendarRecurrenceShortname } from '@tomic/lib';
 import {
-  calendarRecurrenceShortname,
   defaultRepeatRule,
   nativeCalendarPayload,
-} from '@tomic/lib';
+} from '@tomic/lib/calendar-recurrence.js';
 import type { JSX, ReactNode } from 'react';
 import { buildTheme } from '../../styling';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
@@ -161,6 +161,8 @@ describe('the table view row dialog (#1801)', () => {
     );
 
     expect(screen.getByTestId('repeat-field')).toBeTruthy();
+    // Start and End are the table's own columns: no time fields here.
+    expect(screen.queryByLabelText('All day')).toBeNull();
     expect(screen.getByTestId('repeat-summary').textContent).toBe(
       'Does not repeat',
     );
@@ -265,6 +267,7 @@ describe('the table view recurrence cell (#1801)', () => {
           calendarDate: true,
           recurrenceProp: recurrenceProperty,
           ensureRecurrenceProp: async () => RECURRENCE,
+          ensureTimeProps: async () => ({ start: '', end: '' }),
         }}
         fallback={<span data-testid='raw-json' />}
       />,

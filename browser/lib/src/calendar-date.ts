@@ -3,6 +3,10 @@ export const calendarFields = {
   allDay: 'atomic-calendar-all-day',
   endDay: 'atomic-calendar-end-day',
   notes: 'atomic-calendar-notes',
+  /** Exact start / exclusive end instant of a timed event: RFC 3339 strings
+   * with their offset (atomic-plugins Event ontology). */
+  start: 'atomic-calendar-start',
+  end: 'atomic-calendar-end',
 };
 
 /** A civil date, never an instant. Lexical order matches calendar order. */

@@ -1,7 +1,7 @@
+import { isCalendarDate } from '@tomic/lib';
 import {
   calendarWeekdays,
   defaultRepeatRule,
-  isCalendarDate,
   isLastWeekday,
   weekdayOf,
   weekdayOrdinal,
@@ -9,7 +9,7 @@ import {
   type RepeatFrequency,
   type RepeatParse,
   type RepeatRule,
-} from '@tomic/lib';
+} from '@tomic/lib/calendar-recurrence.js';
 import { useId, useState, type JSX, type ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { BasicSelect } from '@components/forms/BasicSelect';

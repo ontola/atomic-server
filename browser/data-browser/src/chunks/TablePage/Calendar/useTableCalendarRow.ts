@@ -3,7 +3,7 @@ import type { Property, Resource } from '@tomic/react';
 import { createContext } from 'react';
 import type { CalendarRowContext } from './CalendarRowFields';
 import { isDateProperty } from './useCalendarDateProp';
-import { useCalendarRecurrenceProp } from './useCalendarRecurrenceProp';
+import { useCalendarRowProps } from './useCalendarRowProps';
 
 /** The calendar's All day and End day columns, and whether `dateProp` is the
  * calendar's own Day, so they apply to it. */
@@ -34,10 +34,13 @@ export function useTableCalendarRow(
   tableClass: Resource,
   allColumns: Property[],
 ): CalendarRowContext | undefined {
-  const { recurrenceProp, ensureRecurrenceProp } = useCalendarRecurrenceProp(
-    tableClass,
-    allColumns,
-  );
+  const {
+    recurrenceProp,
+    ensureRecurrenceProp,
+    startProp,
+    endProp,
+    ensureTimeProps,
+  } = useCalendarRowProps(tableClass, allColumns);
 
   if (!recurrenceProp) return undefined;
 
@@ -53,6 +56,12 @@ export function useTableCalendarRow(
     ...calendarRangeColumns(allColumns, dateProp),
     recurrenceProp,
     ensureRecurrenceProp,
+    // A timed row repeats from its Start, as in the calendar; the table
+    // edits Start and End in their own columns.
+    startProp,
+    endProp,
+    ensureTimeProps,
+    repeatOnly: true,
   };
 }
 
