@@ -16,6 +16,7 @@ import {
   canonicalizeScheme,
   emitSubjectForCaps,
 } from './subject.js';
+import { LoroLoader } from './loro-loader.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store } from './store.js';
@@ -443,6 +444,7 @@ export class WSClient {
     // only inside the connect handshake misses it. Idempotent server-side.
     this._driveUnsub = store.on(StoreEvents.DriveChanged, () => {
       this._pendingSyncState.clear();
+      this.syncImports.clear();
       this.subscribeToDrive();
       void this.reconcileSubscribedDrive();
     });
@@ -1262,10 +1264,7 @@ export class WSClient {
           // is NOT in sync and the local edits stay where they are, to be
           // offered again on the next handshake.
           console.error('[WS] SYNC_PUSH rejected:', msg.message);
-          this.store.failDriveSync(
-            this.driveFromRejection(msg.message),
-            msg.message,
-          );
+          this.rejectSync(this.driveFromRejection(msg.message), msg.message);
         } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||
           msg.code === ErrorCode.UNAUTHORIZED_READ
@@ -1484,11 +1483,7 @@ export class WSClient {
         const msg = decodeSyncOk(payload);
 
         if (msg) {
-          this.store.finishDriveSync(
-            canonicalizeScheme(msg.drive),
-            0,
-            Date.now(),
-          );
+          void this.finishValidatedSync(canonicalizeScheme(msg.drive), 0);
         }
 
         break;
@@ -1512,7 +1507,29 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
-          if (msg.entries.length > 0) this.store.startDriveSyncPull();
+          const drive = canonicalizeScheme(msg.drive);
+          const run = this.syncRun(drive);
+          const current = this.connectionGuard();
+
+          // Buffer the frame behind WASM initialization, not an unvalidated
+          // Resource. SYNC_OK must wait for this admission step as well.
+          if (!LoroLoader.isLoaded()) {
+            const ready = LoroLoader.initializeLoro()
+              .then(() => {
+                if (current() && this.syncImports.get(drive) === run)
+                  this.handleBinary(data);
+              })
+              .catch(error => {
+                if (current() && this.syncImports.get(drive) === run)
+                  this.rejectSync(drive, error);
+              });
+            run.writes.add(ready);
+            void ready.finally(() => run.writes.delete(ready));
+            break;
+          }
+
+          if (msg.entries.length > 0 && !run.failed)
+            this.store.startDriveSyncPull();
 
           // Per-entry `getResourceLoading + importLoroUpdate +
           // setSource + addResources({skipCommitCompare:true})`
@@ -1545,23 +1562,28 @@ export class WSClient {
               );
               this.scheduleBackgroundImport();
               this.pulledInBulk = true;
-              workerDb
+              const write = workerDb
                 .applyStateUpdates(
                   direct.map(e => e.subject),
                   direct.map(e => e.loroBytes),
                 )
-                .catch(e =>
-                  console.warn('[WS] applying pulled states failed:', e),
-                );
+                .catch(error => {
+                  if (current() && this.syncImports.get(drive) === run)
+                    this.rejectSync(drive, error);
+                });
+              run.writes.add(write);
+              void write.finally(() => run.writes.delete(write));
             }
           }
 
           for (const { subject, loroBytes } of entries) {
-            this.store.applyIncoming({
+            const outcome = this.store.applyIncoming({
               subject,
               loroBytes,
               source: 'ws-sync-push',
             });
+            if (outcome === 'invalid')
+              this.rejectSync(drive, `Rejected resource state: ${subject}`);
             const resource = this.hydratedResource(subject);
             if (resource) this.checkForMissingBlobs(resource);
           }
@@ -1583,29 +1605,14 @@ export class WSClient {
           // SYNC_PUSH is chunked and intermediate chunks shouldn't trigger
           // the "done" UI state.
           if (msg.last) {
-            const drive = canonicalizeScheme(msg.drive);
-            const count = msg.entries.length;
-
-            const finish = () => {
-              this.store.finishDriveSync(drive, count, Date.now());
-
-              if (this.pulledInBulk) {
-                this.pulledInBulk = false;
-                this.store.notifyBulkApplied();
-              }
-            };
-
-            const clientDb = this.store.getClientDb();
-
-            // "Synced" is what lets a collection believe its local answer,
-            // an empty one included. Until the pulled resources are in the
-            // local database that answer is a partial one (a large drive
-            // takes minutes to land), so wait for the queued writes first.
-            if (typeof clientDb?.flush === 'function') {
-              clientDb.flush().then(finish, finish);
-            } else {
-              finish();
-            }
+            void this.finishValidatedSync(drive, msg.entries.length).then(
+              () => {
+                if (current() && this.pulledInBulk) {
+                  this.pulledInBulk = false;
+                  this.store.notifyBulkApplied();
+                }
+              },
+            );
           }
         }
 
@@ -1989,6 +1996,46 @@ export class WSClient {
    *  and resync can each ask for one at the same moment; computing the sync
    *  state is O(drive size) on the database worker, so they share one run. */
   private _vvSyncRuns = new Map<string, Promise<void>>();
+  private syncImports = new Map<
+    string,
+    { failed: boolean; writes: Set<Promise<unknown>> }
+  >();
+
+  private syncRun(drive: string) {
+    let run = this.syncImports.get(drive);
+
+    if (!run) {
+      run = { failed: false, writes: new Set() };
+      this.syncImports.set(drive, run);
+    }
+
+    return run;
+  }
+
+  private rejectSync(drive: string, error: unknown): void {
+    this.syncRun(drive).failed = true;
+    this.store.failDriveSync(drive, String(error));
+  }
+
+  private async finishValidatedSync(
+    drive: string,
+    count: number,
+  ): Promise<void> {
+    const current = this.connectionGuard();
+    const run = this.syncRun(drive);
+    const active = () => current() && this.syncImports.get(drive) === run;
+
+    try {
+      // Initialization can enqueue worker writes while we are waiting.
+      while (run.writes.size) await Promise.all(run.writes);
+
+      await this.store.getClientDb()?.flush?.();
+      if (active() && !run.failed)
+        this.store.finishDriveSync(drive, count, Date.now());
+    } catch (error) {
+      if (active()) this.rejectSync(drive, error);
+    }
+  }
 
   private startVVSync(drive: string, explicit = false): Promise<void> {
     const running = this._vvSyncRuns.get(drive);
@@ -2149,6 +2196,10 @@ export class WSClient {
       });
       if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
         return;
+      this.syncImports.set(canonicalizeScheme(drive), {
+        failed: false,
+        writes: new Set(),
+      });
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
@@ -2377,10 +2428,9 @@ export class WSClient {
 
     // If server has nothing to push, sync is done
     if (diff.push.length === 0) {
-      this.store.finishDriveSync(
+      await this.finishValidatedSync(
         this.store.normalizeSubject(diff.drive),
         entries.length,
-        Date.now(),
       );
     }
   }

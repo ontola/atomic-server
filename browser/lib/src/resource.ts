@@ -1,3 +1,9 @@
+import {
+  attachSchemaDependencies,
+  resolveSchemaDependencies,
+  validateSchemaData,
+  installSchemaDependencies,
+} from './schema-dependencies.js';
 import { APP_SHAPE, isFrozenSchema } from './schema-frozen.js';
 import { validateAppValue, type AppShape } from './schema-shape.js';
 import type {
@@ -483,7 +489,28 @@ export class Resource<C extends OptionalClass = any> {
       const initializedFromSnapshot = !!stored;
 
       if (stored) {
-        this._loroDoc.import(stored);
+        const staged = new LoroDocClass();
+
+        try {
+          const status = staged.import(stored);
+
+          if (!isCommitSubject(this.subject)) {
+            if (status.pending?.size)
+              throw new Error('Incomplete resource snapshot');
+            const definitions = resolveSchemaDependencies(staged, id =>
+              this._store?.resources.get(id),
+            );
+            validateSchemaData(staged, definitions);
+            installSchemaDependencies(this._store, definitions);
+          }
+        } catch (error) {
+          this.resetLoroState();
+          throw error;
+        }
+
+        this._loroDoc = staged;
+        this._loroDoc.setRecordTimestamp(true);
+        this._loroMap = staged.getMap('properties');
       } else {
         for (const [key, value] of Object.entries(this.#cache)) {
           if (!isDerivedByServer(key)) {
@@ -869,6 +896,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
+    attachSchemaDependencies(doc, id => this._store?.resources.get(id));
     const props = doc.getMap('properties').toJSON() as Record<string, unknown>;
     const datatypesMap = doc.getMap('datatypes');
 
@@ -1636,6 +1664,16 @@ export class Resource<C extends OptionalClass = any> {
       incomingSnapshot.length > 0 &&
       LoroLoader.isLoaded()
     ) {
+      // Validate the prospective merged state before changing the live doc.
+      const staged = options.replaceLoroDocs
+        ? new LoroLoader.Loro.LoroDoc()
+        : (this.getLoroDoc()?.fork() ?? new LoroLoader.Loro.LoroDoc());
+      const status = staged.import(incomingSnapshot);
+      if (status.pending?.size) throw new Error('Incomplete resource snapshot');
+      const definitions = resolveSchemaDependencies(staged, id =>
+        this._store?.resources.get(id),
+      );
+      validateSchemaData(staged, definitions);
       // Ensure we have a local Loro doc
       const localDoc = this.getLoroDoc();
 
@@ -1680,6 +1718,8 @@ export class Resource<C extends OptionalClass = any> {
             );
           }
         }
+
+        installSchemaDependencies(this._store, definitions);
 
         // Restore local values for omitted keys
         for (const key of omitKeysFromMerge) {
@@ -3958,7 +3998,24 @@ export class Resource<C extends OptionalClass = any> {
      * replace makes the authoritative state win. Never pass `true` for a delta.
      */
     replace = false,
-  ): { complete: boolean } {
+  ): { complete: boolean; schemaError?: string } {
+    // Stage incoming state before touching the live doc or schema cache.
+    if (LoroLoader.isLoaded() && !isCommitSubject(this.subject)) {
+      try {
+        const staged = replace
+          ? new LoroLoader.Loro.LoroDoc()
+          : (this.getLoroDoc()?.fork() ?? new LoroLoader.Loro.LoroDoc());
+        const status = staged.import(loroUpdate);
+        if (status.pending?.size) return { complete: false };
+        const definitions = resolveSchemaDependencies(staged, id =>
+          this._store?.resources.get(id),
+        );
+        validateSchemaData(staged, definitions);
+      } catch (error) {
+        return { complete: false, schemaError: String(error) };
+      }
+    }
+
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
       this.resetLoroState();
@@ -4026,6 +4083,17 @@ export class Resource<C extends OptionalClass = any> {
       this.sealPendingEdits();
       const status = doc.import(loroUpdate);
       this.absorbImportedOpsIntoSaveCursor(status.success);
+
+      if (
+        (!status.pending || status.pending.size === 0) &&
+        !isCommitSubject(this.subject)
+      ) {
+        installSchemaDependencies(
+          this._store,
+          resolveSchemaDependencies(doc, id => this._store?.resources.get(id)),
+        );
+      }
+
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
       this.initLoroSaveCursorIfFresh();

@@ -9,6 +9,7 @@ import {
   CLIENT_CAPABILITIES,
   decodeCommit,
   encodeEphemeral,
+  encodeSyncPush,
   decodeEphemeral,
   EphemeralKind,
   Flags,
@@ -1199,4 +1200,121 @@ describe('WSClient.fetchMany', () => {
     expect(settled[0]).toMatchObject({ type: ErrorType.NotFound });
     client.close();
   });
+});
+
+describe('schema sync failure reporting', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('does not report synced after a rejected schema followed by a final chunk and SYNC_OK', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:schema-drive';
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.getMap('atomic:schema-definitions').set('atomic:frozen:forged', '{}');
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const fail = vi.spyOn(store, 'failDriveSync');
+    socket.receive(
+      encodeSyncPush(
+        drive,
+        [
+          {
+            subject: 'atomic:poison',
+            loroBytes: doc.export({ mode: 'snapshot' }),
+          },
+        ],
+        false,
+      ),
+    );
+    socket.receive(encodeSyncPush(drive, [], true));
+    const name = new TextEncoder().encode(drive);
+    socket.receive(
+      new Uint8Array([
+        Tag.SYNC_OK,
+        name.length >> 8,
+        name.length & 255,
+        ...name,
+      ]),
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(fail).toHaveBeenCalled();
+    assert(finish).not.toHaveBeenCalled();
+    assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
+    client.close();
+  });
+
+  it('waits for Loro initialization before admitting schema state', async () => {
+    const { client, socket, store } = await connectedClient();
+    const drive = 'atomic:early-schema-drive';
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc.getMap('atomic:schema-definitions').set('atomic:frozen:forged', '{}');
+    const frame = encodeSyncPush(
+      drive,
+      [
+        {
+          subject: 'atomic:early-schema',
+          loroBytes: doc.export({ mode: 'snapshot' }),
+        },
+      ],
+      true,
+    );
+    let ready!: () => void;
+    vi.spyOn(LoroLoader, 'initializeLoro').mockReturnValue(
+      new Promise(resolve => {
+        ready = resolve;
+      }),
+    );
+    const loaded = vi.spyOn(LoroLoader, 'isLoaded').mockReturnValue(false);
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const fail = vi.spyOn(store, 'failDriveSync');
+    socket.receive(frame);
+    await Promise.resolve();
+    assert(finish).not.toHaveBeenCalled();
+    loaded.mockReturnValue(true);
+    ready();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(fail).toHaveBeenCalled();
+    assert(finish).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it.each(['worker', 'flush'])(
+    'reports %s persistence failures instead of successful sync',
+    async stage => {
+      const { client, socket, store } = await connectedClient();
+      const drive = 'atomic:worker-schema-drive';
+      const failure = new Error('Schema validation failed in storage');
+      const worker = {
+        applyStateUpdates: vi
+          .fn()
+          .mockImplementation(() =>
+            stage === 'worker' ? Promise.reject(failure) : Promise.resolve(),
+          ),
+        flush: vi
+          .fn()
+          .mockImplementation(() =>
+            stage === 'flush' ? Promise.reject(failure) : Promise.resolve(),
+          ),
+      };
+      vi.spyOn(store, 'getClientDb').mockReturnValue(
+        worker as unknown as ReturnType<typeof store.getClientDb>,
+      );
+      const finish = vi.spyOn(store, 'finishDriveSync');
+      const fail = vi.spyOn(store, 'failDriveSync');
+      const doc = new LoroLoader.Loro.LoroDoc();
+      const bytes = doc.export({ mode: 'snapshot' });
+      socket.receive(
+        encodeSyncPush(
+          drive,
+          Array.from({ length: 50 }, (_, i) => ({
+            subject: `atomic:bulk-${i}`,
+            loroBytes: bytes,
+          })),
+          true,
+        ),
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+      assert(fail).toHaveBeenCalled();
+      assert(finish).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
 });

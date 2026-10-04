@@ -1,3 +1,15 @@
+Schema delivery and migration races (2026-10-04): native schema tests exercise
+actual SYNC_PUSH frames into a cold Db, dependent deltas, authorized rejection
+without SYNC_OK, unauthorized pushes, and private direct schema reads. Native
+and TypeScript tests reject tampered hashes, missing definitions, noncanonical
+JSON, oversized sets/bodies, wrong types and executable metadata without cache
+writes; browser tests retain last good state after a later bad delta. Both
+languages preserve an older client's edit during a semitone-to-cent migration
+and install only reachable definitions. The converted value deliberately stays
+stale until explicit reconciliation. WS frame tests cover failed schema imports,
+worker writes and flushes without false sync success. This is protocol/library
+coverage, not a deployed browser/Iroh test, fuzzing result, or migration runner.
+
 App schemas (2026-10-04): `lib/src/schema/tests.rs` and
 `browser/lib/src/app-schema.test.ts` cover frozen bundle hashes, bounded nested
 validation, mutation/commit rejection, native database reopen, null retention,
@@ -6,7 +18,7 @@ normal browser resource creation/signing and sibling CRDT edits. The shared
 both suites merge a native attack edit with a browser release edit and retain
 both. `db::canonical_scheme::frozen_tests` checks legacy key migration preserves
 hashed reference bytes. This is library-level interoperability; no deployed
-phone/browser round trip, automatic schema transfer, Dart API or Audio migration
+phone/browser round trip, Dart API or Audio migration
 is claimed. The general browser suite's existing live-server genesis integration
 test failed against the process already listening on localhost:9883 (missing
 built-in loroUpdate property); the unit suite passes separately.

@@ -5,6 +5,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 ## UNRELEASED
 
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
+- Frozen app schemas now travel with resource Loro state over normal sync.
+  Receivers verify bounded dependencies before admitting data, reject invalid
+  imports without installing definitions, and retain explicit schema versions
+  during migrations. Browser sync completion waits for successful persistence.
+
 - Experimental app schema API in `@tomic/lib`: `defineAppSchema`,
   `registerAppSchema`, `setAppField` and `patchAppField`. Portable frozen bundles
   match Rust identities and preserve independent nested edits across peers.

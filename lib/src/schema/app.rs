@@ -24,7 +24,7 @@ pub struct AppSchema {
     pub definitions: BTreeMap<String, Json>,
 }
 
-fn datatype(shape: &Shape) -> DataType {
+pub(crate) fn datatype(shape: &Shape) -> DataType {
     match shape {
         Shape::String { .. } => DataType::String,
         Shape::Number { .. } => DataType::Float,
@@ -48,7 +48,7 @@ fn typed(shape: &Shape, value: Json) -> AtomicResult<Value> {
 
 /// Only schema bodies produced by this format are accepted. This is deliberately
 /// not a general JSON-AD importer; it never resolves identifiers over the network.
-fn resource(id: &str, body: &Json) -> AtomicResult<Resource> {
+pub(crate) fn resource(id: &str, body: &Json) -> AtomicResult<Resource> {
     if frozen::id(body)? != id {
         return Err("Schema bundle hash mismatch".into());
     }
@@ -215,6 +215,12 @@ impl AppSchema {
     pub fn new_resource(&self, subject: crate::Subject) -> AtomicResult<Resource> {
         let mut resource = Resource::new(subject.to_string());
         resource.set_class(&self.class_id)?;
+        let definitions = self
+            .definitions
+            .iter()
+            .map(|(id, body)| Ok((id.clone(), self::resource(id, body)?)))
+            .collect::<AtomicResult<_>>()?;
+        resource.attach_schema_definitions(&definitions)?;
         Ok(resource)
     }
 }

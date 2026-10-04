@@ -15,6 +15,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   recipient could hold. Read rights are checked per subscriber against the
   resource when it is sent, and a connection already reached through the
   resource or its drive doesn't get it twice.
+- Frozen app schemas now travel with resource Loro state over normal sync.
+  Receivers verify bounded dependencies before admitting data, reject invalid
+  imports without installing definitions, and retain explicit schema versions
+  during migrations. Browser sync completion waits for successful persistence.
+
 - Experimental `schema::app::AppSchema` SDK: define app Classes/Properties as
   immutable `atomic:frozen:` bundles without an HTTP host, validate nested
   objects/arrays and edit object paths while preserving sibling Loro maps.

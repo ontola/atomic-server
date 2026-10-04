@@ -364,16 +364,69 @@ impl Resource {
         Ok(())
     }
 
-    /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
-    pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
-        // Registered app shapes also validate direct/remote writes, not only SDK setters.
-        for (property, value) in &self.propvals {
-            if crate::schema::frozen::is_frozen(&property.as_str().into()) {
-                if let Ok(definition) = store.get_resource(&property.as_str().into()).await {
-                    crate::schema::app::validate_value(&definition, value)?;
-                }
+    pub(crate) fn attached_schema_definitions(
+        &self,
+    ) -> AtomicResult<crate::schema::dependencies::Definitions> {
+        if self.is_native() {
+            return Ok(Default::default());
+        }
+        if let Some(doc) = &self.loro {
+            return crate::schema::dependencies::read_doc(doc);
+        }
+        if let Some(Value::LoroDoc(bytes)) = self.propvals.get(urls::LORO_UPDATE) {
+            return crate::schema::dependencies::read_doc(
+                &crate::loro::AtomicLoroDoc::from_snapshot(bytes)?,
+            );
+        }
+        Ok(Default::default())
+    }
+
+    pub(crate) fn attach_schema_definitions(
+        &mut self,
+        definitions: &crate::schema::dependencies::Definitions,
+    ) -> AtomicResult<()> {
+        if definitions.is_empty() {
+            return Ok(());
+        }
+        let mut all = self.attached_schema_definitions()?;
+        all.extend(definitions.clone());
+        if all.len() > crate::schema::dependencies::MAX_DEFINITIONS {
+            return Err("Too many schema dependencies".into());
+        }
+        let bodies: Vec<_> = all
+            .iter()
+            .map(|(id, definition)| {
+                Ok((
+                    id,
+                    serde_jcs::to_string(&crate::schema::frozen::body(definition)?)?,
+                ))
+            })
+            .collect::<AtomicResult<_>>()?;
+        if bodies
+            .iter()
+            .map(|(id, body)| id.len() + body.len())
+            .sum::<usize>()
+            > crate::schema::dependencies::MAX_BYTES
+        {
+            return Err("Schema dependencies exceed byte budget".into());
+        }
+        self.ensure_materialized()?;
+        let map = self.loro().doc().get_map(crate::schema::dependencies::ROOT);
+        for (id, body) in bodies {
+            if map.get(id).and_then(|v| v.into_value().ok())
+                != Some(loro::LoroValue::String(body.clone().into()))
+            {
+                map.insert(id, body.as_str())
+                    .map_err(|e| format!("Schema attachment failed: {e}"))?;
             }
         }
+        Ok(())
+    }
+
+    /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
+    pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
+        let definitions = crate::schema::dependencies::resolve(self, store).await?;
+        crate::schema::dependencies::validate_data(self, &definitions)?;
         let classvec = self.get_classes(store).await?;
         for class in classvec.iter() {
             tracing::debug!(
@@ -1330,6 +1383,7 @@ impl Resource {
         agent: &crate::agents::Agent,
         store: &impl Storelike,
     ) -> AtomicResult<crate::commit::CommitResponse> {
+        crate::schema::dependencies::attach(self, store).await?;
         self.sync_loro_changes_to_commit_builder()?;
         if !self.get_commit_builder().has_changes() {
             self.reset_commit_builder();
@@ -1358,6 +1412,7 @@ impl Resource {
     /// Does not store these changes on the server of the Subject - the Commit will be lost, unless you handle it manually.
     pub async fn save_locally(&mut self, store: &impl Storelike) -> AtomicResult<CommitResponse> {
         let agent = store.get_default_agent()?;
+        crate::schema::dependencies::attach(self, store).await?;
         self.sync_loro_changes_to_commit_builder()?;
         if !self.get_commit_builder().has_changes() {
             self.reset_commit_builder();
@@ -1394,6 +1449,7 @@ impl Resource {
         store: &impl Storelike,
     ) -> AtomicResult<CommitResponse> {
         // Use a placeholder that starts with did:ad: to trigger special genesis serialization logic
+        crate::schema::dependencies::attach(self, store).await?;
         self.subject = Subject::from_raw("did:ad:placeholder", None);
         self.commit.set_subject(self.subject.clone());
 
@@ -1435,6 +1491,7 @@ impl Resource {
     /// Signs the commit and sends it to the server's `/commit` endpoint.
     /// Use this for client-side code that talks to an AtomicServer.
     pub async fn save_remote(&mut self, store: &impl Storelike) -> AtomicResult<String> {
+        crate::schema::dependencies::attach(self, store).await?;
         let agent = store.get_default_agent()?;
         let snapshot = self.build_state_doc()?.export_snapshot();
 

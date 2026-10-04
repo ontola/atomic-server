@@ -1,5 +1,6 @@
 //! Structs and models at the core of Atomic Schema (Class, Property, Datatype).
 pub mod app;
+pub mod dependencies;
 pub mod frozen;
 pub mod shape;
 #[cfg(all(test, feature = "db"))]

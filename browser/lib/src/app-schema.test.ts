@@ -73,11 +73,15 @@ describe('app-defined schemas', () => {
     await expect(setAppField(resource, bundle, 'tune', 49)).rejects.toThrow();
   });
 
-  it('merges a native Rust attack edit with a browser release edit', async () => {
-    const { resource, bundle } = setup();
+  it('merges a native Rust attack edit with a browser release edit on a cold store', async () => {
+    const bundle = schema();
+    const store = new Store();
+    const resource = new Resource('atomic:example');
+    resource.setStore(store);
     resource.importLoroUpdate(
       new Uint8Array(Buffer.from(fixture.rust_base, 'base64')),
     );
+    expect(store.resources.has(bundle.class_id)).toBe(true);
     resource.getLoroDoc()!.setPeerId('123456');
     await patchAppField(resource, bundle, 'envelope', ['release'], 0.9);
     const snapshot = Buffer.from(

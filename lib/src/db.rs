@@ -706,8 +706,20 @@ impl Db {
             )
             .into());
         }
+        // Resolve without writes; only admitted, fully validated data installs
+        // its reachable definitions, in the same transaction as the resource.
+        let definitions = crate::schema::dependencies::resolve(resource, self).await?;
+        crate::schema::dependencies::validate_data(resource, &definitions)?;
         if check_required_props {
             resource.check_required_props(self).await?;
+        }
+        for definition in definitions.values() {
+            if !self.has_stored_resource(definition.get_subject()) {
+                self.add_resource_tx(definition, transaction)?;
+                for atom in definition.to_atoms() {
+                    self.add_atom_to_index(&atom, definition, transaction)?;
+                }
+            }
         }
         if update_index {
             // Every atom is removed and filed again, not only the changed

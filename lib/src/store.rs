@@ -177,6 +177,8 @@ impl Storelike for Store {
         overwrite_existing: bool,
     ) -> AtomicResult<()> {
         crate::schema::frozen::verify(resource)?;
+        let definitions = crate::schema::dependencies::resolve(resource, self).await?;
+        crate::schema::dependencies::validate_data(resource, &definitions)?;
         if check_required_props {
             resource.check_required_props(self).await?;
         }
@@ -194,7 +196,11 @@ impl Storelike for Store {
         }
         let _ = update_index;
         // This store has no index, so we don't need to update it.
-        self.hashmap.lock().unwrap().insert(key, resource.clone());
+        let mut map = self.hashmap.lock().unwrap();
+        for (id, definition) in definitions {
+            map.entry(id).or_insert(definition);
+        }
+        map.insert(key, resource.clone());
         Ok(())
     }
 

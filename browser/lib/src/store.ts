@@ -2536,7 +2536,8 @@ export class Store {
       isOwnCommit
     ) {
       if (!isCommitSubject(subject)) {
-        existing.importLoroUpdate(change.loroBytes);
+        if (!existing.importLoroUpdate(change.loroBytes).complete)
+          return 'invalid';
       }
 
       return 'deduped';
@@ -2577,7 +2578,16 @@ export class Store {
       !isCommitSubject(subject) &&
       !resource.hasUnsavedChanges() &&
       !this.outbox.mayHavePending(subject);
-    const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
+    const { complete, schemaError } = resource.importLoroUpdate(
+      change.loroBytes,
+      replace,
+    );
+
+    if (schemaError) {
+      resource.setError(new Error(schemaError));
+
+      return 'invalid';
+    }
 
     // Commit-detail resources (`did:ad:commit:<sig>`) carry a single
     // commit's `loroUpdate`, which is a DELTA by design — importing it

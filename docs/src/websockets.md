@@ -1092,3 +1092,34 @@ its current write authority, and saves a normal signed ACL commit granting the
 requested access. Ordinary peer AUTH/ACL checks then run before any sync data is
 sent. Other peers cannot redeem an issuer's token. Reconnecting after a trusted
 local snapshot exists uses normal ACL authentication without re-redeeming it.
+
+
+## Frozen schema dependencies in resource state
+
+The experimental app-schema SDK uses the existing Loro payload rather than a
+new frame type. A resource may carry a root map named
+`atomic:schema-definitions`, whose keys are canonical `atomic:frozen:<hash>` IDs
+and whose values are JCS JSON strings containing immutable Class/Property bodies.
+This root is carried by COMMIT, UPDATE, GET responses and SYNC_PUSH, over both
+WebSocket and Iroh. The COMMIT signature covers the dependency edits too.
+
+Before persistence, new implementations validate bounded schema dependencies
+and the instance against them. They install reachable definitions and resource
+state together after ordinary authorization. Bad dependencies produce a rejected
+sync result rather than SYNC_OK; earlier valid resources in the same push may
+already have persisted. Browser clients retain the last good document and do
+not mark a pull complete after schema, worker-write or flush failure.
+
+The visible map is limited to 512 entries and 1 MiB total UTF-8 key/body bytes,
+with at most 256 KiB per body and traversal depth 16. Hashes and canonical JSON
+must match, unsupported schema metadata is rejected, and the dependency resolver
+performs no network access or code execution. Missing frozen dependencies fail
+closed; a known local definition may satisfy a dependency omitted by a legacy
+writer. Definitions alone do not authorize data or run migrations.
+
+There is no negotiated capability for enforcement yet: old peers can preserve
+this root without validating it. All validating peers must upgrade before an app
+can rely on the contract end to end. Definitions are duplicated across resource
+snapshots; no global dependency-inventory deduplication is implemented. Existing
+frame/CRDT limits remain necessary before this post-import validation.
+See [app schemas](schema/app-schemas.md) for migration and compatibility rules.

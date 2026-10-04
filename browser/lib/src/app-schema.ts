@@ -119,14 +119,11 @@ export function defineAppSchema(
   return { class_id, fields: bindings, definitions };
 }
 
-/** Validate all definitions before installing any. Call on every app startup. */
-export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
-  const entries = Object.entries(bundle.definitions);
-  if (
-    entries.length !== Object.keys(bundle.fields).length + 1 ||
-    Object.keys(bundle.fields).length > 128
-  )
-    throw new Error('Schema bundle too large');
+/** Internal bounded wire-definition parser; shared with sync dependency import. */
+export function parseAppDefinition(
+  id: string,
+  body: Record<string, SchemaValue>,
+): Resource {
   const allowed = new Set<string>([
     core.properties.isA,
     core.properties.requires,
@@ -137,37 +134,47 @@ export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
     APP_SCOPE,
     APP_SHAPE,
   ]);
-  const resources = entries.map(([id, body]) => {
+
+  if (
+    id !== frozenSchemaId(body) ||
+    Object.keys(body).some(k => !allowed.has(k))
+  )
+    throw new Error('Invalid schema definition');
+
+  if (body[APP_SHAPE]) {
+    const normalized = normalizeAppShape(body[APP_SHAPE] as AppShape);
     if (
-      id !== frozenSchemaId(body) ||
-      Object.keys(body).some(k => !allowed.has(k))
+      canonicalSchemaJson(body[APP_SHAPE]) !==
+      canonicalSchemaJson(normalized as SchemaValue)
     )
-      throw new Error('Invalid schema definition');
+      throw new Error('Shape must use normalized defaults');
+  }
 
-    if (body[APP_SHAPE]) {
-      const normalized = normalizeAppShape(body[APP_SHAPE] as AppShape);
-      if (
-        canonicalSchemaJson(body[APP_SHAPE]) !==
-        canonicalSchemaJson(normalized as SchemaValue)
-      )
-        throw new Error('Shape must use normalized defaults');
-    }
+  for (const key of [
+    core.properties.shortname,
+    core.properties.description,
+    APP_SCOPE,
+  ]) {
+    if (Object.hasOwn(body, key) && typeof body[key] !== 'string')
+      throw new Error('Expected schema text');
+  }
 
-    for (const key of [
-      core.properties.shortname,
-      core.properties.description,
-      APP_SCOPE,
-    ]) {
-      if (Object.hasOwn(body, key) && typeof body[key] !== 'string')
-        throw new Error('Expected schema text');
-    }
+  const [resource] = new JSONADParser().parse({ '@id': id, ...body });
+  if (resource.error) throw resource.error;
+  verifyFrozenSchema(resource);
 
-    const [resource] = new JSONADParser().parse({ '@id': id, ...body });
-    if (resource.error) throw resource.error;
-    verifyFrozenSchema(resource);
+  return resource;
+}
 
-    return resource;
-  });
+/** Validate all definitions before installing any. Call on every app startup. */
+export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
+  const entries = Object.entries(bundle.definitions);
+  if (
+    entries.length !== Object.keys(bundle.fields).length + 1 ||
+    Object.keys(bundle.fields).length > 128
+  )
+    throw new Error('Schema bundle too large');
+  const resources = entries.map(([id, body]) => parseAppDefinition(id, body));
   const cls = bundle.definitions[bundle.class_id];
   if (
     !cls ||

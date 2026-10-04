@@ -6,11 +6,12 @@ Their identifiers are `atomic:frozen:<hash>`: immutable definitions addressed by
 BLAKE3 over their canonical JSON-AD bodies (JCS). Data instances still use normal
 Atomic resources, permissions, signed commits and Loro synchronization.
 
-This API is experimental. Register the same bundle on **every writer and
-validating server**. Bundles are explicit app assets; this version does not
-transfer missing definitions automatically through drive sync. Unknown schema
-continues to follow the existing optional-schema policy. Registered frozen
-properties are validated by Rust's schema-validating write path.
+This API is experimental. Writers register their app bundle locally. Normal save
+operations attach the required definitions to the resource's Loro document, so a
+cold replica can receive and verify them through the existing sync protocol.
+Missing or invalid **frozen** dependencies fail explicitly; unknown HTTP-defined
+schema keeps the existing optional-schema behavior. Older peers preserve the
+extra Loro root but do not enforce this validation contract.
 
 ## TypeScript
 
@@ -122,3 +123,68 @@ reference-based recursive schemas, a schema catalog, automatic discovery,
 JSON Schema import/export and a Dart convenience API are follow-up work. Flutter
 can call these Rust APIs through its existing native bridge; this change does
 not yet migrate Atomic Audio's project format.
+
+
+## Delivery and trust
+
+The reserved Loro root map `atomic:schema-definitions` contains canonical frozen
+IDs mapped to canonical JSON strings. The properties map still holds app data.
+Definitions travel in signed COMMIT updates and authorized UPDATE/SYNC_PUSH
+snapshots or deltas, including Iroh's use of the same protocol. There is no
+separate network fetch by schema hash. A receiver validates the reachable Class
+and Property definitions before admitting the data; native storage installs both
+in one transaction. A rejected resource does not install its definitions.
+
+The resolver only follows schema links, never arbitrary strings or URLs. It
+accepts at most 512 definitions, 1 MiB of UTF-8 keys plus bodies, 256 KiB per body,
+and 16 dependency edges of depth. The entry limit accommodates two complete
+128-field versions during a migration. It verifies every attachment, including unused
+ones, but installs only definitions reachable from the resource's current
+properties and classes. Unsupported metadata and executable migration hooks are
+rejected. A hash proves content identity, not publisher trust or permission:
+existing resource/drive authorization still applies. Direct cache reads do not
+gain public read grants.
+
+Definitions are initially repeated per resource. Later deltas omit unchanged
+entries. The shared cache deduplicates definitions, but this is not a global
+wire-level dependency inventory. Limits cover the visible schema payload after
+Loro import; existing transport/frame limits still matter, and these checks do
+not bound every aspect of CRDT history or decompression. This is not a complete
+DoS audit of Loro or the transport.
+
+## Schema migrations
+
+A schema update creates new immutable definitions. Merely receiving them never
+changes a resource's `isA`, rewrites its fields, or executes code. Versions can
+coexist on disk and in the same resource. Keep schema delivery separate from an
+app's decision to migrate data.
+
+An app migration should:
+
+1. Pin source and target Class/Property IDs, a migration identifier, and the
+   input resource version. A mutable catalog's latest pointer is not enough.
+2. Preview the exact transformed values, unmapped fields and any loss. Run
+   trusted app code locally; do not execute transforms supplied by a peer.
+3. Recheck write rights and the input version before applying. If it changed,
+   recompute or ask for conflict resolution. Apply each resource conversion as
+   one normal signed commit, with an idempotency marker and provenance.
+4. Retain original fields during the compatibility window. Add new properties
+   under new IDs and explicitly switch the class when the target requirements
+   are satisfied. Avoid deleting an old nested container while older clients
+   can still edit it.
+5. Track progress per resource and retry idempotently. A drive migration is not
+   an atomic multi-resource transaction. Interrupted runs must remain resumable.
+
+For example, converting pitch from semitones to cents writes a new Property.
+If a v1 client changes 7 semitones to 9 while the conversion writes 700 cents,
+Loro retains **9 semitones and 700 cents**. This preserves the older edit, but
+requires an explicit decision to refresh or supersede the converted value.
+CRDT convergence does not establish a semantic relationship between the fields.
+
+The SDK tests cover that race and importing historical states afterwards. They
+do not implement a migration runner, version preconditions, provenance records,
+a UI preview, or a guarantee against a write arriving after the app's version
+check. Those need an application policy (and server-side conditional writes or a
+coordinated cutover for strict exclusion). Reverting a migration is another
+permitted commit or a copy from history; automatic reverse conversion may lose
+data and is not assumed safe.

@@ -25,5 +25,36 @@ has unresolved materialization/persistence gaps. Preserve semantic property IDs
 when reusing definitions; a changed definition produces a new identity.
 
 The draft intentionally leaves a Dart convenience API and Audio data migration
-for a follow-up. Each writer/server must register the app bundle; automatic
-schema delivery through sync is not part of this draft.
+for a follow-up. Writers register the app bundle; upgraded receivers learn the
+needed definitions from the resource state.
+
+## Automatic exchange and hostile peers
+
+- [x] Carry bounded, hash-verified definitions in a reserved Loro root map
+  `atomic:schema-definitions` (ID -> canonical JSON body). Existing signed
+  COMMIT, UPDATE and SYNC_PUSH payloads then carry dependencies with the data;
+  no unauthenticated global schema-by-hash endpoint is introduced.
+- [x] Resolve only the closure of a resource's frozen Property and Class IDs.
+  Limit bytes, entries and traversal depth; verify even unused attachments,
+  but install only reachable definitions. Never run schema-supplied code or URLs.
+- [x] Validate against attached definitions without installing them first.
+  Persist dependencies and data in one native transaction only after normal
+  commit/sync authorization. Surface bad attachments as sync failure.
+- [x] Match browser behavior, including rejecting malformed incoming state
+  before mutating a live document or installing definitions.
+- [x] Test cold replicas, deltas, tampering, missing definitions, oversized
+  dependency sets, unauthorized pushes, and unchanged legacy resources.
+
+Definitions live in a separate root from mutable project properties. This adds
+no new frame type: an immutable entry is written once per resource, thereafter
+ordinary Loro deltas omit unchanged entries. Older replicas preserve opaque root
+state but cannot enforce the new validation contract. A future inventory/fetch
+extension can deduplicate definitions across resources without changing their IDs.
+
+
+- [x] Document migration identity, authorization, retries, provenance, old-writer
+  compatibility and the limits of client-side version checks.
+- [x] Reproduce a migration racing with an old-schema write; preserve both
+  properties and require explicit reconciliation of stale converted values.
+- [ ] Migration runner/preview, conditional commit API, and per-app cutover policy.
+- [ ] Deployed mixed-version WebSocket/Iroh acceptance and CRDT history fuzzing.
