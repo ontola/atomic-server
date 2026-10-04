@@ -11050,3 +11050,9 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Discard upload"
 msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid ""
+"Included AI isn't reachable right now. Check your connection and sign-in, "
+"then reload to try again."
+msgstr ""
