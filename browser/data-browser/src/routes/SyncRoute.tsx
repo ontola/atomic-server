@@ -658,6 +658,16 @@ function SyncCard({
   );
 }
 
+/**
+ * Keeps the previous object when a poll brought nothing new. `managedInfo` is a
+ * dependency of the effects that ask the portal about the account and this
+ * drive's enrollment, so a fresh object every five seconds made the page repeat
+ * `/api/me` and `/api/sync-enrollments` for as long as it stayed open.
+ */
+function sameInfo(prev: ManagedInfo, next: ManagedInfo): ManagedInfo {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
 function SyncPage() {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
@@ -932,7 +942,7 @@ function SyncPage() {
 
     const poll = () =>
       fetchManagedInfo(serverUrl).then(info => {
-        if (!cancelled) setManagedInfo(info);
+        if (!cancelled) setManagedInfo(prev => sameInfo(prev, info));
       });
 
     void poll();
