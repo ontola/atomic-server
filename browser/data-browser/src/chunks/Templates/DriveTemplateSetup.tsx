@@ -389,16 +389,18 @@ export function DriveTemplateSetup({
  * a workspace, or the server is self-hosted.
  */
 async function guestSignUpUrl(store: Store): Promise<string | undefined> {
-  const agent = store.getAgent();
-  if (agent?.subject && !(await localAgentIsDisposable(store, agent.subject)))
-    return undefined;
-  if (await getManagedAccount()) return undefined;
-
   const target = accountCreationTarget(
     await fetchManagedInfo(store.getServerUrl()),
   );
+  if (target.kind !== 'portal') return undefined;
+  if (await getManagedAccount()) return undefined;
+  // Last, and only without an account: reading the agent resource while a
+  // signed-in home is still syncing to this device can hold up that sync.
+  const agent = store.getAgent();
+  if (agent?.subject && !(await localAgentIsDisposable(store, agent.subject)))
+    return undefined;
 
-  return target.kind === 'portal' ? target.url : undefined;
+  return target.url;
 }
 
 const TableIcon = getIconForClass(dataBrowser.classes.table);
