@@ -52,10 +52,16 @@ it('becomes ready after a read that failed, without a reload', async () => {
 
   const { result } = renderHook(() => useIntegrationVisibility());
 
-  await waitFor(() => expect(result.current.error).toBeDefined());
+  await waitFor(() => expect(result.current.error).toBeDefined(), {
+    timeout: 5_000,
+  });
   expect(result.current.ready).toBe(false);
 
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  // The first retry comes after a short backoff. A loaded CI host can take
+  // longer than waitFor's default one second to run it.
+  await waitFor(() => expect(result.current.ready).toBe(true), {
+    timeout: 5_000,
+  });
   expect(result.current.error).toBeUndefined();
   // The retry has to go back to the server: the store answers a read that
   // failed with the same error for as long as the tab is open.
