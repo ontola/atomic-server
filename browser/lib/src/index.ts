@@ -37,6 +37,7 @@ export * from './ontologies/server.js';
 export * from './ontologies/ai.js';
 export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
+export * from './ontologies/notifications.js';
 export * from './ontologies/i18n.js';
 export * from './canvas-strokes.js';
 export * from './agent.js';
@@ -72,7 +73,7 @@ export * from './loro-loader.js';
 export * from './page-request-signal.js';
 export * from './presence.js';
 export * from './CryptoProvider.js';
-export { ClientDbWorker } from './client-db.js';
+export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
 export {
   attributionForVersion,
   mergeHistoryAttributions,
@@ -327,9 +328,17 @@ export {
   isAllDayOnDate,
   nextCalendarDate,
   matchesCalendarField,
+  calendarRecurrenceShortname,
 } from './calendar-date.js';
 
-export * from './calendar-recurrence.js';
+// The expansion functions live in `@tomic/lib/calendar-recurrence.js`: they
+// pull in the Temporal polyfill (~120 kB), which most apps never need.
+export type {
+  CalendarTime,
+  CalendarEvent,
+  CalendarRecord,
+  CalendarOccurrence,
+} from './calendar-recurrence.js';
 
 export {
   parseSetupDeclaration,

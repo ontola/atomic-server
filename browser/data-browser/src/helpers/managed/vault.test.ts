@@ -709,6 +709,81 @@ describe('restoreDrive', () => {
     expect(outcome.resourcesRestored).toBe(5);
   });
 
+  it('asks for download URLs at most 64 objects at a time', async () => {
+    const objects = Array.from({ length: 150 }, (_, i) => ({
+      object_id: `id-${i}`,
+      object_key: `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-${String(i).padStart(6, '0')}.pack`,
+    }));
+    const batchSizes: number[] = [];
+    let imported = 0;
+
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(),
+      vaultImport: vi.fn(async (_k, _e, _p, _d, sealed: unknown[]) => {
+        imported = sealed.length;
+
+        return {
+          packsRead: sealed.length,
+          resourcesRestored: 1,
+          tombstonesApplied: 0,
+          objectsSkipped: 0,
+          objectsUnreadable: 0,
+        };
+      }),
+      vaultCommitSegment: vi.fn(),
+    };
+
+    mockFetch((url, init) => {
+      if (url.endsWith('/objects')) {
+        return { ok: true, status: 200, json: async () => objects };
+      }
+
+      if (url.endsWith('/download-urls')) {
+        const ids: string[] = JSON.parse(init?.body as string).object_ids;
+        batchSizes.push(ids.length);
+
+        if (ids.length > 64) {
+          return {
+            ok: false,
+            status: 400,
+            json: async () => ({
+              error: 'at most 64 objects per download-urls request',
+            }),
+            text: async () => 'at most 64 objects per download-urls request',
+          };
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            downloads: ids.map(id => {
+              const o = objects.find(x => x.object_id === id)!;
+
+              return { ...o, url: `https://s3.test/${id}` };
+            }),
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+      };
+    });
+
+    await restoreDrive({
+      db,
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+    });
+
+    expect(batchSizes).toEqual([64, 64, 22]);
+    expect(imported).toBe(150);
+  });
+
   it('reports progress as objects arrive', async () => {
     const db: VaultCapableDb = {
       vaultExport: vi.fn(),

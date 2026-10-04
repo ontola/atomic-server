@@ -60,6 +60,54 @@ pub struct ClientDb {
 }
 
 impl ClientDb {
+    async fn drive_subject_list(&self, drive: &str) -> Vec<String> {
+        let drive_subject =
+            atomic_lib::Subject::from_raw(drive, self.db().get_base_domain().as_deref());
+
+        atomic_lib::sync::engine::collect_drive_subjects(self.db(), &drive_subject)
+            .await
+            .into_iter()
+            .collect()
+    }
+
+    fn version_vectors_of(&self, subjects: Vec<String>) -> Result<JsValue, JsError> {
+        use atomic_lib::db::trees::Tree;
+        use atomic_lib::loro::AtomicLoroDoc;
+        use std::collections::HashMap;
+
+        let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
+
+        for subject in subjects {
+            // `collect_drive_subjects` yields `pure_id()` strings, which are
+            // exactly the `LoroSnapshots` keys.
+            match self.db().kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+                Ok(Some(snapshot_bytes)) => {
+                    match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
+                        Ok(vv) => {
+                            result.insert(subject, vv);
+                        }
+                        Err(e) => {
+                            web_sys::console::warn_1(
+                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
+                                    .into(),
+                            );
+                        }
+                    }
+                }
+                // No snapshot for this subject yet (metadata-only / not
+                // materialized) — nothing to diff, skip it.
+                Ok(None) => {}
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
+                    );
+                }
+            }
+        }
+
+        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    }
+
     fn db(&self) -> &Db {
         self.node.db()
     }
@@ -276,11 +324,39 @@ impl ClientDb {
         self.put_resource_inner(json_ad, Some(snapshot)).await
     }
 
-    async fn put_resource_inner(
+    /// [`Self::put_resource_with_snapshot`] for many resources in one write.
+    /// `snapshots[i]` is a `Uint8Array` for `json_ads[i]`, or null/undefined
+    /// for a resource without a Loro doc.
+    #[wasm_bindgen(js_name = "putResourcesWithSnapshots")]
+    pub async fn put_resources_with_snapshots(
+        &self,
+        json_ads: Vec<String>,
+        snapshots: js_sys::Array,
+    ) -> Result<(), JsError> {
+        let mut entries = Vec::with_capacity(json_ads.len());
+        for (i, json_ad) in json_ads.iter().enumerate() {
+            let value = snapshots.get(i as u32);
+            let snapshot = if value.is_null() || value.is_undefined() {
+                None
+            } else {
+                Some(js_sys::Uint8Array::new(&value).to_vec())
+            };
+            let resource = self.resource_for_put(json_ad, snapshot.as_ref()).await?;
+            entries.push((resource, snapshot));
+        }
+        self.db()
+            .persist_replicated_resources(entries)
+            .await
+            .map_err(to_js_err)
+    }
+
+    /// Parse a stored row back into a resource, filling in what the parser
+    /// skipped from the snapshot that travels with it.
+    async fn resource_for_put(
         &self,
         json_ad: &str,
-        snapshot: Option<Vec<u8>>,
-    ) -> Result<(), JsError> {
+        snapshot: Option<&Vec<u8>>,
+    ) -> Result<Resource, JsError> {
         // `SaveOpts::DontSave` keeps `parse_json_ad_resource` from calling
         // `store.add_resource()` (which validates required props) during
         // parsing. This is admitted replica state, not a new authored import:
@@ -301,7 +377,7 @@ impl ClientDb {
         // tab's snapshot still holds its value. `getResourceWithSnapshot`
         // serves this row, so take those values from the snapshot rather than
         // store a row with less in it than the document.
-        if let Some(snapshot) = &snapshot {
+        if let Some(snapshot) = snapshot {
             let keys: Vec<String> =
                 serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_ad)
                     .map(|map| {
@@ -313,6 +389,15 @@ impl ClientDb {
                     .unwrap_or_default();
             resource.restore_props_from_snapshot(&keys, snapshot);
         }
+        Ok(resource)
+    }
+
+    async fn put_resource_inner(
+        &self,
+        json_ad: &str,
+        snapshot: Option<Vec<u8>>,
+    ) -> Result<(), JsError> {
+        let resource = self.resource_for_put(json_ad, snapshot.as_ref()).await?;
         match snapshot {
             Some(snapshot) => self
                 .db()
@@ -574,6 +659,49 @@ impl ClientDb {
         serde_json::to_string(&report).map_err(to_js_err)
     }
 
+    /// Apply the resource states of a `SYNC_PUSH` without building them in
+    /// JavaScript: each `(subject, state)` pair is merged into the stored
+    /// document and persisted with its indexes (`apply_state_update`, the path
+    /// replicas use). `subjects` is an array of strings and `states` an array
+    /// of `Uint8Array`s of the same length. Returns how many were applied.
+    #[wasm_bindgen(js_name = "applyStateUpdates")]
+    pub async fn apply_state_updates(
+        &self,
+        subjects: Vec<String>,
+        states: js_sys::Array,
+        defer_search: bool,
+    ) -> Result<u32, JsError> {
+        let items: Vec<(String, Vec<u8>)> = subjects
+            .into_iter()
+            .enumerate()
+            .map(|(i, subject)| {
+                (
+                    subject,
+                    js_sys::Uint8Array::new(&states.get(i as u32)).to_vec(),
+                )
+            })
+            .collect();
+
+        let applied =
+            atomic_lib::sync::ws_apply::apply_state_updates(self.db(), &items, defer_search)
+                .await
+                .map_err(to_js_err)?;
+
+        Ok(applied as u32)
+    }
+
+    /// Add full-text search entries for up to `limit` resources that were
+    /// stored without them (`applyStateUpdates` with `deferSearch`). Returns how
+    /// many were done; call again until it returns 0.
+    #[wasm_bindgen(js_name = "indexPendingSearch")]
+    pub async fn index_pending_search(&self, limit: u32) -> Result<u32, JsError> {
+        let done = atomic_lib::search::index_pending(self.db(), limit as usize)
+            .await
+            .map_err(to_js_err)?;
+
+        Ok(done as u32)
+    }
+
     /// The retained signed envelopes of each subject, as
     /// `{ "<subject>": ["<commit JSON-AD>", ...] }`, to ride along a
     /// `SYNC_PUSH` (`atomic_lib::envelopes::for_subjects`). `subjects_json`
@@ -699,46 +827,31 @@ impl ClientDb {
     /// otherwise treat as pull/remove candidates.
     #[wasm_bindgen(js_name = "getVersionVectorsForDrive")]
     pub async fn get_version_vectors_for_drive(&self, drive: String) -> Result<JsValue, JsError> {
-        use atomic_lib::db::trees::Tree;
-        use atomic_lib::loro::AtomicLoroDoc;
-        use std::collections::HashMap;
+        let subjects = self.drive_subject_list(&drive).await;
 
-        let drive_subject =
-            atomic_lib::Subject::from_raw(&drive, self.db().get_base_domain().as_deref());
-        let subjects =
-            atomic_lib::sync::engine::collect_drive_subjects(self.db(), &drive_subject).await;
+        self.version_vectors_of(subjects)
+    }
 
-        let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
+    /// The subjects of one drive (the parent-index walk of
+    /// `getVersionVectorsForDrive`, without reading any snapshot). Together
+    /// with `getVersionVectorsForSubjects` this lets a caller read a big
+    /// drive's version vectors in slices, so reads queued behind the work can
+    /// run between the slices instead of waiting for all of it.
+    #[wasm_bindgen(js_name = "getDriveSubjects")]
+    pub async fn get_drive_subjects(&self, drive: String) -> Result<JsValue, JsError> {
+        let subjects = self.drive_subject_list(&drive).await;
 
-        for subject in subjects {
-            // `collect_drive_subjects` yields `pure_id()` strings, which are
-            // exactly the `LoroSnapshots` keys.
-            match self.db().kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                Ok(Some(snapshot_bytes)) => {
-                    match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
-                        Ok(vv) => {
-                            result.insert(subject, vv);
-                        }
-                        Err(e) => {
-                            web_sys::console::warn_1(
-                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
-                                    .into(),
-                            );
-                        }
-                    }
-                }
-                // No snapshot for this subject yet (metadata-only / not
-                // materialized) — nothing to diff, skip it.
-                Ok(None) => {}
-                Err(e) => {
-                    web_sys::console::warn_1(
-                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
-                    );
-                }
-            }
-        }
+        serde_wasm_bindgen::to_value(&subjects).map_err(|e| JsError::new(&e.to_string()))
+    }
 
-        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    /// Version vectors of exactly these subjects (`pure_id()` strings, as
+    /// returned by `getDriveSubjects`). Subjects without a snapshot are skipped.
+    #[wasm_bindgen(js_name = "getVersionVectorsForSubjects")]
+    pub fn get_version_vectors_for_subjects(&self, subjects: JsValue) -> Result<JsValue, JsError> {
+        let subjects: Vec<String> =
+            serde_wasm_bindgen::from_value(subjects).map_err(|e| JsError::new(&e.to_string()))?;
+
+        self.version_vectors_of(subjects)
     }
 
     /// Get all subjects in the database.

@@ -210,7 +210,7 @@ export function RowActionDialog({
 }
 
 /** A tag's name, for the value picker of a select column. */
-function TagOption({ subject }: { subject: string }): JSX.Element {
+export function TagOption({ subject }: { subject: string }): JSX.Element {
   const tag = useResource(subject);
   const [shortname] = useString(tag, core.properties.shortname);
 

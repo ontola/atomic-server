@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalDriveHash } from './canonical-drive-hash.js';
+import {
+  canonicalDriveHash,
+  canonicalDriveHashV2,
+} from './canonical-drive-hash.js';
 
 describe('canonicalDriveHash', () => {
   // GOLDEN CROSS-IMPLEMENTATION VECTOR. The Rust server asserts the SAME hex
@@ -21,5 +24,29 @@ describe('canonicalDriveHash', () => {
     const byInsertionOrder = await canonicalDriveHash({ b: [1], A: [1] });
     const byReversedInsertion = await canonicalDriveHash({ A: [1], b: [1] });
     expect(byInsertionOrder).toBe(byReversedInsertion);
+  });
+});
+
+describe('canonicalDriveHashV2', () => {
+  // The same vectors as `compute_drive_hash_v2_matches_golden_vectors` in
+  // lib/src/sync/tests.rs. If one side changes, both fail.
+  it('matches the Rust golden vectors', async () => {
+    expect(await canonicalDriveHashV2({ s1: { p1: 2 }, s2: { p2: 3 } })).toBe(
+      'f528a0cda4ba67df7ca7907ddee66b9535f0bf3719516a3ec9877b5b6ee4ea2a',
+    );
+
+    expect(
+      await canonicalDriveHashV2({
+        a: { p2: 4, p1: 1 },
+        b: {},
+        c: { p1: 7, p9: 0 },
+      }),
+    ).toBe('dd7b446967391a32dde347a6c1d24b8549e85362a19e44f4b0c1e48ea5137237');
+  });
+
+  it('does not depend on the order the entries were built in', async () => {
+    expect(await canonicalDriveHashV2({ b: { y: 1, x: 2 }, a: { z: 3 } })).toBe(
+      await canonicalDriveHashV2({ a: { z: 3 }, b: { x: 2, y: 1 } }),
+    );
   });
 });

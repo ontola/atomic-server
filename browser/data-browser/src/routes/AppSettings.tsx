@@ -15,6 +15,7 @@ import { appRoute } from './RootRoutes';
 import { IntegrationSettings } from '@components/Settings/IntegrationSettings';
 import AISettings from '@components/AI/AISettings';
 import { VirtualDriveSettings } from '@components/Settings/VirtualDriveSettings';
+import { NotificationSettings } from '@components/Settings/NotificationSettings';
 import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
 import { SUPPORTED_LOCALES, useLocale } from '@components/LocaleContext';
 import { BasicSelect } from '@components/forms/BasicSelect';
@@ -27,6 +28,11 @@ import {
 import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
+
+/** Touch screens: focusing a field there raises the keyboard. */
+const isTouchDevice = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(pointer: coarse)').matches;
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
@@ -96,6 +102,10 @@ const AppSettings: React.FunctionComponent = () => {
           <InputStyled
             type='text'
             placeholder='Search settings...'
+            aria-label='Search settings'
+            // Ready to type on arrival. Not on touch screens, where focusing
+            // pops the keyboard over the settings you came to look at.
+            autoFocus={!isTouchDevice()}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -229,6 +239,12 @@ const AppSettings: React.FunctionComponent = () => {
                   <span>Enable keyboard drag & drop in sidebar</span>
                 </CheckboxLabel>
               </Column>
+            </SettingsSection>
+            <SettingsSection
+              label='Notifications'
+              childSearchKeywords='notify notifications alerts messages comments replies push'
+            >
+              <NotificationSettings />
             </SettingsSection>
             {isVirtualDriveAvailable() && (
               <SettingsSection label='Virtual drive'>

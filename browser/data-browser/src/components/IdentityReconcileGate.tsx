@@ -11,6 +11,7 @@ import {
   localAgentWorkspace,
   logoutManagedSession,
   PRODUCT_NAME,
+  sameAgent,
   syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
@@ -31,6 +32,7 @@ import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
 import {
+  CardError,
   CardSubtitle,
   CardTitle,
   OnboardingCard,
@@ -45,6 +47,17 @@ type GateProps = {
 /** The account whose identity could not take over without losing drives. */
 type Conflict = {
   managedAccountEmail: string;
+  /** This browser's identity, still active. */
+  from: string;
+  /** The account's identity. */
+  to: string;
+  /**
+   * Whether its workspace can be brought into the account: only an identity
+   * that never hosted anything, like a demo guest. A hosted or synced drive
+   * has an enrollment tied to `from` that the account cannot take over from
+   * here.
+   */
+  canBringAlong: boolean;
 };
 
 /**
@@ -123,7 +136,12 @@ async function handOverOrReport(
  *   the device (see `driveHandover.ts`), so the switch loses nothing. Asking which identity to keep (2026-09-03) put a question about
  *   agents in front of people who only know their account.
  * - **Same, but the handover failed** → ask, as a last resort: switching now
- *   could lock a workspace away.
+ *   could lock a workspace away. For an identity that never hosted anything
+ *   the first answer is to bring its workspace along after all (the same
+ *   handover, tried again); switching without it and keeping this identity
+ *   stay as fallbacks. A hosted or synced identity is only ever kept: its
+ *   drives' enrollments are tied to it, and the account cannot re-enroll
+ *   them from here.
  * - **Otherwise** → adopt this device's agent (bind it to the account) so it
  *   becomes the account's agent. No prompt, no logout.
  *
@@ -140,6 +158,8 @@ export function IdentityReconcileGate({
   const [checking, setChecking] = useState(true);
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [bringing, setBringing] = useState(false);
+  const [bringFailed, setBringFailed] = useState(false);
   const [reconcileAttempt, setReconcileAttempt] = useState(0);
   // Re-checks fire on every `agent?.subject` change (e.g. a device
   // creating/accepting-as a brand new local agent, not just managed-sync
@@ -153,8 +173,14 @@ export function IdentityReconcileGate({
 
   // Identity setup owns its transition. Reconciling a half-created dev agent
   // can classify it as disposable and redirect before its drive is saved.
+  // The demo is the same: it makes (or keeps) a guest identity itself, and a
+  // signed-in visitor is sent to their own drive from there. Holding it back
+  // for this check cost a first visit a cold round trip to the account
+  // server before setup could even start. The check runs as soon as the demo
+  // navigates on.
   const skip =
     pathname === paths.devDrive ||
+    pathname === paths.demo ||
     pathname === paths.welcome ||
     pathname.startsWith(`${paths.welcome}/`);
 
@@ -197,7 +223,8 @@ export function IdentityReconcileGate({
           // here. Any other identity may be someone else's on a shared
           // browser: its key is kept on this device and nothing is copied or
           // shared with the account.
-          const handedOver = store.isLocalOnlyDrive(from)
+          const canBringAlong = store.isLocalOnlyDrive(from);
+          const handedOver = canBringAlong
             ? await handOverOrReport(store, from, to)
             : await archiveOrReport(from);
           if (!isCurrent()) return;
@@ -207,6 +234,9 @@ export function IdentityReconcileGate({
             // instead of the app, so nothing is used as the wrong one meanwhile.
             setConflict({
               managedAccountEmail: result.issue.managedAccountEmail,
+              from,
+              to,
+              canBringAlong,
             });
 
             return;
@@ -284,6 +314,7 @@ export function IdentityReconcileGate({
   /** Switch this browser to the account's identity: the recover flow does it. */
   function switchToAccount() {
     setConflict(null);
+    setBringFailed(false);
     navigate({
       to: paths.welcome,
       search: {
@@ -292,6 +323,37 @@ export function IdentityReconcileGate({
       },
       replace: true,
     });
+  }
+
+  /**
+   * Bring this browser's workspace into the account, then switch: while this
+   * identity can still sign, give the account's identity write on every drive
+   * it owns and list them for the account (`driveHandover.ts`). Old commits
+   * keep their author; everything stays editable as the account.
+   */
+  async function bringAlong(current: Conflict) {
+    setBringing(true);
+    setBringFailed(false);
+
+    try {
+      // Still the identity the conflict was about: a grant signed by any
+      // other would not be this workspace's owner speaking.
+      const active = store.getAgent()?.subject;
+
+      if (
+        active &&
+        sameAgent(active, current.from) &&
+        (await handOverOrReport(store, current.from, current.to))
+      ) {
+        switchToAccount();
+
+        return;
+      }
+
+      setBringFailed(true);
+    } finally {
+      setBringing(false);
+    }
   }
 
   /**
@@ -329,10 +391,36 @@ export function IdentityReconcileGate({
                 saved for {conflict.managedAccountEmail}. Choose which identity
                 you want to use here.
               </CardSubtitle>
+              {conflict.canBringAlong ? (
+                <>
+                  <Button
+                    type='button'
+                    onClick={() => void bringAlong(conflict)}
+                    disabled={resolving || bringing}
+                    data-testid='identity-conflict-bring'
+                  >
+                    {bringing
+                      ? 'Bringing your workspace…'
+                      : 'Bring this workspace into my account'}
+                  </Button>
+                  <CardSubtitle>
+                    Lets {conflict.managedAccountEmail} edit the drives made on
+                    this browser, then switches to that identity. Everything
+                    stays editable and is backed up with your account.
+                  </CardSubtitle>
+                  {bringFailed ? (
+                    <CardError role='alert'>
+                      Your workspace could not be brought into your account. Try
+                      again, or choose one of the options below.
+                    </CardError>
+                  ) : null}
+                </>
+              ) : null}
               <Button
                 type='button'
+                subtle={conflict.canBringAlong}
                 onClick={switchToAccount}
-                disabled={resolving}
+                disabled={resolving || bringing}
                 data-testid='identity-conflict-switch'
               >
                 Use the account identity
@@ -346,7 +434,7 @@ export function IdentityReconcileGate({
                 type='button'
                 subtle
                 onClick={() => void keepLocal()}
-                disabled={resolving}
+                disabled={resolving || bringing}
                 data-testid='identity-conflict-keep'
               >
                 {resolving ? 'Signing out…' : 'Keep this browser identity'}

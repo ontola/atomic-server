@@ -35,6 +35,49 @@ window.addEventListener('message', event => {
   }
 });
 
+/** Requests that wait on the person, so they get no timeout. */
+const ASKS_THE_PERSON = new Set([
+  'confirm',
+  'menu',
+  'share',
+  'pickResource',
+  'pickFile',
+  'form',
+  'proxyConnect',
+]);
+
+/** A MouseEvent or `{ x, y }`, as a point in this frame. */
+function point(at) {
+  if (at && typeof at.clientX === 'number') return { x: at.clientX, y: at.clientY };
+
+  return at;
+}
+
+/**
+ * Keys this view did not handle go up to the host, so its shortcuts (search,
+ * Escape) still work while focus is in here. Only Escape and keys held with
+ * Ctrl, Cmd or Alt: plain typing stays in this frame. A view that handles a
+ * key itself calls `preventDefault()` and the host never sees it.
+ */
+window.addEventListener('keydown', event => {
+  if (event.defaultPrevented || event.isComposing) return;
+  if (event.key !== 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+
+  window.parent.postMessage(
+    {
+      type: 'atomic.view.key',
+      version: 1,
+      key: event.key,
+      code: event.code,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+    },
+    '*',
+  );
+});
+
 function send(op, payload) {
   const id = ++nextId;
 
@@ -42,11 +85,16 @@ function send(op, payload) {
     // A host that never answers would otherwise leave the plugin waiting
     // forever. Allow the host's 30s database-leader / websocket recovery to
     // finish before abandoning a cold-start query after a page reload.
-    const timer = setTimeout(() => {
-      if (pending.delete(id)) {
-        reject(new Error(`The host did not answer ${op} in time.`));
-      }
-    }, 60000);
+    //
+    // Not for a question the person answers: they may take as long as they
+    // like, and a confirm that rejected while still on screen would be a lie.
+    const timer = ASKS_THE_PERSON.has(op)
+      ? undefined
+      : setTimeout(() => {
+          if (pending.delete(id)) {
+            reject(new Error(`The host did not answer ${op} in time.`));
+          }
+        }, 60000);
     pending.set(id, { resolve, reject, timer });
     window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
   });
@@ -58,7 +106,7 @@ function send(op, payload) {
  * `set` stages; `save` sends. Same shape as `@tomic/lib`, and the same reason:
  * a write per keystroke is a commit per keystroke.
  */
-function makeResource(subject, propVals) {
+function makeResource(subject, propVals, title = subject) {
   const props = { ...propVals };
   // Set and removed since the last save. `save` sends only these: the rest
   // is what the host already has (re-sending it would also write back
@@ -71,6 +119,7 @@ function makeResource(subject, propVals) {
 
   return {
     subject,
+    title,
     get props() {
       return { ...props };
     },
@@ -90,6 +139,16 @@ function makeResource(subject, propVals) {
       removed.add(property);
 
       return this;
+    },
+    getClasses() {
+      const isA = props['https://atomicdata.dev/properties/isA'];
+
+      return Array.isArray(isA) ? isA : [];
+    },
+    hasClasses(...classes) {
+      const own = this.getClasses();
+
+      return classes.every(c => own.includes(c));
     },
     async save() {
       if (destroyed) throw new Error('This resource was destroyed.');
@@ -129,12 +188,27 @@ export const store = {
   async getResource(subject) {
     const result = await send('get', { subject });
 
-    return makeResource(result.subject, result.props);
+    return makeResource(result.subject, result.props, result.title);
   },
 
-  /** Subjects matching a property/value pair, scoped to this drive. */
-  async query({ property, value }) {
-    return send('query', { property, value });
+  /**
+   * Subjects of a collection, like `CollectionBuilder` builds: `property` and
+   * `value`, more `filters` (`[{ property, value }]`, at most 10), `sortBy`,
+   * `sortDesc`. Every member (at most 500), or one `page` of `pageSize` (up
+   * to 100).
+   */
+  async query(args) {
+    return send('query', { ...args });
+  },
+
+  /** Full-text search: subjects, optionally of class `isA` or under `parents`. */
+  async search(text, { isA, parents, limit } = {}) {
+    return send('search', { text, isA, parents, limit });
+  },
+
+  /** `{ subject, agent }`: what this view shows, and who is looking. */
+  async getContext() {
+    return send('context', {});
   },
 
   /**
@@ -144,11 +218,29 @@ export const store = {
   async newResource({ parent, isA = [], propVals = {} } = {}) {
     const result = await send('create', { parent, isA, propVals });
 
-    return makeResource(result.subject, result.props);
+    return makeResource(result.subject, result.props, result.title);
   },
 
   /**
-   * Calls back whenever `subject` changes, until the returned function runs.
+   * Several writes as one change: `[{ op: 'create', localId, parent, isA, set },
+   * { op: 'set', subject, set }, { op: 'remove', subject, properties },
+   * { op: 'destroy', subject }]`, the format a plugin's `run()` returns. Refer
+   * to something created in the same call as `local:<localId>`. All of it is
+   * checked before anything is written, and a failed write rolls back the
+   * ones before it. Resolves to `{ subjects }`, the new subjects by `localId`.
+   */
+  async apply(intents) {
+    return send('apply', { intents });
+  },
+
+  /** Reverts this view's latest `apply`. False when there is nothing to undo. */
+  async undo() {
+    return send('undo', {});
+  },
+
+  /**
+   * Calls back with the fresh resource whenever `subject` changes, until the
+   * returned function runs.
    *
    * Writing from inside the handler can feed itself: adding a child counts as
    * a change to its parent, so a view that subscribes to its app and writes
@@ -157,7 +249,11 @@ export const store = {
    */
   subscribe(subject, handler) {
     const listener = event => {
-      if (event.source === window.parent && event.data?.type === 'atomic.view.change' && event.data.version === 1 && event.data.subject === subject) handler();
+      if (event.source === window.parent && event.data?.type === 'atomic.view.change' && event.data.version === 1 && event.data.subject === subject) {
+        // Apps written before the resource was passed along ignore it; a
+        // failed read (the subject was just destroyed) still notifies them.
+        store.getResource(subject).then(handler, () => handler());
+      }
     };
 
     window.addEventListener('message', listener);
@@ -181,6 +277,82 @@ export const store = {
    * 2 request signature: method, full URL, timestamp and body hash), so a
    * copied capability is useless outside this frame.
    */
+  /**
+   * Host UI. The page around this frame draws these with its own components,
+   * so they look like the rest of Atomic and can reach past this frame's
+   * edges. Each names this app to the person, so it is clear who is asking.
+   */
+  ui: {
+    /** Asks a yes/no question in a host dialog. Resolves to true or false. */
+    async confirm({ title, body, confirmLabel, danger = false }) {
+      return send('confirm', { title, body, confirmLabel, danger });
+    },
+
+    /** A short notice in the host's corner. `kind`: success, error or info. */
+    async toast(text, { kind = 'info' } = {}) {
+      return send('toast', { text, kind });
+    },
+
+    /**
+     * A menu at `at`, a point in this frame such as the MouseEvent of a
+     * right-click. `items` are `{ id, label, disabled }` or 'divider'.
+     * Resolves to the chosen item's id, or null when dismissed.
+     */
+    async menu({ at, items }) {
+      return send('menu', { at: point(at), items });
+    },
+
+    /**
+     * Atomic's own menu for a resource (open, share, delete, and whatever
+     * the host adds later), at `at`.
+     */
+    async resourceMenu(subject, { at }) {
+      return send('resourceMenu', { subject, at: point(at) });
+    },
+
+    /** Atomic's share dialog for `subject`. Resolves once it is closed. */
+    async share(subject) {
+      return send('share', { subject });
+    },
+
+    /** Opens `subject` in the host, leaving this view. */
+    async openResource(subject) {
+      return send('openResource', { subject });
+    },
+
+    /**
+     * Lets the person search for a resource, optionally of class `isA`.
+     * Resolves to its subject, or null when cancelled.
+     */
+    async pickResource({ isA, title } = {}) {
+      return send('pickResource', { isA, title });
+    },
+
+    /**
+     * Lets the person choose a file in the drive or upload one from their
+     * device; an upload is stored under this app. `accept` is a list of MIME
+     * types. Resolves to the file's subject, or null when cancelled.
+     */
+    async pickFile({ accept } = {}) {
+      return send('pickFile', { accept });
+    },
+
+    /**
+     * Atomic's own form for a new resource of `class`, with its editors and
+     * validation, prefilled from `propVals`. The person saves it, under
+     * `parent` (default: this app; it must be under this app). Resolves to the
+     * new subject, or null when cancelled.
+     */
+    async form({ class: classSubject, parent, propVals } = {}) {
+      return send('form', { class: classSubject, parent, propVals });
+    },
+
+    /** `{ locale, placement }`: the person's language, and 'page' or 'tab'. */
+    async environment() {
+      return send('environment', {});
+    },
+  },
+
   proxy: {
     /**
      * One provider call. `path` is the provider path (after the proxy's

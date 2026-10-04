@@ -19,6 +19,7 @@ import {
   type Commit,
   serializeDeterministically,
   parseCommitJSON,
+  learnServerClock,
 } from './commit.js';
 import { JSONADParser } from './parse.js';
 import { Resource } from './resource.js';
@@ -421,6 +422,7 @@ export class Client {
     if (response.status !== 200) {
       console.error('[postCommit] Server error body:', body);
       console.error('[postCommit] Commit sent:', serialized);
+      learnServerClock(body);
       throw new AtomicError(body, ErrorType.Server);
     }
 

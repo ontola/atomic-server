@@ -125,7 +125,14 @@ pub const CAPABILITIES: &[&str] = &[
     "ephemeral",
     "get-many",
     "canonical-scheme",
+    "sparse-sync",
 ];
+
+/// Server capability: understands a `SYNC` whose JSON carries `hv: 2` and, in
+/// place of `peers` and `resources`, `vvs` (`subject -> peer -> counter`). The
+/// dense encoding needs one counter per resource per peer in the drive, which
+/// is quadratic once every resource has its own peer.
+pub const CAP_SPARSE_SYNC: &str = "sparse-sync";
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
 /// (WebSocket clients since 2026-09; peers always sent one). The only one a
@@ -1333,6 +1340,30 @@ pub fn encode_sync_probe(drive: &str, drive_hash: &str) -> Vec<u8> {
     )
 }
 
+/// A hash-first probe in hash version 2 ([`CAP_SPARSE_SYNC`]).
+pub fn encode_sync_probe_v2(drive: &str, drive_hash: &str) -> Vec<u8> {
+    encode_sync_json(
+        drive,
+        drive_hash,
+        serde_json::json!({ "hv": 2, "peers": [], "probe": true, "resources": {} }),
+    )
+}
+
+/// A full `SYNC` in the sparse encoding ([`CAP_SPARSE_SYNC`]): each resource
+/// carries its own non-zero counters, `subject -> peer -> counter`, and
+/// `drive_hash` is hash version 2.
+pub fn encode_sync_sparse(
+    drive: &str,
+    drive_hash: &str,
+    vvs: &std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
+) -> Vec<u8> {
+    encode_sync_json(
+        drive,
+        drive_hash,
+        serde_json::json!({ "hv": 2, "vvs": vvs }),
+    )
+}
+
 /// A `SYNC` over only `subjects` (a differing set the client chose): the
 /// responder builds version vectors for that set instead
 /// of walking the drive, and both comparison loops skip anything outside it.
@@ -1377,6 +1408,14 @@ pub struct DecodedSync {
     pub probe: bool,
     /// When present, reconcile only these subjects.
     pub subjects: Option<Vec<String>>,
+    /// Version of the drive hash in `drive_hash`: `1` is the dense form
+    /// ([`super::engine::compute_drive_hash`]), `2` the per-resource form
+    /// ([`super::engine::compute_drive_hash_v2`]). See [`CAP_SPARSE_SYNC`].
+    pub hash_version: u8,
+    /// The client's version vectors as `subject -> peer -> counter`, sent by
+    /// clients that speak [`CAP_SPARSE_SYNC`] in place of `peers` and
+    /// `resources`.
+    pub vvs: Option<std::collections::HashMap<String, std::collections::HashMap<String, i32>>>,
 }
 
 /// Decode a SYNC message (after the type tag).
@@ -1405,6 +1444,10 @@ pub fn decode_sync(data: &[u8]) -> Option<DecodedSync> {
         probe: bool,
         #[serde(default)]
         subjects: Option<Vec<String>>,
+        #[serde(default, rename = "hv")]
+        hash_version: Option<u8>,
+        #[serde(default)]
+        vvs: Option<std::collections::HashMap<String, std::collections::HashMap<String, i32>>>,
     }
 
     let parsed: SyncJson = serde_json::from_slice(json_bytes).ok()?;
@@ -1416,6 +1459,8 @@ pub fn decode_sync(data: &[u8]) -> Option<DecodedSync> {
         resources: parsed.resources,
         probe: parsed.probe,
         subjects: parsed.subjects,
+        hash_version: parsed.hash_version.unwrap_or(1),
+        vvs: parsed.vvs,
     })
 }
 

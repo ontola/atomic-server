@@ -1,11 +1,11 @@
 import { styled } from 'styled-components';
-import { FeedbackMenuItem } from './SideBar/FeedbackMenuItem';
+import { FeedbackButton } from './SideBar/FeedbackButton';
 
 /** Shared corner placement for onboarding pages and their dialogs. */
 export function OnboardingFeedback() {
   return (
     <Corner>
-      <FeedbackMenuItem floating />
+      <FeedbackButton />
     </Corner>
   );
 }

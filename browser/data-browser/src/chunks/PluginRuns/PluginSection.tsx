@@ -1,5 +1,5 @@
 import { useStore, type Resource } from '@tomic/react';
-import { usePluginClass } from './runScript';
+import { usePluginClass } from './useDriveClass';
 
 /**
  * Whether this resource is a plugin.

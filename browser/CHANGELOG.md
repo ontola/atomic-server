@@ -4,6 +4,170 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The shared sign-in card no longer says "This browser does not support passkeys".
+  Where a passkey cannot work it shows no passkey option at all, and the
+  portal and the app now decide that the same way.
+- Apps can use Atomic's own UI through `store.ui`: a confirm dialog, a toast, a
+  menu at the click, the resource menu, the share dialog and opening a
+  resource. Atomic draws them, names the app that asked, and a menu is no
+  longer cut off at the app's edge. Ctrl/Cmd shortcuts and Escape that an app
+  does not handle now reach Atomic, so search still opens while you are in one.
+- Apps can also let the person pick a resource or a file (uploading one if
+  they like), and open Atomic's own form for a new resource of a class.
+- Plugin views and apps now share one API: `store` from `@tomic/plugin` works
+  like `@tomic/lib`'s Store (`getResource`, `resource.set`, `save`,
+  `newResource`, `query`, `search`, `subscribe`) and drive apps get the same
+  object. Packaged plugin views get `store.ui` too. `query` takes `filters`,
+  `sortBy`, `sortDesc`, `pageSize` and `page`. `RPCClient` keeps working but
+  is deprecated.
+- Plugin views and apps can make several writes as one change with
+  `store.apply(intents)`, in the same intent format a plugin's `run()`
+  returns. Everything is checked before anything is written, a failed write
+  rolls back the ones before it, and `store.undo()` reverts the latest change.
+- A plugin can declare the `edit-schema` capability so its view may change
+  the classes and properties of what it shows without asking each time.
+- The More menu has two new actions, "Reload resource" (fetches the resource you
+  are viewing from the server again) and "Restart app" (reloads the whole app).
+  They and the "Go to" items (settings, drives, feedback) no longer clutter the
+  list: type in the menu's filter to find them.
+- Notifications are less noisy. The Notifications page shows one row per
+  conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
+  titles as they are now, in your language. Coming back to the window while
+  already on the conversation reads what arrived while you were away, and after
+  you missed something the app offers system notifications once, instead of
+  only a checkbox in Settings.
+- The Notifications page shows placeholder rows while it loads, instead of a
+  blank page that could flash "Nothing yet" before the list arrived.
+- An app asking to use one of your accounts (Google Calendar, Clockify and so
+  on) now asks in a dialog instead of a bar above the app, in plainer words:
+  which app, which account, and that you approve it on the next page, on the
+  integration proxy's site. If you already connected that account, the dialog
+  lists it with when it was connected and which apps use it, and "Use this
+  account" gives it to the app without leaving the page. A failure stays in
+  the dialog so you can try again; the app hears `cancelled` if you close it.
+  Tests that looked for the `Connect an account` group should look for the
+  dialog named `Connect <platform>`; "Use existing connection" is now "Use
+  this account".
+
+- Signing in to a hosted account can now be enough to open your identity on a
+  new device (#277). When the account service offers assisted recovery
+  (`assisted_recovery` in `GET /api/auth/providers`), a new account's backup is
+  wrapped by the account alone, so onboarding asks for no passkey and shows no
+  recovery code, and the sign-in and restore steps unlock it by themselves
+  after a recent sign-in. Existing backups get the extra wrapper the next time
+  a passkey or recovery code opens them. The sign-in and restore steps now
+  offer the same account options as the portal's sign-in page (Google when
+  configured, passkey, email link), from one shared `AccountSignIn` component
+  in `@tomic/service-ui`. Builds that know no account service (the FOSS
+  release, self-hosted nodes) show none of it and make no requests for it.
+  Account recovery has a "Let Atomic help me recover" switch: off removes the
+  assisted wrapper, so only a passkey or recovery code opens the identity. A
+  wrapper records which service key made it (`kdf_params.key_id`); after the
+  service rotates its key, the next unlock re-wraps with the new one. Accounts
+  may now have an `acct_` id apart from their address: backups and bindings
+  keep using the id, and the app shows `address` from `GET /api/me`.
+
+- Agents, Skills and MCP servers are edited in a dialog again. Their lists stay
+  on the AI settings page, but creating or editing one opens a dialog with the
+  form and Cancel / Save buttons, instead of swapping the list for the form
+  inside the settings section. Save stays disabled until the required fields
+  are filled in.
+- The sidebar's App panel is gone. Its entries (your user page, Notifications,
+  Integrations, Sync, Feedback, About and Install App) now live in a dropdown
+  that opens from the user row at the bottom of the sidebar, with Settings as a
+  gear button beside it. A dot on the row shows unread notifications.
+
+- The role picker next to the email field in the share dialog opens again. A
+  click on it also focused the email field, which closed its option list right
+  after it opened. The email field also asks password managers (Bitwarden,
+  1Password, LastPass, Dashlane) not to fill it, since it holds other people's
+  addresses.
+- Images in documents show again instead of "Failed to load image". An uploaded
+  image's address points at the server, but a browser-only workspace never
+  sends its files there, so the server could not answer it. The editor now shows
+  the copy this browser already holds, as file previews already did, and falls
+  back to the server when there is none. New `useBlobObjectUrl` hook in
+  `@tomic/react` and `blobSubjectFromDownloadUrl` in `@tomic/lib`.
+
+- The "Could not set up your account passkey" message now also names the request that failed and its HTTP status, so a report says whether the session, the challenge or the credential was refused.
+- The "Demo setup stalled" report now says where the time went. It carries how
+  long each setup step took and whether the tab was in the background, and a
+  demo that does finish after the notice sends a second, informational report
+  with its total time. The notice fires at a fixed 45 seconds, so until now a
+  slow machine and a stuck one looked the same in Sentry (`ATOMIC-BROWSER-1J`).
+
+- Pasting an agent secret that opens a different agent than the signed-in
+  account no longer signs that account out on its own. The app now says which
+  account is signed in, shows both agents, and lets the user stay signed in or
+  use the secret and sign out.
+
+- Starting the demo is one calm screen. From "Try Atomic" to the workspace
+  the page shows only the orbiting mark from atomic.place, instead of a blank
+  page, a "Checking local storage…" card and a "Setting up your demo…"
+  spinner in turn. The workspace fades in once its welcome document has
+  content, and the scripted teammates wait a moment before they start.
+  Setup is also faster: the database's WebAssembly is fetched and compiled
+  once, from the first line of the page, instead of up to twice after the app
+  loaded; the demo opens only the guest's database; and it no longer waits for
+  an account check it does not need.
+- A second tab no longer leaves the local database locked. When a tab takes
+  over the database from a tab that stopped answering (in Firefox, a throttled
+  background tab), the old tab now closes its worker and carries on through the
+  new one. It used to keep the file open, so the new tab failed with
+  "OPFS unavailable: … NoModificationAllowedError" and ran without its local
+  cache, and anything needing that cache, such as creating a drive, failed with
+  "Open this drive with local storage available before disconnecting". Firefox's
+  locked-file error now reads as one plain sentence, and those actions name the
+  database's own reason instead of a disconnect the reader never started.
+- Turning workspace sync off says what is actually in the way. All three of its
+  preconditions used to answer with "Open this drive with local storage
+  available before disconnecting", so someone signed out, or on a server this
+  client holds no live connection to, was told to do something they had already
+  done. Each one now names itself, and a socket that exists but is not open says
+  so rather than leaving the attempt to fail on "WebSocket is not open". The
+  local database is also waited for instead of refused: it attaches a few
+  hundred milliseconds after a page load and again after every sign-in, and a
+  click inside that window was rejected outright.
+- A local-only workspace is recognised whatever spelling its subject is written
+  in. The set of disconnected workspaces is read through the canonical form but
+  was written raw, so a trailing slash or a legacy `did:ad:` identifier could
+  store a key nothing found again, and a resource inside such a workspace could
+  still try to reach the server.
+- One Loro wasm panic no longer turns into an error every few seconds for the
+  rest of a tab's life. Presence gives up the drive's ephemeral store on the
+  first failed call, whichever call it is, including a peer's bytes and the
+  read behind the peer list, and it now stops Loro's own expiry timer while
+  doing so. That timer lives in Loro's JavaScript wrapper and keeps calling
+  into the abandoned store, which is how a single panic anywhere in the shared
+  wasm module produced a long stream of unhandled `RuntimeError: unreachable`
+  reports from `setInterval`.
+- Notifications while the app is open, on the web and in the desktop and
+  Android apps: new chat messages, comments on things you made and replies to
+  you show as a toast, or as a system notification when you're in another tab,
+  window or app. Nothing shows for the conversation you're already looking
+  at. System notifications are switched per device under Settings →
+  Notifications. The desktop and Android apps get them through
+  `tauri-plugin-notification`.
+
+- Notifications page and Inbox: every notification is kept in an Inbox in
+  your private drive, so it's there on all your devices. The sidebar shows
+  Notifications with an unread count; the page lists them newest first, and
+  opening one (or the conversation it's about) marks it read.
+
+- Android app: the back button closes an open sidebar drawer or dialog
+  instead of navigating away underneath it. With nothing open, back works as
+  before (previous page, then leave the app).
+
+- Fix: a table no longer goes to an error screen while one of its columns is
+  still loading. A resource-array cell reads its own property from the store to
+  decide between the select and relation pickers, and asked for that property's
+  form category before the resource had arrived. A property with no datatype
+  yet threw "Unknown datatype: undefined", which reached the page's error
+  boundary and replaced the whole table. An absent datatype now means "no
+  category yet", the cell renders as a relation until the property lands, and a
+  datatype that is present but unrecognised still throws, since that is a real
+  gap rather than a slow fetch.
+
 - `@tomic/lib`: `store.createSubject()` and `store.isAliased()` are deprecated
   (they still work). The app no longer creates temporary `_new:` subjects
   that are renamed on first save: the new-resource form, new-resource dialogs
@@ -209,6 +373,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: form inputs validate before writing. `InputString` and `InputURI` no longer put an invalid value into the resource while showing an error; all inputs share one validate-then-set hook (`useValidatedInput`) and surface the datatype's actual error message (e.g. "Not an integer") instead of a generic "Invalid value". `ResourceField` now accepts and forwards `commit` / `commitDebounceInterval`, and every input honours `commitDebounceInterval` (Markdown, Number, Boolean, Date, Timestamp, Resource, ResourceArray and FilePicker previously fell back to the 100 ms default). A required field whose value loads after the first render is now flagged correctly.
 - Fix: `Resource.remove()` and `Resource.push()` emit `LocalChange` like `set()` does, so `useValue` / `useArray` re-render when a field is cleared or an item is appended. `useValue`'s setter clears a previously reported validation error when called with `undefined`. `useArray`'s `push` saves through the same debounced scheduler and error handling (`handleValidationError` / `store.notifyError`) as `set`, instead of an immediate `resource.save()` that only logged failures. `StoreContext` no longer defaults to a phantom `Store`: `useStore()` throws when no `<StoreContext.Provider>` is mounted.
 - `@tomic/lib`: one list of server-managed properties (`server-managed-props.ts`) replaces the three copies in `resource.ts` and `store.ts` that had drifted apart; the OPFS cold-load guard now also treats an inline `genesis` certificate as skeleton, not content. One serializer (`Resource.toClientDbJsonAd()`) writes the local-database row from both `Store.addResource` and `Resource.persistToClientDb`, and a durable save now records its write in the store's dedup stamp so the next ingress does not rewrite the same row.
+- Comment on a table row, like in Notion. Every row's gutter carries a comment bubble: it shows up on hover for a row with nothing on it yet, and stays put — with the count, highlighted while unseen — for a row that has comments. Clicking it opens that row's thread in the Comments panel, headed by the row's title; another row's bubble switches threads, and the same row's closes the panel. A row is a resource of its own, so its thread is the ordinary one (Messages whose `about` points at the row) and needs no setup. The Comments panel can now be aimed at a resource inside the page rather than only at the page's own; the navbar button keeps opening the page's thread.
 - Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.
 - A dashboard is reachable from its table: "Add view" offers **Dashboard**, which creates an empty Dashboard as a child of the table and shows it as a tab (`view-kind: dashboard`, `view-dashboard`). Switching an existing tab to Dashboard does the same. The Dashboard stays a resource of its own, so a Drive page or a document can still embed it.
 - Fix: creating a second table column with a name that already exists in the drive's ontology (e.g. two "Status" columns) no longer mints a colliding property shortname that silently corrupts the ontology. A compatible existing property is reused instead; an incompatible one gets a disambiguated shortname (`status-2`) ([#1504](https://github.com/ontola/atomic-server/issues/1504)).

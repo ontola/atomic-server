@@ -448,7 +448,7 @@ impl AtomicNfsFs {
 
     // A File requires all of these to be a valid resource (see the upload
     // handler), not just the blob pointer.
-    let mut props = hash_props(&self.store, &hash.to_hex().to_string(), 0);
+    let mut props = hash_props(&self.store, &hash.to_hex(), 0);
     props.push((urls::FILENAME, Value::String(name.to_string())));
     props.push((
       urls::MIMETYPE,
@@ -2170,7 +2170,7 @@ mod benches {
       "[bench] save {:.0} MiB (1-byte edit, re-chunk+store): {:.3}s -> {:.1} MiB/s",
       mib,
       secs,
-      mib as f64 / secs
+      mib / secs
     );
   }
 

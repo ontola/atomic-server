@@ -199,6 +199,147 @@ test.describe('apps', () => {
     // The whole point of reporting it: somewhere to go next.
     await expect(alert.getByRole('button', { name: 'Fix it' })).toBeVisible();
   });
+
+  test("an app uses the host's own confirm, menu and shortcuts", async ({
+    page,
+  }) => {
+    await newApp(page);
+    await setAppSource(page, HOST_UI_APP);
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const said = app.getByRole('status');
+    await expect(app.getByRole('button', { name: 'Delete' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // A confirm the host draws, named after the app, not a bare confirm().
+    await app.getByRole('button', { name: 'Delete' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByRole('heading', { name: 'Delete this item?' }),
+    ).toBeVisible();
+    await expect(dialog).toContainText('Asked by');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(said).toHaveText('kept');
+
+    await app.getByRole('button', { name: 'Delete' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Confirm' })
+      .click();
+    await expect(said).toHaveText('confirmed');
+
+    // A menu at the click, drawn by the host so it is not clipped by the frame.
+    await app.getByRole('button', { name: 'Options' }).click();
+    await page.getByRole('menuitem', { name: 'Rename' }).click();
+    await expect(said).toHaveText('chose rename');
+
+    // Dismissing answers null rather than leaving the app waiting.
+    await app.getByRole('button', { name: 'Options' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(said).toHaveText('chose null');
+
+    // A key the app leaves alone reaches the host's own key listeners, as if
+    // pressed on the frame. Checked at the listener rather than through a
+    // Ctrl shortcut: on the CI runner a Ctrl chord opens nothing even
+    // outside a frame, so the shortcut would test the runner, not this.
+    await page.evaluate(() => {
+      const w = window as unknown as { hostKeys: string[] };
+      w.hostKeys = [];
+      document.addEventListener('keydown', e => {
+        if ((e.target as Element | null)?.tagName === 'IFRAME')
+          w.hostKeys.push(e.key);
+      });
+    });
+    await app.getByRole('button', { name: 'Options' }).focus();
+    await page.keyboard.press('Escape');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { hostKeys: string[] }).hostKeys,
+        ),
+      )
+      .toContain('Escape');
+  });
+
+  test("an app asks through the host's form and pickers, and queries sorted", async ({
+    page,
+  }) => {
+    await newApp(page);
+    await setAppSource(page, PICKERS_APP);
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const said = app.getByRole('status');
+    await expect(app.getByRole('button', { name: 'New row' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await app.getByRole('button', { name: 'Add Apple' }).click();
+    await expect(said).toHaveText('added Apple');
+
+    // Atomic's own form for the app's row class, prefilled by the app and
+    // saved by the person.
+    await app.getByRole('button', { name: 'New row' }).click();
+    const form = page.getByRole('dialog');
+    await expect(form.getByRole('textbox').first()).toHaveValue('Zebra');
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(said).toHaveText('made a row');
+
+    // A Store-shaped query: the app's rows, sorted by name, newest call wins.
+    await app.getByRole('button', { name: 'List' }).click();
+    await expect(said).toHaveText('Apple, Zebra', { timeout: 20_000 });
+
+    // The pickers answer null when the person backs out.
+    await app.getByRole('button', { name: 'Pick' }).click();
+    const picker = page.getByRole('dialog');
+    await expect(
+      picker.getByRole('heading', { name: 'Choose a row' }),
+    ).toBeVisible();
+    await expect(picker).toContainText('Asked by');
+    await picker.getByRole('button', { name: 'Cancel' }).click();
+    await expect(said).toHaveText('picked null');
+
+    await app.getByRole('button', { name: 'File' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(said).toHaveText('file null');
+  });
+
+  test('an app makes several writes as one change, and undoes it', async ({
+    page,
+  }) => {
+    await newApp(page);
+    await setAppSource(page, APPLY_APP);
+    await page.reload();
+
+    const app = page.frameLocator('iframe[title="App"]');
+    const said = app.getByRole('status');
+    await expect(
+      app.getByRole('button', { name: 'Apply', exact: true }),
+    ).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // Two linked rows in one call: the second points at the first.
+    await app.getByRole('button', { name: 'Apply', exact: true }).click();
+    await expect(said).toHaveText('2 rows, linked', {
+      timeout: 20_000,
+    });
+
+    // A bad value anywhere means nothing is written.
+    await app.getByRole('button', { name: 'Bad apply' }).click();
+    await expect(said).toContainText('refused, still 2 rows', {
+      timeout: 20_000,
+    });
+
+    await app.getByRole('button', { name: 'Undo' }).click();
+    await expect(said).toHaveText('undone, 0 rows', {
+      timeout: 20_000,
+    });
+  });
 });
 
 /**
@@ -299,3 +440,156 @@ async function setAppSource(
     throw new Error('could not find the app’s entry point');
   }, source);
 }
+
+/**
+ * An app that asks the host for UI and says what came back, so the test can
+ * read the answer from inside the frame.
+ */
+const HOST_UI_APP = `export async function view({ root, store }) {
+  const said = document.createElement('p');
+  said.setAttribute('role', 'status');
+  const button = (label, onClick) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    root.append(b);
+  };
+  button('Delete', async () => {
+    const ok = await store.ui.confirm({
+      title: 'Delete this item?',
+      body: 'It goes to the trash.',
+      danger: true,
+    });
+    said.textContent = ok ? 'confirmed' : 'kept';
+  });
+  button('Options', async event => {
+    const id = await store.ui.menu({
+      at: event,
+      items: [
+        { id: 'rename', label: 'Rename' },
+        { id: 'duplicate', label: 'Duplicate' },
+      ],
+    });
+    said.textContent = 'chose ' + id;
+  });
+  root.append(said);
+}`;
+
+const PICKERS_APP = `export async function view({ root, store }) {
+  const name = 'https://atomicdata.dev/properties/name';
+  const parent = 'https://atomicdata.dev/properties/parent';
+  const { table, rowClass } = await store.getData();
+  const said = document.createElement('p');
+  said.setAttribute('role', 'status');
+  const button = (label, onClick) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    root.append(b);
+  };
+  // Made on a click, not when the view starts: the host can start a view twice
+  // while the page settles, and every start would add its own Apple.
+  button('Add Apple', async () => {
+    await store.newResource({
+      parent: table,
+      isA: [rowClass],
+      propVals: { [name]: 'Apple' },
+    });
+    said.textContent = 'added Apple';
+  });
+  button('New row', async () => {
+    const made = await store.ui.form({
+      class: rowClass,
+      parent: table,
+      propVals: { [name]: 'Zebra' },
+    });
+    said.textContent = made ? 'made a row' : 'no row';
+  });
+  button('List', async () => {
+    try {
+      // The index catches up just after a write; ask until both rows are in.
+      let rows = [];
+      for (let i = 0; i < 20; i++) {
+        rows = await store.query({
+          property: parent,
+          value: table,
+          sortBy: name,
+          pageSize: 10,
+          page: 0,
+        });
+        if (rows.length === 2) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
+      const titles = [];
+      for (const row of rows) titles.push((await store.getResource(row)).get(name));
+      said.textContent = titles.join(', ');
+    } catch (e) {
+      said.textContent = 'list failed: ' + e.message;
+    }
+  });
+  button('Pick', async () => {
+    said.textContent = 'picked ' + (await store.ui.pickResource({ isA: rowClass, title: 'Choose a row' }));
+  });
+  button('File', async () => {
+    said.textContent = 'file ' + (await store.ui.pickFile({ accept: ['image/*'] }));
+  });
+  root.append(said);
+}`;
+
+const APPLY_APP = `export async function view({ root, store }) {
+  const name = 'https://atomicdata.dev/properties/name';
+  const parent = 'https://atomicdata.dev/properties/parent';
+  const description = 'https://atomicdata.dev/properties/description';
+  const { table, rowClass } = await store.getData();
+  const said = document.createElement('p');
+  said.setAttribute('role', 'status');
+  // The table's index catches up just after a write; ask until it says
+  // what we expect, or give its last answer.
+  const rows = async expected => {
+    let found = [];
+    for (let i = 0; i < 20; i++) {
+      found = await store.query({ property: parent, value: table });
+      if (found.length === expected) break;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    return found;
+  };
+  const button = (label, onClick) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    root.append(b);
+  };
+  button('Apply', async () => {
+    try {
+      const { subjects } = await store.apply([
+        { op: 'create', localId: 'a', parent: table, isA: [rowClass], set: { [name]: 'First' } },
+        { op: 'create', localId: 'b', parent: table, isA: [rowClass], set: { [name]: 'Second', [description]: 'local:a' } },
+      ]);
+      const second = await store.getResource(subjects.b);
+      said.textContent = (await rows(2)).length + ' rows, ' + (second.get(description) === subjects.a ? 'linked' : 'not linked');
+    } catch (e) {
+      said.textContent = 'apply failed: ' + e.message;
+    }
+  });
+  button('Bad apply', async () => {
+    try {
+      await store.apply([
+        { op: 'create', localId: 'c', parent: table, isA: [rowClass], set: { [name]: 'Third' } },
+        { op: 'sudo', subject: table },
+      ]);
+      said.textContent = 'applied';
+    } catch (e) {
+      said.textContent = 'refused, still ' + (await rows(2)).length + ' rows';
+    }
+  });
+  button('Undo', async () => {
+    try {
+      const undone = await store.undo();
+      said.textContent = (undone ? 'undone, ' : 'nothing, ') + (await rows(0)).length + ' rows';
+    } catch (e) {
+      said.textContent = 'undo failed: ' + e.message;
+    }
+  });
+  root.append(said);
+}`;

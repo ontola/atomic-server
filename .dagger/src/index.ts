@@ -167,6 +167,52 @@ function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
 }
 
 /**
+ * Prints where a shard's time went: seconds per spec file and per shard, in the
+ * last lines of the shard's log. The shards are contiguous slices of the test
+ * list, cut by test count, so a heavy file sits in whichever slice it lands in.
+ * With these numbers `PWTEST_SHARD_WEIGHTS` can be set from measurements
+ * instead of guessed. Never fails the shard: a missing report prints nothing.
+ */
+const E2E_TIMING_SUMMARY = [
+  "const fs = require('fs');",
+  'let report;',
+  "try { report = JSON.parse(fs.readFileSync('/test-results.json', 'utf8')); } catch { process.exit(0); }",
+  'const files = new Map();',
+  'let tests = 0;',
+  'const walk = suite => {',
+  '  for (const spec of suite.specs || []) for (const test of spec.tests) {',
+  '    tests++;',
+  '    const ms = test.results.reduce((sum, result) => sum + result.duration, 0);',
+  '    files.set(spec.file, (files.get(spec.file) || [0, 0]).map((v, i) => v + (i ? 1 : ms)));',
+  '  }',
+  '  for (const child of suite.suites || []) walk(child);',
+  '};',
+  'for (const suite of report.suites) walk(suite);',
+  'let total = 0;',
+  'for (const [, [ms]] of files) total += ms;',
+  "console.log('E2E-TIMING shard=' + process.argv[1] + ' tests=' + tests + ' test-seconds=' + Math.round(total / 1000));",
+  'for (const [file, [ms, count]] of [...files].sort((a, b) => b[1][0] - a[1][0]))',
+  "  console.log('E2E-TIMING shard=' + process.argv[1] + ' ' + String(Math.round(ms / 1000)).padStart(5) + 's ' + String(count).padStart(3) + ' tests ' + file);",
+].join(' ');
+
+/**
+ * Shard sizes, in tests, for `PWTEST_SHARD_WEIGHTS`, keyed by shard count.
+ *
+ * Playwright cuts the test list into contiguous slices of equal test count, but
+ * the tests differ in cost: with equal counts, run 4783 (one worker per shard)
+ * took 30.3, ~22.9, 27.1 and 26.5 min, and a shard's minutes are its
+ * `E2E-TIMING test-seconds`. These sizes come from the per-file timings of all
+ * four shards on run 4790: costed per test in suite order, they put every
+ * shard within 2252 to 2279 s of that run. Weights are proportions, so a
+ * growing suite keeps the same split. Re-measure from the `E2E-TIMING` lines
+ * when it drifts. Playwright wants the weights separated by ":" and one per
+ * shard, so only a shard count with an entry here is weighted.
+ */
+const E2E_SHARD_WEIGHTS: Record<number, string> = {
+  4: '62:90:84:79',
+};
+
+/**
  * `bash -c` payload for one Playwright shard.
  *
  * The log label must be safe inside a double-quoted `echo`. The previous
@@ -185,8 +231,14 @@ function e2eShardRunScript(
   return (
     'set -o pipefail; ' +
     `echo "e2e mode grep=${grepLabel} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+    (E2E_SHARD_WEIGHTS[shardCount]
+      ? `export PWTEST_SHARD_WEIGHTS=${E2E_SHARD_WEIGHTS[shardCount]}; `
+      : '') +
+    'export PLAYWRIGHT_JSON_OUTPUT_NAME=/test-results.json; ' +
     `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
-    'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0'
+    'echo ${PIPESTATUS[0]} > /test-exit-code; ' +
+    `node -e ${JSON.stringify(E2E_TIMING_SUMMARY)} ${shardIndex}/${shardCount} 2>&1 | tee -a /test-output.log; ` +
+    'exit 0'
   );
 }
 
@@ -518,6 +570,11 @@ export class AtomicServer {
     @argument() playwrightRetries: number = -1,
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /**
+     * Where failed e2e shards leave their traces, for `failedTestResults` to
+     * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
+     */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -546,6 +603,7 @@ export class AtomicServer {
         playwrightRetries,
         '',
         playwrightCloneSessions,
+        resultsKey,
       ),
       this.jsTest(),
       this.jsTestIntegration(),
@@ -682,7 +740,10 @@ export class AtomicServer {
     // by the rust/wasm lanes. A Locked mount here used to serialize pub get /
     // analyze / dart test behind the rust pipeline (~10+ min of lock wait on
     // the step that merely ran `flutter pub get`).
-    const flutterCargoCache = dag.cacheVolume('flutter-cargo');
+    // The volume is still mounted Shared, so its Cargo locks live inside it
+    // (see the symlinks below). A fresh name keeps older branches, which
+    // mount it with private locks, out of this cache.
+    const flutterCargoCache = dag.cacheVolume('flutter-cargo-shared-locks-v1');
     const flutterRustTarget = this.targetCache('flutter-plugin-rust-target');
     const flutterPubCache = dag.cacheVolume('flutter-pub-cache');
     const flutterRustup = dag.cacheVolume('flutter-rustup');
@@ -748,6 +809,22 @@ export class AtomicServer {
         .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
           sharing: CacheSharingMode.Shared,
         })
+        // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
+        // in CARGO_HOME, outside the shared volume, so two runs on one engine
+        // unpacked the same crate at once and failed with
+        // "failed to unpack package ... .cargo-ok: File exists".
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache',
+          '/root/.cargo/.package-cache',
+        ])
+        .withExec([
+          'ln',
+          '-sf',
+          'registry/.package-cache-mutate',
+          '/root/.cargo/.package-cache-mutate',
+        ])
         // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
         // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
         // `flutter test` only runs Dart. Without this step the entire bridge —
@@ -1600,6 +1677,15 @@ export class AtomicServer {
         // The musl-cross image needs `/usr/local/musl/bin` (for
         // `x86_64-unknown-linux-musl-gcc`); a hardcoded PATH drop caused
         // "linker not found" while compiling plugin-example tests.
+        //
+        // The install unpacks into a staging directory and renames the binary
+        // into place, because the volume is Shared and two runs on one engine
+        // race on it. `tar` straight into `$BIN_DIR` creates the executable
+        // before it has finished writing it, so the other run's `-x` test
+        // passes, it skips the install, and its `cargo nextest` exec of a
+        // file still open for writing fails with "Text file busy
+        // (os error 26)" before any test body runs. A rename is atomic, so a
+        // concurrent run sees either no binary or a complete one.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
         })
@@ -1627,7 +1713,10 @@ export class AtomicServer {
           'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
             'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
-            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
+            'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
+            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
+            'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
+            'rm -rf "$STAGE"; fi && ' +
             'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
@@ -2105,6 +2194,8 @@ export class AtomicServer {
     @argument() playwrightGrep: string = '',
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /** See `ci()`. */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.e2eCloneSessions = playwrightCloneSessions;
     // Shards × own atomic-server. Count comes from `--host-profile`
@@ -2184,14 +2275,88 @@ export class AtomicServer {
       )
         .filter(Boolean)
         .join('\n\n');
+      const exported = resultsKey
+        ? await this.saveTestResults(resultsKey, failed)
+        : 'none kept (no --results-key)';
       throw new Error(
         `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
-          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
+          `Reports:\n${reportUrls.join('\n')}\n` +
+          `Traces: ${exported}\n\n${tails}` +
           (contexts ? `\n\n${contexts}` : ''),
       );
     }
 
     return reportUrls.join('\n') || 'e2e ok (no report URL)';
+  }
+
+  /**
+   * Keeps failed shards' `test-results` (traces, screenshots,
+   * `error-context.md`) in a cache volume under `key`, for `failedTestResults`.
+   *
+   * They used to leave only through the netlify report, and with
+   * `NETLIFY_TOKEN` unset they were discarded with the container. A failure
+   * that only happens on Mancave then left an assertion message and nothing
+   * else: on 29-30 September a reload that rendered a blank page could only
+   * be described, not diagnosed. `Directory.export` from inside this module
+   * does not help: it writes into the function's own sandbox, not onto the
+   * runner. The `ci` call fails, so it cannot return them either; a second
+   * call reads them back from the volume instead.
+   */
+  private async saveTestResults(
+    key: string,
+    failed: { shard: number; testResults: Directory }[],
+  ): Promise<string> {
+    const safeKey = key.replace(/[^A-Za-z0-9._-]/g, '_');
+    try {
+      let container = dag
+        .container()
+        .from('alpine:latest')
+        .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'));
+
+      for (const r of failed) {
+        container = container.withDirectory(`/in/shard-${r.shard}`, r.testResults);
+      }
+
+      await container
+        .withExec([
+          'sh',
+          '-c',
+          // Keep a week of runs; the volume must not grow without bound.
+          `find /results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + ; ` +
+            `rm -rf /results/${safeKey} && mkdir -p /results/${safeKey} && ` +
+            `cp -r /in/. /results/${safeKey}/`,
+        ])
+        .sync();
+
+      return `kept under ${safeKey}; the workflow uploads them as the e2e-test-results artifact`;
+    } catch (e) {
+      return `could not keep test results: ${e}`;
+    }
+  }
+
+  /**
+   * Named without a digit on purpose: Dagger's CLI kebab-cases `e2eTestResults`
+   * to something other than `e2e-test-results` (as with `--e2e-mode`), and
+   * the workflow's call failed with "unknown command" (run 36895753311).
+   *
+   * The traces `ci`/`endToEnd` kept for failed shards under `resultsKey`,
+   * one folder per shard. Empty when nothing failed. main-ci.yml exports
+   * this on failure and uploads it as an artifact.
+   */
+  @func()
+  async failedTestResults(@argument() resultsKey: string): Promise<Directory> {
+    const safeKey = resultsKey.replace(/[^A-Za-z0-9._-]/g, '_');
+
+    return dag
+      .container()
+      .from('alpine:latest')
+      .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'))
+      .withExec([
+        'sh',
+        '-c',
+        `mkdir -p /out && if [ -d /results/${safeKey} ]; then cp -r /results/${safeKey}/. /out/; fi`,
+      ])
+      .directory('/out');
   }
 
   /**

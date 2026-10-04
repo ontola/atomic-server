@@ -26,7 +26,7 @@
 //! shrink to uphold this, so a later grow exposes zeroes, not stale plaintext.
 
 use std::io;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
@@ -38,6 +38,8 @@ const MAGIC: &[u8; 8] = b"ATOMENC1";
 const VERSION: u32 = 1;
 const HEADER_LEN: u64 = 64;
 const BLOCK: usize = 4096;
+/// The physical file grows in multiples of this.
+const GROW_STEP: u64 = 1 << 20;
 const NONCE_LEN: usize = 24;
 const TAG_LEN: usize = 16;
 const PHYS_BLOCK: usize = NONCE_LEN + BLOCK + TAG_LEN;
@@ -65,6 +67,17 @@ pub struct EncryptedBackend<B: StorageBackend> {
     inner: B,
     cipher: XChaCha20Poly1305,
     logical_len: AtomicU64,
+    /// The header holds an older length than `logical_len`. It is written out
+    /// before the next sync (see [`Self::persist_logical_len_if_dirty`]).
+    len_dirty: AtomicBool,
+}
+
+impl<B: StorageBackend> Drop for EncryptedBackend<B> {
+    /// A backend dropped without a sync or close still leaves the length it
+    /// was holding back in the header, as every write used to.
+    fn drop(&mut self) {
+        let _ = self.persist_logical_len_if_dirty();
+    }
 }
 
 impl<B: StorageBackend> std::fmt::Debug for EncryptedBackend<B> {
@@ -121,6 +134,7 @@ impl<B: StorageBackend> EncryptedBackend<B> {
                 inner,
                 cipher,
                 logical_len: AtomicU64::new(0),
+                len_dirty: AtomicBool::new(false),
             };
             backend.write_fresh_header()?;
             return Ok(backend);
@@ -164,6 +178,7 @@ impl<B: StorageBackend> EncryptedBackend<B> {
             inner,
             cipher,
             logical_len: AtomicU64::new(logical_len),
+            len_dirty: AtomicBool::new(false),
         })
     }
 
@@ -194,9 +209,30 @@ impl<B: StorageBackend> EncryptedBackend<B> {
         self.inner.write(0, &header)
     }
 
+    /// Record a new logical length. The header is not rewritten here: every
+    /// growing write used to pay a second, tiny write for it, and nothing
+    /// depends on it before the data is synced. Unsynced writes carry no
+    /// ordering guarantee whatever order they were issued in, so writing the
+    /// length first bought nothing a crash could rely on. `sync_data` and
+    /// `close` put it on disk before they flush.
     fn persist_logical_len(&self, len: u64) -> io::Result<()> {
         self.logical_len.store(len, Ordering::SeqCst);
-        self.inner.write(LEN_FIELD_OFFSET, &len.to_le_bytes())
+        self.len_dirty.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn persist_logical_len_if_dirty(&self) -> io::Result<()> {
+        if self.len_dirty.swap(false, Ordering::SeqCst) {
+            let len = self.logical_len.load(Ordering::SeqCst);
+
+            if let Err(e) = self.inner.write(LEN_FIELD_OFFSET, &len.to_le_bytes()) {
+                self.len_dirty.store(true, Ordering::SeqCst);
+
+                return Err(e);
+            }
+        }
+
+        Ok(())
     }
 
     fn phys_offset(block_index: u64) -> u64 {
@@ -262,7 +298,10 @@ impl<B: StorageBackend> EncryptedBackend<B> {
     fn ensure_phys_capacity(&self, logical_len: u64) -> io::Result<()> {
         let needed = Self::phys_len_for(logical_len);
         if self.inner.len()? < needed {
-            self.inner.set_len(needed)?;
+            // Grow in steps: each resize is a call into the browser, and a
+            // file that grows a page at a time paid one per page. The extra
+            // tail is zero-filled, which reads as never written.
+            self.inner.set_len(needed.next_multiple_of(GROW_STEP))?;
         }
         Ok(())
     }
@@ -360,10 +399,12 @@ impl<B: StorageBackend> StorageBackend for EncryptedBackend<B> {
     }
 
     fn sync_data(&self) -> io::Result<()> {
+        self.persist_logical_len_if_dirty()?;
         self.inner.sync_data()
     }
 
     fn close(&self) -> io::Result<()> {
+        self.persist_logical_len_if_dirty()?;
         self.inner.close()
     }
 }

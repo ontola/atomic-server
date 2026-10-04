@@ -2,10 +2,22 @@ import { isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from 'styled-components';
-import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
+import {
+  errorMessageFromResponse,
+  signRequest,
+  useResource,
+  useStore,
+  useTitle,
+} from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  appChanges,
+  handleRequest,
+  isHostRequest,
+  isWithinApp,
+  type HostReply,
+} from './hostStore';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -21,6 +33,9 @@ import {
   type ProxyConnection,
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
+import { ConnectDialog } from './ConnectDialog';
+import { useHostUI } from '@components/HostUI/hostUI';
+import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -79,6 +94,7 @@ function AppFrameSession({
   // frame, so only a click the person makes here can navigate away.
   const [connectAsk, setConnectAsk] = useState<ConnectAsk>();
   const connectAskRef = useRef<ConnectAsk | undefined>(undefined);
+  const [appTitle] = useTitle(useResource(app));
   const { askAI } = useAISidebar();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // Held in a ref so an inline callback does not tear down the listener — and
@@ -89,6 +105,14 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
+  const hostUI = useHostUI({
+    writeRoot: app,
+    mayWriteUnder: subject => isWithinApp(store, subject, app),
+    appTitle,
+    frame: frameRef,
+    table,
+  });
+  const { handle: handleUI, forwardKey } = hostUI;
 
   // Which plugin renders it. Resolved here rather than by each caller: a
   // table tab and an app page both need it, and two copies would drift.
@@ -150,6 +174,8 @@ function AppFrameSession({
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
+    // Per frame: `undo` reverts what this frame applied, nothing older.
+    const changes = appChanges(store, drive, app);
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -159,6 +185,8 @@ function AppFrameSession({
         ? viewSession(originalSession, wire.id)
         : originalSession;
       const message = data as Record<string, unknown>;
+
+      if (forwardKey(message)) return;
 
       if (message.type === '__atomic_plugin_error') {
         const failure: AppError = {
@@ -183,6 +211,15 @@ function AppFrameSession({
 
       if (!isHostRequest(data)) return;
 
+      if (
+        handleUI(
+          data as unknown as Parameters<typeof handleUI>[0],
+          session.post,
+        )
+      ) {
+        return;
+      }
+
       if (data.op === 'proxyConnect') {
         if (!isPlatformId(data.platform)) {
           session.post({ id: data.id, error: 'platform is required' });
@@ -202,15 +239,16 @@ function AppFrameSession({
         setConnectAsk(ask);
 
         // Offer a connection the person already has for this platform, so
-        // using it for one more app needs no second trip through OAuth.
+        // using it for one more app needs no second trip through OAuth. A
+        // proxy that cannot list them still lets them connect a new one.
         existingConnections(store, data.platform!)
+          .catch((): ProxyConnection[] => [])
           .then(existing => {
-            if (connectAskRef.current !== ask || existing.length === 0) return;
+            if (connectAskRef.current !== ask) return;
             const withExisting = { ...ask, existing };
             connectAskRef.current = withExisting;
             setConnectAsk(withExisting);
-          })
-          .catch(() => undefined);
+          });
 
         return;
       }
@@ -234,7 +272,7 @@ function AppFrameSession({
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post);
+      void answer(store, app, drive, table, data, session.post, changes);
     });
     bridgeRef.current = bridge;
 
@@ -242,7 +280,7 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src]);
+  }, [store, app, drive, table, src, handleUI, forwardKey]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
@@ -280,62 +318,45 @@ function AppFrameSession({
     return <LoaderBlock />;
   }
 
-  const finishAsk = (reply: HostReply) => {
-    connectAsk?.reply(reply);
+  /** Answers `ask`, unless a newer ask took its place and answered it. */
+  const finishAsk = (ask: ConnectAsk, used: ProxyConnection | undefined) => {
+    if (connectAskRef.current?.id !== ask.id) return;
+    ask.reply({
+      id: ask.id,
+      result: used
+        ? {
+            status: 'connected',
+            connectionId: used.connection_id,
+            platform: used.platform,
+          }
+        : { status: 'cancelled' },
+    });
     connectAskRef.current = undefined;
     setConnectAsk(undefined);
   };
 
-  const connect = () => {
-    if (!connectAsk) return;
+  const connect = async (ask: ConnectAsk) => {
+    if (!store.getAgent()) throw new Error('Sign in to connect an account.');
 
-    if (!store.getAgent()) {
-      finishAsk({ id: connectAsk.id, error: 'Sign in to connect an account.' });
+    const appAgent = await appAgentOf(store, { drive, app });
+    const url = await proxyConnections(store).start(
+      { drive, app, appAgent },
+      ask.platform,
+      location.href,
+      await appLabel(store, app),
+    );
 
-      return;
-    }
-
-    (async () => {
-      const appAgent = await appAgentOf(store, { drive, app });
-
-      return proxyConnections(store).start(
-        { drive, app, appAgent },
-        connectAsk.platform,
-        location.href,
-        await appLabel(store, app),
-      );
-    })()
-      .then(url => location.assign(url))
-      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
+    // Closing the dialog meanwhile was a no; leaving now would overrule it.
+    if (connectAskRef.current?.id === ask.id) location.assign(url);
   };
 
-  const pickExisting = (connection: ProxyConnection) => {
-    if (!connectAsk) return;
-
-    (async () => {
-      const appAgent = await appAgentOf(store, { drive, app });
-      await proxyConnections(store).delegate(
-        connection.connection_id,
-        appAgent,
-        await appLabel(store, app),
-      );
-    })()
-      .then(() =>
-        finishAsk({
-          id: connectAsk.id,
-          result: {
-            status: 'connected',
-            connectionId: connection.connection_id,
-            platform: connection.platform,
-          },
-        }),
-      )
-      .catch((e: Error) => finishAsk({ id: connectAsk.id, error: e.message }));
-  };
-
-  const cancelConnect = () => {
-    if (!connectAsk) return;
-    finishAsk({ id: connectAsk.id, result: { status: 'cancelled' } });
+  const shareExisting = async (connection: ProxyConnection) => {
+    const appAgent = await appAgentOf(store, { drive, app });
+    await proxyConnections(store).delegate(
+      connection.connection_id,
+      appAgent,
+      await appLabel(store, app),
+    );
   };
 
   const fixIt = () => {
@@ -375,28 +396,17 @@ function AppFrameSession({
           </Row>
         </ErrorBar>
       )}
+      {hostUI.element}
       {connectAsk && (
-        <ConnectBar role='group' aria-label='Connect an account'>
-          <ErrorText>
-            This app wants to use your{' '}
-            <strong>{platformName(connectAsk.platform)}</strong> account through{' '}
-            {getIntegrationProxy()}. The proxy keeps the connection under your
-            account; this app may use it until you revoke that.
-          </ErrorText>
-          <Row gap='0.5rem'>
-            {connectAsk.existing?.[0] && (
-              <Button onClick={() => pickExisting(connectAsk.existing![0])}>
-                Use existing connection
-              </Button>
-            )}
-            <Button subtle={!!connectAsk.existing?.length} onClick={connect}>
-              Connect
-            </Button>
-            <Button subtle onClick={cancelConnect}>
-              Cancel
-            </Button>
-          </Row>
-        </ConnectBar>
+        <ConnectDialog
+          app={appTitle}
+          platform={platformName(connectAsk.platform)}
+          proxySite={new URL(getIntegrationProxy()).host}
+          existing={connectAsk.existing}
+          onConnect={() => connect(connectAsk)}
+          onUseExisting={shareExisting}
+          onClosed={used => finishAsk(connectAsk, used)}
+        />
       )}
       <Frame
         ref={frameRef}
@@ -437,6 +447,7 @@ async function answer(
   table: string | undefined,
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
+  changes: ViewChanges,
 ): Promise<void> {
   try {
     post({
@@ -448,6 +459,7 @@ async function answer(
         request,
         table,
         proxyHost(store, app, drive),
+        changes,
       ),
     });
   } catch (e) {
@@ -535,7 +547,7 @@ interface ConnectAsk {
   id: number | string;
   platform: string;
   reply: (reply: HostReply) => void;
-  /** Connections the person already has for this platform. */
+  /** Connections the person already has for this platform; unset while looking. */
   existing?: ProxyConnection[];
 }
 
@@ -593,20 +605,7 @@ const Frame = styled.iframe`
   background: ${p => p.theme.colors.bg};
 `;
 
-const ConnectBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  margin-bottom: 0.5rem;
-`;
-
-/** Keeps the frame filling whatever is left once the bar has taken its height. */
+/** Keeps the frame filling whatever is left once the error bar has taken its height. */
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;

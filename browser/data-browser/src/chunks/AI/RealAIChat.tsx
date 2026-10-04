@@ -4,6 +4,7 @@ import {
 } from '@helpers/managed/ai';
 import { getManagedApiBase } from '@helpers/managed/api';
 import { HostedAICredits } from './HostedAICredits';
+import { compactionTokens } from './usageMetadata';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
@@ -452,7 +453,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         // A failed request must not spend more quota on compaction.
         if (isError) return;
 
-        const inputTokens = message.metadata?.inputTokensUsed ?? 0;
+        const inputTokens = compactionTokens(message.metadata);
         const threshold = autoCompactTokenThresholdRef.current;
 
         if (threshold !== null && inputTokens > threshold) {

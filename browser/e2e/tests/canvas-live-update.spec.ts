@@ -72,6 +72,16 @@ test.describe('canvas live update', () => {
     page,
     browser,
   }) => {
+    // This test's own budgets already add up to more than the 60s default it
+    // was running under: 20s for session B's canvas, then three 15s polls. So
+    // the wall could fire before any of them did, and that is what runs 4748
+    // and 4749 showed — three attempts each, every one killed by the wall
+    // inside the last poll, which never got to report what it was waiting for.
+    // Measured: 15.1s on its own and 33.8 to 36.5s with the suite running four
+    // ways, so 61% of the old wall with nothing going wrong. 120s leaves the
+    // polls above to name a failure instead of the wall.
+    test.setTimeout(120_000);
+
     // Session A: dev drive + a canvas, signed in.
     const secret = await getDevDriveSecret(page);
     await newResource(CANVAS_CLASS, page);

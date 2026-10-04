@@ -30,6 +30,12 @@ beforeAll(async () => {
 
 async function makeStore(): Promise<Store> {
   const store = new Store({ serverUrl: 'https://example.com' });
+  // Setting a property fetches its definition from atomicdata.dev. Answer at
+  // once that nothing is reachable, so these tests never wait on a real
+  // network (CI took 8 to 20s for it); `set` then skips validation.
+  store.injectFetch(async () => {
+    throw new TypeError('Failed to fetch');
+  });
   const keys = await Agent.generateKeyPair();
   store.setAgent(
     new Agent(

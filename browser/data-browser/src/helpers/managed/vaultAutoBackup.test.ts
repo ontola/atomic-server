@@ -200,6 +200,45 @@ describe('ensureVaultBackup', () => {
     expect(deps.runVaultBackup).not.toHaveBeenCalled();
   });
 
+  it('stays quiet when another tab signs in as a different account mid-pass', async () => {
+    const store = await signedInStore();
+    const identityMatches = vi.fn(async () => true);
+    const deps = fakeDeps({
+      identityMatches,
+      runVaultBackup: vi.fn(async () => {
+        // The other tab's sign-in lands while this pass is in flight.
+        identityMatches.mockResolvedValue(false);
+        throw new Error('Cloud Vault enrollment not found');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await ensureVaultBackup(store, DRIVE, deps)).toEqual({
+      status: 'skipped',
+      reason: 'backup cancelled by account change',
+    });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('still reports a failure while the account is unchanged', async () => {
+    const store = await signedInStore();
+    const deps = fakeDeps({
+      identityMatches: vi.fn(async () => true),
+      runVaultBackup: vi.fn(async () => {
+        throw new Error('Cloud Vault enrollment not found');
+      }),
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect((await ensureVaultBackup(store, DRIVE, deps)).status).toBe('failed');
+    expect(warn).toHaveBeenCalledWith(
+      '[cloud-vault] backup failed',
+      expect.any(Error),
+    );
+    warn.mockRestore();
+  });
+
   it('reuses the enrollment on later passes', async () => {
     const store = await signedInStore();
     const deps = fakeDeps();
@@ -418,7 +457,7 @@ describe('restoreFromVault', () => {
       const store = await signedInStore();
       const resource = new Resource(DRIVE);
       resource.error = new AtomicError('missing', errorType);
-      store.resources.set(DRIVE, resource);
+      store.resources.set(store.normalizeSubject(DRIVE), resource);
       const deps = fakeDeps();
 
       await restoreFromVault(store, DRIVE, deps);
@@ -515,7 +554,7 @@ describe('restoreFromVault', () => {
     const store = await signedInStore();
     const resource = new Resource(DRIVE);
     resource.error = new AtomicError('missing', ErrorType.NotFound);
-    store.resources.set(DRIVE, resource);
+    store.resources.set(store.normalizeSubject(DRIVE), resource);
     const deps = fakeDeps({
       restoreDrive: vi.fn(async () => {
         throw new Error('403');

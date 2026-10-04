@@ -1,5 +1,4 @@
-import { useEffect, useId, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useId, useState } from 'react';
 import { styled } from 'styled-components';
 import { Row, Column } from '@components/Row';
 import { FaPlus, FaPen, FaTrash } from 'react-icons/fa6';
@@ -12,6 +11,7 @@ import Field from '@components/forms/Field';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import type { MCPServer } from './types';
 import { getDefaultMCPServer } from './defaultMCPServers';
+import { ConfigEditorDialog } from './ConfigEditorDialog';
 
 const generateId = () => crypto.randomUUID();
 
@@ -52,22 +52,10 @@ const rowsToHeaders = (
   return Object.keys(headers).length > 0 ? headers : undefined;
 };
 
-interface MCPConfigTabProps {
-  actionPortalElement: HTMLElement | null;
-  onActionsVisibleChange: (visible: boolean) => void;
-}
-
-export const MCPConfigTab = ({
-  actionPortalElement,
-  onActionsVisibleChange,
-}: MCPConfigTabProps) => {
+export const MCPConfigTab = () => {
   const { mcpServers, setMcpServers } = useAISettings();
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
-  useEffect(() => {
-    return () => onActionsVisibleChange(false);
-  }, [onActionsVisibleChange]);
 
   const handleSaveServer = () => {
     if (!editingServer) return;
@@ -93,9 +81,6 @@ export const MCPConfigTab = ({
       : mcpServers.map(s => (s.id === serverToSave.id ? serverToSave : s));
 
     setMcpServers(newServers);
-    setEditingServer(null);
-    setIsCreating(false);
-    onActionsVisibleChange(false);
   };
 
   const handleDeleteServer = (serverToDelete: MCPServer) => {
@@ -109,100 +94,86 @@ export const MCPConfigTab = ({
   const handleCreateNewServer = () => {
     setEditingServer({ ...defaultNewServer, id: generateId() });
     setIsCreating(true);
-    onActionsVisibleChange(true);
   };
 
   const handleEditServer = (server: MCPServer) => {
     setEditingServer({ ...server });
     setIsCreating(false);
-    onActionsVisibleChange(true);
   };
 
-  const handleCancel = () => {
+  const handleDialogClosed = () => {
     setEditingServer(null);
     setIsCreating(false);
-    onActionsVisibleChange(false);
   };
 
   return (
-    <>
-      {editingServer ? (
-        <Column>
+    <Column>
+      <ServerList role='list' aria-label='MCP Servers'>
+        {mcpServers.map(server => {
+          const headerCount = Object.keys(server.headers ?? {}).length;
+          const isDefaultServer = !!getDefaultMCPServer(server.id);
+
+          return (
+            <ServerItem key={server.id}>
+              <Column gap='0.25rem'>
+                <strong>{server.name}</strong>
+                <SubtleText>{server.url}</SubtleText>
+                <SubtleText>Transport: {server.transport}</SubtleText>
+                {isDefaultServer && <SubtleText>Default server</SubtleText>}
+                {headerCount > 0 && (
+                  <SubtleText>
+                    {headerCount} custom header
+                    {headerCount === 1 ? '' : 's'}
+                  </SubtleText>
+                )}
+              </Column>
+              <Row>
+                <IconButton
+                  title='Edit Server'
+                  onClick={() => handleEditServer(server)}
+                >
+                  <FaPen />
+                </IconButton>
+                {!isDefaultServer && (
+                  <IconButton
+                    title='Delete Server'
+                    color='alert'
+                    onClick={() => handleDeleteServer(server)}
+                  >
+                    <FaTrash />
+                  </IconButton>
+                )}
+              </Row>
+            </ServerItem>
+          );
+        })}
+        {mcpServers.length === 0 && (
+          <SubtleText>No MCP servers configured yet.</SubtleText>
+        )}
+      </ServerList>
+
+      <CreateButton onClick={handleCreateNewServer}>
+        <FaPlus title='' />
+        <span>Add New Server</span>
+      </CreateButton>
+
+      <ConfigEditorDialog
+        open={!!editingServer}
+        title={isCreating ? 'New MCP Server' : 'Edit MCP Server'}
+        saveLabel={isCreating ? 'Create Server' : 'Save Changes'}
+        canSave={!!editingServer?.name.trim() && !!editingServer?.url.trim()}
+        onSave={handleSaveServer}
+        onClosed={handleDialogClosed}
+      >
+        {editingServer && (
           <ServerForm
             key={editingServer.id}
             server={editingServer}
             onChange={setEditingServer}
           />
-        </Column>
-      ) : (
-        <Column>
-          <ServerList role='list' aria-label='MCP Servers'>
-            {mcpServers.map(server => {
-              const headerCount = Object.keys(server.headers ?? {}).length;
-              const isDefaultServer = !!getDefaultMCPServer(server.id);
-
-              return (
-                <ServerItem key={server.id}>
-                  <Column gap='0.25rem'>
-                    <strong>{server.name}</strong>
-                    <SubtleText>{server.url}</SubtleText>
-                    <SubtleText>Transport: {server.transport}</SubtleText>
-                    {isDefaultServer && <SubtleText>Default server</SubtleText>}
-                    {headerCount > 0 && (
-                      <SubtleText>
-                        {headerCount} custom header
-                        {headerCount === 1 ? '' : 's'}
-                      </SubtleText>
-                    )}
-                  </Column>
-                  <Row>
-                    <IconButton
-                      title='Edit Server'
-                      onClick={() => handleEditServer(server)}
-                    >
-                      <FaPen />
-                    </IconButton>
-                    {!isDefaultServer && (
-                      <IconButton
-                        title='Delete Server'
-                        color='alert'
-                        onClick={() => handleDeleteServer(server)}
-                      >
-                        <FaTrash />
-                      </IconButton>
-                    )}
-                  </Row>
-                </ServerItem>
-              );
-            })}
-            {mcpServers.length === 0 && (
-              <SubtleText>No MCP servers configured yet.</SubtleText>
-            )}
-          </ServerList>
-
-          <CreateButton onClick={handleCreateNewServer}>
-            <FaPlus title='' />
-            <span>Add New Server</span>
-          </CreateButton>
-        </Column>
-      )}
-      {editingServer &&
-        actionPortalElement &&
-        createPortal(
-          <>
-            <Button subtle onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveServer}
-              disabled={!editingServer.name.trim() || !editingServer.url.trim()}
-            >
-              {isCreating ? 'Create Server' : 'Save Changes'}
-            </Button>
-          </>,
-          actionPortalElement,
         )}
-    </>
+      </ConfigEditorDialog>
+    </Column>
   );
 };
 

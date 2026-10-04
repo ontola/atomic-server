@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { before } from './test-utils';
+import { before, clickAccountMenuItem } from './test-utils';
 
 async function expectLeftSidebarClosed(page: Page) {
   const sidebar = page.getByTestId('sidebar');
@@ -102,7 +102,7 @@ test('comments close when navigating to a page without a resource', async ({
     'data-open',
     '',
   );
-  await page.getByRole('link', { name: /Sync$/ }).click();
+  await clickAccountMenuItem(page, 'Sync');
   await expect(page.getByTestId('comments-panel')).not.toHaveAttribute(
     'data-open',
     '',

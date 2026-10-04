@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -132,11 +133,17 @@ export default defineConfig(({ mode }) => {
         },
         {
           find: '@integration-host/plugin-connection',
-          replacement: path.resolve(__dirname, '../lib/src/plugin-connection.ts'),
+          replacement: path.resolve(
+            __dirname,
+            '../lib/src/plugin-connection.ts',
+          ),
         },
         {
           find: '@integration-host/plugin-reconcile',
-          replacement: path.resolve(__dirname, '../lib/src/plugin-reconcile.ts'),
+          replacement: path.resolve(
+            __dirname,
+            '../lib/src/plugin-reconcile.ts',
+          ),
         },
         {
           find: '@integration-host/navigation',
@@ -144,19 +151,31 @@ export default defineConfig(({ mode }) => {
         },
         {
           find: '@integration-host/runScript',
-          replacement: path.resolve(__dirname, 'src/chunks/PluginRuns/runScript.ts'),
+          replacement: path.resolve(
+            __dirname,
+            'src/chunks/PluginRuns/runScript.ts',
+          ),
         },
         {
           find: '@integration-host/RunPluginDialog',
-          replacement: path.resolve(__dirname, 'src/chunks/PluginRuns/RunPluginDialog.tsx'),
+          replacement: path.resolve(
+            __dirname,
+            'src/chunks/PluginRuns/RunPluginDialog.tsx',
+          ),
         },
         {
           find: '@integration-host/table/createTableFromSpec',
-          replacement: path.resolve(__dirname, 'src/chunks/TablePage/createTableFromSpec.ts'),
+          replacement: path.resolve(
+            __dirname,
+            'src/chunks/TablePage/createTableFromSpec.ts',
+          ),
         },
         {
           find: '@integration-host/table/tableTemplates',
-          replacement: path.resolve(__dirname, 'src/chunks/TablePage/tableTemplates.ts'),
+          replacement: path.resolve(
+            __dirname,
+            'src/chunks/TablePage/tableTemplates.ts',
+          ),
         },
         { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
         {
@@ -175,6 +194,60 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       wasm(),
+      {
+        // `src/chunks/Website/runtime/{search-view.html,website-runtime.min.js}`
+        // are gitignored bundles of the runtime's `.ts` sources. `config` runs
+        // for dev, build and vitest alike, so every consumer finds them fresh.
+        name: 'website-runtime',
+        async config() {
+          await buildWebsiteRuntime();
+        },
+        async handleHotUpdate({ file }) {
+          if (/Website\/runtime\/[^/]+\.ts$/.test(file)) {
+            await buildWebsiteRuntime();
+          }
+        },
+      },
+      {
+        // `prefetch.json`: what a first visit downloads before the app can
+        // start, for another page to warm the HTTP cache with ahead of time.
+        // atomic.place's homepage reads it while a visitor looks at the "Try
+        // Atomic" button, so the click no longer waits on ~3 MB of
+        // WebAssembly (measured: 4.0 s to 2.4 s from click to workspace).
+        // Hashed names change every build, which is why this is generated
+        // rather than written down anywhere.
+        name: 'atomic-prefetch-manifest',
+        apply: 'build',
+        generateBundle(_options, bundle) {
+          const files = new Set<string>();
+          const add = (name: string) => files.add(`/${name}`);
+          const entry = Object.values(bundle).find(
+            item => item.type === 'chunk' && item.isEntry,
+          );
+
+          if (entry?.type === 'chunk') {
+            add(entry.fileName);
+            entry.imports.forEach(add);
+            entry.viteMetadata?.importedCss.forEach(add);
+          }
+
+          for (const item of Object.values(bundle)) {
+            if (
+              item.type === 'asset' &&
+              /loro_wasm_bg.*\.wasm$/.test(item.fileName)
+            )
+              add(item.fileName);
+          }
+
+          files.add(`/wasm/atomic_wasm_bg.wasm?v=${wasmVersionHash}`);
+
+          this.emitFile({
+            type: 'asset',
+            fileName: 'prefetch.json',
+            source: JSON.stringify({ files: [...files] }, null, 2),
+          });
+        },
+      },
       {
         // index.html preloads the wasm pair to warm the worker's fetch, so those
         // hrefs have to carry the same `?v=` the app requests — a preload for a
@@ -460,6 +533,14 @@ export default defineConfig(({ mode }) => {
       // imported module: CollaborativeEditor.tsx"). Crawling the chunk roots at
       // boot pre-optimizes everything, so first-open is warm and e2e is stable.
       entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
+    },
+    test: {
+      setupFiles: ['./src/test-setup.ts'],
+      // The suite runs on a CI host that is also busy with other jobs. A test
+      // that dynamically imports a large module spends more than the default
+      // five seconds on the import alone, and fails without anything being
+      // wrong. A real hang still fails, just later.
+      testTimeout: 30_000,
     },
     build: {
       target: 'baseline-widely-available',

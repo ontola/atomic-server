@@ -7,6 +7,7 @@ import {
   setManagedDeviceToken,
 } from './api';
 import { isRunningInTauri } from '../tauri';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 /**
  * Linking this install to a hosted provider.
@@ -68,10 +69,45 @@ export function describeThisDevice(): string {
   return browser ? `${platform} · ${browser}` : platform;
 }
 
+/**
+ * For an app the provider can send back to through `atomic://` (the desktop
+ * and Android apps): a secret only this app holds, and its hash for the
+ * provider. Signing in then connects the app by itself, and a link someone
+ * else sent can never deliver the session anywhere but here. The same shape
+ * as OAuth for native apps (PKCE).
+ */
+export type ReturnVerifier = { verifier: string; challenge: string };
+
+export function newReturnVerifier(): ReturnVerifier {
+  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+
+  return {
+    verifier,
+    challenge: base64Url(sha256(new TextEncoder().encode(verifier))),
+  };
+}
+
+/** Where the provider sends the signed-in person back to this app. */
+export const ACCOUNT_RETURN_LINK = 'atomic://account-return';
+
+/** The code and one-time handoff in an account-return link, if it is one. */
+export function parseAccountReturn(
+  uri: string,
+): { code: string; handoff: string } | null {
+  if (!uri.startsWith(`${ACCOUNT_RETURN_LINK}?`)) return null;
+
+  const params = new URLSearchParams(uri.slice(ACCOUNT_RETURN_LINK.length + 1));
+  const code = params.get('code');
+  const handoff = params.get('handoff');
+
+  return code && handoff ? { code, handoff } : null;
+}
+
 /** Ask a provider to start a link. Needs no credentials — that is the point. */
 export async function requestDeviceLink(
   portalUrl: string,
   deviceName = describeThisDevice(),
+  returnChallenge?: string,
 ): Promise<LinkRequest> {
   // The session this produces is only ever sent to `portalUrl`, so it has to
   // be an address a bearer token may travel to at all.
@@ -82,7 +118,10 @@ export async function requestDeviceLink(
   const response = await fetch(`${apiBaseFor(portalUrl)}/device-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_name: deviceName }),
+    body: JSON.stringify({
+      device_name: deviceName,
+      return_challenge: returnChallenge,
+    }),
   });
 
   if (!response.ok) {
@@ -94,6 +133,38 @@ export async function requestDeviceLink(
   }
 
   return (await response.json()) as LinkRequest;
+}
+
+/**
+ * Collect the session the provider sent back to this app, with the handoff
+ * from the `atomic://` link and the verifier only this app holds. False for
+ * a handoff that does not belong to this request.
+ */
+export async function redeemDeviceLink(
+  portalUrl: string,
+  deviceCode: string,
+  handoff: string,
+  verifier: string,
+): Promise<boolean> {
+  const response = await fetch(
+    `${apiBaseFor(portalUrl)}/device-link/${encodeURIComponent(deviceCode)}/redeem`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handoff, verifier }),
+    },
+  );
+
+  if (!response.ok) return false;
+
+  const body = (await response.json()) as { token?: string };
+
+  if (!body.token) return false;
+
+  setManagedDeviceToken(body.token, portalUrl);
+  rememberProvider(portalUrl);
+
+  return true;
 }
 
 /**
@@ -246,3 +317,10 @@ function apiBaseFor(portalUrl: string): string {
 }
 
 const trimSlashes = (url: string) => url.replace(/\/+$/, '');
+
+function base64Url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}

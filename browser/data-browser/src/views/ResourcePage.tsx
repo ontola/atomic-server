@@ -1,5 +1,4 @@
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
-import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   useResource,
@@ -11,6 +10,7 @@ import {
   server,
   core,
   ai,
+  notifications,
   useArray,
 } from '@tomic/react';
 
@@ -26,6 +26,7 @@ import { FilePage } from './File/FilePage';
 import { ResourcePageDefault } from './ResourcePageDefault';
 import { Spinner } from '../components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
+import { InboxPage } from './InboxPage';
 import { MessagePage } from './MessagePage';
 import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
@@ -44,9 +45,8 @@ import { InstallationPage } from '@views/Installation/InstallationPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
 import { MeetingPage } from './Meeting/MeetingPage';
-import { PluginPage as AtomicPluginPage } from '@chunks/PluginRuns/PluginPage';
 import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
-import { useAppClass } from '@chunks/PluginRuns/runScript';
+import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -63,6 +63,18 @@ const WebsiteExportPage = lazy(() =>
 );
 const WebsitePage = lazy(() =>
   import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
+);
+
+const AtomicPluginPage = lazy(() =>
+  import('@chunks/PluginRuns/PluginPage').then(m => ({
+    default: m.PluginPage,
+  })),
+);
+
+const ImportResolutionNotice = lazy(() =>
+  import('@chunks/PluginRuns/ImportResolutionNotice').then(m => ({
+    default: m.ImportResolutionNotice,
+  })),
 );
 
 const AppPage = lazy(() =>
@@ -316,6 +328,8 @@ function selectComponent(klass: string | undefined) {
       return MeetingPage;
     case canvas.classes.canvas:
       return CanvasPage;
+    case notifications.classes.inbox:
+      return InboxPage;
     case server.classes.installation:
       return InstallationPage;
     default:

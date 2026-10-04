@@ -5,6 +5,7 @@ import {
   commits,
   diffFork,
   forks,
+  unknownSubject,
   useResource,
   useValue,
   type Resource,
@@ -31,7 +32,13 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
   const original = resource.get(forks.properties.originalSubject) as
     | string
     | undefined;
-  const originalResource = useResource(original ?? '');
+  // `unknownSubject` rather than `''`: an empty subject resolves against the
+  // page origin, so every non-fork resource (the bar renders above all of them
+  // and only returns null below, after the hooks have run) fetched the server
+  // root and got a 404 — nothing serves a resource there, since no Drive is
+  // created at `/`. The store answers `unknownSubject` from memory and never
+  // reaches for the network.
+  const originalResource = useResource(original ?? unknownSubject);
 
   // Subscribe to each resource's latest commit so the component re-renders when
   // either changes — and so `diffFork` is recomputed then, rather than being

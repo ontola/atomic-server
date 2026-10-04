@@ -29,10 +29,22 @@ Trees (names in `lib/src/db/trees.rs`):
 
 | Tree | Key | Value |
 | --- | --- | --- |
-| `SearchPostings` | `field_id \|\| token \|\| 0x00 \|\| subject` | tf (u32 BE) |
-| `SearchDocs` | subject | drive, parent, per-field token counts |
-| `SearchDocTokens` | subject | tokens, so delete can drop postings |
-| `SearchTrigrams` | `trigram \|\| 0x00 \|\| term` | empty (candidate generation) |
+| `SearchPostings` | `field_id \|\| token \|\| 0x00 \|\| doc_id` | tf (varint) |
+| `SearchDocs` | `doc_id` | subject, drive and parent ids, field lengths, tokens with tf |
+| `SearchTrigrams` | `trigram \|\| 0x00 \|\| term` | empty (candidate generation, terms of 12+ chars only) |
+
+`doc_id` is the first 8 bytes of blake3 of the subject: no counter to keep, so
+batches, replays and rebuilds agree. The subject lives once, in the document
+row. The token list in that row is what a re-index diffs against and what a
+delete drops, so an edit writes only the postings that changed. Trigrams are
+only read for query tokens longer than 12 characters, and a one-edit match of
+such a token is at least 12 characters long, so shorter terms get none.
+
+Layout v2 (1 Oct 2026) replaced postings keyed by the full subject plus a
+separate token tree: on a 10k-resource drive the search trees went from about
+14 MB to about 3 MB. A store of the v1 layout drops its old tables on open and
+is re-indexed (the browser files every resource as pending and indexes them in
+slices once the app is up).
 
 Fields: title (name / shortname / filename), description, Loro body
 (`AtomicLoroDoc::extract_document_plain_text`). Commits are skipped.

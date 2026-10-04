@@ -17,6 +17,9 @@ export default defineConfig(options => ({
     // reasoning as above: its own entry so hosts can point a `new Worker(...)`
     // at it without hand-maintaining a parallel copy.
     'plugin-run.worker': 'src/plugin-run.worker.ts',
+    // Kept out of `index` so the Temporal polyfill only loads for consumers
+    // that expand recurring calendar events.
+    'calendar-recurrence': 'src/calendar-recurrence.ts',
     'ontologies/core': 'src/ontologies/core.ts',
     'ontologies/server': 'src/ontologies/server.ts',
     'ontologies/dataBrowser': 'src/ontologies/dataBrowser.ts',

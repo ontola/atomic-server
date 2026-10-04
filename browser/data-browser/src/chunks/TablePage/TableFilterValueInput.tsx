@@ -3,6 +3,7 @@ import { type JSX } from 'react';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { BasicSelect } from '@components/forms/BasicSelect';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import { TagOption } from './RowActionDialog';
 
 interface TableFilterValueInputProps {
   property: Property;
@@ -24,6 +25,23 @@ export function TableFilterValueInput({
   autoFocus,
 }: TableFilterValueInputProps): JSX.Element {
   const datatype = property.datatype;
+
+  // A select column only holds its own options, so offer exactly those rather
+  // than a search over every tag in the drive.
+  if (property.allowsOnly?.length) {
+    return (
+      <BasicSelect
+        value={value}
+        autoFocus={autoFocus}
+        onChange={e => onChange(e.target.value)}
+      >
+        <option value=''>Pick an option…</option>
+        {property.allowsOnly.map(tag => (
+          <TagOption key={tag} subject={tag} />
+        ))}
+      </BasicSelect>
+    );
+  }
 
   if (datatype === Datatype.ATOMIC_URL || datatype === Datatype.RESOURCEARRAY) {
     return (

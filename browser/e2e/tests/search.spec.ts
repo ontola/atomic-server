@@ -3,6 +3,7 @@ import {
   before,
   editTitle,
   setTitle,
+  contextMenu,
   contextMenuClick,
   timestamp,
   newResource,
@@ -227,10 +228,9 @@ test.describe('search', async () => {
 
     // Add tags via the TagBar
     const firstTagName = `first-tag`;
-    await page
-      .locator('[aria-label="navigation"] button')
-      .filter({ hasText: 'Tags' })
-      .click();
+    // Tags live in More until the resource has one.
+    await page.click(contextMenu);
+    await page.getByRole('menuitem', { name: 'Tags' }).click();
     await page.getByPlaceholder('New tag').fill(firstTagName);
     await page.getByTitle('Add tag').click();
     await expect(

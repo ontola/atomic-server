@@ -22,6 +22,19 @@ test.describe('calendar view', () => {
   test('create calendar view, add an item on a day, and it persists', async ({
     page,
   }) => {
+    // The 60s default cannot hold this test's own declared budgets. The body
+    // before the reload takes 14535 ms with nothing else running, and the two
+    // waits after it are given 30s and 15s deliberately, for the contended CI
+    // server the comment at the reload describes. 14.5 + 30 + 15 is 59.5s, so
+    // the wall fires before the budget it is supposed to allow can be reached,
+    // and it then names itself rather than the step that was late.
+    //
+    // Run 4686 is what that looks like: "Test timeout of 60000ms exceeded" with
+    // the 30s wait in flight, on both attempts. Measured over eight
+    // four-worker rounds on a 4-core box, the test itself:
+    //
+    //     29969  33229  34115  34445  34834  35090  37552  40693 ms
+    test.setTimeout(120_000);
     await createIssueTracker(page, 'Roadmap');
 
     // Add a new Calendar view via the "+" tab. The Issue Tracker class has no
@@ -93,6 +106,20 @@ test.describe('calendar day list', () => {
   test('a crowded day shows "+N more", and its day list shows every event', async ({
     page,
   }) => {
+    // Also too much for the 60s default. It builds an Issue Tracker from a
+    // template, adds a calendar view, then creates five items one after
+    // another, each a round trip, and drives about twenty assertions over the
+    // day list and its dialogs. Every one of those carries the 10s action
+    // default, inside a wall only six of them would fill.
+    //
+    // Measured over eight four-worker rounds, and 10445 ms alone:
+    //
+    //     28974  29608  29692  31366  31570  33086  34027  35395 ms
+    //
+    // Run 4686 exceeded the wall on both attempts, the second time during a
+    // hover whose element had already resolved, was visible and stable, and
+    // had finished scrolling. Nothing was missing; the test was out of time.
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 800 });
     await createIssueTracker(page, 'Busy day');
     await page.getByRole('button', { name: 'Add view' }).click();
@@ -190,6 +217,12 @@ test.describe('calendar grid alignment', () => {
   test('weekday headers stay over their columns with a long title, at desktop and phone width', async ({
     page,
   }) => {
+    // Prevention rather than a fix: this one has not failed on CI. It shares
+    // the template build and the calendar view with the two tests above, and
+    // measures 25696 to 34609 ms over the same eight rounds against the 60s
+    // default, which is the ratio that redded them. Raised with them so it
+    // does not cost a later run to learn the same thing.
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 800 });
     await createIssueTracker(page, 'Long titles');
     await page.getByRole('button', { name: 'Add view' }).click();
@@ -246,5 +279,38 @@ test.describe('calendar grid alignment', () => {
         expect(overflow, `horizontal overflow at ${width}px`).toBe(0);
       }).toPass({ timeout: 10000 });
     }
+  });
+});
+
+test.describe('choosing a view type from a tab (#1806)', () => {
+  test.beforeEach(before);
+
+  test('adds a Calendar view next to the only Table view', async ({ page }) => {
+    await createTableFromDialog(page, { name: 'Content plan' });
+
+    // Save the implicit tab as a real Table view, so it has a menu.
+    await page.getByRole('button', { name: 'Add view' }).click();
+    await page.getByTestId('menu-item-table').click();
+    const tableTab = page.getByRole('tab', { name: 'Table', exact: true });
+    await expect(tableTab).toHaveAttribute('aria-selected', 'true');
+    // The tab reads as selected before `?view=` carries it. The switch that
+    // wrote the Table view lands in the URL a moment later, and a menu action
+    // started before then sees that arrival as the person choosing another tab,
+    // so it adds its view and does not switch to it.
+    await expect(page).toHaveURL(/[?&]view=/);
+
+    // Clicking the active tab opens its menu. The only table view cannot be
+    // changed in place; Calendar there adds a view instead.
+    await tableTab.click();
+    await expect(page.getByTestId('menu-item-kind-calendar')).toHaveCount(0);
+    await page.getByTestId('menu-item-add-calendar').click();
+
+    await expect(page.getByTestId('calendar-view')).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveText(['Table', 'Calendar']);
+
+    // The table layout is one click away.
+    await tableTab.click();
+    await expect(page.getByTestId('calendar-view')).toHaveCount(0);
+    await expect(tableTab).toHaveAttribute('aria-selected', 'true');
   });
 });

@@ -5,7 +5,10 @@
  * Server counterpart: `server/src/handlers/web_sockets.rs`.
  */
 
-import { canonicalDriveHash } from './canonical-drive-hash.js';
+import {
+  canonicalDriveHash,
+  canonicalDriveHashV2,
+} from './canonical-drive-hash.js';
 import { createAuthentication } from './authentication.js';
 import {
   isAgentSubject,
@@ -28,6 +31,8 @@ import {
   type Commit,
   parseCommitJSON,
   serializeDeterministically,
+  learnServerClock,
+  isFutureTimestampRefusal,
 } from './commit.js';
 import {
   Tag,
@@ -39,6 +44,7 @@ import {
   encodeGetMany,
   decodeGetManyResult,
   CAP_GET_MANY,
+  CAP_SPARSE_SYNC,
   encodeHello,
   encodeSub,
   encodeUnsub,
@@ -76,9 +82,44 @@ import {
 } from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
+/** How long a drive's sync probe waits so the screen's first reads are not
+ *  queued behind the version-vector scan. */
+const SYNC_PROBE_DELAY_MS = 2000;
+/** A drive with this many resources (last time it was synced) has its first
+ *  sync probe held back; see `runVVSync`. */
+const LARGE_DRIVE_ENTRIES = 500;
+
+function driveSizeKey(drive: string): string {
+  return `atomic.driveSize:${drive}`;
+}
+
+function rememberedDriveSize(drive: string): number {
+  try {
+    return Number(localStorage.getItem(driveSizeKey(drive))) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rememberDriveSize(drive: string, size: number): void {
+  try {
+    localStorage.setItem(driveSizeKey(drive), String(size));
+  } catch {
+    // Blocked storage: the probe is simply not held back next time.
+  }
+}
+
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
 // failure mode is a real server hang or stuck WS, not transient slowness.
+/** Envelopes verified per database call, and the pause between calls. */
+const ENVELOPE_SLICE = 50;
+/** Entries in one SYNC_PUSH chunk from which it counts as a bulk pull. */
+const BULK_PULL_MIN_ENTRIES = 50;
+const ENVELOPE_SLICE_GAP_MS = 150;
+/** Resources indexed for search per database call. */
+const SEARCH_INDEX_SLICE = 100;
+
 const REQUEST_TIMEOUT = 10000;
 
 /** The typed error a GET (or one GET_MANY entry) is refused with. Legacy GET
@@ -98,6 +139,10 @@ function getError(msg: { message: string; code: number }): AtomicError {
 /** How long `authenticate` waits for the server's `CHALLENGE` before signing
  *  a timestamp-only proof (a server that predates the frame never sends it). */
 const CHALLENGE_WAIT_MS = 300;
+
+/** Presence updates held for a not-yet-sent subscribe; the heartbeat repeats
+ *  the latest state, so a long backlog is never worth keeping. */
+const MAX_HELD_PRESENCE_UPDATES = 16;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 const connectionFailedMessage = (url: URL): string =>
@@ -220,12 +265,20 @@ function shortPropName(url: string): string {
  * All messages are binary frames — no JSON-AD parsing on the hot path.
  */
 export class WSClient {
+  /** Tests set this to 0. */
+  public static syncProbeDelayMs = SYNC_PROBE_DELAY_MS;
+
   private ws: WebSocket;
   private store: Store;
   private authPromise: Promise<void>;
   private openPromise: Promise<void>;
 
   private authenticatedWith: string | undefined;
+  /** Drives whose `PRESENCE_SUBSCRIBE` is deferred behind `authenticate()` and
+   *  not on the wire yet, with the presence updates produced meanwhile. The
+   *  server only relays updates from current subscribers, so an update sent
+   *  ahead of its subscribe frame is dropped; these go out right behind it. */
+  private pendingPresence = new Map<string, Uint8Array[]>();
   private isAuthenticating = false;
 
   private _closed = false;
@@ -681,7 +734,12 @@ export class WSClient {
 
         // Refetch resources that had 401 errors
         if (fetchAll) {
-          await this.reconcileSubscribedDrive();
+          // Not awaited: computing the drive's sync state takes seconds on a
+          // large drive, and `authenticate` resolving is what tells the store
+          // the server is connected, so every read waited for it.
+          void this.reconcileSubscribedDrive().catch(() => undefined);
+          // Anything a previous session left without search entries.
+          this.scheduleBackgroundImport();
 
           for (const resource of this.store.resources.values()) {
             if (resource.isUnauthorized()) {
@@ -786,10 +844,15 @@ export class WSClient {
    *  read access at subscribe time, so subscribing pre-auth would get
    *  refused for any non-public drive. */
   public subscribePresence(drive: string): void {
+    if (!this.pendingPresence.has(drive)) this.pendingPresence.set(drive, []);
+
     // authPromise initially resolves even before authentication starts.
     // Kick off authentication instead of treating that promise as readiness.
     void this.authenticate()
       .then(() => {
+        const held = this.pendingPresence.get(drive);
+        this.pendingPresence.delete(drive);
+
         if (
           this.readyState !== WebSocket.OPEN ||
           !this.authenticatedWith ||
@@ -799,13 +862,19 @@ export class WSClient {
         this.ws.send(
           'PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }),
         );
+
+        // `held` is gone when a withdrawn or repeated subscribe got here first.
+        for (const update of held ?? []) this.sendPresenceUpdate(drive, update);
       })
       .catch(() => {
         // authenticate() reports the handshake failure. Never subscribe after it.
+        this.pendingPresence.delete(drive);
       });
   }
 
   public unsubscribePresence(drive: string): void {
+    this.pendingPresence.delete(drive);
+
     if (this.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -815,7 +884,29 @@ export class WSClient {
 
   /** Broadcast presence bytes for `drive` as an `EPHEMERAL` frame. */
   public sendPresenceUpdate(drive: string, update: Uint8Array): void {
+    // Authenticated but not yet subscribed: the subscribe frame is a promise
+    // callback away, and the server drops updates from non-subscribers.
+    const held = this.pendingPresence.get(drive);
+
+    if (
+      held &&
+      this.readyState === WebSocket.OPEN &&
+      this.isAuthenticatedAsCurrentAgent()
+    ) {
+      if (held.length >= MAX_HELD_PRESENCE_UPDATES) held.shift();
+      held.push(update);
+
+      return;
+    }
+
     this.sendEphemeral(EphemeralKind.PRESENCE, drive, update);
+  }
+
+  private isAuthenticatedAsCurrentAgent(): boolean {
+    return (
+      !!this.authenticatedWith &&
+      this.authenticatedWith === this.store.getAgent()?.subject
+    );
   }
 
   /** One `EPHEMERAL (0x40)` frame; `kind` says which channel. The agent
@@ -826,11 +917,7 @@ export class WSClient {
     // Ephemera are transient: sending old cursor/presence data after a
     // handshake (or under the previous identity) is incorrect. The next
     // live update will publish once authentication has completed.
-    if (
-      !this.authenticatedWith ||
-      this.authenticatedWith !== this.store.getAgent()?.subject
-    )
-      return;
+    if (!this.isAuthenticatedAsCurrentAgent()) return;
     this.sendBinary(encodeEphemeral(kind, subject, '', update));
   }
 
@@ -1145,6 +1232,10 @@ export class WSClient {
         const msg = decodeError(payload);
         if (!msg) break;
 
+        // A clock that runs ahead is refused on every AUTH and COMMIT; adopt
+        // the server's time so the reconnect and the outbox's retry pass.
+        learnServerClock(msg.message);
+
         // requestId 0 is the server's sentinel for connection-level errors
         // (e.g. AUTH failure) not tied to one specific pending GET/COMMIT —
         // `nextRequestId` starts at 1 and wraps back to 1, never 0, so this
@@ -1421,11 +1512,51 @@ export class WSClient {
         const msg = decodeSyncPush(payload);
 
         if (msg) {
+          if (msg.entries.length > 0) this.store.startDriveSyncPull();
+
           // Per-entry `getResourceLoading + importLoroUpdate +
           // setSource + addResources({skipCommitCompare:true})`
           // collapsed into one `applyIncoming` call per entry.
           // The chunked-final-chunk drive-sync signal stays here.
-          for (const { subject, loroBytes } of msg.entries) {
+          // Resources nobody holds in memory go straight to the database
+          // worker, which merges and stores them without this thread building
+          // each one (a cold pull of 10k resources kept the main thread busy
+          // for 30 s doing that). Whatever a screen asks for later is read
+          // from the database. Held resources take the normal path, so a view
+          // that is waiting on one still gets it.
+          const workerDb = this.store.getClientDb();
+          let entries = msg.entries;
+
+          // Only for a real pull. A handful of resources arriving is a live
+          // change that mounted views are waiting on, so it takes the path
+          // that announces each one.
+          if (
+            entries.length >= BULK_PULL_MIN_ENTRIES &&
+            typeof workerDb?.applyStateUpdates === 'function' &&
+            !workerDb.initError
+          ) {
+            const direct = entries.filter(
+              e => !this.store.resources.has(e.subject),
+            );
+
+            if (direct.length > 0) {
+              entries = entries.filter(e =>
+                this.store.resources.has(e.subject),
+              );
+              this.scheduleBackgroundImport();
+              this.pulledInBulk = true;
+              workerDb
+                .applyStateUpdates(
+                  direct.map(e => e.subject),
+                  direct.map(e => e.loroBytes),
+                )
+                .catch(e =>
+                  console.warn('[WS] applying pulled states failed:', e),
+                );
+            }
+          }
+
+          for (const { subject, loroBytes } of entries) {
             this.store.applyIncoming({
               subject,
               loroBytes,
@@ -1444,9 +1575,7 @@ export class WSClient {
             // Not every client-db implementation carries envelope import;
             // one that doesn't simply asks the server for attribution later.
             if (typeof clientDb?.importEnvelopes === 'function') {
-              clientDb
-                .importEnvelopes(msg.envelopes)
-                .catch(e => console.warn('[WS] envelope import failed:', e));
+              this.queueEnvelopeImport(msg.envelopes);
             }
           }
 
@@ -1454,11 +1583,29 @@ export class WSClient {
           // SYNC_PUSH is chunked and intermediate chunks shouldn't trigger
           // the "done" UI state.
           if (msg.last) {
-            this.store.finishDriveSync(
-              canonicalizeScheme(msg.drive),
-              msg.entries.length,
-              Date.now(),
-            );
+            const drive = canonicalizeScheme(msg.drive);
+            const count = msg.entries.length;
+
+            const finish = () => {
+              this.store.finishDriveSync(drive, count, Date.now());
+
+              if (this.pulledInBulk) {
+                this.pulledInBulk = false;
+                this.store.notifyBulkApplied();
+              }
+            };
+
+            const clientDb = this.store.getClientDb();
+
+            // "Synced" is what lets a collection believe its local answer,
+            // an empty one included. Until the pulled resources are in the
+            // local database that answer is a partial one (a large drive
+            // takes minutes to land), so wait for the queued writes first.
+            if (typeof clientDb?.flush === 'function') {
+              clientDb.flush().then(finish, finish);
+            } else {
+              finish();
+            }
           }
         }
 
@@ -1570,9 +1717,7 @@ export class WSClient {
       this.authenticatedWith !== this.store.getAgent()?.subject
     )
       return;
-    const knownError = drive
-      ? this.store.resources.get(drive)?.error
-      : undefined;
+    const knownError = drive ? this.hydratedResource(drive)?.error : undefined;
     // Onboarding can name a key-derived home whose data has not arrived yet.
     // A prior read already established that this server cannot subscribe it.
     if (isNotFound(knownError) || isUnauthorized(knownError)) return;
@@ -1753,7 +1898,16 @@ export class WSClient {
 
     if (this.store.getAgent()?.subject) {
       const authClose = perfSpan('ws.authenticate');
-      this.authenticate()
+      // A refusal for a clock that runs ahead has already taught
+      // `getTimestampNow` the server's time (see the ERROR frame handler), so
+      // one more attempt signs a timestamp the server accepts.
+      const authenticateOnce = () =>
+        this.authenticate().catch(e => {
+          if (this._closed || !isFutureTimestampRefusal(e)) throw e;
+
+          return this.authenticate();
+        });
+      authenticateOnce()
         .then(() => {
           authClose('ok');
           if (this._closed) return;
@@ -1798,11 +1952,136 @@ export class WSClient {
     return !!this.store.outbox.getEntry(drive)?.signedGenesis;
   }
 
-  private async startVVSync(drive: string): Promise<void> {
+  private canAutomaticallySyncDrive(drive: string): boolean {
+    const error = this.hydratedResource(drive)?.error;
+
+    return (
+      this.store.isLiveSyncedDrive(drive) &&
+      !isNotFound(error) &&
+      !isUnauthorized(error)
+    );
+  }
+
+  /** Version-vector probes being computed, per drive. Authenticate, reconcile
+   *  and resync can each ask for one at the same moment; computing the sync
+   *  state is O(drive size) on the database worker, so they share one run. */
+  private _vvSyncRuns = new Map<string, Promise<void>>();
+
+  private startVVSync(drive: string, explicit = false): Promise<void> {
+    const running = this._vvSyncRuns.get(drive);
+
+    if (running) return running;
+
+    const run = this.runVVSync(drive, explicit).finally(() => {
+      if (this._vvSyncRuns.get(drive) === run) this._vvSyncRuns.delete(drive);
+    });
+
+    this._vvSyncRuns.set(drive, run);
+
+    return run;
+  }
+
+  private pulledInBulk = false;
+  private pendingEnvelopes: Array<{ subject: string; json: string }> = [];
+  private envelopeDrain: ReturnType<typeof setTimeout> | undefined;
+
+  /** Keep the signed envelopes of pulled resources, a slice at a time. Each is
+   *  verified (a signature check in WASM, about 2 ms), which for a 10k drive
+   *  held the database worker for about 19 s in the middle of the pull, with
+   *  the pulled resources queued behind it. History attribution is the only
+   *  thing waiting on them, so they go in once the pull goes quiet, in slices
+   *  the worker can interleave reads between. */
+  private queueEnvelopeImport(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): void {
+    this.pendingEnvelopes.push(...envelopes);
+    this.scheduleBackgroundImport();
+  }
+
+  /** Run the envelope and search indexing once pulls go quiet. */
+  private scheduleBackgroundImport(): void {
+    clearTimeout(this.envelopeDrain);
+    this.envelopeDrain = setTimeout(() => void this.drainBackground(), 2000);
+  }
+
+  private async drainBackground(): Promise<void> {
+    await this.drainEnvelopes();
+    await this.drainSearchIndex();
+  }
+
+  /** Index pulled resources for search, a slice at a time. Runs after the
+   *  envelopes so neither holds the database worker for long. */
+  private async drainSearchIndex(): Promise<void> {
+    const clientDb = this.store.getClientDb();
+
+    while (clientDb?.indexPendingSearch) {
+      if (this.store.getClientDb() !== clientDb) return;
+
+      let done = 0;
+
+      try {
+        done = await clientDb.indexPendingSearch(SEARCH_INDEX_SLICE);
+      } catch (e) {
+        console.warn('[WS] search indexing failed:', e);
+
+        return;
+      }
+
+      if (done === 0) return;
+
+      await new Promise(resolve => setTimeout(resolve, ENVELOPE_SLICE_GAP_MS));
+    }
+  }
+
+  private async drainEnvelopes(): Promise<void> {
+    const clientDb = this.store.getClientDb();
+
+    while (this.pendingEnvelopes.length > 0 && clientDb?.importEnvelopes) {
+      // A different database is a different identity: what is left belongs to
+      // the one that was open, and the server can be asked for it later.
+      if (this.store.getClientDb() !== clientDb) {
+        this.pendingEnvelopes = [];
+
+        return;
+      }
+
+      const slice = this.pendingEnvelopes.splice(0, ENVELOPE_SLICE);
+
+      try {
+        await clientDb.importEnvelopes(slice);
+      } catch (e) {
+        console.warn('[WS] envelope import failed:', e);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, ENVELOPE_SLICE_GAP_MS));
+    }
+  }
+
+  private async runVVSync(drive: string, explicit: boolean): Promise<void> {
+    if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
+    // Server-only mode (no OPFS / Web Locks): there is no local state to
+    // reconcile, and computing it would only fail, once per call.
+    if (this.store.getClientDb()?.initError) return;
 
     const current = this.connectionGuard();
+
+    // Reading every version vector of a large drive keeps the local database
+    // worker busy for a second or more, and everything the screen is waiting
+    // for is read through that same worker. The probe is background work, so
+    // the first reads go first.
+    // Only a drive that was large last time has anything to wait for; a small
+    // one is reconciled at once, so a change made elsewhere shows up promptly.
+    const delay =
+      rememberedDriveSize(drive) >= LARGE_DRIVE_ENTRIES
+        ? WSClient.syncProbeDelayMs
+        : 0;
+
+    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
+    if (!current() || this.readyState !== WebSocket.OPEN) return;
+
     const close = perfSpan('ws.computeDriveSyncState');
 
     try {
@@ -1811,27 +2090,54 @@ export class WSClient {
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
       // On a mismatch the server replies `SYNC_RESEND` and
       // `sendFullSyncState` sends the state stashed here.
-      const localState = await this.store.computeDriveSyncState(drive);
-      const resources = this.wireSubjectMap(localState.resources);
-      const renamed = Object.keys(localState.resources).some(
+      // A server that speaks `sparse-sync` gets per-resource counters and the
+      // version 2 hash; the dense matrix (resources x peers) is only built for
+      // one that does not.
+      const sparse = this._serverCaps.includes(CAP_SPARSE_SYNC);
+      const localState = await this.store.computeDriveSyncState(drive, {
+        sparse,
+      });
+      rememberDriveSize(
+        drive,
+        Object.keys(localState.vvs ?? localState.resources).length,
+      );
+      const renamed = Object.keys(localState.vvs ?? localState.resources).some(
         s => this.wireSubject(s) !== s,
       );
-      const syncState = {
-        ...localState,
-        resources,
-        driveHash: renamed
-          ? await canonicalDriveHash(resources)
-          : localState.driveHash,
-      };
-      close({ resourceCount: Object.keys(syncState.resources).length });
-      if (!current()) return;
+      const syncState = localState.vvs
+        ? (() => {
+            const vvs = this.wireSubjectMap(localState.vvs!);
+
+            return { ...localState, vvs };
+          })()
+        : {
+            ...localState,
+            resources: this.wireSubjectMap(localState.resources),
+          };
+
+      if (renamed) {
+        syncState.driveHash = syncState.vvs
+          ? await canonicalDriveHashV2(syncState.vvs)
+          : await canonicalDriveHash(syncState.resources);
+      }
+
+      close({
+        resourceCount: Object.keys(syncState.vvs ?? syncState.resources).length,
+      });
+      if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
+        return;
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
         encodeSync(
           this.wireSubject(drive),
           syncState.driveHash,
-          JSON.stringify({ peers: [], resources: {}, probe: true }),
+          JSON.stringify({
+            peers: [],
+            resources: {},
+            probe: true,
+            ...(sparse ? { hv: 2 } : {}),
+          }),
         ),
       );
       perfMark('ws.SYNC.probe.sent');
@@ -1848,7 +2154,7 @@ export class WSClient {
   public async resyncDrive(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
-    await this.startVVSync(drive);
+    await this.startVVSync(drive, true);
   }
 
   /** Respond to SYNC_RESEND: the probe's hash missed, so send the drive's
@@ -1872,10 +2178,14 @@ export class WSClient {
       encodeSync(
         this.wireSubject(drive),
         pendingState.driveHash,
-        JSON.stringify({
-          peers: pendingState.peers,
-          resources: this.wireSubjectMap(pendingState.resources),
-        }),
+        JSON.stringify(
+          pendingState.vvs
+            ? { hv: 2, vvs: this.wireSubjectMap(pendingState.vvs) }
+            : {
+                peers: pendingState.peers,
+                resources: this.wireSubjectMap(pendingState.resources),
+              },
+        ),
       ),
     );
   }

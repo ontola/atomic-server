@@ -124,6 +124,47 @@ describe('resource.ts', () => {
     expect(reloaded.getCreatedAt()).toBe(createdAtMs);
   });
 
+  it('getCreatedAt finds the founding change when several peers have edited, without reading the whole history', async ({
+    expect,
+  }) => {
+    const subject = 'https://example.com/created-multi-peer';
+    const description = 'https://atomicdata.dev/properties/description';
+    const createdAtMs = 1_700_000_123_456;
+
+    const original = new Resource(subject);
+    await original.set(description, 'hello', false);
+    original
+      .getLoroDoc()!
+      .commit({ message: 'did:ad:agent:creator', timestamp: createdAtMs });
+
+    // A second device joins later and both keep editing: many changes, two
+    // peers, and the founding change is neither the last nor the only one.
+    const other = new Resource(subject);
+    other.importLoroUpdate(original.getLoroDoc()!.export({ mode: 'snapshot' }));
+    other.getLoroDoc()!.setPeerId('2');
+
+    for (let i = 0; i < 20; i++) {
+      await other.set(description, `other ${i}`, false);
+      other.getLoroDoc()!.commit({
+        message: 'did:ad:agent:other',
+        timestamp: createdAtMs + 1000 + i,
+      });
+      await original.set(description, `first ${i}`, false);
+      original.getLoroDoc()!.commit({
+        message: 'did:ad:agent:creator',
+        timestamp: createdAtMs + 5000 + i,
+      });
+    }
+
+    original.importLoroUpdate(other.getLoroDoc()!.export({ mode: 'snapshot' }));
+
+    const getAllChanges = vi.spyOn(original.getLoroDoc()!, 'getAllChanges');
+
+    expect(original.getCreatedAt()).toBe(createdAtMs);
+    expect(original.getCreatedBy()).toBe('did:ad:agent:creator');
+    expect(getAllChanges).not.toHaveBeenCalled();
+  });
+
   it('getCreatedBy is undefined when the genesis change carries no message', async ({
     expect,
   }) => {
@@ -437,6 +478,56 @@ describe('resource.ts', () => {
     expect(
       page.getLoroDoc()!.getMap('properties').get(description),
     ).toBeUndefined();
+  });
+
+  /**
+   * A property a snapshot never had is not one its source removed. A second
+   * device restores the agent's profile from Cloud Vault, while the node only
+   * holds the stub it made for the agent: the name must survive the node's
+   * snapshot, and JSON-AD read together with a stored snapshot must still fill
+   * in what that snapshot lacks. What the snapshot did delete stays deleted.
+   */
+  it('a replacing snapshot keeps what its source never had', async ({
+    expect,
+  }) => {
+    const name = core.properties.name;
+    const publicKey = core.properties.publicKey;
+    const subject = 'did:ad:agent:replace-keeps';
+
+    const stub = new Resource(subject);
+    await stub.set(publicKey, 'key', false);
+    const stubBytes = stub.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const profile = new Resource(subject);
+    await profile.set(publicKey, 'key', false);
+    await profile.set(name, 'Returning', false);
+    const profileBytes = profile.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const restored = new Resource(subject);
+    restored.importLoroUpdate(profileBytes, true);
+    restored.importLoroUpdate(stubBytes, true);
+    expect(restored.get(name)).toBe('Returning');
+    expect(restored.get(publicKey)).toBe('key');
+
+    const hydrated = new Resource(subject);
+    hydrated.applyHydratedValues([
+      [publicKey, 'key'],
+      [name, 'Returning'],
+    ]);
+    hydrated.importLoroUpdate(stubBytes, true);
+    expect(hydrated.get(name)).toBe('Returning');
+
+    profile.getLoroDoc()!.getMap('properties').delete(name);
+    profile.getLoroDoc()!.commit();
+    const removedBytes = profile.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const stale = new Resource(subject);
+    stale.applyHydratedValues([
+      [publicKey, 'key'],
+      [name, 'Returning'],
+    ]);
+    stale.importLoroUpdate(removedBytes, true);
+    expect(stale.get(name)).toBeUndefined();
   });
 
   /**

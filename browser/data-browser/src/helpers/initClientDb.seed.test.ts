@@ -46,7 +46,10 @@ vi.mock('@tomic/lib', () => ({
   },
 }));
 vi.mock('@tomic/lib/client-db.worker.js?url', () => ({ default: 'worker.js' }));
-vi.mock('./wasmUrls', () => ({ wasmJsUrl: () => 'wasm.js' }));
+vi.mock('./wasmUrls', () => ({
+  wasmJsUrl: () => 'wasm.js',
+  compiledAtomicWasm: async () => undefined,
+}));
 vi.mock('./localDbKey', () => ({
   agentDbFingerprint: async () => 'agent',
   getSessionDbKey: async () => new Uint8Array(32),

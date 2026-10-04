@@ -3,14 +3,12 @@ import { styled } from 'styled-components';
 import { FaCloudArrowUp } from 'react-icons/fa6';
 import {
   cardSurface,
-  CARD_ACTIONS_GAP,
   CARD_BODY_GAP,
   CARD_ICON_FONT,
   CARD_ICON_SIZE,
   CARD_SUB_FONT,
   CARD_TITLE_FONT,
 } from '../cardSurface';
-import { Button } from '../Button';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import {
   approvalUrl,
@@ -18,6 +16,7 @@ import {
   requestDeviceLink,
   type LinkRequest,
 } from '../../helpers/managed/deviceLink';
+import { AccountSignInViaBrowser } from '../../views/getting-started/AccountSignInPanel';
 
 /**
  * Connect this install to a hosted provider.
@@ -27,11 +26,10 @@ import {
  * has not asked about. The URL is a prop rather than a constant here for the
  * same reason: this component knows how to link, not who to.
  *
- * The user reads a short code off this screen and approves it in a browser
- * where they are already signed in. Deliberately not a redirect: returning from
- * an external browser into an app is the step that fails most often on Android,
- * and it cannot work at all when someone finishes on a different device. The
- * link below is an accelerator for the common case, not the mechanism.
+ * The same sign-in options as every other screen, each finished in the
+ * system browser (`AccountSignInViaBrowser`). Signing in on another device
+ * is the fallback under them: a short code read off this screen and approved
+ * in a browser where the person is already signed in.
  */
 export function LinkProviderPanel({
   portalUrl,
@@ -68,18 +66,21 @@ export function LinkProviderPanel({
     try {
       const issued = await requestDeviceLink(portalUrl);
       setRequest(issued);
+      setBusy(false);
 
       abort.current?.abort();
-      abort.current = new AbortController();
+      const controller = new AbortController();
+      abort.current = controller;
 
       const outcome = await awaitDeviceLink(portalUrl, issued, {
-        signal: abort.current.signal,
+        signal: controller.signal,
       });
 
       if (outcome === 'linked') {
+        // Even when given up on a moment too late: the token is stored.
         setRequest(null);
         onLinked();
-      } else {
+      } else if (!controller.signal.aborted) {
         setRequest(null);
         setError('That code expired. Start again when you are ready.');
       }
@@ -97,7 +98,7 @@ export function LinkProviderPanel({
     }
   }
 
-  const explanation = `Connect this app to your existing ${providerName(portalUrl)} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace.`;
+  const explanation = `Connect this app to your existing ${providerName(portalUrl)} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace.`;
   const body = request ? (
     <>
       <Sub>
@@ -113,24 +114,36 @@ export function LinkProviderPanel({
       </Sub>
       <Code data-testid='link-user-code'>{request.user_code}</Code>
       <Sub>Waiting for you to approve it…</Sub>
+      <TextButton
+        type='button'
+        data-testid='link-provider-cancel'
+        onClick={() => {
+          abort.current?.abort();
+          setRequest(null);
+        }}
+      >
+        Sign in on this device instead
+      </TextButton>
     </>
   ) : (
     <>
       {!compact && <Sub>{explanation}</Sub>}
-      {error && <ErrorText data-testid='link-error'>{error}</ErrorText>}
-      <Actions $compact={compact}>
-        <Button
+      <SignIn>
+        <AccountSignInViaBrowser
+          portalUrl={portalUrl}
+          disabled={busy}
+          onSignedIn={onLinked}
+        />
+        {error && <ErrorText data-testid='link-error'>{error}</ErrorText>}
+        <TextButton
+          type='button'
           data-testid='link-provider-start'
           onClick={start}
           disabled={busy}
         >
-          {busy
-            ? 'Getting a code…'
-            : compact
-              ? `Connect to ${providerName(portalUrl)}`
-              : 'Connect existing account'}
-        </Button>
-      </Actions>
+          {busy ? 'Getting a code…' : 'Signed in on another device? Use a code'}
+        </TextButton>
+      </SignIn>
     </>
   );
 
@@ -206,6 +219,7 @@ const Compact = styled.div`
 `;
 
 const Body = styled.div<{ $center?: boolean }>`
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: ${CARD_BODY_GAP};
@@ -244,9 +258,33 @@ const Code = styled.output`
   color: ${p => p.theme.colors.text};
 `;
 
-const Actions = styled.div<{ $compact?: boolean }>`
+/** As wide as the sign-in card is on every other screen. */
+const SignIn = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: ${CARD_ACTIONS_GAP};
-  margin-top: ${p => (p.$compact ? 0 : CARD_ACTIONS_GAP)};
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 24rem;
+  margin-top: 0.5rem;
+`;
+
+/** The fallback: it should not compete with the sign-in options above. */
+const TextButton = styled.button`
+  align-self: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: ${p => p.theme.colors.textLight};
+  font-size: ${CARD_SUB_FONT};
+  text-decoration: underline;
+
+  &:hover {
+    color: ${p => p.theme.colors.text};
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
 `;

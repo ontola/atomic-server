@@ -3,13 +3,7 @@ import { forwardRef, memo } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
 import { FloatingActions, floatingHoverStyles } from './FloatingActions';
-import {
-  useResource,
-  useString,
-  useSubject,
-  dataBrowser,
-  useTitle,
-} from '@tomic/react';
+import { useResource, useTitle } from '@tomic/react';
 import { ResourceGlyph } from '../../ResourceGlyph';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { DraggableAttributes } from '@dnd-kit/core';
@@ -62,11 +56,8 @@ export const SidebarItemTitle = memo(
     ): React.JSX.Element => {
       const resource = useResource(subject);
       const { sidebarKeyboardDndEnabled } = useSettings();
-      const [emoji] = useString(resource, dataBrowser.properties.emoji);
-      const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
       // A resource's own icon image or emoji takes precedence over its
       // class icon (the precedence lives in ResourceGlyph).
-      const hasCustomGlyph = !!(emoji || iconImage);
       const glyph = (
         <GlyphSlot aria-hidden>
           <ResourceGlyph resource={resource} />
@@ -83,18 +74,16 @@ export const SidebarItemTitle = memo(
 
       const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
 
-      // Expandable rows have no icon slot (the caret occupies it), so a
-      // custom glyph rests in the caret's place and yields to it on
-      // hover/focus — same swap pattern as the drag grip below.
-      const expandControl = hasCustomGlyph ? (
-        <>
-          <GlyphSlot aria-hidden>
-            <ResourceGlyph resource={resource} requireCustom />
-          </GlyphSlot>
-          <ExpandCaret $open={expanded} />
-        </>
-      ) : (
-        <ExpandCaret $open={expanded} />
+      // An expandable row keeps its icon and wears the caret as a small
+      // badge in its corner: always visible, so the row reads as a folder
+      // without hovering it, and grown on hover.
+      const expandControl = (
+        <GlyphWithCaret>
+          {glyph}
+          <CaretBadge aria-hidden>
+            <ExpandCaret $open={expanded} />
+          </CaretBadge>
+        </GlyphWithCaret>
       );
 
       return (
@@ -306,6 +295,36 @@ const ExpandCaret = styled(FaCaretRight)<{ $open: boolean }>`
   font-size: 0.8rem;
 `;
 
+const GlyphWithCaret = styled.span`
+  position: relative;
+  color: ${p => p.theme.colors.textLight};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+/** The caret on a row's icon: a small disc in its bottom-right corner. */
+const CaretBadge = styled.span`
+  position: absolute;
+  right: -0.3rem;
+  bottom: -0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background-color: ${p => p.theme.colors.bg};
+  transform-origin: center;
+  transition: transform ${p => p.theme.animation.duration} ease-out;
+  pointer-events: none;
+  color: ${p => p.theme.colors.main};
+
+  ${ExpandCaret} {
+    font-size: 0.55rem;
+  }
+`;
+
 const RowBody = styled.div`
   flex: 1;
   min-width: 0;
@@ -373,17 +392,12 @@ const ActionWrapper = styled.div<{ isDragging?: boolean }>`
     ${StyledIconButton} ${GlyphSlot} {
       display: none;
     }
-    /* Same for the expand caret: the glyph rests in its slot, caret on
-       hover. */
-    ${ExpandToggleButton} ${GlyphSlot} {
-      display: none;
-    }
-    ${ExpandToggleButton} ${GlyphSlot} + svg {
-      display: block;
+    ${CaretBadge} {
+      transform: scale(1.35);
     }
   }
 
-  ${ExpandToggleButton} ${GlyphSlot} + svg {
-    display: none;
+  ${ExpandToggleButton}:hover ${CaretBadge} {
+    transform: scale(1.6);
   }
 `;

@@ -1,10 +1,14 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   approvalUrl,
   awaitDeviceLink,
   canHoldProviderCookie,
   isDeviceLinked,
+  newReturnVerifier,
+  parseAccountReturn,
   pollDeviceLink,
+  redeemDeviceLink,
   requestDeviceLink,
   unlinkDevice,
   type LinkRequest,
@@ -205,6 +209,55 @@ describe('unlinkDevice', () => {
 
     unlinkDevice();
     expect(isDeviceLinked()).toBe(false);
+    expect(getManagedDeviceToken()).toBeNull();
+  });
+});
+
+describe('being sent back to the app', () => {
+  it('sends the provider the hash of a verifier only this app keeps', () => {
+    const { verifier, challenge } = newReturnVerifier();
+
+    expect(verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(challenge).toBe(
+      createHash('sha256').update(verifier).digest('base64url'),
+    );
+    expect(newReturnVerifier().verifier).not.toBe(verifier);
+  });
+
+  it('reads the code and handoff from the link, and nothing else', () => {
+    expect(
+      parseAccountReturn('atomic://account-return?code=K3F9-2XQP&handoff=H1'),
+    ).toEqual({ code: 'K3F9-2XQP', handoff: 'H1' });
+    expect(parseAccountReturn('atomic://account-return?code=K3F9-2XQP')).toBe(
+      null,
+    );
+    expect(parseAccountReturn('atomic://open?subject=x')).toBe(null);
+  });
+
+  it('keeps the session it redeems, for the provider that issued it', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ state: 'approved', token: 'tok' }));
+
+    await expect(
+      redeemDeviceLink(PORTAL, 'dc-long-secret', 'H1', 'the-verifier'),
+    ).resolves.toBe(true);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(`${PORTAL}/api/device-link/dc-long-secret/redeem`);
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      handoff: 'H1',
+      verifier: 'the-verifier',
+    });
+    expect(getManagedDeviceToken()).toBe('tok');
+  });
+
+  it('keeps nothing for a handoff that is not this request’s', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({}, 404));
+
+    await expect(
+      redeemDeviceLink(PORTAL, 'dc-long-secret', 'H1', 'v'),
+    ).resolves.toBe(false);
     expect(getManagedDeviceToken()).toBeNull();
   });
 });

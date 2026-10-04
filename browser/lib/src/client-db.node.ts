@@ -349,6 +349,18 @@ export class NodeClientDb {
     return versionVectorRecords(r);
   }
 
+  async getDriveSubjects(drive: string): Promise<string[]> {
+    return (await this.requireDb().getDriveSubjects(drive)) as string[];
+  }
+
+  async getVersionVectorsForSubjects(
+    subjects: string[],
+  ): Promise<Record<string, Record<string, number>>> {
+    const r = this.requireDb().getVersionVectorsForSubjects(subjects);
+
+    return versionVectorRecords(r);
+  }
+
   private requireDb(): WasmModule {
     if (!this.db) {
       throw new Error('NodeClientDb not initialized — call init() first');

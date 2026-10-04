@@ -26,13 +26,24 @@ import { useStore } from './hooks.js';
  *
  * Pass `undefined` to disable fetching (e.g. for Tables/ChatRooms that show
  * children in their own UI).
+ *
+ * With `limit`, only the first `limit` children (in creation order) are read
+ * and sorted, and `total` says how many there are. A list that is meant to be
+ * scanned by eye, like the sidebar, never needs the rest, and loading all of
+ * them cost seconds for a folder with a thousand children.
  */
-export function useChildren(parentSubject: string | undefined): {
+export function useChildren(
+  parentSubject: string | undefined,
+  { limit }: { limit?: number } = {},
+): {
   subjects: string[];
   loading: boolean;
+  /** How many children the parent has, including those beyond `limit`. */
+  total: number;
 } {
   const store = useStore();
   const [subjects, setSubjects] = useState<string[]>([]);
+  const [total, setTotal] = useState(0);
   const disabled = !parentSubject;
 
   // `subjectsRef` mirrors `subjects` for the `ResourceUpdated` listener
@@ -51,7 +62,7 @@ export function useChildren(parentSubject: string | undefined): {
       sort_by: commits.properties.createdAt,
       sort_desc: false,
     },
-    { pageSize: 500 },
+    { pageSize: limit ?? 500 },
   );
 
   /**
@@ -115,12 +126,17 @@ export function useChildren(parentSubject: string | undefined): {
       // 200× sequential RTT on cold open. Promise.all hands the worker
       // a batch which it can process while the UI thread is otherwise
       // idle.
+      const memberCount =
+        limit === undefined
+          ? collection.totalMembers
+          : Math.min(limit, collection.totalMembers);
       const resolved = await Promise.all(
-        Array.from({ length: collection.totalMembers }, (_, i) =>
+        Array.from({ length: memberCount }, (_, i) =>
           collection.getMemberWithIndex(i),
         ),
       );
       if (cancelled) return;
+      setTotal(collection.totalMembers);
 
       // A slot that comes back undefined means the cached page is older than
       // the member count it is being read against — `getMemberWithIndex` asks
@@ -181,7 +197,7 @@ export function useChildren(parentSubject: string | undefined): {
     return () => {
       cancelled = true;
     };
-  }, [collection, disabled, sortMembers, store]);
+  }, [collection, disabled, limit, sortMembers, store]);
 
   /**
    * Re-sort when any current child's `sortOrder` (or `createdAt`)
@@ -203,9 +219,13 @@ export function useChildren(parentSubject: string | undefined): {
 
     const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
       const removed = canonicalizeScheme(subject);
-      setSubjects(prev =>
-        prev.includes(removed) ? prev.filter(s2 => s2 !== removed) : prev,
-      );
+      setSubjects(prev => {
+        if (!prev.includes(removed)) return prev;
+
+        setTotal(count => Math.max(0, count - 1));
+
+        return prev.filter(s2 => s2 !== removed);
+      });
     });
 
     const unsub = store.on(StoreEvents.ResourceUpdated, async resource => {
@@ -235,6 +255,14 @@ export function useChildren(parentSubject: string | undefined): {
           // filter was dropping it.
           !store.isDestroyed(resource.subject)
         ) {
+          // A full list stays as it is: the newcomer is the newest child, so
+          // it belongs past the cut.
+          if (limit !== undefined && current.length >= limit) {
+            setTotal(count => count + 1);
+
+            return;
+          }
+
           const sorted = await sortMembers([...current, subject]);
           if (cancelled) return;
 
@@ -281,5 +309,6 @@ export function useChildren(parentSubject: string | undefined): {
   return {
     subjects: disabled ? [] : subjects,
     loading: disabled ? false : !ready,
+    total: disabled ? 0 : total,
   };
 }

@@ -1,7 +1,7 @@
 import { describe, it, vi } from 'vitest';
 import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
-import { Store } from './store.js';
+import { Store, StoreEvents } from './store.js';
 
 const DRIVE = 'did:ad:personal';
 const OTHER = 'did:ad:other';
@@ -12,7 +12,8 @@ function storeWithLocalCopy() {
   vi.spyOn(store, 'getAgent').mockReturnValue({} as Agent);
   vi.spyOn(store, 'getClientDb').mockReturnValue({
     isReady: true,
-  } as ClientDbWorker);
+    waitForInit: async () => true,
+  } as unknown as ClientDbWorker);
 
   return store;
 }
@@ -63,9 +64,46 @@ describe('a drive the server refuses as not enrolled', () => {
     const store = storeWithLocalCopy();
     vi.spyOn(store, 'getDefaultWebSocket').mockReturnValue(undefined);
 
+    // Verifying needs the server's inventory, so without a socket it stops.
     await expect(store.makeDriveLocal(DRIVE)).rejects.toThrow(
-      'Open this drive with local storage available before disconnecting.',
+      'Connect to a server before disconnecting this workspace.',
     );
     expect(store.isLocalOnlyDrive(DRIVE)).toBe(false);
+  });
+
+  it('reports a refused drive once, not once per resource', ({ expect }) => {
+    const store = new Store({ serverUrl: 'http://localhost:9883' });
+    const seen: string[] = [];
+    store.on(StoreEvents.Error, e => {
+      seen.push(e.message);
+    });
+    const notify = (subject: string, message: string) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).notifyBlockedSync(subject, message);
+
+    notify('did:ad:canvas', REFUSAL);
+    notify('did:ad:comments', REFUSAL);
+    notify('did:ad:comments2', REFUSAL);
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('does not host this workspace');
+    expect(seen[0]).toContain('kept on this device');
+  });
+
+  it('still reports every other blocked write', ({ expect }) => {
+    const store = new Store({ serverUrl: 'http://localhost:9883' });
+    const seen: string[] = [];
+    store.on(StoreEvents.Error, e => {
+      seen.push(e.message);
+    });
+    const notify = (subject: string, message: string) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).notifyBlockedSync(subject, message);
+
+    notify('did:ad:a', 'Unauthorized: no write rights in parent');
+    notify('did:ad:b', 'Unauthorized: no write rights in parent');
+
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toContain('Not retrying');
   });
 });

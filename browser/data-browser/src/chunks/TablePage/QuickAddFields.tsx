@@ -4,6 +4,7 @@ import { styled } from 'styled-components';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { Checkbox } from '@components/forms/Checkbox';
 import { PropertyOption } from './DerivedColumnDialog';
+import { TagOption } from './RowActionDialog';
 import {
   ROW_ACTION_GENERATORS,
   propertiesForRowAction,
@@ -113,6 +114,9 @@ export function QuickAddFields({
     ? propertiesForRowAction(classProperties, draft.presetKind)
     : [];
   const needsValue = generator?.valueInput !== undefined;
+  const presetTarget = classProperties.find(
+    p => p.subject === draft.presetProperty,
+  );
   // What is typed has to land somewhere that holds text; a name is the default.
   const fieldTargets = classProperties.filter(
     p =>
@@ -213,7 +217,9 @@ export function QuickAddFields({
             id='quick-add-preset-property'
             data-testid='quick-add-config-preset-property'
             value={draft.presetProperty}
-            onChange={e => set({ presetProperty: e.target.value })}
+            onChange={e =>
+              set({ presetProperty: e.target.value, presetValue: '' })
+            }
           >
             <option value=''>Pick a column…</option>
             {presetTargets.map(p => (
@@ -228,15 +234,31 @@ export function QuickAddFields({
           <label htmlFor='quick-add-preset-value'>
             {generator?.valueLabel ?? 'Value'}
           </label>
-          <InputWrapper>
-            <InputStyled
+          {/* A select column's options are its own tags, so offer those rather
+           *  than asking for a subject to be typed. */}
+          {presetTarget?.allowsOnly?.length ? (
+            <StyledSelect
               id='quick-add-preset-value'
               data-testid='quick-add-config-preset-value'
-              type={generator?.valueInput === 'number' ? 'number' : 'text'}
               value={draft.presetValue}
               onChange={e => set({ presetValue: e.target.value })}
-            />
-          </InputWrapper>
+            >
+              <option value=''>Pick an option…</option>
+              {presetTarget.allowsOnly.map(tag => (
+                <TagOption key={tag} subject={tag} />
+              ))}
+            </StyledSelect>
+          ) : (
+            <InputWrapper>
+              <InputStyled
+                id='quick-add-preset-value'
+                data-testid='quick-add-config-preset-value'
+                type={generator?.valueInput === 'number' ? 'number' : 'text'}
+                value={draft.presetValue}
+                onChange={e => set({ presetValue: e.target.value })}
+              />
+            </InputWrapper>
+          )}
         </Field>
       )}
     </>

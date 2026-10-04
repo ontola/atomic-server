@@ -4,7 +4,7 @@ import { SETUP_BAR_HEIGHT } from './SetupBar';
 import { demoForDrive } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
-import { type JSX, useMemo } from 'react';
+import { type JSX, useMemo, useRef } from 'react';
 import { styled } from 'styled-components';
 
 import { OnboardingFeedback } from './OnboardingFeedback';
@@ -14,9 +14,11 @@ import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
+import { useKeepMainRoom } from './RightPanel/useKeepMainRoom';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
+import { MessageNotifier } from './Notifications/MessageNotifier';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from './HideInPrint';
 import { MAIN_CONTAINER } from '@helpers/containers';
@@ -89,6 +91,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     [subject, search],
   );
 
+  const contentRef = useRef<HTMLDivElement>(null);
+
   return (
     <RightPanelProvider
       scope={JSON.stringify([agent?.subject, drive, hideGlobalChrome])}
@@ -99,8 +103,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {/* The single app-wide resource context menu (right-click). Mounted here
              * so its actions have the AI-sidebar, dialog, and router contexts. */}
             <ResourceContextMenuHost />
+            <KeepMainRoom mainRef={contentRef} />
             {/* Toasts new meeting messages when the meeting panel isn't open. */}
             {!hideGlobalChrome && <MeetingMessageToaster />}
+            {/* New chat messages, comments and replies: toast or OS notification. */}
+            <MessageNotifier />
             {demo && (
               <PreviewHeader>
                 <DemoActionsBar demo={demo} />
@@ -119,7 +126,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
               fullViewportContent={hideGlobalChrome}
             >
               {!hideGlobalChrome && <SideBar />}
-              <Content>{children}</Content>
+              <Content ref={contentRef}>{children}</Content>
               {!hideGlobalChrome && (
                 <HideInPrint>
                   <CommentsPanelMemo />
@@ -138,6 +145,18 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
 }
 
 interface ContentProps {}
+
+/** Closes a side panel when the page between them gets too narrow. A child
+ *  of RightPanelProvider, whose state it reads. */
+function KeepMainRoom({
+  mainRef,
+}: {
+  mainRef: React.RefObject<HTMLDivElement | null>;
+}): null {
+  useKeepMainRoom(mainRef);
+
+  return null;
+}
 
 const Content = styled.div<ContentProps>`
   /* Keep page-local drag overlays below sibling sidebars, including docked

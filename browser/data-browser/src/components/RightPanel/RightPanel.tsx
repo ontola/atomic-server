@@ -42,7 +42,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
   children,
 }) => {
   const targetRef = useRef<HTMLDivElement>(null);
-  const { activePanel, setPanelOpen } = useRightPanel();
+  const { activePanel, closePanel } = useRightPanel();
   const wide = useMediaQuery(
     `(min-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT}px)`,
     true,
@@ -59,7 +59,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
 
   const close = () => {
     if (activePanel) {
-      setPanelOpen(activePanel, false);
+      closePanel(activePanel);
     }
   };
 
@@ -71,6 +71,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
       <PanelContainer
         ref={targetRef}
         data-open={isOpen ? '' : undefined}
+        data-side-panel='right'
         $fullWidthOnMobile={fullWidthOnMobile}
         $overlay={overlay}
         $dragging={isDragging}

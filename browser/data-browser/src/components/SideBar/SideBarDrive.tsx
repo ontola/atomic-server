@@ -1,6 +1,7 @@
 import {
   ai,
   dataBrowser,
+  notifications,
   server,
   useCanWrite,
   useChildren,
@@ -30,6 +31,7 @@ import { useSidebarDnd } from './useSidebarDnd';
 import { closestCenter, DndContext, DragOverlay } from '@dnd-kit/core';
 import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
+import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from './SideBarMoreRow';
 import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LoaderInline } from '../Loader';
@@ -59,8 +61,11 @@ export function SideBarDrive({
     announcements,
   } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
-  const { subjects: allChildren, loading: childrenLoading } =
-    useChildren(drive);
+  const {
+    subjects: allChildren,
+    loading: childrenLoading,
+    total: totalChildren,
+  } = useChildren(drive, { limit: SIDEBAR_CHILD_LIMIT });
 
   // The drive's default ontology is schema plumbing (auto-created by
   // `createDrive`) — hide it from the tree so users aren't confronted with an
@@ -80,6 +85,9 @@ export function SideBarDrive({
   // And the AI Chats folder (on the personal drive): chats re-open through
   // the AI sidebar on the resource they were started on.
   const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
+  // And the Inbox (on the personal drive): it opens from Notifications in the
+  // app menu.
+  const [inbox] = useString(driveResource, notifications.properties.inbox);
   const subResources = useMemo(
     () =>
       allChildren.filter(subject => {
@@ -88,10 +96,11 @@ export function SideBarDrive({
         return (
           canonical !== canonicalizeScheme(defaultOntology ?? '') &&
           canonical !== canonicalizeScheme(commentsFolder ?? '') &&
-          canonical !== canonicalizeScheme(aiChatsFolder ?? '')
+          canonical !== canonicalizeScheme(aiChatsFolder ?? '') &&
+          canonical !== canonicalizeScheme(inbox ?? '')
         );
       }),
-    [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
+    [allChildren, defaultOntology, commentsFolder, aiChatsFolder, inbox],
   );
   const [title] = useTitle(driveResource);
   const isPrivateDrive = useIsPrivateDrive(drive);
@@ -202,6 +211,13 @@ export function SideBarDrive({
                   : driveResource.error.message}
               </SideBarErr>
             ) : null}
+            {totalChildren > allChildren.length && (
+              <SideBarMoreRow
+                parent={drive}
+                hidden={totalChildren - allChildren.length}
+                onClick={onItemClick}
+              />
+            )}
             {agentCanWrite && (
               <NewResourceRow gap='0' center>
                 <QuickCreateRow

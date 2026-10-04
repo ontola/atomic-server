@@ -12,6 +12,7 @@ import {
   envCpuThrottle,
   registerPerfPage,
 } from './perf-attach';
+import { installEmptyDiscoveryRoom } from './fixtures';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
 export const smoke = { tag: '@smoke' } as const;
@@ -23,6 +24,37 @@ export const PROPERTIES = {
   push: 'https://atomicdata.dev/properties/push',
   loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
+
+/**
+ * Click "Page edit" on a website resource, waiting as long as the draft build
+ * behind it can take.
+ *
+ * That button is `disabled={!draft || busy || refreshing || !!problem}`
+ * (`WebsitePage.tsx`), and `refreshing` stays true until the page's effect has
+ * read the website config and run `buildWebsiteArtifact`. So the click is not a
+ * click, it is a wait on that build, and it was sitting on Playwright's 10 s
+ * ACTION default rather than on any assertion budget.
+ *
+ * Measured on this container (4 cores, so a four-worker round is oversubscribed),
+ * over the website specs at four workers:
+ *
+ *     website-inline-content.spec.ts   3708 to 9170 ms   (n=8)
+ *     website-inline-fixture.ts        1235 to 7629 ms   (n=11)
+ *
+ * 9170 ms is 91% of the old budget, and a further round blew past it outright:
+ * `locator.click: Timeout 10000ms exceeded`, the element `disabled` for all
+ * fifteen retries. A CI shard runs ~71 tests against one server with three other
+ * shards alongside, so 91% locally is not a budget at all.
+ *
+ * 30 s is ~3x the worst sample, matching the wait in `waitForSynced` below.
+ * `website.spec.ts`'s own "Page edit" click needs none of this and is left alone:
+ * it happens after a release round-trip, by which time the draft is long settled,
+ * and it measures 109 to 203 ms (2%) over the same eight rounds.
+ */
+export const clickPageEdit = (page: Page) =>
+  page
+    .getByRole('button', { name: 'Page edit', exact: true })
+    .click({ timeout: 30_000 });
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
@@ -249,6 +281,15 @@ export const before = async (
   if (throttle) await applyCpuThrottle(page, throttle);
 
   if (testInfo) registerPerfPage(testInfo, page);
+
+  // Peer discovery never reaches a real signalling service from a test,
+  // whichever `test` the spec imported. `fixtures.ts` installs this for the
+  // specs that take their `test` from there; twenty-two spec files import it
+  // straight from `@playwright/test`, and nineteen of those call this function,
+  // which is why it goes here. The app contacts no service unless one is
+  // configured, so this is a guard for the day a build or a stored setting
+  // names one; registering it a second time is harmless.
+  await installEmptyDiscoveryRoom(page.context());
 
   await installCommitWatcher(page);
   await test.step('Initialize fresh agent and drive', () => devDrive(page));
@@ -490,8 +531,8 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
  * Handles three entry states:
  *   1. Already signed in (e.g. post-`before()`/`devDrive()`): no-op.
  *   2. Welcome gate visible: click its "Sign in" button → paste secret.
- *   3. On a drive page with a "Login / New User" sidebar link: click it, then
- *      follow the welcome-gate flow, then navigate back.
+ *   3. On a drive page with a "Login / New User" sidebar row: go to the
+ *      welcome gate and follow its flow.
  *
  * There is no button to confirm the secret, by design: a secret either parses
  * or it doesn't, so GettingStartedFlow signs in the moment the value is valid
@@ -524,10 +565,15 @@ export async function signIn(page: Page, secret?: string) {
     name: 'Sign in',
     exact: true,
   });
-  const settings = page
-    .locator('a[href$="/app/agent"]')
-    .filter({ hasNotText: 'Login / New User' });
-  const login = page.getByRole('link', { name: 'Login / New User' });
+  // The sidebar's user row, which opens the account menu. It carries
+  // `data-signed-in` once there is an agent, and reads "Login / New User"
+  // before that.
+  const settings = page.locator(
+    '[data-testid="account-menu-trigger"][data-signed-in="true"]',
+  );
+  const login = page
+    .getByTestId('account-menu-trigger')
+    .filter({ hasText: 'Login / New User' });
   // The first thing this helper waits for is a cold app boot in whatever
   // context it was handed: wasm, store init and the route all have to land
   // before any of these four appear. It was on the 10s default while the two
@@ -536,10 +582,12 @@ export async function signIn(page: Page, secret?: string) {
   // box it was already at 61% of its budget. On a Mancave running four runners
   // at once, where a shard took 44 to 50 minutes against the usual 19 to 25,
   // that doubles and goes past 10s. `meetings.spec.ts:237` failed exactly there
-  // on run 4537, waiting for the `Sign in` button.
+  // on run 4537, waiting for the `Sign in` button. 20s was not enough either
+  // for a second browser context whose local database opened late (batch
+  // #1915, runs 1 and 7). This only waits longer when boot is slow.
   await expect(
     input.or(signInButton).or(settings).or(login).first(),
-  ).toBeVisible({ timeout: 20_000 });
+  ).toBeVisible({ timeout: 45_000 });
   // Not "is the settings link visible": the signed-in layout renders from
   // stored state and can be up before the agent is in the store, so that
   // check returned for sessions that had no agent at all. Ask the store.
@@ -1929,6 +1977,30 @@ export async function editTitle(title: string, page: Page) {
   await titleEl.type(title);
   await page.keyboard.press('Enter');
   await waiter;
+}
+
+/**
+ * Opens the account menu behind the user row at the bottom of the sidebar
+ * (Profile, Notifications, Integrations, Sync, Feedback, About) and returns
+ * it. Settings is not in it: that is the gear button beside the user row,
+ * `sidebar-settings-button`.
+ */
+export async function openAccountMenu(page: Page): Promise<Locator> {
+  const sidebar = page.getByTestId('sidebar');
+  await sidebar.hover();
+  await sidebar.getByTestId('account-menu-trigger').click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+
+  return menu;
+}
+
+/** Picks an item from the sidebar's account menu. */
+export async function clickAccountMenuItem(page: Page, name: string) {
+  const menu = await openAccountMenu(page);
+  // Not `exact`: an item's trailing badge (Notifications' unread count) is
+  // part of its accessible name.
+  await menu.getByRole('menuitem', { name: new RegExp(`^${name}\\b`) }).click();
 }
 
 export async function clickSidebarItem(text: string, page: Page) {

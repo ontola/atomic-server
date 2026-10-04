@@ -897,3 +897,87 @@ mod bounded_body_tests {
         assert_eq!(body.len(), 1024);
     }
 }
+
+/// External vocabulary on GitHub Pages is served as
+/// `application/octet-stream` (the files have no `.json` extension), so the
+/// fetch goes by the body, not the Content-Type: a JSON-AD body is accepted
+/// whatever the type says, and anything that is not JSON-AD is refused
+/// however it is labelled.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod content_type_tests {
+    use std::io::{Read, Write};
+
+    /// Serves `body` with `content_type` once on a loopback port. Returns
+    /// the URL, which is also the subject the body should carry.
+    fn serve_once(content_type: &'static str, body: impl FnOnce(&str) -> Vec<u8>) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://127.0.0.1:{}/ontology/classes/draft-v1",
+            listener.local_addr().unwrap().port()
+        );
+        let body = body(&url);
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&body);
+            let _ = stream.flush();
+        });
+        url
+    }
+
+    fn class_doc(subject: &str) -> Vec<u8> {
+        serde_json::json!({
+            "@id": subject,
+            crate::urls::IS_A: [crate::urls::CLASS],
+            crate::urls::SHORTNAME: "draft",
+            crate::urls::DESCRIPTION: "A class served the way GitHub Pages serves it.",
+        })
+        .to_string()
+        .into_bytes()
+    }
+
+    #[tokio::test]
+    async fn json_ad_served_as_octet_stream_is_accepted() {
+        let store = crate::Store::init().await.unwrap();
+        let url = serve_once("application/octet-stream", class_doc);
+
+        let resource = super::fetch_resource(&url, &store, None)
+            .await
+            .unwrap()
+            .to_single();
+
+        assert_eq!(resource.get_subject().as_str(), url);
+        assert_eq!(
+            resource.get(crate::urls::SHORTNAME).unwrap().to_string(),
+            "draft"
+        );
+    }
+
+    #[tokio::test]
+    async fn html_served_as_octet_stream_is_refused() {
+        let store = crate::Store::init().await.unwrap();
+        let url = serve_once("application/octet-stream", |_| {
+            b"<!DOCTYPE html><html><body>404: not a vocabulary</body></html>".to_vec()
+        });
+
+        assert!(super::fetch_resource(&url, &store, None).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn binary_served_as_octet_stream_is_refused() {
+        let store = crate::Store::init().await.unwrap();
+        let url = serve_once("application/octet-stream", |_| {
+            vec![
+                0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d,
+            ]
+        });
+
+        assert!(super::fetch_resource(&url, &store, None).await.is_err());
+    }
+}

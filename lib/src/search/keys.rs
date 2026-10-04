@@ -2,7 +2,21 @@
 
 use crate::db::trees::Tree;
 
-pub const SEARCH_INDEX_VERSION_KEY: &[u8] = b"search_index_v1";
+/// Bumped with the key layout: v2 keys postings by an 8-byte document id
+/// instead of the subject and folds the per-document token list into the
+/// document row, so an index of the old layout is rebuilt once.
+pub const SEARCH_INDEX_VERSION_KEY: &[u8] = b"search_index_v2";
+
+/// Stable document id: the first 8 bytes of blake3 of the subject. Needs no
+/// counter, so concurrent batches, replays and rebuilds all agree on it.
+pub type DocId = u64;
+
+pub fn doc_id(subject: &str) -> DocId {
+    let hash = blake3::hash(subject.as_bytes());
+    let mut id = [0u8; 8];
+    id.copy_from_slice(&hash.as_bytes()[..8]);
+    u64::from_be_bytes(id)
+}
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,26 +39,29 @@ impl Field {
     }
 }
 
+/// One token of a document: field, token, term frequency.
+pub type DocToken = (u8, String, u32);
+
+/// The row stored per document in `SearchDocs`, keyed by [`DocId`].
 #[derive(Debug, Clone, Default)]
 pub struct SearchDoc {
-    pub drive: String,
-    pub parent: String,
+    pub subject: String,
+    /// 0 when the document has none.
+    pub drive: DocId,
+    pub parent: DocId,
     pub field_lens: [u32; 3],
+    /// Needed to remove the postings again; empty unless decoded with tokens.
+    pub tokens: Vec<DocToken>,
 }
 
-pub fn search_trees() -> [Tree; 4] {
-    [
-        Tree::SearchPostings,
-        Tree::SearchDocs,
-        Tree::SearchDocTokens,
-        Tree::SearchTrigrams,
-    ]
+pub fn search_trees() -> [Tree; 3] {
+    [Tree::SearchPostings, Tree::SearchDocs, Tree::SearchTrigrams]
 }
 
-/// `field_id || token || 0x00 || subject`
-pub fn posting_key(field: Field, token: &str, subject: &str) -> Vec<u8> {
+/// `field_id || token || 0x00 || doc_id (8 bytes BE)`
+pub fn posting_key(field: Field, token: &str, id: DocId) -> Vec<u8> {
     let mut key = posting_prefix(field, token);
-    key.extend_from_slice(subject.as_bytes());
+    key.extend_from_slice(&id.to_be_bytes());
     key
 }
 
@@ -90,94 +107,113 @@ pub fn trigram_prefix(gram: &str) -> Vec<u8> {
     key
 }
 
+/// Term frequency as a varint: one byte for anything under 128.
 pub fn encode_tf(tf: u32) -> Vec<u8> {
-    tf.to_be_bytes().to_vec()
+    let mut out = Vec::with_capacity(1);
+    write_varint(&mut out, tf);
+    out
 }
 
 pub fn decode_tf(bytes: &[u8]) -> u32 {
-    if bytes.len() >= 4 {
-        u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
-    } else {
-        1
-    }
+    let mut i = 0;
+    read_varint(bytes, &mut i).unwrap_or(1)
 }
 
+/// `[field_lens varint x3][drive u64][parent u64][subject len+bytes]`, then
+/// `[token count varint]` and per token `[field u8][tf varint][len varint][bytes]`.
 pub fn encode_doc(doc: &SearchDoc) -> Vec<u8> {
-    let mut out = Vec::new();
-    write_len_str(&mut out, &doc.drive);
-    write_len_str(&mut out, &doc.parent);
+    let mut out = Vec::with_capacity(32 + doc.subject.len() + doc.tokens.len() * 10);
     for len in doc.field_lens {
-        out.extend_from_slice(&len.to_be_bytes());
+        write_varint(&mut out, len);
+    }
+    out.extend_from_slice(&doc.drive.to_be_bytes());
+    out.extend_from_slice(&doc.parent.to_be_bytes());
+    write_len_str(&mut out, &doc.subject);
+    write_varint(&mut out, doc.tokens.len() as u32);
+    for (field, token, tf) in &doc.tokens {
+        out.push(*field);
+        write_varint(&mut out, *tf);
+        write_len_str(&mut out, token);
     }
     out
 }
 
-pub fn decode_doc(bytes: &[u8]) -> SearchDoc {
+/// Decode a document row. The token list is only read when `with_tokens`:
+/// scoring needs the lengths and scope of many documents and never the tokens.
+pub fn decode_doc(bytes: &[u8], with_tokens: bool) -> SearchDoc {
     let mut i = 0;
-    let drive = read_len_str(bytes, &mut i).unwrap_or_default();
-    let parent = read_len_str(bytes, &mut i).unwrap_or_default();
     let mut field_lens = [0u32; 3];
     for slot in &mut field_lens {
-        if i + 4 <= bytes.len() {
-            *slot = u32::from_be_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
-            i += 4;
+        *slot = read_varint(bytes, &mut i).unwrap_or(0);
+    }
+    let drive = read_u64(bytes, &mut i).unwrap_or(0);
+    let parent = read_u64(bytes, &mut i).unwrap_or(0);
+    let subject = read_len_str(bytes, &mut i).unwrap_or_default();
+    let mut tokens = Vec::new();
+    if with_tokens {
+        let count = read_varint(bytes, &mut i).unwrap_or(0);
+        for _ in 0..count {
+            let Some(&field) = bytes.get(i) else { break };
+            i += 1;
+            let Some(tf) = read_varint(bytes, &mut i) else {
+                break;
+            };
+            let Some(token) = read_len_str(bytes, &mut i) else {
+                break;
+            };
+            tokens.push((field, token, tf));
         }
     }
     SearchDoc {
+        subject,
         drive,
         parent,
         field_lens,
+        tokens,
     }
 }
 
-/// `[field u8][token_len u16 BE][token bytes]...`
-pub fn encode_tokens(tokens: &[(u8, String)]) -> Vec<u8> {
-    let mut out = Vec::new();
-    for (field, token) in tokens {
-        out.push(*field);
-        let bytes = token.as_bytes();
-        let len = (bytes.len() as u16).to_be_bytes();
-        out.extend_from_slice(&len);
-        out.extend_from_slice(bytes);
+fn write_varint(out: &mut Vec<u8>, mut value: u32) {
+    while value >= 0x80 {
+        out.push((value & 0x7f) as u8 | 0x80);
+        value >>= 7;
     }
-    out
+    out.push(value as u8);
 }
 
-pub fn decode_tokens(bytes: &[u8]) -> Vec<(u8, String)> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i + 3 <= bytes.len() {
-        let field = bytes[i];
-        i += 1;
-        let len = u16::from_be_bytes([bytes[i], bytes[i + 1]]) as usize;
-        i += 2;
-        if i + len > bytes.len() {
-            break;
+fn read_varint(bytes: &[u8], i: &mut usize) -> Option<u32> {
+    let mut value = 0u32;
+    let mut shift = 0;
+    loop {
+        let byte = *bytes.get(*i)?;
+        *i += 1;
+        value |= u32::from(byte & 0x7f).checked_shl(shift)?;
+        if byte & 0x80 == 0 {
+            return Some(value);
         }
-        if let Ok(token) = std::str::from_utf8(&bytes[i..i + len]) {
-            out.push((field, token.to_string()));
+        shift += 7;
+        if shift > 28 {
+            return None;
         }
-        i += len;
     }
-    out
+}
+
+fn read_u64(bytes: &[u8], i: &mut usize) -> Option<u64> {
+    let chunk = bytes.get(*i..*i + 8)?;
+    *i += 8;
+    Some(u64::from_be_bytes(chunk.try_into().ok()?))
 }
 
 fn write_len_str(out: &mut Vec<u8>, s: &str) {
-    let bytes = s.as_bytes();
-    out.extend_from_slice(&(bytes.len() as u16).to_be_bytes());
-    out.extend_from_slice(bytes);
+    write_varint(out, s.len() as u32);
+    out.extend_from_slice(s.as_bytes());
 }
 
 fn read_len_str(bytes: &[u8], i: &mut usize) -> Option<String> {
-    if *i + 2 > bytes.len() {
-        return None;
-    }
-    let len = u16::from_be_bytes([bytes[*i], bytes[*i + 1]]) as usize;
-    *i += 2;
-    if *i + len > bytes.len() {
-        return None;
-    }
-    let s = std::str::from_utf8(&bytes[*i..*i + len]).ok()?.to_string();
+    let len = read_varint(bytes, i)? as usize;
+    let s = std::str::from_utf8(bytes.get(*i..*i + len)?)
+        .ok()?
+        .to_string();
     *i += len;
     Some(s)
 }
