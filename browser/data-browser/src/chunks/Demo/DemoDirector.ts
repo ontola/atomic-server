@@ -656,14 +656,21 @@ export class DemoDirector {
    * loaded makes the child claim the parent itself as its drive, so the store
    * no longer sees it as local-only and posts its genesis to the server, which
    * answers 404 on every outbox retry. Load the parent (from the local
-   * database) first, and refuse to create under one that is gone.
+   * database) first, and refuse to create under one that is really gone.
+   *
+   * A local-only subject can only be read once the local database has opened,
+   * and that can still be underway while the demo starts. Wait for it, and when
+   * it never opens, carry on as before rather than failing the demo on a
+   * read that could not have succeeded.
    */
   private async loadParent(subject: string): Promise<void> {
-    const parent = await this.store.getResource(subject);
+    const dbReady = (await this.store.getClientDb()?.waitForReady()) ?? false;
+    const parent = await this.store.getResource(subject).catch(() => undefined);
 
-    if (parent.error || !this.store.isLocalOnlySubject(subject)) {
-      throw new Error(`Demo parent ${subject} is not in the local demo drive`);
-    }
+    if (parent && !parent.error) return;
+    if (!dbReady) return;
+
+    throw new Error(`Demo parent ${subject} is not in the local demo drive`);
   }
 
   private touch(subject: string): void {
