@@ -24,6 +24,7 @@ function setup(local = true) {
     getResource: vi.fn(async () => ({})),
     reconnect: vi.fn(async () => {}),
     promoteLocalDrive: vi.fn(async () => {}),
+    syncDriveToServerAndVerify: vi.fn(async () => {}),
     getSyncStatus: vi.fn(() => ({ serverConnected: true })),
   };
   const setServer = vi.fn();
@@ -76,7 +77,21 @@ describe('Cloud Server setup', () => {
       expect(actualOrigin).toBe('https://cloud.example');
     });
     await enableCloudSyncForDrive(args);
-    expect(store.promoteLocalDrive).toHaveBeenCalledWith(drive);
+    expect(store.syncDriveToServerAndVerify).toHaveBeenCalledWith(drive);
+  });
+
+  it('also syncs and verifies a drive that was already synced elsewhere', async () => {
+    const { args, store } = setup(false);
+    await enableCloudSyncForDrive(args);
+    expect(store.syncDriveToServerAndVerify).toHaveBeenCalledWith(drive);
+  });
+
+  it('does not report success when the node never receives the drive', async () => {
+    const { args, store } = setup();
+    store.syncDriveToServerAndVerify.mockRejectedValue(
+      new Error('The server is still missing this workspace root.'),
+    );
+    await expect(enableCloudSyncForDrive(args)).rejects.toThrow(/missing/);
   });
 
   it('leaves a local drive unpromoted when connection fails', async () => {
@@ -88,6 +103,7 @@ describe('Cloud Server setup', () => {
       /Cloud Server node: Reconnect to https:\/\/cloud.example timed out/,
     );
     expect(store.promoteLocalDrive).not.toHaveBeenCalled();
+    expect(store.syncDriveToServerAndVerify).not.toHaveBeenCalled();
   });
 
   it('does not claim success or promote against an unrelated server without placement', async () => {
