@@ -203,6 +203,12 @@ export function useTableView(
    * cannot say which view each of them shows.
    */
   viewOverride?: string,
+  /**
+   * An embedded table never reads the host page's `?view=`: that param names a
+   * view of the host's table, and for a dashboard block of its own table it is
+   * the dashboard itself, which would render itself inside itself.
+   */
+  embedded = false,
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
@@ -221,7 +227,7 @@ export function useTableView(
   const navigate = ShowRoute.useNavigate();
   const activeView =
     viewOverride ??
-    activeViewParam ??
+    (embedded ? undefined : activeViewParam) ??
     defaultViewSubject ??
     views[0] ??
     undefined;
