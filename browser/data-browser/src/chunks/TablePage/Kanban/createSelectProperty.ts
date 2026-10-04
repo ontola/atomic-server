@@ -172,6 +172,9 @@ export async function createPropertyOnClass(
   opts: {
     name: string;
     datatype: Datatype;
+    /** Defaults to a slug of the name. For a property found by shortname,
+     * like the calendar's `atomic-calendar-recurrence`. */
+    shortname?: string;
     classtype?: string;
     description?: string;
     /**
@@ -190,7 +193,7 @@ export async function createPropertyOnClass(
   },
 ): Promise<string> {
   const parent = await resolvePropertyParent(store, tableClass);
-  let shortname = stringToSlug(opts.name);
+  let shortname = opts.shortname ?? stringToSlug(opts.name);
 
   if (parent.isOntology) {
     const taken = await loadOntologyPropertiesByShortname(

@@ -340,6 +340,8 @@ export type {
   CalendarOccurrence,
 } from './calendar-recurrence.js';
 
+export * from './calendar-repeat.js';
+
 export {
   parseSetupDeclaration,
   validateSetupArguments,
