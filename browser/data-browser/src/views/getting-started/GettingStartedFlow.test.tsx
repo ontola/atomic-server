@@ -15,6 +15,7 @@ import { buildTheme } from '../../styling';
 
 const state = vi.hoisted(() => ({
   portal: 'https://portal.example',
+  hosted: false,
   navigate: vi.fn(),
   setAgent: vi.fn(),
   setDrive: vi.fn(),
@@ -80,6 +81,7 @@ vi.mock('../../helpers/managed/session', () => ({
 }));
 vi.mock('../../helpers/managedServer', () => ({
   fetchManagedInfo: async () => null,
+  isHostedDistribution: () => state.hosted,
   accountCreationTarget: () =>
     state.portal ? { kind: 'portal', url: state.portal } : { kind: 'local' },
 }));
@@ -179,6 +181,7 @@ const show = async (query = '') => {
 beforeEach(() => {
   vi.clearAllMocks();
   state.portal = 'https://portal.example';
+  state.hosted = false;
   state.recovery.mockResolvedValue(null);
   state.account = null;
   state.hasData = true;
@@ -200,6 +203,13 @@ it('keeps secret sign-in reachable when a portal is configured', async () => {
   await show();
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
   expect(await screen.findByLabelText('Agent secret')).toBeTruthy();
+});
+
+it('opens a hosted build on sign-in, without the welcome choice', async () => {
+  state.hosted = true;
+  await show();
+  expect(screen.getByLabelText('Agent secret')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Create account' })).toBeNull();
 });
 
 it('keeps a self-hosted welcome usable', async () => {
