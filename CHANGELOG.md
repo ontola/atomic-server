@@ -15,6 +15,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   recipient could hold. Read rights are checked per subscriber against the
   resource when it is sent, and a connection already reached through the
   resource or its drive doesn't get it twice.
+- Preserve declared strings that look like JSON arrays/objects or resource
+  references in Loro snapshots; stable app IDs must not become arrays or links.
+
 - Low-level resource/genesis builders attach frozen schemas automatically.
   Native/browser imports memoize exact verified bodies with bounded caches;
   absent dependencies cannot be supplied by another drive's memo cache.

@@ -901,6 +901,17 @@ impl AtomicLoroDoc {
 ///   untagged as the default.
 pub fn datatype_tag(value: &Value) -> Option<&'static str> {
     match value {
+        // Pin strings that legacy untagged readers would reinterpret as JSON
+        // or references (Audio uses JSON-array strings as stable entity IDs).
+        Value::String(s)
+            if s.starts_with('[')
+                || s.starts_with('{')
+                || crate::identifiers::is_atomic_identifier(s)
+                || s.starts_with("http://")
+                || s.starts_with("https://") =>
+        {
+            Some("string")
+        }
         Value::AtomicUrl(_) => Some("atomicUrl"),
         Value::ResourceArray(_) => Some("resourceArray"),
         Value::Json(_) => Some("json"),
@@ -934,6 +945,7 @@ pub fn loro_value_to_atomic_value_tagged(lv: &loro::LoroValue, tag: Option<&str>
 /// Returns `None` if the tag and primitive shape disagree (caller falls back).
 fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
     match (tag, lv) {
+        ("string", loro::LoroValue::String(s)) => Some(Value::String(s.to_string())),
         ("atomicUrl", loro::LoroValue::String(s)) => Some(Value::AtomicUrl(
             crate::identifiers::canonicalize_scheme(s).into(),
         )),
@@ -1584,6 +1596,26 @@ mod test {
         match av {
             Value::Json(json) => assert_eq!(json, serde_json::json!([300, 214])),
             other => panic!("expected Json array, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ambiguous_strings_preserve_their_declared_type() {
+        for text in [
+            r#"["track","parameter","osc","shape"]"#,
+            r#"{"literal":true}"#,
+            "atomic:literal",
+            "https://example.com",
+        ] {
+            let doc = AtomicLoroDoc::new();
+            doc.set_property("urn:literal", &Value::String(text.into()))
+                .unwrap();
+            let read = AtomicLoroDoc::from_snapshot(&doc.export_snapshot()).unwrap();
+            let props = read.get_all_properties();
+            let tags = read.get_all_datatypes();
+            assert!(
+                matches!(loro_value_to_atomic_value_tagged(&props["urn:literal"], Some(&tags["urn:literal"])), Some(Value::String(value)) if value == text)
+            );
         }
     }
 

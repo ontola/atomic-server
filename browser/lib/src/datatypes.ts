@@ -60,7 +60,7 @@ export const datatypeFromUrl = (url: string): Datatype => {
  * cannot recover from the bare primitive) plus the cosmetic string-likes
  * (markdown/slug/date/uri) and timestamp — at least vector/search text
  * extraction branches on `Value::Markdown`, so we preserve the variant rather
- * than let the server guess. Plain string and scalars stay untagged (the
+ * than let the server guess. Unambiguous plain strings and scalars stay untagged (the
  * default). A nested resource (an object stored as a JSON string under an
  * `atomicURL` property) is left untagged for the server's heuristic — see
  * `planning/loro-source-of-truth.md`.
@@ -75,6 +75,11 @@ export const datatypeTag = (
     case Datatype.ATOMIC_URL:
       return typeof loroValue === 'string' && !loroValue.startsWith('{')
         ? 'atomicUrl'
+        : undefined;
+    case Datatype.STRING:
+      return typeof loroValue === 'string' &&
+        /^(\[|\{|atomic:|did:ad:|https?:\/\/)/.test(loroValue)
+        ? 'string'
         : undefined;
     case Datatype.RESOURCEARRAY:
       return 'resourceArray';
