@@ -1,3 +1,5 @@
+import { applyAppListEdit, type AppListEdit } from './schema-list.js';
+import type { SchemaValue } from './schema-frozen.js';
 import {
   attachSchemaDependencies,
   resolveSchemaDependencies,
@@ -3008,6 +3010,63 @@ export class Resource<C extends OptionalClass = any> {
   /** Whether redo is available. */
   public canRedo(): boolean {
     return this._loroUndoManager?.canRedo() ?? false;
+  }
+
+  /** Explicit array replacement or identity-preserving movable-list edit. */
+  public async editJsonList(
+    prop: string,
+    operation: { replacement: SchemaValue[] } | { edit: AppListEdit },
+  ): Promise<void> {
+    if (isFrozenSchema(this.subject))
+      throw new Error('Frozen definitions are immutable');
+    await enableLoro();
+    const candidate = structuredClone(
+      'replacement' in operation ? operation.replacement : this.get(prop),
+    ) as SchemaValue[];
+    if (!Array.isArray(candidate)) throw new Error('Expected JSON array');
+    if ('edit' in operation) applyAppListEdit(candidate, operation.edit);
+    const shape = this._store?.resources.get(prop)?.get(APP_SHAPE) as
+      | AppShape
+      | undefined;
+    if (!shape) throw new Error('Register the app schema before editing lists');
+    validateAppValue(shape, candidate);
+    const { LoroMovableList } = LoroLoader.Loro;
+    const root = this.getLoroDoc()!.getMap('properties');
+
+    if ('replacement' in operation) {
+      const list = root.setContainer(prop, new LoroMovableList());
+      candidate.forEach((item, i) => list.insert(i, item));
+      this.getLoroDoc()!.getMap('datatypes').set(prop, 'json');
+    } else {
+      const list = root.get(prop);
+      if (!(list instanceof LoroMovableList))
+        throw new Error('List is not movable; explicitly replace it first');
+      const edit = operation.edit;
+
+      switch (edit.type) {
+        case 'insert':
+          list.insert(edit.index, edit.value);
+          break;
+        case 'delete':
+          list.delete(edit.index, 1);
+          break;
+        case 'set':
+          list.set(edit.index, edit.value);
+          break;
+        case 'move':
+          list.move(edit.from, edit.to);
+          break;
+      }
+    }
+
+    this.#cacheDirty = true;
+    this._dirty = true;
+    this.commitLoroEdit();
+    this.eventManager.emit(
+      ResourceEvents.LocalChange,
+      prop,
+      candidate as JSONValue,
+    );
   }
 
   /** Edit one nested object member, preserving its ancestors' CRDT identities.

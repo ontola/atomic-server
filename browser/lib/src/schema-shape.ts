@@ -2,22 +2,33 @@ import type { SchemaValue } from './schema-frozen.js';
 
 export type AppShape =
   | { type: 'string'; maxLength?: number }
+  | { type: 'enum'; values: readonly string[] }
+  | { type: 'nullable'; inner: AppShape }
+  | { type: 'union'; variants: readonly AppShape[] }
   | { type: 'number' | 'integer'; minimum?: number; maximum?: number }
   | { type: 'boolean' | 'null' | 'reference' }
   | {
       type: 'object';
       properties: Record<string, AppShape>;
-      required?: string[];
+      required?: readonly string[];
       additionalProperties?: boolean;
     }
   | { type: 'array'; items: AppShape; maxItems: number };
 
 /** Check the supported vocabulary and normalize defaults before hashing. */
-export function normalizeAppShape(shape: AppShape, depth = 0): AppShape {
+export function normalizeAppShape(
+  shape: AppShape,
+  depth = 0,
+  budget = { remaining: 2048 },
+): AppShape {
+  if (--budget.remaining < 0) throw new Error('Schema exceeds 2048 nodes');
   if (depth > 16 || !shape || typeof shape !== 'object' || Array.isArray(shape))
     throw new Error('Invalid or deeply nested shape');
   const allowed: Record<string, string[]> = {
     string: ['type', 'maxLength'],
+    enum: ['type', 'values'],
+    nullable: ['type', 'inner'],
+    union: ['type', 'variants'],
     number: ['type', 'minimum', 'maximum'],
     integer: ['type', 'minimum', 'maximum'],
     boolean: ['type'],
@@ -33,6 +44,40 @@ export function normalizeAppShape(shape: AppShape, depth = 0): AppShape {
     throw new Error('Unsupported shape type or keyword');
 
   switch (shape.type) {
+    case 'enum':
+      if (
+        !Array.isArray(shape.values) ||
+        !shape.values.length ||
+        shape.values.length > 128 ||
+        new Set(shape.values).size !== shape.values.length ||
+        shape.values.some(
+          v =>
+            typeof v !== 'string' || new TextEncoder().encode(v).length > 1024,
+        )
+      )
+        throw new Error('Invalid enum values');
+
+      return { ...shape, values: [...shape.values] };
+    case 'nullable':
+      return {
+        ...shape,
+        inner: normalizeAppShape(shape.inner, depth + 1, budget),
+      };
+    case 'union':
+      if (
+        !Array.isArray(shape.variants) ||
+        shape.variants.length < 2 ||
+        shape.variants.length > 8
+      )
+        throw new Error('Union needs 2-8 variants');
+
+      return {
+        ...shape,
+        variants: shape.variants.map(s =>
+          normalizeAppShape(s, depth + 1, budget),
+        ),
+      };
+
     case 'number':
     case 'integer':
       for (const n of [shape.minimum, shape.maximum])
@@ -79,7 +124,7 @@ export function normalizeAppShape(shape: AppShape, depth = 0): AppShape {
           if (!key || new TextEncoder().encode(key).length > 128)
             throw new Error('Invalid field name');
 
-          return [key, normalizeAppShape(value, depth + 1)];
+          return [key, normalizeAppShape(value, depth + 1, budget)];
         }),
       );
 
@@ -99,7 +144,10 @@ export function normalizeAppShape(shape: AppShape, depth = 0): AppShape {
       )
         throw new Error('Invalid maxItems');
 
-      return { ...shape, items: normalizeAppShape(shape.items, depth + 1) };
+      return {
+        ...shape,
+        items: normalizeAppShape(shape.items, depth + 1, budget),
+      };
   }
 
   return { ...shape };
@@ -111,12 +159,45 @@ export function validateAppValue(
   path = '$',
 ): void {
   normalizeAppShape(shape);
+  validateValue(shape, value, path, { remaining: 100000 });
+}
+
+function validateValue(
+  shape: AppShape,
+  value: SchemaValue,
+  path: string,
+  budget: { remaining: number },
+): void {
+  if (--budget.remaining < 0)
+    throw new Error('Validation exceeds 100000 value checks');
 
   const invalid = () => {
     throw new Error(`Invalid value at ${path}`);
   };
 
   switch (shape.type) {
+    case 'enum':
+      if (typeof value !== 'string' || !shape.values.includes(value)) invalid();
+
+      return;
+    case 'nullable':
+      if (value !== null) validateValue(shape.inner, value, path, budget);
+
+      return;
+    case 'union':
+      for (const variant of shape.variants) {
+        try {
+          validateValue(variant, value, path, budget);
+
+          return;
+        } catch {
+          if (budget.remaining < 0)
+            throw new Error('Validation exceeds 100000 value checks');
+        }
+      }
+
+      throw new Error(`No union variant matches at ${path}`);
+
     case 'string':
       if (
         typeof value !== 'string' ||
@@ -158,7 +239,9 @@ export function validateAppValue(
     case 'array':
       if (!Array.isArray(value) || value.length > shape.maxItems)
         return invalid();
-      value.forEach((v, i) => validateAppValue(shape.items, v, `${path}/${i}`));
+      value.forEach((v, i) =>
+        validateValue(shape.items, v, `${path}/${i}`, budget),
+      );
 
       return;
 
@@ -172,7 +255,7 @@ export function validateAppValue(
       for (const [key, child] of Object.entries(value)) {
         const next = `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`;
         if (Object.hasOwn(shape.properties, key))
-          validateAppValue(shape.properties[key], child, next);
+          validateValue(shape.properties[key], child, next, budget);
         else if (!shape.additionalProperties)
           throw new Error(`Unknown field at ${next}`);
       }

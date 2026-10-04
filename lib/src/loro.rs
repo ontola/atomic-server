@@ -409,6 +409,47 @@ impl AtomicLoroDoc {
         &self.doc
     }
 
+    pub(crate) fn edit_json_list(
+        &self,
+        property: &str,
+        replacement: Option<&[serde_json::Value]>,
+        edit: Option<&crate::schema::list::ListEdit>,
+    ) -> AtomicResult<()> {
+        use crate::schema::list::ListEdit;
+        let root = self.doc.get_map("properties");
+        if let Some(items) = replacement {
+            let list = root
+                .insert_container(property, loro::LoroMovableList::new())
+                .map_err(|e| e.to_string())?;
+            for (i, item) in items.iter().enumerate() {
+                list.insert(i, loro::LoroValue::from(item.clone()))
+                    .map_err(|e| e.to_string())?;
+            }
+            self.doc
+                .get_map("datatypes")
+                .insert(property, "json")
+                .map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+        let list = match root.get(property) {
+            Some(loro::ValueOrContainer::Container(c)) => c
+                .into_movable_list()
+                .map_err(|_| "List is not movable; explicitly replace it first")?,
+            _ => return Err("Missing movable list".into()),
+        };
+        match edit.ok_or("Missing list edit")? {
+            ListEdit::Insert { index, value } => list
+                .insert(*index, loro::LoroValue::from(value.clone()))
+                .map_err(|e| e.to_string())?,
+            ListEdit::Delete { index } => list.delete(*index, 1).map_err(|e| e.to_string())?,
+            ListEdit::Set { index, value } => list
+                .set(*index, loro::LoroValue::from(value.clone()))
+                .map_err(|e| e.to_string())?,
+            ListEdit::Move { from, to } => list.mov(*from, *to).map_err(|e| e.to_string())?,
+        }
+        Ok(())
+    }
+
     /// Edit one object member while retaining ancestor LoroMap identities.
     /// Arrays are values here; use list operations for positional editing.
     pub fn patch_json_path(

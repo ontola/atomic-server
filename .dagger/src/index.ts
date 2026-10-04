@@ -1356,10 +1356,7 @@ export class AtomicServer {
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // Shared Rust/TypeScript fixture lives outside the browser subtree.
-      .withFile(
-        '/fixtures/app-schema.json',
-        this.source.file('lib/tests/fixtures/app-schema.json'),
-      )
+      .withDirectory('/fixtures', this.source.directory('lib/tests/fixtures'))
       .withEnvVariable('ATOMIC_SCHEMA_FIXTURE', '/fixtures/app-schema.json')
       // data-browser imports the repo-root logo from `../../../../logo.svg`
       // and `../../../../../logo.svg`. Browser mount sits at /app, so those

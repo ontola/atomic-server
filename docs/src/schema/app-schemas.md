@@ -210,3 +210,104 @@ check. Those need an application policy (and server-side conditional writes or a
 coordinated cutover for strict exclusion). Reverting a migration is another
 permitted commit or a copy from history; automatic reverse conversion may lose
 data and is not assumed safe.
+
+## Reuse properties and keep display names local
+
+`defineAppProperty(scope, semanticName, shape)` / `PropertyBinding::define`
+creates an immutable vocabulary term. `composeAppSchema` / `AppSchema::compose`
+binds existing terms to a Class. Reusing a binding reuses its Property ID:
+
+```typescript
+const pitch = defineAppProperty('music', 'pitch', {
+  type: 'integer', minimum: 0, maximum: 127,
+}, true);
+const note = composeAppSchema('note', 'Musical note', { pitch });
+const pad = composeAppSchema('pad', 'Drum pad', { triggerKey: pitch });
+const localNote = rebindAppField(note, 'pitch', 'midiKey');
+// Same Property in both classes; localNote retains note's Class ID too.
+```
+
+Rust equivalents are `schema.binding("pitch")`, `AppSchema::compose(...)` and
+`schema.rebind("pitch", "midiKey")`. Membership ordering uses immutable semantic
+shortnames and IDs, so changing aliases cannot reorder the hashed Class body.
+Store translated labels and UI grouping in the application, keyed by Property
+ID. Changing a semantic definition still produces a different identifier.
+Duplicate aliases to the same Property in a Class are rejected.
+
+## Typed models and richer shapes
+
+Shapes now include `{type:'enum', values:['mono','poly']}`,
+`{type:'nullable', inner:{type:'string'}}`, and
+`{type:'union', variants:[{type:'number'}, objectShape]}`. A union accepts any
+matching alternative. Optional means absent; nullable means present with null.
+Enums allow 1–128 unique strings, unions 2–8 alternatives. The schema has a
+2,048-node/16-depth budget; value validation shares 100,000 checks across all
+union alternatives. Upgraded peers are required to validate these new kinds;
+old bundles retain their previous hashes.
+
+TypeScript `defineAppSchema` and reused Property bindings infer literal enums,
+required/optional fields and nested objects. `AppModel<typeof schema>`,
+`readAppModel(resource, schema)` and `setAppField` use those types. A bundle
+loaded as plain JSON needs runtime validation and has no compile-time literals.
+
+Rust provides `encode_field`, `read_field<T>`, `decode_model<T>` and
+`replace_model`. Complete model replacement validates everything first, stages
+an independent resource, removes omitted optional fields, and retains unsaved
+changes outside the model. Rust serde decoding alone does not enforce numeric
+ranges; use these schema helpers at application boundaries.
+
+`AppSchema::generate_models("InstrumentModel")` generates Rust serde structs
+and Dart models from a portable bundle. A command-line example is included:
+
+```sh
+cargo run -p atomic_lib --example schema_codegen -- bundle.json InstrumentModel generated
+```
+
+Generated accessors use `field_<alias>` to avoid language keyword collisions.
+Codegen accepts ASCII identifier aliases; use `rebind` for other local names.
+Model names start uppercase and end in `Model`. Each generated file has its own
+type namespace. Rust `Optional<Option<T>>` distinguishes missing from null;
+Dart exposes `has_<alias>`, typed getters, checked `fromJson` and copied `toJson`.
+Union wrappers expose typed `asVariantN` getters. Dart output needs only
+`dart:convert`; format it with `dart format` after generation. Generation is a
+trusted build step, never something triggered by a schema arriving over sync.
+
+## Choose the edit operation deliberately
+
+| Intent | Rust | TypeScript |
+| --- | --- | --- |
+| Replace a field/object | `set` | `setAppField` |
+| Edit/remove an object member | `patch` | `patchAppField` |
+| Replace an entire list with a movable list | `replace_list` | `replaceAppList` |
+| Insert/delete/set/move a list item | `edit_list(ListEdit::...)` | `editAppList` |
+
+A move preserves item identity: a concurrent edit to the moved item follows it.
+Destination indices refer to the resulting list. List items are whole JSON
+values; use a separate resource for nested independently editable entities.
+Legacy ordinary lists reject movable-list edits. Explicit replacement converts
+them, but concurrent edits in the old container do not transfer to the new one.
+Do that as a deliberate conversion, not silently during a user's move gesture.
+All candidate edits are shape-checked before changing the resource.
+
+## Trusted copy migrations
+
+`schema::migration::CopyPlan::prepare` accepts authoritative, permission-checked
+source snapshots and locally transformed `CopyItem`s. It validates all outputs
+and hashes source versions/values, target Class and Property bindings, the
+application's migration version, and output values. `preview()` performs no
+writes. Rebuild the plan from current source membership when applying, then
+supply the preview revision to `apply`.
+
+A `CopyTarget` adapter provides `begin`, idempotent durable `write`, and `finish`.
+`CopyProgress` reports the destination, completed item keys and completion flag.
+The adapter owns access checks, local serialization and persistence; it finds
+pending copies by source and revision and only exposes a completed destination.
+The runner skips durably completed items on retry and rejects stale previews
+before calling the adapter. Atomic Audio now uses this runner with its existing
+session metadata. Its original sessions remain available.
+
+There is no global transaction across resources or automatic mirroring after
+cutover. Remote edits arriving after the captured versions remain on the source.
+Neither definitions nor sync messages can execute a migration. The generic
+runner is currently native Rust; TypeScript applications need their own trusted
+persistence adapter/runner until a browser equivalent is provided.

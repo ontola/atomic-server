@@ -51,7 +51,7 @@ test('lint source setup avoids WASM while build setup includes it', async () => 
   resetCalls();
   await pipeline.jsLint();
   assert.equal(recordedCalls().some(([name, path]) =>
-    name === 'withFile' && path === '/fixtures/app-schema.json'), true);
+    name === 'withDirectory' && path === '/fixtures'), true);
   assert.equal(recordedCalls().some(([name, key, value]) =>
     name === 'withEnvVariable' && key === 'ATOMIC_SCHEMA_FIXTURE' && value === '/fixtures/app-schema.json'), true);
   assert.equal(

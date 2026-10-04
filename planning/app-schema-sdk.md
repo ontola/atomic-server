@@ -13,7 +13,8 @@ Core vocabulary keeps its existing identifiers. App schemas need no HTTP host.
 - [x] TypeScript API and shared cross-language fixtures.
 - [x] Audio slice example proving domain-free schema definitions and concurrent envelope edits.
 - [x] Tests, documentation and full browser lint.
-- [ ] Upstream review and adoption in Atomic Audio.
+- [x] Atomic Audio adoption, preserving its existing frozen identities.
+- [ ] Upstream review.
 
 The initial package format embeds acyclic shape definitions; arbitrary freezing
 of cyclic RDF graphs, catalog/discovery UI and automatic schema migrations are
@@ -24,9 +25,9 @@ Do not revive PR #1262 wholesale: it predates the canonical atomic: scheme and
 has unresolved materialization/persistence gaps. Preserve semantic property IDs
 when reusing definitions; a changed definition produces a new identity.
 
-The draft intentionally leaves a Dart convenience API and Audio data migration
-for a follow-up. Writers register the app bundle; upgraded receivers learn the
-needed definitions from the resource state.
+The SDK now generates Dart models and provides a native copy-migration runner.
+Writers register the app bundle; upgraded receivers learn the needed definitions
+from the resource state.
 
 ## Automatic exchange and hostile peers
 
@@ -69,3 +70,16 @@ extension can deduplicate definitions across resources without changing their ID
   sync with no schema registration on the receiving process.
 - [x] Migrate Audio entities and saved versions, retain legacy reads, validate
   edits before writes, preserve historical data and document migration behavior.
+
+## Developer ergonomics
+
+- [x] Reusable Property bindings and aliases independent of semantic identity.
+- [x] Rust/Dart model generation and TypeScript model inference.
+- [x] Bounded enums, nullable values and unions.
+- [x] Explicit object replacement/path editing and movable-list operations.
+- [x] Generic native copy plans, previews, revision pins and resumable progress.
+- [x] Audio uses shared bindings, encoding, typed metadata and copy execution.
+
+Browser copy-migration orchestration, a packaged Dart transport/editing SDK and
+in-place distributed migrations remain outside this draft. Generated Dart models
+work with Audio's current native bridge; they do not add a second sync engine.

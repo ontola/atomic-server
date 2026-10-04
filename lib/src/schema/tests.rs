@@ -804,3 +804,279 @@ async fn builder_authoring_and_authorized_get_retrieve_schemas_automatically() {
         .await
         .is_ok());
 }
+
+#[tokio::test]
+async fn bindings_aliases_and_models_preserve_identity_and_validate_before_writes() {
+    use super::bindings::PropertyBinding;
+    let store = Db::init_temp("schema-bindings").await.unwrap();
+    let pitch = PropertyBinding::define(
+        "music",
+        "pitch",
+        Shape::Integer {
+            minimum: Some(0.),
+            maximum: Some(127.),
+        },
+    )
+    .unwrap()
+    .required();
+    let a = AppSchema::compose("note", "A note", [("pitch".into(), pitch.clone())].into()).unwrap();
+    let b = AppSchema::compose("pad", "A pad", [("key".into(), pitch)].into()).unwrap();
+    assert_eq!(a.property("pitch").unwrap(), b.property("key").unwrap());
+    let renamed = a.rebind("pitch", "midiKey").unwrap();
+    assert_eq!(a.class_id, renamed.class_id);
+    assert_eq!(a.definitions, renamed.definitions);
+    renamed.register(&store).await.unwrap();
+    let mut r = renamed.new_resource("atomic:note".into()).unwrap();
+    renamed
+        .replace_model(&mut r, &json!({"midiKey":60}), &store)
+        .await
+        .unwrap();
+    assert_eq!(renamed.read_field::<i64>(&r, "midiKey").unwrap(), 60);
+    let before = r.build_state_doc().unwrap().oplog_vv_bytes();
+    assert!(renamed
+        .replace_model(&mut r, &json!({"midiKey":200}), &store)
+        .await
+        .is_err());
+    assert_eq!(before, r.build_state_doc().unwrap().oplog_vv_bytes());
+    assert_eq!(
+        renamed.decode_model::<serde_json::Value>(&r).unwrap(),
+        json!({"midiKey":60})
+    );
+    assert!(renamed
+        .replace_model(&mut r, &json!({}), &store)
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn movable_list_merge_keeps_edit_attached_to_moved_item() {
+    use super::list::ListEdit;
+    let store = Db::init_temp("schema-movable-list").await.unwrap();
+    let schema = AppSchema::define(
+        "steps",
+        [(
+            "steps".into(),
+            Field {
+                required: true,
+                shape: Shape::Array {
+                    items: Box::new(Shape::Integer {
+                        minimum: Some(0.),
+                        maximum: Some(127.),
+                    }),
+                    max_items: 4,
+                },
+            },
+        )]
+        .into(),
+    )
+    .unwrap();
+    schema.register(&store).await.unwrap();
+    let mut base = schema.new_resource("atomic:steps".into()).unwrap();
+    schema
+        .replace_list(
+            &mut base,
+            "steps",
+            vec![json!(60), json!(64), json!(67)],
+            &store,
+        )
+        .await
+        .unwrap();
+    let mut a = base.clone();
+    let mut b = base.clone();
+    schema
+        .edit_list(&mut a, "steps", ListEdit::Move { from: 0, to: 2 }, &store)
+        .await
+        .unwrap();
+    schema
+        .edit_list(
+            &mut b,
+            "steps",
+            ListEdit::Set {
+                index: 0,
+                value: json!(61),
+            },
+            &store,
+        )
+        .await
+        .unwrap();
+    let merged = a.build_state_doc().unwrap();
+    merged
+        .doc()
+        .import(&b.build_state_doc().unwrap().export_snapshot())
+        .unwrap();
+    a.apply_state_doc(merged).unwrap();
+    assert_eq!(
+        schema.read_field::<serde_json::Value>(&a, "steps").unwrap(),
+        json!([64, 67, 61])
+    );
+    let before = a.build_state_doc().unwrap().oplog_vv_bytes();
+    assert!(schema
+        .edit_list(
+            &mut a,
+            "steps",
+            ListEdit::Insert {
+                index: 0,
+                value: json!(200)
+            },
+            &store
+        )
+        .await
+        .is_err());
+    assert_eq!(before, a.build_state_doc().unwrap().oplog_vv_bytes());
+    schema
+        .set(&mut a, "steps", json!([1, 2]), &store)
+        .await
+        .unwrap();
+    assert!(schema
+        .edit_list(&mut a, "steps", ListEdit::Move { from: 0, to: 1 }, &store)
+        .await
+        .is_err());
+}
+
+#[test]
+fn extended_shapes_and_generation_are_bounded_and_deterministic() {
+    let input: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/model-schema.json")).unwrap();
+    let schema = AppSchema::define(
+        input["input"]["name"].as_str().unwrap(),
+        serde_json::from_value(input["input"]["fields"].clone()).unwrap(),
+    )
+    .unwrap();
+    for (field, accepted, rejected) in [
+        ("mode", json!("mono"), json!("invalid")),
+        ("value", json!({"base":0.5}), json!({"other":1})),
+        ("comment", json!(null), json!(42)),
+    ] {
+        assert!(schema.encode_field(field, &accepted).is_ok());
+        assert!(schema.encode_field(field, &rejected).is_err());
+    }
+    let models = schema.generate_models("ExampleModel").unwrap();
+    assert_eq!(
+        models.rust,
+        include_str!("../../tests/fixtures/generated/model.rs")
+    );
+    assert_eq!(
+        models.dart,
+        include_str!("../../tests/fixtures/generated/model.dart")
+    );
+    let bad: Shape = serde_json::from_value(json!({"type":"enum","values":["x","x"]})).unwrap();
+    assert!(bad.check().is_err());
+    let bad: Shape =
+        serde_json::from_value(json!({"type":"union","variants":[{"type":"null"}]})).unwrap();
+    assert!(bad.check().is_err());
+}
+
+#[tokio::test]
+async fn migration_pins_outputs_rejects_stale_preview_and_resumes_failed_copy() {
+    use super::migration::*;
+    use crate::errors::AtomicResult;
+    use std::collections::BTreeSet;
+    let source = Resource::new("atomic:source".into());
+    let schema = audio();
+    let item = |key: &str| CopyItem {
+        key: key.into(),
+        schema: schema.clone(),
+        fields: json!({"tune":7,"envelope":{"attack":0.01,"release":0.2}})
+            .as_object()
+            .unwrap()
+            .clone(),
+    };
+    let plan = CopyPlan::prepare(
+        "test-v1",
+        "atomic:source",
+        &schema.class_id,
+        std::slice::from_ref(&source),
+        vec![item("one"), item("two")],
+    )
+    .unwrap();
+    let revision = plan.preview().revision.clone();
+    assert!(plan.check_revision("old").is_err());
+    let other = CopyPlan::prepare(
+        "test-v2",
+        "atomic:source",
+        &schema.class_id,
+        &[source],
+        vec![item("one"), item("two")],
+    )
+    .unwrap();
+    assert_ne!(revision, other.preview().revision);
+    struct Target {
+        completed: BTreeSet<String>,
+        complete: bool,
+        writes: usize,
+        fail: bool,
+    }
+    impl CopyTarget for Target {
+        async fn begin(&mut self, _: &MigrationPreview) -> AtomicResult<CopyProgress> {
+            Ok(CopyProgress {
+                subject: "atomic:copy".into(),
+                completed: self.completed.clone(),
+                complete: self.complete,
+            })
+        }
+        async fn write(&mut self, _: &str, item: &CopyItem) -> AtomicResult<()> {
+            if item.key == "two" && self.fail {
+                return Err("disk unavailable".into());
+            }
+            self.completed.insert(item.key.clone());
+            self.writes += 1;
+            Ok(())
+        }
+        async fn finish(&mut self, _: &str) -> AtomicResult<()> {
+            self.complete = true;
+            Ok(())
+        }
+    }
+    let mut target = Target {
+        completed: BTreeSet::new(),
+        complete: false,
+        writes: 0,
+        fail: true,
+    };
+    assert!(plan.apply("old", &mut target).await.is_err());
+    assert_eq!(target.writes, 0);
+    assert!(plan.apply(&revision, &mut target).await.is_err());
+    assert_eq!(target.writes, 1);
+    assert!(!target.complete);
+    target.fail = false;
+    let result = plan.apply(&revision, &mut target).await.unwrap();
+    assert!(result.complete);
+    assert_eq!(target.writes, 2);
+    plan.apply(&revision, &mut target).await.unwrap();
+    assert_eq!(target.writes, 2);
+}
+
+#[test]
+fn compose_identity_does_not_depend_on_alias_sort_order() {
+    use super::bindings::PropertyBinding;
+    let a = PropertyBinding::define("shared", "a", Shape::Boolean).unwrap();
+    let b = PropertyBinding::define("shared", "b", Shape::Boolean).unwrap();
+    let first = AppSchema::compose(
+        "pair",
+        "Pair",
+        [("a".into(), a.clone()), ("b".into(), b.clone())].into(),
+    )
+    .unwrap();
+    let renamed =
+        AppSchema::compose("pair", "Pair", [("z".into(), a), ("a".into(), b)].into()).unwrap();
+    assert_eq!(first.class_id, renamed.class_id);
+    assert_eq!(first.definitions, renamed.definitions);
+}
+
+#[test]
+fn union_branching_has_a_shared_validation_budget() {
+    let array = Shape::Array {
+        items: Box::new(Shape::Boolean),
+        max_items: 16384,
+    };
+    let shape = Shape::Union {
+        variants: vec![array; 8],
+    };
+    let mut values = vec![json!(true); 16384];
+    values[16383] = json!("invalid");
+    assert!(shape
+        .validate(&json!(values))
+        .unwrap_err()
+        .to_string()
+        .contains("100000"));
+}

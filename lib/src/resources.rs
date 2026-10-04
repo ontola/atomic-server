@@ -558,6 +558,41 @@ impl Resource {
         Ok(())
     }
 
+    /// Validated movable-list API; use the schema helpers for local field aliases.
+    pub async fn edit_json_list(
+        &mut self,
+        property: &str,
+        replacement: Option<Vec<serde_json::Value>>,
+        edit: Option<crate::schema::list::ListEdit>,
+        store: &impl Storelike,
+    ) -> AtomicResult<()> {
+        if crate::schema::frozen::is_frozen(&self.subject) {
+            return Err("Frozen definitions are immutable".into());
+        }
+        if replacement.is_some() == edit.is_some() {
+            return Err("Choose replacement or edit".into());
+        }
+        let mut items = if let Some(items) = &replacement {
+            items.clone()
+        } else {
+            match self.get(property)? {
+                Value::Json(serde_json::Value::Array(items)) => items.clone(),
+                _ => return Err("Expected JSON array".into()),
+            }
+        };
+        if let Some(edit) = &edit {
+            edit.apply(&mut items)?;
+        }
+        let candidate = Value::Json(serde_json::Value::Array(items));
+        let definition = store.get_resource(&property.into()).await?;
+        crate::schema::app::validate_value(&definition, &candidate)?;
+        self.ensure_materialized()?;
+        self.loro()
+            .edit_json_list(property, replacement.as_deref(), edit.as_ref())?;
+        self.propvals.insert(property.into(), candidate);
+        Ok(())
+    }
+
     /// Like [`Self::patch_loro_property`] but tags the resulting Loro commit
     /// with a system origin so the user's undo button skips it.
     ///

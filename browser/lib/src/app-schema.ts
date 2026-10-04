@@ -1,3 +1,11 @@
+import type {
+  TypedAppSchema,
+  AppFieldName,
+  AppFieldValue,
+} from './schema-model.js';
+
+export * from './schema-model.js';
+export * from './schema-bindings.js';
 import { core } from './ontologies/core.js';
 import { Datatype } from './datatypes.js';
 import { Resource } from './resource.js';
@@ -42,6 +50,7 @@ export interface AppSchemaBundle {
 export function appShapeDatatype(shape: AppShape): Datatype {
   switch (shape.type) {
     case 'string':
+    case 'enum':
       return Datatype.STRING;
     case 'number':
       return Datatype.FLOAT;
@@ -57,10 +66,10 @@ export function appShapeDatatype(shape: AppShape): Datatype {
 }
 
 /** Define a versioned app vocabulary without choosing a hosting domain. */
-export function defineAppSchema(
+export function defineAppSchema<const F extends Record<string, AppField>>(
   name: string,
-  fields: Record<string, AppField>,
-): AppSchemaBundle {
+  fields: F,
+): TypedAppSchema<F> {
   if (
     !name ||
     new TextEncoder().encode(name).length > 128 ||
@@ -116,7 +125,7 @@ export function defineAppSchema(
   const class_id = frozenSchemaId(body);
   definitions[class_id] = body;
 
-  return { class_id, fields: bindings, definitions };
+  return { class_id, fields: bindings, definitions } as TypedAppSchema<F>;
 }
 
 /** Internal bounded wire-definition parser; shared with sync dependency import. */
@@ -189,6 +198,8 @@ export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
   const ids = [...requires, ...recommends];
   if (
     new Set(ids).size !== ids.length ||
+    new Set(Object.values(bundle.fields)).size !==
+      Object.keys(bundle.fields).length ||
     ids.length !== Object.keys(bundle.fields).length
   )
     throw new Error('Incomplete class bindings');
@@ -199,7 +210,8 @@ export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
       !def ||
       JSON.stringify(def[core.properties.isA]) !==
         JSON.stringify([core.classes.property]) ||
-      def[core.properties.shortname] !== key ||
+      !key ||
+      new TextEncoder().encode(key).length > 128 ||
       !ids.includes(id) ||
       def[core.properties.datatype] !==
         appShapeDatatype(normalizeAppShape(def[APP_SHAPE] as AppShape))
@@ -210,16 +222,19 @@ export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
   for (const resource of resources) store.addResource(resource);
 }
 
-export async function setAppField(
+export async function setAppField<
+  B extends AppSchemaBundle,
+  K extends AppFieldName<B>,
+>(
   resource: Resource,
-  bundle: AppSchemaBundle,
-  field: string,
-  value: SchemaValue,
+  bundle: B,
+  field: K,
+  value: NoInfer<AppFieldValue<B, K>>,
 ): Promise<void> {
   const id = bundle.fields[field];
   const shape = bundle.definitions[id]?.[APP_SHAPE] as AppShape;
   if (!id || !shape) throw new Error(`Unknown field ${field}`);
-  validateAppValue(shape, value);
+  validateAppValue(shape, value as SchemaValue);
   await enableLoro();
   await resource.set(id, value as JSONValue, true, appShapeDatatype(shape));
 }
@@ -235,3 +250,5 @@ export async function patchAppField(
   if (!id) throw new Error(`Unknown field ${field}`);
   await resource.patchJsonPath(id, path, value as JSONValue | undefined);
 }
+
+export * from './schema-list.js';

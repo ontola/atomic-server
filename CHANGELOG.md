@@ -15,6 +15,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   recipient could hold. Read rights are checked per subscriber against the
   resource when it is sent, and a connection already reached through the
   resource or its drive doesn't get it twice.
+- App schema SDK: reusable Property bindings, identity-preserving aliases, typed
+  Rust/Dart model generation and TypeScript inference; bounded enums, unions and
+  nullable values. Explicit movable-list edits retain item identity, and a native
+  copy-migration runner handles preflight, revision pins and resumable progress.
+
 - Preserve declared strings that look like JSON arrays/objects or resource
   references in Loro snapshots; stable app IDs must not become arrays or links.
 

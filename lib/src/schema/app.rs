@@ -26,7 +26,7 @@ pub struct AppSchema {
 
 pub(crate) fn datatype(shape: &Shape) -> DataType {
     match shape {
-        Shape::String { .. } => DataType::String,
+        Shape::String { .. } | Shape::Enum { .. } => DataType::String,
         Shape::Number { .. } => DataType::Float,
         Shape::Integer { .. } => DataType::Integer,
         Shape::Boolean => DataType::Boolean,
@@ -34,10 +34,10 @@ pub(crate) fn datatype(shape: &Shape) -> DataType {
         _ => DataType::Json,
     }
 }
-fn typed(shape: &Shape, value: Json) -> AtomicResult<Value> {
+pub(crate) fn typed(shape: &Shape, value: Json) -> AtomicResult<Value> {
     shape.validate(&value)?;
     Ok(match shape {
-        Shape::String { .. } => Value::String(value.as_str().unwrap().into()),
+        Shape::String { .. } | Shape::Enum { .. } => Value::String(value.as_str().unwrap().into()),
         Shape::Reference => Value::AtomicUrl(value.as_str().unwrap().into()),
         Shape::Number { .. } => Value::Float(value.as_f64().unwrap()),
         Shape::Integer { .. } => Value::Integer(value.as_f64().unwrap() as i64),
@@ -143,7 +143,14 @@ impl AppSchema {
         let class = super::Class::from_resource(class.clone())?;
         let ids: std::collections::BTreeSet<_> =
             class.requires.iter().chain(&class.recommends).collect();
-        if ids.len() != class.requires.len() + class.recommends.len() {
+        if ids.len() != class.requires.len() + class.recommends.len()
+            || self
+                .fields
+                .values()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != self.fields.len()
+        {
             return Err("Duplicate class bindings".into());
         }
         for (name, id) in &self.fields {
@@ -155,7 +162,8 @@ impl AppSchema {
                 return Err("Invalid property definition".into());
             }
             let property = super::Property::from_resource(prop.clone())?;
-            if property.shortname != *name
+            if name.is_empty()
+                || name.len() > 128
                 || !class
                     .requires
                     .iter()

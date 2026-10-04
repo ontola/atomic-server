@@ -1,3 +1,11 @@
+Schema ergonomics (2026-10-04): shared Rust/TypeScript extended-shape hashes,
+alias-independent Class identity, typed model compilation, absent/null roundtrip,
+invalid-write nonmutation, concurrent move versus item edit, and shared union
+validation budgets. Generic migration tests reject stale previews, pin transform
+versions and resume an interrupted copy without repeating completed writes.
+Generated Dart models are executed with Dart; Audio tests pin every existing
+frozen Class/Property ID and exercise its migrated copy adapter.
+
 Audio string identity regression (2026-10-04): strings beginning with JSON
 array/object syntax or a resource URL retain the declared String variant after
 native Loro snapshot materialization. TypeScript writers emit the same tag.
