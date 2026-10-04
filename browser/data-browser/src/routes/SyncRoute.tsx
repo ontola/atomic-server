@@ -1750,10 +1750,12 @@ function SyncPage() {
                     {CLOUD_SERVER_DESCRIPTION}
                   </ServiceDescription>
                   <ConnMeta>
-                    {subscriptionStatus === 'active' ||
-                    subscriptionStatus === 'trialing'
-                      ? 'This drive already has a Server plan. Connecting it uses that plan; you do not need to buy it again.'
-                      : CLOUD_SERVER_PLAN_DESCRIPTION}
+                    {cloudEnrolled === true && !hostedCopyOrigin
+                      ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
+                      : subscriptionStatus === 'active' ||
+                          subscriptionStatus === 'trialing'
+                        ? 'Included in your plan. Turn it on to start hosting this drive; nothing more to buy.'
+                        : CLOUD_SERVER_PLAN_DESCRIPTION}
                   </ConnMeta>
                   {hostedCopyOrigin && (
                     <ConnMeta>
@@ -1780,8 +1782,11 @@ function SyncPage() {
                           : hostedCopyOrigin
                             ? 'Sync again'
                             : cloudEnrolled
-                              ? 'Finish Cloud Server setup'
-                              : CLOUD_SERVER_SETUP}
+                              ? 'Sync again'
+                              : subscriptionStatus === 'active' ||
+                                  subscriptionStatus === 'trialing'
+                                ? 'Turn on Cloud Server'
+                                : CLOUD_SERVER_SETUP}
                       </Button>
                     )}
                     {/* This tier costs money and reads our copy of your data,
