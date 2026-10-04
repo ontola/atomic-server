@@ -143,7 +143,7 @@ function verifiedDefinition(id: string, text: string): Resource {
   return resource;
 }
 
-/** No cache mutation or network I/O. Only reachable, verified definitions return. */
+/** No Store mutation or network I/O. Only reachable, verified definitions return. */
 export function resolveSchemaDependencies(
   doc: LoroDoc,
   lookup: Lookup,

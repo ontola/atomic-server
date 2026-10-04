@@ -4,7 +4,7 @@ native memo test checks exact-body hits, tampered-body rejection and eviction
 under entry/byte pressure. Audio's separate two-process Iroh regression receives
 its schema without registration, then merges note, sampler and instrument edits,
 transfers BLAKE3 files and receives presence. Full native library: 689 passed,
-8 ignored. Browser unit suite: 1127 passed, 1 skipped; the pre-existing live
+8 ignored. Browser unit suite: 1128 passed, 1 skipped; the pre-existing live
 server genesis integration remains excluded. No deployed phone/browser test or
 transport-wide denial-of-service audit is claimed.
 

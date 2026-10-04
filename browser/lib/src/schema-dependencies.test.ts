@@ -43,6 +43,26 @@ function receiver() {
 }
 
 describe('schema dependencies in sync state', () => {
+  it('does not resolve absent definitions from another receiver memo cache', async () => {
+    const source = await author();
+    const first = receiver();
+    expect(
+      first.resource.importLoroUpdate(source.doc.export({ mode: 'snapshot' }))
+        .complete,
+    ).toBe(true);
+    // Warm verification cache, then make the next independent store receive
+    // a resource without that schema. It must still fail closed.
+    source.doc.getMap(SCHEMA_ROOT).delete(v1.class_id);
+    const cold = receiver();
+    const result = cold.resource.importLoroUpdate(
+      source.doc.export({ mode: 'snapshot' }),
+    );
+    expect(result.complete).toBe(false);
+    expect(result.schemaError).toContain('Missing frozen');
+    expect(cold.store.resources.has(v1.class_id)).toBe(false);
+    expect(first.resource.get(v1.fields.semitones)).toBe(7);
+  });
+
   it('imports a cold snapshot and a delta without manual schema registration', async () => {
     const source = await author();
     const { store, resource } = receiver();

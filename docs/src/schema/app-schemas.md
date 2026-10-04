@@ -161,8 +161,9 @@ there is no separate URL lookup or executable schema loader.
 
 Native and browser resolvers memoize verified inline bodies, capped at 256
 entries and 4 MiB of encoded keys/bodies. A hit requires the exact ID and body.
-Parsing, canonicalization, hashing and shape-definition checks are skipped on
-hits; resource values are still validated on every import. Native parsing occurs
+Parsing, hash verification and shape-definition checks are skipped on hits;
+resource values are still validated on every import. Canonical serialization
+is still used when checking the aggregate dependency byte budget. Native parsing occurs
 outside the cache lock. Parsed object memory adds overhead beyond the encoded
 byte cap. An absent attachment cannot be resolved from this process-wide memo
 cache: only the current request and the recipient's admitted store participate

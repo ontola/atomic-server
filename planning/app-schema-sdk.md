@@ -67,5 +67,5 @@ extension can deduplicate definitions across resources without changing their ID
   ID/body equality; cache entries never satisfy a missing dependency by themselves.
 - [x] Exercise cold retrieval from an authorized GET response and real Audio Iroh
   sync with no schema registration on the receiving process.
-- [ ] Migrate Audio entities and saved versions, retain legacy reads, validate
+- [x] Migrate Audio entities and saved versions, retain legacy reads, validate
   edits before writes, preserve historical data and document migration behavior.
