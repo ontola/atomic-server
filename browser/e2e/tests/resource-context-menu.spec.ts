@@ -60,7 +60,9 @@ test.describe('resource context menu', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'More', exact: true }).click();
+    // At this width the navbar shows icons only, so the button's name is its
+    // title ("Open menu"), not the hidden "More" label.
+    await page.locator('[data-test="context-menu"]').click();
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
     const originalTop = (await menu.boundingBox())!.y;
