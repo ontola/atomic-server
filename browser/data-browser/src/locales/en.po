@@ -309,6 +309,7 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -4795,11 +4796,9 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr "Creating…"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr "Create drive"
@@ -5573,7 +5572,9 @@ msgstr "This table has no column of the right kind for that yet."
 msgid "To column"
 msgstr "To column"
 
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Pick an option…"
 msgstr "Pick an option…"
 
@@ -6291,9 +6292,6 @@ msgstr "…or bring it over from another device"
 msgid "Couldn’t reach {0}. Check your connection and try again."
 msgstr "Couldn’t reach {0}. Check your connection and try again."
 
-#~ msgid "Connect to {0}"
-#~ msgstr "Connect to {0}"
-
 #: src/routes/History/VersionTitle.tsx
 msgid "Verified"
 msgstr "Verified"
@@ -6803,9 +6801,6 @@ msgstr "<0>Save this recovery code.</0> It gets you back in on a new device, and
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Could not unlock with a passkey. Use your recovery code instead."
 
-#~ msgid "Connect existing account"
-#~ msgstr "Connect existing account"
-
 #: src/routes/SyncRoute.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr "Error: Sign in before syncing with another device"
@@ -6826,9 +6821,6 @@ msgstr "This drive already has a Server plan. Connecting it uses that plan; you 
 #: src/routes/SyncRoute.tsx
 msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
 msgstr "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
-
-#~ msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
-#~ msgstr "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
 
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
@@ -10419,3 +10411,11 @@ msgstr "Restart app"
 #: src/actions/appMenuItems.tsx
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Reload the whole app, as if you opened it again."
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Opening sign-up…"
+msgstr "Opening sign-up…"
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+msgstr "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."

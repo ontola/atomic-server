@@ -59,7 +59,7 @@ managedDriveTest(
   },
 );
 
-test('a demo guest can create a template drive without an account', async ({
+test('a demo guest creates an account before a template drive is made', async ({
   page,
   browserDiagnostics,
 }) => {
@@ -103,15 +103,18 @@ test('a demo guest can create a template drive without an account', async ({
   await expect(
     page.getByRole('region', { name: 'Setup' }).getByText('Name your drive'),
   ).toBeVisible({ timeout: 60000 });
-  await page.getByRole('button', { name: 'Create drive' }).click();
-  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
+  // Every account has an email: the name step says an account comes next,
+  // and continuing opens the portal's sign-up instead of making the drive.
   await expect(
-    page.getByText('Sign in to check Cloud Server hosting'),
-  ).toHaveCount(0);
-  const createdLocal = await page.evaluate(() =>
-    window.store.isLocalOnlyDrive(window.store.getDrive()!),
+    page.getByText('Next, create your account with your email address'),
+  ).toBeVisible({ timeout: 30000 });
+  await page.getByLabel('Drive name').fill('My studies');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page).toHaveURL(/\/signin$/, { timeout: 30000 });
+  const pending = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('atomic.pendingTemplate') ?? 'null'),
   );
-  expect(createdLocal).toBe(true);
+  expect(pending).toMatchObject({ template: 'student', name: 'My studies' });
 });
 
 managedDriveTest(

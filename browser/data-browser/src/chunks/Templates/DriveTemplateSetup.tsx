@@ -1,7 +1,14 @@
 import { getIconForClass } from '../../helpers/iconMap';
-import { useState, useRef, lazy, Suspense, type ReactNode } from 'react';
+import {
+  useEffect,
+  useState,
+  useRef,
+  lazy,
+  Suspense,
+  type ReactNode,
+} from 'react';
 import { styled } from 'styled-components';
-import { dataBrowser, useStore, type Resource } from '@tomic/react';
+import { dataBrowser, useStore, type Resource, type Store } from '@tomic/react';
 import { SIDEBAR_TOGGLE_WIDTH } from '../../components/SideBar';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -12,6 +19,12 @@ import { Checkbox } from '../../components/forms/Checkbox';
 import { ErrorBlock } from '../../components/ErrorLook';
 import { useSettings } from '../../helpers/AppSettings';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import {
+  accountCreationTarget,
+  fetchManagedInfo,
+} from '../../helpers/managedServer';
+import { getManagedAccount } from '../../helpers/managed/session';
+import { localAgentIsDisposable } from '../../helpers/managed/reconcile';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { TEMPLATE_CATALOG } from './catalog';
@@ -20,6 +33,7 @@ import { instantiateTemplate, startTemplateDemo } from './instantiate';
 import { readTemplateDemo, TEMPLATE_DEMO_KEY } from './demoSession';
 import { keepTemplateDemo } from './keepTemplateDemo';
 import { prepareTemplateDrive } from './prepareTemplateDrive';
+import { clearPendingTemplate, savePendingTemplate } from './pendingTemplate';
 const TemplateChat = lazy(() => import('./TemplateChat'));
 
 export interface TemplateSetupStep {
@@ -49,15 +63,17 @@ export function DriveTemplateSetup({
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const { setDrive, setSideBarLocked } = useSettings();
-  const initial = new URLSearchParams(window.location.search).get('template');
+  const search = new URLSearchParams(window.location.search);
+  const initial = search.get('template');
   const [selected, setSelected] = useState<TemplateDefinition | undefined>(() =>
     TEMPLATE_CATALOG.find(t => t.id === initial),
   );
-  const [naming, setNaming] = useState(
-    !!initial || new URLSearchParams(window.location.search).has('blank'),
+  const [naming, setNaming] = useState(!!initial || search.has('blank'));
+  // `name` and `examples` come back from account creation (`pendingTemplate`).
+  const [name, setName] = useState(
+    () => search.get('name') || selected?.title || 'My drive',
   );
-  const [name, setName] = useState(() => selected?.title ?? 'My drive');
-  const [examples, setExamples] = useState(false);
+  const [examples, setExamples] = useState(search.get('examples') === '1');
   const [keepEdits, setKeepEdits] = useState(false);
   const demo = readTemplateDemo();
   const matchingDemo = demo?.template === selected?.id ? demo : undefined;
@@ -66,6 +82,27 @@ export function DriveTemplateSetup({
   const busyRef = useRef(false);
   const [error, setError] = useState<Error>();
   const [partial, setPartial] = useState<Resource>();
+  // Known up front so the name step can say an account comes next.
+  const [signUpFirst, setSignUpFirst] = useState(false);
+  useEffect(() => {
+    let active = true;
+    guestSignUpUrl(store)
+      .then(url => {
+        if (active) setSignUpFirst(!!url);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [store]);
+  const createLabel = busy
+    ? signUpFirst
+      ? 'Opening sign-up…'
+      : 'Creating…'
+    : signUpFirst
+      ? 'Continue'
+      : 'Create drive';
   const plan = selected
     ? planTemplate(selected, TEMPLATE_CATALOG, examples)
     : undefined;
@@ -112,6 +149,7 @@ export function DriveTemplateSetup({
   async function create() {
     if (!name.trim() || partial) return;
     await run(async () => {
+      if (await sendGuestToSignUp()) return;
       await prepareTemplateDrive(store);
 
       if (keepEdits && matchingDemo) {
@@ -146,8 +184,32 @@ export function DriveTemplateSetup({
       }
 
       store.notifyResourceManuallyCreated(resource);
+      clearPendingTemplate();
       onCreated(resource);
     });
+  }
+
+  /**
+   * On a hosted build a drive belongs to an account, and every account has an
+   * email. A demo guest who picks a template is sent to create one (email and
+   * a way to sign in) and comes back here to finish, via `pendingTemplate`.
+   * Self-hosted servers have no account to make, so nothing changes there.
+   * True when the page is on its way to the portal.
+   */
+  async function sendGuestToSignUp(): Promise<boolean> {
+    const url = await guestSignUpUrl(store);
+    if (!url) return false;
+
+    savePendingTemplate({
+      template: selected?.id,
+      name: name.trim(),
+      examples,
+    });
+    window.location.assign(url);
+    // Stay busy until the page unloads.
+    await new Promise(() => undefined);
+
+    return true;
   }
 
   return (
@@ -159,7 +221,7 @@ export function DriveTemplateSetup({
         create: {
           form: FORM_ID,
           disabled: busy || !!partial || !name.trim(),
-          label: busy ? 'Creating…' : 'Create drive',
+          label: createLabel,
         },
       })}
       {error && (
@@ -214,7 +276,7 @@ export function DriveTemplateSetup({
                 <Card>
                   <Column>
                     <TemplatePreview template={selected} />
-                    {matchingDemo && (
+                    {matchingDemo && !signUpFirst && (
                       <label htmlFor='template-keep-edits'>
                         <Row>
                           <Checkbox
@@ -243,12 +305,18 @@ export function DriveTemplateSetup({
                   </Column>
                 </Card>
               )}
+              {signUpFirst && (
+                <p>
+                  Next, create your account with your email address and a way to
+                  sign in. Then you come back here to create your drive.
+                </p>
+              )}
               {!renderBar && (
                 <Button
                   type='submit'
                   disabled={busy || !!partial || !name.trim()}
                 >
-                  {busy ? 'Creating…' : 'Create drive'}
+                  {createLabel}
                 </Button>
               )}
             </Column>
@@ -313,6 +381,24 @@ export function DriveTemplateSetup({
       )}
     </Column>
   );
+}
+
+/**
+ * The portal sign-up a demo guest must go through before a drive is made, or
+ * undefined when this person may create one right away: they have an account,
+ * a workspace, or the server is self-hosted.
+ */
+async function guestSignUpUrl(store: Store): Promise<string | undefined> {
+  const agent = store.getAgent();
+  if (agent?.subject && !(await localAgentIsDisposable(store, agent.subject)))
+    return undefined;
+  if (await getManagedAccount()) return undefined;
+
+  const target = accountCreationTarget(
+    await fetchManagedInfo(store.getServerUrl()),
+  );
+
+  return target.kind === 'portal' ? target.url : undefined;
 }
 
 const TableIcon = getIconForClass(dataBrowser.classes.table);
