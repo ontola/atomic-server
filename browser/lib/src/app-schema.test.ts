@@ -17,10 +17,9 @@ import { Store } from './store.js';
 import { testStore } from './test-store.js';
 import { core } from './ontologies/core.js';
 
-const fixturePath = new URL(
-  '../../../lib/tests/fixtures/app-schema.json',
-  import.meta.url,
-);
+const fixturePath =
+  process.env.ATOMIC_SCHEMA_FIXTURE ??
+  new URL('../../../lib/tests/fixtures/app-schema.json', import.meta.url);
 const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as {
   input: { name: string; fields: Record<string, AppField> };
   bundle: AppSchemaBundle;

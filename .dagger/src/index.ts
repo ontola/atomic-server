@@ -1355,6 +1355,12 @@ export class AtomicServer {
       // so that relative path resolves.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
+      // Shared Rust/TypeScript fixture lives outside the browser subtree.
+      .withFile(
+        '/fixtures/app-schema.json',
+        this.source.file('lib/tests/fixtures/app-schema.json'),
+      )
+      .withEnvVariable('ATOMIC_SCHEMA_FIXTURE', '/fixtures/app-schema.json')
       // data-browser imports the repo-root logo from `../../../../logo.svg`
       // and `../../../../../logo.svg`. Browser mount sits at /app, so those
       // resolve to /logo.svg. Place the asset there.
