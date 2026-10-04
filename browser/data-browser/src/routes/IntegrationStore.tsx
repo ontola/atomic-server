@@ -10,6 +10,9 @@ import {
   useIntegrationCatalog,
 } from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
+import { PLUGIN_PREVIEW_PARAM } from '@helpers/integrationVisibility';
+import { driveHasServer } from '@helpers/driveData';
+import { isOriginWithoutNode } from '@helpers/originNode';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
@@ -72,6 +75,9 @@ export const IntegrationStoreRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => ({
     workspace:
       typeof search.workspace === 'string' ? search.workspace : undefined,
+    // `?preview=plugins` unlocks the experimental toggle on this device, for
+    // user-testing sessions.
+    preview: typeof search.preview === 'string' ? search.preview : undefined,
   }),
 });
 
@@ -79,9 +85,15 @@ function IntegrationStore(): React.JSX.Element {
   const store = useStore();
   const { drive } = useSettings();
   // Opened from a workspace: new automations can belong to it.
-  const { workspace } = IntegrationStoreRoute.useSearch();
-  const { showExperimentalPlugins, showApiPlugins, setVisibility } =
-    useIntegrationVisibility();
+  const { workspace, preview } = IntegrationStoreRoute.useSearch();
+  const {
+    showExperimentalPlugins,
+    showApiPlugins,
+    experimentalToggleVisible,
+    setVisibility,
+  } = useIntegrationVisibility({
+    unlockToggle: preview === PLUGIN_PREVIEW_PARAM,
+  });
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -99,8 +111,11 @@ function IntegrationStore(): React.JSX.Element {
   useEffect(() => {
     let active = true;
 
-    if (!drive) {
+    // Without a server (the demo workspace, an origin with no node) there is
+    // nothing to query, and so no connections yet.
+    if (!drive || !driveHasServer(store, drive)) {
       setInstalled([]);
+      setAutomations([]);
 
       return;
     }
@@ -144,7 +159,7 @@ function IntegrationStore(): React.JSX.Element {
   useEffect(() => {
     let active = true;
 
-    if (!drive) {
+    if (!drive || !driveHasServer(store, drive)) {
       setInstallations([]);
 
       return;
@@ -178,8 +193,9 @@ function IntegrationStore(): React.JSX.Element {
   useEffect(() => {
     setCatalogError(undefined);
 
-    if (!showExperimentalPlugins) {
-      setListings(undefined);
+    // An origin with no node answers `/plugin-catalog` with the app's HTML.
+    if (!showExperimentalPlugins || isOriginWithoutNode(serverUrl)) {
+      setListings(showExperimentalPlugins ? [] : undefined);
 
       return;
     }
@@ -308,6 +324,14 @@ function IntegrationStore(): React.JSX.Element {
               Connect your apps and keep your work in sync. Add automations when
               you need them.
             </p>
+            <NewFeatureNote role='note'>
+              <NewBadge>New</NewBadge>
+              <span>
+                {showExperimentalPlugins
+                  ? 'This is a new feature. You are seeing experimental plugins to try out.'
+                  : 'This is a new feature. Plugins will show up here soon for you to try out.'}
+              </span>
+            </NewFeatureNote>
           </Header>
           {(installed.length > 0 || installations.length > 0) && (
             <section aria-label='Your integrations'>
@@ -368,7 +392,7 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {hasExperimentalPlugins && (
+          {hasExperimentalPlugins && experimentalToggleVisible && (
             <CheckboxLabel>
               <Checkbox
                 checked={showExperimentalPlugins}
@@ -484,6 +508,24 @@ const Header = styled.header`
   p {
     color: ${p => p.theme.colors.textLight};
   }
+`;
+const NewFeatureNote = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
+`;
+const NewBadge = styled.span`
+  flex-shrink: 0;
+  padding: 0.1rem 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.main};
+  color: ${p => p.theme.colors.bg};
+  font-size: 0.75rem;
+  font-weight: 650;
 `;
 const Icon = styled.div`
   color: ${p => p.theme.colors.main};
