@@ -223,6 +223,12 @@ const PreviewFloat = styled.div`
   width: 18rem;
   height: 30rem;
   overflow-y: auto;
+
+  /* Panel (30rem) is centered, so the preview needs 32rem on each side of the
+     viewport center. Hide it when it would be cut off by the screen edge. */
+  @media (max-width: 66rem) {
+    display: none;
+  }
 `;
 
 const SectionHeading = styled.div`
