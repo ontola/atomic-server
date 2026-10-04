@@ -26,8 +26,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::{
-    actor_messages::SendFrame, appstate::AppState, commit_monitor::CommitMonitor,
-    errors::AtomicServerResult, handlers::ws_v2, helpers::get_auth_headers,
+    actor_messages::SendFrame,
+    appstate::AppState,
+    commit_monitor::CommitMonitor,
+    errors::{AtomicServerError, AtomicServerResult},
+    handlers::ws_v2,
+    helpers::get_auth_headers,
     vector_search::VectorSearchState,
 };
 
@@ -110,7 +114,12 @@ pub async fn web_socket_handler(
     // still far below the ~4 GiB WebSocket frame ceiling, so we don't risk
     // silently truncating legitimate payloads.
     .frame_size(MAX_MESSAGE_SIZE)
-    .start()?;
+    .start()
+    // A request to `/ws` that is not a WebSocket upgrade (a crawler, a
+    // health check, someone pasting the URL) fails the handshake. That is
+    // the caller's mistake, so answer 400 rather than a 500 that Sentry
+    // reports as an incident.
+    .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
 
     Ok(result)
 }
