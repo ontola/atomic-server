@@ -292,6 +292,15 @@ export function isUnrecoverableCommitErrorMessage(message: string): boolean {
     return true;
   }
 
+  // Server emits: "Parent of <subject> (<parent>) not found: ..."
+  // (`resources.rs` get_parent). The node does not hold the commit's parent,
+  // e.g. a drive that was switched to a node without its root ever being
+  // copied. Every retry fails identically, so park the entry (keep the edit)
+  // instead of spinning; a resync of the drive re-arms it.
+  if (/Parent of .+ not found/.test(message)) {
+    return true;
+  }
+
   return false;
 }
 
