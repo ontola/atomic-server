@@ -88,6 +88,17 @@ export function TableFilterValueInput({
         autoFocus={autoFocus}
         placeholder='Value…'
         onChange={e => onChange(e.target.value)}
+        onBlur={() => {
+          // The index compares the text of a stored number, so "2.5e-5" and
+          // "0.00002500" would match nothing though they equal a stored 0.000025.
+          if (inputType === 'number' && value !== '') {
+            const number = Number(value);
+
+            if (Number.isFinite(number) && String(number) !== value) {
+              onChange(String(number));
+            }
+          }
+        }}
       />
     </InputWrapper>
   );
