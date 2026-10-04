@@ -536,6 +536,11 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       setupFiles: ['./src/test-setup.ts'],
+      // The suite runs on a CI host that is also busy with other jobs. A test
+      // that dynamically imports a large module spends more than the default
+      // five seconds on the import alone, and fails without anything being
+      // wrong. A real hang still fails, just later.
+      testTimeout: 30_000,
     },
     build: {
       target: 'baseline-widely-available',
