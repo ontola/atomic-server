@@ -1,0 +1,239 @@
+{
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "comment": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "midiKey": {
+        "maximum": 127.0,
+        "minimum": 0.0,
+        "type": "integer"
+      },
+      "mode": {
+        "enum": [
+          "mono",
+          "poly"
+        ],
+        "type": "string"
+      },
+      "name": {
+        "maxLength": 100,
+        "type": "string"
+      },
+      "steps": {
+        "items": {
+          "maximum": 127.0,
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "maxItems": 128,
+        "type": "array"
+      },
+      "toJson": {
+        "type": "string"
+      },
+      "type": {
+        "type": "boolean"
+      },
+      "value": {
+        "anyOf": [
+          {
+            "minimum": 0.0,
+            "type": "number"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "base": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "base"
+            ],
+            "type": "object"
+          }
+        ]
+      }
+    },
+    "required": [
+      "mode",
+      "name",
+      "value"
+    ],
+    "type": "object"
+  },
+  "atomic": {
+    "class_id": "atomic:frozen:5ae51fa584042c60d193f98a65897c9a07374dbcef60c06364213addaa52f53c",
+    "fields": {
+      "comment": "atomic:frozen:db75746ef089d9afe4b5011381f6c5d316350547e22ac5653389a462e73fefa5",
+      "midiKey": "atomic:frozen:efbe983555b326789ae36f79620a9107dfd44bfee4cd7a6f444f0e90d449637b",
+      "mode": "atomic:frozen:73c04114c330cba49fd9e6056ebcf3108dceab0fd7d854b961582e12013c07f3",
+      "name": "atomic:frozen:6c06ed26ed61068d11ede5bd47af3a52c16b2d522b095fb78ad436a9c2be6e9e",
+      "steps": "atomic:frozen:905eba79c793c41cdc7805735218768de02829d547c996ba32dfe1aae44a9ef4",
+      "toJson": "atomic:frozen:818568a7f9016610ea3bb840f8120570eba26bc3726531c3f5ee80421cc28be8",
+      "type": "atomic:frozen:710cb702c1dfb81fb9f4e172f13035cf0ff6d5cd02e2bba5fdb93f46f310921b",
+      "value": "atomic:frozen:63ee899210866a3dd1f18a7d18e13980e883af94b25e93fb253325a758b87a13"
+    },
+    "definitions": {
+      "atomic:frozen:5ae51fa584042c60d193f98a65897c9a07374dbcef60c06364213addaa52f53c": {
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Class"
+        ],
+        "https://atomicdata.dev/properties/recommends": [
+          "atomic:frozen:db75746ef089d9afe4b5011381f6c5d316350547e22ac5653389a462e73fefa5",
+          "atomic:frozen:efbe983555b326789ae36f79620a9107dfd44bfee4cd7a6f444f0e90d449637b",
+          "atomic:frozen:905eba79c793c41cdc7805735218768de02829d547c996ba32dfe1aae44a9ef4",
+          "atomic:frozen:818568a7f9016610ea3bb840f8120570eba26bc3726531c3f5ee80421cc28be8",
+          "atomic:frozen:710cb702c1dfb81fb9f4e172f13035cf0ff6d5cd02e2bba5fdb93f46f310921b"
+        ],
+        "https://atomicdata.dev/properties/requires": [
+          "atomic:frozen:73c04114c330cba49fd9e6056ebcf3108dceab0fd7d854b961582e12013c07f3",
+          "atomic:frozen:6c06ed26ed61068d11ede5bd47af3a52c16b2d522b095fb78ad436a9c2be6e9e",
+          "atomic:frozen:63ee899210866a3dd1f18a7d18e13980e883af94b25e93fb253325a758b87a13"
+        ],
+        "https://atomicdata.dev/properties/shortname": "typed-example"
+      },
+      "atomic:frozen:63ee899210866a3dd1f18a7d18e13980e883af94b25e93fb253325a758b87a13": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "value",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "type": "union",
+          "variants": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "base": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "base"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "atomic:frozen:6c06ed26ed61068d11ede5bd47af3a52c16b2d522b095fb78ad436a9c2be6e9e": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "name",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "maxLength": 100,
+          "type": "string"
+        }
+      },
+      "atomic:frozen:710cb702c1dfb81fb9f4e172f13035cf0ff6d5cd02e2bba5fdb93f46f310921b": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "type",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "type": "boolean"
+        }
+      },
+      "atomic:frozen:73c04114c330cba49fd9e6056ebcf3108dceab0fd7d854b961582e12013c07f3": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "mode",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "type": "enum",
+          "values": [
+            "mono",
+            "poly"
+          ]
+        }
+      },
+      "atomic:frozen:818568a7f9016610ea3bb840f8120570eba26bc3726531c3f5ee80421cc28be8": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "toJson",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "type": "string"
+        }
+      },
+      "atomic:frozen:905eba79c793c41cdc7805735218768de02829d547c996ba32dfe1aae44a9ef4": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "steps",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "items": {
+            "maximum": 127.0,
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "maxItems": 128,
+          "type": "array"
+        }
+      },
+      "atomic:frozen:db75746ef089d9afe4b5011381f6c5d316350547e22ac5653389a462e73fefa5": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "comment",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "inner": {
+            "type": "string"
+          },
+          "type": "nullable"
+        }
+      },
+      "atomic:frozen:efbe983555b326789ae36f79620a9107dfd44bfee4cd7a6f444f0e90d449637b": {
+        "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+        "https://atomicdata.dev/properties/description": "",
+        "https://atomicdata.dev/properties/isA": [
+          "https://atomicdata.dev/classes/Property"
+        ],
+        "https://atomicdata.dev/properties/shortname": "midiKey",
+        "urn:atomic:schema:scope": "typed-example",
+        "urn:atomic:schema:shape": {
+          "maximum": 127.0,
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

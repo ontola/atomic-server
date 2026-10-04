@@ -1,3 +1,10 @@
+JSON Schema boundary (2026-10-04): shared Rust/TypeScript accepted and rejected
+schemas, Ajv 2020 value validation, exact export/identity sidecar parity,
+malformed/recursive/remote reference rejection, expansion/byte budgets and
+constraint/hash tampering. Generated Rust/Dart models exercise missing/null,
+camelCase wire names, keywords and member-name collisions. Ajv ignores
+__proto__ properties; that case is checked separately by Atomic's corpus.
+
 Schema ergonomics (2026-10-04): shared Rust/TypeScript extended-shape hashes,
 alias-independent Class identity, typed model compilation, absent/null roundtrip,
 invalid-write nonmutation, concurrent move versus item edit, and shared union

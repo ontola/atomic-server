@@ -263,11 +263,14 @@ and Dart models from a portable bundle. A command-line example is included:
 cargo run -p atomic_lib --example schema_codegen -- bundle.json InstrumentModel generated
 ```
 
-Generated accessors use `field_<alias>` to avoid language keyword collisions.
+Generated accessors use Rust `snake_case` and Dart `lowerCamelCase`. Rust
+keywords use raw identifiers (`r#type`); Dart reserved/member names get a
+`Value` suffix. Collisions fail generation with a request to rebind an alias.
+JSON keys and frozen identities remain unchanged.
 Codegen accepts ASCII identifier aliases; use `rebind` for other local names.
 Model names start uppercase and end in `Model`. Each generated file has its own
 type namespace. Rust `Optional<Option<T>>` distinguishes missing from null;
-Dart exposes `has_<alias>`, typed getters, checked `fromJson` and copied `toJson`.
+Dart exposes `hasAlias`, typed getters, checked `fromJson` and copied `toJson`.
 Union wrappers expose typed `asVariantN` getters. Dart output needs only
 `dart:convert`; format it with `dart format` after generation. Generation is a
 trusted build step, never something triggered by a schema arriving over sync.
@@ -311,3 +314,13 @@ cutover. Remote edits arriving after the captured versions remain on the source.
 Neither definitions nor sync messages can execute a migration. The generic
 runner is currently native Rust; TypeScript applications need their own trusted
 persistence adapter/runner until a browser equivalent is provided.
+
+
+## JSON Schema interchange
+
+Use JSON Schema 2020-12 at the application boundary with the [supported
+profile](./json-schema.md). Rust and TypeScript import/export the same bounded
+subset. Standard JSON Schema describes the data; a separate verified Atomic
+bundle preserves Class/Property identities and local aliases. JSON Schema
+`$ref` resolves a local schema definition, whereas an Atomic reference shape
+represents a link **in the data**.

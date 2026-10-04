@@ -1080,3 +1080,78 @@ fn union_branching_has_a_shared_validation_budget() {
         .to_string()
         .contains("100000"));
 }
+
+#[test]
+fn json_schema_interchange_corpus_and_identity_roundtrip() {
+    let corpus: serde_json::Value = serde_json::from_str(include_str!(
+        "../../tests/fixtures/json-schema-interop.json"
+    ))
+    .unwrap();
+    for case in corpus["accepted"].as_array().unwrap() {
+        let shape = Shape::from_json_schema(&case["schema"]).unwrap();
+        let exported = shape.to_json_schema().unwrap();
+        let roundtrip = Shape::from_json_schema(&exported).unwrap();
+        for value in case["valid"].as_array().unwrap() {
+            assert!(shape.validate(value).is_ok(), "{case}");
+            assert!(roundtrip.validate(value).is_ok());
+        }
+        for value in case["invalid"].as_array().unwrap() {
+            assert!(shape.validate(value).is_err(), "{case}");
+            assert!(roundtrip.validate(value).is_err());
+        }
+    }
+    for case in corpus["rejected"].as_array().unwrap() {
+        assert!(
+            Shape::from_json_schema(&case["schema"])
+                .unwrap_err()
+                .to_string()
+                .contains(case["error"].as_str().unwrap()),
+            "{case}"
+        );
+    }
+    let original = audio().rebind("tune", "pitch").unwrap();
+    let mut document = original.export_json_schema().unwrap();
+    document.schema["title"] = json!("A nicer display title");
+    document.schema["required"]
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+    assert_eq!(
+        serde_json::to_value(document.import().unwrap()).unwrap(),
+        serde_json::to_value(&original).unwrap()
+    );
+    document.schema["properties"]["pitch"]["maximum"] = json!(100);
+    assert!(document.import().is_err());
+    let mut tampered = original.export_json_schema().unwrap();
+    tampered
+        .atomic
+        .definitions
+        .get_mut(original.property("pitch").unwrap())
+        .unwrap()[crate::urls::SHORTNAME] = json!("forged");
+    assert!(tampered.import().is_err());
+    assert!(AppSchema::from_json_schema("open", &json!({"type":"object"})).is_err());
+}
+
+#[test]
+fn json_schema_expansion_and_generated_name_collisions_are_bounded() {
+    let mut defs = serde_json::Map::new();
+    defs.insert("d0".into(), json!({"type":"boolean"}));
+    for i in 1..13 {
+        defs.insert(format!("d{i}"),json!({"type":"object","properties":{"a":{"$ref":format!("#/$defs/d{}",i-1)},"b":{"$ref":format!("#/$defs/d{}",i-1)}}}));
+    }
+    assert!(Shape::from_json_schema(&json!({"$defs":defs,"$ref":"#/$defs/d12"})).is_err());
+    let f = || Field {
+        shape: Shape::Boolean,
+        required: false,
+    };
+    let schema = AppSchema::define(
+        "names",
+        [("midiKey".into(), f()), ("midi_key".into(), f())].into(),
+    )
+    .unwrap();
+    assert!(schema
+        .generate_models("ExampleModel")
+        .unwrap_err()
+        .to_string()
+        .contains("collision"));
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "comment": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "midiKey": {
+      "maximum": 127.0,
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "mode": {
+      "enum": [
+        "mono",
+        "poly"
+      ],
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 100,
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "maximum": 127.0,
+        "minimum": 0.0,
+        "type": "integer"
+      },
+      "maxItems": 128,
+      "type": "array"
+    },
+    "toJson": {
+      "type": "string"
+    },
+    "type": {
+      "type": "boolean"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "base"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": [
+    "mode",
+    "name",
+    "value"
+  ],
+  "type": "object"
+}

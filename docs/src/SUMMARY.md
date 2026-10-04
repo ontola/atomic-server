@@ -79,6 +79,7 @@
   - [Paths](core/paths.md)
   - [Schema](schema/intro.md)
     - [App-defined schemas](schema/app-schemas.md)
+    - [JSON Schema interoperability](schema/json-schema.md)
     - [Classes](schema/classes.md)
     - [Datatypes](schema/datatypes.md)
     - [Translations & Localization](schema/translations.md)

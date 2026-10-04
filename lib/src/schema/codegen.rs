@@ -18,6 +18,133 @@ fn ident(value: &str) -> AtomicResult<()> {
     }
     Ok(())
 }
+fn words(value: &str) -> Vec<String> {
+    let chars: Vec<_> = value.chars().collect();
+    let mut text = String::new();
+    for (i, c) in chars.iter().enumerate() {
+        if *c == '_' {
+            text.push(' ');
+            continue;
+        }
+        if c.is_ascii_uppercase()
+            && i > 0
+            && chars[i - 1] != '_'
+            && (chars[i - 1].is_ascii_lowercase()
+                || chars[i - 1].is_ascii_digit()
+                || chars.get(i + 1).is_some_and(char::is_ascii_lowercase))
+        {
+            text.push(' ');
+        }
+        text.push(c.to_ascii_lowercase());
+    }
+    text.split_whitespace().map(String::from).collect()
+}
+fn pascal(parts: &[String]) -> String {
+    parts
+        .iter()
+        .map(|p| format!("{}{}", p[..1].to_uppercase(), &p[1..]))
+        .collect()
+}
+fn accessors(key: &str) -> AtomicResult<(String, String, String)> {
+    ident(key)?;
+    let parts = words(key);
+    let mut rust = parts.join("_");
+    let mut dart = format!("{}{}", parts[0], pascal(&parts[1..]));
+    if ["self", "super", "crate", "Self", "additional"].contains(&rust.as_str()) {
+        rust.push_str("_value");
+    } else if [
+        "as", "async", "await", "break", "const", "continue", "dyn", "else", "enum", "extern",
+        "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut",
+        "pub", "ref", "return", "static", "struct", "trait", "true", "type", "unsafe", "use",
+        "where", "while", "abstract", "become", "box", "do", "final", "macro", "override", "priv",
+        "typeof", "unsized", "virtual", "yield", "try", "gen",
+    ]
+    .contains(&rust.as_str())
+    {
+        rust = format!("r#{rust}");
+    }
+    if [
+        "abstract",
+        "as",
+        "assert",
+        "async",
+        "await",
+        "base",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "covariant",
+        "default",
+        "deferred",
+        "do",
+        "dynamic",
+        "else",
+        "enum",
+        "export",
+        "extends",
+        "extension",
+        "external",
+        "factory",
+        "false",
+        "final",
+        "finally",
+        "for",
+        "Function",
+        "get",
+        "hide",
+        "if",
+        "implements",
+        "import",
+        "in",
+        "interface",
+        "is",
+        "late",
+        "library",
+        "mixin",
+        "new",
+        "null",
+        "of",
+        "on",
+        "operator",
+        "part",
+        "required",
+        "rethrow",
+        "return",
+        "sealed",
+        "set",
+        "show",
+        "static",
+        "super",
+        "switch",
+        "sync",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "type",
+        "typedef",
+        "var",
+        "void",
+        "when",
+        "while",
+        "with",
+        "yield",
+        "toJson",
+        "fromJson",
+        "toString",
+        "hashCode",
+        "runtimeType",
+        "noSuchMethod",
+    ]
+    .contains(&dart.as_str())
+    {
+        dart.push_str("Value");
+    }
+    Ok((rust, dart, format!("has{}", pascal(&parts))))
+}
 fn literal(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
@@ -109,10 +236,19 @@ impl Generator {
     ) -> AtomicResult<()> {
         let mut rust = vec![];
         let mut dart = vec![];
+        let mut rust_names = BTreeSet::new();
+        let mut dart_names = BTreeSet::new();
         for (key, shape) in properties {
-            // Indexed members avoid all keyword and normalization collisions. The
-            // friendly accessor is emitted as field_<alias>, preserving spelling.
-            ident(key)?;
+            let (rust_name, dart_name, presence_name) = accessors(key)?;
+            if !rust_names.insert(rust_name.clone())
+                || !dart_names.insert(dart_name.clone())
+                || !dart_names.insert(presence_name.clone())
+            {
+                return Err(format!(
+                    "Generated accessor collision at {key}; rebind the local alias"
+                )
+                .into());
+            }
             let (rt, dt, decode) = self.ty(shape)?;
             let optional = !required.contains(key);
             let rt = if optional {
@@ -120,7 +256,7 @@ impl Generator {
             } else {
                 rt
             };
-            rust.push(format!("    #[serde(rename = {}{} )]\n    pub field_{key}: {rt},",literal(key),if optional {", default, skip_serializing_if = \"atomic_lib::schema::model::Optional::is_missing\""}else{""}));
+            rust.push(format!("    #[serde(rename = {}{} )]\n    pub {rust_name}: {rt},",literal(key),if optional {", default, skip_serializing_if = \"atomic_lib::schema::model::Optional::is_missing\""}else{""}));
             let dt = if optional && !dt.ends_with('?') {
                 format!("{dt}?")
             } else {
@@ -134,7 +270,7 @@ impl Generator {
             } else {
                 String::new()
             };
-            dart.push(format!(" bool get has_{key} => _json.containsKey({});\n {dt} get field_{key} {{ {absent} final v=_json[{}]; return {decode}; }}",dart_literal(key),dart_literal(key)));
+            dart.push(format!(" bool get {presence_name} => _json.containsKey({});\n {dt} get {dart_name} {{ {absent} final v=_json[{}]; return {decode}; }}",dart_literal(key),dart_literal(key)));
         }
         if additional {
             rust.push("    #[serde(flatten)]\n    pub additional: std::collections::BTreeMap<String, serde_json::Value>,".into());
@@ -149,9 +285,10 @@ impl Generator {
         Ok(())
     }
 }
-/// Both outputs intentionally use field_<alias> accessors to avoid language
-/// keywords. Optional nullable fields retain presence (Rust Optional<Option<T>>,
-/// Dart has_<alias>). Union alternatives expose typed Dart asVariantN getters.
+/// Rust fields use snake_case and Dart getters lowerCamelCase. JSON keys and
+/// frozen identifiers remain unchanged. Keywords are escaped and collisions fail.
+/// Optional nullable values retain presence; Dart exposes has<Field> getters.
+#[derive(Debug)]
 pub struct GeneratedModels {
     pub rust: String,
     pub dart: String,
@@ -204,7 +341,7 @@ impl AppSchema {
                 g.rust.join("\n\n")
             ),
             dart: format!(
-                "// Generated from {}. Do not edit.\n// ignore_for_file: non_constant_identifier_names\nimport 'dart:convert';\n{}\n{}\n",
+                "// Generated from {}. Do not edit.\nimport 'dart:convert';\n{}\n{}\n",
                 self.class_id,
                 include_str!("model_runtime.dart"),
                 g.dart.join("\n\n")

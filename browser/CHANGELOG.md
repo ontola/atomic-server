@@ -5,6 +5,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 ## UNRELEASED
 
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
+- Bounded JSON Schema 2020-12 import/export with verified Atomic identity
+  sidecars, explicit compatibility errors and conventional generated accessors.
+
 - Frozen app schemas now travel with resource Loro state over normal sync.
   Receivers verify bounded dependencies before admitting data, reject invalid
   imports without installing definitions, and retain explicit schema versions

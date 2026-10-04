@@ -1,0 +1,369 @@
+{
+  "accepted": [
+    {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 4
+          }
+        }
+      },
+      "valid": [
+        {},
+        {
+          "label": "four",
+          "extra": 1
+        }
+      ],
+      "invalid": [
+        {
+          "label": "longer"
+        }
+      ]
+    },
+    {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "number",
+                "maximum": 10
+              }
+            ]
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "valid": [
+        {
+          "value": 5
+        },
+        {
+          "value": 20
+        }
+      ],
+      "invalid": [
+        {},
+        {
+          "value": "5"
+        },
+        {
+          "value": 5,
+          "extra": 1
+        }
+      ]
+    },
+    {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 4
+      },
+      "valid": [
+        null,
+        "ok"
+      ],
+      "invalid": [
+        5,
+        "longer"
+      ]
+    },
+    {
+      "schema": {
+        "enum": [
+          "mono",
+          "poly"
+        ]
+      },
+      "valid": [
+        "mono",
+        "poly"
+      ],
+      "invalid": [
+        1,
+        null,
+        "other"
+      ]
+    },
+    {
+      "schema": {
+        "const": "mono"
+      },
+      "valid": [
+        "mono"
+      ],
+      "invalid": [
+        "poly"
+      ]
+    },
+    {
+      "schema": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 127
+      },
+      "valid": [
+        0,
+        60,
+        60.0,
+        127
+      ],
+      "invalid": [
+        -1,
+        128,
+        0.1,
+        "60"
+      ]
+    },
+    {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "boolean"
+        },
+        "maxItems": 2.0
+      },
+      "valid": [
+        [],
+        [
+          true,
+          false
+        ]
+      ],
+      "invalid": [
+        [
+          true,
+          false,
+          true
+        ],
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": {
+          "pitch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/$defs/pitch"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "valid": [
+        {
+          "key": 60
+        }
+      ],
+      "invalid": [
+        {
+          "key": 128
+        }
+      ]
+    },
+    {
+      "schema": {
+        "$defs": {
+          "a/b~c": {
+            "type": "boolean"
+          }
+        },
+        "$ref": "#/$defs/a~1b~0c"
+      },
+      "valid": [
+        true
+      ],
+      "invalid": [
+        1
+      ]
+    },
+    {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "__proto__": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "valid": [
+        {},
+        {
+          "__proto__": "ok"
+        }
+      ],
+      "invalid": [
+        {
+          "__proto__": 4
+        }
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "schema": {
+        "type": "integer"
+      },
+      "error": "safe range"
+    },
+    {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "error": "maxItems"
+    },
+    {
+      "schema": {
+        "type": "string",
+        "pattern": "(a+)+$"
+      },
+      "error": "pattern"
+    },
+    {
+      "schema": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "error": "oneOf"
+    },
+    {
+      "schema": {
+        "$ref": "https://untrusted.example/schema"
+      },
+      "error": "local"
+    },
+    {
+      "schema": {
+        "$defs": {
+          "x": {
+            "$ref": "#/$defs/x"
+          }
+        },
+        "$ref": "#/$defs/x"
+      },
+      "error": "recursive"
+    },
+    {
+      "schema": {
+        "$defs": {
+          "x": {
+            "type": "number"
+          }
+        },
+        "$ref": "#/$defs/x",
+        "minimum": 0
+      },
+      "error": "minimum"
+    },
+    {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "$id": "https://example.com/x",
+            "type": "boolean"
+          }
+        }
+      },
+      "error": "root $id"
+    },
+    {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "x",
+          "x"
+        ]
+      },
+      "error": "unique"
+    },
+    {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "error": "additionalProperties"
+    },
+    {
+      "schema": {
+        "type": "string",
+        "format": "email"
+      },
+      "error": "format"
+    },
+    {
+      "schema": {
+        "enum": [
+          1,
+          2
+        ]
+      },
+      "error": "string enum"
+    },
+    {
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "boolean"
+      },
+      "error": "2020-12"
+    },
+    {
+      "schema": true,
+      "error": "boolean schemas"
+    },
+    {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "mono"
+        ]
+      },
+      "error": "enum/const"
+    }
+  ]
+}

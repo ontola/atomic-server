@@ -83,3 +83,11 @@ extension can deduplicate definitions across resources without changing their ID
 Browser copy-migration orchestration, a packaged Dart transport/editing SDK and
 in-place distributed migrations remain outside this draft. Generated Dart models
 work with Audio's current native bridge; they do not add a second sync engine.
+
+## JSON Schema boundary
+
+- [x] Bounded 2020-12 import/export in Rust and TypeScript, with explicit errors.
+- [x] Separate verified identity sidecars preserve reused Properties and aliases.
+- [x] Shared fixture corpus, exact export parity and Ajv value validation.
+- [x] Conventional generated Rust/Dart accessors with collision detection.
+- [x] Audio exports its actual schemas without changing existing frozen IDs.

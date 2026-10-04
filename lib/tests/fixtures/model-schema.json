@@ -1,7 +1,83 @@
-{"input":{"name":"typed-example","fields":{
-  "name":{"required":true,"shape":{"type":"string","maxLength":100}},
-  "mode":{"required":true,"shape":{"type":"enum","values":["mono","poly"]}},
-  "value":{"required":true,"shape":{"type":"union","variants":[{"type":"number","minimum":0},{"type":"object","properties":{"base":{"type":"number"}},"required":["base"]}]}},
-  "comment":{"shape":{"type":"nullable","inner":{"type":"string"}}},
-  "steps":{"shape":{"type":"array","items":{"type":"integer","minimum":0,"maximum":127},"maxItems":128}}
-}}}
+{
+  "input": {
+    "name": "typed-example",
+    "fields": {
+      "name": {
+        "required": true,
+        "shape": {
+          "type": "string",
+          "maxLength": 100
+        }
+      },
+      "mode": {
+        "required": true,
+        "shape": {
+          "type": "enum",
+          "values": [
+            "mono",
+            "poly"
+          ]
+        }
+      },
+      "value": {
+        "required": true,
+        "shape": {
+          "type": "union",
+          "variants": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "object",
+              "properties": {
+                "base": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "base"
+              ]
+            }
+          ]
+        }
+      },
+      "comment": {
+        "shape": {
+          "type": "nullable",
+          "inner": {
+            "type": "string"
+          }
+        }
+      },
+      "steps": {
+        "shape": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "maxItems": 128
+        }
+      },
+      "midiKey": {
+        "shape": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 127
+        }
+      },
+      "type": {
+        "shape": {
+          "type": "boolean"
+        }
+      },
+      "toJson": {
+        "shape": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@ pub mod bindings;
 pub mod codegen;
 pub mod dependencies;
 pub mod frozen;
+pub mod json_schema;
 pub mod list;
 pub mod migration;
 pub mod model;

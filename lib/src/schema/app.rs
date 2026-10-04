@@ -122,9 +122,8 @@ impl AppSchema {
         })
     }
 
-    /// Verify the entire bundle before installing anything. Re-registration is
-    /// idempotent. This works with both in-memory and persistent Atomic stores.
-    pub async fn register(&self, store: &impl Storelike) -> AtomicResult<()> {
+    /// Verify the entire bundle without mutating a store.
+    fn checked_resources(&self) -> AtomicResult<Vec<Resource>> {
         if self.definitions.len() != self.fields.len() + 1 || self.fields.len() > 128 {
             return Err("Schema bundle too large".into());
         }
@@ -180,7 +179,15 @@ impl AppSchema {
         if class.requires.len() + class.recommends.len() != self.fields.len() {
             return Err("Incomplete class bindings".into());
         }
-        for res in resources {
+        Ok(resources)
+    }
+    pub fn check(&self) -> AtomicResult<()> {
+        self.checked_resources()?;
+        Ok(())
+    }
+    /// Verify and install all definitions; safe to repeat on each app startup.
+    pub async fn register(&self, store: &impl Storelike) -> AtomicResult<()> {
+        for res in self.checked_resources()? {
             store.add_resource_opts(&res, false, true, true).await?;
         }
         Ok(())

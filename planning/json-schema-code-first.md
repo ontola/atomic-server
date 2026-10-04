@@ -1,11 +1,13 @@
 # JSON Schema compatible, code-first schemas
 
-**Status (2026-10-04):** An additive first SDK is being built on
-`codex/atomic-schema-sdk`; see [app-schema-sdk.md](./app-schema-sdk.md).
-It provides `atomic:frozen:` bundles, bounded nested shapes, local registration
-and object-path CRDT edits in Rust and TypeScript. It does not yet provide full
-JSON Schema import/export, automatic schema discovery or migration. PR #1262
-is the older, unmerged `did:ad:` draft and is not the implementation base.
+**Status (2026-10-04):** Implemented on `codex/atomic-schema-sdk`; see
+[app-schema-sdk.md](./app-schema-sdk.md) and the
+[bounded JSON Schema profile](../docs/src/schema/json-schema.md).
+Rust/TypeScript import and export JSON Schema 2020-12 with verified identity
+sidecars. Frozen definitions travel over authorized sync; trusted native copy
+migrations are explicit. Full JSON Schema coverage and distributed in-place
+migration are outside this draft. PR #1262 is the older `did:ad:` draft and is
+not the implementation base.
 
 **Decision (accepted 2026-09-01):** Content-addressed frozen definitions are the
 on-ramp; optional schema remains the write-path policy. The current spelling is

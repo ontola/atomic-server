@@ -175,8 +175,8 @@ export function parseAppDefinition(
   return resource;
 }
 
-/** Validate all definitions before installing any. Call on every app startup. */
-export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
+/** Verify all frozen definitions and bindings without mutating a store. */
+export function checkAppSchema(bundle: AppSchemaBundle): Resource[] {
   const entries = Object.entries(bundle.definitions);
   if (
     entries.length !== Object.keys(bundle.fields).length + 1 ||
@@ -219,7 +219,11 @@ export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
       throw new Error('Invalid field binding');
   }
 
-  for (const resource of resources) store.addResource(resource);
+  return resources;
+}
+/** Verify and install the complete bundle. Call on every app startup. */
+export function registerAppSchema(store: Store, bundle: AppSchemaBundle): void {
+  for (const resource of checkAppSchema(bundle)) store.addResource(resource);
 }
 
 export async function setAppField<
@@ -252,3 +256,5 @@ export async function patchAppField(
 }
 
 export * from './schema-list.js';
+
+export * from './schema-json-schema.js';
