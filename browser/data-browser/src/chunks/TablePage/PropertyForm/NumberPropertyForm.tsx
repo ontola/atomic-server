@@ -89,7 +89,9 @@ export const NumberPropertyForm = ({
           Currency
         </RadioInput>
       </RadioGroup>
-      {resource.hasClasses(dataBrowser.classes.currencyProperty) ? (
+      {/* Follows the chosen format, not the class: adding the class is async and
+       *  does not re-render, so a new column never got its currency picker. */}
+      {numberFormatting === numberFormats.currency ? (
         <CurrencyPicker resource={resource} />
       ) : (
         <DecimalPlacesInput resource={resource} />

@@ -441,7 +441,13 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         {!contextResource && (
           <DropdownMenu
             isMainMenu
-            items={[...appMenu.create, DIVIDER, ...appMenu.find]}
+            items={[
+              ...appMenu.create,
+              DIVIDER,
+              ...appMenu.find,
+              DIVIDER,
+              ...appMenu.maintenance,
+            ]}
             Trigger={ParentContextMenuTrigger}
           />
         )}
