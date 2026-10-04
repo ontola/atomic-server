@@ -501,6 +501,7 @@ msgstr "En-têtes HTTP optionnels à envoyer lors de la connexion à ce serveur 
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/components/MetaSetter.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
 #: src/views/ResourcePageDefault.tsx
@@ -818,12 +819,14 @@ msgid "Login / New User"
 msgstr "Connexion / Nouvel utilisateur"
 
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Settings"
 msgstr "Paramètres"
 
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "About"
 msgstr "À propos"
@@ -1144,6 +1147,7 @@ msgstr "Importation..."
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/components/MetaSetter.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importer"
@@ -1284,6 +1288,7 @@ msgstr "Afficher la vue des données"
 #: src/actions/appActions.ts
 #: src/actions/appMenuItems.tsx
 #: src/actions/resourceActions.tsx
+#: src/components/MetaSetter.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New resource"
 msgstr "Nouvelle ressource"
@@ -1296,6 +1301,7 @@ msgstr "Ouvrir le menu"
 msgid "Theme settings"
 msgstr "Paramètres du thème"
 
+#: src/components/MetaSetter.tsx
 #: src/components/OverlayContainer.tsx
 #: src/routes/ShortcutsRoute.tsx
 msgid "Keyboard shortcuts"
@@ -1329,6 +1335,7 @@ msgstr "Document"
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
@@ -1621,6 +1628,7 @@ msgid "Set"
 msgstr "Définir"
 
 #: src/actions/resourceActions.tsx
+#: src/components/MetaSetter.tsx
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History"
@@ -1823,13 +1831,8 @@ msgid "No instances"
 msgstr "Aucune instance"
 
 #: src/chunks/RTE/AIChatInput/mcpSuggestions.ts
-#: src/components/MetaSetter.tsx
 msgid "Atomic Data"
 msgstr "Atomic Data"
-
-#: src/components/MetaSetter.tsx
-msgid "The easiest way to create and share linked data."
-msgstr "Le moyen le plus simple de créer et de partager des données liées."
 
 #: src/components/SkipNav.tsx
 msgid "Skip Navigation?"
@@ -2310,6 +2313,7 @@ msgstr "Annuler"
 msgid "Accept Changes"
 msgstr "Accepter les modifications"
 
+#: src/components/MetaSetter.tsx
 #: src/components/NavBar.tsx
 msgid "Share"
 msgstr "Partager"
@@ -3332,6 +3336,7 @@ msgstr "Curseur"
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr "Entrez une URL Atomique ou recherchez (appuyez sur \"/\")"
 
+#: src/components/MetaSetter.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
@@ -4793,6 +4798,7 @@ msgstr ""
 msgid "Create drive"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "New drive"
 msgstr ""
@@ -5562,7 +5568,9 @@ msgstr ""
 msgid "To column"
 msgstr ""
 
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Pick an option…"
 msgstr ""
 
@@ -6280,9 +6288,6 @@ msgstr ""
 msgid "Couldn’t reach {0}. Check your connection and try again."
 msgstr ""
 
-#~ msgid "Connect to {0}"
-#~ msgstr ""
-
 #: src/routes/History/VersionTitle.tsx
 msgid "Verified"
 msgstr ""
@@ -6792,9 +6797,6 @@ msgstr ""
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Impossible de déverrouiller avec une clé d’accès. Utilisez votre code de récupération."
 
-#~ msgid "Connect existing account"
-#~ msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr ""
@@ -6815,9 +6817,6 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
 msgstr ""
-
-#~ msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
-#~ msgstr ""
 
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
@@ -7432,6 +7431,7 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -9832,6 +9832,7 @@ msgstr ""
 msgid "Use this secret and sign out"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/SideBar/AccountMenu.tsx
@@ -10380,6 +10381,7 @@ msgstr ""
 
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Signed in on another device? Use a code"
+msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Reload resource"
@@ -10399,4 +10401,40 @@ msgstr ""
 
 #: src/actions/appMenuItems.tsx
 msgid "Reload the whole app, as if you opened it again."
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Welcome"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Account"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Server settings"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Token"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Data"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Get started"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Invitation"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Your own place for documents, tables, meetings and chat. Local-first and open source, with optional cloud backup and sync."
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "The easiest way to create, share and model Linked Atomic Data."
 msgstr ""
