@@ -4559,6 +4559,7 @@ async fn measure_chat_message_bytes() {
         Tree::DriveMapping,
         Tree::Outbox,
     ];
+    let stored = super::compressed_kv::CompressedKv::new(store.kv.clone());
     let tally = |store: &Db| {
         trees
             .iter()
@@ -4569,7 +4570,7 @@ async fn measure_chat_message_bytes() {
                     n += 1;
                     k += key.len();
                     v += if super::compressed_kv::is_compressed_tree(*t) {
-                        super::compressed_kv::encode(&val).len()
+                        stored.encoded(*t, &key, &val, &[]).len()
                     } else {
                         val.len()
                     };
@@ -4629,4 +4630,85 @@ async fn measure_chat_message_bytes() {
     }
     println!("TOTAL per message: {}", total / N);
     let _ = last;
+}
+
+/// A snapshot is stored as the changes after the genesis commit, and read
+/// back as the same document, also after later edits.
+#[tokio::test]
+#[timeout(120000)]
+async fn snapshot_is_stored_as_a_delta_on_the_genesis_commit() {
+    let store = Db::init_temp("snapshot_delta").await.unwrap();
+    let mut resource = Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("hallo".into()), &store)
+        .await
+        .unwrap();
+    resource
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("een gewone zin".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    let response = resource.save_as_genesis(&store).await.unwrap();
+    let subject = response.resource_new.unwrap().get_subject().clone();
+    let key = subject.pure_id();
+
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let stored = super::compressed_kv::CompressedKv::new(store.kv.clone());
+    let packed = stored.encoded(Tree::LoroSnapshots, key.as_bytes(), &snapshot, &[]);
+    assert_eq!(
+        &packed[..2],
+        &[0, 2],
+        "a fresh resource's snapshot is a delta"
+    );
+    assert!(
+        packed.len() * 2 < snapshot.len(),
+        "{} vs {}",
+        packed.len(),
+        snapshot.len()
+    );
+
+    let read = store.get_resource(&subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "hallo");
+
+    // Edits sit on top of the genesis and survive a read.
+    let mut edit = store.get_resource(&subject).await.unwrap();
+    edit.set(urls::NAME.into(), Value::String("edited".into()), &store)
+        .await
+        .unwrap();
+    edit.save_locally(&store).await.unwrap();
+    let read = store.get_resource(&subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "edited");
+    assert_eq!(
+        read.get(urls::DESCRIPTION).unwrap().to_string(),
+        "een gewone zin"
+    );
+
+    // Without the genesis commit there is nothing to be a delta on, so the
+    // whole snapshot is kept.
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let orphan = stored.encoded(
+        Tree::LoroSnapshots,
+        b"atomic:no-such-genesis",
+        &snapshot,
+        &[],
+    );
+    assert_ne!(orphan.get(1), Some(&2), "no base, no delta");
+    assert_eq!(
+        stored
+            .get(Tree::LoroSnapshots, key.as_bytes())
+            .unwrap()
+            .unwrap(),
+        snapshot
+    );
 }

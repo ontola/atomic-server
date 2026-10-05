@@ -8,6 +8,14 @@
 //! [`CompressedKv`] wraps any [`KvStore`] and does this per tree, so every
 //! reader and writer (sync, vault, WASM) sees the plain bytes.
 //!
+//! A Loro snapshot is stored as a delta on the resource's genesis commit when
+//! it can be: the commit row already keeps the signed `loroUpdate`, and the
+//! snapshot of a resource nobody has edited is that same data plus a few
+//! server-written changes. Only what comes after the genesis is kept (about
+//! 250 bytes for a chat message instead of 1 KB), and a read puts the two
+//! back together. It falls back to the whole snapshot whenever the commit row
+//! is missing (a resource that arrived by sync) or the rebuild does not match.
+//!
 //! Layout of a compressed value: `0x00`, a codec byte, then the payload.
 //! `0x00` is the marker because no value these trees held before can start
 //! with it: msgpack maps open with `0x80..=0x8f`, `0xde` or `0xdf`, Loro
@@ -27,6 +35,8 @@ use std::sync::Arc;
 const MARKER: u8 = 0;
 const CODEC_RAW: u8 = 0;
 const CODEC_DEFLATE: u8 = 1;
+/// A snapshot as the deflated updates after the genesis commit.
+const CODEC_SNAPSHOT_DELTA: u8 = 2;
 /// miniz_oxide level 6, the usual speed/size trade.
 const LEVEL: u8 = 6;
 /// Below this a value is not worth the extra step.
@@ -68,13 +78,97 @@ fn decode(value: Vec<u8>) -> AtomicResult<Vec<u8>> {
         Some(&CODEC_RAW) => Ok(value[2..].to_vec()),
         Some(&CODEC_DEFLATE) => miniz_oxide::inflate::decompress_to_vec(&value[2..])
             .map_err(|e| format!("Could not decompress a stored value: {e:?}").into()),
+        Some(&CODEC_SNAPSHOT_DELTA) => Err("A snapshot delta can only be read with its key"
+            .to_string()
+            .into()),
         other => Err(format!("Unknown storage codec {other:?}").into()),
     }
 }
 
-fn decode_pair(pair: AtomicResult<KvPair>) -> AtomicResult<KvPair> {
-    let (key, value) = pair?;
-    Ok((key, decode(value)?))
+/// The resource-tree key of the genesis commit of the resource a snapshot
+/// key names, when its id was derived from that commit's signature.
+fn genesis_commit_key(snapshot_key: &[u8]) -> Option<Vec<u8>> {
+    let key = std::str::from_utf8(snapshot_key).ok()?;
+    let signature = key.strip_prefix(crate::identifiers::ATOMIC_PREFIX)?;
+    if signature.is_empty() || signature.contains(':') {
+        return None;
+    }
+    Some(crate::identifiers::commit_subject(signature).into_bytes())
+}
+
+/// The signed `loroUpdate` of a genesis commit row, as stored.
+fn base_from_row(row: &[u8]) -> Option<Vec<u8>> {
+    let row = decode(row.to_vec()).ok()?;
+    match super::encoding::decode_propvals(&row)
+        .ok()?
+        .remove(crate::urls::LORO_UPDATE)?
+    {
+        crate::Value::LoroDoc(bytes) if !bytes.is_empty() => Some(bytes),
+        _ => None,
+    }
+}
+
+fn base_from_store(inner: &dyn KvStore, snapshot_key: &[u8]) -> Option<Vec<u8>> {
+    let commit_key = genesis_commit_key(snapshot_key)?;
+    let row = inner.get(Tree::Resources, &commit_key).ok()??;
+    base_from_row(&row)
+}
+
+fn rebuild_snapshot(base: &[u8], delta: &[u8]) -> AtomicResult<Vec<u8>> {
+    let doc = crate::loro::AtomicLoroDoc::new();
+    doc.import_update(base)?;
+    doc.import_update(delta)?;
+    Ok(doc.export_snapshot())
+}
+
+/// `snapshot` as a delta on `base`, when that is clearly smaller and
+/// rebuilds the same document.
+fn encode_snapshot_delta(base: &[u8], snapshot: &[u8]) -> Option<Vec<u8>> {
+    let full = crate::loro::AtomicLoroDoc::from_snapshot(snapshot).ok()?;
+    let base_doc = crate::loro::AtomicLoroDoc::new();
+    base_doc.import_update(base).ok()?;
+    let delta = full.export_updates_since(&base_doc.oplog_vv());
+    let packed = miniz_oxide::deflate::compress_to_vec(&delta, LEVEL);
+    if packed.len() * 2 >= snapshot.len() {
+        return None;
+    }
+    let rebuilt =
+        crate::loro::AtomicLoroDoc::from_snapshot(&rebuild_snapshot(base, &delta).ok()?).ok()?;
+    if rebuilt.oplog_vv() != full.oplog_vv() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(packed.len() + 2);
+    out.extend_from_slice(&[MARKER, CODEC_SNAPSHOT_DELTA]);
+    out.extend_from_slice(&packed);
+    Some(out)
+}
+
+fn decode_snapshot(inner: &dyn KvStore, key: &[u8], value: Vec<u8>) -> AtomicResult<Vec<u8>> {
+    if value.get(..2) != Some(&[MARKER, CODEC_SNAPSHOT_DELTA][..]) {
+        return decode(value);
+    }
+    let delta = miniz_oxide::inflate::decompress_to_vec(&value[2..])
+        .map_err(|e| format!("Could not decompress a stored snapshot: {e:?}"))?;
+    let base = base_from_store(inner, key).ok_or_else(|| {
+        format!(
+            "The genesis commit a snapshot is stored against is missing for {}",
+            String::from_utf8_lossy(key)
+        )
+    })?;
+    rebuild_snapshot(&base, &delta)
+}
+
+fn decode_value(
+    inner: &dyn KvStore,
+    tree: Tree,
+    key: &[u8],
+    value: Vec<u8>,
+) -> AtomicResult<Vec<u8>> {
+    if tree == Tree::LoroSnapshots {
+        decode_snapshot(inner, key, value)
+    } else {
+        decode(value)
+    }
 }
 
 pub struct CompressedKv {
@@ -88,10 +182,46 @@ impl CompressedKv {
 
     fn decoded(&self, tree: Tree, iter: KvIter) -> KvIter {
         if is_compressed_tree(tree) {
-            Box::new(iter.map(decode_pair))
+            let inner = self.inner.clone();
+            Box::new(iter.map(move |pair| {
+                let (key, value) = pair?;
+                let value = decode_value(inner.as_ref(), tree, &key, value)?;
+                Ok((key, value))
+            }))
         } else {
             iter
         }
+    }
+
+    /// The value to write for `val`. `pending` are the operations written in
+    /// the same batch, which may hold the genesis commit a snapshot is
+    /// stored against.
+    pub(super) fn encoded(
+        &self,
+        tree: Tree,
+        key: &[u8],
+        val: &[u8],
+        pending: &[Operation],
+    ) -> Vec<u8> {
+        if tree == Tree::LoroSnapshots {
+            let base = genesis_commit_key(key).and_then(|commit_key| {
+                pending
+                    .iter()
+                    .rev()
+                    .find(|op| {
+                        op.tree == Tree::Resources
+                            && op.key == commit_key
+                            && matches!(op.method, Method::Insert)
+                    })
+                    .and_then(|op| op.val.as_deref())
+                    .and_then(base_from_row)
+                    .or_else(|| base_from_store(self.inner.as_ref(), key))
+            });
+            if let Some(delta) = base.and_then(|base| encode_snapshot_delta(&base, val)) {
+                return delta;
+            }
+        }
+        encode(val)
     }
 }
 
@@ -99,14 +229,17 @@ impl KvStore for CompressedKv {
     fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
         let found = self.inner.get(tree, key)?;
         match found {
-            Some(value) if is_compressed_tree(tree) => Ok(Some(decode(value)?)),
+            Some(value) if is_compressed_tree(tree) => {
+                Ok(Some(decode_value(self.inner.as_ref(), tree, key, value)?))
+            }
             other => Ok(other),
         }
     }
 
     fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
         if is_compressed_tree(tree) {
-            self.inner.insert(tree, key, &encode(val))
+            self.inner
+                .insert(tree, key, &self.encoded(tree, key, val, &[]))
         } else {
             self.inner.insert(tree, key, val)
         }
@@ -137,7 +270,12 @@ impl KvStore for CompressedKv {
     ) -> AtomicResult<Vec<KvPair>> {
         let page = self.inner.range_page(tree, start, end, limit)?;
         if is_compressed_tree(tree) {
-            page.into_iter().map(|(k, v)| Ok((k, decode(v)?))).collect()
+            page.into_iter()
+                .map(|(k, v)| {
+                    let v = decode_value(self.inner.as_ref(), tree, &k, v)?;
+                    Ok((k, v))
+                })
+                .collect()
         } else {
             Ok(page)
         }
@@ -149,7 +287,10 @@ impl KvStore for CompressedKv {
 
     fn first_entry(&self, tree: Tree) -> AtomicResult<Option<KvPair>> {
         match self.inner.first_entry(tree)? {
-            Some((key, value)) if is_compressed_tree(tree) => Ok(Some((key, decode(value)?))),
+            Some((key, value)) if is_compressed_tree(tree) => {
+                let value = decode_value(self.inner.as_ref(), tree, &key, value)?;
+                Ok(Some((key, value)))
+            }
             other => Ok(other),
         }
     }
@@ -175,7 +316,7 @@ impl KvStore for CompressedKv {
                 },
                 key: op.key.clone(),
                 val: match (&op.val, is_compressed_tree(op.tree)) {
-                    (Some(val), true) => Some(encode(val)),
+                    (Some(val), true) => Some(self.encoded(op.tree, &op.key, val, operations)),
                     (val, _) => val.clone(),
                 },
             })
