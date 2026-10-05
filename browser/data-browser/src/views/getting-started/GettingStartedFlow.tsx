@@ -1,5 +1,6 @@
 import { Spinner } from '../../components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
+import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
 import {
   pendingTemplateUrl,
   readPendingTemplate,
@@ -604,6 +605,11 @@ export function GettingStartedFlow({
           undefined,
         );
       }
+
+      // One sign-in: the identity just unlocked signs the account in too, so
+      // the portal is not left asking again. In the background; the app does
+      // not need the account session to open.
+      void signInAccountWithAgent(newAgent, { proven: true });
 
       if (inviteToken) {
         navigate(resumeInviteUrl(inviteToken));

@@ -25,6 +25,7 @@ import { LinkOpenRouter } from './LinkOpenRouter';
 import { OnboardingRoute } from './OnboardingRoute';
 import { WelcomeRoute } from './WelcomeRoute';
 import { NewDriveRoute } from './NewDriveRoute';
+import { SignOutRoute } from './SignOutRoute';
 
 const DevDriveRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -70,6 +71,7 @@ const SandboxRoute = createRoute({
 const routeTree = rootRoute.addChildren({
   appRoute: appRoute.addChildren({
     WelcomeRoute,
+    SignOutRoute,
     ShowRoute,
     SearchRoute,
     AppSettingsRoute,

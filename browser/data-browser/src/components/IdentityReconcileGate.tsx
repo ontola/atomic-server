@@ -1,3 +1,4 @@
+import { signInAccountWithAgent } from '../helpers/managed/agentSession';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore, type Store } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
@@ -204,6 +205,14 @@ export function IdentityReconcileGate({
       const isCurrent = () =>
         !signal.aborted &&
         localAgent === (store.getAgent()?.subject ?? undefined);
+      // One sign-in: an unlocked identity with no account session signs the
+      // account in by itself, and the check runs again once it has. In the
+      // background, so the app never waits on the account server for it.
+      void signInAccountWithAgent(store.getAgent() ?? undefined).then(
+        signedIn => {
+          if (signedIn && isCurrent()) setReconcileAttempt(n => n + 1);
+        },
+      );
       const result = await evaluateIdentityReconciliation(localAgent);
       if (!isCurrent()) return;
 
