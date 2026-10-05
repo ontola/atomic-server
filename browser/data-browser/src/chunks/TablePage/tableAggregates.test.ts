@@ -323,3 +323,4 @@ describe('aggregateRows', () => {
     ]);
   });
 });
+
