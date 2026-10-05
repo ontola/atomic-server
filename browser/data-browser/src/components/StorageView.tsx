@@ -93,10 +93,7 @@ export function StorageView({
       <ContainerWide>
         <h1>Where space goes</h1>
         <Intro>
-          Each tile is an item in this workspace. Bigger tile, more space.{' '}
-          <Swatch $kind='edge' /> resource, <Swatch $kind='branch' /> resource
-          with other resources, <Swatch $kind='mixed' /> mixed (files and
-          resources), <Swatch $kind='binary' /> files and images.
+          Each tile is an item in this workspace. Bigger tile, more space.
         </Intro>
 
         {loaded.state === 'loading' && (
@@ -189,6 +186,21 @@ export function StorageView({
               </MapBox>
             )}
 
+            <Legend aria-label='Colours'>
+              <li>
+                <Swatch $kind='edge' /> resource
+              </li>
+              <li>
+                <Swatch $kind='branch' /> resource with other resources
+              </li>
+              <li>
+                <Swatch $kind='mixed' /> mixed (files and resources)
+              </li>
+              <li>
+                <Swatch $kind='binary' /> file or image
+              </li>
+            </Legend>
+
             <List data-testid='storage-list'>
               {items.slice(0, 50).map(item => (
                 <li key={item.subject + item.name}>
@@ -249,6 +261,17 @@ function formatBytes(bytes: number): string {
 
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
 }
+
+const Legend = styled.ul`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: ${p => p.theme.colors.textLight};
+`;
 
 const Intro = styled.p`
   color: ${p => p.theme.colors.textLight};
