@@ -1,3 +1,4 @@
+import { sanitizeFeedbackEvent } from './feedback-privacy';
 import * as Sentry from '@sentry/react';
 import { StoreEvents, type Store } from '@tomic/react';
 
@@ -61,6 +62,7 @@ export function initSentry(): void {
     // only when the user submits the sidebar form.
     tracesSampleRate: 0,
   });
+  Sentry.addEventProcessor(sanitizeFeedbackEvent);
 }
 
 /** Identifiers differ per resource; the failure itself is what groups. */
