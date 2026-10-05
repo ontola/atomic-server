@@ -1187,6 +1187,28 @@ async fn drive_usage_endpoint() {
         "blobBytes should equal the uploaded content length: {body}"
     );
     assert!(json.get("loroBytes").is_some(), "loroBytes missing: {body}");
+
+    // The per-resource breakdown must add up to the drive totals, with the
+    // uploaded file's bytes attributed to exactly one resource.
+    let req = build_request_authenticated(
+        &format!(
+            "/drive-usage/breakdown?subject={}",
+            urlencoding::encode(drive_did.as_str())
+        ),
+        &appstate,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "breakdown status {status}: {body}");
+    let breakdown: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let rows = breakdown["resources"].as_array().unwrap();
+    let blob_total: u64 = rows.iter().map(|r| r["blobBytes"].as_u64().unwrap()).sum();
+    let loro_total: u64 = rows.iter().map(|r| r["loroBytes"].as_u64().unwrap()).sum();
+    assert_eq!(blob_total, test_content.len() as u64, "{body}");
+    assert_eq!(rows.len() as u64, json["resourceCount"].as_u64().unwrap());
+    assert_eq!(loro_total, json["loroBytes"].as_u64().unwrap());
 }
 
 /// `GET /server` describes the node itself as a `Server` resource, replacing the

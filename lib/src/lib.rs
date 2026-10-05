@@ -73,11 +73,15 @@ pub mod collections;
 pub mod commit;
 #[cfg(feature = "config")]
 pub mod config;
+#[cfg(feature = "db")]
+pub mod conversation;
 pub mod datatype;
 #[cfg(feature = "db")]
 pub mod db;
 #[cfg(feature = "discovery")]
 pub mod discovery;
+#[doc(hidden)]
+pub mod document_markdown;
 #[cfg(feature = "db")]
 pub mod endpoints;
 #[cfg(feature = "db")]
@@ -89,7 +93,6 @@ pub mod hierarchy;
 pub mod history;
 pub mod identifiers;
 pub mod import_identity;
-#[doc(hidden)]
 pub mod loro;
 pub mod mapping;
 pub mod metrics;
@@ -124,7 +127,9 @@ pub mod vault;
 pub use atoms::Atom;
 pub use commit::Commit;
 #[cfg(feature = "db")]
-pub use db::{AgentLoadResult, Db, DbEvent, DriveInfo, DriveUsage, ReplicationTarget};
+pub use db::{
+    AgentLoadResult, Db, DbEvent, DriveInfo, DriveUsage, ReplicationTarget, ResourceUsage,
+};
 pub use errors::AtomicError;
 pub use errors::AtomicErrorType;
 pub use identifiers::{

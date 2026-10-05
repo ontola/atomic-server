@@ -115,7 +115,10 @@ async function completeOnboarding(
   // Explicit wait rather than the 10s action timeout: this is the first paint
   // after the magic-link redirect, so it also pays for the WASM ClientDb boot,
   // which on a loaded machine takes longer than a click is allowed to wait.
-  const profileStep = page.getByRole('button', { name: 'Save & continue' });
+  const profileStep = page.getByRole('button', {
+    name: 'Save and continue',
+    exact: true,
+  });
   await profileStep.waitFor({ state: 'visible', timeout: 60_000 });
   await profileStep.click();
 

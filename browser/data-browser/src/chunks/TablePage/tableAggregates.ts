@@ -329,7 +329,18 @@ export function formatAggregateValue(
       : date.toLocaleString();
   }
 
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const rounded = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+  // A nonzero total must not read as zero: 0.0000375 is a real measurement, and
+  // two decimals would show it as "0". Keep three significant digits instead.
+  if (value !== 0 && Number(value.toFixed(2)) === 0) {
+    return value.toLocaleString(undefined, {
+      maximumSignificantDigits: 3,
+      maximumFractionDigits: 20,
+    });
+  }
+
+  return rounded;
 }
 
 /** Formats a bucket key for display. Subjects are resolved by the caller. */

@@ -19,6 +19,7 @@ server/assets_tmp
 # Same, for the plugin assets `build.rs` stages before embedding them.
 server/integrations_assets_tmp
 server/js-build.log
+server/js-inputs.hash
 .netlify
 scratchpad
 # Local Claude Code state stays out; the shared cloud-session hook is tracked.

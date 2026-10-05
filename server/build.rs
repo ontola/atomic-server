@@ -202,6 +202,54 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Where the content hash of the inputs of the last successful JS build is kept.
+const INPUTS_STAMP: &str = "js-inputs.hash";
+
+/// Hash of the CONTENT of every watched input, so that a fresh checkout (which
+/// gives every file a new mtime) or a branch switch back to identical sources
+/// does not trigger a multi-minute frontend rebuild.
+fn hash_inputs(dirs: &Dirs) -> String {
+    let mut files: Vec<PathBuf> = Vec::new();
+    for src_dir in &dirs.src_dirs {
+        for entry in walkdir::WalkDir::new(src_dir)
+            .into_iter()
+            .filter_entry(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|s| !s.starts_with(".DS_Store"))
+                    .unwrap_or(false)
+                    && !is_js_build_output(e.path())
+            })
+            .filter_map(|e| e.ok())
+        {
+            if entry.path().is_file() {
+                files.push(entry.path().to_path_buf());
+            }
+        }
+    }
+    files.sort();
+    let mut hasher = blake3::Hasher::new();
+    for f in &files {
+        hasher.update(f.to_string_lossy().replace('\\', "/").as_bytes());
+        hasher.update(&[0]);
+        if let Ok(data) = fs::read(f) {
+            hasher.update(&data);
+        }
+        hasher.update(&[0]);
+    }
+    hasher.finalize().to_hex().to_string()
+}
+
+/// Cargo hides build-script output until the script ends, so the minutes-long
+/// frontend build looks like a hang. The controlling terminal is the one place
+/// a line shows up immediately.
+fn notice(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut tty) = fs::OpenOptions::new().write(true).open("/dev/tty") {
+        let _ = writeln!(tty, "atomic-server build: {msg}");
+    }
+}
+
 fn should_build(dirs: &Dirs) -> bool {
     // If the ATOMICSERVER_SKIP_JS_BUILD environment variable is set, skip the JS build
     if let Ok(env_skip) = std::env::var("ATOMICSERVER_SKIP_JS_BUILD") {
@@ -215,6 +263,19 @@ fn should_build(dirs: &Dirs) -> bool {
         p!("Could not find browser folder, assuming this is a `cargo publish` run. Skipping JS build.");
         return false;
     }
+    // Content hash first: it is exact, mtimes are not. Without a stamp (first
+    // build, or an older checkout) fall through to the mtime comparison below.
+    if dirs.js_dist_source.exists() {
+        if let Ok(previous) = fs::read_to_string(INPUTS_STAMP) {
+            if previous.trim() == hash_inputs(dirs) {
+                p!("JS inputs unchanged (content hash), skipping JS build.");
+                return false;
+            }
+            p!("JS inputs changed (content hash), rebuilding...");
+            return true;
+        }
+    }
+
     // Check if any JS files were modified since the last build
     // Compare against the actual dist output, not the temporary copy
     // Find the newest file in the dist directory to compare against
@@ -246,6 +307,7 @@ fn should_build(dirs: &Dirs) -> bool {
         }
 
         p!("No changes in JS source files, skipping JS build.");
+        let _ = fs::write(INPUTS_STAMP, hash_inputs(dirs));
         false
     } else if dirs.src_dirs.iter().any(|d| d.exists()) {
         p!(
@@ -344,12 +406,18 @@ fn build_js(dirs: &Dirs) {
         }
     };
 
+    notice(&format!(
+        "building the frontend + WASM, a few minutes with no output here (live log: {})",
+        log_display.display()
+    ));
     p!("install js packages...");
     run_streamed(&["install"], "install");
 
     p!("build js assets...");
     run_streamed(&["run", "build"], "build");
 
+    let _ = fs::write(INPUTS_STAMP, hash_inputs(dirs));
+    notice("frontend build done");
     p!("js build successful");
 }
 

@@ -233,6 +233,20 @@ describe('formatting', () => {
   });
 });
 
+describe('formatAggregateValue precision', () => {
+  const amount = property(Datatype.FLOAT, 'amount');
+
+  it('does not show a small nonzero total as zero', () => {
+    expect(formatAggregateValue(0.0000375, 'sum', amount)).toBe('0.0000375');
+    expect(formatAggregateValue(0.00001875, 'avg', amount)).toBe('0.0000188');
+  });
+
+  it('keeps two decimals for ordinary totals and a real zero', () => {
+    expect(formatAggregateValue(1.2500125, 'sum', amount)).toBe('1.25');
+    expect(formatAggregateValue(0, 'sum', amount)).toBe('0');
+  });
+});
+
 describe('aggregateRows', () => {
   const Q = 'https://example.com/property/quantity';
   const P = 'https://example.com/property/price';

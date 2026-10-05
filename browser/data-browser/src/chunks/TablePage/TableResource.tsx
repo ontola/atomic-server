@@ -54,6 +54,9 @@ import { DEFAULT_SIZE_PX } from '@chunks/TableEditor/hooks/useCellSizes';
 import { NewColumnButton } from './NewColumnButton';
 import { TableHeading } from './TableHeading';
 import { TableFilterBar } from './TableFilterBar';
+import { RowSelectCheckbox } from './RowSelectCheckbox';
+import { CellSelectionMenu } from './CellSelectionMenu';
+import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
@@ -156,6 +159,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewKind,
     duplicateView,
     deleteView,
+    reorderViews,
     collection,
     ready,
     invalidateCollection,
@@ -770,6 +774,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   const baselineMemberCountRef = useRef<number | null>(null);
+  const deletedSessionRowsRef = useRef(0);
   const baselineQueryKeyRef = useRef<string | null>(null);
 
   // What the grid is asking for, and what the collection in hand answers.
@@ -800,6 +805,21 @@ export const TableResource: React.FC<TableResourceProps> = ({
     isSavedDraft(store.getResourceLoading(subject)),
   ).length;
 
+  // Session rows the person deleted: they left `newRowSubjects` at once, but the
+  // collection still counts them until its own removal lands. Without this the
+  // gap reads as a row from somewhere else, the baseline is raised for it, and
+  // the grid draws a member that no longer exists (a duplicated neighbour).
+  // Bounded by what the collection really has in excess, so it drains itself.
+  deletedSessionRowsRef.current = Math.min(
+    deletedSessionRowsRef.current,
+    Math.max(
+      0,
+      collection.totalMembers -
+        (baselineMemberCountRef.current ?? 0) -
+        materialisedSessionRows,
+    ),
+  );
+
   // Freeze the count only once the collection actually answers what was asked.
   // Edits land faster than collections arrive — change a filter's operator and
   // then type its value, and the collection built for the operator-only query
@@ -818,7 +838,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
   ) {
     baselineMemberCountRef.current = Math.max(
       0,
-      collection.totalMembers - materialisedSessionRows,
+      collection.totalMembers -
+        materialisedSessionRows -
+        deletedSessionRowsRef.current,
     );
     baselineQueryKeyRef.current = requestedQuery;
   }
@@ -850,7 +872,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // (`itemKey` offsets by `memberCount`), so nothing remounts.
   if (baselineMemberCountRef.current !== null) {
     const accountedFor =
-      baselineMemberCountRef.current + materialisedSessionRows;
+      baselineMemberCountRef.current +
+      materialisedSessionRows +
+      deletedSessionRowsRef.current;
 
     if (collection.totalMembers > accountedFor) {
       baselineMemberCountRef.current += collection.totalMembers - accountedFor;
@@ -859,7 +883,12 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const memberCount = Math.min(
     baselineMemberCountRef.current ??
-      Math.max(0, collection.totalMembers - materialisedSessionRows),
+      Math.max(
+        0,
+        collection.totalMembers -
+          materialisedSessionRows -
+          deletedSessionRowsRef.current,
+      ),
     collection.totalMembers,
   );
 
@@ -1090,8 +1119,167 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [rowCollection],
   );
 
+  // Rows ticked in the row header, by subject. A change of view, filter or
+  // sorting changes which rows are visible, so the ticks would point at rows
+  // the person can no longer see: they only count for the query they were made
+  // under.
+  const [selection, setSelection] = useState<{
+    queryKey: string;
+    rows: ReadonlySet<string>;
+  }>({ queryKey, rows: new Set() });
+  const selectedRows = useMemo<ReadonlySet<string>>(
+    () => (selection.queryKey === queryKey ? selection.rows : new Set()),
+    [selection, queryKey],
+  );
+
+  const toggleRowSelected = useCallback(
+    (subject: string) => {
+      setSelection(prev => {
+        const next = new Set(prev.queryKey === queryKey ? prev.rows : []);
+
+        if (!next.delete(subject)) {
+          next.add(subject);
+        }
+
+        return { queryKey, rows: next };
+      });
+    },
+    [queryKey],
+  );
+
+  const clearRowSelection = useCallback(
+    () => setSelection({ queryKey, rows: new Set() }),
+    [queryKey],
+  );
+
+  const deleteRowSubjects = useCallback(
+    async (subjects: string[]) => {
+      const resources = subjects
+        .map(subject => store.getResourceLoading(subject))
+        .filter(row => !isUnsavedDraft(row));
+
+      clearRowSelection();
+
+      // Rows added this session are drawn from `newRowSubjects`; drop them from
+      // the render list right away, like `handleDeleteRow` does.
+      const sessionSubjects = new Set(newRowSubjects);
+      const doomed = new Set(subjects);
+
+      for (const subject of sessionSubjects) {
+        if (
+          doomed.has(subject) &&
+          isSavedDraft(store.getResourceLoading(subject))
+        ) {
+          deletedSessionRowsRef.current += 1;
+        }
+      }
+
+      setNewRowSubjects(prev => prev.filter(s => !doomed.has(s)));
+
+      if (resources.length === 0) {
+        return;
+      }
+
+      // One undo step restores the whole batch.
+      addItemsToHistoryStack(resources.map(createResourceDeletedHistoryItem));
+
+      for (const row of resources) {
+        await row.destroy();
+
+        if (!sessionSubjects.has(row.subject)) {
+          decrementMemberCount();
+        }
+      }
+    },
+    [
+      newRowSubjects,
+      store,
+      clearRowSelection,
+      addItemsToHistoryStack,
+      decrementMemberCount,
+    ],
+  );
+
+  const deleteSelectedRows = useCallback(
+    () => deleteRowSubjects([...selectedRows]),
+    [deleteRowSubjects, selectedRows],
+  );
+
+  // The subject of the row at a grid index: a collection member, or a row
+  // added this session.
+  const subjectAtRow = useCallback(
+    async (index: number): Promise<string | undefined> =>
+      index < memberCount
+        ? await collection.getMemberWithIndex(index)
+        : newRowSubjects[index - memberCount],
+    [collection, memberCount, newRowSubjects],
+  );
+
+  const { openResourceMenu } = useResourceContextMenu();
+
+  // Right-click on a row's header cell: the same resource menu a right-click on
+  // one of its cells opens. The subject is looked up asynchronously, so keep
+  // what the menu needs from the event.
+  const handleRowContextMenu = useCallback(
+    (index: number, e: React.MouseEvent) => {
+      e.preventDefault();
+
+      const { clientX, clientY } = e;
+
+      void subjectAtRow(index).then(subject => {
+        if (subject) {
+          openResourceMenu(subject, {
+            clientX,
+            clientY,
+            preventDefault: () => undefined,
+            stopPropagation: () => undefined,
+          } as React.MouseEvent);
+        }
+      });
+    },
+    [subjectAtRow, openResourceMenu],
+  );
+
+  const deleteRowsByIndex = useCallback(
+    async (indexes: number[]) => {
+      const subjects = await Promise.all(indexes.map(subjectAtRow));
+
+      await deleteRowSubjects(
+        subjects.filter((s): s is string => s !== undefined),
+      );
+    },
+    [subjectAtRow, deleteRowSubjects],
+  );
+
+  const RowHeaderExtra = useCallback(
+    ({ index }: { index: number }) => {
+      if (!canWrite) {
+        return null;
+      }
+
+      if (index < memberCount) {
+        return <RowSelectCheckbox collection={collection} index={index} />;
+      }
+
+      // The trailing empty row is the entry placeholder, not a row yet.
+      const newRowIndex = index - memberCount;
+      const subject = newRowSubjects[newRowIndex];
+
+      if (!subject || newRowIndex === newRowSubjects.length - 1) {
+        return null;
+      }
+
+      return <RowSelectCheckbox subject={subject} index={index} />;
+    },
+    [canWrite, collection, memberCount, newRowSubjects],
+  );
+
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
+      selectedRows,
+      toggleRowSelected,
+      clearRowSelection,
+      deleteSelectedRows,
       tableSubject: resource.subject,
       tableClassSubject: tableClass.subject,
       sorting,
@@ -1127,6 +1315,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
       rowSource,
     }),
     [
+      selectedRows,
+      toggleRowSelected,
+      clearRowSelection,
+      deleteSelectedRows,
       resource.subject,
       tableClass.subject,
       sorting,
@@ -1176,6 +1368,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
       // Drop a session row from the render list immediately (optimistic).
       if (!isMember) {
+        if (isSavedDraft(store.getResourceLoading(subject))) {
+          deletedSessionRowsRef.current += 1;
+        }
+
         setNewRowSubjects(prev => prev.filter(s => s !== subject));
       }
 
@@ -1247,6 +1443,23 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [handleCopyCommandByProperty],
   );
 
+  const renderCellSelectionMenu = useCallback(
+    (args: {
+      cells: CellIndex<TableColumn>[];
+      point: { x: number; y: number };
+      onClose: () => void;
+    }) =>
+      canWrite ? (
+        <CellSelectionMenu
+          {...args}
+          onClear={handleClearCells}
+          onSetValue={handlePaste}
+          onDeleteRows={deleteRowsByIndex}
+        />
+      ) : null,
+    [canWrite, handleClearCells, handlePaste, deleteRowsByIndex],
+  );
+
   const Row = useCallback(
     ({ index }: { index: number }) => {
       if (index < gridMemberCount) {
@@ -1309,6 +1522,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
               setViewKind={setViewKind}
               duplicateView={duplicateView}
               deleteView={deleteView}
+              reorderViews={reorderViews}
               viewName={viewName}
               renameView={renameView}
               allColumns={allColumns}
@@ -1450,6 +1664,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 onUndoCommand={undoLastItem}
                 onColumnReorder={handleColumnReorder}
                 onRowExpand={handleRowExpand}
+                RowHeaderExtra={RowHeaderExtra}
+                onRowContextMenu={handleRowContextMenu}
+                renderCellSelectionMenu={renderCellSelectionMenu}
                 onInsertRowBelow={handleInsertRowBelow}
                 onSelectedCellChange={handleSelectedCellChange}
                 RowHeaderAddonComponent={RowCommentButton}

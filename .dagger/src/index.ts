@@ -542,6 +542,11 @@ export class AtomicServer {
           dag.cacheVolume('flutter-pub-cache'),
         )
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+        // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
+        .withDirectory(
+          '/workspace/packages',
+          this.source.directory('packages'),
+        )
         .withWorkdir('/workspace/flutter')
         .withExec([
           'bash',
@@ -818,6 +823,11 @@ export class AtomicServer {
         ])
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+        // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
+        .withDirectory(
+          '/workspace/packages',
+          this.source.directory('packages'),
+        )
         .withMountedCache('/workspace/flutter/rust/target', flutterRustTarget, {
           sharing: CacheSharingMode.Locked,
         })

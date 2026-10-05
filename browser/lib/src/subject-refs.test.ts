@@ -1,11 +1,10 @@
-// @wc-ignore-file
 import { describe, expect, it } from 'vitest';
 import {
   expandSubject,
   shortenRefsDeep,
   shortenSubject,
   tryExpandRef,
-} from './subjectRefs';
+} from './subject-refs.js';
 
 const DID_A = `did:ad:${'QyJIHE1kP9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'}`;
 const DID_B = `did:ad:${'QyJIHE1kZZbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}`;
@@ -90,10 +89,10 @@ it('retains emitted refs when the module reloads in the same tab', async () => {
     setItem: (key: string, value: string) => storage.set(key, value),
   });
   vi.resetModules();
-  const first = await import('./subjectRefs');
+  const first = await import('./subject-refs.js');
   const ref = first.shortenSubject(DID_A);
   vi.resetModules();
-  const reopened = await import('./subjectRefs');
+  const reopened = await import('./subject-refs.js');
   expect(reopened.expandSubject(ref)).toBe(DID_A);
   vi.unstubAllGlobals();
 });

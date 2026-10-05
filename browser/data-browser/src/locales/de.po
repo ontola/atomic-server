@@ -118,6 +118,7 @@ msgstr ""
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -137,7 +138,10 @@ msgstr ""
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
+#: src/views/Conversation/NewMessageDialog.tsx
 #: src/views/Installation/AssignRights.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -307,8 +311,6 @@ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/views/InvitePage.tsx
-#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr ""
 
@@ -487,6 +489,7 @@ msgstr ""
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/components/MetaSetter.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
 #: src/views/ResourcePageDefault.tsx
@@ -542,6 +545,7 @@ msgstr ""
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
+#: src/routes/ConnectAgentRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connected"
@@ -806,12 +810,14 @@ msgstr ""
 
 #: src/chunks/FormBuilder/FormBuilderPage.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Settings"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 msgid "About"
 msgstr ""
@@ -943,17 +949,14 @@ msgstr ""
 msgid "I already have an account"
 msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "Agent created!"
-msgstr ""
+#~ msgid "Agent created!"
+#~ msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "Agent Secret"
-msgstr ""
+#~ msgid "Agent Secret"
+#~ msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "Copy secret to continue"
-msgstr ""
+#~ msgid "Copy secret to continue"
+#~ msgstr ""
 
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -1035,6 +1038,7 @@ msgstr ""
 msgid "Loading messages..."
 msgstr ""
 
+#: src/components/SideBar/MessagesPanel.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
 msgstr ""
@@ -1136,6 +1140,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/components/MetaSetter.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr ""
@@ -1168,7 +1173,7 @@ msgstr ""
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
 msgstr ""
@@ -1276,6 +1281,7 @@ msgstr ""
 #: src/actions/appActions.ts
 #: src/actions/appMenuItems.tsx
 #: src/actions/resourceActions.tsx
+#: src/components/MetaSetter.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 msgid "New resource"
 msgstr ""
@@ -1288,6 +1294,7 @@ msgstr ""
 msgid "Theme settings"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/OverlayContainer.tsx
 #: src/routes/ShortcutsRoute.tsx
 msgid "Keyboard shortcuts"
@@ -1321,6 +1328,8 @@ msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/components/MetaSetter.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
@@ -1611,10 +1620,12 @@ msgid "Enter a Drive DID or URL"
 msgstr ""
 
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr ""
 
 #: src/actions/resourceActions.tsx
+#: src/components/MetaSetter.tsx
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 msgid "History"
@@ -1698,6 +1709,7 @@ msgstr ""
 #: src/chunks/FormBuilder/useFormQuestions.ts
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
+#: src/helpers/storageMap.ts
 msgid "Untitled"
 msgstr ""
 
@@ -1819,12 +1831,7 @@ msgid "No instances"
 msgstr ""
 
 #: src/chunks/RTE/AIChatInput/mcpSuggestions.ts
-#: src/components/MetaSetter.tsx
 msgid "Atomic Data"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "The easiest way to create and share linked data."
 msgstr ""
 
 #: src/components/SkipNav.tsx
@@ -1988,6 +1995,8 @@ msgstr ""
 
 #: src/components/SignInButton.tsx
 #: src/helpers/managed/cloudSync.ts
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
@@ -2311,6 +2320,7 @@ msgstr ""
 msgid "Accept Changes"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 msgid "Share"
@@ -2352,6 +2362,8 @@ msgstr ""
 msgid "Deny"
 msgstr ""
 
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr ""
@@ -2685,29 +2697,23 @@ msgstr ""
 msgid "Enter your Agent Secret"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Set your profile name!"
-msgstr ""
+#~ msgid "Set your profile name!"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Others can read this. You can change this later."
-msgstr ""
+#~ msgid "Others can read this. You can change this later."
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Enter your name"
-msgstr ""
+#~ msgid "Enter your name"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Profile Name"
-msgstr ""
+#~ msgid "Profile Name"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Creating drive…"
-msgstr ""
+#~ msgid "Creating drive…"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Save & continue"
-msgstr ""
+#~ msgid "Save & continue"
+#~ msgstr ""
 
 #: src/components/ResourceUsage/UsageCard.tsx
 msgid "Previous page"
@@ -3348,6 +3354,7 @@ msgstr ""
 msgid "Enter an Atomic URL or search  (press \"/\")"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 #: src/components/Searchbar/SearchbarInput.tsx
@@ -3820,9 +3827,8 @@ msgstr ""
 msgid "Accept as"
 msgstr ""
 
-#: src/views/InvitePage.tsx
-msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
-msgstr ""
+#~ msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
+#~ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
@@ -4795,6 +4801,7 @@ msgstr ""
 msgid "Create drive"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "New drive"
 msgstr ""
@@ -5119,6 +5126,8 @@ msgid "More profile fields"
 msgstr ""
 
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SignOutRoute.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Sign out"
 msgstr ""
 
@@ -5529,6 +5538,8 @@ msgstr ""
 msgid "groups"
 msgstr ""
 
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 msgid "Value"
@@ -6124,6 +6135,7 @@ msgid "Add a recovery code"
 msgstr ""
 
 #: src/components/IdentityReconcileGate.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Signing out…"
 msgstr ""
 
@@ -6630,43 +6642,39 @@ msgstr ""
 msgid "Your account session has ended. Sign in again to resume backup."
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Full name"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Save and continue"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Picture ready to save."
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "How your colleagues see you"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
-msgid "Use your full name and a picture so people recognize you. This updates your Atomic profile wherever you collaborate."
-msgstr ""
+#~ msgid "Use your full name and a picture so people recognize you. This updates your Atomic profile wherever you collaborate."
+#~ msgstr ""
 
-#: src/components/TeamProfileStep.tsx
-msgid "You can add or change your picture later in your profile."
-msgstr ""
+#~ msgid "You can add or change your picture later in your profile."
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr ""
+#~ msgid "Your Cloud Server subscription is active"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr ""
+#~ msgid "Your Cloud Server trial is active"
+#~ msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Profile picture (optional)"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Your selected avatar"
 msgstr ""
 
@@ -6832,7 +6840,7 @@ msgstr ""
 msgid "Reload and try again"
 msgstr ""
 
-#: src/components/TeamProfileStep.tsx
+#: src/components/ProfileForm.tsx
 msgid "Choose profile picture"
 msgstr ""
 
@@ -7421,6 +7429,7 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -8680,6 +8689,7 @@ msgstr ""
 msgid "Resume"
 msgstr ""
 
+#: src/components/ConnectedAppsCard.tsx
 #: src/chunks/FormBuilder/FormAccessSection.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -9348,6 +9358,7 @@ msgstr ""
 msgid "Invite sent to {0} people"
 msgstr ""
 
+#: src/components/Presence/PresenceAvatarMenu.tsx
 #: src/components/Share/ShareDialog.tsx
 msgid "Message"
 msgstr ""
@@ -9844,8 +9855,11 @@ msgstr ""
 msgid "Use this secret and sign out"
 msgstr ""
 
+#: src/components/MetaSetter.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
@@ -9927,6 +9941,101 @@ msgstr "Dein Arbeitsbereich konnte nicht in dein Konto übernommen werden. Versu
 #: src/components/IdentityReconcileGate.tsx
 msgid "Lets {0} edit the drives made on this browser, then switches to that identity. Everything stays editable and is backed up with your account."
 msgstr "Erlaubt {0}, die in diesem Browser erstellten Drives zu bearbeiten, und wechselt dann zu dieser Identität. Alles bleibt bearbeitbar und wird mit deinem Konto gesichert."
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "An app"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Connect an app"
+msgstr ""
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "This link is missing the app's key. Start again from the app that sent you here."
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Sign in first, then open this link again."
+msgstr ""
+
+#. 0: name; 1: write ? 'read and edit' \\: 'read'
+#: src/routes/ConnectAgentRoute.tsx
+msgid "{0} can now {1} what you shared. You can go back to it. To stop it, revoke it under Connected apps in your account settings."
+msgstr ""
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Account settings"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Read only"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Read and edit"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "What it can reach"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "What it can do"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+#: src/routes/ConnectAgentRoute.tsx
+msgid "Connecting"
+msgstr ""
+
+#: src/routes/ConnectAgentRoute.tsx
+msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
+msgstr ""
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "No apps yet. An AI assistant connected through the Atomic MCP server shows up here."
+msgstr ""
+
+#. 0: report.failed.length; 1: report.failed.length === 1 ? 'resource' \\: 'resources'; 2: report.failed.map(f => f.reason).join('\; ')
+#: src/components/ConnectedAppsCard.tsx
+msgid "Still has access to {0} {1}: {2}"
+msgstr ""
+
+#. 0: subject.slice(-8)
+#: src/components/ConnectedAppsCard.tsx
+msgid "App {0}"
+msgstr ""
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "No access left"
+msgstr ""
+
+#: src/components/ConnectedAppsCard.tsx
+msgid "Revoking"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Connected apps"
+msgstr ""
+
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "This link is incomplete. Start again from the app that sent you here."
+msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
@@ -11138,6 +11247,7 @@ msgstr ""
 
 #: src/chunks/FormBuilder/ShareLinkPanel.tsx
 msgid "Forms need a server to receive answers."
+msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Could not read that image"
@@ -11215,6 +11325,75 @@ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+msgstr ""
+
+#. 0: index + 1
+#: src/chunks/TablePage/RowSelectCheckbox.tsx
+msgid "Select row {0}"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Delete selected rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Clear selection"
+msgstr ""
+
+#. 0: selectedRows.size
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} selected"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Selected rows"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear value"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear values"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value…"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete row"
+msgstr ""
+
+#. 0: rowCount
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete {0} rows"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the row this selection touches? You can undo it."
+msgstr ""
+
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the {0} rows this selection touches? You can undo it."
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value"
+msgstr ""
+
+#. 0: count
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set {0} values"
+msgstr ""
+
+#. 0: getSyncLabel(syncStatus)
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Sync: {0}"
 msgstr ""
 
 #. 0: appTitle
@@ -11313,7 +11492,6 @@ msgstr ""
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Signed in on another device? Use a code"
 msgstr ""
-
 
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
@@ -11601,13 +11779,10 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
-
-#: src/routes/SyncRoute.tsx
-msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -11630,6 +11805,115 @@ msgstr ""
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr ""
 
+#: src/components/SideBar/MessagesPanel.tsx
+msgid "Messages"
+msgstr ""
+
+#: src/components/SideBar/MessagesPanel.tsx
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "New message"
+msgstr ""
+
+#: src/helpers/conversations/conversations.ts
+msgid "This person has no encryption key yet. They need to open Atomic once before you can message them."
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "This message was sent before you joined, or it was changed, so it can not be opened."
+msgstr ""
+
+#: src/views/Conversation/ConversationPage.tsx
+msgid "End-to-end encrypted. Only the people in this conversation can read it."
+msgstr ""
+
+#: src/views/Conversation/ConversationTitle.tsx
+msgid "Only you"
+msgstr ""
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Who"
+msgstr ""
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+msgstr ""
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Starting…"
+msgstr ""
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Start conversation"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your profile picture could not be uploaded. You can add it later in your profile."
+msgstr "tificationList.tsx"
+
+#: src/components/ProfileForm.tsx
+msgid "Use your full name and a picture so people recognize you. You can change both later in your profile."
+msgstr ""
+
+#: src/views/InvitePage.tsx
+msgid "Account created"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Welcome"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Account"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Server settings"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Token"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Data"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Get started"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Invitation"
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "Your own place for documents, tables, meetings and chat. Local-first and open source, with optional cloud backup and sync."
+msgstr ""
+
+#: src/components/MetaSetter.tsx
+msgid "The easiest way to create, share and model Linked Atomic Data."
+msgstr ""
+
+#. 0: serverHost ?? 'an unknown server'
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "This link points at {0}, which is not the server you are signed in to, so nothing was shared. Start again from the app that sent you here, using your own server."
+msgstr ""
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "Connect an app that returns to {0}"
+msgstr ""
+
+#. 0: action; 1: serverHost
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "<0/> asks to {0} your data on {1}."
+msgstr ""
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
+msgstr ""
+
 #: src/chunks/TablePage/QuickFilterField.tsx
 msgid "Find rows"
 msgstr ""
@@ -11645,4 +11929,208 @@ msgstr ""
 #. 0: quickFilterQuery
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "See Cloud Server plans"
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server plan is active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server trial is active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive is hosted on Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."
+msgstr ""
+
+#: src/routes/InviteRoute.tsx
+msgid "Opening invitation..."
+msgstr ""
+
+#. 0: candidates[0]
+#: src/routes/InviteRoute.tsx
+msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
+msgstr ""
+
+#. 0: address
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forget {0} on this device"
+msgstr ""
+
+#~ msgid "Saved {0}, identity {1}"
+#~ msgstr ""
+
+#. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Saved {0}, identity …{1}"
+msgstr ""
+
+#: src/routes/SignOutRoute.tsx
+msgid "This signs you out of your account and removes your key from this browser."
+msgstr ""
+
+#: src/components/StorageView.tsx
+#: src/components/StorageView.tsx
+msgid "This item itself"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Location"
+msgstr ""
+
+#. 0: item.name; 1: formatBytes(item.totalBytes)
+#: src/components/StorageView.tsx
+msgid "{0} · {1} · click to look inside"
+msgstr ""
+
+#. 0: item.name; 1: formatBytes(item.totalBytes)
+#: src/components/StorageView.tsx
+msgid "{0} · {1} · click to open"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Measuring…"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "This server could not report storage for the workspace. It may be an older version, or you may not be allowed to read it."
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Nothing here takes up space."
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Where space goes"
+msgstr ""
+
+#~ msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> files and images, <1/> edit history."
+#~ msgstr ""
+
+#. 0: ' '
+#: src/components/StorageView.tsx
+msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
+msgstr ""
+
+#~ msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
+#~ msgstr ""
+
+#: src/helpers/storageMap.ts
+msgid "This workspace"
+msgstr ""
+
+#: src/helpers/storageMap.ts
+msgid "Drive"
+msgstr ""
+
+#: src/routes/StorageRoute.tsx
+msgid "Back to sync settings"
+msgstr ""
+
+#~ msgid "See where space goes →"
+#~ msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "(see where space goes)"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not read storage use."
+msgstr ""
+
+#. 0: formatBytes(result.bytes_reclaimed)
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freed {0}."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Nothing to free."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not free storage."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Manage storage"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Storage in Cloud Vault"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freeing…"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Free up space"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Change history"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Snapshots"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Files and images"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Search index"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Compression data"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Other"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Colours"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Each tile is an item in this workspace. Bigger tile, more space."
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> resource"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> resource with other resources"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> mixed (files and resources)"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> file or image"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Space usage"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "See how much space this resource and what is in it take up."
 msgstr ""

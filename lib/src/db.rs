@@ -210,6 +210,19 @@ pub struct DriveUsage {
     pub loro_bytes: u64,
 }
 
+/// One resource's share of a drive's storage, for the "where does space go"
+/// view. `blob_bytes` is attributed to the first resource that references a
+/// blob, so shared bytes are counted once, as in [`DriveUsage`].
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ResourceUsage {
+    pub subject: String,
+    pub name: Option<String>,
+    pub parent: Option<String>,
+    pub is_a: Option<String>,
+    pub loro_bytes: u64,
+    pub blob_bytes: u64,
+}
+
 /// Result of loading an agent from a secret.
 pub struct AgentLoadResult {
     pub agent: crate::agents::Agent,
@@ -1432,20 +1445,32 @@ impl Db {
         let agent = self.get_default_agent()?;
         let agent_resource = self.get_resource(&agent.subject).await?;
 
-        let subjects = match agent_resource.get(urls::DRIVES) {
+        // Keep legacy Agent.drives entries, then include the private home where
+        // create_drive records new drives. Read both during the migration.
+        let mut subjects = match agent_resource.get(urls::DRIVES) {
             Ok(Value::ResourceArray(arr)) => arr.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             _ => vec![],
         };
-
-        // Fallback: active drive not in agent resource
-        let subjects = if subjects.is_empty() {
-            match self.get_active_drive() {
-                Some(active) => vec![active],
-                None => vec![],
+        if let Ok(personal) = self.private_drive_subject() {
+            if let Ok(home) = self.get_resource(&personal.as_str().into()).await {
+                if !subjects.contains(&personal) {
+                    subjects.push(personal);
+                }
+                if let Ok(Value::ResourceArray(listed)) = home.get(urls::DRIVES) {
+                    for subject in listed {
+                        let subject = subject.to_string();
+                        if !subjects.contains(&subject) {
+                            subjects.push(subject);
+                        }
+                    }
+                }
             }
-        } else {
-            subjects
-        };
+        }
+        if let Some(active) = self.get_active_drive() {
+            if !subjects.contains(&active) {
+                subjects.push(active);
+            }
+        }
 
         let mut drives = Vec::with_capacity(subjects.len());
         for subject in subjects {
@@ -1626,6 +1651,64 @@ impl Db {
         }
 
         Ok(usage.into_values().collect())
+    }
+
+    /// Per-resource storage of one drive: Loro snapshot bytes (history) and the
+    /// blob bytes of attached files. Same accounting as [`Db::per_drive_usage`],
+    /// kept per resource so a client can draw a size map of the drive.
+    pub async fn drive_usage_breakdown(
+        &self,
+        drive_subject: &str,
+    ) -> AtomicResult<Vec<ResourceUsage>> {
+        use std::collections::HashSet;
+
+        let ds: crate::Subject = drive_subject.into();
+        let mut subjects: Vec<String> = crate::sync::engine::collect_drive_subjects(self, &ds)
+            .await
+            .into_iter()
+            .collect();
+        subjects.sort();
+
+        let mut seen_blobs: HashSet<[u8; 32]> = HashSet::new();
+        let mut rows = Vec::new();
+
+        for subject in subjects {
+            let Ok(propvals) = self.get_propvals(&subject) else {
+                continue;
+            };
+            let loro_bytes = self
+                .get_loro_snapshot_bytes(&subject)
+                .map(|s| s.len() as u64)
+                .unwrap_or(0);
+
+            let mut blob_bytes = 0;
+            if let Some(blob_val) = propvals.get(urls::BLOB) {
+                let blob_subject = crate::Subject::from_raw(&blob_val.to_string(), None);
+                if let Some(hash_bytes) = blob_subject
+                    .blob_hash_hex()
+                    .and_then(|h| hex::decode(h).ok())
+                    .filter(|b| b.len() == 32)
+                {
+                    let mut hash = [0u8; 32];
+                    hash.copy_from_slice(&hash_bytes);
+                    if seen_blobs.insert(hash) {
+                        blob_bytes = self.blob_size(&hash).await?.unwrap_or(0);
+                    }
+                }
+            }
+
+            let text = |prop: &str| propvals.get(prop).map(|v| v.to_string());
+            rows.push(ResourceUsage {
+                name: text(urls::NAME).or_else(|| text(urls::FILENAME)),
+                parent: text(urls::PARENT),
+                is_a: text(urls::IS_A).and_then(|c| c.split(',').next().map(str::to_string)),
+                subject,
+                loro_bytes,
+                blob_bytes,
+            });
+        }
+
+        Ok(rows)
     }
 
     /// Get children of a resource, optionally filtered by class.
@@ -2638,6 +2721,16 @@ impl Db {
     /// would write secrets the winner cannot read.
     pub fn set_node_key(&self, key: [u8; crate::vault::keys::KEK_LEN]) {
         let _ = self.node_key.set(key);
+    }
+
+    /// A 32-byte key for one purpose, derived from the node key, or `None`
+    /// when this node has no key. The node key itself never leaves the store;
+    /// what comes out is bound to `context` (say what it is for, and version
+    /// it), so a key made for signing tokens cannot open a wrapped secret.
+    pub fn derive_node_key(&self, context: &str) -> Option<[u8; 32]> {
+        self.node_key
+            .get()
+            .map(|key| blake3::derive_key(context, key))
     }
 
     /// Wraps a secret for storage, or passes it through when no key is set.
@@ -5602,5 +5695,12 @@ mod private_drive_tests {
             listed.iter().any(|s| s == &extra),
             "private drive should list {extra}, got {listed:?}"
         );
+        store.set_active_drive(&personal).unwrap();
+        let drives = store.list_drives().await.unwrap();
+        assert_eq!(drives.len(), 2);
+        assert!(drives.iter().any(|d| d.subject == personal));
+        assert!(drives
+            .iter()
+            .any(|d| d.subject == extra && d.name == "Project"));
     }
 }

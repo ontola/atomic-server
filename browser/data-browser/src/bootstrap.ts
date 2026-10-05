@@ -4,6 +4,7 @@ import defaultStore from '@repo-lib-defaults/default_store.json';
 import tableDefaults from '@repo-lib-defaults/table.json';
 import dashboardDefaults from '@repo-lib-defaults/dashboard.json';
 import chatroomDefaults from '@repo-lib-defaults/chatroom.json';
+import conversationsDefaults from '@repo-lib-defaults/conversations.json';
 import ontologiesDefaults from '@repo-lib-defaults/ontologies.json';
 import aiDefaults from '@repo-lib-defaults/ai.json';
 import meetingDefaults from '@repo-lib-defaults/meeting.json';
@@ -84,6 +85,7 @@ export function bootstrap(store: Store): void {
     addBootstrapped(tableDefaults);
     addBootstrapped(dashboardDefaults);
     addBootstrapped(chatroomDefaults);
+    addBootstrapped(conversationsDefaults);
     addBootstrapped(ontologiesDefaults);
     addBootstrapped(aiDefaults);
     addBootstrapped(meetingDefaults);
