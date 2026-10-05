@@ -11660,3 +11660,12 @@ msgstr "Find rows containing text"
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
 msgstr "No rows show “{0}”."
+
+#: src/routes/InviteRoute.tsx
+msgid "Opening invitation..."
+msgstr "Opening invitation..."
+
+#. 0: candidates[0]
+#: src/routes/InviteRoute.tsx
+msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
+msgstr "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."

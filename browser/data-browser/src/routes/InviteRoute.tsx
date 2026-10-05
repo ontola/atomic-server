@@ -1,6 +1,14 @@
 import { PeerInvitePage } from '../views/PeerInvitePage';
 import { createRoute } from '@tanstack/react-router';
-import { useResource, useStore } from '@tomic/react';
+import { useServerURL, useResource, useStore } from '@tomic/react';
+import { useEffect, useState } from 'react';
+import { isDev } from '../config';
+import { inviteNodeCandidates, pickInviteNode } from '../helpers/inviteNode';
+import {
+  isOriginWithoutNode,
+  originMayLackNode,
+  probeOriginForNode,
+} from '../helpers/originNode';
 import InvitePage from '../views/InvitePage';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
@@ -17,7 +25,6 @@ export const InviteRoute = createRoute({
 });
 
 function InviteRouteComponent() {
-  const store = useStore();
   const token = new URLSearchParams(window.location.search).get('token');
 
   if (!token) {
@@ -38,7 +45,70 @@ function InviteRouteComponent() {
   if (invalid) return <p>Invalid invitation.</p>;
   if (browserInvite) return <PeerInvitePage token={token} />;
 
-  const subject = `${store.getServerUrl()}/invites?token=${encodeURIComponent(token)}`;
+  return <NodeInvite token={token} />;
+}
+
+/**
+ * Opens the invite on the node it was made for.
+ *
+ * The invite is a resource on the drive's node, so the request has to go
+ * there. The link says where that is (the origin it was opened on, or
+ * `?server=`); the server this browser happened to have saved does not. A
+ * hosted app origin such as `app.atomic.place` serves index.html for every
+ * path, so asking it for the invite gave "Could not parse JSON ... Unrecognized
+ * token '<'". When no node can be found the person is told, instead.
+ */
+function NodeInvite({ token }: { token: string }) {
+  const store = useStore();
+  const [, setServerUrl] = useServerURL();
+  const candidates = inviteNodeCandidates({
+    serverParam: new URLSearchParams(window.location.search).get('server'),
+    locationOrigin: window.location.origin,
+    storedServer: store.getServerUrl(),
+    dev: isDev(),
+  });
+  const candidatesKey = candidates.join(' ');
+  const [node, setNode] = useState<string | null | undefined>();
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const pageOrigin = window.location.origin;
+
+      // A hosted build can be served by something that is not a node.
+      if (originMayLackNode() && candidates.includes(pageOrigin)) {
+        await probeOriginForNode(pageOrigin);
+      }
+
+      if (!active) return;
+
+      const chosen = pickInviteNode(candidates);
+
+      if (chosen && chosen !== store.getServerUrl()) setServerUrl(chosen);
+
+      setNode(chosen ?? null);
+    })();
+
+    return () => {
+      active = false;
+    };
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `candidatesKey` stands for `candidates`
+  }, [candidatesKey, store, setServerUrl]);
+
+  if (node === undefined) return <p>Opening invitation...</p>;
+
+  if (node === null || isOriginWithoutNode(node)) {
+    return (
+      <p>
+        This invitation cannot be opened here: {candidates[0]} does not run a
+        server that holds the drive. Ask the person who invited you for a new
+        link.
+      </p>
+    );
+  }
+
+  const subject = `${node}/invites?token=${encodeURIComponent(token)}`;
 
   return <InvitePageHost subject={subject} key={subject} />;
 }
