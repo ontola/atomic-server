@@ -1882,9 +1882,9 @@ function SyncPage() {
                         Moving this drive to Cloud Server…
                       </ServiceTitle>
                       <ServiceDescription>
-                        {planActive ? 'Your plan is active. ' : ''}
-                        The workspace is being copied over and switches on by
-                        itself. You can keep working.
+                        {planActive
+                          ? 'Your plan is active. The workspace is being copied over and switches on by itself. You can keep working.'
+                          : 'The workspace is being copied over and switches on by itself. You can keep working.'}
                       </ServiceDescription>
                     </>
                   ) : autoEnroll && autoEnrollError ? (

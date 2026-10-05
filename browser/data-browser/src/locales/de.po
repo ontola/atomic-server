@@ -4388,6 +4388,7 @@ msgstr ""
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 #: src/routes/DemoRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr ""
 
@@ -5701,7 +5702,6 @@ msgid "Bearer {0}"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Cloud Server"
 msgstr ""
 
@@ -5842,14 +5842,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Switch"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Your cloud services"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud services for this workspace"
 msgstr ""
 
 #. 0: managedAccount.email
@@ -6327,16 +6319,7 @@ msgid "Connected to Cloud Server. Syncing this workspace…"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Keep this workspace available when your devices are offline, with shareable links, search, and API access."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Cloud Server is on"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Sync again"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -6345,26 +6328,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Use Cloud Server"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "See plans"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Local:</0> data stays on your devices unless you connect a service or share it."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Agree and enable Cloud Server"
 msgstr ""
 
 #: src/components/SideBar/DriveSwitcher.tsx
@@ -6654,14 +6617,6 @@ msgstr ""
 msgid "You can add or change your picture later in your profile."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr ""
-
 #: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr ""
@@ -6802,10 +6757,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Sign in to check recovery"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
 msgstr ""
 
 #: src/views/InvitePage.tsx
@@ -7257,6 +7208,7 @@ msgstr ""
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Not signed in"
 msgstr ""
 
@@ -11069,6 +11021,7 @@ msgid "You missed {0} messages while you were away"
 msgstr ""
 
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Not now"
 msgstr ""
 
@@ -11138,6 +11091,7 @@ msgstr ""
 
 #: src/chunks/FormBuilder/ShareLinkPanel.tsx
 msgid "Forms need a server to receive answers."
+msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Could not read that image"
@@ -11313,7 +11267,6 @@ msgstr ""
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Signed in on another device? Use a code"
 msgstr ""
-
 
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
@@ -11601,17 +11554,6 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
-
-#: src/routes/SyncRoute.tsx
-msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Turn on Cloud Server"
 msgstr ""
 
 #: src/helpers/sentry.ts
@@ -11645,4 +11587,91 @@ msgstr ""
 #. 0: quickFilterQuery
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Sign in to your {0} account to start Cloud Server."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan does not include Cloud Server yet."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Could not start Cloud Server."
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0} · Email recovery on"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Moving this drive to Cloud Server…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Trying again…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server could not start"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "{0} offers to host this drive"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server is ready for this drive"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server was added to this drive for you. It turns on once you accept."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan includes Cloud Server. It turns on once you accept."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Accept and turn on"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "<0>Before you accept:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Review offer"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server offered"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Hosting for this drive is waiting for your consent."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Step up to Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault, plus hosting: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Where this drive is kept"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Your plan is active. The workspace is being copied over and switches on by itself. You can keep working."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "The workspace is being copied over and switches on by itself. You can keep working."
 msgstr ""
