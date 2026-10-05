@@ -197,6 +197,10 @@ pub struct Opts {
     /// This is what a managed node is given for hosted vanity subdomains; the
     /// mapping from such a hostname to a Drive is separate, and lives in
     /// `Tree::DriveMapping`.
+    ///
+    /// Takes a comma-separated list (`atomicserver.eu,atomic.place`), for a
+    /// node that answers under two domains while it moves from one to the
+    /// other.
     #[clap(long, env = "ATOMIC_SERVED_DOMAIN_SUFFIX")]
     pub served_domain_suffix: Option<String>,
 
