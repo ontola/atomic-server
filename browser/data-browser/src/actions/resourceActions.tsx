@@ -2,6 +2,7 @@ import toast from 'react-hot-toast';
 import { canvas, core, dataBrowser, forks, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
+  FaChartPie,
   FaClock,
   FaCode,
   FaCodeBranch,
@@ -334,6 +335,17 @@ export const resourceActions: ActionDefinition[] = [
     asTool: true,
     toolName: 'show_history',
     run: ctx => ctx.navigate(historyURL(ctx.subject)),
+  },
+  {
+    id: 'space-usage',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Space usage',
+    helper: () => 'See how much space this resource and what is in it take up.',
+    keywords: ['storage', 'size', 'space', 'disk', 'bytes', 'quota'],
+    icon: () => <FaChartPie />,
+    run: ctx =>
+      ctx.navigate(`${paths.storage}?at=${encodeURIComponent(ctx.subject)}`),
   },
   {
     id: 'parent',

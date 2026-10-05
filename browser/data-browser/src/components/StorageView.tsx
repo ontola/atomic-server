@@ -1,8 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { styled } from 'styled-components';
+import { keyframes, styled } from 'styled-components';
 import { ContainerWide } from './Containers';
 import { Main } from './Main';
-import { squarify, type StorageNode } from '../helpers/storageMap';
+import {
+  squarify,
+  tileKind,
+  type StorageNode,
+  type TileKind,
+} from '../helpers/storageMap';
 
 export type Loaded =
   | { state: 'loading' }
@@ -22,13 +27,30 @@ export function StorageView({
   loaded,
   onOpen,
   backTo,
+  startAt,
 }: {
   loaded: Loaded;
+  /** Open the map inside this resource, for "Space usage" in its menu. */
+  startAt?: string;
   onOpen: (subject: string) => void;
   /** Rendered under the map; the host decides where "back" goes. */
   backTo?: ReactNode;
 }) {
   const [trail, setTrail] = useState<string[]>([]);
+  const [startedAt, setStartedAt] = useState<string | undefined>();
+  // How the map last changed, so the new tiles can grow out of (or shrink back
+  // to) the place the person clicked.
+  const [motion, setMotion] = useState<{
+    dir: 'in' | 'out';
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // Jump to the asked-for resource once, as soon as the data is there.
+  if (loaded.state === 'ready' && startAt && startAt !== startedAt) {
+    setStartedAt(startAt);
+    setTrail(pathTo(loaded.root, startAt));
+  }
 
   const current = useMemo(() => {
     if (loaded.state !== 'ready') return null;
@@ -81,8 +103,7 @@ export function StorageView({
       <ContainerWide>
         <h1>Where space goes</h1>
         <Intro>
-          Each tile is an item in this workspace. Bigger tile, more space.{' '}
-          <Swatch $files /> files and images, <Swatch /> edit history.
+          Each tile is an item in this workspace. Bigger tile, more space.
         </Intro>
 
         {loaded.state === 'loading' && (
@@ -104,7 +125,10 @@ export function StorageView({
                   {i < current.path.length - 1 ? (
                     <CrumbButton
                       type='button'
-                      onClick={() => setTrail(trail.slice(0, i))}
+                      onClick={() => {
+                        setMotion({ dir: 'out', x: 50, y: 50 });
+                        setTrail(trail.slice(0, i));
+                      }}
                     >
                       {n.name}
                     </CrumbButton>
@@ -120,17 +144,34 @@ export function StorageView({
               <p data-testid='storage-empty'>Nothing here takes up space.</p>
             ) : (
               <MapBox
+                // A new key restarts the animation for every level.
+                key={trail.join('/')}
                 data-testid='storage-map'
-                style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+                $dir={motion?.dir}
+                style={{
+                  aspectRatio: `${MAP_W} / ${MAP_H}`,
+                  transformOrigin: `${motion?.x ?? 50}% ${motion?.y ?? 50}%`,
+                }}
               >
                 {tiles.map(({ item, rect }) => (
                   <Tile
                     key={item.subject + item.name}
                     type='button'
-                    $files={item.totalFileBytes * 2 > item.totalBytes}
+                    $kind={tileKind(item, hasInside(item))}
+                    $folder={hasInside(item)}
                     data-testid='storage-tile'
-                    title={`${item.name} · ${formatBytes(item.totalBytes)}`}
-                    onClick={() => openItem(item)}
+                    data-folder={hasInside(item) ? 'true' : undefined}
+                    title={
+                      hasInside(item)
+                        ? `${item.name} · ${formatBytes(item.totalBytes)} · click to look inside`
+                        : `${item.name} · ${formatBytes(item.totalBytes)} · click to open`
+                    }
+                    onClick={() =>
+                      openItem(item, {
+                        x: ((rect.x + rect.w / 2) / MAP_W) * 100,
+                        y: ((rect.y + rect.h / 2) / MAP_H) * 100,
+                      })
+                    }
                     style={{
                       left: `${(rect.x / MAP_W) * 100}%`,
                       top: `${(rect.y / MAP_H) * 100}%`,
@@ -139,13 +180,36 @@ export function StorageView({
                     }}
                   >
                     <TileLabel>
-                      <span>{item.name}</span>
-                      <Muted>{formatBytes(item.totalBytes)}</Muted>
+                      <span>
+                        {hasInside(item) && (
+                          <FolderMark aria-hidden>▸</FolderMark>
+                        )}
+                        {item.name}
+                      </span>
+                      <Muted>
+                        {formatBytes(item.totalBytes)}
+                        {hasInside(item) && ` · ${item.children.length} inside`}
+                      </Muted>
                     </TileLabel>
                   </Tile>
                 ))}
               </MapBox>
             )}
+
+            <Legend aria-label='Colours'>
+              <li>
+                <Swatch $kind='edge' /> resource
+              </li>
+              <li>
+                <Swatch $kind='branch' /> resource with other resources
+              </li>
+              <li>
+                <Swatch $kind='mixed' /> mixed (files and resources)
+              </li>
+              <li>
+                <Swatch $kind='binary' /> file or image
+              </li>
+            </Legend>
 
             <List data-testid='storage-list'>
               {items.slice(0, 50).map(item => (
@@ -157,7 +221,7 @@ export function StorageView({
                         (item.totalBytes / (items[0]?.totalBytes || 1)) * 100,
                       )}%`,
                     }}
-                    $files={item.totalFileBytes * 2 > item.totalBytes}
+                    $kind={tileKind(item, hasInside(item))}
                   />
                   <ListRow>
                     <button type='button' onClick={() => openItem(item)}>
@@ -177,8 +241,9 @@ export function StorageView({
     </Main>
   );
 
-  function openItem(item: StorageNode) {
-    if (item.children.length > 0 && item.name !== 'This item itself') {
+  function openItem(item: StorageNode, at = { x: 50, y: 50 }) {
+    if (hasInside(item)) {
+      setMotion({ dir: 'in', ...at });
       setTrail([...trail, item.subject]);
 
       return;
@@ -186,6 +251,26 @@ export function StorageView({
 
     onOpen(item.subject);
   }
+}
+
+/** The subjects from just below `root` down to `target`; empty when it is not in the tree. */
+function pathTo(root: StorageNode, target: string): string[] {
+  if (root.subject === target) return [];
+
+  for (const child of root.children) {
+    const rest = pathTo(child, target);
+
+    if (child.subject === target) return [child.subject];
+
+    if (rest.length > 0) return [child.subject, ...rest];
+  }
+
+  return [];
+}
+
+/** Folders open the map one level deeper; everything else opens the resource. */
+function hasInside(item: StorageNode): boolean {
+  return item.children.length > 0 && item.name !== 'This item itself';
 }
 
 function formatBytes(bytes: number): string {
@@ -202,6 +287,17 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
+const Legend = styled.ul`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
 const Intro = styled.p`
   color: ${p => p.theme.colors.textLight};
 `;
@@ -210,12 +306,19 @@ const Muted = styled.span`
   color: ${p => p.theme.colors.textLight};
 `;
 
-const Swatch = styled.span<{ $files?: boolean }>`
+const KIND_COLOURS: Record<TileKind, string> = {
+  edge: '#3b6fe0',
+  branch: '#7b4fd6',
+  mixed: '#1f9d8a',
+  binary: '#d9822b',
+};
+
+const Swatch = styled.span<{ $kind: TileKind }>`
   display: inline-block;
   width: 0.8em;
   height: 0.8em;
   border-radius: 2px;
-  background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
+  background: ${p => KIND_COLOURS[p.$kind]};
 `;
 
 const Crumbs = styled.nav`
@@ -231,8 +334,40 @@ const CrumbButton = styled.button`
   cursor: pointer;
 `;
 
-const MapBox = styled.div`
+const growIn = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+`;
+
+const shrinkBack = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+`;
+
+const MapBox = styled.div<{ $dir?: 'in' | 'out' }>`
   position: relative;
+  animation: ${p =>
+      p.$dir === 'in' ? growIn : p.$dir === 'out' ? shrinkBack : 'none'}
+    260ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
   width: 100%;
   min-height: 220px;
   border-radius: 8px;
@@ -240,21 +375,29 @@ const MapBox = styled.div`
   background: ${p => p.theme.colors.bg1};
 `;
 
-const Tile = styled.button<{ $files: boolean }>`
+const Tile = styled.button<{ $kind: TileKind; $folder: boolean }>`
   position: absolute;
   box-sizing: border-box;
   padding: 4px 6px;
   border: 1px solid ${p => p.theme.colors.bg};
-  background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
+  background: ${p => KIND_COLOURS[p.$kind]};
   color: #fff;
   text-align: left;
-  cursor: pointer;
+  cursor: ${p => (p.$folder ? 'zoom-in' : 'pointer')};
   overflow: hidden;
+  /* A tile with things inside gets an inner frame, like a folder; a leaf is flat. */
+  box-shadow: ${p =>
+    p.$folder ? 'inset 0 0 0 3px rgba(255, 255, 255, 0.28)' : 'none'};
 
   &:hover,
   &:focus-visible {
     filter: brightness(1.12);
   }
+`;
+
+const FolderMark = styled.span`
+  margin-right: 0.3em;
+  opacity: 0.85;
 `;
 
 const TileLabel = styled.span`
@@ -285,10 +428,10 @@ const List = styled.ol`
   }
 `;
 
-const Bar = styled.span<{ $files: boolean }>`
+const Bar = styled.span<{ $kind: TileKind }>`
   position: absolute;
   inset: 0 auto 0 0;
-  background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
+  background: ${p => KIND_COLOURS[p.$kind]};
   opacity: 0.18;
   border-radius: 4px;
 `;

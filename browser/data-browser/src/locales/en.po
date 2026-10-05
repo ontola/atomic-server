@@ -1706,6 +1706,7 @@ msgstr "Set a title"
 #: src/chunks/FormBuilder/useFormQuestions.ts
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
+#: src/helpers/storageMap.ts
 msgid "Untitled"
 msgstr "Untitled"
 
@@ -11756,3 +11757,146 @@ msgstr "No rows show “{0}”."
 #: src/routes/SignOutRoute.tsx
 msgid "This signs you out of your account and removes your key from this browser."
 msgstr "This signs you out of your account and removes your key from this browser."
+
+#: src/components/StorageView.tsx
+#: src/components/StorageView.tsx
+msgid "This item itself"
+msgstr "This item itself"
+
+#: src/components/StorageView.tsx
+msgid "Location"
+msgstr "Location"
+
+#. 0: item.name; 1: formatBytes(item.totalBytes)
+#: src/components/StorageView.tsx
+msgid "{0} · {1} · click to look inside"
+msgstr "{0} · {1} · click to look inside"
+
+#. 0: item.name; 1: formatBytes(item.totalBytes)
+#: src/components/StorageView.tsx
+msgid "{0} · {1} · click to open"
+msgstr "{0} · {1} · click to open"
+
+#: src/components/StorageView.tsx
+msgid "Measuring…"
+msgstr "Measuring…"
+
+#: src/components/StorageView.tsx
+msgid "This server could not report storage for the workspace. It may be an older version, or you may not be allowed to read it."
+msgstr "This server could not report storage for the workspace. It may be an older version, or you may not be allowed to read it."
+
+#: src/components/StorageView.tsx
+msgid "Nothing here takes up space."
+msgstr "Nothing here takes up space."
+
+#: src/components/StorageView.tsx
+msgid "Where space goes"
+msgstr "Where space goes"
+
+#~ msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
+#~ msgstr "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
+
+#: src/helpers/storageMap.ts
+msgid "This workspace"
+msgstr "This workspace"
+
+#: src/helpers/storageMap.ts
+msgid "Drive"
+msgstr "Drive"
+
+#: src/routes/StorageRoute.tsx
+msgid "Back to sync settings"
+msgstr "Back to sync settings"
+
+#: src/routes/SyncRoute.tsx
+msgid "(see where space goes)"
+msgstr "(see where space goes)"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not read storage use."
+msgstr "Could not read storage use."
+
+#. 0: formatBytes(result.bytes_reclaimed)
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freed {0}."
+msgstr "Freed {0}."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Nothing to free."
+msgstr "Nothing to free."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not free storage."
+msgstr "Could not free storage."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Manage storage"
+msgstr "Manage storage"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Storage in Cloud Vault"
+msgstr "Storage in Cloud Vault"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freeing…"
+msgstr "Freeing…"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Free up space"
+msgstr "Free up space"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Change history"
+msgstr "Change history"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Snapshots"
+msgstr "Snapshots"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Files and images"
+msgstr "Files and images"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Search index"
+msgstr "Search index"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Compression data"
+msgstr "Compression data"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Other"
+msgstr "Other"
+
+#: src/components/StorageView.tsx
+msgid "Colours"
+msgstr "Colours"
+
+#: src/components/StorageView.tsx
+msgid "Each tile is an item in this workspace. Bigger tile, more space."
+msgstr "Each tile is an item in this workspace. Bigger tile, more space."
+
+#: src/components/StorageView.tsx
+msgid "<0/> resource"
+msgstr "<0/> resource"
+
+#: src/components/StorageView.tsx
+msgid "<0/> resource with other resources"
+msgstr "<0/> resource with other resources"
+
+#: src/components/StorageView.tsx
+msgid "<0/> mixed (files and resources)"
+msgstr "<0/> mixed (files and resources)"
+
+#: src/components/StorageView.tsx
+msgid "<0/> file or image"
+msgstr "<0/> file or image"
+
+#: src/actions/resourceActions.tsx
+msgid "Space usage"
+msgstr "Space usage"
+
+#: src/actions/resourceActions.tsx
+msgid "See how much space this resource and what is in it take up."
+msgstr "See how much space this resource and what is in it take up."
