@@ -18,6 +18,7 @@ import {
   CARD_TITLE_FONT,
 } from '../cardSurface';
 import { Button } from '../Button';
+import { VaultStorage } from './VaultStorage';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 
@@ -235,6 +236,10 @@ export function VaultPanel({
             Turn off
           </Button>
         </Actions>
+        <VaultStorage
+          drivePseudonym={enrollment.drive_pseudonym}
+          onChanged={() => void vault.refresh()}
+        />
       </Body>
     </Panel>
   );
