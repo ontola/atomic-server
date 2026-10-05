@@ -51,6 +51,12 @@ impl CommitResponse {
 
     /// The authorization relevance of this commit — which authority-defining
     /// facts it establishes or mutates. See [`crate::hierarchy::AuthImpact`].
+    /// Whether this commit brought its resource into being.
+    pub fn creates_resource(&self) -> bool {
+        self.commit.is_genesis == Some(true)
+            || (self.resource_old.is_none() && self.resource_new.is_some())
+    }
+
     pub fn auth_impact(&self) -> crate::hierarchy::AuthImpact {
         // A creation is genesis whether or not the client flagged it: Rust
         // `save_locally`, agent first-commits and HTTP-subject creations

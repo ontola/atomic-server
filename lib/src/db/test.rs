@@ -583,7 +583,8 @@ async fn queries() {
     let store = &store_owned;
 
     let demo_val = Value::Slug("myval".to_string());
-    let demo_reference = Value::AtomicUrl(urls::PARAGRAPH.into());
+    // Nothing else in the seeded store points at it, so the count is exact.
+    let demo_reference = Value::AtomicUrl("https://example.com/queries-test-target".into());
 
     let count = 10;
     let limit = 5;
@@ -650,10 +651,16 @@ async fn queries() {
     );
     assert_eq!(limit, res.subjects.len(), "limit");
 
+    // The value index answers "what points at X". A plain value has no row in
+    // it, so without a property only a reference is found.
     q.property = None;
     q.value = Some(demo_val);
     let res = store.query(&q).await.unwrap();
-    assert_eq!(res.count, count, "literal value, no property filter");
+    assert_eq!(res.count, 0, "literal value, no property filter");
+
+    q.value = Some(demo_reference.clone());
+    let res = store.query(&q).await.unwrap();
+    assert_eq!(res.count, count, "reference value, no property filter");
 
     q.offset = 9;
     let res = store.query(&q).await.unwrap();
@@ -4100,13 +4107,13 @@ async fn replica_row_keeps_unresolvable_props_from_snapshot() {
 
 /// A critical commit's `Tree::Resources` row is self-contained: its blob
 /// keeps the signed `loroUpdate` (a CRDT resource's blob drops it in favour
-/// of `Tree::LoroSnapshots`), and the row is findable by the resource it is
-/// about through the `subject` index. See `envelopes::tests::
+/// of `Tree::LoroSnapshots`). A creation's commit is not in the atom indexes;
+/// it is found by its id. See `envelopes::tests::
 /// stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit` for
 /// why the payload cannot be borrowed from the envelope.
 #[tokio::test]
 #[timeout(120000)]
-async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
+async fn commit_resource_blob_keeps_loro_update_and_is_not_indexed() {
     let store = Db::init_temp("commit_row_self_contained").await.unwrap();
     let (_alice, drive) = store.setup("Alice").await.unwrap();
     let subject = store
@@ -4156,11 +4163,11 @@ async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
         .await
         .unwrap();
     assert!(
-        found
+        !found
             .subjects
             .iter()
             .any(|s| s.as_str() == genesis_id.as_str()),
-        "the commit row is indexed by the subject it is about: {:?}",
+        "a creation's commit is found by its id, not by the subject index: {:?}",
         found.subjects
     );
 }
@@ -4511,4 +4518,197 @@ async fn row_inserted_between_two_others_after_the_index_was_built_lists_between
     let order: Vec<String> = res.subjects.iter().map(|s| s.to_string()).collect();
     let expect: Vec<String> = [0, 2, 1].iter().map(|i| subjects[*i].to_string()).collect();
     assert_eq!(order, expect);
+}
+
+/// Prints where the bytes of a 50-message chat go, per tree, with the
+/// compressed trees counted as stored. Run with `--ignored --nocapture`.
+#[tokio::test]
+#[ignore = "measurement, not a check"]
+async fn measure_chat_message_bytes() {
+    let store = Db::init_temp("measure_chat").await.unwrap();
+    let mut chat = Resource::new("did:ad:placeholder".into());
+    chat.set(urls::NAME.into(), Value::String("Chat".into()), &store)
+        .await
+        .unwrap();
+    chat.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::CHATROOM.into()]),
+        &store,
+    )
+    .await
+    .unwrap();
+    let chat = chat
+        .save_as_genesis(&store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap();
+    let parent = chat.get_subject().clone();
+    let trees = [
+        Tree::Resources,
+        Tree::LoroSnapshots,
+        Tree::Envelopes,
+        Tree::PropValSub,
+        Tree::ValPropSub,
+        Tree::QueryMembers,
+        Tree::WatchedQueries,
+        Tree::SearchPostings,
+        Tree::SearchDocs,
+        Tree::SearchTrigrams,
+        Tree::DidMapping,
+        Tree::DriveMapping,
+        Tree::Outbox,
+    ];
+    let stored = super::compressed_kv::CompressedKv::new(store.kv.clone());
+    let tally = |store: &Db| {
+        trees
+            .iter()
+            .map(|t| {
+                let (mut n, mut k, mut v) = (0usize, 0usize, 0usize);
+                for kv in store.kv.iter_tree(*t) {
+                    let (key, val) = kv.unwrap();
+                    n += 1;
+                    k += key.len();
+                    v += if super::compressed_kv::is_compressed_tree(*t) {
+                        stored.encoded(*t, &key, &val, &[]).len()
+                    } else {
+                        val.len()
+                    };
+                }
+                (*t, n, k, v)
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = tally(&store);
+    const N: usize = 50;
+    let mut last = None;
+    for i in 0..N {
+        let mut msg = Resource::new("did:ad:placeholder".into());
+        msg.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(parent.clone()),
+            &store,
+        )
+        .await
+        .unwrap();
+        msg.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::MESSAGE.into()]),
+            &store,
+        )
+        .await
+        .unwrap();
+        msg.set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown(format!("Hallo dit is bericht nummer {i}, een gewone zin.")),
+            &store,
+        )
+        .await
+        .unwrap();
+        let r = msg.save_as_genesis(&store).await.unwrap();
+        last = r.resource_new;
+    }
+    let after = tally(&store);
+    println!(
+        "{:<16}{:>6}{:>10}{:>10}{:>10}",
+        "tree", "rows", "key B", "val B", "B/msg"
+    );
+    let mut total = 0;
+    for (b, a) in before.iter().zip(after.iter()) {
+        let rows = a.1 - b.1;
+        let kb = a.2 - b.2;
+        let vb = a.3 - b.3;
+        total += kb + vb;
+        println!(
+            "{:<16}{:>6}{:>10}{:>10}{:>10}",
+            format!("{:?}", a.0),
+            rows,
+            kb,
+            vb,
+            (kb + vb) / N
+        );
+    }
+    println!("TOTAL per message: {}", total / N);
+    let _ = last;
+}
+
+/// A snapshot is stored as the changes after the genesis commit, and read
+/// back as the same document, also after later edits.
+#[tokio::test]
+#[timeout(120000)]
+async fn snapshot_is_stored_as_a_delta_on_the_genesis_commit() {
+    let store = Db::init_temp("snapshot_delta").await.unwrap();
+    let mut resource = Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("hallo".into()), &store)
+        .await
+        .unwrap();
+    resource
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("een gewone zin".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    let response = resource.save_as_genesis(&store).await.unwrap();
+    let subject = response.resource_new.unwrap().get_subject().clone();
+    let key = subject.pure_id();
+
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let stored = super::compressed_kv::CompressedKv::new(store.kv.clone());
+    let packed = stored.encoded(Tree::LoroSnapshots, key.as_bytes(), &snapshot, &[]);
+    assert_eq!(
+        &packed[..2],
+        &[0, 2],
+        "a fresh resource's snapshot is a delta"
+    );
+    assert!(
+        packed.len() * 2 < snapshot.len(),
+        "{} vs {}",
+        packed.len(),
+        snapshot.len()
+    );
+
+    let read = store.get_resource(&subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "hallo");
+
+    // Edits sit on top of the genesis and survive a read.
+    let mut edit = store.get_resource(&subject).await.unwrap();
+    edit.set(urls::NAME.into(), Value::String("edited".into()), &store)
+        .await
+        .unwrap();
+    edit.save_locally(&store).await.unwrap();
+    let read = store.get_resource(&subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "edited");
+    assert_eq!(
+        read.get(urls::DESCRIPTION).unwrap().to_string(),
+        "een gewone zin"
+    );
+
+    // Without the genesis commit there is nothing to be a delta on, so the
+    // whole snapshot is kept.
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let orphan = stored.encoded(
+        Tree::LoroSnapshots,
+        b"atomic:no-such-genesis",
+        &snapshot,
+        &[],
+    );
+    assert_ne!(orphan.get(1), Some(&2), "no base, no delta");
+    assert_eq!(
+        stored
+            .get(Tree::LoroSnapshots, key.as_bytes())
+            .unwrap()
+            .unwrap(),
+        snapshot
+    );
 }

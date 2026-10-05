@@ -6,6 +6,7 @@ pub mod blob_backend;
 mod canonical_scheme;
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod compaction;
+mod compressed_kv;
 mod encoding;
 pub mod encrypted_backend;
 pub mod kv_store;
@@ -517,7 +518,7 @@ impl Db {
         Db {
             path,
             blob_backend: None,
-            kv,
+            kv: Arc::new(compressed_kv::CompressedKv::new(kv)),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             endpoints: vec![],
@@ -2549,7 +2550,7 @@ impl Db {
 
     /// Finds resource by Subject, return PropVals HashMap
     #[instrument(skip_all)]
-    fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
+    pub(crate) fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
         match self.kv.get(Tree::Resources, subject.as_bytes())? {
             Some(binpropval) => {
                 let propval: PropVals = decode_propvals(&binpropval)?;
@@ -4505,12 +4506,19 @@ impl Storelike for Db {
         // and rights/parent/destroy; drop ordinary content certificates.
         if commit_response.auth_impact().is_critical() {
             store.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
-            for atom in commit_response.commit_resource.to_atoms() {
-                store.add_atom_to_index(
-                    &atom,
-                    &commit_response.commit_resource,
-                    &mut transaction,
-                )?;
+            // A creation's commit is found by its id (it names the resource),
+            // so its atoms stay out of the indexes: five rows and about
+            // 0.5 KB for every new resource that no query asks for. Later
+            // critical commits (rights, parent, destroy) stay queryable by
+            // the subject they are about.
+            if !commit_response.creates_resource() {
+                for atom in commit_response.commit_resource.to_atoms() {
+                    store.add_atom_to_index(
+                        &atom,
+                        &commit_response.commit_resource,
+                        &mut transaction,
+                    )?;
+                }
             }
         }
 
