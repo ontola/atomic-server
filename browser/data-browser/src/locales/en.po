@@ -118,7 +118,6 @@ msgstr "AI Agents"
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
-
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
@@ -146,7 +145,6 @@ msgstr "AI Agents"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Conversation/NewMessageDialog.tsx
-
 #: src/routes/SyncRoute.tsx
 #: src/views/Installation/AssignRights.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -314,10 +312,7 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
-
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/views/InvitePage.tsx
-#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Continue"
 
@@ -2913,6 +2908,7 @@ msgstr "Empty"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
+#: src/components/Vault/VaultStorage.tsx
 msgid "Hide"
 msgstr "Hide"
 
@@ -3828,15 +3824,11 @@ msgstr "This removes drives created for automated tests or local dev: names cont
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 
-#: src/views/InvitePage.tsx
-msgid "Accept as"
-msgstr "Accept as"
+#~ msgid "Accept as"
+#~ msgstr "Accept as"
 
 #~ msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
 #~ msgstr "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
-
-msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
-msgstr "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
@@ -5388,6 +5380,7 @@ msgid "Every row"
 msgstr "Every row"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/TablePage/TableSummaryBar.tsx
 msgid "Rows"
 msgstr "Rows"
 
@@ -5438,17 +5431,14 @@ msgstr "Pick a number and something to group it by"
 msgid "No data yet"
 msgstr "No data yet"
 
-#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
-msgid "Showing the largest"
-msgstr "Showing the largest"
+#~ msgid "Showing the largest"
+#~ msgstr "Showing the largest"
 
-#: src/chunks/DashboardPage/blocks/ChartBlock.tsx
-msgid "groups"
-msgstr "groups"
+#~ msgid "groups"
+#~ msgstr "groups"
 
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
-
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 msgid "Value"
@@ -6216,27 +6206,21 @@ msgstr "Connected to Cloud Server. Syncing this workspace…"
 msgid "Use Cloud Server"
 msgstr "Use Cloud Server"
 
-
-#: src/components/Vault/VaultPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "See plans"
 msgstr "See plans"
 
-#: src/routes/SyncRoute.tsx
-msgid "<0>Local:</0> data stays on your devices unless you connect a service or share it."
-msgstr "<0>Local:</0> data stays on your devices unless you connect a service or share it."
+#~ msgid "<0>Local:</0> data stays on your devices unless you connect a service or share it."
+#~ msgstr "<0>Local:</0> data stays on your devices unless you connect a service or share it."
 
-#: src/routes/SyncRoute.tsx
-msgid "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
-msgstr "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
+#~ msgid "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
+#~ msgstr "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
 
-#: src/routes/SyncRoute.tsx
-msgid "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
-msgstr "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
+#~ msgid "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
+#~ msgstr "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
 
-#: src/routes/SyncRoute.tsx
-msgid "Agree and enable Cloud Server"
-msgstr "Agree and enable Cloud Server"
+#~ msgid "Agree and enable Cloud Server"
+#~ msgstr "Agree and enable Cloud Server"
 
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to your personal drive."
@@ -6510,17 +6494,13 @@ msgstr "How your colleagues see you"
 #~ msgid "You can add or change your picture later in your profile."
 #~ msgstr "You can add or change your picture later in your profile."
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr "Your Cloud Server subscription is active"
+#~ msgid "Your Cloud Server subscription is active"
+#~ msgstr "Your Cloud Server subscription is active"
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr "Your Cloud Server trial is active"
+#~ msgid "Your Cloud Server trial is active"
+#~ msgstr "Your Cloud Server trial is active"
 
 #: src/components/ProfileForm.tsx
-
-#: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr "Profile picture (optional)"
 
@@ -9451,7 +9431,6 @@ msgstr "Show all events on {0}"
 msgid "Show all {0} events on {1}"
 msgstr "Show all {0} events on {1}"
 
-#: src/chunks/FormBuilder/FieldPreview.tsx
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "more"
 msgstr "more"
@@ -9802,9 +9781,8 @@ msgstr "All columns are on this form. Add a column to the table to ask something
 msgid "Add a column to the table"
 msgstr "Add a column to the table"
 
-#: src/chunks/FormBuilder/DeleteFormDialog.tsx
-msgid "Also delete the results table and its responses"
-msgstr "Also delete the results table and its responses"
+#~ msgid "Also delete the results table and its responses"
+#~ msgstr "Also delete the results table and its responses"
 
 #: src/chunks/FormBuilder/DeleteFormDialog.tsx
 msgid "Are you sure you want to delete this form?"
@@ -9844,7 +9822,6 @@ msgid "All of these must match. Leave empty to always show."
 msgstr "All of these must match. Leave empty to always show."
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
-#: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "and"
 msgstr "and"
 
@@ -10048,9 +10025,8 @@ msgstr "Are you sure you want to delete this page? Its fields will no longer be 
 msgid "Delete page"
 msgstr "Delete page"
 
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid "Back to table"
-msgstr "Back to table"
+#~ msgid "Back to table"
+#~ msgstr "Back to table"
 
 #: src/chunks/FormBuilder/FormBuilderPage.tsx
 msgid "Fields"
@@ -10060,13 +10036,11 @@ msgstr "Fields"
 msgid "Summary"
 msgstr "Summary"
 
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid "Required table columns are missing from this form:"
-msgstr "Required table columns are missing from this form:"
+#~ msgid "Required table columns are missing from this form:"
+#~ msgstr "Required table columns are missing from this form:"
 
-#: src/chunks/FormBuilder/FormBuilderPage.tsx
-msgid ". Responses cannot be saved without them."
-msgstr ". Responses cannot be saved without them."
+#~ msgid ". Responses cannot be saved without them."
+#~ msgstr ". Responses cannot be saved without them."
 
 #. 0: formatScheduleMoment(availability.opensAt)
 #: src/chunks/FormBuilder/PublishToggle.tsx
@@ -10475,17 +10449,14 @@ msgstr "A select column contributes its tags. Any other column turns each row in
 msgid "This table has no columns to link to."
 msgstr "This table has no columns to link to."
 
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "Everyone who opens this form sees every row of"
-msgstr "Everyone who opens this form sees every row of"
+#~ msgid "Everyone who opens this form sees every row of"
+#~ msgstr "Everyone who opens this form sees every row of"
 
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "as an option. Only link a table whose contents you are happy to make public."
-msgstr "as an option. Only link a table whose contents you are happy to make public."
+#~ msgid "as an option. Only link a table whose contents you are happy to make public."
+#~ msgstr "as an option. Only link a table whose contents you are happy to make public."
 
-#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
-msgid "This publishes the rows"
-msgstr "This publishes the rows"
+#~ msgid "This publishes the rows"
+#~ msgstr "This publishes the rows"
 
 #: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 msgid "Link options"
@@ -10507,9 +10478,8 @@ msgstr "Replace"
 msgid "Add image"
 msgstr "Add image"
 
-#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
-msgid "points"
-msgstr "points"
+#~ msgid "points"
+#~ msgstr "points"
 
 #: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
 msgid "Scale"
@@ -10577,25 +10547,20 @@ msgstr "Max rows"
 msgid "Option {0}"
 msgstr "Option {0}"
 
-#: src/chunks/FormBuilder/Summary/AnswerList.tsx
-msgid "Showing first"
-msgstr "Showing first"
+#~ msgid "Showing first"
+#~ msgstr "Showing first"
 
-#: src/chunks/FormBuilder/Summary/AnswerList.tsx
-msgid "answers"
-msgstr "answers"
+#~ msgid "answers"
+#~ msgstr "answers"
 
-#: src/chunks/FormBuilder/Summary/Histogram.tsx
-msgid "min"
-msgstr "min"
+#~ msgid "min"
+#~ msgstr "min"
 
-#: src/chunks/FormBuilder/Summary/Histogram.tsx
-msgid "· mean"
-msgstr "· mean"
+#~ msgid "· mean"
+#~ msgstr "· mean"
 
-#: src/chunks/FormBuilder/Summary/Histogram.tsx
-msgid "· max"
-msgstr "· max"
+#~ msgid "· max"
+#~ msgstr "· max"
 
 #. 0: summary.responses
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
@@ -10618,9 +10583,8 @@ msgstr "No summary available. The server may need to be updated."
 msgid "No responses yet"
 msgstr "No responses yet"
 
-#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
-msgid "skipped"
-msgstr "skipped"
+#~ msgid "skipped"
+#~ msgstr "skipped"
 
 #. 0: field.answered
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
@@ -11712,10 +11676,6 @@ msgstr "Trying again…"
 msgid "Your plan"
 msgstr "Your plan"
 
-#: src/routes/SyncRoute.tsx
-msgid "See plans"
-msgstr "See plans"
-
 #: src/components/Cloud/ServiceRow.tsx
 msgid "Current"
 msgstr "Current"
@@ -11797,7 +11757,11 @@ msgid "Turning on…"
 msgstr "Turning on…"
 
 #. 0: Math.round(restoreProgress * 100)
+#. 0: Math.round(vault.restoreProgress * 100)
+#. 0: Math.round(vault.restoreProgress * 100)
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restoring… {0}%"
 msgstr "Restoring… {0}%"
 
@@ -12151,15 +12115,6 @@ msgstr "This template has already been applied here"
 msgid "<0/> Apply template"
 msgstr "<0/> Apply template"
 
-#. 0: Math.round(restoreProgress * 100)
-#. 0: Math.round(vault.restoreProgress * 100)
-#. 0: Math.round(vault.restoreProgress * 100)
-#: src/components/Vault/VaultPanel.tsx
-#: src/components/Vault/VaultRestoreAction.tsx
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Restoring… {0}%"
-msgstr "Restoring… {0}%"
-
 #. 0: klass.error.message
 #: src/components/forms/ResourceForm.tsx
 msgid "Error in class, so this form could miss properties. You can still edit the resource, though. Error message: ` {0}`"
@@ -12322,3 +12277,95 @@ msgstr "Create {0}:{1} <0/>"
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 msgid "Create{0} <0/>"
 msgstr "Create{0} <0/>"
+
+#~ msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
+#~ msgstr "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
+
+#~ msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+#~ msgstr "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+
+#: src/chunks/FormBuilder/DeleteFormDialog.tsx
+msgid "<0/> Also delete the results table and its responses"
+msgstr "<0/> Also delete the results table and its responses"
+
+#. 0: hidden
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "and {0} more"
+msgstr "and {0} more"
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "<0/> Required by the table column"
+msgstr "<0/> Required by the table column"
+
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "<0/> Back to table"
+msgstr "<0/> Back to table"
+
+#. 0: ' '; 1: missing .map(s => columns.find(p => p.subject === s)) .map((p, i) => (p ? columnLabel(p) \\: missing[i])) .join(', ')
+#: src/chunks/FormBuilder/FormBuilderPage.tsx
+msgid "Required table columns are missing from this form:{0} {1} . Responses cannot be saved without them."
+msgstr "Required table columns are missing from this form:{0} {1} . Responses cannot be saved without them."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Reading what is stored…"
+msgstr "Reading what is stored…"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Uploads in progress"
+msgstr "Uploads in progress"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Leftovers <0>· cleaned up automatically</0>"
+msgstr "Leftovers <0>· cleaned up automatically</0>"
+
+#. 0: formatBytes(usage.reclaimable_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of old history and unused files can be removed. Nothing you can see is lost."
+msgstr "{0} of old history and unused files can be removed. Nothing you can see is lost."
+
+#. 0: formatBytes(usage.undo_window_bytes)
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
+msgstr "{0} is kept only so recently deleted items can be brought back. Freeing it means those cannot be restored."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Free it anyway"
+msgstr "Free it anyway"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Nothing extra is stored. This is what your workspace needs."
+msgstr "Nothing extra is stored. This is what your workspace needs."
+
+#. 0: formatBytes(usage.used_bytes); 1: formatBytes(usage.quota_bytes); 2: ' '
+#: src/components/Vault/VaultStorage.tsx
+msgid "{0} of {1}{2} used"
+msgstr "{0} of {1}{2} used"
+
+#. 0: ' '
+#: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
+msgid "<0>This publishes the rows</0> Everyone who opens this form sees every row of{0} <1/> as an option. Only link a table whose contents you are happy to make public."
+msgstr "<0>This publishes the rows</0> Everyone who opens this form sees every row of{0} <1/> as an option. Only link a table whose contents you are happy to make public."
+
+#. 0: formatNumber(min); 1: formatNumber(mean); 2: ' '; 3: formatNumber(max)
+#: src/chunks/FormBuilder/Summary/Histogram.tsx
+msgid "min {0} · mean {1} · max{2} {3}"
+msgstr "min {0} · mean {1} · max{2} {3}"
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "<0/> Refresh"
+msgstr "<0/> Refresh"
+
+#. 0: field.skipped
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "· {0} skipped"
+msgstr "· {0} skipped"
+
+#. 0: scale
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "{0} points"
+msgstr "{0} points"
+
+#. 0: answers.length
+#: src/chunks/FormBuilder/Summary/AnswerList.tsx
+msgid "Showing first {0} answers"
+msgstr "Showing first {0} answers"
