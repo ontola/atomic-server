@@ -1,15 +1,10 @@
 import {
-  ServiceGroup,
-  ServiceSection,
-  ServiceIcon,
-  ServiceBody,
-  ServiceTitle,
-  ServiceDescription,
-  CLOUD_SERVER_DESCRIPTION,
-  CLOUD_SERVER_PLAN_DESCRIPTION,
+  CLOUD_SERVER,
   CLOUD_SERVER_SETUP,
+  CLOUD_VAULT,
 } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
+import { PlanCard, PlanGrid } from '../components/PlanCard';
 import { Checkbox } from '../components/forms/Checkbox';
 import { resumePeerLinks } from '../helpers/browserPeerSync';
 import { syncSummary, showSavedServer } from '../helpers/syncPresentation';
@@ -32,7 +27,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
-import { createRoute, Link } from '@tanstack/react-router';
+import { createRoute } from '@tanstack/react-router';
 import toast from 'react-hot-toast';
 import {
   StoreEvents,
@@ -51,7 +46,6 @@ import {
   cardSurface,
   CardIcon,
   CARD_SUB_FONT,
-  CARD_TITLE_FONT,
 } from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
 import { AICreditsService } from '../components/Vault/AICreditsService';
@@ -66,7 +60,6 @@ import {
   FaPlus,
   FaMobileScreenButton,
   FaCloudArrowUp,
-  FaKey,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
@@ -82,12 +75,6 @@ import {
   getRememberedManagedPortalUrl,
   safePortalUrl,
 } from '../helpers/managed/api';
-import {
-  envelopeWrapperKinds,
-  getRecoverySecret,
-  readCachedBackups,
-  sameAgent,
-} from '../helpers/managed/recovery';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
@@ -135,7 +122,7 @@ import {
   getManagedPortalUrl,
 } from '../helpers/managed/cloudSync';
 import { appRoute } from './RootRoutes';
-import { pathNames, paths } from './paths';
+import { pathNames } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
 
@@ -255,12 +242,6 @@ function externalLinkProps(url: string) {
 
 /**
  * One server, as a card.
- *
- * Rendered in two places, which is why it is a component: a managed node is no
- * longer listed among the devices, because it is one of the provider's
- * services and belongs inside the account card. Both places want the same
- * content — status, usage, node id, the way to disconnect — and one renderer
- * is what stops the two copies drifting.
  *
  * At module scope with every input passed in, even though all of them are to
  * hand in `SyncPage`. A component declared inside another component is a fresh
@@ -392,7 +373,6 @@ function ServerCard({
     <SyncCard
       active={isActive}
       provider={isCloud}
-      embedded={isCloud}
       icon={isCloud ? <FaCloud /> : <FaServer />}
       iconTone={isCloud ? 'provider' : 'neutral'}
       title={isCloud ? 'Cloud Server' : serverLabel(server)}
@@ -451,15 +431,7 @@ function ServerCard({
           : undefined
       }
       footer={
-        isCloud && managedInfo.portalUrl ? (
-          <ManagedLink
-            {...externalLinkProps(
-              driveBillingUrl(managedInfo.portalUrl, status.drive),
-            )}
-          >
-            {'Manage this drive’s plan →'}
-          </ManagedLink>
-        ) : !isSelectedServer ? (
+        !isSelectedServer ? (
           // Removing the server you're using would strand the app.
           <NodeActionSubtle onClick={() => onRemove(server)}>
             Remove
@@ -467,12 +439,6 @@ function ServerCard({
         ) : undefined
       }
     >
-      {isCloud && (
-        <ConnMeta>
-          This status describes data synchronization. View this drive’s
-          subscription and price in billing.
-        </ConnMeta>
-      )}
       {refusedByServer && (
         <ConnError role='alert'>
           <FaCircleExclamation aria-hidden />
@@ -575,7 +541,6 @@ interface SyncCardProps {
   provider?: boolean;
   /** The standalone spacing "This device" uses; the list cards sit tighter. */
   spacious?: boolean;
-  embedded?: boolean;
 }
 
 function SyncCard({
@@ -593,18 +558,12 @@ function SyncCard({
   active,
   provider,
   spacious,
-  embedded,
 }: SyncCardProps): JSX.Element {
   const store = useStore();
   const shown = (facts ?? []).filter((f): f is string => !!f);
 
   return (
-    <ConnCard
-      $active={active}
-      $provider={provider}
-      $spacious={spacious}
-      $embedded={embedded}
-    >
+    <ConnCard $active={active} $provider={provider} $spacious={spacious}>
       <CardIcon $tone={iconTone}>{icon}</CardIcon>
       <ConnBody>
         <ConnTopRow>
@@ -810,81 +769,6 @@ function SyncPage() {
 
     return () => controller.abort();
   }, [managedAccount, status.drive]);
-
-  /**
-   * Where this account's encrypted backup actually is.
-   *
-   * Three answers, not two, because a backup on this device is not the thing
-   * this row promises. `stored` means the control plane holds the sealed
-   * envelope, which is what lets an email get you back in on hardware you do
-   * not own yet. `device-only` means the sealed copy is in this browser and
-   * nowhere else: a passkey still unlocks it here, and a lost laptop still
-   * loses the account. Settings reads that local copy too, so a two-state
-   * answer here had the two pages contradicting each other in plain sight.
-   *
-   * `passkey-only` is stored, but the only thing that opens it is a passkey.
-   * That is the default onboarding leaves behind, and it is the case this row
-   * used to describe as "this email gets you back in on a new device" — while
-   * a browser the passkey never synced to (Firefox next to Safari, say)
-   * offered nothing but a field for the agent secret. Nothing was lost, but
-   * the promise was not kept, so the row must not be drawn as covered.
-   *
-   * `null` until asked, and on failure — "we could not check" is not "you have
-   * none", and telling someone their recovery is missing when the control
-   * plane was merely unreachable is the one wrong answer this row can give.
-   */
-  const [recoveryState, setRecoveryState] = useState<{
-    account: ManagedAccount;
-    value: 'stored' | 'passkey-only' | 'device-only' | 'none' | null;
-  } | null>(null);
-  const recoveryBackup =
-    recoveryState?.account === managedAccount
-      ? (recoveryState?.value ?? null)
-      : null;
-
-  useEffect(() => {
-    if (!managedAccount) return;
-
-    const setRecoveryBackup = (
-      value: NonNullable<typeof recoveryState>['value'],
-    ) => setRecoveryState({ account: managedAccount, value });
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const stored = await getRecoverySecret();
-
-        if (cancelled) return;
-
-        if (stored) {
-          const { hasPasskey, hasCode } = envelopeWrapperKinds(stored);
-
-          setRecoveryBackup(hasPasskey && !hasCode ? 'passkey-only' : 'stored');
-
-          return;
-        }
-
-        // Nothing on the server. Before calling that "no backup", ask whether
-        // this browser is holding one, because that is the copy the settings
-        // page reports and the difference between the two is exactly what the
-        // reader needs told.
-        const agentSubject = store.getAgent()?.subject;
-        const cached = readCachedBackups();
-        const mine = agentSubject
-          ? cached.some(entry => sameAgent(entry.agent_subject, agentSubject))
-          : cached.length > 0;
-
-        setRecoveryBackup(mine ? 'device-only' : 'none');
-      } catch {
-        if (!cancelled) setRecoveryBackup(null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [managedAccount, store]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1257,6 +1141,27 @@ function SyncPage() {
   const managedServer =
     connectionServers.find(server => isManagedServer(server)) ?? null;
 
+  /** A paid Server plan for this drive, whether or not hosting is set up. */
+  const serverPlanActive =
+    subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+
+  /**
+   * The plan this workspace is on, for the "Current plan" badge.
+   *
+   * Cloud Server when the drive is hosted or has a paid Server plan — a plan
+   * bought but not yet set up is still the plan you are paying for. Otherwise
+   * Cloud Vault, the free plan every account has, whether or not its backup is
+   * switched on for this workspace yet (the card says which). Nothing when
+   * nobody is signed in: we cannot know, and guessing would mark a plan the
+   * reader may not have.
+   */
+  const currentPlan: 'vault' | 'server' | null =
+    cloudHosted || serverPlanActive
+      ? 'server'
+      : managedAccount
+        ? 'vault'
+        : null;
+
   /** Is this one of ours? Mirrors `isCloud` inside the card renderer. */
   function isManagedServer(server: string): boolean {
     return sameOrigin(server, status.serverUrl) && cloudHosted;
@@ -1576,51 +1481,24 @@ function SyncPage() {
       <ContainerNarrow>
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
-        {/* Everything our paid services own, in one card.
-
-            These used to be loose entries in the Devices list, on the reasoning
-            that a person does not think of "this device", "the backup" and "the
-            hosted workspace" as different kinds of thing — they are all places
-            the same data lives. True as far as it goes, but it left no answer to
-            a different question the page is also asked: which of this is a
-            product I am paying for, and where do I go to manage it. Grouping
-            under the account answers that without returning to the old stack of
-            free-floating offer cards, because this is one card, not three.
+        {/* Atomic Place: the two plans side by side, with the one this
+            workspace is on marked. They used to be three rows in one card —
+            email recovery, Cloud Vault, Cloud Server — each worded its own
+            way, with nothing saying which was a plan, which one you had, or
+            how they differ. Recovery is about the account, not the
+            workspace, and moved to the user page.
 
             Gated on a portal being known at all, so a self-hosted node with no
             control plane renders none of it. That URL comes from a managed
             node, a build-time override, or one a node named earlier — never
             from anything hardcoded here. */}
         {accountPortalUrl && (
-          <ProviderCard data-testid='provider-card'>
-            <ProviderHeader>
-              <CardIcon $tone='provider'>
-                <FaCloud />
-              </CardIcon>
-              <AccountBody>
-                <AccountLabel>{PRODUCT_NAME}</AccountLabel>
-                <AccountEmail data-testid='provider-account'>
-                  {managedAccount
-                    ? subscriptionStatus === 'active'
-                      ? 'Your Cloud Server subscription is active'
-                      : subscriptionStatus === 'trialing'
-                        ? 'Your Cloud Server trial is active'
-                        : 'Your cloud services'
-                    : 'Cloud services for this workspace'}
-                </AccountEmail>
-              </AccountBody>
-              {/* The way out to the portal, in both states. It used to appear
-                  only once you were signed in, which left the card naming a
-                  provider with no route to it: everything you can do about
-                  these services other than switch them on lives over there,
-                  including having an account in the first place.
-
-                  Signed in, that is the dashboard rather than the portal root,
-                  because a signed-in visitor gets the marketing page at `/` and
-                  would land on a sales pitch instead of the account the link
-                  promises to manage. Signed out, `/signin` is the bare
-                  magic-link form, which both creates an account and returns to
-                  an existing one. */}
+          <Section data-testid='provider-card'>
+            <SectionHeader>
+              <SectionTitle>{PRODUCT_NAME}</SectionTitle>
+              {/* Signed in, the dashboard rather than the portal root: a
+                  signed-in visitor gets the marketing page at `/`. Signed out,
+                  `/signin` both creates an account and returns to one. */}
               <ManagedLink
                 data-testid='provider-portal-link'
                 {...externalLinkProps(
@@ -1629,200 +1507,173 @@ function SyncPage() {
                     : `${accountPortalUrl}/signin`,
                 )}
               >
-                {managedAccount ? 'Manage account →' : 'Sign in →'}
+                {managedAccount ? 'Account settings →' : 'Sign in →'}
               </ManagedLink>
-            </ProviderHeader>
+            </SectionHeader>
+            <ConnNote data-testid='provider-account'>
+              {managedAccount
+                ? `Signed in as ${managedAccount.email}.`
+                : `Sign in to your ${PRODUCT_NAME} account to use these plans for this workspace. Signing in to this workspace with a passkey or secret does not by itself connect your account.`}
+            </ConnNote>
 
-            {/* Email recovery. Blue when it is actually set up, which is the
-                rule for every row here: colour answers "is this on", not "does
-                this exist". Left neutral while unknown too, since a failed
-                check must not be drawn as a missing backup.
+            {/* A client that cannot hold the provider's cookie — a self-hosted
+                origin, or the desktop and Android apps on tauri://localhost —
+                has to link before either plan works here.
 
-                Rendered signed out as well, like the two rows below it. Hiding
-                it made the one service that protects against losing every
-                device the only one you could not find out about until after you
-                had an account, and it left the card looking like it had two
-                offers when it has three. */}
-            <ProviderService data-testid='recovery-row'>
-              <CardIcon
-                $tone={
-                  managedAccount && recoveryBackup === 'stored'
-                    ? 'provider'
-                    : 'neutral'
+                Gated on whether this client has a session, not on what the
+                vault says: the vault sits at `loading` on a fresh install
+                until it has an agent, a drive and its wasm keys, so gating on
+                it hid the one control that could fix that. */}
+            {needsProviderLink && (
+              <LinkProviderPanel
+                portalUrl={getManagedPortalUrl(managedInfo)}
+                onLinked={() => window.location.reload()}
+              />
+            )}
+
+            <PlanGrid>
+              <PlanCard
+                data-testid='vault-plan'
+                kind='vault'
+                title={CLOUD_VAULT}
+                standing={
+                  currentPlan === 'vault'
+                    ? 'current'
+                    : currentPlan === 'server'
+                      ? 'included'
+                      : null
                 }
+                price='Free with an account'
+                tagline='An encrypted backup of this workspace, kept in our cloud.'
+                features={[
+                  'Sealed on your device, so we cannot read it',
+                  'Restore everything if a device is lost',
+                ]}
               >
-                <FaKey />
-              </CardIcon>
-              <ConnBody>
-                <ConnTitle>Email recovery</ConnTitle>
-                <ConnSub>
-                  {!managedAccount
-                    ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this workspace with a passkey or secret does not by itself connect your cloud account.`
-                    : recoveryBackup === null
-                      ? `Signed in as ${managedAccount.email}.`
-                      : recoveryBackup === 'stored'
-                        ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
-                        : recoveryBackup === 'passkey-only'
-                          ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
-                          : recoveryBackup === 'device-only'
-                            ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                            : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
-                </ConnSub>
-                {/* Signed out, the account itself is the missing piece, and it
-                    is made in the portal: on a device that cannot hold our
-                    cookie the sign-in is approved from a browser anyway.
-
-                    Signed in with nothing stored, the flow is in settings,
-                    where the rest of account recovery already lives. It asks
-                    for the agent secret, which this page has no business
-                    collecting in a status row, and it cannot avoid asking: the
-                    key is non-extractable in the browser, so the copy the user
-                    saved at setup is the only one that can still be sealed.
-
-                    Nothing to press once it is on. Rotating a code or reading
-                    the secret back are settings' business, and this row's job
-                    is answering whether you are covered. */}
-                {!managedAccount ? (
+                {/* Unconditional: `VaultPanel` renders every state itself,
+                    including the seconds it spends deciding. */}
+                <VaultPanel
+                  vault={vault}
+                  embedded
+                  hideHeading
+                  onRestored={() => window.location.reload()}
+                />
+                {!managedAccount && !needsProviderLink && (
                   <ConnActions>
                     <LearnMore
                       {...externalLinkProps(`${accountPortalUrl}/signin`)}
                     >
-                      Sign in to check recovery
+                      Create a free account
                     </LearnMore>
                   </ConnActions>
-                ) : recoveryBackup === 'none' ||
-                  recoveryBackup === 'device-only' ||
-                  recoveryBackup === 'passkey-only' ? (
-                  <ConnActions>
-                    <LearnMoreLink
-                      to={paths.agentSettings}
-                      data-testid='recovery-row-action'
-                    >
-                      {recoveryBackup === 'device-only'
-                        ? 'Store it with ' + PRODUCT_NAME
-                        : recoveryBackup === 'passkey-only'
-                          ? 'Add a recovery code'
-                          : 'Set up email recovery'}
-                    </LearnMoreLink>
-                  </ConnActions>
-                ) : null}
-              </ConnBody>
-            </ProviderService>
+                )}
+              </PlanCard>
 
-            {/* Unconditional, like the other two: a service that disappears
-                when it is off cannot be found, and the question this card
-                answers is "is this on". `VaultPanel` renders every state
-                itself, including the seconds it spends deciding. */}
-            <ProviderService>
-              <VaultPanel
-                vault={vault}
-                embedded
-                offerUrl={tierOfferUrl(accountPortalUrl, 'vault')}
-                onOfferClick={url => void openExternal(url)}
-                onRestored={() => window.location.reload()}
-              />
-            </ProviderService>
-
-            {/* On: the managed node itself, rendered by the same function the
-                Devices list uses, so the two cannot drift. Off: the offer,
-                which stays on the page in every other state — with the reason
-                in place of the button when there is nothing to press. */}
-            {managedServer ? (
-              <ProviderService data-testid='cloud-server-row'>
-                <ServerCard
-                  server={managedServer}
-                  status={status}
-                  managedInfo={managedInfo}
-                  cloudHosted={cloudHosted}
-                  cloudEnrolled={cloudEnrolled}
-                  serverStatus={nodes.server}
-                  hasWorkingLocalStore={hasWorkingLocalStore}
-                  nodeUsage={nodeUsage}
-                  quotaBytes={quotaBytes}
-                  serverNodeId={serverNodeId}
-                  onSwitch={switchToServer}
-                  onRemove={removeServer}
-                />
-              </ProviderService>
-            ) : (
-              <ProviderService data-testid='cloud-server-row'>
-                {/* Neutral, like every other service that is off. This was
-                    blue on the reasoning that an offer should still look like
-                    one of ours, but the reader scans this column to find out
-                    what they have, and the header above already says whose
-                    services these are. */}
-                <ServiceIcon kind='server' active={!!hostedCopyOrigin} />
-                <ServiceBody>
-                  <ServiceTitle>
-                    {hostedCopyOrigin ? 'Cloud Server is on' : 'Cloud Server'}
-                  </ServiceTitle>
-                  <ServiceDescription>
-                    {CLOUD_SERVER_DESCRIPTION}
-                  </ServiceDescription>
-                  <ConnMeta>
-                    {cloudEnrolled === true && !hostedCopyOrigin
-                      ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
-                      : subscriptionStatus === 'active' ||
-                          subscriptionStatus === 'trialing'
-                        ? 'Included in your plan. Turn it on to start hosting this drive; nothing more to buy.'
-                        : CLOUD_SERVER_PLAN_DESCRIPTION}
-                  </ConnMeta>
-                  {hostedCopyOrigin && (
+              <PlanCard
+                data-testid='cloud-server-row'
+                kind='server'
+                title={CLOUD_SERVER}
+                standing={currentPlan === 'server' ? 'current' : null}
+                price={
+                  subscriptionStatus === 'trialing'
+                    ? 'Paid plan per workspace · trial active'
+                    : 'Paid plan per workspace'
+                }
+                tagline='This workspace hosted online, so it is there even when your devices are off.'
+                features={[
+                  'Everything in Cloud Vault',
+                  'Shareable links, search across everything, and API access',
+                  'Unlike Cloud Vault, our servers store and process a readable copy',
+                ]}
+              >
+                {cloudHosted && managedServer ? (
+                  <>
                     <ConnMeta>
-                      This workspace has been copied to Cloud Server. You’re
-                      still using the source server.
+                      {`Hosting this workspace on ${serverLabel(managedServer)}. Its connection is listed under Devices.`}
                     </ConnMeta>
-                  )}
-                  {cloudServerBlocked && (
-                    <ConnMeta>{cloudServerBlocked}</ConnMeta>
-                  )}
-                  <ConnActions>
-                    {hostedCopyOrigin && (
-                      <Button onClick={() => switchToServer(hostedCopyOrigin)}>
-                        Use Cloud Server
-                      </Button>
-                    )}
-                    {!cloudServerBlocked && (
-                      <Button
-                        onClick={() => setConfirmCloud(true)}
-                        disabled={cloudBusy}
+                    <ConnActions>
+                      <ManagedLink
+                        data-testid='cloud-server-manage'
+                        {...externalLinkProps(
+                          driveBillingUrl(accountPortalUrl, status.drive),
+                        )}
                       >
-                        {cloudBusy
-                          ? 'Setting up…'
-                          : hostedCopyOrigin
-                            ? 'Sync again'
-                            : cloudEnrolled
-                              ? 'Sync again'
-                              : subscriptionStatus === 'active' ||
-                                  subscriptionStatus === 'trialing'
-                                ? 'Turn on Cloud Server'
-                                : CLOUD_SERVER_SETUP}
-                      </Button>
+                        Manage plan →
+                      </ManagedLink>
+                    </ConnActions>
+                  </>
+                ) : (
+                  <>
+                    <ConnMeta>
+                      {cloudEnrolled === true && !hostedCopyOrigin
+                        ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
+                        : serverPlanActive
+                          ? 'Included in your plan. Turn it on to start hosting this workspace; nothing more to buy.'
+                          : 'A Server plan covers one workspace. Checkout shows the price before you pay; connecting your account is free.'}
+                    </ConnMeta>
+                    {hostedCopyOrigin && (
+                      <ConnMeta>
+                        This workspace has been copied to Cloud Server. You’re
+                        still using the source server.
+                      </ConnMeta>
                     )}
-                    {/* This tier costs money and reads our copy of your data,
-                        so "what am I agreeing to" deserves an answer that
-                        isn't a paragraph on this card. The sales page already
-                        explains the tiers side by side.
-
-                        Linked off the *account's* portal, not the connected
-                        node's: the states that most need a price are the ones
-                        where this device is talking to a node that has never
-                        heard of a portal. */}
-                    <LearnMore
-                      {...externalLinkProps(
-                        tierOfferUrl(accountPortalUrl, 'server'),
+                    {cloudServerBlocked && (
+                      <ConnMeta>{cloudServerBlocked}</ConnMeta>
+                    )}
+                    <ConnActions>
+                      {hostedCopyOrigin && (
+                        <Button
+                          onClick={() => switchToServer(hostedCopyOrigin)}
+                        >
+                          Use Cloud Server
+                        </Button>
                       )}
-                    >
-                      See plans
-                    </LearnMore>
-                  </ConnActions>
-                </ServiceBody>
-              </ProviderService>
-            )}
+                      {!cloudServerBlocked && (
+                        <Button
+                          onClick={() => setConfirmCloud(true)}
+                          disabled={cloudBusy}
+                        >
+                          {cloudBusy
+                            ? 'Setting up…'
+                            : hostedCopyOrigin
+                              ? 'Sync again'
+                              : cloudEnrolled
+                                ? 'Sync again'
+                                : serverPlanActive
+                                  ? 'Turn on Cloud Server'
+                                  : CLOUD_SERVER_SETUP}
+                        </Button>
+                      )}
+                      {/* Linked off the *account's* portal, not the connected
+                          node's: the states that most need a price are the
+                          ones where this device talks to a node that has
+                          never heard of a portal. */}
+                      {serverPlanActive ? (
+                        <LearnMore
+                          {...externalLinkProps(
+                            driveBillingUrl(accountPortalUrl, status.drive),
+                          )}
+                        >
+                          Manage plan
+                        </LearnMore>
+                      ) : (
+                        <LearnMore
+                          {...externalLinkProps(
+                            tierOfferUrl(accountPortalUrl, 'server'),
+                          )}
+                        >
+                          See pricing
+                        </LearnMore>
+                      )}
+                    </ConnActions>
+                  </>
+                )}
+              </PlanCard>
+            </PlanGrid>
             {/* Credits belong to the account, not to a plan or a drive: shown
                 with or without a Cloud Server, only while signed in. */}
             {managedAccount && <ProviderAICredits />}
-          </ProviderCard>
+          </Section>
         )}
 
         <ConfirmationDialog
@@ -1895,12 +1746,6 @@ function SyncPage() {
           </LocalDriveNotice>
         )}
 
-        {/* Cloud Vault first: it is what a managed account gets by default, and
-            it is the promise we can make unconditionally — blind encrypted
-            backup we cannot read. It hides itself entirely when we cannot
-            determine its status, so a missing session never renders a dead
-            button. */}
-
         {/* A local-only drive (demo, or any drive made offline) isn't synced.
             Offer to promote it to a normal synced drive on the connected
             server — the same reconcile a regular drive uses, no special path. */}
@@ -1935,12 +1780,8 @@ function SyncPage() {
         <Section>
           <SectionTitle>Devices</SectionTitle>
 
-          {/* Devices only. The hosted services moved up into the provider
-              card, which is a narrower split than the one this list was
-              built to avoid: that earlier layout scattered them as separate
-              offer cards, where they are now one card under the account that
-              pays for them. What is left here is an inventory of places this
-              workspace physically lives. */}
+          {/* An inventory of places this workspace physically lives. Plans
+              and billing are the Atomic Place section's business. */}
           {/* This device — always the source of truth for local-first data. */}
           <SyncCard
             spacious
@@ -1961,16 +1802,10 @@ function SyncPage() {
             nodeId={isNode && localNodeId ? localNodeId : undefined}
           />
 
-          {/* A client that cannot hold the provider's cookie — a self-hosted
-              origin, or the desktop and Android apps on tauri://localhost — has
-              to link before any of the vault works.
-
-              Gated on whether this client has a session, not on what the vault
-              says. The vault reports `unavailable` only once it has an agent, a
-              drive and its wasm keys to ask with; a fresh install has none of
-              those and sits at `loading` forever, so gating on the vault hid the
-              one control that could have fixed it. */}
-          {needsProviderLink && (
+          {/* Normally inside the Atomic Place section above. Kept here for
+              the one case that section is not drawn: a provider this client
+              could link to, but no portal address it can show. */}
+          {needsProviderLink && !accountPortalUrl && (
             <LinkProviderPanel
               portalUrl={getManagedPortalUrl(managedInfo)}
               onLinked={() => window.location.reload()}
@@ -1999,22 +1834,19 @@ function SyncPage() {
               </EmptyConnections>
             )}
 
-          {/* Servers we do not own — one stable list; the active one is marked,
-              not moved. A managed node is deliberately absent: it moved up into
-              the account card, because "what am I paying for" and "where does
-              this drive live" are different questions and it was answering the
-              second while looking like the first. */}
+          {/* Every always-on device — one stable list; the active one is
+              marked, not moved. A Cloud Server node is listed here too: this
+              list answers "where does this workspace live", and the plan it is
+              on is answered once, in the Atomic Place section above. */}
           {connectionServers
-            .filter(
-              server =>
-                !isManagedServer(server) &&
-                showSavedServer({
-                  managed: isCloudSyncAvailable(managedInfo),
-                  activeForDrive:
-                    (showServerConn ||
-                      (localOnlyDrive && cloudEnrolled === false)) &&
-                    sameOrigin(server, status.serverUrl),
-                }),
+            .filter(server =>
+              showSavedServer({
+                managed: isCloudSyncAvailable(managedInfo),
+                activeForDrive:
+                  (showServerConn ||
+                    (localOnlyDrive && cloudEnrolled === false)) &&
+                  sameOrigin(server, status.serverUrl),
+              }),
             )
             .map(server => (
               <ServerCard
@@ -2522,96 +2354,20 @@ const Lead = styled.p`
   margin-bottom: 2rem;
 `;
 
-/**
- * The account strip under the lead line.
- *
- * Wears the same accent as an active connection card rather than a style of
- * its own: everything on this page that is backed by the provider account
- * reads blue, so a glance separates "this is yours and local" from "this
- * involves your account".
- */
-const ProviderCard = styled(ServiceGroup)`
+/* The account's AI credits under the plan cards, in the same card look. */
+const ProviderAICredits = styled(AICreditsService)`
   --service-accent: ${p => p.theme.colors.main};
   --service-muted: ${p => p.theme.colors.textLight};
   --service-text: ${p => p.theme.colors.text};
-  --service-neutral: ${p => p.theme.colors.bg1};
-  ${cardSurface}
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-  margin-bottom: 2rem;
-  border-color: ${p => p.theme.colors.main};
-  background: ${p => `${p.theme.colors.main}0a`};
-`;
-
-const ProviderHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1rem;
-`;
-
-/**
- * One service under the account header.
- *
- * Separated by a rule rather than by gaps between cards: these belong to the
- * account above them, and whitespace alone made them read as neighbours of it
- * instead of contents.
- */
-/* The same row look as ProviderService, for a row that is its own
-   component. */
-const providerRowCss = css`
+  --service-neutral: ${p => p.theme.colors.bg2};
   display: flex;
   align-items: flex-start;
   gap: 0.9rem;
-  padding: 0.9rem 1rem;
-  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
   min-width: 0;
-`;
-
-const ProviderAICredits = styled(AICreditsService)`
-  ${providerRowCss}
-`;
-
-const ProviderService = styled(ServiceSection)`
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-  padding: 0.9rem 1rem;
-  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
-  min-width: 0;
-
-  /* A connection row is one ellipsised line because a server origin has no
-     useful second line. These rows explain a service, so their text wraps —
-     otherwise the recovery row trails off mid-sentence. */
-  p,
-  span {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-`;
-
-const AccountBody = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-`;
-
-const AccountLabel = styled.span`
-  font-size: ${CARD_TITLE_FONT};
-  font-weight: 600;
-`;
-
-const AccountEmail = styled.span`
-  color: ${p => p.theme.colors.textLight};
-  font-size: ${CARD_SUB_FONT};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0.75rem 1px 0;
+  padding: 1rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
 `;
 
 const Section = styled.section`
@@ -2621,6 +2377,20 @@ const Section = styled.section`
 const SectionTitle = styled.h2`
   font-size: 1.1rem;
   margin-bottom: 0.8rem;
+`;
+
+/** A section title with one link beside it, pushed to the right. */
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.4rem;
+
+  ${SectionTitle} {
+    margin: 0;
+  }
 `;
 
 const NodeAction = styled.button`
@@ -2748,7 +2518,6 @@ const ConnCard = styled.div<{
   $active?: boolean;
   $provider?: boolean;
   $spacious?: boolean;
-  $embedded?: boolean;
 }>`
   ${cardBase}
   margin-bottom: ${p => (p.$spacious ? '1.5rem' : '0.6rem')};
@@ -2759,16 +2528,6 @@ const ConnCard = styled.div<{
         ? p.theme.colors.textLight
         : undefined};
   background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
-  ${p =>
-    p.$embedded &&
-    css`
-      border: 0;
-      background: transparent;
-      padding: 0;
-      margin: 0;
-      width: 100%;
-      box-shadow: none;
-    `}
 `;
 
 /** A call to action, but still one of the cards in this list. The button
@@ -2932,11 +2691,6 @@ const learnMoreLook = css`
 `;
 
 const LearnMore = styled.a`
-  ${learnMoreLook}
-`;
-
-/** The same, for somewhere inside the app: a real route, not an `openExternal`. */
-const LearnMoreLink = styled(Link)`
   ${learnMoreLook}
 `;
 

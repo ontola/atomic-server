@@ -228,3 +228,16 @@ homepage panel, the app's sign-in and restore steps) renders the same
 adds only what the portal cannot do, pasting an agent secret. Native builds that
 cannot hold the account cookie link the device with a code instead. Flutter has
 no account sign-in yet.
+
+## Atomic Place plans on the Sync page (2026-09-29)
+
+The browser Sync page shows an "Atomic Place" heading with the account link on
+the right, then Cloud Vault and Cloud Server as two plan cards side by side
+(stacked when narrow). The workspace's plan carries a "Current plan" badge and
+a highlighted border: Cloud Server when the drive is hosted or has an active or
+trialing Server plan, otherwise Cloud Vault for any signed-in account. Nothing
+is marked while signed out. Cloud Vault shows "Included" under Cloud Server.
+The hosted node itself is listed under Devices like any always-on device; its
+billing link lives only on the plan card. Email recovery moved to the user page
+(`EmailRecoveryStatus`, above `AccountRecoveryCard`). Flutter has no plan or
+recovery UI on its sync screen, so there is no twin to change.
