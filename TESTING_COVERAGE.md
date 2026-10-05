@@ -1091,6 +1091,17 @@ editors do not expose state/commands) and `oxc-react-compiler.test.ts` (producti
 compilation does not hoist command getters into render). `sentry.test.ts` covers
 packaged WebView initialization without server-injected Sentry configuration.
 
+`react-compiler-cli.test.ts` covers the file-targeted compiler command: emitted
+memoization, a bailout in a partially optimized file, explicit opt-outs, relative
+paths, and continued checking after an unreadable file with a failing exit code.
+It also verifies compact line/column diagnostics and optional verbose output.
+`react-compiler-hook.test.mjs` covers UTF-8 source locations, advisory hook JSON,
+per-session content caching, source changes, staged/untracked/deleted files,
+excluded files, subdirectory invocation, ignored non-PostToolUse events and
+advisory output when the hook cannot run. It feeds an Edit event to the script
+through a symlinked path, verifying compact advisory JSON and silence on a
+repeated check. The hook is opt-in personal config, so no agent config is tested.
+
 Automatic Vault scheduling (`vaultAutoBackup.test.ts`) covers sustained-edit
 maximum delay, queued edits across drive switches, late account availability,
 connectivity recovery, enrollment rediscovery after reload, account expiry during
@@ -2321,6 +2332,8 @@ triggers and verifies only action labels disappear. `presence-follow.spec.ts`
 uses two tabs sharing one stored test identity, checks the avatar at 320px,
 opens Follow and verifies subsequent navigation. The updated Chromium test
 passed against the local app; cross-network staging presence was not certified.
+`sidebar-layout.spec.ts` checks the resource menu stays inside 390px and 320px
+viewports, action labels collapse, and the menu opens on tap.
 
 `recovery-fetch.test.ts` verifies 429 cooldowns (Retry-After seconds and a
 60-second fallback), retry after expiry, in-flight sharing and fresh successful

@@ -7,6 +7,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 vi.mock('../helpers/loggingHandlers', () => ({
   handleErrorBugsnag: () => undefined,
+  reportStoreError: () => undefined,
 }));
 
 const { errorHandler } = await import('./errorHandler');

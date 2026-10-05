@@ -38,17 +38,18 @@ jobs:
           targets: wasm32-unknown-unknown
 
       # `version: 8` used to be pinned here while browser/package.json declares
-      # `packageManager: pnpm@10.15.1`, and there was no Node at all — so this
+      # `packageManager: pnpm@<version>`, and there was no Node at all — so this
       # job could not have run a JS build even though, as the next step
       # explains, it has to. There is no root package.json for
-      # pnpm/action-setup to read the version from, hence the explicit 10.
+      # pnpm/action-setup to read the version from, hence the explicit one; keep
+      # it equal to browser/package.json's `packageManager`.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
-          version: 10
+          version: 11.10.0
           run_install: false
 
       # The published crate has to CONTAIN the built frontend.
@@ -192,7 +193,7 @@ jobs:
           # the repo pin (browser/package.json) is older. There is no root
           # package.json for the action to read a version from, so this is
           # explicit, like the crates job.
-          version: 10
+          version: 11.10.0
           run_install: false
 
       # Do NOT run the workspace `pnpm run build`: that walks into
@@ -382,7 +383,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
-          version: 10
+          version: 11.10.0
           run_install: false
 
       - uses: dtolnay/rust-toolchain@1.98.1

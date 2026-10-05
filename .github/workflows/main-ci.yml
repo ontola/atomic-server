@@ -69,7 +69,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.15.1
+          version: 11.10.0
           run_install: false
           # The default, ~/setup-pnpm, is shared by every runner on the host.
           # Two jobs installing at once failed with ENOTEMPTY (2026-09-25,

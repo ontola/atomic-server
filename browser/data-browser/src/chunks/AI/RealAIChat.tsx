@@ -3,6 +3,7 @@ import {
   HOSTED_AI_USAGE_EVENT,
 } from '@helpers/managed/ai';
 import { getManagedApiBase } from '@helpers/managed/api';
+import { isHostedDistribution } from '@helpers/managedServer';
 import { HostedAICredits } from './HostedAICredits';
 import { compactionTokens } from './usageMetadata';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
@@ -13,6 +14,13 @@ import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
 import { type FileUIPart } from 'ai';
 import { useTools } from './useTools';
+import {
+  attachRun,
+  createRun,
+  detachRun,
+  getRun,
+  type ChatRunHandlers,
+} from './chatRunRegistry';
 import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
@@ -359,15 +367,21 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           ? 'OpenRouter'
           : 'the model provider';
 
+  // A hosted build includes AI. Telling its users to find an OpenRouter key
+  // would be wrong while the account status is merely still loading or failed.
+  const hostedBuild = isHostedDistribution();
+
   const providerNotice = canUseInput
     ? null
     : activeModel.provider === AIProvider.Hosted
       ? 'Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges.'
       : activeModel.provider === AIProvider.Ollama
         ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-        : activeModel.provider === AIProvider.OpenRouter
-          ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-          : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+        : activeModel.provider === AIProvider.OpenRouter && hostedBuild
+          ? "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+          : activeModel.provider === AIProvider.OpenRouter
+            ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+            : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const creditPurchaseUrl =
     canPurchaseHostedAICredits(hostedAI) &&
@@ -420,47 +434,91 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     addContextToMessages,
   });
 
+  const handleChatError = (error: Error) => {
+    console.error('AI request failed:', error);
+    // The provider's own words: "NetworkError when attempting to fetch
+    // resource", "401 Unauthorized", "model not found". Rendered next to the
+    // input, where the reason belongs.
+    lastRequestErrorRef.current = error.message || 'Unknown error';
+    setRequestError(lastRequestErrorRef.current);
+  };
+
+  const handleChatFinish: ChatRunHandlers['onFinish'] = ({
+    message,
+    isError,
+    messages: _messages,
+  }) => {
+    if (isError) {
+      message.metadata = {
+        ...(message.metadata || {}),
+        error: lastRequestErrorRef.current ?? 'The response was interrupted.',
+      };
+    } else {
+      message.metadata = { ...message.metadata, error: undefined };
+      setRequestError(undefined);
+    }
+
+    setMessages(previous =>
+      previous.map(m => (m.id === message.id ? { ...message } : m)),
+    );
+    onNewMessage(message);
+
+    // A failed request must not spend more quota on compaction.
+    if (isError) return;
+
+    const inputTokens = compactionTokens(message.metadata);
+    const threshold = autoCompactTokenThresholdRef.current;
+
+    if (threshold !== null && inputTokens > threshold) {
+      compact(_messages);
+    }
+  };
+
+  const runHandlers = {
+    onError: handleChatError,
+    onFinish: handleChatFinish,
+    save: onNewMessage,
+  };
+
+  // The full-page chat keeps its run in a registry, so the reply carries on
+  // (and is saved) while the reader is on another page.
+  const [run] = useState(() =>
+    fullView && chatSubject
+      ? (getRun(chatSubject) ??
+        createRun(
+          chatSubject,
+          transport,
+          initialMessages ?? [],
+          () => store.newLocalId(),
+          runHandlers,
+        ))
+      : undefined,
+  );
+
+  useEffect(() => {
+    if (run) run.handlers = runHandlers;
+  });
+
+  useEffect(() => {
+    if (!run) return;
+
+    attachRun(run);
+
+    return () => detachRun(run);
+  }, [run]);
+
   const { messages, sendMessage, setMessages, status, stop, regenerate } =
-    useChat({
-      transport,
-      messages: initialMessages,
-      generateId: () => store.newLocalId(),
-      onError: error => {
-        console.error('AI request failed:', error);
-        // The provider's own words: "NetworkError when attempting to fetch
-        // resource", "401 Unauthorized", "model not found". Rendered next to the
-        // input, where the reason belongs.
-        lastRequestErrorRef.current = error.message || 'Unknown error';
-        setRequestError(lastRequestErrorRef.current);
-      },
-      onFinish: ({ message, isError, messages: _messages }) => {
-        if (isError) {
-          message.metadata = {
-            ...(message.metadata || {}),
-            error:
-              lastRequestErrorRef.current ?? 'The response was interrupted.',
-          };
-        } else {
-          message.metadata = { ...message.metadata, error: undefined };
-          setRequestError(undefined);
-        }
-
-        setMessages(previous =>
-          previous.map(m => (m.id === message.id ? { ...message } : m)),
-        );
-        onNewMessage(message);
-
-        // A failed request must not spend more quota on compaction.
-        if (isError) return;
-
-        const inputTokens = compactionTokens(message.metadata);
-        const threshold = autoCompactTokenThresholdRef.current;
-
-        if (threshold !== null && inputTokens > threshold) {
-          compact(_messages);
-        }
-      },
-    });
+    useChat(
+      run
+        ? { chat: run.chat }
+        : {
+            transport,
+            messages: initialMessages,
+            generateId: () => store.newLocalId(),
+            onError: handleChatError,
+            onFinish: handleChatFinish,
+          },
+    );
 
   // Save streamed progress even when a tool or provider keeps the run open.
   // The persistence layer updates one message and serializes partial/final saves.
@@ -697,6 +755,29 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
   };
 
+  /**
+   * "Try again" after a failed request. Regenerating throws the half reply
+   * away: the thinking that already streamed vanishes, and tool calls that
+   * already ran (resources created, edits made) run a second time. When the
+   * failed reply holds anything, ask the model to carry on from it instead.
+   */
+  const retryLastReply = () => {
+    const last = messages.at(-1);
+    const hasProgress =
+      last?.role === 'assistant' &&
+      last.parts.some(
+        part =>
+          part.type !== 'step-start' &&
+          !(part.type === 'text' && !part.text.trim()),
+      );
+
+    if (hasProgress) {
+      void sendMessage();
+    } else {
+      regenerate();
+    }
+  };
+
   const regenerateMessage = async (message: AtomicUIMessage) => {
     await onRegenerateMessage(message);
 
@@ -917,7 +998,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     ) {
                       void handleSubmit();
                     } else {
-                      regenerate();
+                      retryLastReply();
                     }
                   }}
                 >

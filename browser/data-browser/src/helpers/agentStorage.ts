@@ -5,6 +5,7 @@ import {
   JSCryptoProvider,
   legacySubjectFromSecret,
 } from '@tomic/react';
+import { canonicalIdentifier } from '@tomic/lib';
 import { del, get, set } from 'idb-keyval';
 import { adoptAgentOnDevice } from './adoptAgent';
 import {
@@ -364,7 +365,14 @@ export async function archiveStoredAgent(
   localOnlyDrives: string[] = [],
 ): Promise<void> {
   const list = await readPreviousIdentities();
-  const existing = list.find(entry => entry.subject === subject);
+  // The same agent is spelled `atomic:agent:` in backups and secrets from
+  // before the rename and `did:ad:agent:` once stored, so compare identities,
+  // not strings: a strict match made the reconcile gate's handover fail with
+  // "no stored key" for a key this device does hold.
+  const isSubject = (candidate: string | undefined) =>
+    candidate !== undefined &&
+    canonicalIdentifier(candidate) === canonicalIdentifier(subject);
+  const existing = list.find(entry => isSubject(entry.subject));
 
   if (existing) {
     existing.localOnlyDrives = [
@@ -379,24 +387,28 @@ export async function archiveStoredAgent(
   const fallback = (await get(AGENT_FALLBACK_KEY)) as
     | StoredAgentFallback
     | undefined;
-  const record =
-    stored?.subject === subject
-      ? stored
-      : fallback?.subject === subject
-        ? fallback
-        : undefined;
+  const record = isSubject(stored?.subject)
+    ? stored
+    : isSubject(fallback?.subject)
+      ? fallback
+      : undefined;
 
   if (!record) {
     throw new Error(`no stored key for ${subject}`);
   }
 
+  // Keep what the device holds, in its own spelling, whichever one was asked for.
   list.push({
-    subject,
+    subject: record.subject,
     savedAt: Date.now(),
     record,
     secret:
       'privateKey' in record
-        ? Agent.buildSecret(record.privateKey, subject, record.initialDrive)
+        ? Agent.buildSecret(
+            record.privateKey,
+            record.subject,
+            record.initialDrive,
+          )
         : undefined,
     localOnlyDrives: [...new Set(localOnlyDrives)],
   });

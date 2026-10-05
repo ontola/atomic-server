@@ -326,6 +326,11 @@ export class ClientDbWorker {
   private leaderLockName: string;
   private rpcChannelName: string;
   private ready = false;
+  /** True while the database is parked as `'failed'` only because its own open
+   *  is taking long (see `OWN_BOOT_SETTLE_WAIT_MS`), as opposed to having
+   *  failed for good. The open is still running and may yet finish. */
+  private openIsSlow = false;
+  private openWaiters = new Set<(open: boolean) => void>();
 
   /** Set by `destroy()`. An in-flight `doInit` (the election waits span
    *  seconds) checks this after every await so a superseded instance goes
@@ -502,6 +507,7 @@ export class ClientDbWorker {
         // carries the real cause (usually the OPFS handle still held by a
         // live background tab). Surface that instead of a generic message.
         this.role = 'failed';
+        this.settleOpenWaiters(false);
         console.warn('[ClientDb]', this._initError?.message);
 
         return;
@@ -512,6 +518,9 @@ export class ClientDbWorker {
         // and flips the role back to 'leader' whenever it finishes, and a late
         // `leader-announce` flips us to follower.
         this.role = 'failed';
+        // Parked, not dead: the message below says it recovers by itself, and
+        // `whenOpen` callers are waiting for exactly that.
+        this.openIsSlow = true;
         this._initError = stealing
           ? // Either the engine ignored `steal` (the request queued behind the
             // ghost) or the steal callback hasn't run.
@@ -543,6 +552,8 @@ export class ClientDbWorker {
     if (this.destroyed) return;
 
     this.ready = true;
+    this.openIsSlow = false;
+    this.settleOpenWaiters(true);
   }
 
   /**
@@ -580,8 +591,11 @@ export class ClientDbWorker {
 
           if (!this.destroyed) {
             this.role = 'failed';
+            this.openIsSlow = false;
             this.ready = false;
           }
+
+          this.settleOpenWaiters(false);
 
           for (const [id, pending] of this.pending) {
             if (!pending.onLeaderChanged) continue;
@@ -719,6 +733,8 @@ export class ClientDbWorker {
     // `waitForReady` resolve true on subsequent calls.
     this._initError = undefined;
     this.ready = true;
+    this.openIsSlow = false;
+    this.settleOpenWaiters(true);
     this.onBecameLeader();
     this.observedLeader = this.tabId;
     this.bc?.postMessage({
@@ -759,6 +775,8 @@ export class ClientDbWorker {
           if (this.role === 'failed') {
             this._initError = undefined;
             this.ready = true;
+            this.openIsSlow = false;
+            this.settleOpenWaiters(true);
           }
 
           this.role = 'follower';
@@ -1312,6 +1330,52 @@ export class ClientDbWorker {
     return this.ready && this.seeded;
   }
 
+  /** True once the database is open here (or in the tab that leads), whether
+   *  or not the bootstrap seed has finished. */
+  get isOpen(): boolean {
+    return this.ready;
+  }
+
+  /**
+   * Resolves `true` as soon as the database is open, `false` when it has
+   * failed for good or is still not open after `timeoutMs`.
+   *
+   * For writes whose local copy is the only copy (a local-only drive, an
+   * offline save). A read can fall back to the server while the database opens
+   * and should not wait; a write that has nowhere else to go should, because
+   * `send()` rejects at once while the open is merely slow, and a load that
+   * delays the open past its 17s cap would otherwise lose the write. See the
+   * note at `OWN_BOOT_SETTLE_WAIT_MS` on why that cap itself must stay short.
+   */
+  whenOpen(timeoutMs: number): Promise<boolean> {
+    if (this.ready) return Promise.resolve(true);
+
+    if (this.destroyed || this._unsupportedEnvironment) {
+      return Promise.resolve(false);
+    }
+
+    // Failed for good: waiting cannot help.
+    if (this.role === 'failed' && !this.openIsSlow) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise<boolean>(resolve => {
+      const done = (open: boolean) => {
+        clearTimeout(timer);
+        this.openWaiters.delete(done);
+        resolve(open);
+      };
+
+      const timer = setTimeout(() => done(false), timeoutMs);
+
+      this.openWaiters.add(done);
+    });
+  }
+
+  private settleOpenWaiters(open: boolean): void {
+    for (const settle of [...this.openWaiters]) settle(open);
+  }
+
   /** True once the WASM worker is initialized — independent of the
    *  bootstrap seed. Lookups for resources that aren't part of the
    *  bootstrap (i.e. user data) only need this; gating them on the seed
@@ -1359,6 +1423,7 @@ export class ClientDbWorker {
 
   destroy(): void {
     this.destroyed = true;
+    this.settleOpenWaiters(false);
     // Release the leader lock FIRST. If we're the leader, resolving the hold
     // frees the `navigator.locks` lease; if we're still queued, abort the
     // pending request. Without this, `destroy()` (notably the HMR dispose

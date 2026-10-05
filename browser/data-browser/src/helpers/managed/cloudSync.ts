@@ -274,20 +274,26 @@ export async function enableCloudSyncForDrive(params: {
   store.setServerUrl(httpOrigin);
   setServer(httpOrigin);
 
-  if (!(await store.waitForServerConnected(20_000))) {
+  // Force a fresh socket. `setServerUrl` opens none when this device was
+  // disconnected by hand (a flag that survives reloads), and reuses a socket
+  // left over from an earlier attempt at the same node. Either way the wait
+  // used to run out its 20 seconds with nothing to say why.
+  await store.reconnect(20_000).catch((error: unknown) => {
     throw new Error(
-      'Timed out connecting to the Cloud Server node. Retry setup.',
+      `Could not connect to the Cloud Server node: ${
+        error instanceof Error ? error.message : String(error)
+      } Retry setup.`,
     );
-  }
+  });
 
-  await promoteLocalOnly();
+  // Agent first: the drive's commits are signed by it, and a node that can
+  // resolve the signer before the drive arrives has nothing to defer.
+  if (agentWasLocalOnly) await store.promoteLocalDrive(agentSubject);
 
-  async function promoteLocalOnly() {
-    // Agent first: the drive's commits are signed by it, and a node that can
-    // resolve the signer before the drive arrives has nothing to defer.
-    if (agentWasLocalOnly) await store.promoteLocalDrive(agentSubject);
-    if (wasLocalOnly) await store.promoteLocalDrive(drive);
-  }
+  // Also for a drive that was already synced elsewhere: switching servers
+  // copies nothing, and reporting success without this left the node without
+  // the drive root, so every later commit was refused as "Parent not found".
+  await store.syncDriveToServerAndVerify(drive);
 
   return { ok: true, httpOrigin, replicated: false };
 }

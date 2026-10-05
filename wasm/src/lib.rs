@@ -193,7 +193,9 @@ impl ClientDb {
         expected_peer: Option<String>,
         challenge: String,
     ) -> Result<u32, JsError> {
-        if self.peer_sessions.len() >= 16 {
+        // Every tab of this origin shares this database, and every drive has
+        // its own peer room, so the budget scales with drives, not tabs.
+        if self.peer_sessions.len() >= 128 {
             return Err(JsError::new("Too many peer sessions"));
         }
         let session = atomic_lib::sync::browser_peer::BrowserPeerSession::new(

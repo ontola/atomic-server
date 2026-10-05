@@ -1018,6 +1018,8 @@ msgstr "Recursos"
 #: src/actions/resourceActions.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr "Etiquetas"
@@ -2255,6 +2257,7 @@ msgstr "<0/> Nota"
 #: src/actions/appMenuItems.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "New"
 msgstr "Nuevo"
@@ -2311,6 +2314,7 @@ msgstr "Deshacer cambios"
 msgid "Accept Changes"
 msgstr "Aceptar cambios"
 
+#: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 msgid "Share"
 msgstr "Compartir"
@@ -6331,11 +6335,8 @@ msgid "Cloud Server is on"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Sync again"
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
-msgid "Finish Cloud Server setup"
+msgid "Sync again"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -6801,10 +6802,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Sign in to check recovery"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "This drive already has a Server plan. Connecting it uses that plan; you do not need to buy it again."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -8221,6 +8218,7 @@ msgid "Recurring meeting"
 msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
 msgid "All day"
 msgstr ""
 
@@ -9672,6 +9670,14 @@ msgstr ""
 msgid "Nothing closed."
 msgstr ""
 
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental plugins to try out."
+msgstr "Esta es una función nueva. Estás viendo plugins experimentales para probar."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Plugins will show up here soon for you to try out."
+msgstr "Esta es una función nueva. Pronto aparecerán aquí plugins para que los pruebes."
+
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
 msgstr ""
@@ -10374,6 +10380,267 @@ msgstr ""
 msgid "Signed in on another device? Use a code"
 msgstr ""
 
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the repeat: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Repeat"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Custom"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Does not repeat"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Daily"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Weekly"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Monthly"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Yearly"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Every"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Never"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On a date"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "After a number of times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Last day"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Number of times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Ends"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Hide JSON"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Show JSON"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "days"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "weeks"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "months"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "years"
+msgstr ""
+
+#. 0: day
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On day {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the first {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the second {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the third {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the fourth {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the last {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every weekday"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every day of the week"
+msgstr ""
+
+#. 0: rule.interval
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} weeks, every day"
+msgstr ""
+
+#. 0: names
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0}"
+msgstr ""
+
+#. 0: rule.interval; 1: names
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} weeks on {1}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the first {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the second {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the third {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the fourth {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the last {0}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the first {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the second {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the third {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the fourth {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the last {1}"
+msgstr ""
+
+#. 0: day
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on day {0}"
+msgstr ""
+
+#. 0: rule.interval; 1: day
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on day {1}"
+msgstr ""
+
+#. 0: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every year on {0}"
+msgstr ""
+
+#. 0: rule.interval; 1: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} years on {1}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every day"
+msgstr ""
+
+#. 0: rule.interval
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} days"
+msgstr ""
+
+#. 0: text; 1: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0} until {1}"
+msgstr ""
+
+#. 0: text
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0}, once"
+msgstr ""
+
+#. 0: text; 1: rule.end.count
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0}, {1} times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "This repeat rule has options the Repeat field cannot show. Edit its JSON, or pick a repeat above to replace it."
+msgstr ""
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the time: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "Start time"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "End time"
+msgstr ""
+
 #: src/actions/resourceActions.tsx
 msgid "Reload resource"
 msgstr ""
@@ -10400,4 +10667,31 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+
+#: src/routes/SyncRoute.tsx
+msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Turn on Cloud Server"
+msgstr ""
+
+#: src/helpers/sentry.ts
+msgid "Commit keeps failing"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Stop uploading this change? It stays on this device but will not reach the server."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Discard upload"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr ""
