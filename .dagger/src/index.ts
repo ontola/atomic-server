@@ -1090,6 +1090,10 @@ export class AtomicServer {
         browser.file('plugin/package.json'),
       )
       .withFile(
+        '/repo/browser/mcp/package.json',
+        browser.file('mcp/package.json'),
+      )
+      .withFile(
         '/repo/browser/e2e/package.json',
         browser.file('e2e/package.json'),
       )
@@ -1118,11 +1122,11 @@ export class AtomicServer {
       .withExec(['pnpm', 'install', '--frozen-lockfile']);
 
     // Drop in @tomic/lib source. Other packages are unused by the
-    // integration tests, so we don't bother mounting them.
-    const withSource = installed.withDirectory(
-      '/repo/browser/lib',
-      browser.directory('lib'),
-    );
+    // integration tests, except @tomic/mcp: hosted-mcp.integration.test.ts
+    // imports its bridge from `../../mcp/src`.
+    const withSource = installed
+      .withDirectory('/repo/browser/lib', browser.directory('lib'))
+      .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
     return withSource
       .withFile('/repo/target/debug/atomic-server', binary, {
