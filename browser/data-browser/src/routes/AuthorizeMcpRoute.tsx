@@ -17,6 +17,7 @@ import {
   isTrustedServer,
   requestIssuedAgent,
 } from '../helpers/hostedMcp';
+import { isRunningInTauri } from '../helpers/tauri';
 import { useAccountDriveCatalog } from '../hooks/useAccountDriveCatalog';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
@@ -61,6 +62,14 @@ export const AuthorizeMcpRoute = createRoute({
     state: text(search.state) || undefined,
   }),
 });
+
+function isLoopback(uri: string): boolean {
+  try {
+    return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(uri).hostname);
+  } catch {
+    return false;
+  }
+}
 
 function hostOf(uri: string): string | undefined {
   try {
@@ -177,6 +186,15 @@ function AuthorizeMcpPage() {
         write: canEdit,
         state: search.state,
       });
+
+      if (isRunningInTauri() && isLoopback(redirect)) {
+        // The client listens on this machine: tell it, and stay in the app
+        // rather than navigating the window away from it.
+        await fetch(redirect, { mode: 'no-cors' });
+        navigate(paths.agentSettings);
+
+        return;
+      }
 
       // Away from the app: the client takes over from here.
       window.location.assign(redirect);

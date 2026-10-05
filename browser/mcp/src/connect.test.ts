@@ -104,6 +104,35 @@ describe('connect', () => {
     ).rejects.toThrow(/another server/);
   });
 
+  it('hands the desktop app what its consent page needs, with --desktop', async () => {
+    let opened = '';
+
+    await expect(
+      connect({
+        server: node.origin,
+        clientName: 'Desk',
+        write: true,
+        desktop: true,
+        timeoutMs: 50,
+        openUrl: link => {
+          opened = link;
+        },
+      }),
+    ).rejects.toThrow(/Gave up/);
+
+    const url = new URL(opened);
+    expect(url.protocol).toBe('atomic:');
+    expect(url.host).toBe('authorize-mcp');
+    expect(url.searchParams.get('server')).toBe(node.origin);
+    expect(url.searchParams.get('client_name')).toBe('Desk');
+    expect(url.searchParams.get('scope')).toBe('read write');
+    expect(url.searchParams.get('redirect_uri')).toMatch(
+      /^http:\/\/127\.0\.0\.1:\d+\/callback$/,
+    );
+    expect(url.searchParams.get('code_challenge')).toBeTruthy();
+    expect(url.searchParams.get('state')).toBeTruthy();
+  });
+
   it('gives up after the timeout', async () => {
     await expect(
       connect({

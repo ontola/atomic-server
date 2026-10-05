@@ -26,6 +26,11 @@ export interface ConnectOptions {
   clientName: string;
   /** Ask to edit, not only read. The person still decides on the consent page. */
   write: boolean;
+  /**
+   * Approve in the AtomicServer desktop app instead of the browser: the app
+   * holds the person's identity, a browser on the same machine does not.
+   */
+  desktop?: boolean;
   /** Shows the person where to go. Defaults to printing the link and opening it. */
   openUrl?: (url: string) => void | Promise<void>;
   /** How long to wait for the person, in milliseconds. */
@@ -195,6 +200,7 @@ export async function connect({
   server,
   clientName,
   write,
+  desktop = false,
   openUrl,
   timeoutMs = 10 * 60 * 1000,
   fetch: doFetch = fetch,
@@ -235,15 +241,26 @@ export async function connect({
     };
     const { verifier, challenge } = pkcePair();
     const state = b64url(randomBytes(16));
-    const link = `${meta.authorization_endpoint}?${new URLSearchParams({
-      response_type: 'code',
-      client_id: clientId,
-      redirect_uri: listener.redirectUri,
-      code_challenge: challenge,
-      code_challenge_method: 'S256',
-      scope: write ? 'read write' : 'read',
-      state,
-    })}`;
+    const scope = write ? 'read write' : 'read';
+    const link = desktop
+      ? `atomic://authorize-mcp?${new URLSearchParams({
+          server: origin,
+          client_id: clientId,
+          client_name: clientName,
+          redirect_uri: listener.redirectUri,
+          code_challenge: challenge,
+          scope,
+          state,
+        })}`
+      : `${meta.authorization_endpoint}?${new URLSearchParams({
+          response_type: 'code',
+          client_id: clientId,
+          redirect_uri: listener.redirectUri,
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+          scope,
+          state,
+        })}`;
 
     await (openUrl ?? defaultOpenUrl)(link);
 

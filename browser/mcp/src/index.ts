@@ -34,6 +34,7 @@ if (command === 'connect') {
       server,
       clientName,
       write: process.env.ATOMIC_READ_ONLY !== 'true',
+      desktop: process.argv.includes('--desktop'),
     });
 
     process.stderr.write(

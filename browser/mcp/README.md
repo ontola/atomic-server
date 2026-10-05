@@ -57,6 +57,13 @@ A client that cannot run a local process (claude.ai) connects to
 `https://<your server>/mcp` directly and signs in through the same approval
 page.
 
+### With the desktop app
+
+The approval page needs your identity, which the AtomicServer desktop app
+holds and a browser on the same machine may not. Run
+`ATOMIC_SERVER_URL=http://localhost:9883 npx -y @tomic/mcp connect --desktop`
+and the approval page opens in the desktop app instead of the browser.
+
 ### Environment variables
 
 | Variable             | Required | Meaning                                                                                       |
