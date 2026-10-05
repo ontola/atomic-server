@@ -9,7 +9,7 @@ import {
   useResizable,
 } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
-import { AppMenu } from './AppMenu';
+import { AccountMenu } from './AccountMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
@@ -93,6 +93,7 @@ export function SideBar(): JSX.Element {
 
   return (
     <SideBarContainer
+      data-side-panel='left'
       $width={SIDEBAR_WIDTH_PROP.var()}
       $size={size}
       $expanded={isWideScreen && sideBarLocked}
@@ -127,11 +128,7 @@ export function SideBar(): JSX.Element {
                   <OntologiesPanel />
                 </SideBarPanel>
               )}
-              <SideBarPanel title='App' heightStorageKey='appPanelHeight'>
-                <Column gap='0.5rem' align='stretch'>
-                  <AppMenu onItemClick={closeSideBar} />
-                </Column>
-              </SideBarPanel>
+              <AccountMenu onItemClick={closeSideBar} />
             </Column>
           </MenuWrapper>
           {!isRearanging && (

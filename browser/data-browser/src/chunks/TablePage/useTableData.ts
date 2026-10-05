@@ -33,8 +33,9 @@ export function useTableData(
   resource: Resource,
   /** Which view to show, when the caller decides rather than the URL. */
   viewOverride?: string,
+  embedded = false,
 ): UseTableDataResult {
-  const tableView = useTableView(resource, viewOverride);
+  const tableView = useTableView(resource, viewOverride, embedded);
   const { filters, sorting } = tableView;
   const store = useStore();
 

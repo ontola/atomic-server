@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Sentry from '@sentry/react';
-import { initSentry } from './sentry';
-vi.mock('@sentry/react', () => ({ init: vi.fn() }));
+import { StoreEvents } from '@tomic/react';
+import { initSentry, reportRepeatedCommitFailures } from './sentry';
+vi.mock('@sentry/react', () => ({
+  init: vi.fn(),
+  isEnabled: vi.fn(() => true),
+  captureMessage: vi.fn(),
+}));
 describe('Sentry configuration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -75,6 +80,33 @@ describe('Sentry configuration', () => {
     initSentry();
     expect(Sentry.init).toHaveBeenCalledWith(
       expect.objectContaining({ environment: 'staging' }),
+    );
+  });
+  it('groups repeated commit failures by server and message, not by resource', () => {
+    let handler: ((failure: unknown) => void) | undefined;
+    const store = {
+      on: vi.fn((event: string, cb: (failure: unknown) => void) => {
+        if (event === StoreEvents.CommitRepeatedlyFailing) handler = cb;
+
+        return () => {};
+      }),
+    };
+    reportRepeatedCommitFailures(store as never);
+    handler?.({
+      subject: 'atomic:abc',
+      error: new Error('Parent of atomic:abc (atomic:def) not found'),
+      failures: 4,
+      server: 'https://node1.example',
+    });
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      'Commit keeps failing',
+      expect.objectContaining({
+        fingerprint: [
+          'commit-keeps-failing',
+          'https://node1.example',
+          'Parent of <id> (<id>) not found',
+        ],
+      }),
     );
   });
 });

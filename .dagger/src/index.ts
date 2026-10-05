@@ -69,6 +69,30 @@ const INSTALL_DOCS_TOOLS =
   'cargo install mdbook --version 0.5.4 --locked --quiet && ' +
   'cargo install mdbook-linkcheck --version 0.7.7 --locked --quiet';
 
+// Must match `packageManager` in `browser/package.json`, exactly.
+//
+// Installing any *other* version means the first pnpm invocation inside a
+// workspace tries to self-switch to the declared one, and pnpm 10 cannot
+// switch to pnpm 11: it downloads `@pnpm/<platform>` and then looks for the
+// CLI at `.tools/@pnpm+<platform>/<version>/bin`, which pnpm 11 no longer
+// ships that way. The switch dies with
+//   ERROR  Failed to switch pnpm to v11.10.0. Looks like pnpm CLI is missing
+// and takes every JS container with it. Upstream: pnpm/pnpm#12528.
+//
+// So: install the exact version, and never let the self-switch run.
+const PNPM_VERSION = '11.10.0';
+
+// Where `get.pnpm.io/install.sh` puts the CLI, for the containers that install
+// pnpm that way instead of via `npm --global` (the playwright image).
+//
+// pnpm 10 dropped the binary straight into `$PNPM_HOME`; pnpm 11 installs
+// `@pnpm/exe` and leaves shims in `$PNPM_HOME/bin` instead. Pointing PATH at
+// `$PNPM_HOME` — correct until the version bump above — now yields
+//   exec: "pnpm": executable file not found in $PATH
+// on the container's first `pnpm install`. The install script's own PATH
+// advice (`export PATH="$PNPM_HOME/bin:$PATH"`) is the authority here.
+const PNPM_BIN_DIR = '/root/.local/share/pnpm/bin';
+
 // Must match `@playwright/test` in `browser/e2e/package.json`.
 //
 // The image bakes in the browser builds its own Playwright wants, and each
@@ -167,6 +191,52 @@ function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
 }
 
 /**
+ * Prints where a shard's time went: seconds per spec file and per shard, in the
+ * last lines of the shard's log. The shards are contiguous slices of the test
+ * list, cut by test count, so a heavy file sits in whichever slice it lands in.
+ * With these numbers `PWTEST_SHARD_WEIGHTS` can be set from measurements
+ * instead of guessed. Never fails the shard: a missing report prints nothing.
+ */
+const E2E_TIMING_SUMMARY = [
+  "const fs = require('fs');",
+  'let report;',
+  "try { report = JSON.parse(fs.readFileSync('/test-results.json', 'utf8')); } catch { process.exit(0); }",
+  'const files = new Map();',
+  'let tests = 0;',
+  'const walk = suite => {',
+  '  for (const spec of suite.specs || []) for (const test of spec.tests) {',
+  '    tests++;',
+  '    const ms = test.results.reduce((sum, result) => sum + result.duration, 0);',
+  '    files.set(spec.file, (files.get(spec.file) || [0, 0]).map((v, i) => v + (i ? 1 : ms)));',
+  '  }',
+  '  for (const child of suite.suites || []) walk(child);',
+  '};',
+  'for (const suite of report.suites) walk(suite);',
+  'let total = 0;',
+  'for (const [, [ms]] of files) total += ms;',
+  "console.log('E2E-TIMING shard=' + process.argv[1] + ' tests=' + tests + ' test-seconds=' + Math.round(total / 1000));",
+  'for (const [file, [ms, count]] of [...files].sort((a, b) => b[1][0] - a[1][0]))',
+  "  console.log('E2E-TIMING shard=' + process.argv[1] + ' ' + String(Math.round(ms / 1000)).padStart(5) + 's ' + String(count).padStart(3) + ' tests ' + file);",
+].join(' ');
+
+/**
+ * Shard sizes, in tests, for `PWTEST_SHARD_WEIGHTS`, keyed by shard count.
+ *
+ * Playwright cuts the test list into contiguous slices of equal test count, but
+ * the tests differ in cost: with equal counts, run 4783 (one worker per shard)
+ * took 30.3, ~22.9, 27.1 and 26.5 min, and a shard's minutes are its
+ * `E2E-TIMING test-seconds`. These sizes come from the per-file timings of all
+ * four shards on run 4790: costed per test in suite order, they put every
+ * shard within 2252 to 2279 s of that run. Weights are proportions, so a
+ * growing suite keeps the same split. Re-measure from the `E2E-TIMING` lines
+ * when it drifts. Playwright wants the weights separated by ":" and one per
+ * shard, so only a shard count with an entry here is weighted.
+ */
+const E2E_SHARD_WEIGHTS: Record<number, string> = {
+  4: '62:90:84:79',
+};
+
+/**
  * `bash -c` payload for one Playwright shard.
  *
  * The log label must be safe inside a double-quoted `echo`. The previous
@@ -185,8 +255,14 @@ function e2eShardRunScript(
   return (
     'set -o pipefail; ' +
     `echo "e2e mode grep=${grepLabel} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+    (E2E_SHARD_WEIGHTS[shardCount]
+      ? `export PWTEST_SHARD_WEIGHTS=${E2E_SHARD_WEIGHTS[shardCount]}; `
+      : '') +
+    'export PLAYWRIGHT_JSON_OUTPUT_NAME=/test-results.json; ' +
     `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
-    'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0'
+    'echo ${PIPESTATUS[0]} > /test-exit-code; ' +
+    `node -e ${JSON.stringify(E2E_TIMING_SUMMARY)} ${shardIndex}/${shardCount} 2>&1 | tee -a /test-output.log; ` +
+    'exit 0'
   );
 }
 
@@ -518,6 +594,11 @@ export class AtomicServer {
     @argument() playwrightRetries: number = -1,
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /**
+     * Where failed e2e shards leave their traces, for `failedTestResults` to
+     * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
+     */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -546,6 +627,7 @@ export class AtomicServer {
         playwrightRetries,
         '',
         playwrightCloneSessions,
+        resultsKey,
       ),
       this.jsTest(),
       this.jsTestIntegration(),
@@ -946,9 +1028,25 @@ export class AtomicServer {
     const pnpmContainer = dag
       .container()
       .from(NODE_IMAGE)
-      .withExec(['npm', 'install', '--global', 'corepack@latest'])
-      .withExec(['corepack', 'enable'])
-      .withExec(['corepack', 'prepare', 'pnpm@latest-10', '--activate'])
+      // Straight to the declared version — see PNPM_VERSION. Going through
+      // corepack with a 10.x line meant pnpm had to self-switch to 11 on
+      // first use, which is broken.
+      .withExec(['npm', 'install', '--global', `pnpm@${PNPM_VERSION}`])
+      // Hoisting must be a *persistent* setting, not a CLI flag. pnpm 11
+      // (see browser/package.json `packageManager`) runs a deps-status check
+      // before every `pnpm run`, and re-invokes `pnpm install` itself when
+      // node_modules looks stale. That implicit install doesn't inherit
+      // `--shamefully-hoist`, so it sees a changed hoisting config, decides
+      // node_modules must be purged, and — with no TTY to confirm — aborts
+      // with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY. `PNPM_CONFIG_*` is
+      // read by every pnpm invocation in the container, implicit ones
+      // included, so the two agree and no purge is ever proposed.
+      //
+      // Deliberately an env var rather than `shamefullyHoist: true` in
+      // pnpm-workspace.yaml: that file is shared with developers, and
+      // flattening node_modules locally would hide undeclared dependencies
+      // that currently fail fast.
+      .withEnvVariable('PNPM_CONFIG_SHAMEFULLY_HOIST', 'true')
       .withWorkdir('/repo/browser');
 
     // Mount workspace package manifests for caching and `pnpm install`.
@@ -1011,11 +1109,10 @@ export class AtomicServer {
         'store-dir',
         '/repo/browser/.pnpm-store',
       ])
-      .withExec([
-        'sh',
-        '-c',
-        'yes | pnpm install --frozen-lockfile --shamefully-hoist',
-      ]);
+      // Hoisting comes from PNPM_CONFIG_SHAMEFULLY_HOIST above, and the
+      // `yes |` that used to answer the purge prompt is no longer needed —
+      // nothing prompts once the setting is persistent.
+      .withExec(['pnpm', 'install', '--frozen-lockfile']);
 
     // Drop in @tomic/lib source. Other packages are unused by the
     // integration tests, so we don't bother mounting them.
@@ -1205,9 +1302,13 @@ export class AtomicServer {
     const pnpmContainer = dag
       .container()
       .from(NODE_IMAGE)
-      .withExec(['npm', 'install', '--global', 'corepack@latest'])
-      .withExec(['corepack', 'enable'])
-      .withExec(['corepack', 'prepare', 'pnpm@latest-10', '--activate'])
+      // Exact declared version, no corepack, no self-switch — see PNPM_VERSION.
+      .withExec(['npm', 'install', '--global', `pnpm@${PNPM_VERSION}`])
+      // See jsTestIntegration() for why hoisting is an env var and not a
+      // `--shamefully-hoist` flag: pnpm 11's pre-run deps check re-invokes
+      // `pnpm install` without the flag, reads that as a hoisting-config
+      // change, and aborts trying to purge node_modules without a TTY.
+      .withEnvVariable('PNPM_CONFIG_SHAMEFULLY_HOIST', 'true')
       .withWorkdir('/app');
 
     // Copy workspace files first for caching node_modules.
@@ -1239,11 +1340,7 @@ export class AtomicServer {
       // `/app/.pnpm-store` without the config command.
       .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
       .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
-      .withExec([
-        'sh',
-        '-c',
-        'yes | pnpm install --frozen-lockfile --shamefully-hoist',
-      ]);
+      .withExec(['pnpm', 'install', '--frozen-lockfile']);
 
     // data-browser bootstrap JSON lives in repo-root lib/defaults. Vite resolves ../../../lib
     // from data-browser/src to filesystem /lib if /app is only browser — do not mount there
@@ -1980,13 +2077,13 @@ export class AtomicServer {
       .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
       .withEnvVariable(
         'PATH',
-        '/root/.local/share/pnpm:/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        `${PNPM_BIN_DIR}:/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
       )
       .withExec([
         '/bin/sh',
         '-c',
-        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ' +
-          'export PATH=/root/.local/share/pnpm:/opt/npm-global/bin:$PATH && ' +
+        `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=${PNPM_VERSION} ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ` +
+          `export PATH=${PNPM_BIN_DIR}:/opt/npm-global/bin:$PATH && ` +
           '/bin/apt update && /bin/apt install -y zip && ' +
           'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
       ]);
@@ -2136,6 +2233,8 @@ export class AtomicServer {
     @argument() playwrightGrep: string = '',
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
+    /** See `ci()`. */
+    @argument() resultsKey: string = '',
   ): Promise<string> {
     this.e2eCloneSessions = playwrightCloneSessions;
     // Shards × own atomic-server. Count comes from `--host-profile`
@@ -2215,14 +2314,88 @@ export class AtomicServer {
       )
         .filter(Boolean)
         .join('\n\n');
+      const exported = resultsKey
+        ? await this.saveTestResults(resultsKey, failed)
+        : 'none kept (no --results-key)';
       throw new Error(
         `E2E tests failed on ${failed.length}/${shardCount} shard(s).\n` +
-          `Reports:\n${reportUrls.join('\n')}\n\n${tails}` +
+          `Reports:\n${reportUrls.join('\n')}\n` +
+          `Traces: ${exported}\n\n${tails}` +
           (contexts ? `\n\n${contexts}` : ''),
       );
     }
 
     return reportUrls.join('\n') || 'e2e ok (no report URL)';
+  }
+
+  /**
+   * Keeps failed shards' `test-results` (traces, screenshots,
+   * `error-context.md`) in a cache volume under `key`, for `failedTestResults`.
+   *
+   * They used to leave only through the netlify report, and with
+   * `NETLIFY_TOKEN` unset they were discarded with the container. A failure
+   * that only happens on Mancave then left an assertion message and nothing
+   * else: on 29-30 September a reload that rendered a blank page could only
+   * be described, not diagnosed. `Directory.export` from inside this module
+   * does not help: it writes into the function's own sandbox, not onto the
+   * runner. The `ci` call fails, so it cannot return them either; a second
+   * call reads them back from the volume instead.
+   */
+  private async saveTestResults(
+    key: string,
+    failed: { shard: number; testResults: Directory }[],
+  ): Promise<string> {
+    const safeKey = key.replace(/[^A-Za-z0-9._-]/g, '_');
+    try {
+      let container = dag
+        .container()
+        .from('alpine:latest')
+        .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'));
+
+      for (const r of failed) {
+        container = container.withDirectory(`/in/shard-${r.shard}`, r.testResults);
+      }
+
+      await container
+        .withExec([
+          'sh',
+          '-c',
+          // Keep a week of runs; the volume must not grow without bound.
+          `find /results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + ; ` +
+            `rm -rf /results/${safeKey} && mkdir -p /results/${safeKey} && ` +
+            `cp -r /in/. /results/${safeKey}/`,
+        ])
+        .sync();
+
+      return `kept under ${safeKey}; the workflow uploads them as the e2e-test-results artifact`;
+    } catch (e) {
+      return `could not keep test results: ${e}`;
+    }
+  }
+
+  /**
+   * Named without a digit on purpose: Dagger's CLI kebab-cases `e2eTestResults`
+   * to something other than `e2e-test-results` (as with `--e2e-mode`), and
+   * the workflow's call failed with "unknown command" (run 36895753311).
+   *
+   * The traces `ci`/`endToEnd` kept for failed shards under `resultsKey`,
+   * one folder per shard. Empty when nothing failed. main-ci.yml exports
+   * this on failure and uploads it as an artifact.
+   */
+  @func()
+  async failedTestResults(@argument() resultsKey: string): Promise<Directory> {
+    const safeKey = resultsKey.replace(/[^A-Za-z0-9._-]/g, '_');
+
+    return dag
+      .container()
+      .from('alpine:latest')
+      .withMountedCache('/results', dag.cacheVolume('e2e-test-results-v1'))
+      .withExec([
+        'sh',
+        '-c',
+        `mkdir -p /out && if [ -d /results/${safeKey} ]; then cp -r /results/${safeKey}/. /out/; fi`,
+      ])
+      .directory('/out');
   }
 
   /**

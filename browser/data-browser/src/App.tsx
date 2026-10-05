@@ -15,6 +15,7 @@ import {
 } from './helpers/originNode';
 
 import { useEffect, type JSX } from 'react';
+import { reportRepeatedCommitFailures } from './helpers/sentry';
 import { RouterProvider } from '@tanstack/react-router';
 import { ProxyConnectReturn } from './chunks/AppPage/ProxyConnectReturn';
 import { router } from './routes/Router';
@@ -210,7 +211,12 @@ import { isClientDbEnabled } from './helpers/clientDbMode';
 
 if (isClientDbEnabled()) {
   initClientDb(store, {
-    deferAnonymous: window.location.pathname === '/app/dev-drive',
+    // The demo makes a guest identity straight away, and that identity gets
+    // its own database: opening the anonymous one first only to close it
+    // again cost a second worker and WebAssembly start on every first visit.
+    deferAnonymous:
+      window.location.pathname === '/app/dev-drive' ||
+      window.location.pathname === '/app/demo',
   });
 }
 
@@ -236,6 +242,7 @@ window.store = store;
 // traffic shows up alongside React render counts. Cmd/Ctrl+Shift+P to
 // dump a snapshot.
 attachStoreToProfiler(store);
+reportRepeatedCommitFailures(store);
 
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');

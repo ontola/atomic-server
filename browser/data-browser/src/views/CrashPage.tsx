@@ -1,4 +1,4 @@
-import { FeedbackMenuItem } from '../components/SideBar/FeedbackMenuItem';
+import { FeedbackButton } from '../components/SideBar/FeedbackButton';
 import { DialogGlobalContextProvider } from '../components/Dialog/DialogGlobalContextProvider';
 import * as React from 'react';
 import { Resource } from '@tomic/react';
@@ -48,7 +48,7 @@ function CrashPage({
               Try Again
             </Button>
             <DialogGlobalContextProvider>
-              <FeedbackMenuItem floating reportError={error} />
+              <FeedbackButton reportError={error} />
             </DialogGlobalContextProvider>
           </Row>
         </Column>

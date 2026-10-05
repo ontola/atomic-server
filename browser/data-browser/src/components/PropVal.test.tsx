@@ -44,7 +44,7 @@ async function property(
 }
 
 async function setup(labelByName: boolean, propertyURL = BOUGHT) {
-  const store = new Store();
+  const store = new Store({ connect: false });
   store.addResource(
     await property(BOUGHT, 'bought', Datatype.BOOLEAN, 'Bought'),
   );

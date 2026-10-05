@@ -11,7 +11,8 @@ allowBuilds:
   cbor-extract: true
   esbuild: true
   netlify-cli: false
-  unix-dgram: false
+  sharp: true
+  unix-dgram: true
 
 # Each range below is bounded to the package's current major line
 # (>=patched <nextMajor) — an open-ended ">=x" lets pnpm resolve to a much

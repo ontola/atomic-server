@@ -16,7 +16,7 @@ import {
   useSubject,
   useTypingPresence,
 } from '@tomic/react';
-import { memo, useCallback, useRef, useState, useEffect } from 'react';
+import { memo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   FaCopy,
@@ -27,7 +27,7 @@ import {
   FaReply,
   FaXmark,
 } from 'react-icons/fa6';
-import { styled } from 'styled-components';
+import { css, keyframes, styled } from 'styled-components';
 import { AtomicLink } from '../../components/AtomicLink';
 import { PresenceAvatarMenu } from '../../components/Presence/PresenceAvatarMenu';
 import { Button } from '../../components/Button';
@@ -47,6 +47,9 @@ const CHAT_PAGE_SIZE = 50;
 export interface ChatViewProps {
   messages: string[];
   loading: boolean;
+  /** Messages older than the ones listed; shows a "load older" row when > 0. */
+  olderCount?: number;
+  onLoadOlder?: () => void;
   /** Persists a message. Throwing restores the composer text and shows the error. */
   onSend: (text: string, replyTo?: string) => Promise<void>;
   /** Pass a ref to control composer focus from outside (e.g. after a title edit). */
@@ -71,6 +74,8 @@ export interface ChatViewProps {
 export function ChatView({
   messages,
   loading: messagesLoading,
+  olderCount = 0,
+  onLoadOlder,
   onSend,
   inputRef: inputRefProp,
   viewTransition = false,
@@ -81,12 +86,54 @@ export function ChatView({
   const [isReplyTo, setReplyTo] = useState<string | undefined>(undefined);
   const internalInputRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = inputRefProp ?? internalInputRef;
-  const [textAreaHight, setTextAreaHight] = useState(1);
   const [scrollToBottomTrigger, setScrollToBottomTrigger] = useState(0);
 
   const { typers, notifyTyping, stopTyping } = useTypingPresence(threadSubject);
 
+  // Messages that arrive once the chat is on screen grow into place from
+  // the bottom, where the "is typing" line was; the ones already there when
+  // it opened just appear. A short wait after loading lets a list that loads
+  // in a few batches count as already there.
+  const [settled, setSettled] = useState(false);
+
+  useEffect(() => {
+    if (messagesLoading || settled) return;
+    const timer = setTimeout(() => setSettled(true), 400);
+
+    return () => clearTimeout(timer);
+  }, [messagesLoading, settled]);
+
   const disableSend = newMessageVal.length === 0;
+
+  // Older messages are added ABOVE the ones being read. Keep the message that
+  // was at the top where it was (browsers without scroll anchoring would
+  // otherwise jump to the new top).
+  const olderRowRef = useRef<HTMLButtonElement>(null);
+  const anchorRef = useRef<{ el: Element; top: number } | null>(null);
+
+  const handleLoadOlder = () => {
+    const el = olderRowRef.current?.nextElementSibling;
+
+    if (el) anchorRef.current = { el, top: el.getBoundingClientRect().top };
+    onLoadOlder?.();
+  };
+
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+
+    if (!anchor || !anchor.el.isConnected) return;
+    anchorRef.current = null;
+    const delta = anchor.el.getBoundingClientRect().top - anchor.top;
+
+    if (delta === 0) return;
+    let scroller: HTMLElement | null = anchor.el.parentElement;
+
+    while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
+      scroller = scroller.parentElement;
+    }
+
+    if (scroller) scroller.scrollTop += delta;
+  }, [messages]);
 
   const sendMessage = async (e?: React.SyntheticEvent) => {
     e?.preventDefault();
@@ -118,13 +165,12 @@ export function ChatView({
     }
   };
 
-  const handleReply = useCallback(
-    (subject: string) => {
-      setReplyTo(subject);
-      inputRef.current?.focus();
-    },
-    [setReplyTo, inputRef],
-  );
+  // The React Compiler memoizes this; a manual useCallback over `inputRef`
+  // could no longer be preserved once the input's height is read from it.
+  const handleReply = (subject: string) => {
+    setReplyTo(subject);
+    inputRef.current?.focus();
+  };
 
   const handleChangeMessageText: React.ChangeEventHandler<
     HTMLTextAreaElement
@@ -132,28 +178,24 @@ export function ChatView({
     setNewMessage(e.target.value);
 
     if (e.target.value === '') {
-      // Make the textarea small again when the user removed their message
-      setTextAreaHight(1);
       stopTyping();
 
       return;
     }
 
     notifyTyping();
-
-    // Auto-grow the textarea
-    const overflowStyle = e.target.style.overflow;
-    e.target.style.overflow = 'scroll';
-    // in Firefox, scrollHeight only works if overflow is set to scroll
-    const height = e.target.scrollHeight;
-    e.target.style.overflow = overflowStyle;
-    const rowHeight = 30;
-    const trows = Math.ceil(height / rowHeight) - 1;
-
-    if (trows !== textAreaHight) {
-      setTextAreaHight(trows);
-    }
   };
+
+  // Grow the input with its text, to exactly the text's height. Counting
+  // rows at an assumed 30px each left a line-height of 24px short: a few
+  // lines in, the input could be scrolled by a line's worth. Runs on every
+  // change of the value, so it also shrinks back after sending.
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+  }, [newMessageVal, inputRef]);
 
   return (
     <ViewWrapper>
@@ -172,13 +214,22 @@ export function ChatView({
               <span>Be the first to say something</span>
             </EmptyChatState>
           ) : (
-            messages.map(message => (
-              <Message
-                key={message}
-                subject={message}
-                setReplyTo={handleReply}
-              />
-            ))
+            <>
+              {olderCount > 0 && (
+                <LoadOlder
+                  ref={olderRowRef}
+                  type='button'
+                  onClick={handleLoadOlder}
+                >
+                  {`Show older messages (${olderCount})`}
+                </LoadOlder>
+              )}
+              {messages.map(message => (
+                <Appear key={message} animate={settled}>
+                  <Message subject={message} setReplyTo={handleReply} />
+                </Appear>
+              ))}
+            </>
           )}
         </ChatMessagesContainer>
       </ScrollAreaWrapper>
@@ -194,7 +245,7 @@ export function ChatView({
       <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
         <MessageInput
           aria-label='Chat input'
-          rows={textAreaHight}
+          rows={1}
           ref={inputRef}
           autoFocus
           value={newMessageVal}
@@ -237,7 +288,8 @@ export function ChatRoomView({
   noContainerPadding,
 }: ChatRoomViewProps) {
   const store = useStore();
-  const { messages, loading, invalidate } = useChatMessages(resource.subject);
+  const { messages, loading, invalidate, olderCount, loadOlder } =
+    useChatMessages(resource.subject);
 
   const handleSend = async (text: string, replyTo?: string) => {
     await sendChatMessage(store, { parent: resource.subject, text, replyTo });
@@ -248,6 +300,8 @@ export function ChatRoomView({
     <ChatView
       messages={messages}
       loading={loading}
+      olderCount={olderCount}
+      onLoadOlder={loadOlder}
       onSend={handleSend}
       inputRef={inputRef}
       viewTransition={viewTransition}
@@ -344,7 +398,11 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   return (
     <MessageComponent about={subject}>
       {createdBy ? (
-        <PresenceAvatarMenu agentSubject={createdBy} size='1.8rem' />
+        <PresenceAvatarMenu
+          agentSubject={createdBy}
+          size='1.8rem'
+          chip={false}
+        />
       ) : (
         <AvatarSpacer />
       )}
@@ -609,6 +667,40 @@ const AvatarSpacer = styled.div`
   flex-shrink: 0;
 `;
 
+/** Grows a message into place if it arrived while the chat was open. Whether
+ *  to animate is fixed at mount, so messages already listed never replay it. */
+function Appear({
+  animate,
+  children,
+}: {
+  animate: boolean;
+  children: React.ReactNode;
+}) {
+  const [grow] = useState(animate);
+
+  return <AppearWrapper $grow={grow}>{children}</AppearWrapper>;
+}
+
+const growIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.96);
+  }
+`;
+
+const AppearWrapper = styled.div<{ $grow: boolean }>`
+  ${p =>
+    p.$grow &&
+    css`
+      transform-origin: left bottom;
+      animation: ${growIn} 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    `}
+`;
+
 const MessageComponent = styled.div`
   display: flex;
   align-items: flex-start;
@@ -639,6 +731,8 @@ const SendButton = styled(Button)`
 `;
 
 const MessageInput = styled.textarea`
+  box-sizing: border-box;
+  resize: none;
   color: ${p => p.theme.colors.text};
   background: none;
   flex: 1;
@@ -684,6 +778,23 @@ const ScrollAreaWrapper = styled.div`
   min-height: 0;
 `;
 
+const LoadOlder = styled.button`
+  align-self: center;
+  margin-block: 0.25rem 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background: none;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.8rem;
+  cursor: pointer;
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+`;
+
 const EmptyChatState = styled.div`
   display: flex;
   flex-direction: column;
@@ -720,6 +831,29 @@ const ONLY_MESSAGES = [
  *  viewer's. See `Resource.save` in @tomic/lib. */
 const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
+interface ChatTail {
+  total: number;
+  messages: string[];
+}
+
+function readTail(key: string): ChatTail | undefined {
+  try {
+    const raw = localStorage.getItem(key);
+
+    return raw ? (JSON.parse(raw) as ChatTail) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeTail(key: string, tail: ChatTail) {
+  try {
+    localStorage.setItem(key, JSON.stringify(tail));
+  } catch {
+    // Storage full or blocked: the chat just opens the slower way.
+  }
+}
+
 /**
  * Fetches messages linked to a subject using the Collection system, sorted by
  * createdAt ascending (oldest first) with pagination. ChatRooms link their
@@ -729,7 +863,19 @@ export function useChatMessages(
   subject: string,
   property: string = core.properties.parent,
 ) {
-  const [messages, setMessages] = useState<string[]>([]);
+  // The newest messages seen last time this chat was open, so a reopened chat
+  // fills at once from the local database while the real list (server sorted,
+  // after the connection is up) is on its way.
+  const tailKey = `chat-tail:${subject}:${property}`;
+  const [remembered] = useState(() => readTail(tailKey));
+  const [messages, setMessages] = useState<string[]>(
+    remembered?.messages ?? [],
+  );
+  // How many of the NEWEST messages are listed. A busy chat can hold
+  // thousands; listing (and rendering) them all made opening it a stall and
+  // an unbounded DOM. Older ones load a page at a time on request.
+  const [visible, setVisible] = useState(CHAT_PAGE_SIZE);
+  const [total, setTotal] = useState(remembered?.total ?? 0);
 
   // Scope the query to the drive the THREAD lives on, not the viewer's active
   // one. A guest opening a chatroom shared from another drive has their own
@@ -749,27 +895,46 @@ export function useChatMessages(
       sort_desc: false,
       drive: typeof threadDrive === 'string' ? threadDrive : undefined,
     },
-    { pageSize: CHAT_PAGE_SIZE },
+    { pageSize: CHAT_PAGE_SIZE, preferServer: true },
   );
 
   useEffect(() => {
     const extractMembers = async () => {
       await collection.waitForReady();
+      const count = collection.totalMembers;
       const members: string[] = [];
 
-      for (let i = 0; i < collection.totalMembers; i++) {
-        const member = await collection.getMemberWithIndex(i);
+      try {
+        // Re-read the count each step: the collection can refresh with fewer
+        // members while we await, and an index past the end throws.
+        for (
+          let i = Math.max(0, count - visible);
+          i < collection.totalMembers;
+          i++
+        ) {
+          const member = await collection.getMemberWithIndex(i);
 
-        if (member) {
-          members.push(member);
+          if (member) {
+            members.push(member);
+          }
         }
+      } catch {
+        // The collection changed under us; its next refresh extracts again.
+        return;
       }
 
+      setTotal(count);
       setMessages(members);
+
+      // An empty chat is remembered too, so reopening it does not flash the
+      // loader every time while the server answers "no messages".
+      if (visible === CHAT_PAGE_SIZE) {
+        writeTail(tailKey, { total: count, messages: members });
+      }
     };
 
     extractMembers();
-  }, [collection]);
+  }, [collection, visible, tailKey]);
 
   // `useCollection` (used internally by this hook) routes
   // `ResourceManuallyCreated` through `applyResourceChange` for an
@@ -778,7 +943,10 @@ export function useChatMessages(
 
   return {
     messages,
-    loading: !ready,
+    loading: !ready && messages.length === 0 && !remembered,
     invalidate: invalidateCollection,
+    /** Messages that exist but are not listed yet (older than the window). */
+    olderCount: Math.max(0, total - messages.length),
+    loadOlder: () => setVisible(v => v + CHAT_PAGE_SIZE),
   };
 }

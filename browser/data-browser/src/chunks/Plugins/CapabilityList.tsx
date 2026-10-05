@@ -7,6 +7,7 @@ import {
   FaHardDrive,
   FaKey,
   FaMemory,
+  FaShapes,
   FaShield,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
@@ -18,6 +19,7 @@ const LABELS: Record<string, string> = {
   'extended-fuel': 'Extended Fuel',
   'extended-memory': 'Extended Memory',
   'custom-view': 'Custom View',
+  'edit-schema': 'Edit Schema',
 };
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -27,6 +29,7 @@ const ICONS: Record<string, React.ReactNode> = {
   'extended-fuel': <FaFire />,
   'extended-memory': <FaMemory />,
   'custom-view': <FaDesktop />,
+  'edit-schema': <FaShapes />,
 };
 
 function iconFor(capability: ReviewCapability): React.ReactNode {

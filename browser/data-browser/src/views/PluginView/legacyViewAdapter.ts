@@ -1,4 +1,12 @@
-import { isViewRequest, packagedViewOperations } from '@tomic/plugin';
+import {
+  isViewKeyEvent,
+  isViewRequest,
+  packagedViewOperations,
+  type ViewRequest,
+} from '@tomic/plugin';
+import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { ViewChanges } from '@helpers/extensions/viewApply';
+import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import { viewSession } from '@helpers/extensions/viewSession';
 import { canViewAccess, type ViewPolicy } from '@helpers/extensions/viewPolicy';
 // @wc-ignore-file
@@ -12,6 +20,7 @@ import {
   server,
   type JSONArray,
   type JSONValue,
+  type ApplyHost,
   type Resource,
   type Store,
 } from '@tomic/react';
@@ -41,7 +50,33 @@ interface ConstructorArgs {
   requestReadPermission: RequestPermissionFn;
   hasReadPermission: (subject: string) => boolean;
   requestWritePermission: RequestPermissionFn;
+  /**
+   * The host UI drive apps get (`store.ui`): answers a UI ask and returns
+   * true, or returns false when the request is not one.
+   */
+  handleUI?: (
+    request: { id: string | number; op: string } & Record<string, unknown>,
+    post: (reply: { result?: unknown; error?: string }) => void,
+  ) => boolean;
+  /** Passes a key the frame did not handle to the host's shortcuts. */
+  forwardKey?: (message: unknown) => boolean;
 }
+
+/**
+ * Ops a packaged view answers on the `store` API that have no legacy message
+ * type. Pickers stay on the legacy path: those already answer with the
+ * resource, which old plugins rely on and `store.ui` reduces to its subject.
+ */
+const STORE_OPS = new Set([
+  'create',
+  'save',
+  'destroy',
+  'query',
+  'search',
+  'apply',
+  'undo',
+]);
+const LEGACY_PICKERS = new Set(['pickResource', 'pickFile']);
 
 export class LegacyViewAdapter {
   public context: PageContext;
@@ -55,8 +90,12 @@ export class LegacyViewAdapter {
   public requestWritePermission: RequestPermissionFn;
 
   public pluginResource: Resource;
+  public handleUI: ConstructorArgs['handleUI'];
+  public forwardKey: ConstructorArgs['forwardKey'];
 
   private bridge: FrameBridge;
+  /** This frame's `apply` and `undo` history. */
+  private changes: ViewChanges;
 
   constructor({
     context,
@@ -69,7 +108,22 @@ export class LegacyViewAdapter {
     requestReadPermission,
     hasReadPermission,
     requestWritePermission,
+    handleUI,
+    forwardKey,
   }: ConstructorArgs) {
+    this.handleUI = handleUI;
+    this.forwardKey = forwardKey;
+    this.changes = new ViewChanges(store, {
+      authorize: async subject => {
+        const target = await this.store.getResource(subject);
+
+        if (target.hasClasses(server.classes.plugin))
+          throw new Error('Plugin cannot edit plugin resources');
+
+        await this.ensureWrite(subject);
+      },
+      writes: storeWrites(store),
+    });
     this.context = context;
     this.store = store;
     this.iFrame = iFrame;
@@ -81,10 +135,31 @@ export class LegacyViewAdapter {
     this.hasReadPermission = hasReadPermission;
     this.requestWritePermission = requestWritePermission;
     this.bridge = new FrameBridge(iFrame, (data, originalSession) => {
+      if (isViewKeyEvent(data)) {
+        this.forwardKey?.(data);
+
+        return;
+      }
+
       const canonical = isViewRequest(data);
       const session = canonical
         ? viewSession(originalSession, data.id)
         : originalSession;
+
+      if (canonical && !LEGACY_PICKERS.has(data.op)) {
+        const request = { ...data.args, id: data.id, op: data.op };
+
+        if (this.handleUI?.(request, session.post)) return;
+
+        if (STORE_OPS.has(data.op)) {
+          void this.handleStoreOp(data, session.post).catch(error =>
+            session.post({ error: String(error?.message ?? error) }),
+          );
+
+          return;
+        }
+      }
+
       const type = canonical
         ? Object.keys(packagedViewOperations).find(
             key => packagedViewOperations[key as MessageType] === data.op,
@@ -119,6 +194,172 @@ export class LegacyViewAdapter {
   }
   public setStyle(css: string): void {
     this.bridge.setStyle(css);
+  }
+
+  /** Whether this view may write `subject` without asking the person. */
+  public async mayWrite(subject: string): Promise<boolean> {
+    if (await canViewAccess(this.store, subject, this.policy, 'write'))
+      return true;
+
+    return this.grants().includes('edit-schema') && this.inSchema(subject);
+  }
+
+  private grants(): string[] {
+    const grants = this.pluginResource.get(server.properties.grants);
+
+    return Array.isArray(grants) ? grants.map(String) : [];
+  }
+
+  /**
+   * Whether `subject` is part of the schema of what this view shows: one of
+   * its classes, a property they list, or something in their ontology. A
+   * class that sits in no ontology (directly in a drive) grants only itself
+   * and its properties, never the drive around it.
+   */
+  private async inSchema(subject: string): Promise<boolean> {
+    const scope = await schemaScope(this.store, this.context.resource);
+    let current: string | undefined = subject;
+
+    for (let depth = 0; current && depth < 12; depth++) {
+      if (scope.has(current)) return true;
+      const resource: Resource = await this.store.getResource(current);
+      const parent: unknown = resource.get(core.properties.parent);
+      current = typeof parent === 'string' ? parent : undefined;
+    }
+
+    return false;
+  }
+
+  /**
+   * The `store` calls drive apps make, answered for a packaged view: the
+   * same arguments and results, under this view's own rules. Reads and writes
+   * outside its grants ask the person, as the legacy calls always have.
+   */
+  private async handleStoreOp(
+    request: ViewRequest,
+    post: (reply: { result?: unknown; error?: string }) => void,
+  ): Promise<void> {
+    const args = request.args;
+
+    switch (request.op) {
+      case 'apply':
+        if (makesPlugin(args.intents))
+          throw new Error('Plugin cannot create plugin resources');
+
+        post({ result: await this.changes.apply(args.intents) });
+
+        return;
+
+      case 'undo':
+        post({ result: await this.changes.undo() });
+
+        return;
+
+      case 'create': {
+        const parent =
+          typeof args.parent === 'string'
+            ? args.parent
+            : this.context.resource.subject;
+        await this.ensureWrite(parent);
+        const isA = Array.isArray(args.isA)
+          ? args.isA.filter((c): c is string => typeof c === 'string')
+          : [];
+
+        if (isA.includes(server.classes.plugin))
+          throw new Error('Plugin cannot create plugin resources');
+
+        const resource = await this.store.newResource({
+          parent,
+          isA,
+          propVals: (args.propVals ?? {}) as Record<string, JSONValue>,
+        });
+        await resource.save();
+        post({ result: resourceToUIPluginResource(resource) });
+
+        return;
+      }
+
+      case 'save':
+
+      case 'destroy': {
+        const subject = String(args.subject ?? '');
+        const resource = await this.store.getResource(subject);
+        const set = (args.propVals ?? {}) as Record<string, JSONValue>;
+        const commit: PluginCommit =
+          request.op === 'destroy'
+            ? { subject, destroy: true }
+            : {
+                subject,
+                set,
+                remove: Array.isArray(args.remove)
+                  ? args.remove.filter(
+                      (p): p is string => typeof p === 'string',
+                    )
+                  : undefined,
+              };
+
+        if (this.commitChangesPlugin(commit, resource))
+          throw new Error('Plugin cannot edit plugin resources');
+
+        await this.ensureWrite(subject);
+
+        for (const [key, value] of Object.entries(commit.set ?? {}))
+          await resource.set(key, value as JSONValue);
+
+        for (const key of commit.remove ?? []) resource.remove(key);
+
+        if (commit.destroy) await resource.destroy();
+        else await resource.save();
+
+        post({ result: { subject } });
+
+        return;
+      }
+
+      case 'query':
+        post({
+          result: await this.readable(
+            await runViewQuery(this.store, parseViewQuery(args)),
+          ),
+        });
+
+        return;
+
+      case 'search':
+        post({
+          result: await this.readable(
+            await runViewSearch(this.store, parseViewSearch(args)),
+          ),
+        });
+
+        return;
+    }
+  }
+
+  /**
+   * Only what this view may read. A list of subjects is still data: it says
+   * what exists. Members it may not read are left out, not asked about.
+   */
+  private async readable(subjects: string[]): Promise<string[]> {
+    const allowed = await Promise.all(
+      subjects.map(async subject => {
+        const resource = await this.store.getResource(subject);
+
+        return (
+          this.hasReadPermission(subject) ||
+          (await this.canPluginReadResource(resource).catch(() => false))
+        );
+      }),
+    );
+
+    return subjects.filter((_, i) => allowed[i]);
+  }
+
+  private async ensureWrite(subject: string): Promise<void> {
+    if (await this.mayWrite(subject)) return;
+
+    if (!(await this.requestWritePermission(subject)))
+      throw new Error('Plugin does not have access to this resource.');
   }
 
   private async handleMessage(message: Request): Promise<void> {
@@ -462,4 +703,83 @@ function entriesToJSONRecord(
       return [key, value as JSONValue];
     }),
   ) as Record<string, JSONValue>;
+}
+
+/** Writes signed by the person, as every other packaged-view write is. */
+function storeWrites(store: Store): ApplyHost {
+  return {
+    create: async ({ parent, isA, propVals }) => {
+      const resource = await store.newResource({ parent, isA, propVals });
+      await resource.save();
+
+      return resource.subject;
+    },
+    set: async (subject, propVals) => {
+      const resource = await store.getResource(subject);
+
+      for (const [property, value] of Object.entries(propVals))
+        await resource.set(property, value);
+
+      await resource.save();
+    },
+    remove: async (subject, properties) => {
+      const resource = await store.getResource(subject);
+      properties.forEach(property => resource.remove(property));
+      await resource.save();
+    },
+    destroy: async subject => {
+      await (await store.getResource(subject)).destroy();
+    },
+  };
+}
+
+/** Whether any intent would make something a plugin. */
+function makesPlugin(intents: unknown): boolean {
+  if (!Array.isArray(intents)) return false;
+
+  return intents.some(intent => {
+    const values = (intent as { set?: Record<string, unknown> })?.set;
+    const isA = [
+      ...((intent as { isA?: unknown[] })?.isA ?? []),
+      ...((values?.[core.properties.isA] as unknown[] | undefined) ?? []),
+    ];
+
+    return isA.includes(server.classes.plugin);
+  });
+}
+
+/** The classes a page is, or holds as rows, with their properties and ontologies. */
+async function schemaScope(
+  store: Store,
+  page: { subject: string; props: Record<string, JSONValue> },
+): Promise<Set<string>> {
+  const isA = page.props[core.properties.isA];
+  const rows = page.props[core.properties.classtype];
+  const classes = [
+    ...(Array.isArray(isA) ? isA : []),
+    ...(typeof rows === 'string' ? [rows] : []),
+  ].filter((c): c is string => typeof c === 'string');
+  const scope = new Set<string>();
+
+  for (const subject of classes) {
+    const cls = await store.getResource(subject);
+
+    if (cls.error) continue;
+    scope.add(subject);
+
+    for (const property of [
+      ...cls.getSubjects(core.properties.requires),
+      ...cls.getSubjects(core.properties.recommends),
+    ])
+      scope.add(property);
+
+    const parent = cls.get(core.properties.parent);
+
+    if (typeof parent === 'string') {
+      const ontology = await store.getResource(parent);
+      if (ontology.hasClasses(core.classes.ontology)) scope.add(parent);
+    }
+  }
+
+  return scope;
 }

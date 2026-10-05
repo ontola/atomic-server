@@ -10,6 +10,8 @@ interface UseResizeResult {
     'onPointerDown' | 'onClickCapture'
   >;
   isDragging: boolean;
+  /** Set the size from outside a drag, e.g. to restore a remembered one. */
+  setSize: (size: number) => void;
 }
 
 const dragRule = (cursor: string) => `
@@ -84,6 +86,8 @@ export type UseResizableProps<E extends HTMLElement> = {
   mode?: 'edge' | 'delta';
   /** Movement before a press becomes a drag, preserving taps on header buttons. */
   threshold?: number;
+  /** Called once when a drag ends, with the size it ended at. */
+  onResizeEnd?: (size: number) => void;
 };
 
 export function useResizable<E extends HTMLElement>({
@@ -95,6 +99,7 @@ export function useResizable<E extends HTMLElement>({
   edge = 'left',
   mode = 'edge',
   threshold = 0,
+  onResizeEnd,
 }: UseResizableProps<E>): UseResizeResult {
   const dragAreaRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -103,9 +108,11 @@ export function useResizable<E extends HTMLElement>({
   const stopDragRef = useRef<(() => void) | undefined>(undefined);
   const suppressClick = useRef(false);
   const onResizeRef = useRef(onResize);
+  const onResizeEndRef = useRef(onResizeEnd);
   useEffect(() => {
     onResizeRef.current = onResize;
-  }, [onResize]);
+    onResizeEndRef.current = onResizeEnd;
+  }, [onResize, onResizeEnd]);
 
   useEffect(
     () => () => {
@@ -129,6 +136,7 @@ export function useResizable<E extends HTMLElement>({
     const startSize = vertical ? rect.height : rect.width;
     const direction = edge === 'right' || edge === 'bottom' ? -1 : 1;
     let started = false;
+    let lastSize = startSize;
 
     const move = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
@@ -159,6 +167,7 @@ export function useResizable<E extends HTMLElement>({
           ? startSize + direction * delta
           : direction * (position - origin);
       const newSize = Math.min(maxSize, Math.max(minSize, requested));
+      lastSize = newSize;
       setSize(`${newSize}px`);
       onResizeRef.current?.(newSize);
     };
@@ -174,6 +183,7 @@ export function useResizable<E extends HTMLElement>({
       cleanup(styleId);
       setDragging(false);
       stopDragRef.current = undefined;
+      if (started) onResizeEndRef.current?.(lastSize);
     };
 
     const finish = (e: PointerEvent) => {
@@ -198,6 +208,7 @@ export function useResizable<E extends HTMLElement>({
     size,
     dragAreaRef,
     isDragging: dragging,
+    setSize: next => setSize(`${next}px`),
     dragAreaListeners: {
       onPointerDown,
       onClickCapture: event => {

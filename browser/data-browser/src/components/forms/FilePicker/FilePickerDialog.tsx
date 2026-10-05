@@ -23,6 +23,8 @@ interface FilePickerProps {
   onResourcePicked: (subject: string) => void;
   onNewFilePicked?: (file: File) => void;
   allowedMimes?: Set<string>;
+  /** Shown under the search, e.g. which app asked for the file. */
+  note?: React.ReactNode;
 }
 
 export function FilePickerDialog({
@@ -31,6 +33,7 @@ export function FilePickerDialog({
   onNewFilePicked,
   onResourcePicked,
   allowedMimes,
+  note,
 }: FilePickerProps): React.JSX.Element {
   const { drive } = useSettings();
   const [dialogProps, showDialog, closeDialog] = useDialog({
@@ -116,6 +119,7 @@ export function FilePickerDialog({
                 </StyledLabel>
               )}
             </Row>
+            {note}
           </DialogTitle>
           <StyledDialogContent>
             {shownResults.map(subject => (

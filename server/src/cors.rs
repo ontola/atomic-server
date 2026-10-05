@@ -44,8 +44,14 @@ pub(crate) fn any_origin() -> Cors {
 /// Whether a browser on `origin` (the `Origin` header, `scheme://host[:port]`)
 /// may send the session cookie along: the configured domain, a subdomain of
 /// the multi-tenant base domain, loopback (which covers `tauri.localhost`), or
-/// the desktop webview's own `tauri://localhost` scheme.
-pub(crate) fn origin_may_send_credentials(origin: &str, opts: &Opts) -> bool {
+/// the desktop webview's own `tauri://localhost` scheme. `mapped` says
+/// whether this server has a Drive mapping for a host (a vanity name outside
+/// every configured suffix).
+pub(crate) fn origin_may_send_credentials(
+    origin: &str,
+    opts: &Opts,
+    mapped: impl Fn(&str) -> bool,
+) -> bool {
     let Some((scheme, host)) = origin.split_once("://") else {
         // `null` (a sandboxed frame, a `file:` page) and anything else that
         // is not an origin with a host.
@@ -55,7 +61,10 @@ pub(crate) fn origin_may_send_credentials(origin: &str, opts: &Opts) -> bool {
         return false;
     }
     match scheme.to_ascii_lowercase().as_str() {
-        "http" | "https" => crate::context::host_is_served_here(host, opts),
+        "http" | "https" => {
+            crate::context::host_is_served_here(host, opts)
+                || mapped(crate::context::strip_port(host))
+        }
         "tauri" => host.eq_ignore_ascii_case("localhost"),
         _ => false,
     }
@@ -77,7 +86,9 @@ pub(crate) async fn credentials_gate(
         req.app_data::<web::Data<AppState>>(),
     ) {
         (Some(Ok(origin)), Some(appstate)) => {
-            origin_may_send_credentials(origin, &appstate.config.opts)
+            origin_may_send_credentials(origin, &appstate.config.opts, |host| {
+                appstate.store.has_drive_mapping(host)
+            })
         }
         // Fail closed: no origin, an origin that is not even a string, or no
         // policy to consult, gets no credentials.
@@ -125,7 +136,10 @@ mod tests {
             "tauri://localhost",
             "http://tauri.localhost",
         ] {
-            assert!(origin_may_send_credentials(origin, &o), "{origin}");
+            assert!(
+                origin_may_send_credentials(origin, &o, |_| false),
+                "{origin}"
+            );
         }
     }
 
@@ -144,8 +158,39 @@ mod tests {
             "chrome-extension://abcdefghijklmnop",
             "ftp://atomicdata.dev",
         ] {
-            assert!(!origin_may_send_credentials(origin, &o), "{origin:?}");
+            assert!(
+                !origin_may_send_credentials(origin, &o, |_| false),
+                "{origin:?}"
+            );
         }
+    }
+
+    /// A vanity host outside every configured suffix gets credentials once
+    /// this server has a Drive mapping for it, and only then.
+    #[test]
+    fn mapped_vanity_hosts_may_send_credentials() {
+        let o = opts("node1.atomicserver.eu", Some("atomicserver.eu"));
+        let mapped = |host: &str| host == "ontola.atomic.place";
+        assert!(!origin_may_send_credentials(
+            "https://ontola.atomic.place",
+            &o,
+            |_| false
+        ));
+        assert!(origin_may_send_credentials(
+            "https://ontola.atomic.place",
+            &o,
+            mapped
+        ));
+        assert!(origin_may_send_credentials(
+            "https://ontola.atomic.place:443",
+            &o,
+            mapped
+        ));
+        assert!(!origin_may_send_credentials(
+            "https://evil.atomic.place",
+            &o,
+            mapped
+        ));
     }
 
     /// The full stack as `serve.rs` registers it: permissive CORS with the

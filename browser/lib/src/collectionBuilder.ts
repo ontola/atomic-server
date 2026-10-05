@@ -14,6 +14,7 @@ export class CollectionBuilder {
   private store: Store;
   private server: string | undefined;
   private explicitDrive = false;
+  private preferServer = false;
 
   private params: CollectionParams = {
     page_size: '30',
@@ -83,6 +84,18 @@ export class CollectionBuilder {
 
   public setIncludeNested(includeNested: boolean): CollectionBuilder {
     this.params.include_nested = includeNested;
+
+    return this;
+  }
+
+  /**
+   * Answer from the server when it is connected, instead of building every
+   * member from the local database to sort it. For lists that grow large (a
+   * chat) where only a page or two is ever shown; falls back to the local
+   * database when the server cannot answer.
+   */
+  public setPreferServer(preferServer: boolean): CollectionBuilder {
+    this.preferServer = preferServer;
 
     return this;
   }
@@ -173,7 +186,9 @@ export class CollectionBuilder {
       params.drive = undefined;
     }
 
-    return new Collection(this.store, server, params);
+    return new Collection(this.store, server, params, false, {
+      preferServer: this.preferServer,
+    });
   }
 
   public async buildAndFetch(): Promise<Collection> {

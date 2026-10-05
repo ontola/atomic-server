@@ -93,8 +93,7 @@ export function saveCanvasHistory(
  *  the live array don't bleed into the snapshot. */
 export function cloneStrokes(strokes: StrokeSnapshot): StrokeSnapshot {
   return strokes.map(s => ({
-    color: s.color,
-    width: s.width,
+    ...s,
     path: s.path.map(p => [p[0], p[1]] as [number, number]),
   }));
 }

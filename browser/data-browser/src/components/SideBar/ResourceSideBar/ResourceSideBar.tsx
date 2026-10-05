@@ -28,6 +28,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { SidebarItemTitle } from './SidebarItemTitle';
 import { TextWrapper } from './shared';
 import { DropEdge } from './DropEdge';
+import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from '../SideBarMoreRow';
 import { SideBarDragData, SideBarDropData } from '../useSidebarDnd';
 import { transparentize } from 'polished';
 import { transition } from '../../../helpers/transition';
@@ -86,8 +87,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
       classes.includes(ai.classes.aiChat) ||
       classes.includes(core.classes.ontology);
 
-    const { subjects: subResources } = useChildren(
+    const { subjects: subResources, total: totalChildren } = useChildren(
       hideChildren ? undefined : subject,
+      { limit: SIDEBAR_CHILD_LIMIT },
     );
 
     const dragData: SideBarDragData = {
@@ -264,6 +266,13 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                   )}
                 </Fragment>
               ))}
+              {totalChildren > subResources.length && (
+                <SideBarMoreRow
+                  parent={subject}
+                  hidden={totalChildren - subResources.length}
+                  onClick={onClick}
+                />
+              )}
             </>
           )}
         </Details>

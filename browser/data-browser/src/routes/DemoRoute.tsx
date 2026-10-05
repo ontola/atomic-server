@@ -3,28 +3,44 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../helpers/AppSettings';
 import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
-import { useStore, type Store } from '@tomic/react';
+import { STORAGE_BLOCKED_ERROR_NAME, useStore, type Store } from '@tomic/react';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { isClientDbEnabled, setClientDbEnabled } from '../helpers/clientDbMode';
 import { isRunningInTauri } from '../helpers/tauri';
-import { Shell } from '../views/getting-started/chrome';
-import { Spinner } from '../components/Spinner';
+import {
+  afterNextPaint,
+  hideBootSplash,
+  isBootSplashVisible,
+  setBootSplashCaption,
+  showBootSplash,
+} from '../helpers/bootSplash';
 import { Button } from '../components/Button';
 import * as Sentry from '@sentry/react';
 import type { DemoSetupStep } from '../chunks/Demo/startDemo';
-import type { DemoManifest } from '../chunks/Demo/demoWorkspace';
+import {
+  lateFinishContext,
+  stallContext,
+  type StepStarts,
+} from '../chunks/Demo/demoSetupReport';
 import { localAgentIsDisposable } from '../helpers/managed/reconcile';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { withDeadline } from '../helpers/withDeadline';
-import { demoForDrive } from '../chunks/Templates/demoSession';
+import {
+  demoForDrive,
+  readInteractiveDemo,
+} from '../chunks/Templates/demoSession';
+import { demoRunningInAnotherTab } from '../helpers/demoTabLock';
 import { paths } from './paths';
 
 // Setup takes seconds on a laptop and several times that on a phone. Past
 // this, say so and offer a way out rather than spin forever: a phone in an
 // in-app browser once sat on the spinner with nothing reported (Sentry
 // ATOMIC-BROWSER-1G). The step it was on is sent along, so the next such
-// report says where it stopped.
+// report says where it stopped. A stall fires at a fixed deadline, so setup
+// that is merely slow reports the same as setup that is stuck: the report
+// carries how long each step took, and a run that does finish afterwards
+// says so in a second report.
 const STALLED_AFTER_MS = 45_000;
 
 const STEP_LABELS: Record<DemoSetupStep, string> = {
@@ -37,6 +53,8 @@ const STEP_LABELS: Record<DemoSetupStep, string> = {
 type DemoRun = {
   startedAt: number;
   step?: DemoSetupStep;
+  /** When each step began, in ms since `startedAt`. */
+  stepStarts: StepStarts;
   error?: Error;
   done: boolean;
   reported: boolean;
@@ -82,24 +100,63 @@ async function signedInDrive(
   );
 }
 
+/** Setup went on past the stall notice and finished: say how long it took. */
+function reportLateFinish(): void {
+  if (!run?.reported) return;
+
+  const { tags, extra } = lateFinishContext(
+    run.stepStarts,
+    Date.now() - run.startedAt,
+  );
+
+  Sentry.captureMessage('Demo setup finished after stall', {
+    level: 'info',
+    tags,
+    extra,
+  });
+}
+
 function startRun(
   store: Store,
   currentDrive: string | undefined,
-  onReady: (manifest: DemoManifest) => void,
+  onReady: (manifest: { welcomeDoc: string }) => void,
   onSignedIn: (target: string) => void,
 ): void {
-  run = { startedAt: Date.now(), done: false, reported: false };
+  run = { startedAt: Date.now(), stepStarts: {}, done: false, reported: false };
   // Someone with an account who follows "Try the app" wants their own
   // workspace, not a scripted one built next to it.
   signedInDrive(store, currentDrive)
     .then(async target => {
       if (target) return target;
+
+      // Another tab is running the demo: join it. Starting a new one here
+      // would delete that tab's workspace.
+      const running = readInteractiveDemo();
+
+      if (running && (await demoRunningInAnotherTab())) {
+        store.setDrive(running.drive);
+
+        return running;
+      }
+
       const { startDemoWorkspace } = await import('../chunks/Demo/startDemo');
 
-      return startDemoWorkspace(store, step => updateRun({ step }));
+      return startDemoWorkspace(store, step => {
+        // Visible in a performance trace, to see which step a slow start spent
+        // its time in.
+        performance.mark(`demo.${step}`);
+        updateRun({
+          step,
+          stepStarts: {
+            ...run?.stepStarts,
+            [step]: Date.now() - (run?.startedAt ?? Date.now()),
+          },
+        });
+      });
     })
     .then(result => {
       updateRun({ done: true });
+      reportLateFinish();
       if (typeof result === 'string') onSignedIn(result);
       else onReady(result);
     })
@@ -140,6 +197,12 @@ const DemoRoute: React.FC = () => {
       return;
     }
 
+    // One loading screen for the whole setup: the boot splash that is already
+    // up on a first visit, brought back when the demo is started from inside
+    // the app.
+    showBootSplash();
+    setBootSplashCaption('Setting up your demo…');
+
     // Re-running the demo must always start fresh, so only a run still in
     // progress is joined.
     if (!run || run.done || run.error) {
@@ -148,17 +211,27 @@ const DemoRoute: React.FC = () => {
         drive,
         manifest => {
           if (window.innerWidth < SIDEBAR_TOGGLE_WIDTH) setSideBarLocked(true);
-          navigate(constructOpenURL(manifest.welcomeDoc));
+          void revealWhenReady(store, manifest.welcomeDoc);
+          // Replace, don't push: /app/demo builds a fresh demo every time it
+          // loads, so leaving it in history made Back rebuild the demo (and
+          // tear down the one just left) instead of returning to the page the
+          // visitor came from.
+          navigate({
+            to: constructOpenURL(manifest.welcomeDoc),
+            replace: true,
+          });
         },
         target => {
+          void afterNextPaint().then(() => hideBootSplash());
+
           if (target === paths.newDrive) {
-            navigate(target);
+            navigate({ to: target, replace: true });
 
             return;
           }
 
           setDrive(target);
-          navigate(constructOpenURL(target));
+          navigate({ to: constructOpenURL(target), replace: true });
         },
       );
     }
@@ -173,9 +246,16 @@ const DemoRoute: React.FC = () => {
         setStalled(true);
         if (run.reported) return;
         run.reported = true;
+        const { tags, extra } = stallContext(
+          run.stepStarts,
+          Date.now() - run.startedAt,
+          document.visibilityState,
+        );
+
         Sentry.captureMessage('Demo setup stalled', {
           level: 'warning',
-          tags: { demo_step: run.step ?? 'loading' },
+          tags: { demo_step: run.step ?? 'loading', ...tags },
+          extra,
         });
       },
       Math.max(0, STALLED_AFTER_MS - (Date.now() - run!.startedAt)),
@@ -189,11 +269,20 @@ const DemoRoute: React.FC = () => {
 
   const error = current?.error;
   const step = current?.step;
+  const needsAttention = !!error || stalled || !supported;
+
+  // Something to read or a button to press has to be on the page, not behind
+  // the splash.
+  useEffect(() => {
+    if (needsAttention) hideBootSplash();
+  }, [needsAttention]);
+
+  // Otherwise the splash is the loading screen, and this renders nothing.
+  if (!needsAttention && isBootSplashVisible()) return null;
 
   return (
-    <Shell>
+    <Surface>
       <DemoStatus>
-        {!error && <Spinner size='3.5rem' />}
         <DemoTitle>
           {error ? 'The demo could not start' : 'Setting up your demo…'}
         </DemoTitle>
@@ -203,7 +292,13 @@ const DemoRoute: React.FC = () => {
             browser. Enable it on the Sync page and try again.
           </p>
         )}
-        {error && <p role='alert'>{error.message}</p>}
+        {error && (
+          <p role='alert'>
+            {error.name === STORAGE_BLOCKED_ERROR_NAME
+              ? 'The demo keeps its workspace in this browser, and this window does not allow that. Private windows in Firefox and Safari block it, and so do settings that block site data. Open this page in a normal window to try the demo.'
+              : error.message}
+          </p>
+        )}
         {!error && stalled && (
           <p>
             This is taking longer than usual.
@@ -214,17 +309,43 @@ const DemoRoute: React.FC = () => {
           <Button onClick={() => window.location.reload()}>Try again</Button>
         )}
       </DemoStatus>
-    </Shell>
+    </Surface>
   );
 };
+
+/**
+ * Take the splash away once the welcome document can be shown with its
+ * content, not as soon as the route changes: a reveal onto "Loading…" is the
+ * very jump the splash is there to hide. Capped, so a slow document still
+ * gets revealed.
+ */
+async function revealWhenReady(store: Store, welcomeDoc: string) {
+  await withDeadline(
+    store.getResource(welcomeDoc).then(() => undefined),
+    2_000,
+    undefined,
+  ).catch(() => undefined);
+  await afterNextPaint();
+  // The editor mounts a beat after the route; let it lay out first.
+  await new Promise(resolve => setTimeout(resolve, 150));
+  hideBootSplash({ reveal: true });
+}
+
+const Surface = styled.main`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: ${p => p.theme.size(6)};
+  box-sizing: border-box;
+`;
 
 const DemoStatus = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: ${p => p.theme.size(5)};
-  max-width: 24rem;
-  text-align: center;
+  max-width: 30rem;
 
   p {
     margin: 0;

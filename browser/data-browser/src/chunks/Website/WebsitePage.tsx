@@ -57,6 +57,19 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   const reportedProblem = useRef('');
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  /**
+   * True while the draft is being rebuilt, which every remote edit starts and
+   * which takes a second or two on a loaded machine. It shows the "Updating
+   * preview…" toolbar, and it withholds the draft from publishing, which is
+   * the one thing that must not go out a version behind.
+   *
+   * It deliberately does not disable the buttons that open the draft, because
+   * a control that goes disabled and back under the pointer loses the click
+   * that was already on its way: the browser drops a click whose target turned
+   * disabled in between, silently. Opening a draft one rebuild old costs
+   * nothing, since inline editing freezes a snapshot anyway and refreshes when
+   * it ends.
+   */
   const [refreshing, setRefreshing] = useState(true);
   const [document, setDocument] = useState<string>();
   const [addingContent, setAddingContent] = useState(false);
@@ -286,7 +299,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       {
         id: 'website-prepare',
         label: 'Prepare release',
-        disabled: !draft || !canWrite || busy || refreshing || !!problem,
+        disabled: !draft || !canWrite || busy || !!problem,
         onClick: () => setReview(draft),
       },
       {
@@ -309,7 +322,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       draft,
       canWrite,
       busy,
-      refreshing,
       problem,
       release,
       showRelease,
@@ -344,7 +356,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
               </Button>
               <Button
                 subtle
-                disabled={!draft || busy || refreshing || !!problem}
+                disabled={!draft || busy || !!problem}
                 onClick={() =>
                   setInlineArtifact(inlineArtifact ? undefined : draft)
                 }

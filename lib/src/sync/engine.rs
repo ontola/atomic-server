@@ -434,7 +434,15 @@ pub async fn handle_frame_full_for_caps(
             // readable subjects both so it can match the client's and so an
             // anonymous socket learns nothing about a drive it cannot read.
             Some(sync) if sync.probe => {
-                match drive_sync_hash_for_wire(store, &sync.drive, agent, wire).await {
+                match drive_sync_hash_for_wire_version(
+                    store,
+                    &sync.drive,
+                    agent,
+                    wire,
+                    sync.hash_version,
+                )
+                .await
+                {
                     Ok(server_hash) if server_hash == sync.drive_hash => {
                         vec![protocol::encode_sync_ok(&wire.subject(&sync.drive))]
                     }
@@ -455,19 +463,60 @@ pub async fn handle_frame_full_for_caps(
                     .subjects
                     .as_ref()
                     .map(|s| s.iter().cloned().collect::<std::collections::HashSet<_>>());
-                handle_sync_vv_filtered(
-                    &sync.drive,
-                    &sync.drive_hash,
-                    &sync.peers,
-                    &sync.resources,
-                    filter.as_ref(),
-                    store,
-                    agent,
-                    wire,
-                    // Dialed into us: the same gate `SYNC_PUSH` applies below.
-                    false,
-                )
-                .await
+                match sync.vvs.as_ref() {
+                    // Sparse encoding (`sparse-sync`): the client's vectors
+                    // arrive as they are, no peer table to expand.
+                    Some(vvs) => {
+                        handle_sync_vv_reconcile(
+                            &sync.drive,
+                            &sync.drive_hash,
+                            sync.hash_version,
+                            || {
+                                let mut client_vvs: std::collections::HashMap<
+                                    String,
+                                    std::collections::HashMap<String, i32>,
+                                > = std::collections::HashMap::new();
+
+                                for (subject, vv) in vvs {
+                                    let entry = client_vvs
+                                        .entry(crate::Subject::from_raw(subject, None).pure_id())
+                                        .or_default();
+
+                                    for (peer, &counter) in vv {
+                                        if counter != 0 {
+                                            let current = entry.entry(peer.clone()).or_default();
+                                            *current = (*current).max(counter);
+                                        }
+                                    }
+                                }
+
+                                client_vvs
+                            },
+                            filter.as_ref(),
+                            store,
+                            agent,
+                            wire,
+                            // Dialed into us: the same gate `SYNC_PUSH` applies below.
+                            false,
+                        )
+                        .await
+                    }
+                    None => {
+                        handle_sync_vv_filtered(
+                            &sync.drive,
+                            &sync.drive_hash,
+                            &sync.peers,
+                            &sync.resources,
+                            filter.as_ref(),
+                            store,
+                            agent,
+                            wire,
+                            // Dialed into us: the same gate `SYNC_PUSH` applies below.
+                            false,
+                        )
+                        .await
+                    }
+                }
             }
             None => vec![protocol::encode_error(
                 0,
@@ -984,6 +1033,52 @@ pub async fn collect_drive_subjects(
     result
 }
 
+/// Drive hash, version 2: independent of how many peers the drive has.
+///
+/// [`compute_drive_hash`] indexes every counter by the drive's sorted peer
+/// list, so it (and the `SYNC` frame that goes with it) grow with resources
+/// times peers. Every resource a client creates has a peer of its own, so on
+/// a drive of R resources that is R x R numbers: 3000 resources hash a 30 MB
+/// string and send a 48 MB frame. This form lists each resource's own
+/// non-zero counters, `subject:peer=counter,peer=counter`, peers in byte
+/// order, subjects in byte order, entries joined with `|`, then SHA-256 as
+/// lower-case hex. The browser builds the same string
+/// (`canonicalDriveHashV2`); a golden vector pins them together.
+pub fn compute_drive_hash_v2(
+    vvs: &std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
+) -> String {
+    let mut subjects: Vec<&String> = vvs.keys().collect();
+    subjects.sort();
+
+    let mut hash_input = String::new();
+
+    for (i, subject) in subjects.into_iter().enumerate() {
+        if i > 0 {
+            hash_input.push('|');
+        }
+        hash_input.push_str(subject);
+        hash_input.push(':');
+
+        let mut peers: Vec<(&String, &i32)> =
+            vvs[subject].iter().filter(|(_, c)| **c != 0).collect();
+        peers.sort_by(|a, b| a.0.cmp(b.0));
+
+        for (j, (peer, counter)) in peers.into_iter().enumerate() {
+            if j > 0 {
+                hash_input.push(',');
+            }
+            hash_input.push_str(peer);
+            hash_input.push('=');
+            hash_input.push_str(&counter.to_string());
+        }
+    }
+
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(hash_input.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
 /// Compute SHA-256 drive hash matching the client's algorithm.
 /// Hash of sorted entries: "subject1:c0,c1|subject2:c0,c1|..."
 pub fn compute_drive_hash(
@@ -1155,12 +1250,28 @@ pub async fn drive_sync_hash_for_wire(
     agent: &crate::agents::ForAgent,
     wire: WireScheme,
 ) -> Result<String, String> {
+    drive_sync_hash_for_wire_version(store, drive, agent, wire, 1).await
+}
+
+/// [`drive_sync_hash_for_wire`] in the hash version the client asked for
+/// (`1`: [`compute_drive_hash`], `2`: [`compute_drive_hash_v2`]).
+pub async fn drive_sync_hash_for_wire_version(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    hash_version: u8,
+) -> Result<String, String> {
     let items = drive_items_for_wire(store, drive, agent, wire).await?;
     let vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = items
         .into_iter()
         .map(|(subject, vv)| (subject, vv.into_iter().collect()))
         .collect();
-    Ok(compute_drive_hash(&vvs))
+    Ok(if hash_version >= 2 {
+        compute_drive_hash_v2(&vvs)
+    } else {
+        compute_drive_hash(&vvs)
+    })
 }
 
 /// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH
@@ -1216,6 +1327,65 @@ pub async fn handle_sync_vv_filtered(
     wire: WireScheme,
     trust_owned: bool,
 ) -> Vec<Vec<u8>> {
+    handle_sync_vv_reconcile(
+        drive,
+        drive_hash,
+        1,
+        // Only built when the hashes differ: a matching drive never pays for
+        // the dense-to-sparse walk.
+        || {
+            let mut client_vvs: std::collections::HashMap<
+                String,
+                std::collections::HashMap<String, i32>,
+            > = std::collections::HashMap::new();
+
+            for (subject, counters) in client_resources {
+                let mut vv = std::collections::HashMap::new();
+
+                for (i, &counter) in counters.iter().enumerate() {
+                    if counter != 0 {
+                        if let Some(peer_id) = client_peers.get(i) {
+                            vv.insert(peer_id.clone(), counter);
+                        }
+                    }
+                }
+
+                let entry = client_vvs
+                    .entry(crate::Subject::from_raw(subject, None).pure_id())
+                    .or_default();
+                for (peer, counter) in vv {
+                    let current = entry.entry(peer).or_default();
+                    *current = (*current).max(counter);
+                }
+            }
+
+            client_vvs
+        },
+        subjects,
+        store,
+        agent,
+        wire,
+        trust_owned,
+    )
+    .await
+}
+
+/// The reconcile shared by both `SYNC` encodings. `client_vvs` yields the
+/// client's version vectors keyed by canonical subject; it runs only when the
+/// server hash differs from `drive_hash`, which is computed in `hash_version`.
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_sync_vv_reconcile(
+    drive: &str,
+    drive_hash: &str,
+    hash_version: u8,
+    client_vvs: impl FnOnce()
+        -> std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
+    subjects: Option<&std::collections::HashSet<String>>,
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    trust_owned: bool,
+) -> Vec<Vec<u8>> {
     let canonical_subjects = subjects.map(|set| {
         set.iter()
             .map(|s| crate::Subject::from_raw(s, None).pure_id())
@@ -1245,12 +1415,15 @@ pub async fn handle_sync_vv_filtered(
 
     // Fast path: hash match
     if !drive_hash.is_empty() {
-        let server_hash = compute_drive_hash(
-            &server_vvs
-                .iter()
-                .map(|(s, vv)| (wire.subject(s), vv.clone()))
-                .collect(),
-        );
+        let wire_vvs = server_vvs
+            .iter()
+            .map(|(s, vv)| (wire.subject(s), vv.clone()))
+            .collect();
+        let server_hash = if hash_version >= 2 {
+            compute_drive_hash_v2(&wire_vvs)
+        } else {
+            compute_drive_hash(&wire_vvs)
+        };
 
         if server_hash == drive_hash {
             tracing::info!("SYNC: drive {} — hashes match, in sync", drive);
@@ -1259,30 +1432,7 @@ pub async fn handle_sync_vv_filtered(
         }
     }
 
-    // Reconstruct client VVs from compact format
-    let mut client_vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
-        std::collections::HashMap::new();
-
-    for (subject, counters) in client_resources {
-        let mut vv = std::collections::HashMap::new();
-
-        for (i, &counter) in counters.iter().enumerate() {
-            if counter != 0 {
-                if let Some(peer_id) = client_peers.get(i) {
-                    vv.insert(peer_id.clone(), counter);
-                }
-            }
-        }
-
-        let entry = client_vvs
-            .entry(crate::Subject::from_raw(subject, None).pure_id())
-            .or_default();
-        for (peer, counter) in vv {
-            let current = entry.entry(peer).or_default();
-            *current = (*current).max(counter);
-        }
-    }
-
+    let client_vvs = client_vvs();
     let mut pull: Vec<String> = Vec::new();
     let mut pull_from: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
         std::collections::HashMap::new();

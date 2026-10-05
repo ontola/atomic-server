@@ -2,7 +2,12 @@
  * as UTC; Temporal alone converts to instants, independent of the host zone. */
 import { Temporal } from '@js-temporal/polyfill';
 import { RRule } from 'rrule';
-import { isCalendarDate } from './calendar-date.js';
+import {
+  calendarRecurrenceShortname,
+  isCalendarDate,
+} from './calendar-date.js';
+
+export { calendarRecurrenceShortname };
 
 export interface CalendarTime {
   dateTime?: string;
@@ -35,7 +40,6 @@ export interface CalendarOccurrence {
   allDay: boolean;
   recurring: boolean;
 }
-export const calendarRecurrenceShortname = 'atomic-calendar-recurrence';
 const MAX_STEPS = 100000;
 
 function instant(time: CalendarTime | undefined): number {
@@ -409,3 +413,8 @@ export function expandCalendar(
 
   return output.sort((a, b) => a.start - b.start || a.key.localeCompare(b.key));
 }
+
+// Repeat rules and times of day use the Temporal polyfill too, so they ship
+// from this subpath with the expansion, not from the main entry.
+export * from './calendar-repeat.js';
+export * from './calendar-time.js';

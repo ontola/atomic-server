@@ -1,5 +1,8 @@
 import toast from 'react-hot-toast';
-import { handleErrorBugsnag } from '../helpers/loggingHandlers';
+import {
+  handleErrorBugsnag,
+  reportStoreError,
+} from '../helpers/loggingHandlers';
 
 /**
  * Coerces whatever was thrown into an Error.
@@ -39,6 +42,7 @@ export const errorHandler = (thrown: unknown) => {
 
   console.error(e);
   handleErrorBugsnag(e);
+  reportStoreError(e);
 
   toast.error(e.message);
 };

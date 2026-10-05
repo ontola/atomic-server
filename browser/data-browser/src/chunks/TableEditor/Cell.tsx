@@ -45,6 +45,12 @@ export interface CellProps {
 
 interface IndexCellProps extends CellProps {
   onExpand: (rowIndex: number) => void;
+  /**
+   * Rendered in the gutter at the start of the row, left of the row number —
+   * where a row-scoped affordance belongs (the table view hangs its comment
+   * bubble here). See {@link FancyTableProps.RowHeaderAddonComponent}.
+   */
+  RowHeaderAddonComponent?: React.ComponentType<{ rowIndex: number }>;
 }
 
 export function Cell({
@@ -293,6 +299,7 @@ export function Cell({
 export function IndexCell({
   children,
   onExpand,
+  RowHeaderAddonComponent,
   ...props
 }: React.PropsWithChildren<IndexCellProps>): JSX.Element {
   const { markings } = useTableEditorContext();
@@ -301,6 +308,11 @@ export function IndexCell({
 
   return (
     <StyledIndexCell role='rowheader' {...props} hasMarking={!!marking}>
+      {RowHeaderAddonComponent && (
+        <AddonSlot>
+          <RowHeaderAddonComponent rowIndex={props.rowIndex} />
+        </AddonSlot>
+      )}
       <IconButton
         title='Open resource'
         onClick={() => onExpand(props.rowIndex)}
@@ -314,11 +326,28 @@ export function IndexCell({
 
 const IndexNumber = styled.span``;
 
+/**
+ * Holds the gutter affordance at the start of the row. It keeps its box even
+ * when empty, so a row number never shifts sideways as the affordance appears
+ * and disappears on hover.
+ */
+const AddonSlot = styled.span`
+  margin-inline-end: auto;
+  display: flex;
+  align-items: center;
+`;
+
+/* The `:not([data-row-affordance])` below spares the addon's buttons: those are
+ * row-scoped and are revealed from the row itself (see TableRow), so they must
+ * not also be shown and hidden by this cell's own hover rules. */
 const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
   justify-content: flex-end !important;
+  /* Tighter than a data cell: the gutter fits two controls side by side. */
+  padding-inline: 0.25rem;
+  gap: ${p => p.theme.size(1)};
   color: ${p => p.theme.colors.textLight};
 
-  & button {
+  & button:not([data-row-affordance]) {
     display: none;
   }
 
@@ -326,8 +355,9 @@ const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
     display: none;
   }
 
-  &:not([data-hasmarking='true']):hover button,
-  &:not([data-hasmarking='true']):focus-within button {
+  &:not([data-hasmarking='true']):hover button:not([data-row-affordance]),
+  &:not([data-hasmarking='true']):focus-within
+    button:not([data-row-affordance]) {
     display: ${p => (p.hasMarking ? 'none' : 'block')};
   }
 `;

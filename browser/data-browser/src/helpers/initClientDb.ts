@@ -10,7 +10,7 @@ import {
   hasWrappedDbKey,
   waitForSessionDbKey,
 } from './localDbKey';
-import { wasmJsUrl } from './wasmUrls';
+import { compiledAtomicWasm, wasmJsUrl } from './wasmUrls';
 
 // Track the current worker so we can terminate it on HMR reload and on
 // agent switches.
@@ -210,6 +210,8 @@ async function startForIdentity(
     // active at upgrade time. No-ops once it's gone.
     migrateLegacy: true,
     discardUndecryptable,
+    // Fetched and compiled once for the whole page, starting in index.html.
+    wasmModule: compiledAtomicWasm(),
   });
   currentWorker = clientDb;
 
@@ -385,6 +387,17 @@ async function startForIdentity(
     // fetched resources).
     const existingSet = new Set<string>();
 
+    // Listing every subject reads the whole database (0.25 s at 10k
+    // resources, in front of the first reads of the screen). When the
+    // bundled defaults are unchanged since the last start there is nothing
+    // to decide, so skip it.
+    if (!bootstrapChanged && storedFingerprint !== null) {
+      endAllSubjects({ skipped: true });
+      endPostInit({ seeded: false, skipped: true });
+
+      return;
+    }
+
     try {
       const existing = await clientDb.allSubjects();
       for (const s of existing) existingSet.add(s);
@@ -518,7 +531,13 @@ async function startForIdentity(
       // ghost-leader lock it couldn't reclaim). Surface that to the user —
       // otherwise the app silently renders empty, unpersisted resources with
       // no explanation of why local caching/offline isn't working.
-      if (clientDb.initError && !clientDb.unsupportedEnvironment) {
+      // The demo explains a storage problem on its own page; a toast with
+      // the same text beside it only doubled it.
+      if (
+        clientDb.initError &&
+        !clientDb.unsupportedEnvironment &&
+        window.location.pathname !== '/app/demo'
+      ) {
         store.notifyError(clientDb.initError);
       }
     })
@@ -533,6 +552,7 @@ async function startForIdentity(
       // Re-emit so the Sync page can show the error (clientDbError).
       // clientDb.initError was populated in the send() catch inside doInit.
       store.setClientDb(clientDb);
-      store.notifyError(clientDb.initError ?? err);
+      if (window.location.pathname !== '/app/demo')
+        store.notifyError(clientDb.initError ?? err);
     });
 }

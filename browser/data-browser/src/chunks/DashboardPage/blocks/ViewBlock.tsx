@@ -40,7 +40,7 @@ export function ViewBlock({ block, config }: BlockProps): JSX.Element {
       <Frame>
         <TableResource
           resource={table as Resource<DataBrowser.Table>}
-          viewSubject={config.view}
+          viewSubject={config.view || undefined}
           embedded
         />
       </Frame>

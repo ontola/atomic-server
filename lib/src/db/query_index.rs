@@ -518,6 +518,55 @@ pub fn check_if_atom_matches_watched_query_filters(
     Ok(())
 }
 
+/// A resource without a `sortOrder` is filed under its `createdAt` (see
+/// [sort_key_for]), so a commit that adds or removes the property moves it to
+/// another key without any atom naming the old one. Delete the entry the
+/// resource had and file the one it has now, in every watched query sorted by
+/// `sortOrder`. Left alone, the stale `createdAt` entry lists the row at its
+/// creation time rather than where its `sortOrder` puts it.
+pub fn refile_sort_order_entries(
+    store: &Db,
+    old: &Resource,
+    new: &Resource,
+    transaction: &mut Transaction,
+) -> AtomicResult<()> {
+    let old_key = sort_key_for(old, crate::urls::SORT_ORDER);
+    let new_key = sort_key_for(new, crate::urls::SORT_ORDER);
+
+    if old_key == new_key {
+        return Ok(());
+    }
+
+    let subject = new.get_subject();
+    let subject_str = subject.as_str();
+    let filters: Vec<Arc<QueryFilter>> = if crate::identifiers::is_atomic_identifier(subject_str) {
+        store.all_watched_queries_for_property(crate::urls::SORT_ORDER)
+    } else {
+        let drive_prefix = drive_prefix_from_subject(subject);
+        store.watched_queries_for_atom(drive_prefix.as_str(), crate::urls::SORT_ORDER)
+    };
+
+    for q_filter in &filters {
+        let sorted_by_order = q_filter
+            .sort_by
+            .as_ref()
+            .is_some_and(|s| s == crate::urls::SORT_ORDER);
+
+        if !sorted_by_order
+            || !store.filter_accepts_resource_drive(q_filter, new)
+            || !resource_matches_filter(new, q_filter)
+        {
+            continue;
+        }
+
+        let pure = subject.pure_id();
+        update_indexed_member(q_filter, pure.as_str(), &old_key, true, transaction)?;
+        update_indexed_member(q_filter, pure.as_str(), &new_key, false, transaction)?;
+    }
+
+    Ok(())
+}
+
 /// Adds or removes a single item (IndexAtom) to the [Tree::QueryMembers] cache.
 /// `sort_key` is a typed key from [encode_sort_value] / [sort_key_for].
 #[tracing::instrument(skip_all)]

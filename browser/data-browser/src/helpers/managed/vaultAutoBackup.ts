@@ -256,6 +256,30 @@ function notifyVaultChanged(driveSubject: string): void {
   for (const listener of vaultChangeListeners) listener(driveSubject);
 }
 
+/**
+ * Whether the account this pass started for is no longer the one signed in.
+ * Another tab can sign in as a different account mid-pass; the shared cookie
+ * then belongs to that account, and the control plane rightly answers that it
+ * has no such enrollment. That is the account changing, not a failed backup.
+ */
+async function accountChangedSince(
+  store: Store,
+  agentSubject: string,
+  deps: VaultAutoBackupDeps,
+): Promise<boolean> {
+  if (store.getAgent()?.subject !== agentSubject) return true;
+
+  try {
+    if (!(await deps.hasAccount())) return true;
+
+    return (
+      !!deps.identityMatches && !(await deps.identityMatches(agentSubject))
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function ensureVaultBackupOnce(
   store: Store,
   driveSubject: string,
@@ -405,7 +429,11 @@ async function ensureVaultBackupOnce(
     // attempt re-derives both from the control plane.
     enrolled.delete(driveSubject);
 
-    if (signal.aborted || error instanceof VaultSessionEndedError) {
+    if (
+      signal.aborted ||
+      error instanceof VaultSessionEndedError ||
+      (await accountChangedSince(store, agent.subject, deps))
+    ) {
       return {
         status: 'skipped',
         reason: 'backup cancelled by account change',
@@ -457,7 +485,9 @@ export async function restoreFromVault(
   // while this document is still the live one. The catch reads it.
   const pageSignal = pageRequestSignal();
 
-  const absentFromNode = isNotFound(store.resources.get(driveSubject)?.error);
+  const absentFromNode = isNotFound(
+    store.resources.get(store.normalizeSubject(driveSubject))?.error,
+  );
 
   try {
     // Session first: one quick request, against a database wait of up to

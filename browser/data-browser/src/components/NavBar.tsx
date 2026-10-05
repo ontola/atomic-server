@@ -21,6 +21,9 @@ import { Button } from './Button';
 import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
 import { transition } from '../helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
+import { DIVIDER, DropdownMenu } from './Dropdown';
+import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
+import { useAppMenuItems } from '../actions/appMenuItems';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
 import {
   FaArrowLeft,
@@ -43,7 +46,12 @@ import {
 } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
-import { ButtonArea, LabelButton } from './NavBarButton';
+import {
+  ButtonArea,
+  LabelButton,
+  NAV_BUTTON_HEIGHT,
+  NAV_BUTTON_RADIUS,
+} from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -81,10 +89,27 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
     commit: true,
   });
   const canCreateTags = useCanWrite(drive);
+  // Tags sit in the More menu until a resource has some: most never do, and a
+  // Tags button on every page was one more thing in a crowded bar. Choosing it
+  // there (the `tags` action) shows the button with its picker open.
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === resource.subject)
+        setOpen(true);
+    };
+
+    window.addEventListener(OPEN_TAGS_EVENT, onOpen);
+
+    return () => window.removeEventListener(OPEN_TAGS_EVENT, onOpen);
+  }, [resource.subject]);
 
   useEffect(() => {
     getResourcesDrive(resource, store).then(setDriveSubject);
   }, [resource, store]);
+
+  if (tags.length === 0 && !open) return null;
 
   const handleNewTag = (newTag: string) => {
     // Tag creation finishes asynchronously; append to the live resource
@@ -94,7 +119,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
 
   if (driveSubject === undefined || resource.loading) {
     return (
-      <LabelButton disabled>
+      <LabelButton disabled title='Tags'>
         <FaTags />
         <span>Tags</span>
       </LabelButton>
@@ -104,6 +129,8 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
   return (
     <>
       <TagSelectPopover
+        open={open}
+        onOpenChange={setOpen}
         tags={driveTags}
         selectedTags={tags}
         setSelectedTags={setTags}
@@ -113,6 +140,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
           <LabelButton
             as={RadixPopover.Trigger}
             data-testid='navbar-tags-button'
+            title='Tags'
           >
             <FaTags />
             <span>Tags</span>
@@ -225,6 +253,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   const { changes, revertResource, acceptChanges } = useAIChanges();
   const { enableAI } = useAISettings();
   const { isOpen: aiOpen, setIsOpen } = useAISidebar();
+  const appMenu = useAppMenuItems();
   const hasAiChanges = !!contextResource && changes.includes(resource.subject);
 
   const handleAcceptChanges = async () => {
@@ -253,6 +282,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   // remembers the width at which labels last overflowed and only re-expands
   // clearly above it, so it settles instead of flip-flopping at the boundary.
   const navRef = useRef<HTMLElement>(null);
+  const actionAreaRef = useRef<HTMLDivElement>(null);
   const collapseWidthRef = useRef(0);
   const [iconOnly, setIconOnly] = useState(false);
 
@@ -262,7 +292,10 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
     if (!nav) return;
 
     const width = nav.clientWidth;
-    const overflowing = nav.scrollWidth > width + 1;
+    const actions = actionAreaRef.current;
+    const overflowing =
+      nav.scrollWidth > width + 1 ||
+      (actions !== null && actions.scrollWidth > actions.clientWidth + 1);
 
     setIconOnly(prev => {
       if (overflowing) {
@@ -356,7 +389,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         <EditableBreadcrumb resource={resource} fallback={title} />
       </CrumbGroup>
       <Spacer />
-      <ButtonArea $iconOnly={iconOnly}>
+      <ButtonArea ref={actionAreaRef} $iconOnly={iconOnly}>
         <FollowStatus />
         <MeetingBanner />
         <ContentLanguageSelect />
@@ -394,32 +427,55 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             <ShareDialog
               subject={contextResource.subject}
               trigger={
-                <LabelButton as='button'>
+                <LabelButton as='button' title='Share'>
                   <FaShare />
                   <span>Share</span>
                 </LabelButton>
               }
             />
-            <ResourceContextMenu
-              isMainMenu
-              subject={contextResource.subject}
-              trigger={ParentContextMenuTrigger}
-            />
           </>
         )}
+        {/* Pages that are not a resource (settings, notifications) still get
+         * a More menu: starting something new, and finding places in the app.
+         * Only the resource's own actions are left out. */}
+        {!contextResource && (
+          <DropdownMenu
+            isMainMenu
+            items={[
+              ...appMenu.create,
+              DIVIDER,
+              ...appMenu.find,
+              DIVIDER,
+              ...appMenu.maintenance,
+            ]}
+            Trigger={ParentContextMenuTrigger}
+          />
+        )}
       </ButtonArea>
+      {contextResource && (
+        <MenuSlot $iconOnly={iconOnly}>
+          <ResourceContextMenu
+            isMainMenu
+            subject={contextResource.subject}
+            trigger={ParentContextMenuTrigger}
+          />
+        </MenuSlot>
+      )}
     </NavBarWrapper>
   );
 }
 
 /** Comments panel toggle showing the live comment count at the icon. */
 function CommentsButton({ subject }: { subject: string }): JSX.Element {
-  const { togglePanel, activePanel } = useRightPanel();
+  const { togglePanel, activePanel, commentSubject } = useRightPanel();
   const { count, hasUnseen } = useCommentCount(subject);
 
   return (
     <CommentsLabelButton
-      $active={activePanel === 'comments'}
+      // The panel can be showing a thread from *inside* the page — a table
+      // row's. This button is about the page's own thread, and clicking it
+      // brings the panel back to that rather than closing the row's.
+      $active={activePanel === 'comments' && !commentSubject}
       onClick={() => togglePanel('comments')}
       data-testid='navbar-comments-button'
       data-unseen={hasUnseen ? '' : undefined}
@@ -438,6 +494,7 @@ function CommentsButton({ subject }: { subject: string }): JSX.Element {
 const NavBarWrapper = styled.nav`
   height: 100%;
   width: 100%;
+  box-sizing: border-box;
   padding-inline: ${p => p.theme.size(1)};
   display: flex;
   flex-direction: row;
@@ -458,6 +515,9 @@ const NavBarWrapper = styled.nav`
  * hover like {@link LabelButton} so left and right feel like one set.
  */
 const NavIconButton = styled(IconButton)`
+  height: ${NAV_BUTTON_HEIGHT};
+  border-radius: ${NAV_BUTTON_RADIUS};
+
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
@@ -545,6 +605,19 @@ const CommentsLabelButton = styled(LabelButton)`
     color: ${p => p.theme.colors.main};
     font-weight: bold;
   }
+`;
+
+/** Reserve the trailing edge for the resource menu even when other actions grow. */
+const MenuSlot = styled.div<{ $iconOnly: boolean }>`
+  flex-shrink: 0;
+
+  ${p =>
+    p.$iconOnly &&
+    css`
+      ${LabelButton} > span {
+        display: none;
+      }
+    `}
 `;
 
 /**

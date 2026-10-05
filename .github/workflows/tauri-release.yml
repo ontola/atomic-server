@@ -184,7 +184,7 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11.10.0
           run_install: false
 
       - uses: dtolnay/rust-toolchain@1.98.1
@@ -238,9 +238,9 @@ jobs:
           pnpm -C browser install --frozen-lockfile
           # The workspace root build, not `-C browser/data-browser build`.
           # data-browser imports @tomic/lib, which is a workspace package that
-          # has to be BUILT before anything can resolve it — the root script
-          # does `--filter "@tomic/lib" run build` first for exactly that
-          # reason. Building the leaf alone fails with
+          # has to be BUILT before anything can resolve it — the root script's
+          # `pnpm run -r build` builds it first (workspace topological order)
+          # for exactly that reason. Building the leaf alone fails with
           # `Rolldown failed to resolve import "@tomic/lib"`. Same command
           # release.yml uses to build the assets it embeds in the crate.
           pnpm -C browser build
@@ -381,7 +381,7 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11.10.0
           run_install: false
 
       - uses: actions/setup-java@v4
@@ -442,9 +442,9 @@ jobs:
           pnpm -C browser install --frozen-lockfile
           # The workspace root build, not `-C browser/data-browser build`.
           # data-browser imports @tomic/lib, which is a workspace package that
-          # has to be BUILT before anything can resolve it — the root script
-          # does `--filter "@tomic/lib" run build` first for exactly that
-          # reason. Building the leaf alone fails with
+          # has to be BUILT before anything can resolve it — the root script's
+          # `pnpm run -r build` builds it first (workspace topological order)
+          # for exactly that reason. Building the leaf alone fails with
           # `Rolldown failed to resolve import "@tomic/lib"`. Same command
           # release.yml uses to build the assets it embeds in the crate.
           pnpm -C browser build
@@ -544,7 +544,7 @@ jobs:
           node-version: 22
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11.10.0
           run_install: false
 
       - uses: dtolnay/rust-toolchain@1.98.1
@@ -585,9 +585,9 @@ jobs:
           pnpm -C browser install --frozen-lockfile
           # The workspace root build, not `-C browser/data-browser build`.
           # data-browser imports @tomic/lib, which is a workspace package that
-          # has to be BUILT before anything can resolve it — the root script
-          # does `--filter "@tomic/lib" run build` first for exactly that
-          # reason. Building the leaf alone fails with
+          # has to be BUILT before anything can resolve it — the root script's
+          # `pnpm run -r build` builds it first (workspace topological order)
+          # for exactly that reason. Building the leaf alone fails with
           # `Rolldown failed to resolve import "@tomic/lib"`. Same command
           # release.yml uses to build the assets it embeds in the crate.
           pnpm -C browser build

@@ -1,7 +1,9 @@
 import React, {
   cloneElement,
   isValidElement,
+  useCallback,
   useEffect,
+  useRef,
   useState,
   type JSX,
 } from 'react';
@@ -31,7 +33,10 @@ import { profileReviewedBefore, rememberProfileReviewed } from '../InviteForm';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
-import { getManagedAccount } from '../../helpers/managed/session';
+import {
+  accountAddress,
+  getManagedAccount,
+} from '../../helpers/managed/session';
 import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { PeopleWithAccess, effectiveRole } from './PeopleWithAccess';
@@ -76,6 +81,40 @@ export function ShareDialog({
         {isOpen && <ShareDialogBody subject={subject} onDone={close} />}
       </Dialog>
     </>
+  );
+}
+
+/**
+ * The same dialog, open from the moment it mounts, for a caller with no
+ * trigger of its own: an app asking the host to share something it shows.
+ * `onClosed` runs once the person closes it.
+ */
+export function OpenShareDialog({
+  subject,
+  onClosed,
+}: {
+  subject: string;
+  onClosed: () => void;
+}): JSX.Element {
+  // Stable, so `show` keeps its identity and the effect below opens the
+  // dialog once rather than again after every render.
+  const onClosedRef = useRef(onClosed);
+  useEffect(() => {
+    onClosedRef.current = onClosed;
+  });
+  const bindShow = useCallback((open: boolean) => {
+    if (!open) onClosedRef.current();
+  }, []);
+  const [dialogProps, show, close, isOpen] = useDialog({ bindShow });
+
+  useEffect(() => {
+    show();
+  }, [show]);
+
+  return (
+    <Dialog {...dialogProps} width='38rem'>
+      {isOpen && <ShareDialogBody subject={subject} onDone={close} />}
+    </Dialog>
   );
 }
 
@@ -459,7 +498,10 @@ function useCurrentAgentDetail(
     if (!isSaas) return;
     let cancelled = false;
     getManagedAccount()
-      .then(account => !cancelled && setEmail(account?.email))
+      .then(
+        account =>
+          !cancelled && setEmail(account ? accountAddress(account) : undefined),
+      )
       .catch(() => {
         /* The name alone is fine. */
       });

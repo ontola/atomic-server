@@ -1,6 +1,6 @@
 // @wc-ignore-file
 import type { LanguageModel } from 'ai';
-import { createHostedModel } from '@helpers/managed/ai';
+import { createHostedModel } from './hostedModel';
 
 /** Managed voice tasks share the hosted transport's auth and credit updates. */
 export function hostedVoiceModel(): Extract<

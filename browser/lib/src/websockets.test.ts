@@ -118,6 +118,8 @@ async function connectedClient() {
   return { client, socket, store };
 }
 
+WSClient.syncProbeDelayMs = 0;
+
 describe('WSClient handshake', () => {
   const original = globalThis.WebSocket;
 
@@ -254,6 +256,89 @@ describe('WSClient handshake', () => {
     client.close();
   });
 
+  /** Frames in send order, reduced to what the presence ordering needs. */
+  const presenceFrames = (socket: FakeWebSocket) =>
+    socket.sent
+      .filter(
+        frame =>
+          frame[0] === Tag.EPHEMERAL ||
+          new TextDecoder().decode(frame).startsWith('PRESENCE_SUBSCRIBE '),
+      )
+      .map(frame =>
+        frame[0] === Tag.EPHEMERAL
+          ? `update:${[...(decodeEphemeral(frame.subarray(1))?.payload ?? [])]}`
+          : 'subscribe',
+      );
+
+  it('puts PRESENCE_SUBSCRIBE before a presence update sent right after it', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    socket.receive(encodeChallenge('presence-order'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+
+    client.subscribePresence('did:ad:drive');
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([1]));
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([2]));
+    await vi.waitFor(() =>
+      expect(presenceFrames(socket)).toEqual([
+        'subscribe',
+        'update:1',
+        'update:2',
+      ]),
+    );
+    // Once subscribed, updates go straight out.
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([3]));
+    expect(presenceFrames(socket).at(-1)).toBe('update:3');
+    client.close();
+  });
+
+  it('subscribes before the rebroadcast that follows authentication', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(store, 'getPresenceSubjects').mockReturnValue(['did:ad:drive']);
+    vi.spyOn(store, '__rebroadcastPresence').mockImplementation(() =>
+      client.sendPresenceUpdate('did:ad:drive', new Uint8Array([7])),
+    );
+    socket.receive(encodeChallenge('presence-reconnect'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+    await vi.waitFor(() =>
+      expect(presenceFrames(socket)).toEqual(['subscribe', 'update:7']),
+    );
+    client.close();
+  });
+
+  it('drops a held presence update when the subscription is withdrawn', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    socket.receive(encodeChallenge('presence-withdrawn'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+
+    client.subscribePresence('did:ad:drive');
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([1]));
+    client.unsubscribePresence('did:ad:drive');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(presenceFrames(socket)).not.toContain('update:1');
+    client.close();
+  });
+
   it('signs the AUTH proof for `{origin}#{nonce}` once a CHALLENGE arrived', async ({
     expect,
   }) => {
@@ -373,6 +458,7 @@ describe('WSClient drive sync probe', () => {
     const pending = (
       client as unknown as { startVVSync: (drive: string) => Promise<void> }
     ).startVVSync('did:ad:drive');
+    await vi.advanceTimersByTimeAsync(0);
     socket.close();
     socket.fire('close', { code: 1006, reason: '', wasClean: false });
     await vi.advanceTimersByTimeAsync(1000);
@@ -746,6 +832,30 @@ describe('WSClient drive subscription', () => {
     expect(framesWithTag(socket, Tag.SUB)).toHaveLength(1);
     client.close();
   });
+
+  it.each([ErrorType.NotFound, ErrorType.Unauthorized])(
+    'does not automatically sync an unreadable drive under its legacy alias (%s)',
+    async errorType => {
+      const { client, socket, store } = await connectedClient();
+      const resource = new Resource('atomic:private-drive');
+      resource.setError(new AtomicError('Not readable', errorType));
+      store.resources.set('atomic:private-drive', resource);
+      vi.spyOn(store, 'getAgent').mockReturnValue(undefined);
+      vi.spyOn(store, 'getDrive').mockReturnValue('did:ad:private-drive');
+      vi.spyOn(store, 'isLiveSyncedDrive').mockReturnValue(true);
+      const compute = vi.spyOn(store, 'computeDriveSyncState');
+      const internal = client as unknown as {
+        subscribeToDrive(): void;
+        startVVSync(drive: string): Promise<void>;
+      };
+      internal.subscribeToDrive();
+      await internal.startVVSync('did:ad:private-drive');
+      assert(framesWithTag(socket, Tag.SUB)).toHaveLength(0);
+      assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+      assert(compute).not.toHaveBeenCalled();
+      client.close();
+    },
+  );
 
   it('UNSUBs the previous drive when the store switches drives', async ({
     expect,

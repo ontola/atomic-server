@@ -12,16 +12,21 @@ import {
 import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsageDialog';
 import { addIf } from '../../helpers/addIf';
 import { resourceActions } from '../../actions/resourceActions';
+import { useAppMenuItems } from '../../actions/appMenuItems';
 import { useActionContext } from '../../actions/useActionContext';
 import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
-import { RunPluginDialog } from '@chunks/PluginRuns/RunPluginDialog';
-import { usePluginClass } from '@chunks/PluginRuns/runScript';
+import { usePluginClass } from '@chunks/PluginRuns/useDriveClass';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
 
+const RunPluginDialog = lazy(() =>
+  import('@chunks/PluginRuns/RunPluginDialog').then(m => ({
+    default: m.RunPluginDialog,
+  })),
+);
 const ReportAIChatDialog = lazy(() => import('@chunks/AI/ReportAIChatDialog'));
 
 export {
@@ -42,6 +47,7 @@ export const ContextMenuOptions = {
   Edit: 'edit',
   Scope: 'scope',
   Share: 'share',
+  Tags: 'tags',
   Delete: 'delete',
   History: 'history',
   Import: 'import',
@@ -58,6 +64,7 @@ export const ContextMenuOptions = {
   OpenOriginal: 'openOriginal',
   SetEmoji: 'setEmoji',
   SetCover: 'setCover',
+  Reload: 'reload',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -137,6 +144,7 @@ export function ResourceContextMenu({
     pluginClass,
   });
   const { items: customItems } = useCustomContextItemsContext();
+  const appMenu = useAppMenuItems();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
 
   const handleBindActive = useCallback(
@@ -187,9 +195,13 @@ export function ResourceContextMenu({
   );
 
   const items: DropdownItem[] = [];
+  // Reload sits with "Restart app" at the very bottom of the menu.
+  const maintenanceItems: DropdownItem[] = [];
   let previousSection: string | undefined;
 
-  for (const action of availableActions) {
+  for (const action of availableActions.filter(
+    a => a.section !== 'maintenance',
+  )) {
     if (previousSection !== undefined && action.section !== previousSection) {
       items.push(DIVIDER);
     }
@@ -222,6 +234,20 @@ export function ResourceContextMenu({
     });
   }
 
+  for (const action of availableActions.filter(
+    a => a.section === 'maintenance',
+  )) {
+    maintenanceItems.push({
+      id: action.id,
+      label: action.label(ctx),
+      helper: action.helper(ctx),
+      icon: action.icon?.(ctx),
+      keywords: action.keywords,
+      searchOnly: true,
+      onClick: () => runAction(action, ctx),
+    });
+  }
+
   // Page-specific actions lead; the menu owns their boundary with generic actions.
   // Older callers include a leading/trailing divider, which must not leak here.
   const pageItems = subject === ctx.currentSubject ? [...customItems] : [];
@@ -241,6 +267,23 @@ export function ResourceContextMenu({
       onClick: () => setReportChatOpen(true),
     }),
   ];
+
+  // The navbar's More menu ends with places in the app (settings, drives,
+  // feedback), below this page's own actions, then the maintenance group.
+  if (isMainMenu && !showOnly) {
+    allItems.push(
+      DIVIDER,
+      ...appMenu.find,
+      DIVIDER,
+      ...maintenanceItems,
+      ...appMenu.maintenance,
+    );
+  } else {
+    allItems.push(
+      ...addIf(maintenanceItems.length > 0, DIVIDER),
+      ...maintenanceItems,
+    );
+  }
 
   const filteredItems = showOnly
     ? allItems.filter(
@@ -320,12 +363,14 @@ export function ResourceContextMenu({
         />
       )}
       {pluginRunOpen !== undefined && ctx.drive !== undefined && (
-        <RunPluginDialog
-          resource={ctx.resource}
-          drive={ctx.drive}
-          show={pluginRunOpen}
-          onShowChange={setPluginRunOpen}
-        />
+        <Suspense fallback={null}>
+          <RunPluginDialog
+            resource={ctx.resource}
+            drive={ctx.drive}
+            show={pluginRunOpen}
+            onShowChange={setPluginRunOpen}
+          />
+        </Suspense>
       )}
       {reportChatOpen !== undefined && (
         <Suspense fallback={null}>

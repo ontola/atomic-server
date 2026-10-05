@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Store } from '@tomic/lib';
-import { deviceHasDriveData } from './driveData';
+import { deviceHasDriveData, driveHasServer } from './driveData';
 import { isOriginWithoutNode } from './originNode';
 
 vi.mock('./originNode', () => ({ isOriginWithoutNode: vi.fn() }));
@@ -70,4 +70,20 @@ describe('refreshing drive availability', () => {
       );
     },
   );
+});
+
+describe('driveHasServer', () => {
+  it.each([
+    [false, false, true],
+    [true, false, false],
+    [false, true, false],
+    [true, true, false],
+  ])('nodeless=%s localOnly=%s hasServer=%s', (nodeless, localOnly, has) => {
+    vi.mocked(isOriginWithoutNode).mockReturnValue(nodeless);
+    const store = {
+      getServerUrl: () => 'https://app.example',
+      isLocalOnlyDrive: () => localOnly,
+    };
+    expect(driveHasServer(store, 'did:ad:drive')).toBe(has);
+  });
 });

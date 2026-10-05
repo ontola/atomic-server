@@ -72,7 +72,10 @@ describe('upload roundtrip via unified sync path', () => {
     // Poll the server's CAS endpoint until the blob shows up. The sync push
     // is asynchronous (Loro update → server import_sync_push → BLOB_REQUEST →
     // our BLOB_RESPONSE → server inserts into Tree::Blobs).
-    const deadline = Date.now() + 15_000;
+    // Locally the blob arrives in about a second. On a CI box running several
+    // pipelines at once this chain took over 15 s (batch #1915, run 6), so the
+    // window is sized for that and stays inside the test's 60 s budget.
+    const deadline = Date.now() + 45_000;
     let lastStatus = 0;
     let lastBody = '';
 
