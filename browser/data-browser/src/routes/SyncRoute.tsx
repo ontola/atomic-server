@@ -1486,6 +1486,23 @@ function SyncPage() {
     void backupToCloud({ auto: true });
   }, [autoEnroll, status.drive, cloudBusy]);
 
+  /** Point the app at `server` and reconnect. `setServer` runs through
+   * `store.setServerUrl`, which reopens the WebSocket — the connection card
+   * then reflects the new server's status. The toast is the immediate feedback
+   * (the reconnect itself is async). */
+  function switchToServer(server: string) {
+    if (server === baseURL) {
+      return;
+    }
+
+    try {
+      setServer(server);
+      toast.success(`Switching to ${serverLabel(server)}…`);
+    } catch (e) {
+      store.notifyError(e as Error);
+    }
+  }
+
   /**
    * Cloud Server's row, as one state. Each state fills the same slots of
    * `ServiceRow`, so the row only ever changes what it says, never its shape.
@@ -1759,23 +1776,6 @@ function SyncPage() {
 
   function removePeer(nodeId: string) {
     savePeers(knownPeers.filter(p => p.nodeId !== nodeId));
-  }
-
-  /** Point the app at `server` and reconnect. `setServer` runs through
-   * `store.setServerUrl`, which reopens the WebSocket — the connection card
-   * then reflects the new server's status. The toast is the immediate feedback
-   * (the reconnect itself is async). */
-  function switchToServer(server: string) {
-    if (server === baseURL) {
-      return;
-    }
-
-    try {
-      setServer(server);
-      toast.success(`Switching to ${serverLabel(server)}…`);
-    } catch (e) {
-      store.notifyError(e as Error);
-    }
   }
 
   function removeServer(server: string) {
