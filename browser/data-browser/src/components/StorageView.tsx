@@ -27,13 +27,17 @@ export function StorageView({
   loaded,
   onOpen,
   backTo,
+  startAt,
 }: {
   loaded: Loaded;
+  /** Open the map inside this resource, for "Space usage" in its menu. */
+  startAt?: string;
   onOpen: (subject: string) => void;
   /** Rendered under the map; the host decides where "back" goes. */
   backTo?: ReactNode;
 }) {
   const [trail, setTrail] = useState<string[]>([]);
+  const [startedAt, setStartedAt] = useState<string | undefined>();
   // How the map last changed, so the new tiles can grow out of (or shrink back
   // to) the place the person clicked.
   const [motion, setMotion] = useState<{
@@ -41,6 +45,12 @@ export function StorageView({
     x: number;
     y: number;
   } | null>(null);
+
+  // Jump to the asked-for resource once, as soon as the data is there.
+  if (loaded.state === 'ready' && startAt && startAt !== startedAt) {
+    setStartedAt(startAt);
+    setTrail(pathTo(loaded.root, startAt));
+  }
 
   const current = useMemo(() => {
     if (loaded.state !== 'ready') return null;
@@ -241,6 +251,21 @@ export function StorageView({
 
     onOpen(item.subject);
   }
+}
+
+/** The subjects from just below `root` down to `target`; empty when it is not in the tree. */
+function pathTo(root: StorageNode, target: string): string[] {
+  if (root.subject === target) return [];
+
+  for (const child of root.children) {
+    const rest = pathTo(child, target);
+
+    if (child.subject === target) return [child.subject];
+
+    if (rest.length > 0) return [child.subject, ...rest];
+  }
+
+  return [];
 }
 
 /** Folders open the map one level deeper; everything else opens the resource. */

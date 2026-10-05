@@ -11,6 +11,9 @@ import { StorageView, type Loaded } from '../components/StorageView';
 
 export const StorageRoute = createRoute({
   path: pathNames.storage,
+  validateSearch: (search: Record<string, unknown>): { at?: string } => ({
+    at: typeof search.at === 'string' ? search.at : undefined,
+  }),
   component: () => <StoragePage />,
   getParentRoute: () => appRoute,
 });
@@ -18,6 +21,7 @@ export const StorageRoute = createRoute({
 /** Fetches the drive's per-resource usage and hands it to the size map. */
 function StoragePage() {
   const store = useStore();
+  const { at } = StorageRoute.useSearch();
   const navigate = useNavigateWithTransition();
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
 
@@ -50,6 +54,7 @@ function StoragePage() {
   return (
     <StorageView
       loaded={loaded}
+      startAt={at}
       onOpen={subject => navigate(constructOpenURL(subject))}
       backTo={
         <p>

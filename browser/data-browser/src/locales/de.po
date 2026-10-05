@@ -10824,3 +10824,11 @@ msgstr ""
 #: src/components/StorageView.tsx
 msgid "<0/> file or image"
 msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Space usage"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "See how much space this resource and what is in it take up."
+msgstr ""

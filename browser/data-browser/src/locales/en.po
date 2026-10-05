@@ -10842,3 +10842,11 @@ msgstr "<0/> mixed (files and resources)"
 #: src/components/StorageView.tsx
 msgid "<0/> file or image"
 msgstr "<0/> file or image"
+
+#: src/actions/resourceActions.tsx
+msgid "Space usage"
+msgstr "Space usage"
+
+#: src/actions/resourceActions.tsx
+msgid "See how much space this resource and what is in it take up."
+msgstr "See how much space this resource and what is in it take up."
