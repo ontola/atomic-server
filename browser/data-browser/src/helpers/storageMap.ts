@@ -190,3 +190,22 @@ export function squarify<T>(
 
   return out;
 }
+
+/**
+ * What a tile is made of, for its colour:
+ * - `edge`: a resource with nothing below it (its own data and history);
+ * - `branch`: a resource with other resources below it, and next to no files;
+ * - `mixed`: resources and binary files together;
+ * - `binary`: mostly attached files.
+ */
+export type TileKind = 'edge' | 'branch' | 'mixed' | 'binary';
+
+export function tileKind(node: StorageNode, hasInside: boolean): TileKind {
+  const share = node.totalBytes > 0 ? node.totalFileBytes / node.totalBytes : 0;
+
+  if (share >= 0.9) return 'binary';
+  if (!hasInside) return share > 0.5 ? 'binary' : 'edge';
+  if (share < 0.1) return 'branch';
+
+  return 'mixed';
+}
