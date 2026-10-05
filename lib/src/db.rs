@@ -2467,7 +2467,7 @@ impl Db {
 
     /// Finds resource by Subject, return PropVals HashMap
     #[instrument(skip_all)]
-    fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
+    pub(crate) fn get_propvals(&self, subject: &str) -> AtomicResult<PropVals> {
         match self.kv.get(Tree::Resources, subject.as_bytes())? {
             Some(binpropval) => {
                 let propval: PropVals = decode_propvals(&binpropval)?;
