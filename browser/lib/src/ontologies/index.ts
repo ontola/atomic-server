@@ -12,6 +12,7 @@ import { server } from './server.js';
 import { ai } from './ai.js';
 import { forks } from './forks.js';
 import { notifications } from './notifications.js';
+import { conversations } from './conversations.js';
 import { i18n } from './i18n.js';
 
 export function initOntologies(): void {
@@ -24,6 +25,7 @@ export function initOntologies(): void {
     ai,
     forks,
     notifications,
+    conversations,
     i18n,
   );
 }

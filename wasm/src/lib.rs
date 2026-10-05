@@ -1267,6 +1267,80 @@ pub fn vault_generate_key() -> Vec<u8> {
     DriveVaultKey::generate(1).expose_secret().to_vec()
 }
 
+/// The agent's public encryption key, base64url, derived from its vault proof.
+///
+/// Published on the Agent resource as `encryptionKey`, so others can start an
+/// encrypted conversation with it. See `atomic_lib::conversation`.
+#[wasm_bindgen(js_name = "conversationEncryptionKey")]
+pub fn conversation_encryption_key(vault_proof: &[u8]) -> Result<String, JsError> {
+    check_agent_proof(vault_proof)?;
+    Ok(atomic_lib::conversation::encryption_public_key(vault_proof))
+}
+
+/// Adds an epoch with a fresh key to a conversation keyring, wrapped to
+/// `members_json` (`[{agent, encryptionKey}]`). Pass an empty string to start
+/// a new keyring. Returns the updated keyring JSON.
+#[wasm_bindgen(js_name = "conversationAddEpoch")]
+pub fn conversation_add_epoch(keyring_json: &str, members_json: &str) -> Result<String, JsError> {
+    use atomic_lib::conversation::{Keyring, Member};
+    let mut keyring = if keyring_json.is_empty() {
+        Keyring::default()
+    } else {
+        Keyring::from_json(keyring_json).map_err(to_js_err)?
+    };
+    let members: Vec<Member> = serde_json::from_str(members_json)
+        .map_err(|e| JsError::new(&format!("invalid members: {e}")))?;
+    keyring.add_epoch(&members).map_err(to_js_err)?;
+    keyring.to_json().map_err(to_js_err)
+}
+
+/// Seals a message payload for `conversation` with the keyring's newest epoch.
+#[wasm_bindgen(js_name = "conversationSeal")]
+pub fn conversation_seal(
+    keyring_json: &str,
+    agent: &str,
+    vault_proof: &[u8],
+    conversation: &str,
+    plaintext: &str,
+) -> Result<String, JsError> {
+    use atomic_lib::conversation::{seal_message, Keyring};
+    check_agent_proof(vault_proof)?;
+    let key = Keyring::from_json(keyring_json)
+        .map_err(to_js_err)?
+        .open_current(agent, vault_proof)
+        .map_err(to_js_err)?;
+    seal_message(&key, conversation, plaintext.as_bytes()).map_err(to_js_err)
+}
+
+/// Opens sealed messages of one conversation. Returns one entry per input, in
+/// order: the plaintext, or `null` when that message cannot be opened (an
+/// epoch before the reader joined, or altered data). One keyring unwrap for a
+/// whole page of messages.
+#[wasm_bindgen(js_name = "conversationOpen")]
+pub fn conversation_open(
+    keyring_json: &str,
+    agent: &str,
+    vault_proof: &[u8],
+    conversation: &str,
+    sealed: Vec<String>,
+) -> Result<Vec<JsValue>, JsError> {
+    use atomic_lib::conversation::{open_message, Keyring};
+    check_agent_proof(vault_proof)?;
+    let keys = Keyring::from_json(keyring_json)
+        .map_err(to_js_err)?
+        .open(agent, vault_proof)
+        .map_err(to_js_err)?;
+    Ok(sealed
+        .iter()
+        .map(|s| {
+            open_message(&keys, conversation, s)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .map_or(JsValue::NULL, |text| JsValue::from_str(&text))
+        })
+        .collect())
+}
+
 /// The proof must be a 64-byte Ed25519 signature.
 ///
 /// Not the private key: the browser's `CryptoProvider` exposes signing rather

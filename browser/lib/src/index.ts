@@ -38,6 +38,7 @@ export * from './ontologies/ai.js';
 export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
 export * from './ontologies/notifications.js';
+export * from './ontologies/conversations.js';
 export * from './ontologies/i18n.js';
 export * from './canvas-strokes.js';
 export * from './agent.js';
