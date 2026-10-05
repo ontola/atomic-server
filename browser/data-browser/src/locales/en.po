@@ -7432,6 +7432,7 @@ msgstr "Fix it"
 msgid "Dismiss"
 msgstr "Dismiss"
 
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -10713,3 +10714,8 @@ msgstr "Discard upload"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+
+#. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
+#: src/chunks/Pieces/usePieceOffers.ts
+msgid "Through {0}"
+msgstr "Through {0}"

@@ -4,6 +4,8 @@ import type { ProxyHost } from '@helpers/proxyConnections';
 import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
+import { piecesEnabled } from '@chunks/Pieces/piecesFlag';
+import { lensPathFor } from '@chunks/Pieces/loadPieces';
 import {
   core,
   errorMessageFromResponse,
@@ -123,13 +125,22 @@ export async function handleRequest(
       // names what its rows are, and duplicating that on the app would be two
       // places to disagree.
       const tableResource = await store.getResource(subject);
+      const rowClass = tableResource.get(core.properties.classtype) as
+        | string
+        | undefined;
 
-      return {
-        table: subject,
-        rowClass: tableResource.get(core.properties.classtype) as
-          | string
-          | undefined,
-      };
+      // Split-pieces exploration: an integration offered on this table
+      // through lenses is told which ones, so it can translate the rows into
+      // the shape it syncs. Additive, and only when the flag is on.
+      if (piecesEnabled() && table) {
+        return {
+          table: subject,
+          rowClass,
+          lensPath: await lensPathFor(store, drive, app, rowClass),
+        };
+      }
+
+      return { table: subject, rowClass };
     }
 
     case 'get': {
