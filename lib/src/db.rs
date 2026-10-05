@@ -2723,6 +2723,16 @@ impl Db {
         let _ = self.node_key.set(key);
     }
 
+    /// A 32-byte key for one purpose, derived from the node key, or `None`
+    /// when this node has no key. The node key itself never leaves the store;
+    /// what comes out is bound to `context` (say what it is for, and version
+    /// it), so a key made for signing tokens cannot open a wrapped secret.
+    pub fn derive_node_key(&self, context: &str) -> Option<[u8; 32]> {
+        self.node_key
+            .get()
+            .map(|key| blake3::derive_key(context, key))
+    }
+
     /// Wraps a secret for storage, or passes it through when no key is set.
     ///
     /// Passing through is what lets a store predating the node key still be
