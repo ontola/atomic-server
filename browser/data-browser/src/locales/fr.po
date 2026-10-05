@@ -5122,6 +5122,8 @@ msgid "More profile fields"
 msgstr ""
 
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SignOutRoute.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Sign out"
 msgstr ""
 
@@ -6129,6 +6131,7 @@ msgid "Add a recovery code"
 msgstr ""
 
 #: src/components/IdentityReconcileGate.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Signing out…"
 msgstr ""
 
@@ -11684,6 +11687,7 @@ msgstr ""
 
 msgstr ""
 
+
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 msgstr ""
@@ -11894,4 +11898,7 @@ msgstr ""
 #. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Saved {0}, identity …{1}"
+
+#: src/routes/SignOutRoute.tsx
+msgid "This signs you out of your account and removes your key from this browser."
 msgstr ""

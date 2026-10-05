@@ -30,6 +30,7 @@ export const pathNames = {
   devDrive: '/dev-drive',
   demo: '/demo',
   invite: '/invite',
+  signOut: '/sign-out',
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
@@ -59,4 +60,5 @@ export const paths = {
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
   devDrive: `${pathNames.app}${pathNames.devDrive}`,
   demo: `${pathNames.app}${pathNames.demo}`,
+  signOut: `${pathNames.app}${pathNames.signOut}`,
 } as const;

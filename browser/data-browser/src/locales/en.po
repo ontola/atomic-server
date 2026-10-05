@@ -5128,6 +5128,8 @@ msgid "More profile fields"
 msgstr "More profile fields"
 
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SignOutRoute.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Sign out"
 msgstr "Sign out"
 
@@ -6135,6 +6137,7 @@ msgid "Add a recovery code"
 msgstr "Add a recovery code"
 
 #: src/components/IdentityReconcileGate.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Signing out…"
 msgstr "Signing out…"
 
@@ -11872,3 +11875,7 @@ msgstr "Forget {0} on this device"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Saved {0}, identity …{1}"
 msgstr "Saved {0}, identity …{1}"
+
+#: src/routes/SignOutRoute.tsx
+msgid "This signs you out of your account and removes your key from this browser."
+msgstr "This signs you out of your account and removes your key from this browser."
