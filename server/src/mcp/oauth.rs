@@ -59,7 +59,7 @@ pub async fn protected_resource_metadata(
         "resource": resource_url(&origin),
         "authorization_servers": [origin],
         "bearer_methods_supported": ["header"],
-        "scopes_supported": ["read"],
+        "scopes_supported": ["read", "write"],
         "resource_name": "Atomic Data",
     }))
 }
@@ -79,7 +79,7 @@ pub async fn authorization_server_metadata(
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none"],
-        "scopes_supported": ["read"],
+        "scopes_supported": ["read", "write"],
     }))
 }
 
@@ -104,6 +104,11 @@ fn valid_redirect_uri(uri: &str) -> bool {
         }
         _ => true,
     }
+}
+
+/// Whether a requested `scope` includes editing.
+fn wants_write(scope: &str) -> bool {
+    scope.split_whitespace().any(|s| s == "write")
 }
 
 fn oauth_error(
@@ -181,6 +186,9 @@ pub struct AuthorizeQuery {
     redirect_uri: Option<String>,
     code_challenge: Option<String>,
     code_challenge_method: Option<String>,
+    /// What the client asks for: `read`, or `read write` to also edit. The
+    /// person decides on the consent page; this only sets the default.
+    scope: Option<String>,
     state: Option<String>,
 }
 
@@ -244,6 +252,9 @@ pub async fn authorize(
             .append_pair("client_name", &client.name)
             .append_pair("redirect_uri", redirect_uri)
             .append_pair("code_challenge", challenge);
+        if q.scope.as_deref().is_some_and(wants_write) {
+            pairs.append_pair("scope", "read write");
+        }
         if let Some(state) = &q.state {
             pairs.append_pair("state", state);
         }
@@ -332,6 +343,9 @@ struct ApproveBody {
     redirect_uri: String,
     code_challenge: String,
     nonce: String,
+    /// The person let the client edit, not only read.
+    #[serde(default)]
+    write: bool,
     #[serde(default)]
     state: Option<String>,
 }
@@ -382,6 +396,9 @@ pub async fn approve(
             client_id: body.client_id,
             redirect_uri: body.redirect_uri.clone(),
             challenge: body.code_challenge,
+            person,
+            nonce: body.nonce,
+            write: body.write,
         },
     )
     .map_err(AtomicServerError::bad_request)?;
@@ -406,6 +423,8 @@ pub struct TokenForm {
     redirect_uri: Option<String>,
     client_id: Option<String>,
     refresh_token: Option<String>,
+    /// RFC 8707: which resource the token is for. Only this node's `/mcp`.
+    resource: Option<String>,
 }
 
 /// Authorization codes already redeemed, until they would have expired anyway.
@@ -445,14 +464,28 @@ fn token_reply(appstate: &AppState, grant: &Grant) -> HttpResponse {
                 "token_type": "Bearer",
                 "expires_in": tokens::ACCESS_TTL,
                 "refresh_token": refresh,
-                "scope": "read",
+                "scope": grant.scope(),
             })),
         (Err(e), _) | (_, Err(e)) => bad("server_error", &e),
     }
 }
 
-pub async fn token(appstate: web::Data<AppState>, form: web::Form<TokenForm>) -> HttpResponse {
+pub async fn token(
+    appstate: web::Data<AppState>,
+    form: web::Form<TokenForm>,
+    req: HttpRequest,
+) -> HttpResponse {
     let f = form.into_inner();
+    let origin = crate::context::RequestContext::new(&req, &appstate).origin;
+
+    if let Some(resource) = f.resource.as_deref() {
+        if resource != resource_url(&origin) {
+            return bad(
+                "invalid_target",
+                "This node only issues tokens for its own /mcp",
+            );
+        }
+    }
 
     match f.grant_type.as_str() {
         "authorization_code" => {
@@ -483,6 +516,9 @@ pub async fn token(appstate: web::Data<AppState>, form: web::Form<TokenForm>) ->
                 &Grant {
                     agent: claims.agent,
                     client_id: claims.client_id,
+                    person: claims.person,
+                    nonce: claims.nonce,
+                    write: claims.write,
                 },
             )
         }
@@ -542,5 +578,13 @@ mod tests {
     fn a_code_is_redeemed_once() {
         assert!(redeem_once("code-a-unit-test"));
         assert!(!redeem_once("code-a-unit-test"));
+    }
+
+    #[test]
+    fn write_is_only_asked_for_by_scope() {
+        assert!(wants_write("read write"));
+        assert!(wants_write("write"));
+        assert!(!wants_write("read"));
+        assert!(!wants_write("overwrite"));
     }
 }

@@ -4,28 +4,27 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- New package `@tomic/mcp`: an MCP server that lets Claude Code, Claude
-  Desktop, Cursor and other MCP clients read and edit your Atomic Data. It runs
-  locally with its own key: `atomic-mcp connect` opens a link in the app
-  (`/app/connect-agent`) where you pick the drives it may reach and whether it
-  may edit, so your own secret is never shared. Account settings lists
-  connected apps under **Connected apps**, with Revoke. The grants are the ACLs
-  themselves (`grantAgent`, `grantsTo`, `revokeAgent` in `@tomic/lib`). Any
-  app with its own key can use the same page: `connectAgentUrl` builds the link
-  (optionally asking for edit rights or specific resources), `waitForGrant`
-  waits for Allow, and `publishAgentName` sets the name the person sees.
+- New package `@tomic/mcp`: lets Claude Code, Claude Desktop, Cursor and other
+  MCP clients that run a local process read and edit your Atomic Data. It is a
+  small stdio bridge to your node's own `/mcp` endpoint, which is the one
+  implementation of the tools (see the server changelog). `atomic-mcp connect`
+  signs in with OAuth (PKCE, a loopback redirect): the approval page in the app
+  asks which drives it may reach and whether it may edit, so your own secret is
+  never shared, and the token is kept in a file only you can read. Account
+  settings lists connected apps under **Connected apps**, with Revoke.
+- Apps with a key of their own can still connect without OAuth through
+  `/app/connect-agent`: `connectAgentUrl` builds the link (optionally asking for
+  edit rights or specific resources), `waitForGrant` waits for Allow, and
+  `publishAgentName` sets the name the person sees. The grants are the ACLs
+  themselves (`grantAgent`, `grantsTo`, `revokeAgent` in `@tomic/lib`).
   `@tomic/lib/node` has `loadOrCreateLocalAgent` for the key file. `@tomic/cli`
   gets `ad-generate connect`, so private ontologies no longer need an agent
   secret in `atomic.config.json`.
-  The MCP server can write a document's or meeting's text from Markdown
-  (`_documentText` on `create_resource` and `edit_resource`), and `get_schema`
-  accepts class names like `document`.
-  `@tomic/lib` now also exports the
-  data verbs behind it and behind the in-app assistant (`readResourceCompact`,
-  `queryResources`, `textSearch`, `semanticSearch`, `listDriveClasses`,
-  `setResourceProperty`, `createResourceFromCompact`), plus the compact JSON-AD
-  helpers (`toCompact`, `fromCompact`, ...) and short subject refs
-  (`shortenSubject`, `expandSubject`) that used to live in the data-browser.
+- `@tomic/lib` now also exports the data verbs behind the in-app assistant
+  (`readResourceCompact`, `queryResources`, `textSearch`, `semanticSearch`,
+  `listDriveClasses`, `setResourceProperty`, `createResourceFromCompact`), plus
+  the compact JSON-AD helpers (`toCompact`, `fromCompact`, ...) and short subject
+  refs (`shortenSubject`, `expandSubject`) that used to live in the data-browser.
 
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
 - The shared sign-in card no longer says "This browser does not support passkeys".

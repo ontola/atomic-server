@@ -3,10 +3,12 @@
 An [MCP](https://modelcontextprotocol.io) server that lets an LLM client
 (Claude Code, Claude Desktop, Cursor, ...) read and edit your Atomic Data.
 
-It runs on your own machine with its own key, made there the first time it
-runs. You decide in the app what that key may reach and whether it may edit,
-and you can revoke it at any time. Your own secret is never involved, and every
-edit it makes is a signed commit by that key, so you can see what it did.
+It is a small bridge to the `/mcp` endpoint of your own AtomicServer, which is
+the one implementation of the tools (the same endpoint claude.ai connects to).
+You connect once: you pick in the app what the connection may reach and whether
+it may edit, and you can revoke it at any time. Your own secret is never
+involved, and every edit is a signed commit by an identity of its own that is
+shown under **Connected apps**, so you can see what it did.
 
 ## Setup
 
@@ -40,46 +42,45 @@ edit it makes is a signed commit by that key, so you can see what it did.
    }
    ```
 
-If you skip step 1, the tools answer with the link instead, so the assistant
-can hand it to you.
+If you skip step 1, the tools answer with the command to run instead, so the
+assistant can hand it to you.
 
 To see or revoke what you connected, open your account settings in the app
-(`/app/agent`), under **Connected apps**. Revoking removes the key from every
-resource it could reach, including the ones it created.
+(`/app/agent`), under **Connected apps**. Revoking takes the connection off
+every drive it could reach.
 
-The key is stored in `~/.config/atomic-mcp/<server>.json` (or under
-`$XDG_CONFIG_HOME`). Delete that file to start over with a new key.
+The token is stored in `~/.config/atomic-mcp/<server>.json` (or under
+`$XDG_CONFIG_HOME`), readable by you only. Delete that file to disconnect this
+machine without the app; revoke it in the app to cut it off on the server.
+
+A client that cannot run a local process (claude.ai) connects to
+`https://<your server>/mcp` directly and signs in through the same approval
+page.
 
 ### Environment variables
 
-| Variable              | Required | Meaning                                                                                                          |
-| --------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
-| `ATOMIC_SERVER_URL`   | yes      | The server your drives live on.                                                                                  |
-| `ATOMIC_APP_URL`      | no       | Where the app runs, for the approval link. Defaults to `ATOMIC_SERVER_URL`.                                      |
-| `ATOMIC_CLIENT_NAME`  | no       | The name you see in the app. Defaults to `AI assistant on <hostname>`.                                           |
-| `ATOMIC_DRIVE`        | no       | The drive tools default to, out of the ones you shared.                                                          |
-| `ATOMIC_READ_ONLY`    | no       | `true` registers only the read tools.                                                                            |
-| `ATOMIC_AGENT_SECRET` | no       | For scripts and CI: sign as this Agent instead of a connected key. Anyone with the secret can act as that Agent. |
+| Variable             | Required | Meaning                                                                                       |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `ATOMIC_SERVER_URL`  | yes      | The server your drives live on.                                                               |
+| `ATOMIC_CLIENT_NAME` | no       | The name you see in the app. Defaults to `AI assistant on <hostname>`.                        |
+| `ATOMIC_READ_ONLY`   | no       | `true` on `connect` asks for read only. You can still change it on the approval page.         |
 
 ## Tools
 
-| Tool               | What it does                                                                   |
-| ------------------ | ------------------------------------------------------------------------------ |
-| `list_drives`      | Your drives, and which one is the default.                                     |
-| `get_resource`     | Reads resources as compact JSON-AD; documents and meetings include their text. |
-| `search`           | Full-text search.                                                              |
-| `semantic_search`  | Search by meaning (needs a server with embeddings).                            |
-| `query`            | Finds resources by property values, e.g. all tasks with status "done".         |
-| `get_user_classes` | The custom classes on the drive.                                               |
-| `get_schema`       | The properties of a class.                                                     |
-| `create_resource`  | Creates one or many resources; documents take their text as `_documentText`.   |
-| `edit_resource`    | Sets one property, or replaces a document's text (`_documentText`).            |
-| `delete_resource`  | Deletes a resource (never a whole drive).                                      |
+The node decides the list; a connection that may not edit sees only the read
+tools.
 
-These are the same verbs the in-app assistant uses; both call the
-implementations in `@tomic/lib` (`assistant-tools.ts`). Results use
-JSON-AD-Compact (property shortnames, `#ref` short subjects), see
-`planning/json-ad-compact.md`.
+| Tool               | What it does                                                             |
+| ------------------ | ------------------------------------------------------------------------ |
+| `list_drives`      | The drives shared with this connection, and which can be edited.         |
+| `get_resource`     | Reads resources; documents and meetings include their text.              |
+| `search`           | Full-text search.                                                        |
+| `query`            | Finds resources by property values, e.g. all tasks with status "done".   |
+| `get_user_classes` | The custom classes on a drive.                                           |
+| `get_schema`       | The properties of a class.                                               |
+| `create_resource`  | Creates one or many resources; documents take their text as `_documentText`. |
+| `edit_resource`    | Sets one property, or replaces a document's text (`_documentText`).      |
+| `delete_resource`  | Deletes a resource (never a whole drive).                                |
 
 A document's or meeting's text is written as Markdown or plain text through
 `_documentText`, on `create_resource` and on `edit_resource`: headings,
@@ -89,6 +90,5 @@ and links. Every non-blank line outside a list or code block is its own
 paragraph. Writing replaces the whole body, so read `_documentText` first when
 keeping parts of it.
 
-Not yet: a hosted (remote) MCP endpoint that
-claude.ai can connect to without a local process. See
-`planning/mcp-endpoint.md`.
+Not yet: `semantic_search` (it needs the embeddings index on the node), and
+`format=compact` short references in results. See `planning/mcp-endpoint.md`.

@@ -9,14 +9,17 @@
 //!   revoking is taking that agent off the drives (Connected apps), exactly as
 //!   for the local MCP.
 //! - [`endpoint`] is the resource server: JSON-RPC over Streamable HTTP. It
-//!   reads as the issued agent under the normal rights checks. It is read-only
-//!   for now, and never signs a commit as anyone.
+//!   acts as the issued agent under the normal rights checks. Reads need
+//!   nothing more; writes (only if the person allowed editing) are commits the
+//!   node signs as that issued agent, never as the person.
 //!
-//! The node signs nothing as the person, and no bearer token is accepted on
+//! The node signs nothing as the person (only as the issued agent), and no bearer token is accepted on
 //! `/commit` or on the WebSocket: a token is proof to this handler only.
 
+pub mod compact;
 pub mod document_text;
 pub mod endpoint;
 pub mod oauth;
 pub mod tokens;
 pub mod tools;
+pub mod write;

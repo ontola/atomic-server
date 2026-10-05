@@ -80,7 +80,7 @@ pub async fn mcp(
                     "protocolVersion": version,
                     "capabilities": {"tools": {"listChanged": false}},
                     "serverInfo": {"name": "atomic", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": tools::INSTRUCTIONS,
+                    "instructions": tools::instructions(grant.write),
                 }
             }))
         }
@@ -88,7 +88,7 @@ pub async fn mcp(
         "tools/list" => HttpResponse::Ok().json(json!({
             "jsonrpc": "2.0",
             "id": id,
-            "result": {"tools": tools::list()}
+            "result": {"tools": tools::list(grant.write)}
         })),
         "tools/call" => {
             let name = message
@@ -100,7 +100,7 @@ pub async fn mcp(
                 .cloned()
                 .unwrap_or_else(|| json!({}));
             let (text, is_error) =
-                match tools::call(&appstate, &origin, &grant.agent, name, &args).await {
+                match tools::call(&appstate, &origin, &req, &grant, name, &args).await {
                     Ok(value) => (
                         serde_json::to_string_pretty(&value).unwrap_or_default(),
                         false,

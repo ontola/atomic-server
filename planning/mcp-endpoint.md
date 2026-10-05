@@ -1,15 +1,20 @@
 # Atomic as an MCP server
 
-> **Status:** Steps 1 and 2 of the sequencing below are in (2026-09): the
-> data verbs live in `@tomic/lib` (`assistant-tools.ts`, with
-> `json-ad-compact.ts`, `subject-refs.ts`, `class-schema.ts`), the in-app
-> assistant calls them, and `browser/mcp` (`@tomic/mcp`) is the local stdio
-> server. It signs with its own key, which the person approves in the app
-> (`/app/connect-agent`) for chosen drives, read or read and edit, and can
-> revoke under Connected apps; the grant is the ACL on those drives, since
-> only an agent may edit its own Agent resource. Step 4 (hosted, read-only,
-> `server/src/mcp/`) is built: see "Hosted endpoint" below. Steps 3 and 5 are
-> not started.
+> **Status:** One implementation. The node serves the tools at `POST /mcp`
+> (`server/src/mcp/`): OAuth 2.1 authorization server plus Streamable HTTP
+> resource server, reads and, if the person allowed editing, writes. A write is
+> a commit the node signs as the *issued agent* behind the token (its key is
+> derived again from the token's claims, never stored, never the person's), sent
+> through the normal commit pipeline, so the ACLs the person granted that agent
+> are the limit and Connected apps shows it by name and revokes it. The local
+> `@tomic/mcp` (`browser/mcp`) is only a stdio bridge to that endpoint with a
+> token from `atomic-mcp connect` (OAuth with a loopback redirect). The in-app
+> assistant keeps its own tool list (`useAtomicTools`, `assistant-tools.ts` in
+> `@tomic/lib`), which is the one place the verbs are still implemented twice;
+> `atomic-cli connect` and `ad-generate connect` still use a key of their own
+> (`/app/connect-agent`). Not done: `semantic_search` on `/mcp`, `format=compact`
+> short refs, refresh-token rotation, a per-process-independent one-time code
+> store.
 > Companion to [`actions.md`](./actions.md) (one verb list, many surfaces),
 > [`json-ad-compact.md`](./json-ad-compact.md) (the wire dialect),
 > [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) (`AtomicNode`),

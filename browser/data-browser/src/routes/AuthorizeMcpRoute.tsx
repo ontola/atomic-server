@@ -9,9 +9,14 @@ import { ContainerNarrow } from '../components/Containers';
 import { ErrorLook } from '../components/ErrorLook';
 import { Main } from '../components/Main';
 import { Column, Row } from '../components/Row';
+import { RadioInput } from '../components/forms/RadioInput';
 import { useSettings } from '../helpers/AppSettings';
 import { rememberConnectedApp } from '../helpers/connectedApps';
-import { approveAuthorization, requestIssuedAgent } from '../helpers/hostedMcp';
+import {
+  approveAuthorization,
+  isTrustedServer,
+  requestIssuedAgent,
+} from '../helpers/hostedMcp';
 import { useAccountDriveCatalog } from '../hooks/useAccountDriveCatalog';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
@@ -25,6 +30,8 @@ export interface AuthorizeMcpSearch {
   client_name: string;
   redirect_uri: string;
   code_challenge: string;
+  /** `read write` when the client asks to edit, which only sets the default. */
+  scope?: string;
   state?: string;
 }
 
@@ -34,11 +41,11 @@ const text = (value: unknown) => (typeof value === 'string' ? value : '');
  * /app/authorize-mcp?server=&client_id=&client_name=&redirect_uri=&code_challenge=[&state=]
  *
  * Where a person lets an MCP client that runs elsewhere (claude.ai, for one)
- * read their data. The node's `/oauth/authorize` sends the browser here. On
+ * read, and if they allow it edit, their data. The node's `/oauth/authorize` sends the browser here. On
  * Allow the app asks the node for an identity for that client, gives it read
- * rights on the drives picked, and sends the browser back to the client. The
- * client can only read, and only what is picked here; revoke it under
- * Connected apps in account settings.
+ * rights on the drives picked (to edit as well, if allowed), and sends the
+ * browser back to the client. The client can only reach what is picked here;
+ * revoke it under Connected apps in account settings.
  */
 export const AuthorizeMcpRoute = createRoute({
   path: pathNames.authorizeMcp,
@@ -50,6 +57,7 @@ export const AuthorizeMcpRoute = createRoute({
     client_name: text(search.client_name),
     redirect_uri: text(search.redirect_uri),
     code_challenge: text(search.code_challenge),
+    scope: text(search.scope) || undefined,
     state: text(search.state) || undefined,
   }),
 });
@@ -75,13 +83,25 @@ function AuthorizeMcpPage() {
     privateDrive ? [privateDrive, ...savedDrives] : savedDrives,
   );
   const [picked, setPicked] = useState<string[] | undefined>();
+  const [write, setWrite] = useState<boolean | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
   const name = search.client_name.trim() || 'An app';
   const host = hostOf(search.redirect_uri);
+  const serverHost = hostOf(search.server);
+  const trusted =
+    !!search.server &&
+    isTrustedServer(search.server, [
+      window.location.origin,
+      store.getServerUrl(),
+      drive,
+      privateDrive,
+    ]);
   const selected =
     picked ?? (drive && catalog.subjects.includes(drive) ? [drive] : []);
+  const canEdit = write ?? search.scope?.split(' ').includes('write') === true;
+  const action = canEdit ? 'read and edit' : 'read';
   const complete =
     search.server &&
     search.client_id &&
@@ -94,6 +114,19 @@ function AuthorizeMcpPage() {
         <h1>Connect an app</h1>
         <p>
           This link is incomplete. Start again from the app that sent you here.
+        </p>
+      </Page>
+    );
+  }
+
+  if (!trusted) {
+    return (
+      <Page>
+        <h1>Connect an app</h1>
+        <p>
+          This link points at {serverHost ?? 'an unknown server'}, which is not
+          the server you are signed in to, so nothing was shared. Start again
+          from the app that sent you here, using your own server.
         </p>
       </Page>
     );
@@ -133,7 +166,7 @@ function AuthorizeMcpPage() {
         search.client_id,
       );
 
-      await grantAgent(store, issued.agent, selected, false);
+      await grantAgent(store, issued.agent, selected, canEdit);
       await rememberConnectedApp(store, home, issued.agent);
 
       const redirect = await approveAuthorization(store, search.server, {
@@ -141,6 +174,7 @@ function AuthorizeMcpPage() {
         redirectUri: search.redirect_uri,
         codeChallenge: search.code_challenge,
         nonce: issued.nonce,
+        write: canEdit,
         state: search.state,
       });
 
@@ -157,22 +191,44 @@ function AuthorizeMcpPage() {
 
   return (
     <Page>
-      <h1>Connect an app</h1>
+      <h1>Connect an app that returns to {host}</h1>
       <p>
-        <strong data-test='authorize-mcp-name'>{name}</strong> asks to read your
-        Atomic data. After you allow it, you go back to {host}. It gets its own
+        <strong data-test='authorize-mcp-name'>{name}</strong> asks to {action}
+        your data on {serverHost}.
+      </p>
+      <p>
+        When you allow it, you go back to {host}. The name is chosen by the app,
+        so only allow it if that is where you expect to go. It gets its own
         access, so your secret stays with you, and you can revoke it at any
         time.
       </p>
 
       <Column>
-        <Heading>What it can read</Heading>
+        <Heading>What it can reach</Heading>
         <ConnectDrivePicker
           subjects={catalog.subjects}
           selected={selected}
           onToggle={toggle}
         />
-        <p>It can read only. It cannot change or delete anything.</p>
+
+        <Heading>What it can do</Heading>
+        <Column gap='0.75rem'>
+          <RadioInput
+            name='access'
+            checked={!canEdit}
+            onChange={() => setWrite(false)}
+          >
+            Read only
+          </RadioInput>
+          <RadioInput
+            name='access'
+            checked={canEdit}
+            onChange={() => setWrite(true)}
+            data-test='authorize-mcp-write'
+          >
+            Read and edit
+          </RadioInput>
+        </Column>
 
         <Margin />
         {error && <ErrorLook>{error}</ErrorLook>}

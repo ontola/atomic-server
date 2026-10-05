@@ -558,7 +558,6 @@ msgstr "Not configured"
 #: src/components/AI/ProviderStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
 #: src/components/SideBar/syncStatus.tsx
-#: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/ConnectAgentRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -9974,18 +9973,22 @@ msgstr "{0} can now {1} what you shared. You can go back to it. To stop it, revo
 msgid "Account settings"
 msgstr "Account settings"
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "Read only"
 msgstr "Read only"
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "Read and edit"
 msgstr "Read and edit"
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "What it can reach"
 msgstr "What it can reach"
 
+#: src/routes/AuthorizeMcpRoute.tsx
 #: src/routes/ConnectAgentRoute.tsx
 msgid "What it can do"
 msgstr "What it can do"
@@ -10032,19 +10035,6 @@ msgstr "Connected apps"
 #: src/routes/AuthorizeMcpRoute.tsx
 msgid "This link is incomplete. Start again from the app that sent you here."
 msgstr "This link is incomplete. Start again from the app that sent you here."
-
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "What it can read"
-msgstr "What it can read"
-
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "It can read only. It cannot change or delete anything."
-msgstr "It can read only. It cannot change or delete anything."
-
-#. 0: host
-#: src/routes/AuthorizeMcpRoute.tsx
-msgid "<0/> asks to read your Atomic data. After you allow it, you go back to {0}. It gets its own access, so your secret stays with you, and you can revoke it at any time."
-msgstr "<0/> asks to read your Atomic data. After you allow it, you go back to {0}. It gets its own access, so your secret stays with you, and you can revoke it at any time."
 
 #: src/actions/resourceActions.tsx
 msgid "Add or remove tags"
@@ -10819,3 +10809,23 @@ msgstr "Discard upload"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+
+#. 0: serverHost ?? 'an unknown server'
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "This link points at {0}, which is not the server you are signed in to, so nothing was shared. Start again from the app that sent you here, using your own server."
+msgstr "This link points at {0}, which is not the server you are signed in to, so nothing was shared. Start again from the app that sent you here, using your own server."
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "Connect an app that returns to {0}"
+msgstr "Connect an app that returns to {0}"
+
+#. 0: action; 1: serverHost
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "<0/> asks to {0} your data on {1}."
+msgstr "<0/> asks to {0} your data on {1}."
+
+#. 0: host
+#: src/routes/AuthorizeMcpRoute.tsx
+msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
+msgstr "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."

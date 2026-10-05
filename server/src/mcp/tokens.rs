@@ -48,13 +48,40 @@ pub struct Code {
     pub client_id: String,
     pub redirect_uri: String,
     pub challenge: String,
+    /// The person who approved, and the nonce of the issued agent: what the
+    /// node needs to derive the agent's key again when the client writes.
+    pub person: String,
+    pub nonce: String,
+    /// Whether the person let the client edit, not only read.
+    pub write: bool,
 }
 
-/// An access or refresh token: the issued agent it reads as.
+/// An access or refresh token: the issued agent it acts as. Reading is
+/// always through the agent's rights; `write` is the person's separate say on
+/// whether the client may also change things, checked on top of those rights.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Grant {
     pub agent: String,
     pub client_id: String,
+    pub person: String,
+    pub nonce: String,
+    pub write: bool,
+}
+
+impl Grant {
+    /// The scope string OAuth clients see.
+    pub fn scope(&self) -> &'static str {
+        if self.write {
+            "read write"
+        } else {
+            "read"
+        }
+    }
+
+    /// The issued agent, with its key, so the node can sign for it.
+    pub fn agent_key(&self, appstate: &AppState) -> Result<atomic_lib::agents::Agent, String> {
+        issued_agent(appstate, &self.person, &self.client_id, &self.nonce, None)
+    }
 }
 
 fn key(appstate: &AppState) -> Result<[u8; 32], String> {
@@ -134,8 +161,9 @@ pub fn verify<T: DeserializeOwned>(
 
 /// The agent the node issues for one approval: an Ed25519 identity derived
 /// from the node key, the approving person, the client and a nonce. Nobody
-/// holds its private key today (reads need none), and the node can re-derive
-/// it later if hosted writes come (step 5 of the plan) without storing it.
+/// stores its private key: the node derives it again from the claims in the
+/// token when the client writes, and signs the commit as this agent, never as
+/// the person.
 pub fn issued_agent(
     appstate: &AppState,
     person: &str,
