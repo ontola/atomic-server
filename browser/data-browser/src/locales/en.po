@@ -8186,7 +8186,6 @@ msgid "Integration proxy"
 msgstr "Integration proxy"
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 msgid "Reset to default"
 msgstr "Reset to default"
 
@@ -12050,3 +12049,7 @@ msgstr "Opening invitation..."
 #: src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
 msgstr "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Reset"
+msgstr "<0/> Reset"
