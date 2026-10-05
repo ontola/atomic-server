@@ -978,14 +978,19 @@ function SyncPage() {
     status.serverUrl,
   );
 
-  // A managed node only accepts drives that are enrolled, and a member can read
-  // the drive's usage from it. So a drive that holds data on a managed node is
-  // hosted for everyone with access, whichever account pays for it. The
-  // account's own enrollment list cannot say that: it only knows its own drives.
+  // A managed node only accepts drives that are enrolled and active, and a
+  // member can read the drive's usage from it. So a drive that this device has
+  // finished syncing with a managed node, and that holds data there, is hosted
+  // for everyone with access, whichever account pays for it. The account's own
+  // enrollment list cannot say that: it only knows its own drives. Data alone
+  // is not enough (a disabled enrollment leaves it behind), hence the sync.
   const hostedByNode =
     managedInfo.managed &&
     !!status.drive &&
     store.isLiveSyncedDrive(status.drive) &&
+    !store.isDriveRefusedByServer(status.drive) &&
+    status.serverConnected &&
+    !!currentDriveSync(status) &&
     (nodeUsage?.resourceCount ?? 0) > 0;
   const cloudEnrolled = hostedByNode ? true : accountEnrolled;
 
