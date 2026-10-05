@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildStorageTree, squarify, type ResourceUsage } from './storageMap';
+import {
+  buildStorageTree,
+  squarify,
+  tileKind,
+  type ResourceUsage,
+  type StorageNode,
+} from './storageMap';
 
 const row = (
   subject: string,
@@ -67,5 +73,26 @@ describe('squarify', () => {
     expect(squarify([0, 5], v => v, { x: 0, y: 0, w: 10, h: 10 })).toHaveLength(
       1,
     );
+  });
+});
+
+describe('tileKind', () => {
+  const node = (totalBytes: number, totalFileBytes: number): StorageNode => ({
+    subject: 'x',
+    name: 'x',
+    kind: null,
+    ownBytes: totalBytes,
+    ownFileBytes: totalFileBytes,
+    totalBytes,
+    totalFileBytes,
+    children: [],
+  });
+
+  it('tells the four kinds apart', () => {
+    expect(tileKind(node(100, 0), false)).toBe('edge');
+    expect(tileKind(node(100, 0), true)).toBe('branch');
+    expect(tileKind(node(100, 40), true)).toBe('mixed');
+    expect(tileKind(node(100, 95), true)).toBe('binary');
+    expect(tileKind(node(100, 80), false)).toBe('binary');
   });
 });

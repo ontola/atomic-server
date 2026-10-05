@@ -2,7 +2,12 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { keyframes, styled } from 'styled-components';
 import { ContainerWide } from './Containers';
 import { Main } from './Main';
-import { squarify, type StorageNode } from '../helpers/storageMap';
+import {
+  squarify,
+  tileKind,
+  type StorageNode,
+  type TileKind,
+} from '../helpers/storageMap';
 
 export type Loaded =
   | { state: 'loading' }
@@ -89,7 +94,9 @@ export function StorageView({
         <h1>Where space goes</h1>
         <Intro>
           Each tile is an item in this workspace. Bigger tile, more space.{' '}
-          <Swatch $files /> files and images, <Swatch /> edit history.
+          <Swatch $kind='edge' /> resource, <Swatch $kind='branch' /> resource
+          with other resources, <Swatch $kind='mixed' /> mixed (files and
+          resources), <Swatch $kind='binary' /> files and images.
         </Intro>
 
         {loaded.state === 'loading' && (
@@ -143,7 +150,7 @@ export function StorageView({
                   <Tile
                     key={item.subject + item.name}
                     type='button'
-                    $files={item.totalFileBytes * 2 > item.totalBytes}
+                    $kind={tileKind(item, hasInside(item))}
                     $folder={hasInside(item)}
                     data-testid='storage-tile'
                     data-folder={hasInside(item) ? 'true' : undefined}
@@ -192,7 +199,7 @@ export function StorageView({
                         (item.totalBytes / (items[0]?.totalBytes || 1)) * 100,
                       )}%`,
                     }}
-                    $files={item.totalFileBytes * 2 > item.totalBytes}
+                    $kind={tileKind(item, hasInside(item))}
                   />
                   <ListRow>
                     <button type='button' onClick={() => openItem(item)}>
@@ -251,12 +258,19 @@ const Muted = styled.span`
   color: ${p => p.theme.colors.textLight};
 `;
 
-const Swatch = styled.span<{ $files?: boolean }>`
+const KIND_COLOURS: Record<TileKind, string> = {
+  edge: '#3b6fe0',
+  branch: '#7b4fd6',
+  mixed: '#1f9d8a',
+  binary: '#d9822b',
+};
+
+const Swatch = styled.span<{ $kind: TileKind }>`
   display: inline-block;
   width: 0.8em;
   height: 0.8em;
   border-radius: 2px;
-  background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
+  background: ${p => KIND_COLOURS[p.$kind]};
 `;
 
 const Crumbs = styled.nav`
@@ -313,12 +327,12 @@ const MapBox = styled.div<{ $dir?: 'in' | 'out' }>`
   background: ${p => p.theme.colors.bg1};
 `;
 
-const Tile = styled.button<{ $files: boolean; $folder: boolean }>`
+const Tile = styled.button<{ $kind: TileKind; $folder: boolean }>`
   position: absolute;
   box-sizing: border-box;
   padding: 4px 6px;
   border: 1px solid ${p => p.theme.colors.bg};
-  background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
+  background: ${p => KIND_COLOURS[p.$kind]};
   color: #fff;
   text-align: left;
   cursor: ${p => (p.$folder ? 'zoom-in' : 'pointer')};
@@ -366,10 +380,10 @@ const List = styled.ol`
   }
 `;
 
-const Bar = styled.span<{ $files: boolean }>`
+const Bar = styled.span<{ $kind: TileKind }>`
   position: absolute;
   inset: 0 auto 0 0;
-  background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
+  background: ${p => KIND_COLOURS[p.$kind]};
   opacity: 0.18;
   border-radius: 4px;
 `;
