@@ -311,6 +311,7 @@ msgid "Ollama"
 msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -4795,11 +4796,9 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr ""
@@ -10484,6 +10483,7 @@ msgstr ""
 msgid "Signed in on another device? Use a code"
 msgstr ""
 
+
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
 msgid "Could not save the repeat: {0}"
@@ -10763,6 +10763,13 @@ msgstr ""
 #: src/actions/appMenuItems.tsx
 msgid "Reload the whole app, as if you opened it again."
 msgstr ""
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Opening sign-up…"
+msgstr ""
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."

@@ -83,18 +83,27 @@ async function existingAccount(
   return { secret, agent: JSON.parse(atob(secret)).subject };
 }
 
-/** As the guest: a drive made from a template, which the guest owns. */
+/**
+ * As the guest: a drive of its own, which the guest owns. Made directly: the
+ * template gallery sends a guest to create an account first (see
+ * template-recovery.spec.ts), and this is about a guest that already has work.
+ */
 async function guestWorkspace(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/demo`);
   await expect(page).not.toHaveURL(/\/app\/demo/, { timeout: 90_000 });
-  await page.goto(`${FRONTEND_URL}/app/new-drive?template=student`);
-  await expect(
-    page.getByRole('region', { name: 'Setup' }).getByText('Name your drive'),
-  ).toBeVisible({ timeout: 60_000 });
-  await page.getByRole('button', { name: 'Create drive' }).click();
-  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60_000 });
 
-  return page.evaluate(() => window.store.getDrive()!);
+  return page.evaluate(async () => {
+    const store = window.store;
+    // As `prepareTemplateDrive` does for a guest: its home lives here only.
+    store.registerLocalOnlyDrive(await store.getAgent()!.privateDriveSubject());
+    const drive = await store.createDrive('Guest drive', {
+      personal: false,
+      localOnly: true,
+    });
+    store.setDrive(drive.subject);
+
+    return drive.subject;
+  });
 }
 
 async function unlockAccount(page: Page, secret: string, agent: string) {

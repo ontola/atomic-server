@@ -311,6 +311,7 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -4806,11 +4807,9 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr "Creating…"
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr "Create drive"
@@ -10781,6 +10780,14 @@ msgstr "Restart app"
 #: src/actions/appMenuItems.tsx
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Reload the whole app, as if you opened it again."
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Opening sign-up…"
+msgstr "Opening sign-up…"
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+msgstr "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
