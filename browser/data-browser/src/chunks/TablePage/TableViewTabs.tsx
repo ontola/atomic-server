@@ -9,6 +9,23 @@ import {
 import { useContext, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type Modifier,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   FaCheck,
   FaCopy,
   FaFilter,
@@ -17,6 +34,7 @@ import {
   FaTableColumns,
   FaWindowMaximize,
   FaTrash,
+  FaXmark,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -53,6 +71,9 @@ import { QuickAddDialog } from './QuickAddDialog';
 import type { QuickAddSpec } from './quickAdd';
 import { QuickFilterField } from './QuickFilterField';
 
+/** Tabs sit in a row: a dragged one must not wander off it. */
+const keepHorizontal: Modifier = ({ transform }) => ({ ...transform, y: 0 });
+
 interface TableViewTabsProps {
   /** The class of this table's rows, which decides what apps can show it. */
   rowClass: string;
@@ -67,6 +88,8 @@ interface TableViewTabsProps {
   ) => void;
   duplicateView: (subject: string) => void;
   deleteView: (subject: string) => void;
+  /** Persist a new tab order. */
+  reorderViews: (views: string[]) => void;
   viewName: string;
   renameView: (name: string) => void;
   allColumns: Property[];
@@ -109,6 +132,7 @@ export function TableViewTabs({
   setViewKind,
   duplicateView,
   deleteView,
+  reorderViews,
   viewName,
   renameView,
   allColumns,
@@ -129,42 +153,73 @@ export function TableViewTabs({
   const apps = appsForClass(driveApps.apps, rowClass);
   const typesBySubject = useViewTypes(views);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Touch scrolls the tab strip, so dragging a tab takes a press first.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
+  );
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const from = views.indexOf(active.id as string);
+    const to = views.indexOf(over.id as string);
+
+    if (from !== -1 && to !== -1) {
+      reorderViews(arrayMove(views, from, to));
+    }
+  };
+
   return (
     <Bar>
-      <Tabs role='tablist'>
-        {tabs.map((subject, i) => (
-          <ViewTab
-            key={subject ?? `implicit-${i}`}
-            subject={subject}
-            active={subject === activeView || (!activeView && i === 0)}
-            fallbackName={subject ? undefined : viewName}
-            canWrite={canWrite}
-            onSelect={() => subject && setActiveView(subject)}
-            onRename={renameView}
-            createView={createView}
-            setViewKind={setViewKind}
-            canChangeType={
-              !!subject && canChangeViewType(subject, typesBySubject)
-            }
-            canDelete={!subject || canDeleteView(subject, typesBySubject)}
-            apps={apps}
-            refreshApps={driveApps.refresh}
-            duplicateView={duplicateView}
-            deleteView={deleteView}
-            classProperties={allColumns}
-            quickAdd={quickAdd}
-            setQuickAdd={setQuickAdd}
-          />
-        ))}
-        {canWrite && (
-          <AddViewMenu
-            createView={createView}
-            apps={apps}
-            refreshApps={driveApps.refresh}
-          />
-        )}
-      </Tabs>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={[keepHorizontal]}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={views} strategy={horizontalListSortingStrategy}>
+          <Tabs role='tablist'>
+            {tabs.map((subject, i) => (
+              <ViewTab
+                key={subject ?? `implicit-${i}`}
+                subject={subject}
+                active={subject === activeView || (!activeView && i === 0)}
+                fallbackName={subject ? undefined : viewName}
+                canWrite={canWrite}
+                onSelect={() => subject && setActiveView(subject)}
+                onRename={renameView}
+                createView={createView}
+                setViewKind={setViewKind}
+                canChangeType={
+                  !!subject && canChangeViewType(subject, typesBySubject)
+                }
+                canDelete={!subject || canDeleteView(subject, typesBySubject)}
+                apps={apps}
+                refreshApps={driveApps.refresh}
+                duplicateView={duplicateView}
+                deleteView={deleteView}
+                classProperties={allColumns}
+                quickAdd={quickAdd}
+                setQuickAdd={setQuickAdd}
+              />
+            ))}
+            {canWrite && (
+              <AddViewMenu
+                createView={createView}
+                apps={apps}
+                refreshApps={driveApps.refresh}
+              />
+            )}
+          </Tabs>
+        </SortableContext>
+      </DndContext>
       <Actions>
+        <RowSelectionActions />
         {quickFilter && (
           <QuickFilterField
             value={quickFilter.value}
@@ -257,6 +312,54 @@ function AddViewMenu({
     />
   );
 }
+
+/**
+ * Appears while rows are ticked ("select mode"): how many, and what to do with
+ * them. Sits next to the filter button, where the other table actions live.
+ */
+function RowSelectionActions(): JSX.Element | null {
+  const { selectedRows, clearRowSelection, deleteSelectedRows } =
+    useContext(TablePageContext);
+
+  if (selectedRows.size === 0) {
+    return null;
+  }
+
+  return (
+    <SelectionBar role='toolbar' aria-label='Selected rows'>
+      <SelectionCount>{selectedRows.size} selected</SelectionCount>
+      <IconBtn
+        type='button'
+        title='Delete selected rows'
+        onClick={() => void deleteSelectedRows()}
+      >
+        <FaTrash />
+      </IconBtn>
+      <IconBtn
+        type='button'
+        title='Clear selection'
+        onClick={clearRowSelection}
+      >
+        <FaXmark />
+      </IconBtn>
+    </SelectionBar>
+  );
+}
+
+const SelectionBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-right: 0.5rem;
+  margin-right: 0.25rem;
+  border-right: 1px solid ${p => p.theme.colors.bg2};
+`;
+
+const SelectionCount = styled.span`
+  white-space: nowrap;
+  font-size: 0.9em;
+  color: ${p => p.theme.colors.textLight};
+`;
 
 const FilterTrigger = buildDefaultTrigger(<FaFilter />, 'Filter');
 
@@ -373,6 +476,11 @@ function ViewTab({
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
+  // The implicit tab of a table with no saved views has nothing to reorder.
+  const sortable = useSortable({
+    id: subject ?? 'implicit',
+    disabled: !subject || !canWrite || editing,
+  });
   // The cursor point of an open context menu (right-click, or clicking the
   // already-active tab). `undefined` = closed.
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
@@ -525,6 +633,14 @@ function ViewTab({
   return (
     <>
       <Tab
+        ref={sortable.setNodeRef}
+        style={{
+          transform: CSS.Translate.toString(sortable.transform),
+          transition: sortable.transition,
+          opacity: sortable.isDragging ? 0.6 : undefined,
+        }}
+        {...sortable.attributes}
+        {...sortable.listeners}
         role='tab'
         aria-selected={active}
         $active={active}

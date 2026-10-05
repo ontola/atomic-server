@@ -118,6 +118,8 @@ msgstr "AI Agents"
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -1329,6 +1331,7 @@ msgstr "Document"
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Sync"
@@ -1618,6 +1621,7 @@ msgid "Enter a Drive DID or URL"
 msgstr "Enter a Drive DID or URL"
 
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr "Set"
 
@@ -5535,6 +5539,8 @@ msgstr "Showing the largest"
 msgid "groups"
 msgstr "groups"
 
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 msgid "Value"
@@ -9795,6 +9801,8 @@ msgstr "Use this secret and sign out"
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
 msgstr "Notifications"
@@ -11165,6 +11173,75 @@ msgstr "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pa
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
 msgstr "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+
+#. 0: index + 1
+#: src/chunks/TablePage/RowSelectCheckbox.tsx
+msgid "Select row {0}"
+msgstr "Select row {0}"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Delete selected rows"
+msgstr "Delete selected rows"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Clear selection"
+msgstr "Clear selection"
+
+#. 0: selectedRows.size
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} selected"
+msgstr "{0} selected"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Selected rows"
+msgstr "Selected rows"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear value"
+msgstr "Clear value"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear values"
+msgstr "Clear values"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value…"
+msgstr "Set value…"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete row"
+msgstr "Delete row"
+
+#. 0: rowCount
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete {0} rows"
+msgstr "Delete {0} rows"
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the row this selection touches? You can undo it."
+msgstr "Delete the row this selection touches? You can undo it."
+
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the {0} rows this selection touches? You can undo it."
+msgstr "Delete the {0} rows this selection touches? You can undo it."
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value"
+msgstr "Set value"
+
+#. 0: count
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set {0} values"
+msgstr "Set {0} values"
+
+#. 0: getSyncLabel(syncStatus)
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Sync: {0}"
+msgstr "Sync: {0}"
 
 #. 0: appTitle
 #. 0: appTitle
