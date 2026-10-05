@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { styled } from 'styled-components';
+import { keyframes, styled } from 'styled-components';
 import { ContainerWide } from './Containers';
 import { Main } from './Main';
 import { squarify, type StorageNode } from '../helpers/storageMap';
@@ -29,6 +29,13 @@ export function StorageView({
   backTo?: ReactNode;
 }) {
   const [trail, setTrail] = useState<string[]>([]);
+  // How the map last changed, so the new tiles can grow out of (or shrink back
+  // to) the place the person clicked.
+  const [motion, setMotion] = useState<{
+    dir: 'in' | 'out';
+    x: number;
+    y: number;
+  } | null>(null);
 
   const current = useMemo(() => {
     if (loaded.state !== 'ready') return null;
@@ -104,7 +111,10 @@ export function StorageView({
                   {i < current.path.length - 1 ? (
                     <CrumbButton
                       type='button'
-                      onClick={() => setTrail(trail.slice(0, i))}
+                      onClick={() => {
+                        setMotion({ dir: 'out', x: 50, y: 50 });
+                        setTrail(trail.slice(0, i));
+                      }}
                     >
                       {n.name}
                     </CrumbButton>
@@ -120,17 +130,34 @@ export function StorageView({
               <p data-testid='storage-empty'>Nothing here takes up space.</p>
             ) : (
               <MapBox
+                // A new key restarts the animation for every level.
+                key={trail.join('/')}
                 data-testid='storage-map'
-                style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+                $dir={motion?.dir}
+                style={{
+                  aspectRatio: `${MAP_W} / ${MAP_H}`,
+                  transformOrigin: `${motion?.x ?? 50}% ${motion?.y ?? 50}%`,
+                }}
               >
                 {tiles.map(({ item, rect }) => (
                   <Tile
                     key={item.subject + item.name}
                     type='button'
                     $files={item.totalFileBytes * 2 > item.totalBytes}
+                    $folder={hasInside(item)}
                     data-testid='storage-tile'
-                    title={`${item.name} · ${formatBytes(item.totalBytes)}`}
-                    onClick={() => openItem(item)}
+                    data-folder={hasInside(item) ? 'true' : undefined}
+                    title={
+                      hasInside(item)
+                        ? `${item.name} · ${formatBytes(item.totalBytes)} · click to look inside`
+                        : `${item.name} · ${formatBytes(item.totalBytes)} · click to open`
+                    }
+                    onClick={() =>
+                      openItem(item, {
+                        x: ((rect.x + rect.w / 2) / MAP_W) * 100,
+                        y: ((rect.y + rect.h / 2) / MAP_H) * 100,
+                      })
+                    }
                     style={{
                       left: `${(rect.x / MAP_W) * 100}%`,
                       top: `${(rect.y / MAP_H) * 100}%`,
@@ -139,8 +166,16 @@ export function StorageView({
                     }}
                   >
                     <TileLabel>
-                      <span>{item.name}</span>
-                      <Muted>{formatBytes(item.totalBytes)}</Muted>
+                      <span>
+                        {hasInside(item) && (
+                          <FolderMark aria-hidden>▸</FolderMark>
+                        )}
+                        {item.name}
+                      </span>
+                      <Muted>
+                        {formatBytes(item.totalBytes)}
+                        {hasInside(item) && ` · ${item.children.length} inside`}
+                      </Muted>
                     </TileLabel>
                   </Tile>
                 ))}
@@ -177,8 +212,9 @@ export function StorageView({
     </Main>
   );
 
-  function openItem(item: StorageNode) {
-    if (item.children.length > 0 && item.name !== 'This item itself') {
+  function openItem(item: StorageNode, at = { x: 50, y: 50 }) {
+    if (hasInside(item)) {
+      setMotion({ dir: 'in', ...at });
       setTrail([...trail, item.subject]);
 
       return;
@@ -186,6 +222,11 @@ export function StorageView({
 
     onOpen(item.subject);
   }
+}
+
+/** Folders open the map one level deeper; everything else opens the resource. */
+function hasInside(item: StorageNode): boolean {
+  return item.children.length > 0 && item.name !== 'This item itself';
 }
 
 function formatBytes(bytes: number): string {
@@ -231,8 +272,40 @@ const CrumbButton = styled.button`
   cursor: pointer;
 `;
 
-const MapBox = styled.div`
+const growIn = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+`;
+
+const shrinkBack = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+`;
+
+const MapBox = styled.div<{ $dir?: 'in' | 'out' }>`
   position: relative;
+  animation: ${p =>
+      p.$dir === 'in' ? growIn : p.$dir === 'out' ? shrinkBack : 'none'}
+    260ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
   width: 100%;
   min-height: 220px;
   border-radius: 8px;
@@ -240,7 +313,7 @@ const MapBox = styled.div`
   background: ${p => p.theme.colors.bg1};
 `;
 
-const Tile = styled.button<{ $files: boolean }>`
+const Tile = styled.button<{ $files: boolean; $folder: boolean }>`
   position: absolute;
   box-sizing: border-box;
   padding: 4px 6px;
@@ -248,13 +321,21 @@ const Tile = styled.button<{ $files: boolean }>`
   background: ${p => (p.$files ? '#d9822b' : '#3b6fe0')};
   color: #fff;
   text-align: left;
-  cursor: pointer;
+  cursor: ${p => (p.$folder ? 'zoom-in' : 'pointer')};
   overflow: hidden;
+  /* A tile with things inside gets an inner frame, like a folder; a leaf is flat. */
+  box-shadow: ${p =>
+    p.$folder ? 'inset 0 0 0 3px rgba(255, 255, 255, 0.28)' : 'none'};
 
   &:hover,
   &:focus-visible {
     filter: brightness(1.12);
   }
+`;
+
+const FolderMark = styled.span`
+  margin-right: 0.3em;
+  opacity: 0.85;
 `;
 
 const TileLabel = styled.span`
