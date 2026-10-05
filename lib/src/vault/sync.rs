@@ -64,6 +64,13 @@ pub struct LaneState {
     /// need, and is always safe because it is a superset of what is missing.
     #[serde(default)]
     pub cursors: BTreeMap<String, VersionVectorMap>,
+    /// Subject `pure_id()` → the newest envelope `createdAt` (Unix ms) this
+    /// lane has shipped. A delta pack carries only envelopes at or after it,
+    /// so under `all` retention an edit does not re-ship every earlier
+    /// envelope. Absent means "ship every envelope", which is what a lane
+    /// written before this field existed needs; checkpoints always ship all.
+    #[serde(default)]
+    pub envelope_cursors: BTreeMap<String, i64>,
     /// Segments this lane has written since the last checkpoint it took part in.
     #[serde(default)]
     pub segments_since_checkpoint: u32,
@@ -498,19 +505,33 @@ pub async fn export_vault_segment(
 
     let mut entries = Vec::new();
     let mut cursors: BTreeMap<String, VersionVectorMap> = BTreeMap::new();
+    let mut envelope_cursors: BTreeMap<String, i64> = BTreeMap::new();
     let mut unchanged = 0usize;
 
     for subject_str in &subjects {
         match contribution(store, subject_str, state.cursors.get(subject_str), full).await {
             Contribution::Update(update, reached) => {
+                let stored = crate::envelopes::envelopes(store, subject_str);
+                // `>=`, not `>`: two commits can share a millisecond, and
+                // re-shipping one envelope is cheaper than losing one.
+                let floor = if full {
+                    None
+                } else {
+                    state.envelope_cursors.get(subject_str).copied()
+                };
+                let newest = stored.iter().map(|e| e.created_at).max();
                 entries.push(PackEntry {
                     subject: subject_str.clone(),
                     update,
-                    envelopes: crate::envelopes::envelopes(store, subject_str)
+                    envelopes: stored
                         .into_iter()
+                        .filter(|e| floor.is_none_or(|f| e.created_at >= f))
                         .map(|e| e.json)
                         .collect(),
                 });
+                if let Some(newest) = newest.or(floor) {
+                    envelope_cursors.insert(subject_str.clone(), newest);
+                }
                 cursors.insert(subject_str.clone(), reached);
             }
             Contribution::Unchanged => {
@@ -614,7 +635,14 @@ pub async fn export_vault_segment(
     let sealed = envelope::seal(key, object_kind, &pack.encode()?)?;
     vault.put(&object_key, &sealed)?;
 
+    // Subjects this pass did not ship keep their marker.
+    for (subject, at) in &state.envelope_cursors {
+        if cursors.contains_key(subject) {
+            envelope_cursors.entry(subject.clone()).or_insert(*at);
+        }
+    }
     state.cursors = cursors;
+    state.envelope_cursors = envelope_cursors;
     match kind {
         SegmentKind::Checkpoint => {
             state.segments_since_checkpoint = 0;
@@ -1569,6 +1597,75 @@ mod tests {
             report.attributions.iter().any(|a| a.verified && a.genesis),
             "{report:?}"
         );
+    }
+
+    /// Deltas carry only the envelopes newer than the lane's cursor, and a
+    /// restore still ends up with every envelope the node kept. A lane state
+    /// written before the envelope cursor existed ships them all, which is
+    /// the safe direction.
+    #[tokio::test]
+    async fn delta_packs_carry_only_new_envelopes_and_restore_keeps_all() {
+        use crate::envelopes::EnvelopeRetention;
+
+        let source = Db::init_temp("vault_envelope_cursor_source").await.unwrap();
+        source.set_envelope_retention(EnvelopeRetention::All);
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let note = source
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let note_subject = Subject::from_raw(&note, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+
+        let mut delta_sizes = Vec::new();
+        for name in ["one", "two", "three", "four"] {
+            let mut resource = source.get_resource(&note_subject).await.unwrap();
+            resource
+                .set(
+                    crate::urls::NAME.into(),
+                    crate::Value::String(name.into()),
+                    &source,
+                )
+                .await
+                .unwrap();
+            resource.save_locally(&source).await.unwrap();
+            let summary = backup_delta(&source, &drive_subject, &key, &vault, DEVICE)
+                .await
+                .unwrap();
+            delta_sizes.push(summary.sealed_bytes);
+        }
+        let stored = crate::envelopes::envelopes(&source, &note);
+        assert_eq!(stored.len(), 5, "genesis plus four edits");
+
+        let state = read_lane_state(&source, PSEUDONYM, DEVICE);
+        let newest = stored.iter().map(|e| e.created_at).max();
+        assert_eq!(
+            state
+                .envelope_cursors
+                .get(&Subject::from_raw(&note, None).pure_id()),
+            newest.as_ref(),
+        );
+
+        let restored = Db::init_temp("vault_envelope_cursor_restored")
+            .await
+            .unwrap();
+        restored.set_envelope_retention(EnvelopeRetention::All);
+        restore(&restored, &key, &vault).await;
+        assert_eq!(
+            crate::envelopes::envelopes(&restored, &note).len(),
+            5,
+            "every envelope survives the trimmed deltas"
+        );
+
+        // A lane state from before the cursor existed re-ships everything.
+        let legacy: LaneState =
+            serde_json::from_slice(br#"{"cursors":{},"segments_since_checkpoint":1}"#).unwrap();
+        assert!(legacy.envelope_cursors.is_empty());
     }
 
     /// A subject that disappears without a tombstone is not claimed as deleted.
