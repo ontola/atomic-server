@@ -21,7 +21,10 @@ server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad
-.claude
+# Local Claude Code state stays out; the shared cloud-session hook is tracked.
+**/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
 .antigravitycli
 
 # Release binaries and one-off rustc scratch files at repo root
@@ -58,3 +61,5 @@ node_modules/
 # Machine-specific agent notes; never commit these
 CLAUDE.local.md
 AGENTS.local.md
+
+/e2e-test-results

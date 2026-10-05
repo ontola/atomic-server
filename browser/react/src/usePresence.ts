@@ -5,37 +5,102 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react';
-import type { DrivePresenceManager, PresenceItem } from '@tomic/lib';
-import { useStore } from './index.js';
+import {
+  isUnauthorized,
+  type DrivePresenceManager,
+  type PresenceItem,
+} from '@tomic/lib';
+import { useStore, useResource } from './index.js';
 import { useDrive } from './useDrive.js';
 import { useCurrentAgent } from './useCurrentAgent.js';
 
 const EMPTY: PresenceItem[] = [];
 
-/** Subscribe to a drive's presence manager and return its live snapshot
- *  (all sessions, including our own). */
-function usePresenceSnapshot(): {
-  manager: DrivePresenceManager | undefined;
-  snapshot: PresenceItem[];
-} {
+/**
+ * The current drive's presence manager, unless this agent can't read the
+ * drive. Someone given one resource out of it is refused that channel, and
+ * what they announce there is dropped; they meet the others in the shared
+ * resource's own channel instead (`Store.presenceScope`).
+ */
+export function useDrivePresenceManager(): DrivePresenceManager | undefined {
   const store = useStore();
   const [drive] = useDrive();
+  const driveResource = useResource(drive);
 
-  const manager = drive ? store.getPresence(drive) : undefined;
+  if (!drive || isUnauthorized(driveResource.error)) return undefined;
 
+  return store.getPresence(drive);
+}
+
+/** The presence manager of the resource shared out of its drive that
+ *  `subject` is in, if any (`Store.presenceScope`). */
+function useScopePresenceManager(
+  subject: string | undefined,
+): DrivePresenceManager | undefined {
+  const store = useStore();
+  // Re-evaluate once the resource (and with it its rights) has loaded.
+  useResource(subject);
+  const scope = subject ? store.presenceScope(subject) : undefined;
+
+  return scope ? store.getPresence(scope) : undefined;
+}
+
+/** A presence manager's live snapshot (all sessions, including our own). */
+function useManagerSnapshot(
+  manager: DrivePresenceManager | undefined,
+): PresenceItem[] {
   const subscribe = useCallback(
     (callback: () => void) =>
       manager ? manager.subscribe(callback) : () => undefined,
     [manager],
   );
 
-  const snapshot = useSyncExternalStore(
+  return useSyncExternalStore(
     subscribe,
     () => manager?.getSnapshot() ?? EMPTY,
     () => EMPTY,
   );
+}
 
-  return { manager, snapshot };
+/**
+ * The drive's presence plus, for `subject`, its shared resource's channel:
+ * the managers to announce in and every session either one knows, once each.
+ * All managers share this tab's session id, so a session in both channels is
+ * one entry.
+ */
+function usePresenceChannels(subject?: string): {
+  managers: DrivePresenceManager[];
+  snapshot: PresenceItem[];
+  sessionId: string;
+} {
+  const store = useStore();
+  const driveManager = useDrivePresenceManager();
+  const scopeManager = useScopePresenceManager(subject);
+  const driveSnapshot = useManagerSnapshot(driveManager);
+  const scopeSnapshot = useManagerSnapshot(scopeManager);
+
+  const managers = useMemo(
+    () =>
+      [driveManager, scopeManager].filter(
+        (m, i, all): m is DrivePresenceManager => !!m && all.indexOf(m) === i,
+      ),
+    [driveManager, scopeManager],
+  );
+
+  const snapshot = useMemo(() => {
+    if (scopeSnapshot === EMPTY || scopeManager === driveManager) {
+      return driveSnapshot;
+    }
+
+    const seen = new Set(driveSnapshot.map(item => item.sessionId));
+
+    return [
+      ...driveSnapshot,
+      ...scopeSnapshot.filter(item => !seen.has(item.sessionId)),
+    ];
+  }, [driveSnapshot, scopeSnapshot, driveManager, scopeManager]);
+
+  return { managers, snapshot, sessionId: store.presenceSessionId };
 }
 
 /**
@@ -47,14 +112,15 @@ function usePresenceSnapshot(): {
  * per-session); dedupe by `agent` where that's unwanted.
  */
 export function useDrivePresence<T = unknown>(): PresenceItem<T>[] {
-  const { manager, snapshot } = usePresenceSnapshot();
+  const store = useStore();
+  const snapshot = useManagerSnapshot(useDrivePresenceManager());
 
   return useMemo(
     () =>
       snapshot.filter(
-        item => item.sessionId !== manager?.sessionId,
+        item => item.sessionId !== store.presenceSessionId,
       ) as PresenceItem<T>[],
-    [snapshot, manager],
+    [snapshot, store],
   );
 }
 
@@ -83,7 +149,7 @@ export function useResourcePresence<T = unknown>(
   setData: (data: T | undefined) => void;
 } {
   const { announce = true } = options;
-  const { manager, snapshot } = usePresenceSnapshot();
+  const { managers, snapshot, sessionId } = usePresenceChannels(subject);
   const [agent] = useCurrentAgent();
   const agentSubject = agent?.subject;
 
@@ -94,27 +160,30 @@ export function useResourcePresence<T = unknown>(
   // owned by other features — e.g. follow mode — survive navigation; the
   // view payload is cleared since it described the previous resource.
   useEffect(() => {
-    if (announce && manager && subject && agentSubject) {
-      manager.patchLocal({ resource: subject, data: undefined });
+    if (announce && subject && agentSubject) {
+      for (const manager of managers) {
+        manager.patchLocal({ resource: subject, data: undefined });
+      }
     }
-  }, [announce, manager, subject, agentSubject]);
+  }, [announce, managers, subject, agentSubject]);
 
   const setData = useCallback(
     (data: T | undefined) => {
-      if (announce && manager && subject) {
-        manager.patchLocal({ resource: subject, data });
+      if (announce && subject) {
+        for (const manager of managers) {
+          manager.patchLocal({ resource: subject, data });
+        }
       }
     },
-    [announce, manager, subject],
+    [announce, managers, subject],
   );
 
   const presence = useMemo(
     () =>
       snapshot.filter(
-        item =>
-          item.resource === subject && item.sessionId !== manager?.sessionId,
+        item => item.resource === subject && item.sessionId !== sessionId,
       ) as PresenceItem<T>[],
-    [snapshot, subject, manager],
+    [snapshot, subject, sessionId],
   );
 
   return { presence, setData };
@@ -147,7 +216,7 @@ export function useTypingPresence(subject: string | undefined): {
   /** Clear this session's typing announcement immediately. */
   stopTyping: () => void;
 } {
-  const { manager, snapshot } = usePresenceSnapshot();
+  const { managers, snapshot, sessionId } = usePresenceChannels(subject);
   const [agent] = useCurrentAgent();
   const agentSubject = agent?.subject;
 
@@ -166,18 +235,24 @@ export function useTypingPresence(subject: string | undefined): {
 
     if (activeRef.current) {
       activeRef.current = false;
-      manager?.patchLocal({ typing: undefined });
+
+      for (const manager of managers) {
+        manager.patchLocal({ typing: undefined });
+      }
     }
-  }, [manager]);
+  }, [managers]);
 
   const notifyTyping = useCallback(() => {
-    if (!manager || !subject || !agentSubject) {
+    if (managers.length === 0 || !subject || !agentSubject) {
       return;
     }
 
     if (!activeRef.current) {
       activeRef.current = true;
-      manager.patchLocal({ typing: subject });
+
+      for (const manager of managers) {
+        manager.patchLocal({ typing: subject });
+      }
     }
 
     if (idleTimer.current) {
@@ -185,7 +260,7 @@ export function useTypingPresence(subject: string | undefined): {
     }
 
     idleTimer.current = setTimeout(stopTyping, TYPING_IDLE_MS);
-  }, [manager, subject, agentSubject, stopTyping]);
+  }, [managers, subject, agentSubject, stopTyping]);
 
   // Stop announcing when the thread changes or the composer unmounts — the
   // previous `typing` value would otherwise linger via the heartbeat.
@@ -195,7 +270,7 @@ export function useTypingPresence(subject: string | undefined): {
     const seen = new Set<string>();
 
     return snapshot.filter(item => {
-      if (item.typing !== subject || item.sessionId === manager?.sessionId) {
+      if (item.typing !== subject || item.sessionId === sessionId) {
         return false;
       }
 
@@ -209,7 +284,7 @@ export function useTypingPresence(subject: string | undefined): {
 
       return true;
     });
-  }, [snapshot, subject, manager, agentSubject]);
+  }, [snapshot, subject, sessionId, agentSubject]);
 
   return { typers, notifyTyping, stopTyping };
 }

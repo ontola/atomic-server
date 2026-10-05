@@ -379,6 +379,40 @@ async fn fresh_store_gets_core_models_without_initialize() {
     );
 }
 
+/// A plain GET to `/ws` (a crawler, a pasted URL) is not an upgrade. It must be
+/// a 400, not the 500 that Sentry reports as an incident.
+#[actix_rt::test]
+async fn websocket_route_answers_400_to_a_request_that_is_not_an_upgrade() {
+    use clap::Parser;
+    let unique_string = atomic_lib::utils::random_string(10);
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+    let mut config = config::build_config(opts)
+        .map_err(|e| format!("Initialization failed: {}", e))
+        .expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/ws").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::BAD_REQUEST);
+}
+
 #[actix_rt::test]
 async fn test_did_agent_edit() {
     use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};

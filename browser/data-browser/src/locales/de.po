@@ -127,6 +127,7 @@ msgstr ""
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
@@ -305,6 +306,7 @@ msgid "Ollama"
 msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/views/InvitePage.tsx
 #: src/views/InvitePage.tsx
 msgid "Continue"
@@ -1003,6 +1005,8 @@ msgstr ""
 #: src/actions/resourceActions.tsx
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
+#: src/components/NavBar.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Tags"
 msgstr ""
@@ -1178,10 +1182,6 @@ msgid "Show canvas help"
 msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
-msgid "Switch to draw"
-msgstr ""
-
-#: src/views/Canvas/CanvasPage.tsx
 msgid "Eraser"
 msgstr ""
 
@@ -1204,10 +1204,6 @@ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Redo (Ctrl+Shift+Z)"
-msgstr ""
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Zoom to fit (tap) — drag horizontally to zoom-scrub"
 msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
@@ -1556,6 +1552,7 @@ msgstr ""
 #: src/helpers/managed/deviceLink.ts
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr ""
 
@@ -2256,6 +2253,7 @@ msgstr ""
 #: src/actions/appMenuItems.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "New"
 msgstr ""
@@ -2312,6 +2310,7 @@ msgstr ""
 msgid "Accept Changes"
 msgstr ""
 
+#: src/components/NavBar.tsx
 #: src/components/NavBar.tsx
 msgid "Share"
 msgstr ""
@@ -3632,10 +3631,6 @@ msgid "Rename"
 msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-msgid "View type"
-msgstr ""
-
-#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Delete view"
 msgstr ""
 
@@ -4008,10 +4003,6 @@ msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Hold the undo button to see versions you abandoned by drawing after an undo; drag over one and release to restore it"
-msgstr ""
-
-#: src/views/Canvas/CanvasPage.tsx
-msgid "Tap the zoom button to fit all strokes; drag left/right to zoom continuously"
 msgstr ""
 
 #: src/views/Drive/DrivePage.tsx
@@ -4796,11 +4787,9 @@ msgid "Local storage is off, so this server is the only data source. Enable loca
 msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Creating…"
 msgstr ""
 
-#: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Create drive"
 msgstr ""
@@ -5573,7 +5562,9 @@ msgstr ""
 msgid "To column"
 msgstr ""
 
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/chunks/TablePage/TableFilterValueInput.tsx
 msgid "Pick an option…"
 msgstr ""
 
@@ -6293,11 +6284,6 @@ msgstr ""
 msgid "Couldn’t reach {0}. Check your connection and try again."
 msgstr ""
 
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect to {0}"
-msgstr ""
-
 #: src/routes/History/VersionTitle.tsx
 msgid "Verified"
 msgstr ""
@@ -6348,11 +6334,8 @@ msgid "Cloud Server is on"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Sync again"
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
-msgid "Finish Cloud Server setup"
+msgid "Sync again"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -6396,6 +6379,7 @@ msgid "Checking cloud…"
 msgstr ""
 
 #: src/helpers/managed/driveHostingState.ts
+#: src/views/DriveUnavailable.tsx
 msgid "Server"
 msgstr ""
 
@@ -6806,10 +6790,6 @@ msgstr ""
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Entsperren mit einem Passkey fehlgeschlagen. Verwende stattdessen deinen Wiederherstellungscode."
 
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect existing account"
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr ""
@@ -6824,16 +6804,7 @@ msgid "Sign in to check recovery"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "This drive already has a Server plan. Connecting it uses that plan; you do not need to buy it again."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
-msgstr ""
-
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect this app to your existing {0} account to use your cloud services. Approve a code in the portal to sign this app in. This is free and does not purchase hosting or fetch a workspace."
 msgstr ""
 
 #: src/views/InvitePage.tsx
@@ -8246,6 +8217,7 @@ msgid "Recurring meeting"
 msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
 msgid "All day"
 msgstr ""
 
@@ -9710,6 +9682,14 @@ msgstr ""
 msgid "Nothing closed."
 msgstr ""
 
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental plugins to try out."
+msgstr "Das ist eine neue Funktion. Du siehst experimentelle Plugins zum Ausprobieren."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Plugins will show up here soon for you to try out."
+msgstr "Das ist eine neue Funktion. Hier erscheinen bald Plugins, die du ausprobieren kannst."
+
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
 msgstr ""
@@ -10952,6 +10932,16 @@ msgstr ""
 msgid "Edit MCP Server"
 msgstr ""
 
+#. 0: hidden
+#: src/components/SideBar/SideBarMoreRow.tsx
+msgid "{0} more, open to see all"
+msgstr "{0} weitere, öffnen um alle zu sehen"
+
+#. 0: olderCount
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Show older messages ({0})"
+msgstr "Ältere Nachrichten anzeigen ({0})"
+
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr ""
@@ -11147,4 +11137,494 @@ msgstr ""
 
 #: src/chunks/FormBuilder/ShareLinkPanel.tsx
 msgid "Forms need a server to receive answers."
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Could not read that image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Canvas text"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Pen tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Eraser tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: circle strokes to select them, then move or scale"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text tool"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: place a picture"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Place image"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Delete selection"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level: tap to fit everything, drag sideways to zoom"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Zoom level"
+msgstr ""
+
+#. 0: ' '
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Lasso: draw a loop around strokes (or tap one) to select them, drag inside the box to move, drag a corner to scale, and press{0} <0>Delete</0> to remove"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Text: tap the canvas and type; tap existing text to edit it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Image: pick a picture, then move or scale it"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Touch: two fingers pan and zoom. Once a pen has been seen, one finger pans as well; without a pen one finger draws"
+msgstr ""
+
+#: src/views/Canvas/CanvasPage.tsx
+msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
+msgstr ""
+
+#. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
+#. 0: appTitle
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUI.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Asked by {0}"
+msgstr "Gefragt von {0}"
+
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Choose a resource"
+msgstr "Ressource auswählen"
+
+#: src/components/HostUI/hostUIDialogs.tsx
+msgid "Choose"
+msgstr "Auswählen"
+
+#: src/views/DriveUnavailable.tsx
+msgid "This drive isn't connected to a server, so it syncs directly between devices. Open it on a device that has it, and it will arrive here."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "This device can't reach the drive's server, and it hasn't kept a copy of it. It will open as soon as the server answers."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "No server"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Your other devices"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "No device with this drive is reachable."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "The server isn't reachable."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Retrying…"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Retry now"
+msgstr ""
+
+#. 0: ' '
+#: src/views/DriveUnavailable.tsx
+msgid "<0/>{0} Retrying automatically every 10 seconds."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "This drive isn't on this device yet"
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "<0>Sync anytime with a server.</0> Once the drive's owner connects it to a server, it opens on any device, even when the others are closed."
+msgstr ""
+
+#: src/views/DriveUnavailable.tsx
+msgid "Technical details"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "The last table view stays, so the rows can always be seen as a table."
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Add a view"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Change this view to"
+msgstr ""
+
+#: src/routes/DemoRoute.tsx
+msgid "Demo setup finished after stall"
+msgstr ""
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Connect this app to your existing {0} account to use your cloud services. This is free and does not purchase hosting or fetch a workspace."
+msgstr ""
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Sign in on this device instead"
+msgstr ""
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Signed in on another device? Use a code"
+msgstr ""
+
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the repeat: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Repeat"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Custom"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Does not repeat"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Daily"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Weekly"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Monthly"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Yearly"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Every"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Never"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On a date"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "After a number of times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Last day"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Number of times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Ends"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Hide JSON"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "Show JSON"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "days"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "weeks"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "months"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "years"
+msgstr ""
+
+#. 0: day
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On day {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the first {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the second {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the third {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the fourth {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "On the last {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every weekday"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every day of the week"
+msgstr ""
+
+#. 0: rule.interval
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} weeks, every day"
+msgstr ""
+
+#. 0: names
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0}"
+msgstr ""
+
+#. 0: rule.interval; 1: names
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} weeks on {1}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the first {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the second {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the third {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the fourth {0}"
+msgstr ""
+
+#. 0: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on the last {0}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the first {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the second {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the third {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the fourth {1}"
+msgstr ""
+
+#. 0: n; 1: weekday
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on the last {1}"
+msgstr ""
+
+#. 0: day
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Monthly on day {0}"
+msgstr ""
+
+#. 0: rule.interval; 1: day
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} months on day {1}"
+msgstr ""
+
+#. 0: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every year on {0}"
+msgstr ""
+
+#. 0: rule.interval; 1: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} years on {1}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every day"
+msgstr ""
+
+#. 0: rule.interval
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "Every {0} days"
+msgstr ""
+
+#. 0: text; 1: date
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0} until {1}"
+msgstr ""
+
+#. 0: text
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0}, once"
+msgstr ""
+
+#. 0: text; 1: rule.end.count
+#: src/chunks/TablePage/Calendar/repeatSummary.ts
+msgid "{0}, {1} times"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/RepeatField.tsx
+msgid "This repeat rule has options the Repeat field cannot show. Edit its JSON, or pick a repeat above to replace it."
+msgstr ""
+
+#. 0: errorMessage(error)
+#: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
+msgid "Could not save the time: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "Start time"
+msgstr ""
+
+#: src/chunks/TablePage/Calendar/EventTimeFields.tsx
+msgid "End time"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Reload resource"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Fetch this resource from the server again, replacing the local copy."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Resource reloaded"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Restart app"
+msgstr ""
+
+#: src/actions/appMenuItems.tsx
+msgid "Reload the whole app, as if you opened it again."
+msgstr ""
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Opening sign-up…"
+msgstr ""
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+
+#: src/routes/SyncRoute.tsx
+msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Turn on Cloud Server"
+msgstr ""
+
+#: src/helpers/sentry.ts
+msgid "Commit keeps failing"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Stop uploading this change? It stays on this device but will not reach the server."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Discard upload"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr ""

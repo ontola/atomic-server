@@ -274,6 +274,11 @@ export function encodeGet(requestId: number, subject: string): Uint8Array {
 /** The AUTH_OK capability that says the server answers GET_MANY. */
 export const CAP_GET_MANY = 'get-many';
 
+/** The server reads a `SYNC` whose hash is version 2 and whose version
+ *  vectors are sent per resource (`vvs`), instead of as a matrix with one
+ *  column per peer in the drive. */
+export const CAP_SPARSE_SYNC = 'sparse-sync';
+
 /**
  * GET_MANY: `[0x15] [request_id: u16] [count: u16] ([subject_len: u16]
  * [subject_utf8])*`. Mirrors `protocol::encode_get_many`.

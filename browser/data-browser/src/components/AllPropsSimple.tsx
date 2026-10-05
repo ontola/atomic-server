@@ -11,6 +11,7 @@ import { useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { InlineFormattedResourceList } from './InlineFormattedResourceList';
 import { isNeverEditableProp } from '../helpers/hiddenProperties';
+import { formatPlainValue } from '../helpers/formatPlainValue';
 
 export interface AllPropsSimpleProps {
   resource: Resource;
@@ -57,7 +58,7 @@ function Row({ prop, val }: RowProps): JSX.Element {
       );
     }
 
-    return <>{val as string}</>;
+    return <>{formatPlainValue(val)}</>;
   }, [val, dataType]);
 
   return (

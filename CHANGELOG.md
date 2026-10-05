@@ -30,6 +30,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   browser resends a self-contained update.
 - `/download/files/{hash}` and blob URLs serve the File's stored mimetype.
 
+- A plain `GET /ws` that is not a WebSocket upgrade (a crawler, a pasted URL) now answers 400 instead of 500, so it no longer shows up as an incident in error reporting.
+- A commit is also sent to WebSocket subscribers of the resource's parent. A
+  resource shared out of a drive the recipient can't read (a chatroom) can only
+  be subscribed to on its own, and a new child is a new subject, so its new
+  messages reached neither that subscription nor a drive subscription the
+  recipient could hold. Read rights are checked per subscriber against the
+  resource when it is sent, and a connection already reached through the
+  resource or its drive doesn't get it twice.
+
 - New default ontology `notifications` (`lib/defaults/notifications.json`):
   the `Inbox` and `Notification` classes, and an `inbox` property the private
   drive points to its Inbox with.
@@ -300,6 +309,16 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   without `--base-domain`'s other effect of also becoming the store's base
   domain (which changes how subjects are normalized and migrated, and is not
   something to switch on for a server that already holds data).
+
+- The `/version` and `/all-versions` endpoints are removed. Resource history
+  is read from the Loro oplog on the client now (`resource.getLoroHistory()`,
+  with signers from `/history-attribution`), which is what the History route
+  has used for a while; these endpoints were the older server-side path to the
+  same data, reachable only from a single "All versions" link. `atomic_lib`
+  loses `history::encode_version_id` and `history::decode_version_id` with
+  them -- they existed to carry an opaque `VersionID` through an HTTP query
+  parameter. `history::versions`, `history::at_version`,
+  `Resource::get_history` and `Resource::view_at` are unaffected.
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub

@@ -248,6 +248,11 @@
     "error": "view entrypoint requires the custom-view capability"
   },
   {
+    "name": "v2 edit-schema needs custom-view",
+    "file": "v2-edit-schema-without-view.json",
+    "error": "edit-schema requires the custom-view capability"
+  },
+  {
     "name": "v2 view must stay in the package",
     "file": "v2-view-traversal.json",
     "error": "view entrypoint must be"

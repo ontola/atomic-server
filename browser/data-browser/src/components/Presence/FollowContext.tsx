@@ -13,6 +13,7 @@ import {
   useCurrentAgent,
   useDrive,
   useDrivePresence,
+  useDrivePresenceManager,
   useStore,
   type PresenceItem,
   type Store,
@@ -153,7 +154,8 @@ export function FollowProvider({
    *  reload ends leadership; the banner hides once presence expires). */
   const [activeMeeting, setActiveMeeting] = useState<string>();
 
-  const manager = drive ? store.getPresence(drive) : undefined;
+  // Not the drive's channel when this agent can't read the drive.
+  const manager = useDrivePresenceManager();
 
   // While leading a meeting, the presence session points at it — joiners
   // read it and open the meeting chat. (Following without a meeting shares

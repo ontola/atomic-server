@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta
       content="The easiest way to create, share and model Linked Atomic Data."
@@ -47,6 +47,33 @@
       media="(prefers-color-scheme: dark)"
       content="#000000"
     />
+    <!-- A reload can cancel the requests for the app's own script (seen with the
+         service worker answering them: ERR_ABORTED on the entry script, a few
+         times in a hundred reloads). Nothing then runs, and the splash would
+         stay for good. Ask for the page once more. The timestamp keeps a page
+         that really cannot load from reloading in a loop. -->
+    <script>
+      window.addEventListener(
+        'error',
+        function (event) {
+          var script = event.target;
+          if (!script || script.tagName !== 'SCRIPT' || script.type !== 'module') {
+            return;
+          }
+          try {
+            var last = Number(sessionStorage.getItem('atomic.bootRetryAt'));
+            if (last && Date.now() - last < 30000) return;
+            sessionStorage.setItem('atomic.bootRetryAt', String(Date.now()));
+          } catch (e) {
+            // Without storage a second failure cannot be told from the first.
+            return;
+          }
+          console.info('[boot] the app script did not load, trying once more');
+          location.reload();
+        },
+        true,
+      );
+    </script>
     <!-- The local database's WebAssembly is the largest thing a first visit
          downloads, and the ClientDb worker only asks for it once the app's
          JavaScript has loaded and the worker has started. Start fetching and

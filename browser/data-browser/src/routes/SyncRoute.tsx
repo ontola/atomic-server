@@ -658,6 +658,16 @@ function SyncCard({
   );
 }
 
+/**
+ * Keeps the previous object when a poll brought nothing new. `managedInfo` is a
+ * dependency of the effects that ask the portal about the account and this
+ * drive's enrollment, so a fresh object every five seconds made the page repeat
+ * `/api/me` and `/api/sync-enrollments` for as long as it stayed open.
+ */
+function sameInfo(prev: ManagedInfo, next: ManagedInfo): ManagedInfo {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
 function SyncPage() {
   const store = useStore();
   const [status, setStatus] = useState<StoreSyncStatus>(() =>
@@ -932,7 +942,7 @@ function SyncPage() {
 
     const poll = () =>
       fetchManagedInfo(serverUrl).then(info => {
-        if (!cancelled) setManagedInfo(info);
+        if (!cancelled) setManagedInfo(prev => sameInfo(prev, info));
       });
 
     void poll();
@@ -1750,10 +1760,12 @@ function SyncPage() {
                     {CLOUD_SERVER_DESCRIPTION}
                   </ServiceDescription>
                   <ConnMeta>
-                    {subscriptionStatus === 'active' ||
-                    subscriptionStatus === 'trialing'
-                      ? 'This drive already has a Server plan. Connecting it uses that plan; you do not need to buy it again.'
-                      : CLOUD_SERVER_PLAN_DESCRIPTION}
+                    {cloudEnrolled === true && !hostedCopyOrigin
+                      ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
+                      : subscriptionStatus === 'active' ||
+                          subscriptionStatus === 'trialing'
+                        ? 'Included in your plan. Turn it on to start hosting this drive; nothing more to buy.'
+                        : CLOUD_SERVER_PLAN_DESCRIPTION}
                   </ConnMeta>
                   {hostedCopyOrigin && (
                     <ConnMeta>
@@ -1780,8 +1792,11 @@ function SyncPage() {
                           : hostedCopyOrigin
                             ? 'Sync again'
                             : cloudEnrolled
-                              ? 'Finish Cloud Server setup'
-                              : CLOUD_SERVER_SETUP}
+                              ? 'Sync again'
+                              : subscriptionStatus === 'active' ||
+                                  subscriptionStatus === 'trialing'
+                                ? 'Turn on Cloud Server'
+                                : CLOUD_SERVER_SETUP}
                       </Button>
                     )}
                     {/* This tier costs money and reads our copy of your data,
@@ -2311,6 +2326,31 @@ function SyncPage() {
                   <CommitPropertyList entry={entry} />
 
                   {entry.error && <ErrorText>{entry.error}</ErrorText>}
+                  {/* A failed upload that can never land (its parent or drive
+                      is gone) otherwise retries forever and keeps "Changes
+                      pending" up. Discarding drops only the queued upload;
+                      the copy on this device stays. */}
+                  {entry.status === 'failed' &&
+                    entry.direction === 'outgoing' &&
+                    store.outbox.hasPending(entry.subject) && (
+                      <DiscardRow>
+                        <Button
+                          subtle
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                'Stop uploading this change? It stays on this device but will not reach the server.',
+                              )
+                            ) {
+                              store.outbox.discard(entry.subject);
+                              setCommitLog(store.getCommitLog());
+                            }
+                          }}
+                        >
+                          Discard upload
+                        </Button>
+                      </DiscardRow>
+                    )}
                 </CommitCard>
               ))}
             </LogList>
@@ -3253,6 +3293,12 @@ const DestroyBadge = styled.span`
   border-radius: ${p => p.theme.radius};
   background: ${p => p.theme.colors.warning}22;
   color: ${p => p.theme.colors.warning};
+`;
+
+const DiscardRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
 `;
 
 const ErrorText = styled.div`

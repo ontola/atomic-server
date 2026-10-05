@@ -1,4 +1,4 @@
-import { useRef, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 /**
  * Every way into an Atomic account, in one order, wherever someone signs in:
@@ -8,13 +8,33 @@ import { useRef, type FormEvent, type ReactNode } from 'react';
  */
 export type AccountSignInCopy = {
   google: string;
+  apple: string;
+  github: string;
   passkey: string;
-  passkeyUnavailable: string;
+  /** "Sign in with secret", and its field once opened. */
+  secret: string;
+  secretLabel: string;
+  secretSubmit: string;
+  /** Making a new secret, for someone who has none yet. */
+  secretCreate: SecretCreateCopy;
   or: string;
   emailLabel: string;
   send: string;
   sending: string;
   info: AccountSignInInfoCopy;
+};
+
+/** Signing up with a secret made on the spot, then an email address. */
+export type SecretCreateCopy = {
+  open: string;
+  title: string;
+  text: string;
+  copy: string;
+  copied: string;
+  saved: string;
+  emailText: string;
+  submit: string;
+  back: string;
 };
 
 /** "How safe is each option?": what each one trusts, and who can see what. */
@@ -33,9 +53,24 @@ export type AccountSignInInfoCopy = {
 export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
   en: {
     google: 'Google',
+    apple: 'Apple',
+    github: 'GitHub',
     passkey: 'Sign in with passkey',
-    passkeyUnavailable:
-      'This browser does not support passkeys. Use Google or an email link instead.',
+    secret: 'Sign in with secret',
+    secretLabel: 'Your Atomic secret',
+    secretSubmit: 'Sign in',
+    secretCreate: {
+      open: 'No secret yet? Create one',
+      title: 'Your new secret',
+      text: 'This is the key to your Atomic identity. Save it in your password manager now: nobody can show it to you again or reset it.',
+      copy: 'Copy',
+      copied: 'Copied',
+      saved: 'I have saved my secret',
+      emailText:
+        'Add your email to finish. Your account always has one, for invoices and for signing in when your secret is not at hand.',
+      submit: 'Create account',
+      back: 'Back',
+    },
     or: 'or',
     emailLabel: 'Email',
     send: 'Email me a link',
@@ -54,8 +89,20 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
           text: 'Google confirms your email address to us, and that address is all we receive. Google learns that you signed in to Atomic. Whoever controls your Google account can sign in.',
         },
         {
+          name: 'Apple',
+          text: 'The same as Google, with your Apple Account. Apple can hide your real address and give us a private relay address that forwards to you. Whoever controls your Apple Account can sign in.',
+        },
+        {
+          name: 'GitHub',
+          text: "GitHub tells us your account number and your verified email addresses, and we use the main one. We ask to read nothing else, and do not keep GitHub's access. Whoever controls your GitHub account can sign in.",
+        },
+        {
           name: 'Email link',
           text: 'We send a link that works once, within 24 hours. Whoever can read your inbox can sign in. The email goes out through our mail provider, Postmark.',
+        },
+        {
+          name: 'Secret',
+          text: 'The key of your Atomic identity itself. It never leaves your device: it only signs a one-time challenge, and nobody else is involved. Whoever has it is you, so keep it somewhere safe, like a password manager.',
         },
       ],
       unlockTitle: 'What signing in opens',
@@ -67,9 +114,24 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
   },
   nl: {
     google: 'Google',
+    apple: 'Apple',
+    github: 'GitHub',
     passkey: 'Inloggen met passkey',
-    passkeyUnavailable:
-      'Deze browser ondersteunt geen passkeys. Gebruik Google of een e-maillink.',
+    secret: 'Inloggen met secret',
+    secretLabel: 'Je Atomic-secret',
+    secretSubmit: 'Inloggen',
+    secretCreate: {
+      open: 'Nog geen secret? Maak er een',
+      title: 'Je nieuwe secret',
+      text: 'Dit is de sleutel van je Atomic-identiteit. Bewaar hem nu in je wachtwoordbeheerder: niemand kan hem je opnieuw laten zien of hem resetten.',
+      copy: 'Kopiëren',
+      copied: 'Gekopieerd',
+      saved: 'Ik heb mijn secret bewaard',
+      emailText:
+        'Vul je e-mailadres in om af te ronden. Je account heeft er altijd een, voor facturen en om in te loggen als je je secret niet bij de hand hebt.',
+      submit: 'Account aanmaken',
+      back: 'Terug',
+    },
     or: 'of',
     emailLabel: 'E-mail',
     send: 'Stuur me een link',
@@ -88,8 +150,20 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
           text: 'Google bevestigt je e-mailadres aan ons, en dat adres is alles wat we krijgen. Google ziet dat je bij Atomic inlogt. Wie je Google-account beheert, kan inloggen.',
         },
         {
+          name: 'Apple',
+          text: 'Hetzelfde als Google, met je Apple-account. Apple kan je echte adres verbergen en ons een privé doorstuuradres geven. Wie je Apple-account beheert, kan inloggen.',
+        },
+        {
+          name: 'GitHub',
+          text: 'GitHub geeft ons je accountnummer en je geverifieerde e-mailadressen, en we gebruiken het hoofdadres. We vragen niets anders te lezen en bewaren de toegang tot GitHub niet. Wie je GitHub-account beheert, kan inloggen.',
+        },
+        {
           name: 'E-maillink',
           text: 'We sturen een link die één keer werkt, binnen 24 uur. Wie je inbox kan lezen, kan inloggen. De e-mail gaat via onze mailprovider Postmark.',
+        },
+        {
+          name: 'Secret',
+          text: 'De sleutel van je Atomic-identiteit zelf. Hij verlaat je apparaat nooit: hij ondertekent alleen een eenmalige uitdaging, en er komt niemand anders aan te pas. Wie hem heeft, kan als jou inloggen, dus bewaar hem veilig, bijvoorbeeld in een wachtwoordbeheerder.',
         },
       ],
       unlockTitle: 'Wat inloggen opent',
@@ -104,6 +178,12 @@ export const ACCOUNT_SIGN_IN_COPY: Record<'en' | 'nl', AccountSignInCopy> = {
 export function AccountSignIn({
   googleHref,
   onGoogle,
+  appleHref = null,
+  onApple,
+  githubHref = null,
+  onGitHub,
+  onSecret,
+  secretSignUp,
   onPasskey,
   passkeySupported = true,
   email,
@@ -125,6 +205,23 @@ export function AccountSignIn({
   /** Instead of `googleHref`, for a host that has to do something first
    * (the desktop apps open Google in the system browser). */
   onGoogle?: () => void;
+  /** The Apple option, as `googleHref`. */
+  appleHref?: string | null;
+  onApple?: () => void;
+  /** The GitHub option, as `googleHref`. */
+  githubHref?: string | null;
+  onGitHub?: () => void;
+  /** Sign in with the Atomic secret the person pastes. The host proves it
+   * (it never leaves the device) and reports failures through `notice`.
+   * Left out, the option is not shown: a host with its own secret field. */
+  onSecret?: (secret: string) => void;
+  /** Sign up with a secret made here: `create` makes one (on this device),
+   * which the person saves, and `submit` sends it with the email field's
+   * address. Left out, only existing secrets are offered. */
+  secretSignUp?: {
+    create: () => Promise<string>;
+    submit: (secret: string) => void;
+  };
   onPasskey: () => void;
   passkeySupported?: boolean;
   email: string;
@@ -146,6 +243,27 @@ export function AccountSignIn({
   assistedRecovery?: boolean;
 }) {
   const info = useRef<HTMLDialogElement>(null);
+  const [secretOpen, setSecretOpen] = useState(false);
+  const [secret, setSecret] = useState('');
+  const [created, setCreated] = useState<string | null>(null);
+
+  if (created !== null && secretSignUp) {
+    return (
+      <div className='atomic-signin' data-signin-theme={theme}>
+        <SecretCreated
+          secret={created}
+          copy={copy}
+          email={email}
+          onEmailChange={onEmailChange}
+          emailInputId={emailInputId}
+          busy={busy || sending}
+          onSubmit={() => secretSignUp.submit(created)}
+          onBack={() => setCreated(null)}
+        />
+        {notice}
+      </div>
+    );
+  }
 
   return (
     <div className='atomic-signin' data-signin-theme={theme}>
@@ -183,34 +301,88 @@ export function AccountSignIn({
           <PasskeyMark />
           <span>{copy.passkey}</span>
         </button>
-      ) : (
-        <p className='atomic-signin-hint'>{copy.passkeyUnavailable}</p>
-      )}
+      ) : null}
       <div className='atomic-signin-row'>
-        {googleHref ? (
-          <a
-            className='atomic-signin-option'
-            href={googleHref}
-            aria-disabled={busy || undefined}
-            onClick={e => busy && e.preventDefault()}
-            data-test='google-sign-in'
-          >
-            <GoogleMark />
-            <span>{copy.google}</span>
-          </a>
-        ) : onGoogle ? (
-          <button
-            type='button'
-            className='atomic-signin-option'
-            disabled={busy}
-            onClick={onGoogle}
-            data-test='google-sign-in'
-          >
-            <GoogleMark />
-            <span>{copy.google}</span>
-          </button>
-        ) : null}
+        <ProviderOption
+          href={googleHref}
+          onPress={onGoogle}
+          busy={busy}
+          test='google-sign-in'
+          mark={<GoogleMark />}
+          label={copy.google}
+        />
+        <ProviderOption
+          href={appleHref}
+          onPress={onApple}
+          busy={busy}
+          test='apple-sign-in'
+          mark={<AppleMark />}
+          label={copy.apple}
+        />
+        <ProviderOption
+          href={githubHref}
+          onPress={onGitHub}
+          busy={busy}
+          test='github-sign-in'
+          mark={<GitHubMark />}
+          label={copy.github}
+        />
       </div>
+      {onSecret && !secretOpen ? (
+        <button
+          type='button'
+          className='atomic-signin-option'
+          disabled={busy}
+          onClick={() => setSecretOpen(true)}
+          data-test='secret-sign-in'
+        >
+          <SecretMark />
+          <span>{copy.secret}</span>
+        </button>
+      ) : null}
+      {onSecret && secretOpen ? (
+        <form
+          className='atomic-signin-email'
+          onSubmit={e => {
+            e.preventDefault();
+            onSecret(secret.trim());
+          }}
+        >
+          <label htmlFor={`${emailInputId}-secret`}>{copy.secretLabel}</label>
+          <input
+            id={`${emailInputId}-secret`}
+            type='password'
+            name='secret'
+            value={secret}
+            onChange={e => setSecret(e.target.value)}
+            autoComplete='current-password'
+            spellCheck={false}
+            autoFocus
+            required
+            data-test='secret-input'
+          />
+          <button
+            type='submit'
+            className='atomic-signin-submit'
+            disabled={busy || !secret.trim()}
+          >
+            {copy.secretSubmit}
+          </button>
+          {secretSignUp ? (
+            <button
+              type='button'
+              className='atomic-signin-link'
+              disabled={busy}
+              onClick={() =>
+                void secretSignUp.create().then(setCreated, () => undefined)
+              }
+              data-test='secret-create'
+            >
+              {copy.secretCreate.open}
+            </button>
+          ) : null}
+        </form>
+      ) : null}
       {notice}
       <button
         type='button'
@@ -252,6 +424,141 @@ export function AccountSignIn({
       </dialog>
     </div>
   );
+}
+
+/** A secret just made: shown once to save, then the email that finishes
+ * the account. */
+function SecretCreated({
+  secret,
+  copy,
+  email,
+  onEmailChange,
+  emailInputId,
+  busy,
+  onSubmit,
+  onBack,
+}: {
+  secret: string;
+  copy: AccountSignInCopy;
+  email: string;
+  onEmailChange: (email: string) => void;
+  emailInputId: string;
+  busy: boolean;
+  onSubmit: () => void;
+  onBack: () => void;
+}) {
+  const text = copy.secretCreate;
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <form
+      className='atomic-signin-email'
+      onSubmit={e => {
+        e.preventDefault();
+        onSubmit();
+      }}
+      data-test='secret-created'
+    >
+      <h3 className='atomic-signin-title'>{text.title}</h3>
+      <p className='atomic-signin-hint'>{text.text}</p>
+      <div className='atomic-signin-secret'>
+        <code data-test='secret-created-value'>{secret}</code>
+        <button
+          type='button'
+          className='atomic-signin-option'
+          onClick={() =>
+            void navigator.clipboard?.writeText(secret).then(
+              () => setCopied(true),
+              () => undefined,
+            )
+          }
+        >
+          {copied ? text.copied : text.copy}
+        </button>
+      </div>
+      <label className='atomic-signin-check'>
+        <input
+          type='checkbox'
+          checked={saved}
+          onChange={e => setSaved(e.target.checked)}
+          data-test='secret-saved'
+        />
+        <span>{text.saved}</span>
+      </label>
+      <p className='atomic-signin-hint'>{text.emailText}</p>
+      <label htmlFor={`${emailInputId}-new`}>{copy.emailLabel}</label>
+      <input
+        id={`${emailInputId}-new`}
+        type='email'
+        value={email}
+        onChange={e => onEmailChange(e.target.value)}
+        autoComplete='email'
+        required
+        data-test='secret-email'
+      />
+      <button
+        type='submit'
+        className='atomic-signin-submit'
+        disabled={busy || !saved || !email.trim()}
+      >
+        {text.submit}
+      </button>
+      <button type='button' className='atomic-signin-link' onClick={onBack}>
+        {text.back}
+      </button>
+    </form>
+  );
+}
+
+/** One sign-in provider option: a link, a button when the host has to do
+ * something first, or nothing when the account service does not offer it. */
+function ProviderOption({
+  href,
+  onPress,
+  busy,
+  test,
+  mark,
+  label,
+}: {
+  href: string | null;
+  onPress?: () => void;
+  busy: boolean;
+  test: string;
+  mark: ReactNode;
+  label: string;
+}) {
+  if (href) {
+    return (
+      <a
+        className='atomic-signin-option'
+        href={href}
+        aria-disabled={busy || undefined}
+        onClick={e => busy && e.preventDefault()}
+        data-test={test}
+      >
+        {mark}
+        <span>{label}</span>
+      </a>
+    );
+  }
+
+  if (onPress) {
+    return (
+      <button
+        type='button'
+        className='atomic-signin-option'
+        disabled={busy}
+        onClick={onPress}
+        data-test={test}
+      >
+        {mark}
+        <span>{label}</span>
+      </button>
+    );
+  }
+
+  return null;
 }
 
 // Google's "G", in its four brand colours, as their sign-in guidelines ask.
@@ -296,6 +603,55 @@ function PasskeyMark() {
       fill='currentColor'
     >
       <path d='M7 14a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm5.65-4A6 6 0 1 0 12.65 14H16v3h3v-3h2v-4z' />
+    </svg>
+  );
+}
+
+// Apple's logo, in the text colour, as Apple's guidelines allow for a
+// button in the host's own style.
+function AppleMark() {
+  return (
+    <svg
+      width='18'
+      height='18'
+      viewBox='0 0 24 24'
+      aria-hidden='true'
+      focusable='false'
+      fill='currentColor'
+    >
+      <path d='M16.37 12.78c-.02-2.4 1.96-3.56 2.05-3.62-1.12-1.63-2.86-1.86-3.48-1.88-1.48-.15-2.89.87-3.64.87-.75 0-1.91-.85-3.14-.83-1.61.02-3.1.94-3.93 2.38-1.68 2.91-.43 7.22 1.2 9.58.8 1.16 1.75 2.45 2.99 2.41 1.2-.05 1.65-.78 3.1-.78 1.45 0 1.86.78 3.13.75 1.29-.02 2.11-1.17 2.9-2.33.92-1.34 1.29-2.64 1.31-2.71-.03-.01-2.51-.96-2.54-3.84zM13.98 5.73c.66-.8 1.11-1.92.99-3.03-.95.04-2.11.64-2.8 1.44-.61.71-1.15 1.85-1 2.94 1.06.08 2.15-.54 2.81-1.35z' />
+    </svg>
+  );
+}
+
+// GitHub's mark, in the text colour.
+function GitHubMark() {
+  return (
+    <svg
+      width='18'
+      height='18'
+      viewBox='0 0 16 16'
+      aria-hidden='true'
+      focusable='false'
+      fill='currentColor'
+    >
+      <path d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z' />
+    </svg>
+  );
+}
+
+// A lock, in the text colour: the secret is the key to the identity itself.
+function SecretMark() {
+  return (
+    <svg
+      width='18'
+      height='18'
+      viewBox='0 0 24 24'
+      aria-hidden='true'
+      focusable='false'
+      fill='currentColor'
+    >
+      <path d='M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9zm3 4a2 2 0 0 1 1 3.73V19h-2v-1.27A2 2 0 0 1 12 14z' />
     </svg>
   );
 }

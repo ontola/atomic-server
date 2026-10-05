@@ -7,6 +7,7 @@ import { useResourcePicker } from './useResourcePicker';
 import { useFilePicker } from './useFilePicker';
 import type { UIPluginData } from '@components/CustomViewProvider';
 import { useRequestPermissionDialog } from './useRequestPermissionDialog';
+import { useHostUI } from '@components/HostUI/hostUI';
 import {
   LegacyViewAdapter,
   resourceToUIPluginResource,
@@ -41,6 +42,16 @@ export function usePluginRPC(
   const [pickFile, filePickerDialog] = useFilePicker();
 
   const serverRef = useRef<LegacyViewAdapter | undefined>(undefined);
+
+  // The same host UI drive apps get, so `store.ui` means one thing.
+  const hostUI = useHostUI({
+    writeRoot: currentSubject ?? '',
+    mayWriteUnder: async subject =>
+      (await serverRef.current?.mayWrite(subject)) ?? false,
+    appTitle: pluginResource.title,
+    frame: frameRef,
+  });
+  const { handle: handleUI, forwardKey } = hostUI;
 
   const latest = useRef({
     currentResource,
@@ -83,6 +94,8 @@ export function usePluginRPC(
       hasReadPermission: subject => latest.current.hasReadPermission(subject),
       requestWritePermission: subject =>
         latest.current.requestWritePermission(subject),
+      handleUI,
+      forwardKey,
     });
     serverRef.current = adapter;
 
@@ -90,7 +103,14 @@ export function usePluginRPC(
       adapter.stopServer();
       serverRef.current = undefined;
     };
-  }, [store, currentSubject, pluginData.resource, agent?.subject]);
+  }, [
+    store,
+    currentSubject,
+    pluginData.resource,
+    agent?.subject,
+    handleUI,
+    forwardKey,
+  ]);
 
   useEffect(() => {
     if (!serverRef.current) return;
@@ -109,6 +129,7 @@ export function usePluginRPC(
       {filePickerDialog}
       {requestReadPermissionDialog}
       {requestWritePermissionDialog}
+      {hostUI.element}
     </>,
   ];
 }

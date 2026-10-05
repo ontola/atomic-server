@@ -3,6 +3,10 @@ export const calendarFields = {
   allDay: 'atomic-calendar-all-day',
   endDay: 'atomic-calendar-end-day',
   notes: 'atomic-calendar-notes',
+  /** Exact start / exclusive end instant of a timed event: RFC 3339 strings
+   * with their offset (atomic-plugins Event ontology). */
+  start: 'atomic-calendar-start',
+  end: 'atomic-calendar-end',
 };
 
 /** A civil date, never an instant. Lexical order matches calendar order. */
@@ -64,3 +68,6 @@ export function matchesCalendarField(
 ): boolean {
   return actual === field || actual === `lt-google-calendar-property-${field}`;
 }
+
+/** Shortname of the property that holds a calendar record's recurrence. */
+export const calendarRecurrenceShortname = 'atomic-calendar-recurrence';

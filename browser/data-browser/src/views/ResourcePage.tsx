@@ -1,5 +1,4 @@
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
-import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   useResource,
@@ -47,9 +46,8 @@ import { InstallationPage } from '@views/Installation/InstallationPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
 import { MeetingPage } from './Meeting/MeetingPage';
-import { PluginPage as AtomicPluginPage } from '@chunks/PluginRuns/PluginPage';
 import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
-import { useAppClass } from '@chunks/PluginRuns/runScript';
+import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -66,6 +64,18 @@ const WebsiteExportPage = lazy(() =>
 );
 const WebsitePage = lazy(() =>
   import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
+);
+
+const AtomicPluginPage = lazy(() =>
+  import('@chunks/PluginRuns/PluginPage').then(m => ({
+    default: m.PluginPage,
+  })),
+);
+
+const ImportResolutionNotice = lazy(() =>
+  import('@chunks/PluginRuns/ImportResolutionNotice').then(m => ({
+    default: m.ImportResolutionNotice,
+  })),
 );
 
 const AppPage = lazy(() =>

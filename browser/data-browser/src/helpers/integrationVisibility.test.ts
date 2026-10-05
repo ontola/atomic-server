@@ -3,8 +3,10 @@ import {
   integrationVisibility,
   integrationVisibilitySchema,
   readPendingVisibility,
+  readPreviewUnlocked,
   readVisibilityCache,
   writePendingVisibility,
+  writePreviewUnlocked,
   writeVisibilityCache,
 } from './integrationVisibility';
 
@@ -164,5 +166,35 @@ describe('Atomic integration visibility cache', () => {
         blocked,
       ),
     ).not.toThrow();
+  });
+});
+
+describe('Atomic integration preview unlock', () => {
+  it('is locked until unlocked, per agent', () => {
+    const storage = fakeStorage();
+    expect(readPreviewUnlocked('did:ad:alice', storage)).toBe(false);
+    writePreviewUnlocked('did:ad:alice', storage);
+    expect(readPreviewUnlocked('did:ad:alice', storage)).toBe(true);
+    expect(readPreviewUnlocked('did:ad:bob', storage)).toBe(false);
+  });
+
+  it('does not touch the stored preferences', () => {
+    const storage = fakeStorage();
+    writePreviewUnlocked('did:ad:alice', storage);
+    expect(readVisibilityCache('did:ad:alice', storage)).toEqual({});
+    expect(readPendingVisibility('did:ad:alice', storage)).toEqual({});
+  });
+
+  it('survives storage that is unavailable', () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    } as unknown as Storage;
+    expect(readPreviewUnlocked('did:ad:alice', blocked)).toBe(false);
+    expect(() => writePreviewUnlocked('did:ad:alice', blocked)).not.toThrow();
   });
 });

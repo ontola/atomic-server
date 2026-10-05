@@ -24,8 +24,7 @@ import { useAppMenuItems } from '../../actions/appMenuItems';
 import { useActionContext } from '../../actions/useActionContext';
 import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
-import { RunPluginDialog } from '@chunks/PluginRuns/RunPluginDialog';
-import { usePluginClass } from '@chunks/PluginRuns/runScript';
+import { usePluginClass } from '@chunks/PluginRuns/useDriveClass';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
@@ -39,6 +38,11 @@ const CreateTableFormDialog = lazy(() =>
   })),
 );
 
+const RunPluginDialog = lazy(() =>
+  import('@chunks/PluginRuns/RunPluginDialog').then(m => ({
+    default: m.RunPluginDialog,
+  })),
+);
 const ReportAIChatDialog = lazy(() => import('@chunks/AI/ReportAIChatDialog'));
 
 export {
@@ -77,6 +81,7 @@ export const ContextMenuOptions = {
   SetEmoji: 'setEmoji',
   SetCover: 'setCover',
   CreateTableForm: 'createTableForm',
+  Reload: 'reload',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -213,9 +218,13 @@ export function ResourceContextMenu({
   );
 
   const items: DropdownItem[] = [];
+  // Reload sits with "Restart app" at the very bottom of the menu.
+  const maintenanceItems: DropdownItem[] = [];
   let previousSection: string | undefined;
 
-  for (const action of availableActions) {
+  for (const action of availableActions.filter(
+    a => a.section !== 'maintenance',
+  )) {
     if (previousSection !== undefined && action.section !== previousSection) {
       items.push(DIVIDER);
     }
@@ -259,6 +268,20 @@ export function ResourceContextMenu({
     });
   }
 
+  for (const action of availableActions.filter(
+    a => a.section === 'maintenance',
+  )) {
+    maintenanceItems.push({
+      id: action.id,
+      label: action.label(ctx),
+      helper: action.helper(ctx),
+      icon: action.icon?.(ctx),
+      keywords: action.keywords,
+      searchOnly: true,
+      onClick: () => runAction(action, ctx),
+    });
+  }
+
   // Page-specific actions lead; the menu owns their boundary with generic actions.
   // Older callers include a leading/trailing divider, which must not leak here.
   const pageItems = subject === ctx.currentSubject ? [...customItems] : [];
@@ -295,8 +318,21 @@ export function ResourceContextMenu({
   ];
 
   // The navbar's More menu ends with places in the app (settings, drives,
-  // feedback), below this page's own actions.
-  if (isMainMenu && !showOnly) allItems.push(DIVIDER, ...appMenu.find);
+  // feedback), below this page's own actions, then the maintenance group.
+  if (isMainMenu && !showOnly) {
+    allItems.push(
+      DIVIDER,
+      ...appMenu.find,
+      DIVIDER,
+      ...maintenanceItems,
+      ...appMenu.maintenance,
+    );
+  } else {
+    allItems.push(
+      ...addIf(maintenanceItems.length > 0, DIVIDER),
+      ...maintenanceItems,
+    );
+  }
 
   const filteredItems = showOnly
     ? allItems.filter(
@@ -394,12 +430,14 @@ export function ResourceContextMenu({
         />
       )}
       {pluginRunOpen !== undefined && ctx.drive !== undefined && (
-        <RunPluginDialog
-          resource={ctx.resource}
-          drive={ctx.drive}
-          show={pluginRunOpen}
-          onShowChange={setPluginRunOpen}
-        />
+        <Suspense fallback={null}>
+          <RunPluginDialog
+            resource={ctx.resource}
+            drive={ctx.drive}
+            show={pluginRunOpen}
+            onShowChange={setPluginRunOpen}
+          />
+        </Suspense>
       )}
       {reportChatOpen !== undefined && (
         <Suspense fallback={null}>

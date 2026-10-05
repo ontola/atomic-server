@@ -4,26 +4,64 @@ import { AccountSignIn } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
 import {
   getAccountProviders,
-  googleSignInUrl,
+  providerSignInUrl,
   sendAccountEmailLink,
+  type AccountProviders,
+  type SignInProvider,
 } from '../../helpers/managed/accountProviders';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import { getManagedAccount } from '../../helpers/managed/session';
-import { hasPasskeyApi } from '../../helpers/passkeySupport';
+import {
+  deviceCanUsePasskeys,
+  hasPasskeyApi,
+} from '../../helpers/passkeySupport';
 import {
   approvalUrl,
   awaitDeviceLink,
+  newReturnVerifier,
+  parseAccountReturn,
+  redeemDeviceLink,
   requestDeviceLink,
   type LinkRequest,
 } from '../../helpers/managed/deviceLink';
+import { setAccountReturnHandler } from '../../helpers/deepLinkQueue';
 import { openExternal } from '../../helpers/openExternal';
+import { isRunningInTauri } from '../../helpers/tauri';
 import { CardError } from './chrome';
 
 const EMAIL_POLL_MS = 2000;
 
+/** undefined while the device is still being asked. */
+function usePasskeysOnThisDevice(): boolean | undefined {
+  const [usable, setUsable] = useState<boolean | undefined>(() =>
+    hasPasskeyApi() ? undefined : false,
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    void deviceCanUsePasskeys().then(result => {
+      if (active) setUsable(result);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return usable;
+}
+
+const NO_PROVIDERS: AccountProviders = {
+  google: false,
+  apple: false,
+  github: false,
+  assisted_recovery: false,
+};
+
 /**
  * The account's ways in, the same component and the same options as the
- * portal's sign-in page: Google, passkey, email link. `onSignedIn` runs once
+ * portal's sign-in page: Google, Apple, GitHub, passkey, email link. `onSignedIn` runs once
  * this browser holds an account session, however it got one.
  */
 export function AccountSignInPanel({
@@ -36,15 +74,13 @@ export function AccountSignInPanel({
   onSignedIn: () => void;
 }) {
   const theme = useTheme();
-  const [providers, setProviders] = useState({
-    google: false,
-    assisted_recovery: false,
-  });
+  const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const passkeys = usePasskeysOnThisDevice();
   const signedIn = useRef(onSignedIn);
 
   useEffect(() => {
@@ -122,16 +158,19 @@ export function AccountSignInPanel({
     setSentTo(email.trim());
   }
 
+  const href = (provider: SignInProvider) =>
+    providers[provider]
+      ? providerSignInUrl(provider, portalUrl, window.location.href)
+      : null;
+
   return (
     <Themed>
       <AccountSignIn
-        googleHref={
-          providers.google
-            ? googleSignInUrl(portalUrl, window.location.href)
-            : null
-        }
+        googleHref={href('google')}
+        appleHref={href('apple')}
+        githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
-        passkeySupported={hasPasskeyApi()}
+        passkeySupported={passkeys === true}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => void handleEmail(e)}
@@ -176,7 +215,8 @@ const Sent = styled.p`
  * desktop and Android apps, a self-hosted origin): each one opens the
  * portal in the system browser, straight at that option, with a device-link
  * code, and this screen continues once the code is approved there. Google
- * refuses to sign in inside an app window anyway.
+ * refuses to sign in inside an app window anyway, and Apple's answer is a
+ * POST no app window could receive.
  */
 export function AccountSignInViaBrowser({
   portalUrl,
@@ -188,16 +228,18 @@ export function AccountSignInViaBrowser({
   onSignedIn: () => void;
 }) {
   const theme = useTheme();
-  const [providers, setProviders] = useState({
-    google: false,
-    assisted_recovery: false,
-  });
+  const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
   const [email, setEmail] = useState('');
   const [request, setRequest] = useState<LinkRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const waiting = useRef<AbortController | null>(null);
   const signedIn = useRef(onSignedIn);
+  /** The request in flight and, for an app the provider can send back to,
+   * the verifier only this app holds. */
+  const pending = useRef<{ request: LinkRequest; verifier?: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     signedIn.current = onSignedIn;
@@ -207,11 +249,40 @@ export function AccountSignInViaBrowser({
     let live = true;
     void getAccountProviders().then(p => live && setProviders(p));
 
+    // Signed in in the browser, which sent the handoff back through
+    // atomic://. Only this request's own handoff, redeemed with its verifier,
+    // can finish it; anything else is ignored.
+    const stopListening = setAccountReturnHandler(uri => {
+      const back = parseAccountReturn(uri);
+      const current = pending.current;
+
+      if (!back || !current?.verifier) return;
+      if (back.code !== current.request.user_code) return;
+
+      void redeemDeviceLink(
+        portalUrl,
+        current.request.device_code,
+        back.handoff,
+        current.verifier,
+      )
+        .catch(() => false)
+        .then(ok => {
+          if (!ok || !live) return;
+
+          pending.current = null;
+          waiting.current?.abort();
+          waiting.current = null;
+          setRequest(null);
+          signedIn.current();
+        });
+    });
+
     return () => {
       live = false;
+      stopListening();
       waiting.current?.abort();
     };
-  }, []);
+  }, [portalUrl]);
 
   function wait(issued: LinkRequest) {
     if (waiting.current) return;
@@ -223,6 +294,7 @@ export function AccountSignInViaBrowser({
       .catch(() => 'expired' as const)
       .then(outcome => {
         waiting.current = null;
+        pending.current = null;
         setRequest(null);
 
         if (controller.signal.aborted) return;
@@ -232,13 +304,21 @@ export function AccountSignInViaBrowser({
       });
   }
 
-  async function open(via: 'google' | 'passkey' | 'email') {
+  async function open(via: SignInProvider | 'passkey' | 'email') {
     setBusy(true);
     setError(null);
 
+    // The desktop and Android apps can be sent back to through atomic://,
+    // so signing in there is enough; a browser app keeps the code.
+    const sendBack = isRunningInTauri();
+    const returnVerifier = sendBack ? newReturnVerifier() : undefined;
     const issued =
       request ??
-      (await requestDeviceLink(portalUrl).catch((err: unknown) =>
+      (await requestDeviceLink(
+        portalUrl,
+        undefined,
+        returnVerifier?.challenge,
+      ).catch((err: unknown) =>
         err instanceof Error ? err : new Error(String(err)),
       ));
     setBusy(false);
@@ -253,9 +333,15 @@ export function AccountSignInViaBrowser({
       return;
     }
 
+    if (!request) {
+      pending.current = { request: issued, verifier: returnVerifier?.verifier };
+    }
+
     setRequest(issued);
     const url = new URL(approvalUrl(portalUrl, issued.user_code));
     url.searchParams.set('via', via);
+
+    if (pending.current?.verifier) url.searchParams.set('return', 'app');
 
     if (via === 'email' && email.trim()) {
       url.searchParams.set('email', email.trim());
@@ -270,6 +356,10 @@ export function AccountSignInViaBrowser({
       <AccountSignIn
         googleHref={null}
         onGoogle={providers.google ? () => void open('google') : undefined}
+        appleHref={null}
+        onApple={providers.apple ? () => void open('apple') : undefined}
+        githubHref={null}
+        onGitHub={providers.github ? () => void open('github') : undefined}
         onPasskey={() => void open('passkey')}
         email={email}
         onEmailChange={setEmail}

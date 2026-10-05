@@ -50,6 +50,8 @@ export function FileDropzoneInput({
   const { getRootProps, getInputProps } = useDropzone({
     onDrop: onFileSelect,
     maxFiles,
+    // A single-file dropzone must not let the chooser select several files.
+    multiple: maxFiles !== 1,
     accept: acceptedMimeTypes,
   });
 

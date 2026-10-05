@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Store } from './store.js';
-import { BrowserPeerSync } from './browser-peer-sync.js';
+import { webcrypto } from 'node:crypto';
+import { BrowserPeerSync, browserPeerId } from './browser-peer-sync.js';
 
 const peers = vi.hoisted(
   () =>
@@ -155,4 +156,49 @@ it('stops a connecting socket without joining or reconnecting after it opens', a
   expect(socket.sent).toEqual([]);
   await vi.advanceTimersByTimeAsync(6000);
   expect(SignalSocket.instances).toHaveLength(1);
+});
+
+function memoryStorage() {
+  const items = new Map<string, string>();
+
+  return {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+  };
+}
+
+it('gives every tab of one browser the same prefix per agent and room', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.stubGlobal('localStorage', memoryStorage());
+  const room = 'a'.repeat(64);
+  const one = await browserPeerId('did:ad:agent:me', room);
+  const two = await browserPeerId('did:ad:agent:me', room);
+  expect(one).toMatch(/^[a-f0-9]{64}$/);
+  expect(one).not.toBe(two);
+  expect(one.slice(0, 16)).toBe(two.slice(0, 16));
+  const elsewhere = await browserPeerId('did:ad:agent:me', 'b'.repeat(64));
+  expect(elsewhere.slice(0, 16)).not.toBe(one.slice(0, 16));
+});
+
+it('does not pair with another tab of the same browser', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.stubGlobal('localStorage', memoryStorage());
+  const socket = SignalSocket.instances[0];
+  socket.dispatchEvent(new Event('open'));
+  await vi.waitUntil(() =>
+    socket.sent.some(message => message.type === 'join'),
+  );
+  const join = socket.sent.find(message => message.type === 'join') as {
+    peer: string;
+  };
+  expect(join.peer).toMatch(/^[a-f0-9]{64}$/);
+  const ownTab = join.peer.slice(0, 16) + 'f'.repeat(48);
+  const otherBrowser = 'f'.repeat(64);
+  socket.message({ type: 'joined', peers: [ownTab, otherBrowser] });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(
+    socket.sent
+      .filter(message => message.type === 'offer')
+      .map(message => message.to),
+  ).toEqual([otherBrowser]);
 });

@@ -68,6 +68,35 @@ pub async fn apply_state_update(store: &Db, subject: &str, state_bytes: &[u8]) -
     .await
 }
 
+/// [`apply_state_update`] for many subjects in one write: every state is merged
+/// and materialized first, then they are persisted together, so pages the
+/// batch touches repeatedly are written once. Returns how many were applied;
+/// a state that does not decode is skipped and does not fail the rest. With
+/// `defer_search` the search entries are left for [`crate::search::index_pending`].
+pub async fn apply_state_updates(
+    store: &Db,
+    items: &[(String, Vec<u8>)],
+    defer_search: bool,
+) -> AtomicResult<usize> {
+    import_scope(None, async {
+        let mut entries = Vec::with_capacity(items.len());
+
+        for (subject, state_bytes) in items {
+            if let Some(resolved) = resolve_update(store, subject, state_bytes).await {
+                entries.push((resolved.resource, Some(resolved.snapshot)));
+            }
+        }
+
+        let applied = entries.len();
+        store
+            .persist_replicated_resources_opts(entries, defer_search)
+            .await?;
+
+        Ok(applied)
+    })
+    .await
+}
+
 /// A merged-in-memory UPDATE, not yet persisted. Lets the caller resolve the
 /// target drive and run an admission check before any bytes are written.
 pub struct ResolvedUpdate {

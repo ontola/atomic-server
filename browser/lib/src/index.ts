@@ -329,9 +329,17 @@ export {
   isAllDayOnDate,
   nextCalendarDate,
   matchesCalendarField,
+  calendarRecurrenceShortname,
 } from './calendar-date.js';
 
-export * from './calendar-recurrence.js';
+// The expansion functions live in `@tomic/lib/calendar-recurrence.js`: they
+// pull in the Temporal polyfill (~120 kB), which most apps never need.
+export type {
+  CalendarTime,
+  CalendarEvent,
+  CalendarRecord,
+  CalendarOccurrence,
+} from './calendar-recurrence.js';
 
 export {
   parseSetupDeclaration,

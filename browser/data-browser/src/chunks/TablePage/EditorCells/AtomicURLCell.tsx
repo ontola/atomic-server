@@ -263,6 +263,8 @@ function FileUploadContainer({
     return (
       <StyledFileDropzoneInput
         parentResource={row}
+        // The cell holds one file, so offer one.
+        maxFiles={1}
         onFilesUploaded={onFilesUploaded}
       />
     );

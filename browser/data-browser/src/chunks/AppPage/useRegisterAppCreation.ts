@@ -3,7 +3,7 @@ import { useStore } from '@tomic/react';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { registerBasicInstanceHandler } from '@components/forms/NewForm/useNewResourceUI';
-import { useAppClass } from '@chunks/PluginRuns/runScript';
+import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
 /**
  * Makes "App" in the New menu build a working app.
