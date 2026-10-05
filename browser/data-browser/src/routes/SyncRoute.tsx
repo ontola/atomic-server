@@ -26,6 +26,7 @@ import { BrowserPeerPanel } from '../components/BrowserPeerPanel';
 import { HostingPaymentRequiredError } from '../helpers/managed/enrollment';
 import { DiscoverWorkspace } from '../views/getting-started/DiscoverWorkspace';
 import {
+  Fragment,
   useEffect,
   useState,
   type JSX,
@@ -346,20 +347,40 @@ function ServerCard({
    * dropped string is not an error, it is simply never translated — which is
    * the quiet failure, so it is worth knowing about.
    */
-  const facts: string[] = [];
+  const facts: ReactNode[] = [];
 
   if (nodeUsage && usedBytes !== null) {
     facts.push(`${nodeUsage.resourceCount.toLocaleString()} resources`);
+
+    const usedText = quotaBytes
+      ? `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)}`
+      : formatBytes(usedBytes);
+
+    // The link to the size map sits right behind the space count.
     facts.push(
-      quotaBytes
-        ? `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)}`
-        : formatBytes(usedBytes),
+      isActive ? (
+        <span key='space'>
+          {usedText}{' '}
+          <ManagedLink
+            as={Link}
+            to={paths.storage}
+            data-testid='storage-map-link'
+          >
+            (see where space goes)
+          </ManagedLink>
+        </span>
+      ) : (
+        usedText
+      ),
     );
   }
 
-  if (driveSync) {
-    facts.push(syncedAgo ? `Synced ${syncedAgo}` : 'Synced just now');
-  }
+  // Shown next to the "in use" line at the top of the card.
+  const syncedFact = driveSync
+    ? syncedAgo
+      ? `Synced ${syncedAgo}`
+      : 'Synced just now'
+    : null;
 
   async function toggleWorkspaceSync(next: boolean) {
     const drive = status.drive;
@@ -437,9 +458,9 @@ function ServerCard({
       }
       subtitle={
         isActive
-          ? isCloud
-            ? serverHostname
-            : 'Always-on · in use'
+          ? [isCloud ? serverHostname : 'Always-on · in use', syncedFact]
+              .filter(Boolean)
+              .join(' · ')
           : 'Always-on device'
       }
       facts={isActive ? facts : undefined}
@@ -472,15 +493,6 @@ function ServerCard({
           This status describes data synchronization. View this drive’s
           subscription and price in billing.
         </ConnMeta>
-      )}
-      {isActive && nodeUsage && (
-        <ManagedLink
-          as={Link}
-          to={paths.storage}
-          data-testid='storage-map-link'
-        >
-          See where space goes →
-        </ManagedLink>
       )}
       {refusedByServer && (
         <ConnError role='alert'>
@@ -574,7 +586,7 @@ interface SyncCardProps {
   subtitle?: ReactNode;
   /** What is true of this connection, joined by dots. Empty entries drop out,
    *  so callers can build the list conditionally without filtering. */
-  facts?: (string | false | undefined | null)[];
+  facts?: ReactNode[];
   /** Anything between the facts and the node id: errors, a usage bar. */
   children?: ReactNode;
   /** Rendered as a click-to-copy row. Pass the full `did:ad:node:…`. */
@@ -605,7 +617,7 @@ function SyncCard({
   embedded,
 }: SyncCardProps): JSX.Element {
   const store = useStore();
-  const shown = (facts ?? []).filter((f): f is string => !!f);
+  const shown = (facts ?? []).filter(f => !!f);
 
   return (
     <ConnCard
@@ -638,7 +650,16 @@ function SyncCard({
 
         {children}
 
-        {shown.length > 0 && <ConnMeta>{shown.join(' · ')}</ConnMeta>}
+        {shown.length > 0 && (
+          <ConnMeta>
+            {shown.map((fact, i) => (
+              <Fragment key={i}>
+                {i > 0 && ' · '}
+                {fact}
+              </Fragment>
+            ))}
+          </ConnMeta>
+        )}
 
         {nodeId && (
           <NodeIdRow>

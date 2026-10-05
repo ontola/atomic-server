@@ -11990,6 +11990,16 @@ msgstr ""
 msgid "Location"
 msgstr ""
 
+#. 0: item.name; 1: formatBytes(item.totalBytes)
+#: src/components/StorageView.tsx
+msgid "{0} · {1} · click to look inside"
+msgstr ""
+
+#. 0: item.name; 1: formatBytes(item.totalBytes)
+#: src/components/StorageView.tsx
+msgid "{0} · {1} · click to open"
+msgstr ""
+
 #: src/components/StorageView.tsx
 msgid "Measuring…"
 msgstr ""
@@ -12006,9 +12016,12 @@ msgstr ""
 msgid "Where space goes"
 msgstr ""
 
+#~ msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> files and images, <1/> edit history."
+#~ msgstr ""
+
 #. 0: ' '
 #: src/components/StorageView.tsx
-msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> files and images, <1/> edit history."
+msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
 msgstr ""
 
 #: src/helpers/storageMap.ts
@@ -12023,8 +12036,11 @@ msgstr ""
 msgid "Back to sync settings"
 msgstr ""
 
+#~ msgid "See where space goes →"
+#~ msgstr ""
+
 #: src/routes/SyncRoute.tsx
-msgid "See where space goes →"
+msgid "(see where space goes)"
 msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
