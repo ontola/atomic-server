@@ -772,8 +772,13 @@ test.describe('tables', async () => {
       await expect(page.getByRole('tab', { name: kind })).toBeVisible();
     }
 
+    // The table's own view comes first and has a name that has changed before;
+    // only the order of the two views added here is under test.
     const tabNames = () =>
-      page.getByRole('tab').evaluateAll(tabs => tabs.map(t => t.textContent));
+      page
+        .getByRole('tab')
+        .evaluateAll(tabs => tabs.map(t => t.textContent))
+        .then(names => names.filter(n => n === 'Kanban' || n === 'Calendar'));
 
     await expect.poll(tabNames).toEqual(['Kanban', 'Calendar']);
 

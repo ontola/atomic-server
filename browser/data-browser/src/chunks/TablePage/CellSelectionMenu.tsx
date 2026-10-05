@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import toast from 'react-hot-toast';
 import { FaEraser, FaPen, FaTrash } from 'react-icons/fa6';
 import { DropdownMenu, type DropdownItem } from '@components/Dropdown';
 import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
@@ -68,7 +69,10 @@ export function CellSelectionMenu({
         icon: <FaEraser />,
         onClick: () => {
           picked.current = true;
-          void onClear(cells).finally(onClose);
+          // Closed now, not when the write lands: by then the person may have
+          // opened the menu again, and that one must not be closed under them.
+          onClose();
+          onClear(cells).catch(e => toast.error((e as Error).message));
         },
       },
       {
