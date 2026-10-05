@@ -26,6 +26,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   edit.
 - Fix: uploaded SVG files display in the data browser.
 
+- The per-group summary under a table has column headings, such as "Sum of Plus ones" and "Rows", so a bare number says what it measures.
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
 - A link or mention that points at a table View now opens the table with that view selected, instead of the view's configuration.
 - A Number column's total or average no longer shows a small nonzero value as 0, and a Number filter typed as `2.5e-5` or with trailing zeros finds the same rows as the plain number.
