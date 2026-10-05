@@ -6,6 +6,7 @@ pub mod blob_backend;
 mod canonical_scheme;
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod compaction;
+mod compressed_kv;
 mod encoding;
 pub mod encrypted_backend;
 pub mod kv_store;
@@ -504,7 +505,7 @@ impl Db {
         Db {
             path,
             blob_backend: None,
-            kv,
+            kv: Arc::new(compressed_kv::CompressedKv::new(kv)),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
             endpoints: vec![],

@@ -52,6 +52,9 @@ redb = { version = "4.1.0", optional = true }
 chacha20poly1305 = { version = "0.10", default-features = false, features = [
   "alloc",
 ], optional = true }
+# Compresses the large values in the store (`db::compressed_kv`). Pure Rust, so
+# it builds for WASM too.
+miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"], optional = true }
 toml = { version = "1.1.2", optional = true }
 tracing = "0.1"
 reqwest = { version = "0.13.3", default-features = false, features = ["rustls", "json"] }
@@ -91,7 +94,7 @@ version = "0.32"
 config = ["directories", "toml"]
 ## Core Db on redb (a file natively, memory in tests, OPFS in WASM).
 ## Does NOT pull in sled — works in WASM.
-db = ["rmp-serde", "redb", "chacha20poly1305"]
+db = ["rmp-serde", "redb", "chacha20poly1305", "miniz_oxide"]
 ## Kept so existing dependents keep building; `db` now includes redb.
 db-redb = ["db"]
 ## Full Db with sled backend and migrations. Implies `db`.

@@ -4512,3 +4512,114 @@ async fn row_inserted_between_two_others_after_the_index_was_built_lists_between
     let expect: Vec<String> = [0, 2, 1].iter().map(|i| subjects[*i].to_string()).collect();
     assert_eq!(order, expect);
 }
+
+/// Prints where the bytes of a 50-message chat go, per tree, with the
+/// compressed trees counted as stored. Run with `--ignored --nocapture`.
+#[tokio::test]
+#[ignore = "measurement, not a check"]
+async fn measure_chat_message_bytes() {
+    let store = Db::init_temp("measure_chat").await.unwrap();
+    let mut chat = Resource::new("did:ad:placeholder".into());
+    chat.set(urls::NAME.into(), Value::String("Chat".into()), &store)
+        .await
+        .unwrap();
+    chat.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::CHATROOM.into()]),
+        &store,
+    )
+    .await
+    .unwrap();
+    let chat = chat
+        .save_as_genesis(&store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap();
+    let parent = chat.get_subject().clone();
+    let trees = [
+        Tree::Resources,
+        Tree::LoroSnapshots,
+        Tree::Envelopes,
+        Tree::PropValSub,
+        Tree::ValPropSub,
+        Tree::QueryMembers,
+        Tree::WatchedQueries,
+        Tree::SearchPostings,
+        Tree::SearchDocs,
+        Tree::SearchTrigrams,
+        Tree::DidMapping,
+        Tree::DriveMapping,
+        Tree::Outbox,
+    ];
+    let tally = |store: &Db| {
+        trees
+            .iter()
+            .map(|t| {
+                let (mut n, mut k, mut v) = (0usize, 0usize, 0usize);
+                for kv in store.kv.iter_tree(*t) {
+                    let (key, val) = kv.unwrap();
+                    n += 1;
+                    k += key.len();
+                    v += if super::compressed_kv::is_compressed_tree(*t) {
+                        super::compressed_kv::encode(&val).len()
+                    } else {
+                        val.len()
+                    };
+                }
+                (*t, n, k, v)
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = tally(&store);
+    const N: usize = 50;
+    let mut last = None;
+    for i in 0..N {
+        let mut msg = Resource::new("did:ad:placeholder".into());
+        msg.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(parent.clone()),
+            &store,
+        )
+        .await
+        .unwrap();
+        msg.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::MESSAGE.into()]),
+            &store,
+        )
+        .await
+        .unwrap();
+        msg.set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown(format!("Hallo dit is bericht nummer {i}, een gewone zin.")),
+            &store,
+        )
+        .await
+        .unwrap();
+        let r = msg.save_as_genesis(&store).await.unwrap();
+        last = r.resource_new;
+    }
+    let after = tally(&store);
+    println!(
+        "{:<16}{:>6}{:>10}{:>10}{:>10}",
+        "tree", "rows", "key B", "val B", "B/msg"
+    );
+    let mut total = 0;
+    for (b, a) in before.iter().zip(after.iter()) {
+        let rows = a.1 - b.1;
+        let kb = a.2 - b.2;
+        let vb = a.3 - b.3;
+        total += kb + vb;
+        println!(
+            "{:<16}{:>6}{:>10}{:>10}{:>10}",
+            format!("{:?}", a.0),
+            rows,
+            kb,
+            vb,
+            (kb + vb) / N
+        );
+    }
+    println!("TOTAL per message: {}", total / N);
+    let _ = last;
+}
