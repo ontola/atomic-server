@@ -57,4 +57,9 @@ node_modules/
 # vite.config.ts runs on every vite / vitest start.
 /browser/data-browser/src/chunks/Website/runtime/search-view.html
 /browser/data-browser/src/chunks/Website/runtime/website-runtime.min.js
+
+# Machine-specific agent notes; never commit these
+CLAUDE.local.md
+AGENTS.local.md
+
 /e2e-test-results

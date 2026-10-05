@@ -48,6 +48,7 @@ import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import { notifications } from './ontologies/notifications.js';
+import { forms } from './ontologies/forms.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
 import {
@@ -98,6 +99,7 @@ import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
+  isPendingDepsCommitErrorMessage,
   isOutboxDatabase,
   isSettledDestroyErrorMessage,
   isTerminalCommitError,
@@ -493,6 +495,9 @@ const embeddedVocabulary = new Set<string>([
   // lib/defaults/notifications.json, likewise not on the catalog yet.
   ...Object.values(notifications.classes),
   ...Object.values(notifications.properties),
+  // lib/defaults/forms.json, likewise not on the catalog yet.
+  ...Object.values(forms.classes),
+  ...Object.values(forms.properties),
 ]);
 
 /** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */
@@ -1916,7 +1921,25 @@ export class Store {
       resource.appliedCommitSignatures.add(commit.signature);
     }
 
-    const created = await this.postCommit(commit, endpoint);
+    let created: Commit;
+
+    try {
+      created = await this.postCommit(commit, endpoint);
+    } catch (e) {
+      // Pending-deps rejection: the delta we just sent starts past ops the
+      // server never received (an earlier commit was lost after the save
+      // cursor advanced). Retrying the same delta can never succeed — the
+      // missing base won't appear server-side. Drop the cursor so the next
+      // drain attempt (scheduled by the outbox backoff) exports a
+      // self-contained snapshot, which the server can always merge; that
+      // re-delivers the lost range too.
+      if (e instanceof Error && isPendingDepsCommitErrorMessage(e.message)) {
+        resource.clearLoroSaveCursor();
+      }
+
+      throw e;
+    }
+
     const commitId = commitIdOf(created);
 
     if (commitId) {

@@ -39,6 +39,7 @@ export * from './ontologies/canvas.js';
 export * from './ontologies/forks.js';
 export * from './ontologies/notifications.js';
 export * from './ontologies/i18n.js';
+export * from './ontologies/forms.js';
 export * from './canvas-strokes.js';
 export * from './agent.js';
 // Needed outside this package by the Cloud Vault client, which must convert an

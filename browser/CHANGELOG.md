@@ -25,6 +25,26 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   `listDriveClasses`, `setResourceProperty`, `createResourceFromCompact`), plus
   the compact JSON-AD helpers (`toCompact`, `fromCompact`, ...) and short subject
   refs (`shortenSubject`, `expandSubject`) that used to live in the data-browser.
+- Forms (beta): build a form or survey and share a link; guests fill it in
+  without an account and each answer becomes a table row. Create one with
+  New > Form, or from a table with "Create form from this table" (pick its
+  columns). The builder has 21 question types, pages, drag-to-reorder,
+  "Show when" rules that hide questions and pages based on earlier answers,
+  required fields and limits, a Results tab (the table) and a Summary tab
+  (charts). Settings cover public or invite-only access, an open/close
+  schedule, a thank-you message, appearance and custom CSS. Share with a
+  link, QR code or embed snippet. Guests get a small separate app
+  (`@tomic/form-app`, built on the new `@tomic/form-renderer`) with a
+  progress bar and answers saved on their device until they submit.
+  [#875](https://github.com/ontola/atomic-server/issues/875)
+- Forms: share links use the server that hosts the workspace. Without one, the
+  builder says forms need a server instead of offering a link guests cannot open.
+- `@tomic/lib`: the forms ontology (`forms`) is exported and, like
+  `notifications`, fetched from the host rather than atomicdata.dev.
+- Fix: after the server refuses a commit that depends on ops it never
+  received, the next save resends the whole history instead of dropping the
+  edit.
+- Fix: uploaded SVG files display in the data browser.
 
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
 - The shared sign-in card no longer says "This browser does not support passkeys".
