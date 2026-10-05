@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React, { createRef } from 'react';
 import {
   cleanup,
@@ -30,6 +30,26 @@ const LOCAL_CLASS = 'did:ad:local-class';
 
 const fixture = vi.hoisted(() => ({ serverResults: [] as string[] }));
 
+/**
+ * No socket, and no reads. The picker resolves `atomicdata.dev/classes/Class`
+ * and the row of a server result through the store, and a store without a
+ * socket answers that with an HTTP request, a five-second wait for a socket and
+ * a lookup in the local database, all of which can finish after the file does.
+ * The answer then updates a component once jsdom is torn down: React reports
+ * `window is not defined`, and vitest counts it as an unhandled error and fails
+ * the run although every test passed. It only shows when the worker lingers
+ * past the end of the file, so on a loaded CI machine and almost never here.
+ */
+const newStore = () => {
+  const store = new Store({ serverUrl: SERVER, connect: false });
+  vi.spyOn(
+    store as unknown as { fetchResourceWithLocalFallback(): Promise<void> },
+    'fetchResourceWithLocalFallback',
+  ).mockResolvedValue();
+
+  return store;
+};
+
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
   useServerSearch: () => ({ results: fixture.serverResults }),
@@ -56,7 +76,7 @@ function classJson(subject: string, shortname: string, description: string) {
 }
 
 function storeWithFetchedClasses(): Store {
-  const store = new Store({ serverUrl: SERVER });
+  const store = newStore();
   const parser = new JSONADParser();
 
   for (const json of [
@@ -117,7 +137,7 @@ describe('searchLoadedExternal', () => {
   });
 
   it('leaves out subjects the server search already covers', () => {
-    const store = new Store({ serverUrl: SERVER });
+    const store = newStore();
 
     for (const subject of [
       `${SERVER}/classes/own`,
@@ -139,6 +159,16 @@ describe('searchLoadedExternal', () => {
 });
 
 describe('class picker', () => {
+  // The first render in this file is where styled-components builds its
+  // stylesheet, jsdom parses it and the picker's modules run for the first
+  // time. Under CI load that one-time cost put whichever test ran first over
+  // vitest's 5 s default, though the test itself takes a few milliseconds.
+  // Paid here, under the hook's own timeout.
+  beforeAll(() => {
+    show(storeWithFetchedClasses(), { searchValue: '' });
+    cleanup();
+  });
+
   it('shows a fetched external class for a partial name, marked with its origin', () => {
     fixture.serverResults = [LOCAL_CLASS];
     const { onSelect } = show(storeWithFetchedClasses(), {
@@ -179,7 +209,7 @@ describe('class picker', () => {
   });
 
   it('still selects a pasted URL directly', () => {
-    const { onSelect } = show(new Store({ serverUrl: SERVER }), {
+    const { onSelect } = show(newStore(), {
       searchValue: '',
     });
     const url = `${PAGES}/classes/never-fetched`;

@@ -64,6 +64,7 @@ export const ContextMenuOptions = {
   OpenOriginal: 'openOriginal',
   SetEmoji: 'setEmoji',
   SetCover: 'setCover',
+  Reload: 'reload',
 } as const;
 
 export type ContextMenuOptionsUnion =
@@ -194,9 +195,13 @@ export function ResourceContextMenu({
   );
 
   const items: DropdownItem[] = [];
+  // Reload sits with "Restart app" at the very bottom of the menu.
+  const maintenanceItems: DropdownItem[] = [];
   let previousSection: string | undefined;
 
-  for (const action of availableActions) {
+  for (const action of availableActions.filter(
+    a => a.section !== 'maintenance',
+  )) {
     if (previousSection !== undefined && action.section !== previousSection) {
       items.push(DIVIDER);
     }
@@ -229,6 +234,20 @@ export function ResourceContextMenu({
     });
   }
 
+  for (const action of availableActions.filter(
+    a => a.section === 'maintenance',
+  )) {
+    maintenanceItems.push({
+      id: action.id,
+      label: action.label(ctx),
+      helper: action.helper(ctx),
+      icon: action.icon?.(ctx),
+      keywords: action.keywords,
+      searchOnly: true,
+      onClick: () => runAction(action, ctx),
+    });
+  }
+
   // Page-specific actions lead; the menu owns their boundary with generic actions.
   // Older callers include a leading/trailing divider, which must not leak here.
   const pageItems = subject === ctx.currentSubject ? [...customItems] : [];
@@ -250,8 +269,21 @@ export function ResourceContextMenu({
   ];
 
   // The navbar's More menu ends with places in the app (settings, drives,
-  // feedback), below this page's own actions.
-  if (isMainMenu && !showOnly) allItems.push(DIVIDER, ...appMenu.find);
+  // feedback), below this page's own actions, then the maintenance group.
+  if (isMainMenu && !showOnly) {
+    allItems.push(
+      DIVIDER,
+      ...appMenu.find,
+      DIVIDER,
+      ...maintenanceItems,
+      ...appMenu.maintenance,
+    );
+  } else {
+    allItems.push(
+      ...addIf(maintenanceItems.length > 0, DIVIDER),
+      ...maintenanceItems,
+    );
+  }
 
   const filteredItems = showOnly
     ? allItems.filter(

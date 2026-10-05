@@ -413,3 +413,8 @@ export function expandCalendar(
 
   return output.sort((a, b) => a.start - b.start || a.key.localeCompare(b.key));
 }
+
+// Repeat rules and times of day use the Temporal polyfill too, so they ship
+// from this subpath with the expansion, not from the main entry.
+export * from './calendar-repeat.js';
+export * from './calendar-time.js';

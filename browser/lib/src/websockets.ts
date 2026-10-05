@@ -31,6 +31,8 @@ import {
   type Commit,
   parseCommitJSON,
   serializeDeterministically,
+  learnServerClock,
+  isFutureTimestampRefusal,
 } from './commit.js';
 import {
   Tag,
@@ -137,6 +139,10 @@ function getError(msg: { message: string; code: number }): AtomicError {
 /** How long `authenticate` waits for the server's `CHALLENGE` before signing
  *  a timestamp-only proof (a server that predates the frame never sends it). */
 const CHALLENGE_WAIT_MS = 300;
+
+/** Presence updates held for a not-yet-sent subscribe; the heartbeat repeats
+ *  the latest state, so a long backlog is never worth keeping. */
+const MAX_HELD_PRESENCE_UPDATES = 16;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 const connectionFailedMessage = (url: URL): string =>
@@ -268,6 +274,11 @@ export class WSClient {
   private openPromise: Promise<void>;
 
   private authenticatedWith: string | undefined;
+  /** Drives whose `PRESENCE_SUBSCRIBE` is deferred behind `authenticate()` and
+   *  not on the wire yet, with the presence updates produced meanwhile. The
+   *  server only relays updates from current subscribers, so an update sent
+   *  ahead of its subscribe frame is dropped; these go out right behind it. */
+  private pendingPresence = new Map<string, Uint8Array[]>();
   private isAuthenticating = false;
 
   private _closed = false;
@@ -833,10 +844,15 @@ export class WSClient {
    *  read access at subscribe time, so subscribing pre-auth would get
    *  refused for any non-public drive. */
   public subscribePresence(drive: string): void {
+    if (!this.pendingPresence.has(drive)) this.pendingPresence.set(drive, []);
+
     // authPromise initially resolves even before authentication starts.
     // Kick off authentication instead of treating that promise as readiness.
     void this.authenticate()
       .then(() => {
+        const held = this.pendingPresence.get(drive);
+        this.pendingPresence.delete(drive);
+
         if (
           this.readyState !== WebSocket.OPEN ||
           !this.authenticatedWith ||
@@ -846,13 +862,19 @@ export class WSClient {
         this.ws.send(
           'PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }),
         );
+
+        // `held` is gone when a withdrawn or repeated subscribe got here first.
+        for (const update of held ?? []) this.sendPresenceUpdate(drive, update);
       })
       .catch(() => {
         // authenticate() reports the handshake failure. Never subscribe after it.
+        this.pendingPresence.delete(drive);
       });
   }
 
   public unsubscribePresence(drive: string): void {
+    this.pendingPresence.delete(drive);
+
     if (this.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -862,7 +884,29 @@ export class WSClient {
 
   /** Broadcast presence bytes for `drive` as an `EPHEMERAL` frame. */
   public sendPresenceUpdate(drive: string, update: Uint8Array): void {
+    // Authenticated but not yet subscribed: the subscribe frame is a promise
+    // callback away, and the server drops updates from non-subscribers.
+    const held = this.pendingPresence.get(drive);
+
+    if (
+      held &&
+      this.readyState === WebSocket.OPEN &&
+      this.isAuthenticatedAsCurrentAgent()
+    ) {
+      if (held.length >= MAX_HELD_PRESENCE_UPDATES) held.shift();
+      held.push(update);
+
+      return;
+    }
+
     this.sendEphemeral(EphemeralKind.PRESENCE, drive, update);
+  }
+
+  private isAuthenticatedAsCurrentAgent(): boolean {
+    return (
+      !!this.authenticatedWith &&
+      this.authenticatedWith === this.store.getAgent()?.subject
+    );
   }
 
   /** One `EPHEMERAL (0x40)` frame; `kind` says which channel. The agent
@@ -873,11 +917,7 @@ export class WSClient {
     // Ephemera are transient: sending old cursor/presence data after a
     // handshake (or under the previous identity) is incorrect. The next
     // live update will publish once authentication has completed.
-    if (
-      !this.authenticatedWith ||
-      this.authenticatedWith !== this.store.getAgent()?.subject
-    )
-      return;
+    if (!this.isAuthenticatedAsCurrentAgent()) return;
     this.sendBinary(encodeEphemeral(kind, subject, '', update));
   }
 
@@ -1191,6 +1231,10 @@ export class WSClient {
       case Tag.ERROR: {
         const msg = decodeError(payload);
         if (!msg) break;
+
+        // A clock that runs ahead is refused on every AUTH and COMMIT; adopt
+        // the server's time so the reconnect and the outbox's retry pass.
+        learnServerClock(msg.message);
 
         // requestId 0 is the server's sentinel for connection-level errors
         // (e.g. AUTH failure) not tied to one specific pending GET/COMMIT —
@@ -1673,9 +1717,7 @@ export class WSClient {
       this.authenticatedWith !== this.store.getAgent()?.subject
     )
       return;
-    const knownError = drive
-      ? this.store.resources.get(drive)?.error
-      : undefined;
+    const knownError = drive ? this.hydratedResource(drive)?.error : undefined;
     // Onboarding can name a key-derived home whose data has not arrived yet.
     // A prior read already established that this server cannot subscribe it.
     if (isNotFound(knownError) || isUnauthorized(knownError)) return;
@@ -1726,6 +1768,23 @@ export class WSClient {
     this.sendBinary(encodeSub(this.wireSubject(subject)));
   }
 
+  /** A `SUB` for one resource, held via {@link Store.subscribeLive}. */
+  public subscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) return;
+    if (this.store.isLocalOnlySubject(subject)) return;
+    if (
+      this.store.getAgent()?.subject &&
+      this.authenticatedWith !== this.store.getAgent()?.subject
+    )
+      return;
+    this.sendBinary(encodeSub(this.wireSubject(subject)));
+  }
+
+  public unsubscribeResource(subject: string): void {
+    if (this.readyState !== WebSocket.OPEN) return;
+    this.sendBinary(encodeUnsub(this.wireSubject(subject)));
+  }
+
   public unsubscribeAgentProfile(subject: string): void {
     if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
     this.sendBinary(encodeUnsub(this.wireSubject(subject)));
@@ -1739,6 +1798,12 @@ export class WSClient {
     for (const subject of this.store.subscribers.keys()) {
       if (this.store.getWebSocketForSubject(subject) === this) {
         this.subscribeAgentProfile(subject);
+      }
+    }
+
+    for (const subject of this.store.liveSubjects.keys()) {
+      if (this.store.getWebSocketForSubject(subject) === this) {
+        this.subscribeResource(subject);
       }
     }
 
@@ -1856,7 +1921,16 @@ export class WSClient {
 
     if (this.store.getAgent()?.subject) {
       const authClose = perfSpan('ws.authenticate');
-      this.authenticate()
+      // A refusal for a clock that runs ahead has already taught
+      // `getTimestampNow` the server's time (see the ERROR frame handler), so
+      // one more attempt signs a timestamp the server accepts.
+      const authenticateOnce = () =>
+        this.authenticate().catch(e => {
+          if (this._closed || !isFutureTimestampRefusal(e)) throw e;
+
+          return this.authenticate();
+        });
+      authenticateOnce()
         .then(() => {
           authClose('ok');
           if (this._closed) return;
@@ -1901,17 +1975,27 @@ export class WSClient {
     return !!this.store.outbox.getEntry(drive)?.signedGenesis;
   }
 
+  private canAutomaticallySyncDrive(drive: string): boolean {
+    const error = this.hydratedResource(drive)?.error;
+
+    return (
+      this.store.isLiveSyncedDrive(drive) &&
+      !isNotFound(error) &&
+      !isUnauthorized(error)
+    );
+  }
+
   /** Version-vector probes being computed, per drive. Authenticate, reconcile
    *  and resync can each ask for one at the same moment; computing the sync
    *  state is O(drive size) on the database worker, so they share one run. */
   private _vvSyncRuns = new Map<string, Promise<void>>();
 
-  private startVVSync(drive: string): Promise<void> {
+  private startVVSync(drive: string, explicit = false): Promise<void> {
     const running = this._vvSyncRuns.get(drive);
 
     if (running) return running;
 
-    const run = this.runVVSync(drive).finally(() => {
+    const run = this.runVVSync(drive, explicit).finally(() => {
       if (this._vvSyncRuns.get(drive) === run) this._vvSyncRuns.delete(drive);
     });
 
@@ -1996,9 +2080,13 @@ export class WSClient {
     }
   }
 
-  private async runVVSync(drive: string): Promise<void> {
+  private async runVVSync(drive: string, explicit: boolean): Promise<void> {
+    if (!explicit && !this.canAutomaticallySyncDrive(drive)) return;
     if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
+    // Server-only mode (no OPFS / Web Locks): there is no local state to
+    // reconcile, and computing it would only fail, once per call.
+    if (this.store.getClientDb()?.initError) return;
 
     const current = this.connectionGuard();
 
@@ -2059,7 +2147,8 @@ export class WSClient {
       close({
         resourceCount: Object.keys(syncState.vvs ?? syncState.resources).length,
       });
-      if (!current()) return;
+      if (!current() || (!explicit && !this.canAutomaticallySyncDrive(drive)))
+        return;
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, { state: syncState, current });
       this.sendBinary(
@@ -2088,7 +2177,7 @@ export class WSClient {
   public async resyncDrive(drive: string): Promise<void> {
     if (this.readyState !== WebSocket.OPEN) return;
 
-    await this.startVVSync(drive);
+    await this.startVVSync(drive, true);
   }
 
   /** Respond to SYNC_RESEND: the probe's hash missed, so send the drive's

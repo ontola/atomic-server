@@ -75,6 +75,8 @@ beforeEach(() => {
         options: LockOptions,
         callback: () => Promise<void>,
       ) => {
+        if (options.steal) return callback();
+
         const request = tail.then(() => {
           if (options.signal?.aborted)
             throw new DOMException('Aborted', 'AbortError');
@@ -254,4 +256,32 @@ it('caps retries when successive leaders close during the same file operation', 
   expect(
     workers[2].messages.some(message => message.type === 'blake3Hash'),
   ).toBe(false);
+});
+
+it('takes the database over from a leader that holds the lock but answers nothing', async () => {
+  const leader = await openTab();
+  const follower = await openTab();
+  // A frozen tab: its lock is held, but its channel hears and says nothing.
+  channels.forEach(channel => {
+    if (channel !== (follower as unknown as { bc: TestChannel }).bc)
+      channels.delete(channel);
+  });
+  void leader;
+  const workersBefore = workers.length;
+
+  let result: Uint8Array | undefined;
+  let error: unknown;
+  void follower.blake3Hash(new Uint8Array([10])).then(
+    value => {
+      result = value as Uint8Array;
+    },
+    value => {
+      error = value;
+    },
+  );
+  await vi.advanceTimersByTimeAsync(10_000);
+
+  expect(workers.length).toBe(workersBefore + 1);
+  expect(error).toBeUndefined();
+  expect(result).toEqual(new Uint8Array([1, 2, 3]));
 });

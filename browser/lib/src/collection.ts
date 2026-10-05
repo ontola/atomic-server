@@ -325,6 +325,10 @@ export class Collection {
    */
   private _assemblingPage = false;
   private static legacyQueryServers = new WeakMap<Store, Set<string>>();
+  /** Pages of unsynced drives the server has answered this session. Its
+   * members were written to the local DB as they loaded and live updates keep
+   * it current, so the local answer is whole from then on. */
+  private static completedByServer = new WeakMap<Store, Set<string>>();
   private legacyQuery = false;
   private readonly preferServer: boolean;
   private legacyMembers?: Promise<string[]>;
@@ -769,7 +773,11 @@ export class Collection {
       this._memberIndex.set(subject, lastPageIdx);
       this.writePageMembers(
         lastPage,
-        [...members, subject],
+        this.withMemberInSortedPosition(
+          members,
+          subject,
+          this.pages.size === 1,
+        ),
         this._totalMembers,
       );
 
@@ -966,6 +974,24 @@ export class Collection {
     // here. The cold-load case pays at most one extra OPFS wait
     // before the server fetch fires.
     if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
+      // Only a drive synced into this client has its whole membership here.
+      // Anything else holds what this client happened to fetch or create: a
+      // guest in a chatroom shared from someone else's drive had their own
+      // messages and the ones present when they joined, and trusting that
+      // hid every later message from the host, on every reload. Asked once
+      // per page per session, not on every mount.
+      if (
+        this.store.serverConnected &&
+        !this.store.hasCompletedDriveSyncFor(
+          this.params.drive ?? this.store.getDrive(),
+        ) &&
+        !Collection.completedByServer
+          .get(this.store)
+          ?.has(this.buildSubject(page))
+      ) {
+        await this.completeFromServer(page);
+      }
+
       return;
     }
 
@@ -1003,6 +1029,101 @@ export class Collection {
     if (this.store.serverConnected) {
       await this.fetchPageFromServer(page).catch(() => undefined);
     }
+  }
+
+  /**
+   * A member's sort key, read from the store. `sortOrder` (fractional
+   * sibling-order key) falls back to the creation time, mirroring the server's
+   * query index, so explicitly positioned resources interleave with untouched
+   * ones. Client resources usually lack a materialized `createdAt` propval, so
+   * the genesis Loro change is read directly.
+   */
+  private sortKeyOf(subject: string, sortBy: string): unknown {
+    const isSortOrder = sortBy === dataBrowser.properties.sortOrder;
+    const isCreatedAt = sortBy === commits.properties.createdAt;
+    const resource = this.store.resources.get(subject);
+    let key = resource?.get(sortBy);
+
+    if (typeof key === 'number' && (isSortOrder || isCreatedAt)) {
+      key = isCreatedAt ? normalizeLoroChangeTimestampMs(key) : key;
+    } else if (key === undefined && resource && (isSortOrder || isCreatedAt)) {
+      key = resource.getCreatedAt();
+    }
+
+    return key;
+  }
+
+  /**
+   * `members` with `subject` added: in its sorted place when the collection is
+   * sorted on a key the store can read and the page holds the whole list,
+   * else at the end. A local database that has only some of the members at
+   * load (the rest arrive a moment later) would otherwise list them in the
+   * order they arrive, so a row that belongs between two others ends up first.
+   */
+  private withMemberInSortedPosition(
+    members: string[],
+    subject: string,
+    wholeList: boolean,
+  ): string[] {
+    const sortBy = this.params.sort_by;
+
+    if (!sortBy || !wholeList) return [...members, subject];
+
+    const sortDesc = !!this.params.sort_desc;
+    const key = this.sortKeyOf(subject, sortBy);
+    const keys = members.map(member => this.sortKeyOf(member, sortBy));
+
+    // A member the store does not hold yet has no key to compare against.
+    if (key === undefined || keys.some(k => k === undefined)) {
+      return [...members, subject];
+    }
+
+    let at = members.length;
+
+    while (
+      at > 0 &&
+      compareSortKeys(keys[at - 1], key, members[at - 1]!, subject, sortDesc) >
+        0
+    ) {
+      at -= 1;
+    }
+
+    return [...members.slice(0, at), subject, ...members.slice(at)];
+  }
+
+  /**
+   * Replace a page the local DB answered with the server's, keeping any member
+   * only the local DB knows: a write the server hasn't acknowledged yet must
+   * not vanish because the server answered first. When the server can't be
+   * reached, the local page stands.
+   */
+  private async completeFromServer(page: number): Promise<void> {
+    const local = this.pages.get(page)?.props.members ?? [];
+
+    try {
+      await this.fetchPageFromServer(page);
+    } catch {
+      return;
+    }
+
+    const answered =
+      Collection.completedByServer.get(this.store) ?? new Set<string>();
+    answered.add(this.buildSubject(page));
+    Collection.completedByServer.set(this.store, answered);
+
+    const fetched = this.pages.get(page);
+
+    if (!fetched) return;
+
+    const members = fetched.props.members ?? [];
+    const localOnly = local.filter(s => !members.includes(s));
+
+    if (localOnly.length === 0) return;
+
+    const total = (this._totalMembers ?? members.length) + localOnly.length;
+    this.writePageMembers(fetched, [...members, ...localOnly], total);
+    this.setPage(page, fetched);
+    this._totalMembers = total;
   }
 
   /**
@@ -1260,8 +1381,6 @@ export class Collection {
       // resources interleave with untouched ones. Client resources usually
       // lack a materialized `createdAt` propval, so read the genesis Loro
       // change directly.
-      const isSortOrder = sortBy === dataBrowser.properties.sortOrder;
-      const isCreatedAt = sortBy === commits.properties.createdAt;
 
       for (const s of result.subjects) {
         if (jsonSortKeys) {
@@ -1269,20 +1388,7 @@ export class Collection {
           continue;
         }
 
-        const resource = this.store.resources.get(s);
-        let key = resource?.get(sortBy);
-
-        if (typeof key === 'number' && (isSortOrder || isCreatedAt)) {
-          key = isCreatedAt ? normalizeLoroChangeTimestampMs(key) : key;
-        } else if (
-          key === undefined &&
-          resource &&
-          (isSortOrder || isCreatedAt)
-        ) {
-          key = resource.getCreatedAt();
-        }
-
-        sortKeys.set(s, key);
+        sortKeys.set(s, this.sortKeyOf(s, sortBy));
       }
 
       // Ordered to match the server, because the same collection can be
@@ -1299,33 +1405,9 @@ export class Collection {
       //     local index happened to yield — stable, but stable at a
       //     different order than the server's, which is exactly the case
       //     where every row shares a value (an unfilled column).
-      result.subjects.sort((a, b) => {
-        const valA = sortKeys.get(a);
-        const valB = sortKeys.get(b);
-        const aMissing = valA === null || valA === undefined;
-        const bMissing = valB === null || valB === undefined;
-
-        let cmp: number;
-
-        if (aMissing && bMissing) {
-          cmp = 0;
-        } else if (aMissing) {
-          cmp = -1;
-        } else if (bMissing) {
-          cmp = 1;
-        } else {
-          cmp =
-            typeof valA === 'number' && typeof valB === 'number'
-              ? valA - valB
-              : String(valA).localeCompare(String(valB));
-        }
-
-        if (cmp === 0) {
-          cmp = a.localeCompare(b);
-        }
-
-        return sortDesc ? -cmp : cmp;
-      });
+      result.subjects.sort((a, b) =>
+        compareSortKeys(sortKeys.get(a), sortKeys.get(b), a, b, sortDesc),
+      );
     }
 
     // Client-side pagination
@@ -1558,6 +1640,50 @@ function readAggregates(resource: Resource): AggregateOutcome[] {
   const value = resource.get(collections.properties.aggregates);
 
   return Array.isArray(value) ? (value as unknown as AggregateOutcome[]) : [];
+}
+
+/**
+ * Orders two members by their sort keys the way the server does, because the
+ * same collection can be answered by either and the two must not disagree.
+ * A row list that reshuffles depending on which side answered reads as data
+ * changing under you.
+ *
+ *   - Missing values FIRST. The server encodes them as `TAG_NONE` (0x05),
+ *     below every value tag, so they lead an ascending sort.
+ *   - Ties broken by subject. The server's member key is
+ *     `id || sort_key || subject`, so equal sort keys come back in subject
+ *     order.
+ */
+function compareSortKeys(
+  valA: unknown,
+  valB: unknown,
+  subjectA: string,
+  subjectB: string,
+  sortDesc: boolean,
+): number {
+  const aMissing = valA === null || valA === undefined;
+  const bMissing = valB === null || valB === undefined;
+
+  let cmp: number;
+
+  if (aMissing && bMissing) {
+    cmp = 0;
+  } else if (aMissing) {
+    cmp = -1;
+  } else if (bMissing) {
+    cmp = 1;
+  } else {
+    cmp =
+      typeof valA === 'number' && typeof valB === 'number'
+        ? valA - valB
+        : String(valA).localeCompare(String(valB));
+  }
+
+  if (cmp === 0) {
+    cmp = subjectA.localeCompare(subjectB);
+  }
+
+  return sortDesc ? -cmp : cmp;
 }
 
 /** Collections with more members than this are sorted from their JSON and only

@@ -130,8 +130,6 @@ impl AppState {
         store.add_endpoint(plugins::server_info::server_info_endpoint(
             server_info.clone(),
         ))?;
-        store.add_endpoint(plugins::versioning::version_endpoint())?;
-        store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
         store.add_endpoint(plugins::did::did_endpoint())?;
         store.add_endpoint(plugins::did::resource_endpoint())?;
         store.add_endpoint(plugins::did::atomic_endpoint())?;

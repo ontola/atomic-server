@@ -202,7 +202,7 @@ const SettingsAgent: React.FunctionComponent = () => {
                 </Button>
                 <Button
                   subtle
-                  title='Sign out. You can get back in on this device with your passkey.'
+                  title='Sign out of this device.'
                   onClick={handleSignOut}
                   data-test='sign-out'
                 >

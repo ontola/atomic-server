@@ -617,7 +617,7 @@ impl Handler<CommitMessage> for CommitMonitor {
     type Result = ResponseActFuture<Self, ()>;
 
     #[tracing::instrument(name = "handle_commit_message", skip_all, fields(subscriptions = &self.subscriptions.len(), s = %msg.commit_response.commit_resource.get_subject()))]
-    fn handle(&mut self, msg: CommitMessage, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: CommitMessage, ctx: &mut Context<Self>) -> Self::Result {
         // Normalize the subject using the base domain so it matches subscriptions
         let target_subject = atomic_lib::Subject::from_raw(
             msg.commit_response.commit.subject.as_str(),
@@ -630,6 +630,8 @@ impl Handler<CommitMessage> for CommitMonitor {
         // per-connection.
         let frames = encode_commit_frames(&self.store, &msg);
 
+        #[allow(clippy::mutable_key_type)]
+        let mut parent_subscribers: Vec<(Addr<WebSocketConnection>, Subscriber)> = Vec::new();
         if let Some(frames) = frames.as_ref() {
             // Per-resource subscribers
             if let Some(subscribers) = self.subscriptions.get(&target_subject) {
@@ -665,13 +667,81 @@ impl Handler<CommitMessage> for CommitMonitor {
                 .as_ref()
                 .and_then(|r| r.get_drive());
             let owner = resource_drive.as_ref().unwrap_or(&target_subject);
+            #[allow(clippy::mutable_key_type)]
+            let mut sent: HashSet<&Addr<WebSocketConnection>> = HashSet::new();
             for (drive, subscribers) in &self.drive_subscriptions {
                 let drive_subject = atomic_lib::Subject::from_raw(drive, base_domain.as_deref());
                 if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }
                 send_scheme_frames(subscribers, frames, |_| false);
+                sent.extend(subscribers.keys());
             }
+
+            // Subscribers of the parent. Someone given one resource out of a
+            // drive they can't read (a shared chatroom) can subscribe to that
+            // resource but not to the drive, and a new child is a new subject,
+            // so neither map above reaches them: every message after the one
+            // they loaded never arrived. A connection already reached above,
+            // through the drive or the resource itself, is skipped so it
+            // doesn't get the frame twice.
+            if let Some(subscribers) = self.subscriptions.get(&target_subject) {
+                sent.extend(subscribers.keys());
+            }
+            let parent = msg
+                .commit_response
+                .resource_new
+                .as_ref()
+                .or(msg.commit_response.resource_old.as_ref())
+                .and_then(|r| r.get(atomic_lib::urls::PARENT).ok())
+                .map(|p| atomic_lib::Subject::from_raw(&p.to_string(), base_domain.as_deref()));
+            if let Some(subscribers) = parent.and_then(|p| self.subscriptions.get(&p)) {
+                parent_subscribers.extend(
+                    subscribers
+                        .iter()
+                        .filter(|(connection, _)| !sent.contains(connection))
+                        .map(|(connection, subscriber)| (connection.clone(), subscriber.clone())),
+                );
+            }
+        }
+
+        // Rights are checked again at send time, per subscriber, against the
+        // resource itself: the subscription was admitted on the parent, and a
+        // child can carry rights of its own. `ctx.wait` keeps this delivery in
+        // order with the commits that follow it.
+        if !parent_subscribers.is_empty() {
+            let store = self.store.clone();
+            let msg = msg.clone();
+            ctx.wait(
+                async move {
+                    let Some(resource) = msg
+                        .commit_response
+                        .resource_new
+                        .as_ref()
+                        .or(msg.commit_response.resource_old.as_ref())
+                    else {
+                        return;
+                    };
+                    let mut allowed = Vec::new();
+                    for (connection, subscriber) in parent_subscribers {
+                        let agent = ForAgent::from(subscriber.agent.clone());
+                        if atomic_lib::hierarchy::check_read(&store, resource, &agent)
+                            .await
+                            .is_ok()
+                        {
+                            allowed.push((connection, subscriber));
+                        }
+                    }
+                    if let Some(frames) = encode_commit_frames(&store, &msg) {
+                        for (connection, subscriber) in &allowed {
+                            connection.do_send(SendFrame {
+                                frame: frames.for_subscriber(subscriber),
+                            });
+                        }
+                    }
+                }
+                .into_actor(self),
+            );
         }
 
         let store = self.store.clone();

@@ -165,6 +165,47 @@ describe('collection page assemble does not flash unsorted members', () => {
     }
   });
 
+  it('files a late-arriving member in its sortOrder place, not at the end', async ({
+    expect,
+  }) => {
+    // A reload whose local database held only the newest row: the page starts
+    // with that row and the rest arrive after it.
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const collection = new Collection(
+      store,
+      'https://example.com',
+      {
+        page_size: '30',
+        include_nested: false,
+        property: core.properties.parent,
+        value: TABLE,
+        sort_by: dataBrowser.properties.sortOrder,
+        sort_desc: false,
+      },
+      true,
+    );
+
+    const arrive = (subject: string, createdAt: number, sortOrder: number) => {
+      const row = new Resource(subject);
+      row.applyHydratedValues([
+        [core.properties.parent, TABLE],
+        [core.properties.isA, [dataBrowser.classes.folder]],
+        [commits.properties.createdAt, createdAt],
+        [dataBrowser.properties.sortOrder, sortOrder],
+      ]);
+      row.loading = false;
+      store.addResource(row);
+      collection.applyResourceChange(subject, row);
+    };
+
+    // Created a second after the others, positioned between them.
+    arrive(CHARLIE, 3000, 1500);
+    arrive(ALICE, 1000, 1000);
+    arrive(BOB, 2000, 2000);
+
+    expect(pageMembers(collection)).toEqual([ALICE, CHARLIE, BOB]);
+  });
+
   it('still optimistic-adds a resource created while the local query is in flight', async ({
     expect,
   }) => {

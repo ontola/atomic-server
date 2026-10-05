@@ -15,6 +15,10 @@ describe('useRehypeKatex', () => {
   it('loads the plugin once the text can contain math', async () => {
     const { result } = renderHook(() => useRehypeKatex('Energy: $E=mc^2$'));
 
-    await waitFor(() => expect(result.current).toBeTypeOf('function'));
+    // The first import of KaTeX and its CSS reads a few hundred kB from disk,
+    // which took over waitFor's default second on a loaded CI runner.
+    await waitFor(() => expect(result.current).toBeTypeOf('function'), {
+      timeout: 20_000,
+    });
   });
 });

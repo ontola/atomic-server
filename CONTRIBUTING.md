@@ -16,6 +16,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
 - [Translation \& Internationalization](#translation--internationalization)
 - [Running \& compiling](#running--compiling)
   - [Running locally (with local development browser)](#running-locally-with-local-development-browser)
+  - [Nix and NixOS](#nix-and-nixos)
   - [IDE setup (VSCode)](#ide-setup-vscode)
   - [Using Dagger](#using-dagger)
   - [Improve local compilation speed](#improve-local-compilation-speed)
@@ -56,8 +57,17 @@ TL;DR Clone the repo and run `cargo run` from each folder (e.g. `cli` or `server
 
 - Run `cargo run` to start the server
 - Go to `browser`, run `pnpm install` (if you haven't already), and run `pnpm dev` to start the browser
-- Visit your `localhost` in your locally running `atomic-data-browser` instance: (e.g. `http://localhost:5173/app/show?subject=http%3A%2F%2Flocalhost`)
+- Visit your `localhost` in your locally running `atomic-data-browser` instance: (e.g. `http://localhost:6747/app/show?subject=http%3A%2F%2Flocalhost`)
 - use `cargo watch -- cargo run` to automatically recompile `atomic-server` when you update JS assets in `browser`
+
+### Nix and NixOS
+
+`flake.nix` provides a development shell and a package. Both need flakes enabled.
+
+- `nix develop` gives you Rust (the version in `rust-toolchain.toml`), Node, pnpm, wasm-pack, wasm-bindgen and wasm-opt. On NixOS the prebuilt versions of those tools that `pnpm` and `wasm-pack` download can't run, so use this shell for the steps above (`cargo run`, `pnpm install`, `pnpm dev`, `pnpm run -r build`).
+- `nix build` (or `nix run`) builds the server in the Nix sandbox. The sandbox can't build the data browser yet, so the result serves the API only, with a placeholder page. Embed a bundle you built in the dev shell with `.override { dataBrowser = /path/to/browser/data-browser/dist; }`.
+- The package leaves out the server-side plugin runtime, because nixpkgs has no `wasm32-wasip2` standard library.
+- `rust-toolchain.toml` and `flake.nix` must agree: the dev shell warns when nixpkgs ships a different Rust version. Update the pin with `nix flake update`.
 
 ### IDE setup (VSCode)
 
@@ -121,7 +131,8 @@ tags as production.
 
 ### Open a PR
 
-- Make sure your branch is up to date with `develop`.
+- Branch from an up-to-date `develop`. Keeping up with `develop` afterwards is
+  the trekmeester's job (see below), so you don't need to rebase an open PR.
 - Open a PR against `develop`.
 - Make sure all relevant tests / lint pass.
 
@@ -130,6 +141,18 @@ tags as production.
 Only the **trekmeester** agent merges pull requests into `develop`. Everyone
 else, human or AI agent, opens PRs and addresses review, but does not merge
 into `develop` themselves.
+
+The trekmeester also brings PRs up to date with `develop`. When a PR is
+behind or conflicts, it does not wait for the author to rebase: it knows what
+landed on `develop` since the PR branched (renames, moved code, reverted
+approaches), so it is the one best placed to resolve the conflicts. Stacked
+PRs are updated bottom-up, each onto its updated base. Branches that others
+build on (like `feat/*` integration branches) get `develop` merged in rather
+than rebased, so nobody's local checkout is rewritten under them. Every
+conflict it resolved is listed in a PR comment, so the author can check the
+result. The author is only asked when a conflict is a design decision, not a
+mechanical one, or when a check that passed before now fails for a reason
+that is theirs to judge.
 
 ### Pre-commit checks
 

@@ -1,4 +1,8 @@
-import { expandCalendar } from '@tomic/lib/calendar-recurrence.js';
+import {
+  dayInZone,
+  expandCalendar,
+  viewerTimeZone,
+} from '@tomic/lib/calendar-recurrence.js';
 import {
   isAllDayOnDate,
   nextCalendarDate,
@@ -24,33 +28,22 @@ export interface CalendarDayOccurrence extends CalendarOccurrence {
   movedFrom?: string;
   /** A placeholder: this instance moved to that day (YYYY-MM-DD). */
   movedTo?: string;
+  /** Has a time of day: its chip shows `start` in local time. */
+  timed?: boolean;
 }
 
-/** The civil day of a start time: its date, or the date on the wall clock of
- * its own zone, else the series' zone, else as written. Mirrors how the
- * expansion places occurrences (`eventDay` in @tomic/lib). */
-function civilDay(time: CalendarTime | undefined, fallbackZone?: string) {
+/** The day of a start time on the grid: an all-day event's date, or the
+ * viewer's local day of a timed one (#1802), like Google Calendar. */
+function civilDay(time: CalendarTime | undefined, viewerZone: string) {
   if (time?.date) return time.date;
   if (!time?.dateTime) return undefined;
-  const zone = time.timeZone ?? fallbackZone;
-  if (!zone) return time.dateTime.slice(0, 10);
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-      .formatToParts(new Date(time.dateTime))
-      .map(part => [part.type, part.value]),
-  );
 
-  return `${parts.year}-${parts.month}-${parts.day}`;
+  return dayInZone(Date.parse(time.dateTime), viewerZone);
 }
 
 /** The moves in one series, keyed like `CalendarOccurrence.key`: the
  * original instance's [calendarId, series id, original start]. */
-function seriesMoves(group: CalendarRecord[]) {
+function seriesMoves(group: CalendarRecord[], viewerZone: string) {
   const moves = new Map<
     string,
     { record: CalendarRecord; from: string; to: string; start: number }
@@ -65,9 +58,8 @@ function seriesMoves(group: CalendarRecord[]) {
         other.event.id === event.recurringEventId,
     )?.event;
     if (master?.status === 'cancelled') continue;
-    const zone = master?.start?.timeZone;
-    const from = civilDay(event.originalStartTime, zone);
-    const to = civilDay(event.start, zone);
+    const from = civilDay(event.originalStartTime, viewerZone);
+    const to = civilDay(event.start, viewerZone);
     if (!from || !to || from === to) continue;
     const original = event.originalStartTime!;
     const start = Date.parse(
@@ -96,17 +88,19 @@ function seriesKey(record: CalendarRecord): string {
   ]);
 }
 
+/** Each grid day's occurrences. All-day events keep their dates and
+ * exclusive end; timed ones go on the viewer's local day (`viewerZone`). */
 export function calendarOccurrenceBuckets(
   records: CalendarRecord[],
   days: string[],
+  viewerZone: string = viewerTimeZone(),
 ) {
   const buckets = new Map<string, CalendarDayOccurrence[]>();
   const invalid: InvalidCalendarRecord[] = [];
   if (!days.length || !records.length) return { buckets, invalid };
   // Per-series expansion must not sidestep expandCalendar's own size guard.
   if (records.length > 5000) throw new Error('Too many calendar records');
-  // The view groups by the event's civil day, not the browser's timezone.
-  // Include offset margins before assigning actual civil dates to cells.
+  // Include offset margins before assigning local days to cells.
   const from = Date.parse(`${days[0]}T00:00:00Z`) - 86400000;
   const to = Date.parse(`${days[days.length - 1]}T00:00:00Z`) + 2 * 86400000;
 
@@ -123,9 +117,16 @@ export function calendarOccurrenceBuckets(
   for (const group of series.values()) {
     try {
       const expanded = expandCalendar(group, from, to);
-      const moves = seriesMoves(group);
+      const moves = seriesMoves(group, viewerZone);
 
-      for (const occurrence of expanded) {
+      for (const expandedOccurrence of expanded) {
+        const occurrence = expandedOccurrence.allDay
+          ? expandedOccurrence
+          : {
+              ...expandedOccurrence,
+              day: dayInZone(expandedOccurrence.start, viewerZone),
+              endDay: dayInZone(expandedOccurrence.end, viewerZone),
+            };
         const move = moves.get(occurrence.key);
         occurrences.push(
           move ? { ...occurrence, movedFrom: move.from } : occurrence,

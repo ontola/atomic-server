@@ -29,7 +29,7 @@ impl RequestContext {
         // sends. Only hosts this server is configured to answer for are taken
         // from the headers; anything else falls back to the configured origin.
         let origin = match host {
-            Some(h) if host_is_served_here(h, &appstate.config.opts) => {
+            Some(h) if host_is_served_by(h, appstate) => {
                 let p = proto.unwrap_or(if appstate.config.opts.https {
                     "https"
                 } else {
@@ -87,8 +87,17 @@ pub(crate) fn host_is_served_here(host: &str, opts: &crate::config::Opts) -> boo
     false
 }
 
+/// [`host_is_served_here`], or a host this server has a Drive mapping for.
+/// A vanity name the control plane routed here (`ontola.atomic.place`) need
+/// not sit under any configured suffix: the mapping itself says this server
+/// answers for it, and only the control plane or an admin can install one.
+pub(crate) fn host_is_served_by(host: &str, appstate: &AppState) -> bool {
+    host_is_served_here(host, &appstate.config.opts)
+        || appstate.store.has_drive_mapping(strip_port(host))
+}
+
 /// `host:port` -> `host`, leaving IPv6 literals (`[::1]:9883`) intact.
-fn strip_port(host: &str) -> &str {
+pub(crate) fn strip_port(host: &str) -> &str {
     if host.starts_with('[') {
         match host.find(']') {
             Some(end) => &host[..=end],

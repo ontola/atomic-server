@@ -219,3 +219,12 @@ Rust inspection is available for a future matching confirmation step there.
 ### Account recovery after code sign-in
 
 The browser/Tauri Account recovery card offers recovery-code unlock independently of passkeys, including after a WebAuthn failure. A portal session plus the existing recovery code can add a passkey without replacing the code or older passkeys. Each passkey uses its own PRF salt. Flutter has no corresponding envelope-management card yet.
+
+### One set of account sign-in options
+
+Every screen that signs in to the account (the portal's sign-in page and its
+homepage panel, the app's sign-in and restore steps) renders the same
+`AccountSignIn` from `@tomic/service-ui`: Google, passkey, email link. The app
+adds only what the portal cannot do, pasting an agent secret. Native builds that
+cannot hold the account cookie link the device with a code instead. Flutter has
+no account sign-in yet.

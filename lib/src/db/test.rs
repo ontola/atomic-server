@@ -33,6 +33,27 @@ async fn synthetic_agent_reads_have_stable_history_without_persisting() {
     assert!(!db.has_stored_resource(&agent.subject));
 }
 
+/// A profile stored under a padded spelling of the key answers for the
+/// canonical unpadded subject too, instead of an empty synthesized twin.
+#[tokio::test]
+async fn agent_profile_under_padded_key_answers_for_unpadded_subject() {
+    let db = Db::init_temp("agent_padded_spelling").await.unwrap();
+    let agent = crate::agents::Agent::new(Some("Padded")).unwrap();
+    let padded = format!("{}=", agent.public_key);
+    let mut stored = agent.to_resource().unwrap();
+    stored.set_subject(format!("atomic:agent:{padded}"));
+    stored
+        .set_unsafe(urls::PUBLIC_KEY.into(), Value::String(padded.clone()))
+        .unwrap();
+    db.add_resource_opts(&stored, false, false, true)
+        .await
+        .unwrap();
+
+    let read = db.get_resource(&agent.subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "Padded");
+    assert_eq!(read.get_subject().to_string(), agent.subject.to_string());
+}
+
 /// Share the Db instance between tests. Otherwise, all tests try to init the same location on disk and throw errors.
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
@@ -4130,4 +4151,217 @@ async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
         .get(Tree::ValPropSub, &legacy_vps)
         .unwrap()
         .is_none());
+}
+
+/// An `after_commit` extender runs after the commit is persisted, so its
+/// failure must not turn into a failed commit: the client would retry or show
+/// an error for a change that was saved. The error is logged instead, and the
+/// extenders registered after the failing one still run. (#1848)
+#[tokio::test]
+#[timeout(120000)]
+async fn failing_after_commit_does_not_fail_a_saved_commit() {
+    use crate::class_extender::ClassExtender;
+    use crate::commit::{CommitBuilder, CommitOpts};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    const CLASS: &str = "did:ad:afterCommitFailureTestClass";
+
+    let store = Db::init_temp("after_commit_failure").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+
+    store
+        .add_class_extender(
+            ClassExtender::builder()
+                .id("failing")
+                .class(CLASS)
+                .after_commit_fn(|_ctx| Box::pin(async { Err("after_commit exploded".into()) }))
+                .build(),
+        )
+        .unwrap();
+
+    let later_ran = Arc::new(AtomicBool::new(false));
+    let flag = later_ran.clone();
+    store
+        .add_class_extender(
+            ClassExtender::builder()
+                .id("later")
+                .class(CLASS)
+                .after_commit_fn(move |_ctx| {
+                    let flag = flag.clone();
+                    Box::pin(async move {
+                        flag.store(true, Ordering::SeqCst);
+                        Ok(())
+                    })
+                })
+                .build(),
+        )
+        .unwrap();
+
+    let mut builder = CommitBuilder::new("placeholder".into());
+    builder.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![Subject::from(CLASS).into()]),
+    );
+    builder.set(urls::NAME.into(), Value::String("saved anyway".into()));
+    let commit = crate::commit::Commit::create_did(builder, &agent, &store)
+        .await
+        .unwrap();
+    let subject = commit.subject.clone();
+
+    let result = store
+        .apply_commit(commit, &CommitOpts::no_validations_no_index())
+        .await;
+    assert!(
+        result.is_ok(),
+        "a failing after_commit must not fail a persisted commit: {:?}",
+        result.err()
+    );
+
+    let stored = store.get_resource(&subject).await.unwrap();
+    assert_eq!(stored.get(urls::NAME).unwrap().to_string(), "saved anyway");
+    assert!(
+        later_ran.load(Ordering::SeqCst),
+        "the extender after the failing one should still run"
+    );
+}
+
+/// A table row is indexed by `createdAt` while it has no `sortOrder`, and is
+/// given one by a later commit (Shift+Enter inserts a row between two others).
+/// The old `createdAt` entry must go: left behind, the row is listed at its
+/// creation time instead of where its `sortOrder` puts it.
+#[tokio::test]
+#[timeout(120000)]
+async fn sort_order_added_by_a_later_commit_replaces_the_created_at_entry() {
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("sort_order_later_commit").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+    let drive_did = store.create_drive("Test Drive").await.unwrap();
+    let row_class = "https://atomicdata.dev/classes/Test";
+
+    let opts = CommitOpts {
+        update_index: true,
+        ..CommitOpts::no_validations_no_index()
+    };
+    // A table row is a draft first (parent and class only) and gets its
+    // content, with its sortOrder, in a later commit.
+    let mut rows: Vec<(Subject, String)> = Vec::new();
+    for _ in 0..3 {
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(drive_did.clone().into()),
+        );
+        b.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![row_class.into()]),
+        );
+        let commit = Commit::create_did(b, &agent, &store).await.unwrap();
+        let subject = commit.subject.clone();
+        let result = store.apply_commit(commit, &opts).await.unwrap();
+        rows.push((subject, result.commit_resource.get_subject().to_string()));
+        // createdAt has millisecond resolution.
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+    query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    query.sort_by = Some(urls::SORT_ORDER.to_string());
+    query.drive = Some(drive_did.clone().into());
+    query.limit = Some(100);
+
+    // Builds and watches the index: creation order.
+    let before = store.query(&query).await.unwrap();
+    assert_eq!(before.subjects.len(), 3, "got {:?}", before.subjects);
+
+    // Give the first row a sortOrder far above every createdAt: it must go
+    // last.
+    let (subject, previous) = rows[0].clone();
+    let stored = store.get_resource(&subject).await.unwrap();
+    let mut b = CommitBuilder::new(subject.clone());
+    b.set(urls::NAME.into(), Value::String("first".into()));
+    b.set(urls::SORT_ORDER.into(), Value::Float(1.0e18));
+    b.set_previous_commit(previous);
+    let commit = b.sign(&agent, &store, &stored).await.unwrap();
+    store.apply_commit(commit, &opts).await.unwrap();
+
+    let after = store.query(&query).await.unwrap();
+    let order: Vec<String> = after.subjects.iter().map(|s| s.to_string()).collect();
+    assert_eq!(
+        order.last().map(String::as_str),
+        Some(subject.as_str()),
+        "the row with the big sortOrder must list last, got {order:?}"
+    );
+    assert_eq!(order.len(), 3, "no duplicate entries, got {order:?}");
+}
+
+/// Shift+Enter in a table: the third row is created after the first query
+/// built the index and carries a `sortOrder` between the other two, so it must
+/// list between them.
+#[tokio::test]
+#[timeout(120000)]
+async fn row_inserted_between_two_others_after_the_index_was_built_lists_between_them() {
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+    let store = Db::init_temp("zz_insert").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+    let drive_did = store.create_drive("Test Drive").await.unwrap();
+    let row_class = "https://atomicdata.dev/classes/Test";
+    let opts = CommitOpts {
+        update_index: true,
+        ..CommitOpts::no_validations_no_index()
+    };
+    let now = 1_791_033_284_445.0_f64;
+    let mut subjects = Vec::new();
+    for (i, v) in [now, now + 265.0, now + 130.0].into_iter().enumerate() {
+        if i == 2 {
+            let mut q = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+            q.filters = vec![crate::storelike::PropVal {
+                property: Some(urls::IS_A.to_string()),
+                value: Some(Value::AtomicUrl(row_class.into())),
+                ..Default::default()
+            }];
+            q.sort_by = Some(urls::SORT_ORDER.to_string());
+            q.drive = Some(drive_did.clone().into());
+            q.limit = Some(100);
+            // Builds and watches the index with the first two rows in it.
+            let first = store.query(&q).await.unwrap();
+            assert_eq!(first.subjects.len(), 2);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+        let doc = loro::LoroDoc::new();
+        let props = doc.get_map("properties");
+        props.insert(urls::PARENT, drive_did.as_str()).unwrap();
+        props.insert(urls::SORT_ORDER, v).unwrap();
+        let list = props
+            .insert_container(urls::IS_A, loro::LoroList::new())
+            .unwrap();
+        list.push(row_class).unwrap();
+        doc.commit();
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set_loro_update(doc.export(loro::ExportMode::Snapshot).unwrap());
+        let commit = Commit::create_did(b, &agent, &store).await.unwrap();
+        subjects.push(commit.subject.clone());
+        store.apply_commit(commit, &opts).await.unwrap();
+    }
+    let mut q = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+    q.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    q.sort_by = Some(urls::SORT_ORDER.to_string());
+    q.drive = Some(drive_did.clone().into());
+    q.limit = Some(100);
+    let res = store.query(&q).await.unwrap();
+    let order: Vec<String> = res.subjects.iter().map(|s| s.to_string()).collect();
+    let expect: Vec<String> = [0, 2, 1].iter().map(|i| subjects[*i].to_string()).collect();
+    assert_eq!(order, expect);
 }

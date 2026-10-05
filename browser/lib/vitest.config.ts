@@ -10,6 +10,11 @@ export default defineConfig({
     // a separate CI step that builds the Rust binary first.
     include: ['src/**/*.test.ts'],
     setupFiles: ['src/test-setup.ts'],
+    // Not the 5 s default: on a CI host running several pipelines at once,
+    // ten tests that take milliseconds locally (signing a string, among them)
+    // all hit 5 s together (batch #1966's first run). A test that really
+    // hangs still fails; it only takes longer to say so.
+    testTimeout: 20_000,
   },
   server: {
     port: 5175,

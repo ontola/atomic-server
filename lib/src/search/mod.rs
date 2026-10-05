@@ -436,6 +436,12 @@ pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec
         if doc.subject.is_empty() {
             continue;
         }
+        // An entry whose resource is gone (left behind by an interrupted
+        // write, or by a store older than the unindex-on-destroy) would
+        // otherwise be listed and then fail to open.
+        if !store.has_resource_locally(&doc.subject) {
+            continue;
+        }
         if !parents.is_empty()
             && !subject_in_parents(store, &doc.subject, &parents, &mut doc_cache)?
         {

@@ -43,6 +43,19 @@ import {
   type MergeForkOptions,
 } from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
+import { withDeadline } from './withDeadline.js';
+
+/** How long a save the server already acknowledged waits on the local mirror. */
+const LOCAL_MIRROR_AFTER_ACK_DEADLINE_MS = 3_000;
+
+/**
+ * How long a write whose local copy is the only copy waits for a database that
+ * is still opening. On a loaded host the open can outlast the 17s after which
+ * the database is parked and every write to it rejects; a local-only drive or
+ * an offline save has nowhere else to go, so it waits for the open instead of
+ * failing. Past this it fails, and says why.
+ */
+const LOCAL_COPY_OPEN_WAIT_MS = 30_000;
 import {
   DERIVED_BY_SERVER,
   SERVER_MANAGED_PROPS,
@@ -3463,7 +3476,16 @@ export class Resource<C extends OptionalClass = any> {
       // The server acknowledgement does not make the OPFS cache durable.
       // Explicit saves must survive an immediate reload for existing resources
       // too (for example a dashboard block renamed in its config dialog).
-      await this.persistToClientDb();
+      // The server holds the commit now, so the local mirror is a cache: a
+      // reload refetches what it lacks. Failing `save()` here told the caller
+      // a durable change had failed, and a retry made a duplicate (a second
+      // canvas, a second comments folder). A local database that is stuck
+      // behind another tab gets a short wait, then the save reports success.
+      await withDeadline(
+        this.persistToClientDb(),
+        LOCAL_MIRROR_AFTER_ACK_DEADLINE_MS,
+        false,
+      );
       this.commitError = undefined;
 
       return 'persisted';
@@ -3629,6 +3651,19 @@ export class Resource<C extends OptionalClass = any> {
     // A save must not resolve in that gap without writing its snapshot.
     const identity = this.store.getAgent()?.subject;
     await this.store.waitForClientDb(10_000);
+
+    const opening = this.store.getClientDb();
+
+    if (
+      opening &&
+      !opening.unsupportedEnvironment &&
+      opening.isOpen === false
+    ) {
+      console.info(
+        '[persistToClientDb] waiting for the local database to finish opening',
+      );
+      await opening.whenOpen(LOCAL_COPY_OPEN_WAIT_MS);
+    }
 
     if (this.store.getAgent()?.subject !== identity) {
       throw new Error('Identity changed before local persistence');

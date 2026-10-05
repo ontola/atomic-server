@@ -14,6 +14,24 @@ const queue: string[] = [];
 const seen = new Set<string>();
 let sink: ((uri: string) => void) | undefined;
 
+// A signed-in account coming back from the browser (`atomic://account-return`,
+// see helpers/managed/deviceLink.ts). Only meaningful to the sign-in screen
+// that is waiting for it, so it goes there rather than into the queue: one
+// that arrives with nobody waiting belongs to no request of this app.
+const ACCOUNT_RETURN = 'atomic://account-return?';
+let accountReturn: ((uri: string) => void) | undefined;
+
+/** Receive account-return links while a sign-in waits for one. */
+export function setAccountReturnHandler(
+  handler: (uri: string) => void,
+): () => void {
+  accountReturn = handler;
+
+  return () => {
+    if (accountReturn === handler) accountReturn = undefined;
+  };
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('atomic-deep-link', event => {
     const uri = (event as CustomEvent).detail;
@@ -23,6 +41,12 @@ if (typeof window !== 'undefined') {
     }
 
     seen.add(uri);
+
+    if (uri.startsWith(ACCOUNT_RETURN)) {
+      accountReturn?.(uri);
+
+      return;
+    }
 
     if (sink) {
       sink(uri);

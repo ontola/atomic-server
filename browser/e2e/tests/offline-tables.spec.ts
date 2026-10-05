@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import {
+  clickAccountMenuItem,
   FRONTEND_URL,
   editableTitle,
   setGridCell,
@@ -39,10 +40,7 @@ test.describe('offline tables', () => {
     });
 
     // 2. Go to the Sync page and disconnect from the server.
-    await page
-      .getByTestId('sidebar')
-      .getByRole('link', { name: 'Sync' })
-      .click();
+    await clickAccountMenuItem(page, 'Sync');
     await page.getByRole('button', { name: 'Disconnect' }).click();
     await expect
       .poll(() =>

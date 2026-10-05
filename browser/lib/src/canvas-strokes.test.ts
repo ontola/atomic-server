@@ -53,4 +53,35 @@ describe('canvas-strokes', () => {
     expect(canvas.properties.strokeData).toContain('strokeData');
     expect(canvas.classes.canvas).toContain('Canvas');
   });
+
+  it('round-trips text and image elements through the stroke shape', ({
+    expect,
+  }) => {
+    const text = {
+      color: 0xff000000,
+      width: 0.01,
+      path: [[5, 6]] as [number, number][],
+      kind: 'text' as const,
+      text: 'hello\nworld',
+      size: 30,
+    };
+    const image = {
+      color: 0xff000000,
+      width: 0.01,
+      path: [[1, 2]] as [number, number][],
+      kind: 'image' as const,
+      src: 'data:image/png;base64,AAAA',
+      w: 120,
+      h: 80,
+    };
+
+    const parsed = parseCanvasStrokes([
+      strokeToJson(text),
+      strokeToJson(image),
+    ]);
+
+    expect(parsed).toEqual([text, image]);
+    // Still shaped like a stroke, so older readers do not choke.
+    expect(strokeToJson(text).path).toEqual([[5, 6]]);
+  });
 });

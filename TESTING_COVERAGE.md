@@ -22,6 +22,8 @@ Collection alias indexing: `sorted_parent_query_deduplicates_legacy_and_canonica
 
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
+Document images: `document-image.spec.ts` uploads a freshly generated PNG through the editor's image picker in a browser-only drive, whose bytes never reach a server, and verifies the image renders from the local blob store before and after a reload instead of showing "Failed to load image". `subject.test.ts` covers mapping a content-addressed `/download/files/<hash>` URL back to its blob. An image in a server-synced drive on a device that has not got the bytes still loads from the server URL; that path is not separately covered.
+
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
 
 Template visibility: `settings-templates.spec.ts` toggles Hide templates through Settings, verifies the loaded New page hides templates across reload, and restores them when unchecked.
@@ -92,6 +94,8 @@ keyboard filtering, removal of plugin/website/app creation actions from menus,
 discovery of their blank starters on a fresh drive, and file/upload searches.
 Existing app, plugin, and website browser flows create through the catalog,
 including a website seeded from its selected parent document.
+The resource menu check simulates a shrinking visual viewport and requires the
+open menu, including its filter, to remain above the keyboard boundary.
 
 Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
 Back dismissal without leaving the page, the AI settings link, an empty composer
@@ -1086,6 +1090,17 @@ The node-type toolbar lifecycle is covered by `NodeSelectMenu.test.tsx` (destroy
 editors do not expose state/commands) and `oxc-react-compiler.test.ts` (production
 compilation does not hoist command getters into render). `sentry.test.ts` covers
 packaged WebView initialization without server-injected Sentry configuration.
+
+`react-compiler-cli.test.ts` covers the file-targeted compiler command: emitted
+memoization, a bailout in a partially optimized file, explicit opt-outs, relative
+paths, and continued checking after an unreadable file with a failing exit code.
+It also verifies compact line/column diagnostics and optional verbose output.
+`react-compiler-hook.test.mjs` covers UTF-8 source locations, advisory hook JSON,
+per-session content caching, source changes, staged/untracked/deleted files,
+excluded files, subdirectory invocation, ignored non-PostToolUse events and
+advisory output when the hook cannot run. It feeds an Edit event to the script
+through a symlinked path, verifying compact advisory JSON and silence on a
+repeated check. The hook is opt-in personal config, so no agent config is tested.
 
 Automatic Vault scheduling (`vaultAutoBackup.test.ts`) covers sustained-edit
 maximum delay, queued edits across drive switches, late account availability,
@@ -2159,7 +2174,9 @@ failure checks also pass. Actual staging phone restore latency remains unmeasure
 
 ## Right-panel lifecycle
 
-`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets. It also covers the comments panel's target: aiming it at another resource switches threads instead of toggling, the NavBar button (no target) returns to the page's own thread rather than closing a row's, the target is dropped when another panel takes over, and `closePanelState` closes the panel whatever it is aimed at — which a targetless toggle cannot express.
+
+`e2e/tests/table-row-comments.spec.ts` covers commenting on a table row from the gutter bubble: the panel opens headed by the row's title, the count is live and belongs to that row alone, another row's bubble switches threads, the same row's closes the panel, the comment survives a reload, and the trailing entry row (no resource yet) offers no bubble. What is NOT covered: reaching the bubble by keyboard — it shares the row-gutter's mouse-only reachability with the existing expand button, since the grid owns Tab for cell navigation.
 
 `e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
 
@@ -2315,6 +2332,8 @@ triggers and verifies only action labels disappear. `presence-follow.spec.ts`
 uses two tabs sharing one stored test identity, checks the avatar at 320px,
 opens Follow and verifies subsequent navigation. The updated Chromium test
 passed against the local app; cross-network staging presence was not certified.
+`sidebar-layout.spec.ts` checks the resource menu stays inside 390px and 320px
+viewports, action labels collapse, and the menu opens on tap.
 
 `recovery-fetch.test.ts` verifies 429 cooldowns (Retry-After seconds and a
 60-second fallback), retry after expiry, in-flight sharing and fresh successful
@@ -2356,3 +2375,21 @@ out. It does not drive a real browser's throttling.
 right behind `PRESENCE_SUBSCRIBE`, as every reconnect does, and checks it
 reaches the other subscriber without a retry, and that an update held for a
 refused subscribe is dropped.
+
+## Onboarding audit regressions
+
+- `websockets.test.ts`: missing and unauthorized drives cannot SUB or automatically
+  reconcile via a legacy DID when the read error is cached under its canonical ID.
+- `helpers/readableDrive.test.ts`: explicit portal selection waits for a readable
+  resource and discards results after navigation or identity changes.
+- `helpers/managed/vaultAutoBackup.test.ts`: a confirmed missing canonical drive
+  stays local-only after recovery through its legacy alias; transport failures
+  do not change routing.
+- `helpers/managed/readCache.test.ts`: short metadata read sharing, expiry,
+  independent response bodies, provider/token isolation, mutation invalidation,
+  cancellation/cache-control bypass, and retryable error/anonymous responses.
+- `oxc-react-compiler.test.ts`: the full app must avoid internal compiler invariants,
+  including identity creation and the connect-device polling loop.
+- The paired SaaS `portal/e2e/onboarding.spec.ts` closes the original context,
+  downloads the vault into a fresh browser, verifies the saved document and
+  profile, requires a clean console, and budgets metadata reads after reload.

@@ -904,18 +904,31 @@ export function useChatMessages(
       const count = collection.totalMembers;
       const members: string[] = [];
 
-      for (let i = Math.max(0, count - visible); i < count; i++) {
-        const member = await collection.getMemberWithIndex(i);
+      try {
+        // Re-read the count each step: the collection can refresh with fewer
+        // members while we await, and an index past the end throws.
+        for (
+          let i = Math.max(0, count - visible);
+          i < collection.totalMembers;
+          i++
+        ) {
+          const member = await collection.getMemberWithIndex(i);
 
-        if (member) {
-          members.push(member);
+          if (member) {
+            members.push(member);
+          }
         }
+      } catch {
+        // The collection changed under us; its next refresh extracts again.
+        return;
       }
 
       setTotal(count);
       setMessages(members);
 
-      if (visible === CHAT_PAGE_SIZE && members.length > 0) {
+      // An empty chat is remembered too, so reopening it does not flash the
+      // loader every time while the server answers "no messages".
+      if (visible === CHAT_PAGE_SIZE) {
         writeTail(tailKey, { total: count, messages: members });
       }
     };
@@ -930,7 +943,7 @@ export function useChatMessages(
 
   return {
     messages,
-    loading: !ready && messages.length === 0,
+    loading: !ready && messages.length === 0 && !remembered,
     invalidate: invalidateCollection,
     /** Messages that exist but are not listed yet (older than the window). */
     olderCount: Math.max(0, total - messages.length),

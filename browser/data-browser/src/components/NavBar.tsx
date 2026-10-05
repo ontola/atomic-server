@@ -119,7 +119,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
 
   if (driveSubject === undefined || resource.loading) {
     return (
-      <LabelButton disabled>
+      <LabelButton disabled title='Tags'>
         <FaTags />
         <span>Tags</span>
       </LabelButton>
@@ -140,6 +140,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
           <LabelButton
             as={RadixPopover.Trigger}
             data-testid='navbar-tags-button'
+            title='Tags'
           >
             <FaTags />
             <span>Tags</span>
@@ -281,6 +282,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
   // remembers the width at which labels last overflowed and only re-expands
   // clearly above it, so it settles instead of flip-flopping at the boundary.
   const navRef = useRef<HTMLElement>(null);
+  const actionAreaRef = useRef<HTMLDivElement>(null);
   const collapseWidthRef = useRef(0);
   const [iconOnly, setIconOnly] = useState(false);
 
@@ -290,7 +292,10 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
     if (!nav) return;
 
     const width = nav.clientWidth;
-    const overflowing = nav.scrollWidth > width + 1;
+    const actions = actionAreaRef.current;
+    const overflowing =
+      nav.scrollWidth > width + 1 ||
+      (actions !== null && actions.scrollWidth > actions.clientWidth + 1);
 
     setIconOnly(prev => {
       if (overflowing) {
@@ -384,7 +389,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         <EditableBreadcrumb resource={resource} fallback={title} />
       </CrumbGroup>
       <Spacer />
-      <ButtonArea $iconOnly={iconOnly}>
+      <ButtonArea ref={actionAreaRef} $iconOnly={iconOnly}>
         <FollowStatus />
         <MeetingBanner />
         <ContentLanguageSelect />
@@ -422,16 +427,11 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             <ShareDialog
               subject={contextResource.subject}
               trigger={
-                <LabelButton as='button'>
+                <LabelButton as='button' title='Share'>
                   <FaShare />
                   <span>Share</span>
                 </LabelButton>
               }
-            />
-            <ResourceContextMenu
-              isMainMenu
-              subject={contextResource.subject}
-              trigger={ParentContextMenuTrigger}
             />
           </>
         )}
@@ -441,23 +441,41 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         {!contextResource && (
           <DropdownMenu
             isMainMenu
-            items={[...appMenu.create, DIVIDER, ...appMenu.find]}
+            items={[
+              ...appMenu.create,
+              DIVIDER,
+              ...appMenu.find,
+              DIVIDER,
+              ...appMenu.maintenance,
+            ]}
             Trigger={ParentContextMenuTrigger}
           />
         )}
       </ButtonArea>
+      {contextResource && (
+        <MenuSlot $iconOnly={iconOnly}>
+          <ResourceContextMenu
+            isMainMenu
+            subject={contextResource.subject}
+            trigger={ParentContextMenuTrigger}
+          />
+        </MenuSlot>
+      )}
     </NavBarWrapper>
   );
 }
 
 /** Comments panel toggle showing the live comment count at the icon. */
 function CommentsButton({ subject }: { subject: string }): JSX.Element {
-  const { togglePanel, activePanel } = useRightPanel();
+  const { togglePanel, activePanel, commentSubject } = useRightPanel();
   const { count, hasUnseen } = useCommentCount(subject);
 
   return (
     <CommentsLabelButton
-      $active={activePanel === 'comments'}
+      // The panel can be showing a thread from *inside* the page — a table
+      // row's. This button is about the page's own thread, and clicking it
+      // brings the panel back to that rather than closing the row's.
+      $active={activePanel === 'comments' && !commentSubject}
       onClick={() => togglePanel('comments')}
       data-testid='navbar-comments-button'
       data-unseen={hasUnseen ? '' : undefined}
@@ -476,6 +494,7 @@ function CommentsButton({ subject }: { subject: string }): JSX.Element {
 const NavBarWrapper = styled.nav`
   height: 100%;
   width: 100%;
+  box-sizing: border-box;
   padding-inline: ${p => p.theme.size(1)};
   display: flex;
   flex-direction: row;
@@ -586,6 +605,19 @@ const CommentsLabelButton = styled(LabelButton)`
     color: ${p => p.theme.colors.main};
     font-weight: bold;
   }
+`;
+
+/** Reserve the trailing edge for the resource menu even when other actions grow. */
+const MenuSlot = styled.div<{ $iconOnly: boolean }>`
+  flex-shrink: 0;
+
+  ${p =>
+    p.$iconOnly &&
+    css`
+      ${LabelButton} > span {
+        display: none;
+      }
+    `}
 `;
 
 /**

@@ -10,7 +10,12 @@ import { Button } from '../../components/Button';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { Column, Row } from '../../components/Row';
 import { FilePickerDialog } from '../../components/forms/FilePicker/FilePickerDialog';
-import { useStore, type Server } from '@tomic/react';
+import {
+  blobSubjectFromDownloadUrl,
+  useBlobObjectUrl,
+  useStore,
+  type Server,
+} from '@tomic/react';
 import {
   ClearType,
   FilePickerButton,
@@ -72,8 +77,18 @@ const MarkdownEditorImage = ({
   const [altText, setAltText] = useState<string>();
   const [caption, setCaption] = useState<string>();
   const [float, setFloat] = useState<string>('none');
-  const [imageError, setImageError] = useState<boolean>(false);
   const [urlValid, urlRef] = useHTMLFormFieldValidation();
+  const src: string | undefined = node.attrs.src || undefined;
+  // An uploaded image's `src` is its content-addressed download URL. Show the
+  // local copy of those bytes when there is one: in a browser-only drive it
+  // is the only copy, and no server can answer that URL.
+  const displaySrc = useBlobObjectUrl(
+    src ? blobSubjectFromDownloadUrl(src) : undefined,
+    src,
+  );
+  // Keyed by the src that failed, so a new src gets its own attempt.
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const imageError = !!displaySrc && failedSrc === displaySrc;
 
   const floatOptions: ButtonGroupOption[] = [
     {
@@ -132,9 +147,15 @@ const MarkdownEditorImage = ({
     );
   }
 
+  if (src && !displaySrc) {
+    // Still looking for a local copy. Rendering the URL meanwhile would ask a
+    // server that may never have had the bytes, and flash the error state.
+    return <NodeViewWrapper />;
+  }
+
   if (
     !extension.options.markdownCompatible &&
-    node.attrs.src &&
+    displaySrc &&
     node.attrs.caption
   ) {
     return (
@@ -142,11 +163,11 @@ const MarkdownEditorImage = ({
         <StyledFigure>
           <StyledImage
             ref={ref as React.ForwardedRef<HTMLImageElement>}
-            src={node.attrs.src}
+            src={displaySrc}
             alt={node.attrs.alt}
             selected={selected}
             float={node.attrs.float}
-            onError={() => setImageError(true)}
+            onError={() => setFailedSrc(displaySrc)}
           />
           <figcaption>{node.attrs.caption}</figcaption>
         </StyledFigure>
@@ -154,16 +175,16 @@ const MarkdownEditorImage = ({
     );
   }
 
-  if (node.attrs.src) {
+  if (displaySrc) {
     return (
       <NodeViewWrapper>
         <StyledImage
           ref={ref as React.ForwardedRef<HTMLImageElement>}
-          src={node.attrs.src}
+          src={displaySrc}
           alt={node.attrs.alt}
           selected={selected}
           float={node.attrs.float}
-          onError={() => setImageError(true)}
+          onError={() => setFailedSrc(displaySrc)}
         />
         <p>{node.attrs.caption}</p>
       </NodeViewWrapper>
@@ -179,7 +200,7 @@ const MarkdownEditorImage = ({
               {!selectedSubject && (
                 <>
                   <Label>
-                    Choose an image
+                    <span>Choose an image</span>
                     <Column>
                       <StyledInputWrapper hasPrefix>
                         <FaLink />
@@ -222,7 +243,7 @@ const MarkdownEditorImage = ({
                 </Label>
               )}
               <Label>
-                Textual Description
+                <span>Textual Description</span>
                 <TextArea
                   placeholder='Alt text'
                   value={altText}

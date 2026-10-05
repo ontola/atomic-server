@@ -4,25 +4,8 @@
 //!
 //! Prefer this over [crate::loro] in app code — it keeps the CRDT details here.
 
-use base64::{engine::general_purpose, Engine};
-
 pub use crate::loro::{VersionID, VersionMetadata};
 use crate::{errors::AtomicResult, Resource};
-
-/// A [VersionID] as a URL-safe string, for addressing a version over HTTP.
-/// The id is opaque (encoded Loro Frontiers), so it is carried as base64url
-/// rather than given a readable structure clients might parse.
-pub fn encode_version_id(id: &VersionID) -> String {
-    general_purpose::URL_SAFE_NO_PAD.encode(id.bytes())
-}
-
-pub fn decode_version_id(encoded: &str) -> AtomicResult<VersionID> {
-    let bytes = general_purpose::URL_SAFE_NO_PAD
-        .decode(encoded)
-        .map_err(|e| format!("Not a valid version id: {e}"))?;
-
-    Ok(VersionID::from_bytes(bytes))
-}
 
 /// The resource's document, as a value this module may read freely.
 fn doc_of(resource: &Resource) -> AtomicResult<crate::loro::AtomicLoroDoc> {
@@ -159,16 +142,5 @@ mod test {
         resource.apply_state_doc(doc).unwrap();
 
         assert_eq!(versions(&resource).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn version_ids_survive_a_url() {
-        let id = VersionID::from_bytes(vec![0, 1, 2, 250, 255]);
-        let encoded = encode_version_id(&id);
-        assert!(
-            !encoded.contains('+') && !encoded.contains('/') && !encoded.contains('='),
-            "must be URL-safe without padding: {encoded}"
-        );
-        assert_eq!(decode_version_id(&encoded).unwrap(), id);
     }
 }

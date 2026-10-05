@@ -1,5 +1,7 @@
+#[cfg(target_os = "macos")]
+use tauri::menu::AboutMetadata;
 use tauri::{
-  menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu},
+  menu::{Menu, PredefinedMenuItem, Submenu},
   AppHandle, Runtime,
 };
 

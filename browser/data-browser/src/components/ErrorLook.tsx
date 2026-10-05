@@ -6,9 +6,9 @@ import { FaTriangleExclamation } from 'react-icons/fa6';
 import { lazy, Suspense, type JSX } from 'react';
 import { getMessageForErrorType } from '@tomic/react';
 
-const FeedbackMenuItem = lazy(() =>
-  import('./SideBar/FeedbackMenuItem').then(module => ({
-    default: module.FeedbackMenuItem,
+const FeedbackButton = lazy(() =>
+  import('./SideBar/FeedbackButton').then(module => ({
+    default: module.FeedbackButton,
   })),
 );
 
@@ -60,7 +60,7 @@ export function ErrorBlock({
       </Pre>
       {showReport && (
         <Suspense fallback={null}>
-          <FeedbackMenuItem floating reportError={error} />
+          <FeedbackButton reportError={error} />
         </Suspense>
       )}
     </ErrorLookBig>

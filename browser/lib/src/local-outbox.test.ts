@@ -12,6 +12,7 @@ import {
   groupTiers,
   runBounded,
   BLOCK_AFTER_FAILURES,
+  REPORT_AFTER_FAILURES,
   type OutboxEntry,
 } from './local-outbox.js';
 import { commitToJsonADObject, type Commit } from './commit.js';
@@ -472,6 +473,19 @@ describe('a commit naming a class the server lacks', () => {
   });
 });
 
+describe('a commit whose parent the server lacks', () => {
+  const MESSAGE =
+    'Parent of atomic:kfyvO_ (atomic:5JhFDF6v) not found: Resource not found. ' +
+    'DID Resource atomic:5JhFDF6v not found locally';
+
+  it('blocks but is not terminal, so the edit is kept and not re-sent', ({
+    expect,
+  }) => {
+    expect(isUnrecoverableCommitError(MESSAGE, undefined)).toBe(true);
+    expect(isTerminalCommitError(MESSAGE, undefined)).toBe(false);
+  });
+});
+
 describe('a stale Loro write rejected by the causality guard', () => {
   const MESSAGE =
     "Commit's Loro update produced no state changes — its writes were silently dropped by LWW against stored state.";
@@ -691,6 +705,44 @@ describe('LocalOutbox blocking', () => {
       vi.setSystemTime(60_000);
       await outbox.drain(ctx);
       expect(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a persistently failing write once, and keeps retrying it', async ({
+    expect,
+  }) => {
+    vi.useFakeTimers();
+
+    try {
+      const outbox = new LocalOutbox();
+      outbox.markDirty(SUBJECT);
+      // The entry is a live object, so read its count at the moment of the call.
+      const failuresAtReport: (number | undefined)[] = [];
+      const onRepeatedFailure = vi.fn((entry: OutboxEntry) => {
+        failuresAtReport.push(entry.failures);
+      });
+      const drainSubject = vi.fn(async () => {
+        throw new Error('Parent of x not found: Resource not found.');
+      });
+      const ctx = { ...blockingCtx(drainSubject), onRepeatedFailure };
+
+      let now = 0;
+      vi.setSystemTime(now);
+
+      for (let i = 1; i <= REPORT_AFTER_FAILURES + 2; i++) {
+        await outbox.drain(ctx);
+        now += drainBackoffMs(i) + 1;
+        vi.setSystemTime(now);
+      }
+
+      // Not on the first failures, exactly once at the threshold, and the
+      // entry is neither blocked nor dropped: reporting changes nothing else.
+      expect(onRepeatedFailure).toHaveBeenCalledTimes(1);
+      expect(failuresAtReport).toEqual([REPORT_AFTER_FAILURES]);
+      expect(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
+      expect(drainSubject).toHaveBeenCalledTimes(REPORT_AFTER_FAILURES + 2);
     } finally {
       vi.useRealTimers();
     }

@@ -20,6 +20,10 @@ afterEach(() => {
  */
 class FakeClientDb {
   isReady = true;
+  /** False while the database is still opening: writes reject until
+   *  {@link finishOpening}, as the real one does once it is parked. */
+  isOpen = true;
+  private openWaiters: Array<(open: boolean) => void> = [];
   isInitialized = true;
   initError = undefined;
   unsupportedEnvironment = false;
@@ -31,6 +35,17 @@ class FakeClientDb {
 
   async waitForReady() {
     return true;
+  }
+
+  whenOpen(_timeoutMs: number): Promise<boolean> {
+    if (this.isOpen) return Promise.resolve(true);
+
+    return new Promise(resolve => this.openWaiters.push(resolve));
+  }
+
+  finishOpening() {
+    this.isOpen = true;
+    this.openWaiters.splice(0).forEach(resolve => resolve(true));
   }
 
   async waitForInit() {
@@ -45,6 +60,7 @@ class FakeClientDb {
     snapshot?: Uint8Array,
     outbox?: ClientDbOutboxWrite,
   ) {
+    if (!this.isOpen) throw new Error('ClientDb unavailable: still opening');
     this.putCalls.push({ subject, outbox });
     this.rows.set(subject, { jsonAd, snapshot: snapshot ?? null });
     if (outbox) this.applyOutbox(outbox, true);
@@ -182,6 +198,38 @@ describe('the outbox in the client database', () => {
     await Promise.resolve();
     expect(db.queued(agent.subject!)).toEqual([]);
     second.store.setServerConnected(false);
+  });
+
+  it('an offline save waits for a database that is still opening', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    db.isOpen = false;
+    const { store } = await tab(agent, db, false);
+
+    const doc = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Made while opening' },
+    });
+    let outcome: string | undefined;
+    const saving = doc.save().then(
+      result => (outcome = result),
+      e => (outcome = `threw: ${e.message}`),
+    );
+
+    // The write has nowhere else to go, so it must not fail while the open
+    // is merely slow.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(outcome).toBeUndefined();
+    expect(db.putCalls).toHaveLength(0);
+
+    db.finishOpening();
+    await saving;
+    expect(outcome).toBe('offline');
+    expect(db.putCalls.at(-1)?.subject).toBe(doc.subject);
+    expect(db.queued(agent.subject!).map(r => r.subject)).toEqual([
+      doc.subject,
+    ]);
   });
 
   it('an offline create keeps its signed genesis across a reload', async () => {

@@ -242,6 +242,16 @@ const LEADER_ELECTION_WAIT_MS = 2_000;
 // server. Ends early on success or on a definite failure.
 const STEAL_SETTLE_WAIT_MS = 15_000;
 
+// A follower whose request has gone unanswered this long asks the leader if it
+// is alive at all. A tab the browser froze or discarded keeps its lock and
+// answers nothing, so without this every call would wait out the 30s deadline
+// below and the page would sit empty with no error.
+const LEADER_LIVENESS_CHECK_MS = 1_000;
+
+// A live leader answers a ping from its main thread in milliseconds, so this
+// is generous; a slow worker does not delay the answer, only a dead tab does.
+const LEADER_PROBE_WAIT_MS = 1_000;
+
 // The same wait, for the case where nothing was stolen because we already own
 // the lock and our own leader init is simply still running. Nothing is
 // contended there, so the message this cap produces has to say so: see the
@@ -316,6 +326,11 @@ export class ClientDbWorker {
   private leaderLockName: string;
   private rpcChannelName: string;
   private ready = false;
+  /** True while the database is parked as `'failed'` only because its own open
+   *  is taking long (see `OWN_BOOT_SETTLE_WAIT_MS`), as opposed to having
+   *  failed for good. The open is still running and may yet finish. */
+  private openIsSlow = false;
+  private openWaiters = new Set<(open: boolean) => void>();
 
   /** Set by `destroy()`. An in-flight `doInit` (the election waits span
    *  seconds) checks this after every await so a superseded instance goes
@@ -365,11 +380,16 @@ export class ClientDbWorker {
   }
 
   async init(baseUrl?: string): Promise<void> {
+    this.baseUrl = baseUrl;
     if (this.initPromise) return this.initPromise;
     this.initPromise = this.doInit(baseUrl);
 
     return this.initPromise;
   }
+
+  private baseUrl: string | undefined;
+  private lastLeaderAnnounceAt = 0;
+  private probingLeader = false;
 
   private async doInit(baseUrl?: string): Promise<void> {
     if (!this.workerUrl) {
@@ -487,6 +507,7 @@ export class ClientDbWorker {
         // carries the real cause (usually the OPFS handle still held by a
         // live background tab). Surface that instead of a generic message.
         this.role = 'failed';
+        this.settleOpenWaiters(false);
         console.warn('[ClientDb]', this._initError?.message);
 
         return;
@@ -497,6 +518,9 @@ export class ClientDbWorker {
         // and flips the role back to 'leader' whenever it finishes, and a late
         // `leader-announce` flips us to follower.
         this.role = 'failed';
+        // Parked, not dead: the message below says it recovers by itself, and
+        // `whenOpen` callers are waiting for exactly that.
+        this.openIsSlow = true;
         this._initError = stealing
           ? // Either the engine ignored `steal` (the request queued behind the
             // ghost) or the steal callback hasn't run.
@@ -528,6 +552,8 @@ export class ClientDbWorker {
     if (this.destroyed) return;
 
     this.ready = true;
+    this.openIsSlow = false;
+    this.settleOpenWaiters(true);
   }
 
   /**
@@ -565,8 +591,11 @@ export class ClientDbWorker {
 
           if (!this.destroyed) {
             this.role = 'failed';
+            this.openIsSlow = false;
             this.ready = false;
           }
+
+          this.settleOpenWaiters(false);
 
           for (const [id, pending] of this.pending) {
             if (!pending.onLeaderChanged) continue;
@@ -704,6 +733,8 @@ export class ClientDbWorker {
     // `waitForReady` resolve true on subsequent calls.
     this._initError = undefined;
     this.ready = true;
+    this.openIsSlow = false;
+    this.settleOpenWaiters(true);
     this.onBecameLeader();
     this.observedLeader = this.tabId;
     this.bc?.postMessage({
@@ -734,6 +765,8 @@ export class ClientDbWorker {
         break;
 
       case 'leader-announce':
+        this.lastLeaderAnnounceAt = Date.now();
+
         if (this.role !== 'leader') {
           // Recover from a prior `'failed'` state if a leader finally
           // announces itself (the stale tab woke up, or a fresh tab took
@@ -742,6 +775,8 @@ export class ClientDbWorker {
           if (this.role === 'failed') {
             this._initError = undefined;
             this.ready = true;
+            this.openIsSlow = false;
+            this.settleOpenWaiters(true);
           }
 
           this.role = 'follower';
@@ -1295,6 +1330,52 @@ export class ClientDbWorker {
     return this.ready && this.seeded;
   }
 
+  /** True once the database is open here (or in the tab that leads), whether
+   *  or not the bootstrap seed has finished. */
+  get isOpen(): boolean {
+    return this.ready;
+  }
+
+  /**
+   * Resolves `true` as soon as the database is open, `false` when it has
+   * failed for good or is still not open after `timeoutMs`.
+   *
+   * For writes whose local copy is the only copy (a local-only drive, an
+   * offline save). A read can fall back to the server while the database opens
+   * and should not wait; a write that has nowhere else to go should, because
+   * `send()` rejects at once while the open is merely slow, and a load that
+   * delays the open past its 17s cap would otherwise lose the write. See the
+   * note at `OWN_BOOT_SETTLE_WAIT_MS` on why that cap itself must stay short.
+   */
+  whenOpen(timeoutMs: number): Promise<boolean> {
+    if (this.ready) return Promise.resolve(true);
+
+    if (this.destroyed || this._unsupportedEnvironment) {
+      return Promise.resolve(false);
+    }
+
+    // Failed for good: waiting cannot help.
+    if (this.role === 'failed' && !this.openIsSlow) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise<boolean>(resolve => {
+      const done = (open: boolean) => {
+        clearTimeout(timer);
+        this.openWaiters.delete(done);
+        resolve(open);
+      };
+
+      const timer = setTimeout(() => done(false), timeoutMs);
+
+      this.openWaiters.add(done);
+    });
+  }
+
+  private settleOpenWaiters(open: boolean): void {
+    for (const settle of [...this.openWaiters]) settle(open);
+  }
+
   /** True once the WASM worker is initialized — independent of the
    *  bootstrap seed. Lookups for resources that aren't part of the
    *  bootstrap (i.e. user data) only need this; gating them on the seed
@@ -1342,6 +1423,7 @@ export class ClientDbWorker {
 
   destroy(): void {
     this.destroyed = true;
+    this.settleOpenWaiters(false);
     // Release the leader lock FIRST. If we're the leader, resolving the hold
     // frees the `navigator.locks` lease; if we're still queued, abort the
     // pending request. Without this, `destroy()` (notably the HMR dispose
@@ -1422,6 +1504,40 @@ export class ClientDbWorker {
     });
   }
 
+  /**
+   * A request to the leader has gone unanswered. Ping it: a live leader
+   * answers from its main thread within milliseconds, even while busy. If
+   * nothing answers it is a ghost (frozen or discarded tab holding the lock),
+   * so take the lock. Taking it replays the calls that are safe to repeat and
+   * fails the rest with a retryable error, through `resumeAfterLeaderChange`.
+   */
+  private async reclaimFromSilentLeader(): Promise<void> {
+    if (this.probingLeader || this.role !== 'follower' || !this.bc) return;
+
+    this.probingLeader = true;
+
+    try {
+      const pingedAt = Date.now();
+      this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
+      await new Promise(resolve => setTimeout(resolve, LEADER_PROBE_WAIT_MS));
+
+      if (
+        this.destroyed ||
+        this.role !== 'follower' ||
+        this.lastLeaderAnnounceAt >= pingedAt
+      ) {
+        return;
+      }
+
+      console.warn(
+        '[ClientDb] the leader tab stopped answering; taking over the local database',
+      );
+      this.requestLeaderLock(this.baseUrl, true);
+    } finally {
+      this.probingLeader = false;
+    }
+  }
+
   private sendToLeader(
     msg: Record<string, unknown>,
     retries = 1,
@@ -1440,7 +1556,13 @@ export class ClientDbWorker {
       // "peer closed" event — the pending entry sits forever.
       // Handoffs settle these entries through onLeaderChanged below. Keep a
       // deadline as well for a leader that stays alive but stops answering.
+      const liveness = setTimeout(() => {
+        if (this.pending.has(id)) void this.reclaimFromSilentLeader();
+      }, LEADER_LIVENESS_CHECK_MS);
+
       const timer = setTimeout(() => {
+        clearTimeout(liveness);
+
         if (this.pending.has(id)) {
           this.pending.delete(id);
           reject(
@@ -1455,6 +1577,7 @@ export class ClientDbWorker {
         onLeaderChanged: () => {
           this.pending.delete(id);
           clearTimeout(timer);
+          clearTimeout(liveness);
           // Reads, flush, and content-addressed blob writes are safe to
           // repeat. A general write may have committed before its reply was
           // lost, and worker-local peer sessions cannot move across tabs.
@@ -1479,10 +1602,12 @@ export class ClientDbWorker {
         },
         resolve: (data: unknown) => {
           clearTimeout(timer);
+          clearTimeout(liveness);
           resolve(data);
         },
         reject: (e: Error) => {
           clearTimeout(timer);
+          clearTimeout(liveness);
           reject(e);
         },
       });
