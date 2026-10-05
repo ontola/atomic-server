@@ -11680,6 +11680,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+msgstr ""
 
 msgstr ""
 
@@ -11881,4 +11882,16 @@ msgstr ""
 #. 0: candidates[0]
 #: src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
+
+#. 0: address
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forget {0} on this device"
+msgstr ""
+
+#~ msgid "Saved {0}, identity {1}"
+#~ msgstr ""
+
+#. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Saved {0}, identity …{1}"
 msgstr ""
