@@ -6665,14 +6665,6 @@ msgstr "Use your full name and a picture so people recognize you. This updates y
 msgid "You can add or change your picture later in your profile."
 msgstr "You can add or change your picture later in your profile."
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr "Your Cloud Server subscription is active"
-
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr "Your Cloud Server trial is active"
-
 #: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr "Profile picture (optional)"
@@ -10691,10 +10683,6 @@ msgid "Setting up Cloud Server. Your workspace is being copied over; this turns 
 msgstr "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 
 #: src/routes/SyncRoute.tsx
-msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-msgstr "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-
-#: src/routes/SyncRoute.tsx
 msgid "Turn on Cloud Server"
 msgstr "Turn on Cloud Server"
 
@@ -10721,3 +10709,19 @@ msgstr "See Cloud Server plans"
 #: src/components/BrowserPeerPanel.tsx
 msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
 msgstr "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server plan is active"
+msgstr "This drive’s Cloud Server plan is active"
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server trial is active"
+msgstr "This drive’s Cloud Server trial is active"
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive is hosted on Cloud Server"
+msgstr "This drive is hosted on Cloud Server"
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."
+msgstr "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."

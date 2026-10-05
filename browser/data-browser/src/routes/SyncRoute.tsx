@@ -1614,13 +1614,15 @@ function SyncPage() {
               <AccountBody>
                 <AccountLabel>{PRODUCT_NAME}</AccountLabel>
                 <AccountEmail data-testid='provider-account'>
-                  {managedAccount
-                    ? subscriptionStatus === 'active'
-                      ? 'Your Cloud Server subscription is active'
-                      : subscriptionStatus === 'trialing'
-                        ? 'Your Cloud Server trial is active'
-                        : 'Your cloud services'
-                    : 'Cloud services for this workspace'}
+                  {subscriptionStatus === 'active'
+                    ? 'This drive’s Cloud Server plan is active'
+                    : subscriptionStatus === 'trialing'
+                      ? 'This drive’s Cloud Server trial is active'
+                      : hostedByNode
+                        ? 'This drive is hosted on Cloud Server'
+                        : managedAccount
+                          ? 'Your cloud services'
+                          : 'Cloud services for this workspace'}
                 </AccountEmail>
               </AccountBody>
               {/* The way out to the portal, in both states. It used to appear
@@ -1778,7 +1780,7 @@ function SyncPage() {
                       ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
                       : subscriptionStatus === 'active' ||
                           subscriptionStatus === 'trialing'
-                        ? 'Included in your plan. Turn it on to start hosting this drive; nothing more to buy.'
+                        ? 'This drive’s plan includes hosting. Turn it on to start; nothing more to buy.'
                         : CLOUD_SERVER_PLAN_DESCRIPTION}
                   </ConnMeta>
                   {hostedCopyOrigin && (

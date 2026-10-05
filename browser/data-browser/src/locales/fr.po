@@ -6654,14 +6654,6 @@ msgstr ""
 msgid "You can add or change your picture later in your profile."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr ""
-
 #: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr ""
@@ -10673,10 +10665,6 @@ msgid "Setting up Cloud Server. Your workspace is being copied over; this turns 
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Turn on Cloud Server"
 msgstr ""
 
@@ -10702,4 +10690,20 @@ msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
 msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server plan is active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server trial is active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive is hosted on Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."
 msgstr ""
