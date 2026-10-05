@@ -264,7 +264,7 @@ test.describe('data-browser', async () => {
         driveTitle,
       );
       await expect(
-        page2.getByRole('heading', { name: 'Agent created!' }),
+        page2.getByRole('heading', { name: 'This is your account' }),
       ).toHaveCount(0);
 
       // A saved avatar suppresses the profile nudge in both directions.
