@@ -117,7 +117,11 @@ msgstr ""
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
+<<<<<<< HEAD
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
+=======
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+>>>>>>> 90e3f2676b7d717644855127f9384b0fcba6f55b
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -1329,6 +1333,7 @@ msgstr ""
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr ""
@@ -1618,6 +1623,7 @@ msgid "Enter a Drive DID or URL"
 msgstr ""
 
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr ""
 
@@ -5528,6 +5534,8 @@ msgstr ""
 msgid "groups"
 msgstr ""
 
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
 msgid "Value"
@@ -9847,6 +9855,8 @@ msgstr ""
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/Notifications/NotificationList.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/AppSettings.tsx
 msgid "Notifications"
 msgstr ""
@@ -11217,6 +11227,74 @@ msgstr ""
 msgid "Tap the zoom button (it shows the zoom level) to fit all strokes; drag left/right to zoom continuously"
 msgstr ""
 
+#. 0: index + 1
+#: src/chunks/TablePage/RowSelectCheckbox.tsx
+msgid "Select row {0}"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Delete selected rows"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Clear selection"
+msgstr ""
+
+#. 0: selectedRows.size
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "{0} selected"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Selected rows"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear value"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Clear values"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value…"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete row"
+msgstr ""
+
+#. 0: rowCount
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete {0} rows"
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the row this selection touches? You can undo it."
+msgstr ""
+
+#. 0: rowCount
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Delete the {0} rows this selection touches? You can undo it."
+msgstr ""
+
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set value"
+msgstr ""
+
+#. 0: count
+#: src/chunks/TablePage/CellSelectionMenu.tsx
+msgid "Set {0} values"
+msgstr ""
+
+#. 0: getSyncLabel(syncStatus)
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Sync: {0}"
+
 #. 0: appTitle
 #. 0: appTitle
 #. 0: appTitle
@@ -11313,7 +11391,6 @@ msgstr ""
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Signed in on another device? Use a code"
 msgstr ""
-
 
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
@@ -11630,6 +11707,7 @@ msgstr ""
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 
+<<<<<<< HEAD
 #: src/components/SideBar/MessagesPanel.tsx
 msgid "Messages"
 msgstr ""
@@ -11768,4 +11846,6 @@ msgstr ""
 
 #: src/components/MetaSetter.tsx
 msgid "The easiest way to create, share and model Linked Atomic Data."
+=======
+>>>>>>> 90e3f2676b7d717644855127f9384b0fcba6f55b
 msgstr ""

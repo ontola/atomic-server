@@ -26,6 +26,25 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Fix: uploaded SVG files display in the data browser.
 
 - The per-group summary under a table has column headings, such as "Sum of Plus ones" and "Rows", so a bare number says what it measures.
+- Tables: deleting a row you typed in the same session no longer shows its
+  neighbour twice until you reload.
+- Sidebar: notifications and sync have their own icon buttons next to Settings
+  (they stay in the account menu too), in the same muted color as the menu's
+  items, with an unread dot on the bell. The dividers in the menu are gone.
+- Share: names under "People with access" open that person's profile.
+- Error toasts: long subject URLs are shortened in the message. Copy still
+  copies the full text.
+- Tables: right-click a row's number to get the same menu as right-clicking one
+  of its cells. Select several cells with shift+click or by dragging and
+  right-click them for a menu that acts on all of them: clear the values, set
+  one value in all of them, or delete the rows they touch. Delete is one undo
+  step.
+- Tables: drag a view's tab to change the order of the views.
+- Tables: tick rows to delete several at once. Hover a row's number (or look
+  left of it on a touch screen) for a checkbox. Once one row is ticked every
+  row shows its checkbox, and the toolbar next to the filter button shows how
+  many are ticked with a delete button. Undo brings all of them back at once.
+
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
 - A link or mention that points at a table View now opens the table with that view selected, instead of the view's configuration.
 - A Number column's total or average no longer shows a small nonzero value as 0, and a Number filter typed as `2.5e-5` or with trailing zeros finds the same rows as the plain number.
