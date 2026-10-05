@@ -4423,12 +4423,19 @@ impl Storelike for Db {
         // and rights/parent/destroy; drop ordinary content certificates.
         if commit_response.auth_impact().is_critical() {
             store.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
-            for atom in commit_response.commit_resource.to_atoms() {
-                store.add_atom_to_index(
-                    &atom,
-                    &commit_response.commit_resource,
-                    &mut transaction,
-                )?;
+            // A creation's commit is found by its id (it names the resource),
+            // so its atoms stay out of the indexes: five rows and about
+            // 0.5 KB for every new resource that no query asks for. Later
+            // critical commits (rights, parent, destroy) stay queryable by
+            // the subject they are about.
+            if !commit_response.creates_resource() {
+                for atom in commit_response.commit_resource.to_atoms() {
+                    store.add_atom_to_index(
+                        &atom,
+                        &commit_response.commit_resource,
+                        &mut transaction,
+                    )?;
+                }
             }
         }
 

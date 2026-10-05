@@ -583,7 +583,8 @@ async fn queries() {
     let store = &store_owned;
 
     let demo_val = Value::Slug("myval".to_string());
-    let demo_reference = Value::AtomicUrl(urls::PARAGRAPH.into());
+    // Nothing else in the seeded store points at it, so the count is exact.
+    let demo_reference = Value::AtomicUrl("https://example.com/queries-test-target".into());
 
     let count = 10;
     let limit = 5;
@@ -650,10 +651,16 @@ async fn queries() {
     );
     assert_eq!(limit, res.subjects.len(), "limit");
 
+    // The value index answers "what points at X". A plain value has no row in
+    // it, so without a property only a reference is found.
     q.property = None;
     q.value = Some(demo_val);
     let res = store.query(&q).await.unwrap();
-    assert_eq!(res.count, count, "literal value, no property filter");
+    assert_eq!(res.count, 0, "literal value, no property filter");
+
+    q.value = Some(demo_reference.clone());
+    let res = store.query(&q).await.unwrap();
+    assert_eq!(res.count, count, "reference value, no property filter");
 
     q.offset = 9;
     let res = store.query(&q).await.unwrap();
@@ -4100,13 +4107,13 @@ async fn replica_row_keeps_unresolvable_props_from_snapshot() {
 
 /// A critical commit's `Tree::Resources` row is self-contained: its blob
 /// keeps the signed `loroUpdate` (a CRDT resource's blob drops it in favour
-/// of `Tree::LoroSnapshots`), and the row is findable by the resource it is
-/// about through the `subject` index. See `envelopes::tests::
+/// of `Tree::LoroSnapshots`). A creation's commit is not in the atom indexes;
+/// it is found by its id. See `envelopes::tests::
 /// stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit` for
 /// why the payload cannot be borrowed from the envelope.
 #[tokio::test]
 #[timeout(120000)]
-async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
+async fn commit_resource_blob_keeps_loro_update_and_is_not_indexed() {
     let store = Db::init_temp("commit_row_self_contained").await.unwrap();
     let (_alice, drive) = store.setup("Alice").await.unwrap();
     let subject = store
@@ -4156,11 +4163,11 @@ async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
         .await
         .unwrap();
     assert!(
-        found
+        !found
             .subjects
             .iter()
             .any(|s| s.as_str() == genesis_id.as_str()),
-        "the commit row is indexed by the subject it is about: {:?}",
+        "a creation's commit is found by its id, not by the subject index: {:?}",
         found.subjects
     );
 }

@@ -6,10 +6,26 @@ use super::{
     trees::{Method, Operation, Transaction, Tree},
 };
 
+/// Whether a value can be a reference to another resource. The index is
+/// there to answer "what points at X", so a description, a number or a
+/// timestamp has no row in it: that was two of the five atoms of a chat
+/// message, about 340 bytes, for lookups nothing makes. Decided on the text,
+/// not the datatype, so a reference an older document stored as a plain
+/// string still counts.
+pub fn is_reference(value: &str) -> bool {
+    ["http://", "https://", "did:ad:", "atomic:", "internal:"]
+        .iter()
+        .any(|scheme| value.starts_with(scheme))
+        && !value.contains(char::is_whitespace)
+}
+
 pub fn add_atom_to_valpropsub_index(
     index_atom: &IndexAtom,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
+    if !is_reference(&index_atom.ref_value) {
+        return Ok(());
+    }
     transaction.push(Operation {
         key: valpropsub_key(index_atom),
         val: Some(b"".to_vec()),
