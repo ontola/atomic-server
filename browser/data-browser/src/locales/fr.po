@@ -3581,7 +3581,6 @@ msgstr ""
 msgid "Enter the recovery password you set for {0}."
 msgstr ""
 
-#: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -4387,6 +4386,7 @@ msgstr ""
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 #: src/routes/DemoRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr ""
 
@@ -4466,8 +4466,6 @@ msgstr ""
 
 #: src/chunks/PluginRuns/FileImport.tsx
 #: src/components/AccountRecoveryCard.tsx
-#: src/components/Vault/VaultPanel.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Setting up…"
 msgstr ""
 
@@ -5791,11 +5789,6 @@ msgid "Restore my workspace"
 msgstr ""
 
 #. 0: PRODUCT_NAME
-#: src/components/Vault/VaultPanel.tsx
-msgid "Nothing has been backed up to {0} yet."
-msgstr ""
-
-#. 0: PRODUCT_NAME
 #: src/helpers/managed/enrollment.ts
 msgid "Your {0} session expired. Sign in and retry."
 msgstr ""
@@ -5844,14 +5837,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Switch"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Your cloud services"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud services for this workspace"
 msgstr ""
 
 #. 0: managedAccount.email
@@ -6330,44 +6315,7 @@ msgid "Connected to Cloud Server. Syncing this workspace…"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Keep this workspace available when your devices are offline, with shareable links, search, and API access."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server is on"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Sync again"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "This workspace has been copied to Cloud Server. You’re still using the source server."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Use Cloud Server"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "See plans"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Local:</0> data stays on your devices unless you connect a service or share it."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Agree and enable Cloud Server"
 msgstr ""
 
 #: src/components/SideBar/DriveSwitcher.tsx
@@ -6664,6 +6612,8 @@ msgid "Your Cloud Server trial is active"
 msgstr ""
 
 #: src/components/ProfileForm.tsx
+
+#: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr ""
 
@@ -6805,10 +6755,6 @@ msgstr ""
 msgid "Sign in to check recovery"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Existing content stays in this drive. Hosting uses the Server plan or invitation for this drive. If a purchase is needed, you will see the price at checkout before paying."
-msgstr ""
-
 #: src/views/InvitePage.tsx
 msgid "Creating your account…"
 msgstr ""
@@ -6843,14 +6789,6 @@ msgstr ""
 
 #: src/views/InvitePage.tsx
 msgid "Accepting your invitation…"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "This status describes data synchronization. View this drive’s subscription and price in billing."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Manage this drive’s plan →"
 msgstr ""
 
 #: src/helpers/managed/recovery.ts
@@ -7258,6 +7196,7 @@ msgstr ""
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Not signed in"
 msgstr ""
 
@@ -8064,6 +8003,7 @@ msgid "Find links to these copies"
 msgstr ""
 
 #: src/chunks/PluginRuns/ImportReferences.tsx
+#: src/components/Cloud/ServiceRow.tsx
 msgid "Included"
 msgstr ""
 
@@ -9465,15 +9405,6 @@ msgstr ""
 #. 0: classLabel.toLowerCase()
 #: src/components/Share/PublicAccess.tsx
 msgid "This {0} is not public"
-msgstr ""
-
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: PRODUCT_NAME; 3: formatShareUsed( enrollment.used_bytes, enrollment.quota_bytes, )
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} encrypted object{1} stored in {2} · {3}."
-msgstr ""
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Less than 1% used"
 msgstr ""
 
 #. 0: String(reason)
@@ -11618,6 +11549,7 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Turn on Cloud Server"
+
 msgstr ""
 
 #: src/helpers/sentry.ts
@@ -11884,4 +11816,135 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 msgid "See how much space this resource and what is in it take up."
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Sign in to your {0} account to start Cloud Server."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan does not include Cloud Server yet."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Could not start Cloud Server."
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0} · Email recovery on"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Trying again…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Your plan"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "See plans"
+msgstr ""
+
+#: src/components/Cloud/ServiceRow.tsx
+msgid "Current"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Shareable links and API access"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Search across everything"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "No need for another device to be awake"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing backed up to {0} yet"
+msgstr ""
+
+#. 0: formatWhen(enrollment.last_backup_at)
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backed up {0}"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backed up to {0}"
+msgstr ""
+
+#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} object{1}"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data. Only you can read it."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage plan"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace is on Cloud Server. This device still syncs with its old server."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Moving this workspace to Cloud Server. It switches on by itself; you can keep working."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Turn on Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Upgrade to Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here."
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Sealed on your device, so we cannot read it"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore this workspace on any device"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Free with an account"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Turning on…"
+msgstr ""
+
+#. 0: Math.round(restoreProgress * 100)
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restoring… {0}%"
+msgstr ""
+
+#: src/components/Cloud/ServiceRow.tsx
+msgid "Offered"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "{0} added Cloud Server to this workspace. It waits for your consent."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace’s plan includes Cloud Server. It waits for your consent."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this workspace on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr ""

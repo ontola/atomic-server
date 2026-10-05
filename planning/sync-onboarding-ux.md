@@ -202,6 +202,23 @@ Existing records retain unknown consent; no consent is inferred from a drive
 being present. Browser switcher rows carry compact service state labels, with
 one Storage and hosting action for details. Unknown cloud status stays explicit.
 
+### Plan steps and automatic hosting (2026-10-05)
+
+The Sync page's account card is a header (atomic.place, email, recovery,
+Manage account) over "Your plan": Cloud Vault, then Cloud Server, both drawn
+by the same `ServiceRow` (`components/Cloud/ServiceRow.tsx`): name and a
+Current / Included / Offered badge, one fixed tagline, selling points while
+off, one status line with a coloured dot, then actions, primary first.
+Cloud Server is the step up and includes Cloud Vault. The managed node itself
+is listed under Devices with every other server.
+
+There is no "Finish setup". A drive with a paid plan (`source: stripe` from
+`/api/billing/subscription`), or one already enrolled, enrolls and switches by
+itself and shows "Moving…"; a failure shows the reason and Try again. Consent
+is asked only for a plan nobody bought (`source: grant`, or no `source` from an
+older control plane), because hosting stores a readable copy. The checkout is
+where a buyer agrees to that. Flutter has no plan UI, so nothing changes there.
+
 ## Desktop workspace discovery (2026-09-08)
 
 A restored Tauri identity now inspects its personal drive's PKARR peer before

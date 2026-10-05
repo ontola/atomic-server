@@ -1,29 +1,12 @@
-import {
-  ServiceSection,
-  ServiceIcon,
-  ServiceBody,
-  ServiceTitle,
-  ServiceDescription,
-  CLOUD_VAULT_DESCRIPTION,
-  CLOUD_VAULT_ON,
-} from '@tomic/service-ui';
-import '@tomic/service-ui/styles.css';
-import { styled } from 'styled-components';
 import { FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
-import {
-  cardSurface,
-  CARD_ACTIONS_GAP,
-  CARD_BODY_GAP,
-  CARD_SUB_FONT,
-  CARD_TITLE_FONT,
-} from '../cardSurface';
 import { Button } from '../Button';
+import { ServiceRow, type ServiceStanding } from '../Cloud/ServiceRow';
 import { VaultStorage } from './VaultStorage';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 
 /**
- * Cloud Vault controls for one drive.
+ * Cloud Vault for one drive, as one {@link ServiceRow}.
  *
  * Presentational: every decision lives in `useVaultBackup`, so this can be
  * dropped anywhere a drive is in view without dragging state with it.
@@ -37,76 +20,24 @@ import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 export function VaultPanel({
   vault,
   onRestored,
-  embedded = false,
-  offerUrl,
-  onOfferClick,
+  included = false,
 }: {
   vault: UseVaultBackup;
   /** Called after a successful restore, so the host can refresh its view. */
   onRestored?: () => void;
-  /**
-   * Render as a row inside a surface the host already drew, rather than as a
-   * card of its own. Nesting a card in a card reads as two things when this is
-   * one service listed under an account.
-   */
-  embedded?: boolean;
-  /**
-   * Where to read what this tier costs. Shown only while the vault is off:
-   * once it is on, the price is a question for the account page, not for a
-   * panel whose job is the state of one drive's backup.
-   */
-  offerUrl?: string | null;
-  /**
-   * Opening the link is the host's business. A plain anchor is wrong in the
-   * desktop app, where Tauri intercepts a new window natively and the shell
-   * refuses it; the host already knows how to open one properly.
-   */
-  onOfferClick?: (url: string) => void;
+  /** Cloud Server is on, so the vault is part of it rather than the plan. */
+  included?: boolean;
 }) {
   const { status, busy, error, restoreProgress } = vault;
-
-  // Still settling. Bounded — the hook gives up on `loading` rather than
-  // sitting in it — but the bound is seconds, not a frame, so rendering
-  // nothing meant the row appeared out of nowhere and shoved the rest of the
-  // account card down with it. Hold the space and say what is happening.
-  if (status.state === 'loading') {
-    return (
-      <Panel
-        data-testid='vault-panel'
-        data-vault-state='loading'
-        $embedded={embedded}
-      >
-        <ServiceIcon kind='vault' />
-        <Body>
-          <Title>Cloud Vault</Title>
-          <Sub>Checking this workspace’s backup…</Sub>
-        </Body>
-      </Panel>
-    );
-  }
-
-  // "Cannot say" is not "off": offering an enable button when we could not
-  // even ask would turn a missing session into a confusing failure on click.
-  //
-  // But it is not nothing either. Rendering null here meant a device that
-  // could never run the vault looked exactly like one where the feature does
-  // not exist — no panel, no reason, nothing to act on. Say what is missing
-  // and leave the decision to the reader.
-  if (status.state === 'unavailable') {
-    return (
-      <Panel
-        data-testid='vault-panel'
-        data-vault-state='unavailable'
-        $embedded={embedded}
-      >
-        <ServiceIcon kind='vault' />
-        <Body>
-          <Title>Cloud Vault</Title>
-          <Sub data-testid='vault-unavailable-reason'>{status.reason}</Sub>
-        </Body>
-      </Panel>
-    );
-  }
+  // What Cloud Vault is: the same sentence in every state. Declared in here,
+  // not at module level, so the translation extractor sees it.
+  const tagline = 'Encrypted backup of your data. Only you can read it.';
+  const on = status.state === 'on';
+  const standing: ServiceStanding | null = on
+    ? included
+      ? 'included'
+      : 'current'
+    : null;
 
   async function handleRestore() {
     const outcome = await vault.restore();
@@ -114,148 +45,181 @@ export function VaultPanel({
     if (outcome) onRestored?.();
   }
 
+  // Still settling, or cannot say. Neither is "off": an enable button when we
+  // could not even ask would turn a missing session into a confusing failure
+  // on click. The row holds its place and says why.
+  if (status.state === 'loading' || status.state === 'unavailable') {
+    return (
+      <ServiceRow
+        data-testid='vault-panel'
+        data-vault-state={status.state}
+        kind='vault'
+        title='Cloud Vault'
+        tagline={tagline}
+        status={{
+          tone: 'muted',
+          text:
+            status.state === 'loading' ? (
+              'Checking this workspace’s backup…'
+            ) : (
+              <span data-testid='vault-unavailable-reason'>
+                {status.reason}
+              </span>
+            ),
+        }}
+      />
+    );
+  }
+
   if (status.state === 'off') {
     return (
-      <Panel
+      <ServiceRow
         data-testid='vault-panel'
         data-vault-state='off'
-        $embedded={embedded}
-      >
-        {/* Neutral: an offer is not a service. Blue on this page means "on",
-            so a vault that is off must not wear it, or the row's own answer
-            contradicts its glyph. */}
-        <ServiceIcon kind='vault' />
-        <Body>
-          <Title>Cloud Vault</Title>
-          <Sub>{CLOUD_VAULT_DESCRIPTION}</Sub>
-          {error && <ErrorText data-testid='vault-error'>{error}</ErrorText>}
-          <Actions>
-            <Button
-              data-testid='vault-enable'
-              onClick={vault.enable}
-              disabled={busy}
-            >
-              {busy ? 'Setting up…' : 'Turn on Cloud Vault'}
-            </Button>
-            {offerUrl && (
-              <OfferLink
-                data-testid='vault-offer'
-                href={offerUrl}
-                rel='noreferrer'
-                onClick={e => {
-                  if (!onOfferClick) return;
-
-                  e.preventDefault();
-                  onOfferClick(offerUrl);
-                }}
-              >
-                See plans
-              </OfferLink>
-            )}
-          </Actions>
-        </Body>
-      </Panel>
+        kind='vault'
+        title='Cloud Vault'
+        tagline={tagline}
+        points={[
+          'Sealed on your device, so we cannot read it',
+          'Restore this workspace on any device',
+          'Free with an account',
+        ]}
+        status={
+          error ? { tone: 'error', text: <ErrorText>{error}</ErrorText> } : null
+        }
+        actions={
+          <Button
+            data-testid='vault-enable'
+            onClick={vault.enable}
+            disabled={busy}
+          >
+            {busy ? 'Turning on…' : 'Turn on Cloud Vault'}
+          </Button>
+        }
+      />
     );
   }
 
   const { enrollment, details } = status;
   const suspended = enrollment.status !== 'active';
 
+  // One line answers "is my data safe": when it last went up, how much is
+  // there, and how full the vault is once that is worth mentioning. An error
+  // or a pause replaces it rather than stacking under it.
+  const summary =
+    details.confirmed_objects === 0
+      ? `Nothing backed up to ${PRODUCT_NAME} yet`
+      : [
+          enrollment.last_backup_at
+            ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
+            : `Backed up to ${PRODUCT_NAME}`,
+          `${details.confirmed_objects} object${
+            details.confirmed_objects === 1 ? '' : 's'
+          }`,
+          formatShareUsed(enrollment.used_bytes, enrollment.quota_bytes),
+        ]
+          .filter(Boolean)
+          .join(' · ');
+
   return (
-    <Panel
-      data-testid='vault-panel'
-      data-vault-state={suspended ? 'suspended' : 'on'}
-      $accent={!embedded}
-      $embedded={embedded}
-    >
-      <ServiceIcon kind='vault' active={!suspended} />
-      <Body>
-        <Title>{CLOUD_VAULT_ON}</Title>
-        {/* The object count is an attribute as well as prose: a test asserting
-            that a second backup actually stored something should read the
-            number, not parse a sentence that is free to be reworded. */}
-        <Sub
-          data-testid='vault-summary'
-          data-vault-objects={details.confirmed_objects}
-          data-vault-bytes={enrollment.used_bytes}
-        >
-          {/* Name where it goes, in the state the user actually sits in. The
-              off-state copy says "in {PRODUCT_NAME}" and then the on-state used
-              to drop it, so the one screen you see every day never mentioned
-              that your data leaves the device at all. Sealed or not, who is
-              holding it is not a detail to infer. */}
-          {details.confirmed_objects === 0
-            ? `Nothing has been backed up to ${PRODUCT_NAME} yet.`
-            : `${details.confirmed_objects} encrypted object${
-                details.confirmed_objects === 1 ? '' : 's'
-              } stored in ${PRODUCT_NAME} · ${formatShareUsed(
-                enrollment.used_bytes,
-                enrollment.quota_bytes,
-              )}.`}
-          {enrollment.last_backup_at
-            ? ` Last backup ${formatWhen(enrollment.last_backup_at)}.`
-            : ''}
-        </Sub>
-
-        {suspended && (
-          <ErrorText data-testid='vault-suspended'>
-            Backups are paused. You can still restore what is already stored.
-          </ErrorText>
-        )}
-
-        {error && <ErrorText data-testid='vault-error'>{error}</ErrorText>}
-
-        {restoreProgress !== null && (
-          <Sub data-testid='vault-restore-progress'>
-            Restoring… {Math.round(restoreProgress * 100)}%
-          </Sub>
-        )}
-
-        <Actions>
-          <Button
-            data-testid='vault-backup-now'
-            onClick={vault.backupNow}
-            disabled={busy || suspended}
-          >
-            <FaCloudArrowUp /> <span>{busy ? 'Working…' : 'Back up now'}</span>
-          </Button>
-          <Button
-            data-testid='vault-restore'
-            subtle
-            onClick={handleRestore}
-            disabled={busy}
-          >
-            <FaRotateLeft /> <span>Restore</span>
-          </Button>
-          <Button
-            data-testid='vault-disable'
-            subtle
-            onClick={vault.disable}
-            disabled={busy}
-          >
-            Turn off
-          </Button>
-        </Actions>
-        <VaultStorage
-          drivePseudonym={enrollment.drive_pseudonym}
-          onChanged={() => void vault.refresh()}
-        />
-      </Body>
-    </Panel>
+    <>
+      <ServiceRow
+        data-testid='vault-panel'
+        data-vault-state={suspended ? 'suspended' : 'on'}
+        kind='vault'
+        title='Cloud Vault'
+        standing={standing}
+        tagline={tagline}
+        status={
+          error
+            ? { tone: 'error', text: <ErrorText>{error}</ErrorText> }
+            : restoreProgress !== null
+              ? {
+                  tone: 'busy',
+                  text: (
+                    <span data-testid='vault-restore-progress'>
+                      Restoring… {Math.round(restoreProgress * 100)}%
+                    </span>
+                  ),
+                }
+              : suspended
+                ? {
+                    tone: 'error',
+                    text: (
+                      <span data-testid='vault-suspended'>
+                        Backups are paused. You can still restore what is
+                        already stored.
+                      </span>
+                    ),
+                  }
+                : {
+                    tone: 'ok',
+                    text: (
+                      // The object count is an attribute as well as prose: a
+                      // test asserting that a second backup stored something
+                      // should read the number, not parse a sentence.
+                      <span
+                        data-testid='vault-summary'
+                        data-vault-objects={details.confirmed_objects}
+                        data-vault-bytes={enrollment.used_bytes}
+                      >
+                        {summary}
+                      </span>
+                    ),
+                  }
+        }
+        actions={
+          <>
+            <Button
+              data-testid='vault-backup-now'
+              onClick={vault.backupNow}
+              disabled={busy || suspended}
+            >
+              <FaCloudArrowUp />{' '}
+              <span>{busy ? 'Working…' : 'Back up now'}</span>
+            </Button>
+            <Button
+              data-testid='vault-restore'
+              subtle
+              onClick={handleRestore}
+              disabled={busy}
+            >
+              <FaRotateLeft /> <span>Restore</span>
+            </Button>
+            <Button
+              data-testid='vault-disable'
+              subtle
+              onClick={vault.disable}
+              disabled={busy}
+            >
+              Turn off
+            </Button>
+          </>
+        }
+      />
+      <VaultStorage
+        drivePseudonym={enrollment.drive_pseudonym}
+        onChanged={() => void vault.refresh()}
+      />
+    </>
   );
 }
 
+function ErrorText({ children }: { children: string }) {
+  return <span data-testid='vault-error'>{children}</span>;
+}
+
 /**
- * How full the vault is, as a whole percentage. The byte numbers are
- * deliberately not shown: the free quota is a limit people grow towards,
- * not a figure to advertise.
+ * How full the vault is, as a whole percentage, or nothing below one percent.
+ * The byte numbers are deliberately not shown: the free quota is a limit
+ * people grow towards, not a figure to advertise.
  */
 function formatShareUsed(usedBytes: number, quotaBytes: number): string {
-  if (!quotaBytes || !usedBytes || usedBytes <= 0) return '0% used';
+  if (!quotaBytes || !usedBytes || usedBytes <= 0) return '';
 
   const percent = (usedBytes / quotaBytes) * 100;
 
-  if (percent < 1) return 'Less than 1% used';
+  if (percent < 1) return '';
 
   return `${Math.min(100, Math.round(percent))}% used`;
 }
@@ -274,72 +238,3 @@ function formatWhen(unixSeconds: number): string {
 
   return `${Math.floor(hours / 24)}d ago`;
 }
-
-// This panel sits in the Sync page's list of cards, so it uses that list's
-// surface and type scale rather than its own. It used to set padding and gap
-// from `theme.size(2)` (8px) while the cards around it used 0.9rem (14.4px),
-// and left its body text at the inherited 1rem against their 0.82rem — close
-// enough to look like a mistake rather than a distinction.
-const Panel = styled(ServiceSection)<{
-  $accent?: boolean;
-  $embedded?: boolean;
-}>`
-  ${cardSurface}
-  border-color: ${p => (p.$accent ? p.theme.colors.main : undefined)};
-  background: ${p => (p.$accent ? `${p.theme.colors.main}0a` : undefined)};
-
-  /* Inside the provider card the surrounding card already supplies the
-     surface and the accent, so drawing them again would box one service
-     inside another box. */
-  ${p =>
-    p.$embedded &&
-    `
-      border: none;
-      background: none;
-      padding: 0;
-    `}
-`;
-
-const Body = styled(ServiceBody)`
-  display: flex;
-  flex-direction: column;
-  gap: ${CARD_BODY_GAP};
-  min-width: 0;
-`;
-
-const Title = styled(ServiceTitle)`
-  margin: 0;
-  font-size: ${CARD_TITLE_FONT};
-  font-weight: 600;
-`;
-
-const Sub = styled(ServiceDescription)`
-  margin: 0;
-  color: ${p => p.theme.colors.textLight};
-  font-size: ${CARD_SUB_FONT};
-`;
-
-const ErrorText = styled.p`
-  margin: 0;
-  color: ${p => p.theme.colors.alert};
-  font-size: ${CARD_SUB_FONT};
-`;
-
-const OfferLink = styled.a`
-  align-self: center;
-  color: ${p => p.theme.colors.main};
-  font-size: ${CARD_SUB_FONT};
-  text-decoration: underline;
-
-  &:hover,
-  &:focus-visible {
-    color: ${p => p.theme.colors.mainDark};
-  }
-`;
-
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${CARD_ACTIONS_GAP};
-  margin-top: ${CARD_ACTIONS_GAP};
-`;
