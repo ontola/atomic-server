@@ -392,6 +392,30 @@ describe('resource.ts', () => {
     expect(resource.get(prop)).toEqual(strokes);
   });
 
+  it('replaceListItems keeps unchanged strokes between two separate edits', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+    const strokes = Array.from({ length: 40 }, (_, i) => ({
+      color: i,
+      width: 2,
+      path: [[i, i]],
+    }));
+    const resource = new Resource('https://example.com/lcs-list');
+    const doc = resource.getLoroDoc()!;
+
+    for (const s of strokes) resource.pushListItem(prop, s);
+
+    doc.commit();
+    const before = doc.opCount();
+    // Removes strokes 5 and 30: two separate hunks.
+    const target = strokes.filter((_, i) => i !== 5 && i !== 30);
+
+    resource.replaceListItems(prop, target);
+    expect(resource.get(prop)).toEqual(target);
+    expect(doc.opCount() - before).toBeLessThan(5);
+  });
+
   /**
    * Opening a filled table (and the sidebar tree) flashed as if row/column
    * order changed. OPFS cold-load hydrates JSON-AD first — which seeds a
