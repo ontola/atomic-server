@@ -60,3 +60,26 @@ Old rows are left as they are; they go when their resource changes.
 The snapshot cannot be dropped for a resource nobody has edited: it also holds
 the changes the server writes (`lastCommit`, derived `drive`), which exist
 nowhere else; the delta keeps just those.
+
+## Property dictionary (design, 2026-10-05)
+
+Per-row breakdown of one "hallo" message (3195 B): message row 439, genesis
+commit row 1163, snapshot delta 347, `PropValSub`/`ValPropSub` about 1100,
+search 148. Full property URLs and the 93 B subject repeat in nearly every row.
+
+Two layers, the safe one first.
+
+1. **Database dictionary (no protocol change).** A small tree maps each
+   property URL and datatype tag to a 1 to 2 byte id, with an in-memory cache.
+   Used by index keys, resource rows and the snapshot delta. A marker byte keeps
+   old rows readable, as with compression. Open question: deflate on a 350 B row
+   learns little, so a static substitution codec for well-known URLs before
+   deflate may beat a learned dictionary for values; index keys need the id map
+   either way.
+2. **Short keys in the protocol (HDT-like).** The Loro document and the signed
+   commit use ids from a fixed, published dictionary of well-known properties;
+   custom properties keep their URL. Changes what clients sign, so it needs a
+   protocol version and the old form keeps working.
+
+Layer 1 first: measure per tree, build in its own PR. Layer 2 needs Joep's go on
+the versioning approach before code.
