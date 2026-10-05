@@ -24,6 +24,42 @@ export interface CreatedSelectProperty {
   tags: Record<string, string>;
 }
 
+/**
+ * How a new Property is labelled — one of two shapes, never both halves
+ * missing:
+ *
+ * - `name` (with an optional explicit `shortname`): the ordinary case. The
+ *   free-text label goes on the Property, and the shortname is slugified from
+ *   it unless one is given.
+ * - `shortname` alone: a Property whose label lives somewhere else. The form
+ *   builder's fields are the case — the Label is on the FormField, and a
+ *   second copy on the Property only went stale (see
+ *   `planning/form-field-shortnames.md`).
+ */
+export type PropertyNaming =
+  | { name: string; shortname?: string }
+  | { name?: undefined; shortname: string };
+
+/** The shortname a new Property asks for, before collision handling. */
+function namingShortname(naming: PropertyNaming): string {
+  if (naming.name === undefined) {
+    return naming.shortname;
+  }
+
+  return naming.shortname ?? stringToSlug(naming.name);
+}
+
+function namingPropVals(naming: PropertyNaming): Record<string, JSONValue> {
+  if (naming.name === undefined) {
+    return { [core.properties.shortname]: naming.shortname };
+  }
+
+  return {
+    [core.properties.shortname]: naming.shortname ?? stringToSlug(naming.name),
+    [core.properties.name]: naming.name,
+  };
+}
+
 /** Resolves the parent a new property of `tableClass` should be created under. */
 async function resolvePropertyParent(
   store: Store,
@@ -169,12 +205,8 @@ export async function attachPropertiesToClass(
 export async function createPropertyOnClass(
   store: Store,
   tableClass: Resource,
-  opts: {
-    name: string;
+  opts: PropertyNaming & {
     datatype: Datatype;
-    /** Defaults to a slug of the name. For a property found by shortname,
-     * like the calendar's `atomic-calendar-recurrence`. */
-    shortname?: string;
     classtype?: string;
     description?: string;
     /**
@@ -193,7 +225,7 @@ export async function createPropertyOnClass(
   },
 ): Promise<string> {
   const parent = await resolvePropertyParent(store, tableClass);
-  let shortname = opts.shortname ?? stringToSlug(opts.name);
+  let shortname = namingShortname(opts);
 
   if (parent.isOntology) {
     const taken = await loadOntologyPropertiesByShortname(
@@ -219,8 +251,9 @@ export async function createPropertyOnClass(
   }
 
   const propVals: Record<string, JSONValue> = {
+    ...namingPropVals(opts),
+    // May differ from the requested one: see the collision handling above.
     [core.properties.shortname]: shortname,
-    [core.properties.name]: opts.name,
     [core.properties.description]: opts.description ?? '',
     [core.properties.datatype]: opts.datatype,
     ...opts.propVals,
@@ -258,13 +291,13 @@ async function reuseSelectProperty(
   store: Store,
   tableClass: Resource,
   existing: Resource,
-  opts: { name: string; tags: TagSeed[]; deferAttach?: boolean },
+  opts: { tags: TagSeed[]; deferAttach?: boolean },
 ): Promise<CreatedSelectProperty | undefined> {
   const optionSubjects = (existing.get(core.properties.allowsOnly) ??
     []) as string[];
-  // Tags are created with only a shortname (see below) — no `core:name` — so
-  // match the caller's option names against that, the same slug they were
-  // minted with.
+  // Tags always carry a shortname (older ones carry nothing else), so match
+  // the caller's option names against that, the same slug they were minted
+  // with.
   const subjectByShortname: Record<string, string> = {};
 
   for (const subject of optionSubjects) {
@@ -309,15 +342,20 @@ async function reuseSelectProperty(
 export async function createSelectPropertyOnClass(
   store: Store,
   tableClass: Resource,
-  opts: {
-    name: string;
+  opts: PropertyNaming & {
     tags: TagSeed[];
+    /**
+     * How many tags may be picked at once. A SelectProperty is always a
+     * `resourceArray`, so single-select is `max: 1` rather than a different
+     * datatype — see `SelectProperty`'s `max` in `lib/defaults/table.json`.
+     */
+    max?: number;
     /** See {@link createPropertyOnClass}'s `deferAttach`. */
     deferAttach?: boolean;
   },
 ): Promise<CreatedSelectProperty> {
   const parent = await resolvePropertyParent(store, tableClass);
-  let shortname = stringToSlug(opts.name);
+  let shortname = namingShortname(opts);
 
   if (parent.isOntology) {
     const taken = await loadOntologyPropertiesByShortname(
@@ -348,12 +386,15 @@ export async function createSelectPropertyOnClass(
     parent: parent.subject,
     isA: [core.classes.property, dataBrowser.classes.selectProperty],
     propVals: {
+      ...namingPropVals(opts),
       [core.properties.shortname]: shortname,
-      [core.properties.name]: opts.name,
       [core.properties.description]: '',
       [core.properties.datatype]: Datatype.RESOURCEARRAY,
       [core.properties.classtype]: dataBrowser.classes.tag,
       [core.properties.allowsOnly]: [],
+      ...(opts.max !== undefined
+        ? { [dataBrowser.properties.max]: opts.max }
+        : {}),
     },
   });
 
@@ -377,7 +418,12 @@ export async function createSelectPropertyOnClass(
       parent: property.subject,
       isA: dataBrowser.classes.tag,
       propVals: {
+        // `shortname` is the slug the class requires; `name` carries the
+        // label verbatim, since a seed like "Strongly agree — daily" does not
+        // survive slugification. `useTitle` prefers `name`, so every tag
+        // renderer shows the original text.
         [core.properties.shortname]: stringToSlug(seed.name),
+        [core.properties.name]: seed.name,
         [dataBrowser.properties.color]: seed.color ?? randomItem(tagColours),
       },
     });

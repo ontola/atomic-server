@@ -122,6 +122,17 @@ impl QueryFilter {
 /// Still used by the [Tree::PropValSub] / [Tree::ValPropSub] key layouts.
 pub const SEPARATION_BIT: u8 = 0xff;
 
+/// What the atom indexes write for an atom's sort value: nothing when it is
+/// the reference value (which every indexed atom's is), so a long URL or text
+/// is not in the key twice. Readers take an empty part to mean "the same".
+pub(crate) fn sort_part(atom: &IndexAtom) -> &[u8] {
+    if atom.sort_value == atom.ref_value.as_str() {
+        &[]
+    } else {
+        atom.sort_value.as_bytes()
+    }
+}
+
 /// Length of the compact query id that prefixes every [Tree::QueryMembers]
 /// key: a truncated blake3 hash of the filter's canonical encoding. 16 bytes
 /// keeps accidental collisions out of reach (2^64 birthday bound) while
@@ -282,7 +293,10 @@ pub async fn query_sorted_indexed(
         let index = seen.len() - 1;
         // The user's maximum amount of results has not yet been reached
         // and
-        // The users minimum starting distance (offset) has been reached
+        // The users minimum starting distance (offset) has been reached.
+        // Denied members do not grow `subjects`, so we keep resolving until
+        // the page is full of *authorized* hits — a private streak must not
+        // hide a later readable row.
         let in_selection = subjects.len() < limit && index >= q.offset;
         // Tracks whether this iter step should bump the visible count.
         // Defaults to true so entries past the page limit still count

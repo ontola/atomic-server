@@ -571,6 +571,8 @@ test.describe('tables', async () => {
       .toBe('3');
     await enterGridEdit(page);
     await typeInActiveGridCell(page, 'rowINSERTED');
+    // Commit the persisted cell before leaving edit mode.
+    await page.keyboard.press('Tab');
     await page.keyboard.press('Escape');
     await waitForSynced(page);
 
