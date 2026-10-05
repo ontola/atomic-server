@@ -642,6 +642,23 @@ export class Store {
    *  for the same subject from firing one fetch each. */
   private _gapRecoveries: Set<string> = new Set();
 
+  /** The updates that could not apply, per subject under recovery, to be
+   *  replayed once a base is in place. */
+  private _gapUpdates: Map<string, Uint8Array[]> = new Map();
+
+  /**
+   * Subjects whose in-memory Loro doc was rebuilt from JSON-AD alone, by a
+   * local query that returns no snapshots. Such a doc holds the values but
+   * none of the history: its ops are new, by a peer nobody else knows, so no
+   * delta from the server or another tab can apply to it (#1905).
+   *
+   * Two consequences. It must not be written back to the local database,
+   * where it would replace the real history the query read the values from.
+   * And a delta that arrives for it is replayed on that local history before
+   * anything asks the server.
+   */
+  private _withoutLoroHistory: Set<string> = new Set();
+
   /** Agent subjects already re-checked against the server this session — see
    *  the agent branch in {@link fetchResourceWithLocalFallback}. */
   private _revalidatedAgents: Set<string> = new Set();
@@ -2280,6 +2297,7 @@ export class Store {
     parsed: Record<string, unknown>,
     snapshot?: Uint8Array,
   ): Resource | undefined {
+    const existing = this.getResolved(subject);
     const resource = new Resource(subject);
     resource.applyHydratedValues(
       Object.entries(parsed).filter(([key]) => key !== '@id') as [
@@ -2287,11 +2305,23 @@ export class Store {
         JSONValue,
       ][],
     );
+
     // JSON is a read cache, not a replacement for the document's causal
     // history. Reconstructing it as fresh ops makes later edits lose LWW
     // against the existing server document (notably agent profile renames).
-    if (snapshot?.length) resource.importLoroUpdate(snapshot, true);
-    else resource.getLoroDoc();
+    if (snapshot?.length) {
+      resource.importLoroUpdate(snapshot, true);
+      this._withoutLoroHistory.delete(this.normalizeSubject(subject));
+    } else {
+      resource.getLoroDoc();
+
+      // Only when nothing with real history is here to merge into: a
+      // placeholder, or nothing at all.
+      if (!existing || existing.loading) {
+        this._withoutLoroHistory.add(this.normalizeSubject(subject));
+      }
+    }
+
     resource.loading = false;
     const outcome = this.applyIncoming({
       subject: resource.subject,
@@ -2447,19 +2477,52 @@ export class Store {
    * and a network error here should not surface as an error on a document the
    * user can still read.
    */
-  private recoverFromIncompleteImport(subject: string, source?: string): void {
+  private recoverFromIncompleteImport(
+    subject: string,
+    source: string | undefined,
+    update: Uint8Array,
+  ): void {
+    const updates = this._gapUpdates.get(subject) ?? [];
+    updates.push(update);
+    this._gapUpdates.set(subject, updates);
+
     if (this._gapRecoveries.has(subject)) return;
 
     this._gapRecoveries.add(subject);
     this.getResolved(subject)?.setRecovering(true);
     console.info(
       `[Store] incomplete Loro import for ${subject.slice(0, 60)} ` +
-        `(source: ${source ?? 'unknown'}) — missing base state, fetching a full ` +
-        `snapshot to catch up.`,
+        `(source: ${source ?? 'unknown'}) — missing base state, catching up ` +
+        `from the local database, else from the server.`,
     );
 
-    this.fetchResourceFromServer(subject, { forceOverride: true })
+    // Destroyed while the repair ran (a cascade from its parent's delete,
+    // say): "not found" is then the right answer, not a failure, and the
+    // resource must not come back as an errored copy. The local-base replay
+    // (#1905) waits on the local database first, which widened this window
+    // enough for the delete e2e to hit it.
+    const gone = () =>
+      this.isDestroyed(subject) || this.hasPendingDestroy(subject);
+    const fromServer = () =>
+      gone()
+        ? undefined
+        : this.fetchResourceFromServer(subject, { forceOverride: true });
+    const repair: Promise<unknown> = this.clientDb
+      ? this.replayOnLocalBase(subject).then(done =>
+          done ? undefined : fromServer(),
+        )
+      : Promise.resolve(fromServer());
+
+    repair
       .catch(error => {
+        if (gone()) {
+          console.info(
+            `[Store] ${subject.slice(0, 60)} was deleted while its missing state was being recovered.`,
+          );
+
+          return;
+        }
+
         console.warn(
           `[Store] failed to recover missing state for ${subject}:`,
           error,
@@ -2474,6 +2537,7 @@ export class Store {
       })
       .finally(() => {
         this._gapRecoveries.delete(subject);
+        this._gapUpdates.delete(subject);
         const resource = this.getResolved(subject);
 
         if (resource) {
@@ -2481,6 +2545,69 @@ export class Store {
           this.notify(resource);
         }
       });
+  }
+
+  /**
+   * Put the history an update was built on under `subject`'s doc, from the
+   * local database, then replay the updates that could not apply. True when
+   * they all applied.
+   *
+   * The server sends a drive sync as deltas from the version vectors this
+   * client reported, and those come from the local database. So the base a
+   * sync delta needs is, by construction, the snapshot stored locally, one
+   * worker round trip away. The doc in memory lacks it only because it was
+   * built from something else: a local query's JSON-AD, or nothing at all
+   * when the update is the first this page hears of the subject.
+   *
+   * Asking the server instead worked too, but only as fast as the server
+   * answered, and meanwhile the resource sat under repair: `getResource`
+   * waited on it and whatever was listed from it (the apps a table offers,
+   * #1846) went stale.
+   */
+  private async replayOnLocalBase(subject: string): Promise<boolean> {
+    const clientDb = this.clientDb;
+
+    if (!clientDb) return false;
+    if (!clientDb.isReady && !(await clientDb.waitForReady())) return false;
+
+    let snapshot: Uint8Array | null;
+
+    try {
+      ({ snapshot } = await clientDb.getResourceWithSnapshot(subject));
+    } catch {
+      return false;
+    }
+
+    const resource = this.getResolved(subject);
+
+    if (!snapshot?.length || !resource) return false;
+
+    if (this.isDestroyed(subject) || this.hasPendingDestroy(subject)) {
+      return false;
+    }
+
+    // A doc with no history of its own gains nothing from a merge but new
+    // ops that can outvote the real ones, so it is replaced, unless it
+    // carries an edit that has not reached the server.
+    const replace =
+      (this._withoutLoroHistory.has(subject) ||
+        !this.hasRenderableContent(resource)) &&
+      !resource.hasUnsavedChanges() &&
+      !this.outbox.mayHavePending(subject);
+
+    if (!resource.importLoroUpdate(snapshot, replace).complete) return false;
+
+    this._withoutLoroHistory.delete(subject);
+
+    for (const update of this._gapUpdates.get(subject) ?? []) {
+      if (!resource.importLoroUpdate(update).complete) return false;
+    }
+
+    resource.error = undefined;
+    resource.loading = false;
+    this.addResource(resource, { skipCommitCompare: true });
+
+    return true;
   }
 
   /**
@@ -2518,6 +2645,12 @@ export class Store {
 
       const alias =
         change.subject !== change.resource.subject ? change.subject : undefined;
+
+      // The server's copy brings the real history with it.
+      if (change.source === 'http-fetch') {
+        this._withoutLoroHistory.delete(this.normalizeSubject(change.subject));
+      }
+
       this.addResource(change.resource, {
         skipCommitCompare: true,
         alias,
@@ -2605,6 +2738,11 @@ export class Store {
       !this.outbox.mayHavePending(subject);
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
+    // Full state: the doc holds the real history now, merged or replaced.
+    if (change.replaceLoroDocsFromRemote && complete) {
+      this._withoutLoroHistory.delete(subject);
+    }
+
     // Commit-detail resources (`did:ad:commit:<sig>`) carry a single
     // commit's `loroUpdate`, which is a DELTA by design — importing it
     // into a fresh doc legitimately leaves "pending" ops (the base it
@@ -2640,7 +2778,11 @@ export class Store {
       // method drop the very fetch being issued to repair the gap.
       resource.loading = !this.hasRenderableContent(resource);
       this.addResource(resource, { skipCommitCompare: true });
-      this.recoverFromIncompleteImport(subject, change.source);
+      this.recoverFromIncompleteImport(
+        subject,
+        change.source,
+        change.loroBytes,
+      );
 
       return 'invalid';
     }
@@ -2797,7 +2939,12 @@ export class Store {
       // once when init failed — that single line is the actionable signal.
       !this.clientDb ||
       this.clientDb.initError ||
-      !isPersistableState(resource)
+      !isPersistableState(resource) ||
+      // Rebuilt from the local database's own JSON-AD: writing it back would
+      // replace the history stored there with ops that have none (#1905).
+      // An edit on it is still written, by the save.
+      (this._withoutLoroHistory.has(this.normalizeSubject(resource.subject)) &&
+        !resource.hasUnsavedChanges())
     ) {
       return;
     }
@@ -5504,6 +5651,7 @@ export class Store {
     const resolved = this.resolveSubject(subjectRaw);
     // A subsequently loaded resource must not inherit the old cache stamp.
     this.lastPersisted.delete(resolved);
+    this._withoutLoroHistory.delete(resolved);
 
     if (this.resources.delete(resolved)) {
       if (shouldNotify) {

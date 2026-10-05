@@ -1979,6 +1979,13 @@ discard a readable product attachment or abort context preparation.
 subsequent reads of its error placeholder. Existing gap-recovery and ingress
 tests cover missing-history and snapshot recovery; these are not proof that
 every resource in a user's live session has recovered.
+`sync-delta-local-base.test.ts` covers a sync delta for a resource the local
+query hydrated from JSON-AD (no Loro history): it is replayed on the local
+database's snapshot without a server round trip, and the rebuilt doc is not
+written back over that history (#1905).
+`useDriveApps.localBase.test.tsx` covers the "+ Add view" case of it: an app's
+edit arriving that way while the menu is open (#1846). Editing a resource that
+is still without its history (it is saved from the rebuilt doc) is not covered.
 
 `toolHistory.test.ts` checks interrupted tool calls remain explicitly unknown
 in outgoing model history, completed calls retain results, and persisted tool
