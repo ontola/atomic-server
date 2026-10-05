@@ -6,6 +6,7 @@ vi.mock('@sentry/react', () => ({
   init: vi.fn(),
   isEnabled: vi.fn(() => true),
   captureMessage: vi.fn(),
+  addEventProcessor: vi.fn(),
 }));
 describe('Sentry configuration', () => {
   beforeEach(() => {
