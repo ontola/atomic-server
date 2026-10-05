@@ -382,6 +382,10 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
     .service(
+        web::resource("/drive-usage/breakdown")
+            .to(handlers::drive_usage::handle_drive_usage_breakdown),
+    )
+    .service(
         web::resource("/history-attribution")
             .to(handlers::history_attribution::handle_history_attribution),
     )

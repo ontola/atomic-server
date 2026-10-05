@@ -207,6 +207,19 @@ pub struct DriveUsage {
     pub loro_bytes: u64,
 }
 
+/// One resource's share of a drive's storage, for the "where does space go"
+/// view. `blob_bytes` is attributed to the first resource that references a
+/// blob, so shared bytes are counted once, as in [`DriveUsage`].
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ResourceUsage {
+    pub subject: String,
+    pub name: Option<String>,
+    pub parent: Option<String>,
+    pub is_a: Option<String>,
+    pub loro_bytes: u64,
+    pub blob_bytes: u64,
+}
+
 /// Result of loading an agent from a secret.
 pub struct AgentLoadResult {
     pub agent: crate::agents::Agent,
@@ -1607,6 +1620,64 @@ impl Db {
         }
 
         Ok(usage.into_values().collect())
+    }
+
+    /// Per-resource storage of one drive: Loro snapshot bytes (history) and the
+    /// blob bytes of attached files. Same accounting as [`Db::per_drive_usage`],
+    /// kept per resource so a client can draw a size map of the drive.
+    pub async fn drive_usage_breakdown(
+        &self,
+        drive_subject: &str,
+    ) -> AtomicResult<Vec<ResourceUsage>> {
+        use std::collections::HashSet;
+
+        let ds: crate::Subject = drive_subject.into();
+        let mut subjects: Vec<String> = crate::sync::engine::collect_drive_subjects(self, &ds)
+            .await
+            .into_iter()
+            .collect();
+        subjects.sort();
+
+        let mut seen_blobs: HashSet<[u8; 32]> = HashSet::new();
+        let mut rows = Vec::new();
+
+        for subject in subjects {
+            let Ok(propvals) = self.get_propvals(&subject) else {
+                continue;
+            };
+            let loro_bytes = self
+                .get_loro_snapshot_bytes(&subject)
+                .map(|s| s.len() as u64)
+                .unwrap_or(0);
+
+            let mut blob_bytes = 0;
+            if let Some(blob_val) = propvals.get(urls::BLOB) {
+                let blob_subject = crate::Subject::from_raw(&blob_val.to_string(), None);
+                if let Some(hash_bytes) = blob_subject
+                    .blob_hash_hex()
+                    .and_then(|h| hex::decode(h).ok())
+                    .filter(|b| b.len() == 32)
+                {
+                    let mut hash = [0u8; 32];
+                    hash.copy_from_slice(&hash_bytes);
+                    if seen_blobs.insert(hash) {
+                        blob_bytes = self.blob_size(&hash).await?.unwrap_or(0);
+                    }
+                }
+            }
+
+            let text = |prop: &str| propvals.get(prop).map(|v| v.to_string());
+            rows.push(ResourceUsage {
+                name: text(urls::NAME).or_else(|| text(urls::FILENAME)),
+                parent: text(urls::PARENT),
+                is_a: text(urls::IS_A).and_then(|c| c.split(',').next().map(str::to_string)),
+                subject,
+                loro_bytes,
+                blob_bytes,
+            });
+        }
+
+        Ok(rows)
     }
 
     /// Get children of a resource, optionally filtered by class.

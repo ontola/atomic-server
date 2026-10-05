@@ -473,6 +473,15 @@ function ServerCard({
           subscription and price in billing.
         </ConnMeta>
       )}
+      {isActive && nodeUsage && (
+        <ManagedLink
+          as={Link}
+          to={paths.storage}
+          data-testid='storage-map-link'
+        >
+          See where space goes →
+        </ManagedLink>
+      )}
       {refusedByServer && (
         <ConnError role='alert'>
           <FaCircleExclamation aria-hidden />
