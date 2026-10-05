@@ -5,9 +5,6 @@ import {
   ServiceBody,
   ServiceTitle,
   ServiceDescription,
-  CLOUD_SERVER_DESCRIPTION,
-  CLOUD_SERVER_PLAN_DESCRIPTION,
-  CLOUD_SERVER_SETUP,
 } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
 import { Checkbox } from '../components/forms/Checkbox';
@@ -27,6 +24,7 @@ import { HostingPaymentRequiredError } from '../helpers/managed/enrollment';
 import { DiscoverWorkspace } from '../views/getting-started/DiscoverWorkspace';
 import {
   useEffect,
+  useRef,
   useState,
   type JSX,
   type MouseEvent,
@@ -69,7 +67,6 @@ import {
   FaKey,
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
-import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { VaultPanel } from '../components/Vault/VaultPanel';
 import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
 import { isDeviceLinked } from '../helpers/managed/deviceLink';
@@ -682,7 +679,6 @@ function SyncPage() {
   const [clientDbOn, setClientDbOn] = useState(() => isClientDbEnabled());
   const { setServer, setDrive, baseURL } = useSettings();
   const { drive: requestedDrive } = SyncRoute.useSearch();
-  const [confirmCloud, setConfirmCloud] = useState(false);
   const [hostedCopy, setHostedCopy] = useState<{
     drive: string;
     origin: string;
@@ -725,6 +721,15 @@ function SyncPage() {
     status.serverUrl,
   );
   const [cloudBusy, setCloudBusy] = useState(false);
+  // Why the automatic Cloud Server start failed, so the row can say so and
+  // offer a retry instead of sitting on "Moving…" forever.
+  const [autoEnrollError, setAutoEnrollError] = useState<string | null>(null);
+  // The drive this page already tried to start Cloud Server for by itself.
+  // Once per drive per visit: a failure gets a button, not a loop.
+  const autoEnrollTried = useRef<string | null>(null);
+  // "Not now" on a Cloud Server someone else added to this drive. Per drive,
+  // per browser: the offer stays findable behind one button.
+  const [offerDismissals, setOfferDismissals] = useState(0);
   // Resolved in an effect rather than read off a Resource during render: the
   // React Compiler memoizes on the proxy identity, so a resource that finishes
   // loading would never re-render this.
@@ -784,9 +789,19 @@ function SyncPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(
     null,
   );
+  /**
+   * Who made this drive's plan: `stripe` when the account paid for it, `grant`
+   * when an operator added it by hand. Unknown from a control plane that does
+   * not say yet, which is treated like a grant: asking once too often is
+   * cheaper than hosting a readable copy nobody agreed to.
+   */
+  const [subscriptionSource, setSubscriptionSource] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     setSubscriptionStatus(null);
+    setSubscriptionSource(null);
     if (!managedAccount || !status.drive) return;
     const drive = status.drive;
     const controller = new AbortController();
@@ -801,6 +816,11 @@ function SyncPage() {
         if (!controller.signal.aborted) {
           setSubscriptionStatus(
             subscription.plan === 'server' ? subscription.status : 'free',
+          );
+          setSubscriptionSource(
+            typeof subscription.source === 'string'
+              ? subscription.source
+              : null,
           );
         }
       })
@@ -1316,7 +1336,14 @@ function SyncPage() {
     }
   }
 
-  async function backupToCloud() {
+  /**
+   * Enroll this drive with Cloud Server and point this device at it.
+   *
+   * `auto` is the run nobody clicked: a paid plan, or an enrollment this
+   * device has not caught up with. It must not open a sign-in window or leave
+   * for checkout on its own, so those cases become an error on the row.
+   */
+  async function backupToCloud({ auto = false }: { auto?: boolean } = {}) {
     const drive = status.drive;
     const agent = store.getAgent();
     // Enrollment is keyed on the agent's subject: without one there is no
@@ -1343,6 +1370,14 @@ function SyncPage() {
             : undefined,
       };
       let result = await enableCloudSyncForDrive(args);
+
+      if (!result.ok && auto) {
+        setAutoEnrollError(
+          `Sign in to your ${PRODUCT_NAME} account to start Cloud Server.`,
+        );
+
+        return;
+      }
 
       if (!result.ok) {
         // No account/session yet. Open the portal (in-app window on desktop,
@@ -1386,7 +1421,15 @@ function SyncPage() {
           : 'Connected to Cloud Server. Syncing this workspace…',
       );
     } catch (e) {
-      if (e instanceof HostingPaymentRequiredError) {
+      if (auto) {
+        setAutoEnrollError(
+          e instanceof HostingPaymentRequiredError
+            ? 'This drive’s plan does not include Cloud Server yet.'
+            : e instanceof Error
+              ? e.message
+              : 'Could not start Cloud Server.',
+        );
+      } else if (e instanceof HostingPaymentRequiredError) {
         if (!accountPortalUrl) {
           store.notifyError(
             new Error(
@@ -1411,6 +1454,68 @@ function SyncPage() {
     } finally {
       setCloudBusy(false);
     }
+  }
+
+  const planActive =
+    subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+  /**
+   * Cloud Server should just work for a drive whose owner paid for it (the
+   * checkout already said what hosting means), and for a drive that is
+   * enrolled but that this device has not switched to yet. Either way there is
+   * nothing left for the person to decide, so no button.
+   */
+  const autoEnroll =
+    !managedServer &&
+    !hostedCopyOrigin &&
+    !cloudServerBlocked &&
+    !!managedAccount &&
+    (cloudEnrolled === true ||
+      (cloudEnrolled === false &&
+        planActive &&
+        subscriptionSource === 'stripe'));
+  /**
+   * The one case that still asks: a plan that was not bought, such as Cloud
+   * Server added by hand by an operator. Hosting stores the drive readable on
+   * our servers, so it waits for the owner's word.
+   */
+  const needsHostingConsent =
+    !managedServer &&
+    !hostedCopyOrigin &&
+    !cloudServerBlocked &&
+    cloudEnrolled === false &&
+    planActive &&
+    subscriptionSource !== 'stripe';
+
+  useEffect(() => {
+    const drive = status.drive;
+
+    if (!autoEnroll || !drive || cloudBusy) return;
+
+    if (autoEnrollTried.current === drive) return;
+
+    autoEnrollTried.current = drive;
+    setAutoEnrollError(null);
+    void backupToCloud({ auto: true });
+  }, [autoEnroll, status.drive, cloudBusy]);
+
+  // Read during render: a localStorage lookup is cheap, and `offerDismissals`
+  // changing is what re-renders after a click.
+  const offerDismissed =
+    offerDismissals >= 0 && !!status.drive && readOfferDismissed(status.drive);
+
+  function setOfferDismissed(dismissed: boolean) {
+    if (!status.drive) return;
+
+    const key = `atomic-hosting-offer-dismissed:${status.drive}`;
+
+    try {
+      if (dismissed) localStorage.setItem(key, '1');
+      else localStorage.removeItem(key);
+    } catch {
+      /* Not remembered; the offer just stays open. */
+    }
+
+    setOfferDismissals(n => n + 1);
   }
 
   function savePeers(peers: KnownPeer[]) {
@@ -1591,36 +1696,35 @@ function SyncPage() {
             control plane renders none of it. That URL comes from a managed
             node, a build-time override, or one a node named earlier — never
             from anything hardcoded here. */}
+        {/* Everything our paid services own, in one card.
+
+            The top is the account, not a service: whose services these are,
+            who is signed in and whether email recovery is set up, with the
+            way out to the portal. Below it, the drive's place on one ladder:
+            on this device, then Cloud Vault (encrypted backup we cannot read),
+            then Cloud Server (hosting on top of that backup). Cloud Server is
+            the step up from Cloud Vault, not a second product next to it.
+
+            Gated on a portal being known at all, so a self-hosted node with no
+            control plane renders none of it. That URL comes from a managed
+            node, a build-time override, or one a node named earlier, never
+            from anything hardcoded here. */}
         {accountPortalUrl && (
           <ProviderCard data-testid='provider-card'>
             <ProviderHeader>
-              <CardIcon $tone='provider'>
-                <FaCloud />
-              </CardIcon>
               <AccountBody>
                 <AccountLabel>{PRODUCT_NAME}</AccountLabel>
                 <AccountEmail data-testid='provider-account'>
                   {managedAccount
-                    ? subscriptionStatus === 'active'
-                      ? 'Your Cloud Server subscription is active'
-                      : subscriptionStatus === 'trialing'
-                        ? 'Your Cloud Server trial is active'
-                        : 'Your cloud services'
-                    : 'Cloud services for this workspace'}
+                    ? recoveryBackup === 'stored'
+                      ? `${managedAccount.email} · Email recovery on`
+                      : managedAccount.email
+                    : 'Not signed in'}
                 </AccountEmail>
               </AccountBody>
-              {/* The way out to the portal, in both states. It used to appear
-                  only once you were signed in, which left the card naming a
-                  provider with no route to it: everything you can do about
-                  these services other than switch them on lives over there,
-                  including having an account in the first place.
-
-                  Signed in, that is the dashboard rather than the portal root,
-                  because a signed-in visitor gets the marketing page at `/` and
-                  would land on a sales pitch instead of the account the link
-                  promises to manage. Signed out, `/signin` is the bare
-                  magic-link form, which both creates an account and returns to
-                  an existing one. */}
+              {/* Signed in, the dashboard rather than the portal root, which
+                  is the marketing page. Signed out, `/signin` both creates an
+                  account and returns to an existing one. */}
               <ManagedLink
                 data-testid='provider-portal-link'
                 {...externalLinkProps(
@@ -1633,101 +1737,93 @@ function SyncPage() {
               </ManagedLink>
             </ProviderHeader>
 
-            {/* Email recovery. Blue when it is actually set up, which is the
-                rule for every row here: colour answers "is this on", not "does
-                this exist". Left neutral while unknown too, since a failed
-                check must not be drawn as a missing backup.
+            {/* Folded into the header once it is set up: a row that only
+                says "this is fine" competes with the ones that need you. */}
+            {!(managedAccount && recoveryBackup === 'stored') && (
+              <ProviderService data-testid='recovery-row'>
+                <CardIcon
+                  $tone={
+                    managedAccount && recoveryBackup === 'stored'
+                      ? 'provider'
+                      : 'neutral'
+                  }
+                >
+                  <FaKey />
+                </CardIcon>
+                <ConnBody>
+                  <ConnTitle>Email recovery</ConnTitle>
+                  <ConnSub>
+                    {!managedAccount
+                      ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this workspace with a passkey or secret does not by itself connect your cloud account.`
+                      : recoveryBackup === null
+                        ? `Signed in as ${managedAccount.email}.`
+                        : recoveryBackup === 'stored'
+                          ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
+                          : recoveryBackup === 'passkey-only'
+                            ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                            : recoveryBackup === 'device-only'
+                              ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                              : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
+                  </ConnSub>
+                  {/* Signed out, the account itself is the missing piece, and it
+                      is made in the portal: on a device that cannot hold our
+                      cookie the sign-in is approved from a browser anyway.
 
-                Rendered signed out as well, like the two rows below it. Hiding
-                it made the one service that protects against losing every
-                device the only one you could not find out about until after you
-                had an account, and it left the card looking like it had two
-                offers when it has three. */}
-            <ProviderService data-testid='recovery-row'>
-              <CardIcon
-                $tone={
-                  managedAccount && recoveryBackup === 'stored'
-                    ? 'provider'
-                    : 'neutral'
+                      Signed in with nothing stored, the flow is in settings,
+                      where the rest of account recovery already lives. It asks
+                      for the agent secret, which this page has no business
+                      collecting in a status row, and it cannot avoid asking: the
+                      key is non-extractable in the browser, so the copy the user
+                      saved at setup is the only one that can still be sealed.
+
+                      Nothing to press once it is on. Rotating a code or reading
+                      the secret back are settings' business, and this row's job
+                      is answering whether you are covered. */}
+                  {!managedAccount ? (
+                    <ConnActions>
+                      <LearnMore
+                        {...externalLinkProps(`${accountPortalUrl}/signin`)}
+                      >
+                        Sign in to check recovery
+                      </LearnMore>
+                    </ConnActions>
+                  ) : recoveryBackup === 'none' ||
+                    recoveryBackup === 'device-only' ||
+                    recoveryBackup === 'passkey-only' ? (
+                    <ConnActions>
+                      <LearnMoreLink
+                        to={paths.agentSettings}
+                        data-testid='recovery-row-action'
+                      >
+                        {recoveryBackup === 'device-only'
+                          ? 'Store it with ' + PRODUCT_NAME
+                          : recoveryBackup === 'passkey-only'
+                            ? 'Add a recovery code'
+                            : 'Set up email recovery'}
+                      </LearnMoreLink>
+                    </ConnActions>
+                  ) : null}
+                </ConnBody>
+              </ProviderService>
+            )}
+
+            <ProviderService data-testid='cloud-tier'>
+              <TierLadder
+                tier={
+                  managedServer || hostedCopyOrigin
+                    ? 'server'
+                    : vault.status.state === 'on'
+                      ? 'vault'
+                      : 'local'
                 }
-              >
-                <FaKey />
-              </CardIcon>
-              <ConnBody>
-                <ConnTitle>Email recovery</ConnTitle>
-                <ConnSub>
-                  {!managedAccount
-                    ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this workspace with a passkey or secret does not by itself connect your cloud account.`
-                    : recoveryBackup === null
-                      ? `Signed in as ${managedAccount.email}.`
-                      : recoveryBackup === 'stored'
-                        ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
-                        : recoveryBackup === 'passkey-only'
-                          ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
-                          : recoveryBackup === 'device-only'
-                            ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                            : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
-                </ConnSub>
-                {/* Signed out, the account itself is the missing piece, and it
-                    is made in the portal: on a device that cannot hold our
-                    cookie the sign-in is approved from a browser anyway.
-
-                    Signed in with nothing stored, the flow is in settings,
-                    where the rest of account recovery already lives. It asks
-                    for the agent secret, which this page has no business
-                    collecting in a status row, and it cannot avoid asking: the
-                    key is non-extractable in the browser, so the copy the user
-                    saved at setup is the only one that can still be sealed.
-
-                    Nothing to press once it is on. Rotating a code or reading
-                    the secret back are settings' business, and this row's job
-                    is answering whether you are covered. */}
-                {!managedAccount ? (
-                  <ConnActions>
-                    <LearnMore
-                      {...externalLinkProps(`${accountPortalUrl}/signin`)}
-                    >
-                      Sign in to check recovery
-                    </LearnMore>
-                  </ConnActions>
-                ) : recoveryBackup === 'none' ||
-                  recoveryBackup === 'device-only' ||
-                  recoveryBackup === 'passkey-only' ? (
-                  <ConnActions>
-                    <LearnMoreLink
-                      to={paths.agentSettings}
-                      data-testid='recovery-row-action'
-                    >
-                      {recoveryBackup === 'device-only'
-                        ? 'Store it with ' + PRODUCT_NAME
-                        : recoveryBackup === 'passkey-only'
-                          ? 'Add a recovery code'
-                          : 'Set up email recovery'}
-                    </LearnMoreLink>
-                  </ConnActions>
-                ) : null}
-              </ConnBody>
-            </ProviderService>
-
-            {/* Unconditional, like the other two: a service that disappears
-                when it is off cannot be found, and the question this card
-                answers is "is this on". `VaultPanel` renders every state
-                itself, including the seconds it spends deciding. */}
-            <ProviderService>
-              <VaultPanel
-                vault={vault}
-                embedded
-                offerUrl={tierOfferUrl(accountPortalUrl, 'vault')}
-                onOfferClick={url => void openExternal(url)}
-                onRestored={() => window.location.reload()}
+                pending={autoEnroll || cloudBusy}
               />
             </ProviderService>
 
-            {/* On: the managed node itself, rendered by the same function the
-                Devices list uses, so the two cannot drift. Off: the offer,
-                which stays on the page in every other state — with the reason
-                in place of the button when there is nothing to press. */}
-            {managedServer ? (
+            {/* The highest step the drive is on goes first. With Cloud Server
+                on, the vault is what it includes; without it, the vault is
+                what you have and Cloud Server is the next step. */}
+            {managedServer && (
               <ProviderService data-testid='cloud-server-row'>
                 <ServerCard
                   server={managedServer}
@@ -1744,78 +1840,154 @@ function SyncPage() {
                   onRemove={removeServer}
                 />
               </ProviderService>
-            ) : (
-              <ProviderService data-testid='cloud-server-row'>
-                {/* Neutral, like every other service that is off. This was
-                    blue on the reasoning that an offer should still look like
-                    one of ours, but the reader scans this column to find out
-                    what they have, and the header above already says whose
-                    services these are. */}
-                <ServiceIcon kind='server' active={!!hostedCopyOrigin} />
-                <ServiceBody>
-                  <ServiceTitle>
-                    {hostedCopyOrigin ? 'Cloud Server is on' : 'Cloud Server'}
-                  </ServiceTitle>
-                  <ServiceDescription>
-                    {CLOUD_SERVER_DESCRIPTION}
-                  </ServiceDescription>
-                  <ConnMeta>
-                    {cloudEnrolled === true && !hostedCopyOrigin
-                      ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
-                      : subscriptionStatus === 'active' ||
-                          subscriptionStatus === 'trialing'
-                        ? 'Included in your plan. Turn it on to start hosting this drive; nothing more to buy.'
-                        : CLOUD_SERVER_PLAN_DESCRIPTION}
-                  </ConnMeta>
-                  {hostedCopyOrigin && (
-                    <ConnMeta>
-                      This workspace has been copied to Cloud Server. You’re
-                      still using the source server.
-                    </ConnMeta>
-                  )}
-                  {cloudServerBlocked && (
-                    <ConnMeta>{cloudServerBlocked}</ConnMeta>
-                  )}
-                  <ConnActions>
-                    {hostedCopyOrigin && (
-                      <Button onClick={() => switchToServer(hostedCopyOrigin)}>
-                        Use Cloud Server
-                      </Button>
-                    )}
-                    {!cloudServerBlocked && (
-                      <Button
-                        onClick={() => setConfirmCloud(true)}
-                        disabled={cloudBusy}
-                      >
-                        {cloudBusy
-                          ? 'Setting up…'
-                          : hostedCopyOrigin
-                            ? 'Sync again'
-                            : cloudEnrolled
-                              ? 'Sync again'
-                              : subscriptionStatus === 'active' ||
-                                  subscriptionStatus === 'trialing'
-                                ? 'Turn on Cloud Server'
-                                : CLOUD_SERVER_SETUP}
-                      </Button>
-                    )}
-                    {/* This tier costs money and reads our copy of your data,
-                        so "what am I agreeing to" deserves an answer that
-                        isn't a paragraph on this card. The sales page already
-                        explains the tiers side by side.
+            )}
 
-                        Linked off the *account's* portal, not the connected
-                        node's: the states that most need a price are the ones
-                        where this device is talking to a node that has never
-                        heard of a portal. */}
-                    <LearnMore
-                      {...externalLinkProps(
-                        tierOfferUrl(accountPortalUrl, 'server'),
+            {/* Unconditional: a service that disappears when it is off cannot
+                be found. `VaultPanel` renders every state itself. */}
+            <ProviderService>
+              <VaultPanel
+                vault={vault}
+                embedded
+                offerUrl={tierOfferUrl(accountPortalUrl, 'vault')}
+                onOfferClick={url => void openExternal(url)}
+                onRestored={() => window.location.reload()}
+              />
+            </ProviderService>
+
+            {!managedServer && (
+              <ProviderService data-testid='cloud-server-row'>
+                <ServiceIcon
+                  kind='server'
+                  active={!!hostedCopyOrigin || autoEnroll || cloudBusy}
+                />
+                <ServiceBody>
+                  {hostedCopyOrigin ? (
+                    <>
+                      <ServiceTitle>Cloud Server is on</ServiceTitle>
+                      <ConnMeta>
+                        This workspace has been copied to Cloud Server. You’re
+                        still using the source server.
+                      </ConnMeta>
+                      <ConnActions>
+                        <Button
+                          onClick={() => switchToServer(hostedCopyOrigin)}
+                        >
+                          Use Cloud Server
+                        </Button>
+                      </ConnActions>
+                    </>
+                  ) : autoEnroll && !autoEnrollError ? (
+                    <>
+                      <ServiceTitle data-testid='cloud-server-moving'>
+                        Moving this drive to Cloud Server…
+                      </ServiceTitle>
+                      <ServiceDescription>
+                        {planActive ? 'Your plan is active. ' : ''}
+                        The workspace is being copied over and switches on by
+                        itself. You can keep working.
+                      </ServiceDescription>
+                    </>
+                  ) : autoEnroll && autoEnrollError ? (
+                    <>
+                      <ServiceTitle>Cloud Server could not start</ServiceTitle>
+                      <ConnError role='alert'>
+                        <FaCircleExclamation aria-hidden />
+                        <span>{autoEnrollError}</span>
+                      </ConnError>
+                      <ConnActions>
+                        <Button
+                          onClick={() => {
+                            setAutoEnrollError(null);
+                            void backupToCloud();
+                          }}
+                          disabled={cloudBusy}
+                        >
+                          {cloudBusy ? 'Trying again…' : 'Try again'}
+                        </Button>
+                      </ConnActions>
+                    </>
+                  ) : needsHostingConsent && !offerDismissed ? (
+                    <>
+                      <ServiceTitle data-testid='cloud-server-offer'>
+                        {subscriptionSource === 'grant'
+                          ? `${PRODUCT_NAME} offers to host this drive`
+                          : 'Cloud Server is ready for this drive'}
+                      </ServiceTitle>
+                      <ServiceDescription>
+                        {subscriptionSource === 'grant'
+                          ? 'Cloud Server was added to this drive for you. It turns on once you accept.'
+                          : 'This drive’s plan includes Cloud Server. It turns on once you accept.'}
+                      </ServiceDescription>
+                      <ConsentNotice data-testid='cloud-server-consent'>
+                        <strong>Before you accept:</strong> unlike Cloud Vault,
+                        Cloud Server stores a readable, unencrypted copy of this
+                        drive on our servers, so we can run search, shareable
+                        links and the API for it. Your sharing permissions still
+                        control who else sees it, and you can turn it off at any
+                        time.
+                      </ConsentNotice>
+                      <ConnActions>
+                        <Button
+                          data-testid='cloud-server-accept'
+                          onClick={() => void backupToCloud()}
+                          disabled={cloudBusy}
+                        >
+                          {cloudBusy ? 'Setting up…' : 'Accept and turn on'}
+                        </Button>
+                        <Button subtle onClick={() => setOfferDismissed(true)}>
+                          Not now
+                        </Button>
+                      </ConnActions>
+                    </>
+                  ) : needsHostingConsent ? (
+                    <>
+                      <ServiceTitle>Cloud Server offered</ServiceTitle>
+                      <ServiceDescription>
+                        Hosting for this drive is waiting for your consent.
+                      </ServiceDescription>
+                      <ConnActions>
+                        <Button subtle onClick={() => setOfferDismissed(false)}>
+                          Review offer
+                        </Button>
+                      </ConnActions>
+                    </>
+                  ) : (
+                    <>
+                      <ServiceTitle>Step up to Cloud Server</ServiceTitle>
+                      <ServiceDescription>
+                        Everything in Cloud Vault, plus hosting: shareable
+                        links, search across everything, API access, and no
+                        waiting on another device to be awake. Unlike Cloud
+                        Vault, our servers process what you put here.
+                      </ServiceDescription>
+                      {cloudServerBlocked && (
+                        <ConnMeta>{cloudServerBlocked}</ConnMeta>
                       )}
-                    >
-                      See plans
-                    </LearnMore>
-                  </ConnActions>
+                      <ConnActions>
+                        {/* Buying is the whole setup: once the drive's plan is
+                            paid, the row above starts hosting by itself. */}
+                        {!cloudServerBlocked && status.drive && (
+                          <Button
+                            data-testid='cloud-server-upgrade'
+                            onClick={() =>
+                              void openExternal(
+                                driveBillingUrl(accountPortalUrl, status.drive),
+                              )
+                            }
+                          >
+                            Upgrade this drive
+                          </Button>
+                        )}
+                        <LearnMore
+                          {...externalLinkProps(
+                            tierOfferUrl(accountPortalUrl, 'server'),
+                          )}
+                        >
+                          See plans
+                        </LearnMore>
+                      </ConnActions>
+                    </>
+                  )}
                 </ServiceBody>
               </ProviderService>
             )}
@@ -1824,37 +1996,6 @@ function SyncPage() {
             {managedAccount && <ProviderAICredits />}
           </ProviderCard>
         )}
-
-        <ConfirmationDialog
-          title={CLOUD_SERVER_SETUP}
-          confirmLabel='Agree and enable Cloud Server'
-          show={confirmCloud}
-          bindShow={setConfirmCloud}
-          onConfirm={() => void backupToCloud()}
-        >
-          <p>
-            Keep this workspace available when your devices are offline, with
-            shareable links, search, and API access.
-          </p>
-          <p>
-            <strong>Local:</strong> data stays on your devices unless you
-            connect a service or share it.
-          </p>
-          <p>
-            <strong>Cloud Vault:</strong> an encrypted backup that the provider
-            cannot read. It does not host your workspace.
-          </p>
-          <p>
-            <strong>Cloud Server:</strong> you agree to us storing and
-            processing a readable copy of this drive to provide hosting. Your
-            sharing permissions still control other users’ access.
-          </p>
-          <p>
-            Existing content stays in this drive. Hosting uses the Server plan
-            or invitation for this drive. If a purchase is needed, you will see
-            the price at checkout before paying.
-          </p>
-        </ConfirmationDialog>
 
         {/* A failed read gives no evidence about copies on other devices. */}
         {driveMissing && (
@@ -2572,6 +2713,95 @@ const providerRowCss = css`
 
 const ProviderAICredits = styled(AICreditsService)`
   ${providerRowCss}
+`;
+
+function readOfferDismissed(drive: string): boolean {
+  try {
+    return !!localStorage.getItem(`atomic-hosting-offer-dismissed:${drive}`);
+  } catch {
+    return false;
+  }
+}
+
+type CloudTier = 'local' | 'vault' | 'server';
+
+const TIERS: { tier: CloudTier; label: string }[] = [
+  { tier: 'local', label: 'On this device' },
+  { tier: 'vault', label: 'Cloud Vault' },
+  { tier: 'server', label: 'Cloud Server' },
+];
+
+/**
+ * Where this drive stands, as one ladder: each step includes the ones before
+ * it. Filled is the step the drive is on, outlined the steps it includes.
+ * `pending` outlines Cloud Server while it is being switched on.
+ */
+function TierLadder({
+  tier,
+  pending,
+}: {
+  tier: CloudTier;
+  pending: boolean;
+}): JSX.Element {
+  const reached = TIERS.findIndex(t => t.tier === tier);
+
+  return (
+    <Ladder aria-label='Where this drive is kept' data-tier={tier}>
+      {TIERS.map(({ tier: step, label }, i) => (
+        <LadderStep
+          key={step}
+          $state={
+            i === reached
+              ? 'on'
+              : i < reached || (pending && step === 'server')
+                ? 'included'
+                : 'off'
+          }
+          aria-current={i === reached ? 'step' : undefined}
+        >
+          {label}
+        </LadderStep>
+      ))}
+    </Ladder>
+  );
+}
+
+const Ladder = styled.ol`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`;
+
+const LadderStep = styled.li<{ $state: 'on' | 'included' | 'off' }>`
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid
+    ${p => (p.$state === 'off' ? p.theme.colors.bg2 : p.theme.colors.main)};
+  color: ${p =>
+    p.$state === 'on'
+      ? p.theme.colors.bg
+      : p.$state === 'included'
+        ? p.theme.colors.main
+        : p.theme.colors.textLight};
+  background: ${p => (p.$state === 'on' ? p.theme.colors.main : 'transparent')};
+  font-weight: ${p => (p.$state === 'on' ? 600 : 400)};
+`;
+
+/** The one warning this card carries: what accepting hosting means. */
+const ConsentNotice = styled.p`
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.warning}66;
+  background: ${p => p.theme.colors.warning}14;
+  color: ${p => p.theme.colors.text};
+  font-size: 0.85rem;
+  line-height: 1.4;
 `;
 
 const ProviderService = styled(ServiceSection)`

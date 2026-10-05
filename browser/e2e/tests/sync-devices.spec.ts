@@ -84,7 +84,7 @@ test.describe('sync page devices', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(recovery).toContainText('sync-account@example.com');
     await expect(
-      cloud.getByRole('button', { name: 'Set up Cloud Server', exact: true }),
+      cloud.getByRole('button', { name: 'Upgrade this drive', exact: true }),
     ).toBeVisible();
     await expect(page.getByTestId('link-provider-panel')).not.toBeVisible();
   });
