@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The per-group summary under a table has column headings, such as "Sum of Plus ones" and "Rows", so a bare number says what it measures.
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
 - The shared sign-in card no longer says "This browser does not support passkeys".
   Where a passkey cannot work it shows no passkey option at all, and the
