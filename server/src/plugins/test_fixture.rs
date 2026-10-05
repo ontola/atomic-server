@@ -259,10 +259,6 @@ pub async fn install_release_with(
     route_grant: Option<serde_json::Value>,
     config: Option<serde_json::Value>,
 ) -> Result<String, String> {
-    let store = &fixture.appstate.store;
-    let id = store
-        .publish_plugin_release(release)
-        .map_err(|e| e.to_string())?;
     let mut grants: Vec<serde_json::Value> = release
         .manifest
         .get("capabilities")
@@ -274,6 +270,21 @@ pub async fn install_release_with(
     if let Some(targets) = route_grant {
         grants.push(serde_json::json!({ "route-writes": targets }));
     }
+    install_release_with_grants(fixture, release, grants.into(), config).await
+}
+
+/// [`install_release`] with `grants` written to the Installation verbatim,
+/// as a client (the install review) writes them.
+pub async fn install_release_with_grants(
+    fixture: &Fixture,
+    release: &atomic_lib::db::plugin_release::PluginRelease,
+    grants: serde_json::Value,
+    config: Option<serde_json::Value>,
+) -> Result<String, String> {
+    let store = &fixture.appstate.store;
+    let id = store
+        .publish_plugin_release(release)
+        .map_err(|e| e.to_string())?;
     let mut resource = Resource::new("did:ad:placeholder".into());
     if let Some(config) = config {
         resource
@@ -292,7 +303,7 @@ pub async fn install_release_with(
         (urls::RELEASE_PROP, Value::String(id.clone())),
         (urls::RELEASE_ID, Value::String(id)),
         (urls::INSTALLATION_STATUS, Value::String("active".into())),
-        (urls::GRANTS, Value::Json(grants.into())),
+        (urls::GRANTS, Value::Json(grants)),
     ] {
         resource
             .set_unsafe(property.into(), value)

@@ -22,9 +22,21 @@ import {
   readInstallationReview,
   DEFAULT_INSTALLATION_NAMESPACE,
   RUNTIME_JS,
+  checkHostFeatures,
+  parsePluginRoutesStatus,
+  type DeclaredHttp,
+  type HostFeatureUnavailable,
+  type DeclaredWriteTarget,
   type JSONValue,
+  type PluginRoutesStatus,
   type PublishedRelease,
 } from '@tomic/react';
+import { gateCatalog, NO_PLUGIN_ROUTES } from '../chunks/Plugins/catalogGate';
+import {
+  NeedsPublicEndpointsChip,
+  RefusalText,
+} from '../chunks/Plugins/PublicEndpoints';
+import { plural } from '@helpers/plural';
 import { ResourceInline } from '../views/ResourceInline/ResourceInline';
 import {
   InstallationReviewDialog,
@@ -59,6 +71,11 @@ interface Listing {
   releaseId: string;
   runtime: string | null;
   world: string | null;
+  /**
+   * Derived from the release manifest (`plugin-routes:read-only`, …); null
+   * when the release isn't cached on this node. Absent on older servers.
+   */
+  requires?: string[] | null;
 }
 
 /**
@@ -98,6 +115,12 @@ function IntegrationStore(): React.JSX.Element {
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
   const [listings, setListings] = useState<Listing[]>();
+  const [pluginRoutes, setPluginRoutes] = useState<PluginRoutesStatus>();
+  // The refusal of design 0.4 for each marked entry, with the surfaces that
+  // need more than this node allows. `requires` alone doesn't name them.
+  const [refusals, setRefusals] = useState<
+    Record<string, HostFeatureUnavailable>
+  >({});
   const [installed, setInstalled] = useState<string[]>([]);
   const [installations, setInstallations] = useState<string[]>([]);
   const [automations, setAutomations] = useState<string[]>([]);
@@ -195,8 +218,10 @@ function IntegrationStore(): React.JSX.Element {
     void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
-        const entries = catalogListings(await response.json());
-        if (!controller.signal.aborted) setListings(entries);
+        const body = await response.json();
+        if (controller.signal.aborted) return;
+        setListings(catalogListings(body));
+        setPluginRoutes(parsePluginRoutesStatus(body));
       })
       .catch(reason => {
         if (!controller.signal.aborted) setCatalogError(String(reason));
@@ -240,6 +265,7 @@ function IntegrationStore(): React.JSX.Element {
     p: PendingInstallation,
     config: JSONValue | undefined,
     grants: string[],
+    routeWrites: DeclaredWriteTarget[] | undefined,
   ) => {
     if (!drive) return;
     const subject = await installRelease(store, {
@@ -251,6 +277,7 @@ function IntegrationStore(): React.JSX.Element {
       version: p.review.version,
       config,
       grants,
+      routeWrites,
     });
     navigate(constructOpenURL(subject));
   };
@@ -289,13 +316,44 @@ function IntegrationStore(): React.JSX.Element {
   // Only offer the toggle when the catalog has something behind it: a checkbox
   // that reveals nothing reads as broken.
   const hasExperimentalPlugins = hasExperimentalEntries(catalogEntries);
-  const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
+  const catalog = showExperimentalPlugins ? listings : [];
+  // Hidden: needs plugin routes this build doesn't have. Marked: the operator
+  // hasn't opened the gate far enough (design 0.5).
+  const gated = catalog && gateCatalog(catalog, pluginRoutes);
+  const visible = gated?.shown.filter(({ entry }) =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')
       .toLocaleLowerCase()
       .includes(query),
   );
   const nothingToDiscover = catalogReady && !visible?.length;
+  const markedReleases = (gated?.shown ?? [])
+    .filter(({ refusal }) => refusal)
+    .map(({ entry }) => entry.releaseId)
+    .join(' ');
+  useEffect(() => {
+    if (!pluginRoutes || !markedReleases) return;
+    const controller = new AbortController();
+
+    for (const id of markedReleases.split(' ')) {
+      void fetch(`${serverUrl}/plugin-package/${encodeURIComponent(id)}`, {
+        signal: controller.signal,
+      })
+        .then(response => (response.ok ? response.json() : undefined))
+        .then((release: PublishedRelease | undefined) => {
+          const http = (release?.manifest as { http?: DeclaredHttp } | null)
+            ?.http;
+          const refusal = checkHostFeatures(http, pluginRoutes);
+          if (refusal && !controller.signal.aborted)
+            setRefusals(current => ({ ...current, [id]: refusal }));
+        })
+        .catch(() => {
+          // The chip still marks it; the review shows the refusal.
+        });
+    }
+
+    return () => controller.abort();
+  }, [markedReleases, pluginRoutes, serverUrl]);
 
   return (
     <Main>
@@ -395,16 +453,28 @@ function IntegrationStore(): React.JSX.Element {
             )}
           </Column>
           <Grid>
-            {visible?.map(entry => (
-              <Card key={entry.subject} data-release={entry.releaseId}>
+            {visible?.map(({ entry, refusal }) => (
+              <Card
+                key={entry.subject}
+                data-release={entry.releaseId}
+                data-gate={refusal ? 'marked' : undefined}
+              >
                 <Column gap='1rem'>
                   <Row justify='space-between' center>
                     <Avatar aria-hidden>{entry.emoji || <FaPlug />}</Avatar>
-                    <Badge>Unverified</Badge>
+                    <Row center gap='0.5rem'>
+                      {refusal && <NeedsPublicEndpointsChip />}
+                      <Badge>Unverified</Badge>
+                    </Row>
                   </Row>
                   <div>
                     <h2>{entry.name}</h2>
                     <Description>{entry.description}</Description>
+                    {refusals[entry.releaseId] && (
+                      <GateNote>
+                        <RefusalText problem={refusals[entry.releaseId]} />
+                      </GateNote>
+                    )}
                   </div>
                   <Row wrapItems gap='0.4rem'>
                     {entry.domains.map(domain => (
@@ -449,12 +519,21 @@ function IntegrationStore(): React.JSX.Element {
               </Card>
             ))}
           </Grid>
+          {gated && gated.hidden > 0 && (
+            <HiddenNote data-testid='hidden-gated'>
+              {plural(gated.hidden, [
+                '# plugin needs server features this server doesn’t have.',
+                '# plugins need server features this server doesn’t have.',
+              ])}
+            </HiddenNote>
+          )}
         </Column>
       </ContainerWide>
       <InstallationReviewDialog
         pending={pending}
         onClose={() => setPending(undefined)}
         onInstall={install}
+        pluginRoutes={listings ? (pluginRoutes ?? NO_PLUGIN_ROUTES) : undefined}
         secondary={
           pending && pending.review.runtime === RUNTIME_JS
             ? {
@@ -511,6 +590,14 @@ const Tag = styled.span`
 const Description = styled.p`
   color: ${p => p.theme.colors.textLight};
   line-height: 1.5;
+`;
+const GateNote = styled.p`
+  font-size: 0.85rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+`;
+const HiddenNote = styled.p`
+  color: ${p => p.theme.colors.textLight};
 `;
 const Identity = styled.p`
   overflow-wrap: anywhere;

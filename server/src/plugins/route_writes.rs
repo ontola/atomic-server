@@ -776,7 +776,7 @@ mod http_tests {
         route_registry::slug,
         test_fixture::{
             children_named, fixture_with_args, genesis, inbox_release, install_release_with,
-            Fixture,
+            install_release_with_grants, Fixture,
         },
     };
 
@@ -958,6 +958,82 @@ mod http_tests {
         .await;
         assert_eq!(resp.status(), 200);
         assert_eq!(children_named(&i.f, &i.inbox, "hello").await, 0);
+    }
+
+    /// What the browser's install review writes when the installer approves
+    /// the route writes (`page-install.json`, which the browser's tests check
+    /// the page produces): the grants verbatim, then the installer adds the
+    /// installation's agent to the inbox's `write`, next to who was there.
+    /// A POST is then stored.
+    #[actix_rt::test]
+    async fn a_page_shaped_install_stores_a_post() {
+        let page: Json = serde_json::from_str(include_str!(
+            "../../../testdata/plugin-routes/inbox/page-install.json"
+        ))
+        .unwrap();
+        assert_eq!(page["rights"]["property"], urls::WRITE);
+        assert_eq!(page["rights"]["on"], "config:inbox");
+        let f = fixture_with_args(
+            "route_write_page_install",
+            &["--plugin-routes", "read-write"],
+        )
+        .await;
+        let store = &f.appstate.store;
+        let installer = store.get_default_agent().unwrap().subject;
+        let inbox = genesis(
+            store,
+            vec![
+                (urls::PARENT, Value::AtomicUrl(f.drive.as_str().into())),
+                (urls::NAME, Value::String("Inbox".into())),
+                (
+                    urls::WRITE,
+                    Value::ResourceArray(vec![installer.as_str().into()]),
+                ),
+            ],
+        )
+        .await;
+        let installation = install_release_with_grants(
+            &f,
+            &inbox_release(),
+            page["grants"].clone(),
+            Some(json!({ "inbox": inbox })),
+        )
+        .await
+        .unwrap();
+        let agent = store
+            .get_app_agent_info(&AppAgentKey::new(&f.drive, &installation))
+            .unwrap()
+            .unwrap()
+            .agent;
+
+        // The rights commit, as the page makes it: append, don't replace.
+        let mut resource = store.get_resource(&inbox.as_str().into()).await.unwrap();
+        let mut writers = resource
+            .get(urls::WRITE)
+            .unwrap()
+            .to_subjects(None)
+            .unwrap();
+        writers.push(agent.clone());
+        resource
+            .set_unsafe(
+                urls::WRITE.into(),
+                Value::ResourceArray(writers.iter().map(|w| w.as_str().into()).collect()),
+            )
+            .unwrap();
+        resource.save(store).await.unwrap();
+
+        let app = app!(f.appstate);
+        let resp = actix_test::call_service(
+            &app,
+            send!(
+                "POST",
+                &format!("/_routes/{}/inbox", slug(&installation)),
+                json!({"name": "from the page", "text": "hello"}),
+            ),
+        )
+        .await;
+        assert!(resp.status().is_success(), "{}", resp.status());
+        assert_eq!(children_named(&f, &inbox, "from the page").await, 1);
     }
 
     #[actix_rt::test]
