@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/react';
+import { StoreEvents, type Store } from '@tomic/react';
 
 /**
  * Browser error reporting. Strictly opt-in: nothing is initialised, and no
@@ -59,5 +60,34 @@ export function initSentry(): void {
     // No performance tracing or session replay. Explicit feedback is sent
     // only when the user submits the sidebar form.
     tracesSampleRate: 0,
+  });
+}
+
+/** Identifiers differ per resource; the failure itself is what groups. */
+function withoutIdentifiers(message: string): string {
+  return message.replace(/(?:atomic|did:ad):[\w-]+/g, '<id>');
+}
+
+/**
+ * Report a write that keeps failing while the outbox retries it. Those
+ * failures only ever reached the console, so a drive that could not sync (for
+ * instance a server that never received its root) was invisible to us.
+ */
+export function reportRepeatedCommitFailures(store: Store): () => void {
+  return store.on(StoreEvents.CommitRepeatedlyFailing, failure => {
+    if (!Sentry.isEnabled()) return;
+
+    const message = withoutIdentifiers(failure.error.message);
+
+    Sentry.captureMessage('Commit keeps failing', {
+      level: 'warning',
+      fingerprint: ['commit-keeps-failing', failure.server, message],
+      tags: { server: failure.server },
+      extra: {
+        subject: failure.subject,
+        failures: failure.failures,
+        error: failure.error.message,
+      },
+    });
   });
 }

@@ -1,5 +1,9 @@
 import { Spinner } from '../../components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
+import {
+  pendingTemplateUrl,
+  readPendingTemplate,
+} from '../../chunks/Templates/pendingTemplate';
 import { WorkspaceLoading } from './WorkspaceLoading';
 import {
   PRODUCT_NAME,
@@ -10,7 +14,7 @@ import toast from 'react-hot-toast';
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
-import { Agent } from '@tomic/lib';
+import { Agent, decodeSecret } from '@tomic/lib';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
 import { useSettings } from '../../helpers/AppSettings';
@@ -37,6 +41,7 @@ import {
   fetchManagedInfo,
   accountCreationTarget,
   type AccountCreationTarget,
+  isHostedDistribution,
 } from '../../helpers/managedServer';
 import {
   ensureVaultBackup,
@@ -202,10 +207,21 @@ export function GettingStartedFlow({
   // call back to the control plane (whose session cookie we don't have here).
   const emailParam =
     new URLSearchParams(window.location.search).get('email') || undefined;
+  // Someone who signed up on the portal with a secret they made there: that
+  // identity, handed over in the fragment (which no server sees), is the one
+  // to open, not a new one. Read once and taken out of the address bar.
+  const [presetKeys] = useState(() =>
+    fromManaged ? takeSecretFragment() : undefined,
+  );
   // A sign-in guard (clicking a drive you're not signed in for) sends the user
   // here with `next` carrying that drive's subject, so we open straight to the
   // sign-in step and return them to that drive afterwards (not their home).
   const inviteToken = new URLSearchParams(window.location.search).get('invite');
+  // A demo guest who chose a template was sent to make an account first; once
+  // it exists they go back to that template instead of to their home.
+  const [pendingTemplate] = useState(() =>
+    fromManaged && !inviteToken ? readPendingTemplate() : undefined,
+  );
   const nextDrive =
     new URLSearchParams(window.location.search).get('next') ||
     new URLSearchParams(window.location.search).get('drive') ||
@@ -226,7 +242,13 @@ export function GettingStartedFlow({
       ? 'create'
       : inviteToken
         ? 'restore'
-        : nextDrive || returnToAgent || signInRequested
+        : nextDrive ||
+            returnToAgent ||
+            signInRequested ||
+            // Hosted builds have no Create/Sign-in/Demo choice: creating an
+            // account happens in the portal, so signed-out people get the
+            // sign-in options directly.
+            (isHostedDistribution() && initialStep === 'welcome')
           ? 'signin'
           : initialStep,
   );
@@ -1299,6 +1321,9 @@ export function GettingStartedFlow({
                     window.location.assign(
                       new URL('/dashboard', knownPortalUrl).toString(),
                     );
+                  } else if (isHostedDistribution() && knownPortalUrl) {
+                    // No welcome step in a hosted build; Back leaves for the portal.
+                    window.location.assign(knownPortalUrl);
                   } else {
                     setStep('welcome');
                   }
@@ -1599,8 +1624,10 @@ export function GettingStartedFlow({
                 ) : (
                   <NewIdentitySection
                     autoStart
-                    navigateToDrive={!inviteToken}
-                    verifySecret
+                    navigateToDrive={!inviteToken && !pendingTemplate}
+                    // Already saved and confirmed on the portal.
+                    verifySecret={!presetKeys}
+                    presetKeys={presetKeys}
                     stepIndicatorPortal={stepDotsSlotRef.current}
                     defaultProfileName={managedUsername}
                     offerRecoveryBackup={fromManaged}
@@ -1616,6 +1643,8 @@ export function GettingStartedFlow({
                     }
                     onDone={() => {
                       if (inviteToken) navigate(resumeInviteUrl(inviteToken));
+                      else if (pendingTemplate)
+                        navigate(pendingTemplateUrl(pendingTemplate));
                     }}
                   />
                 )}
@@ -1804,3 +1833,29 @@ const StepDotsSlot = styled.div`
     gap: 6px;
   }
 `;
+
+/** The `#secret=` the portal hands over after a secret sign-up, removed from
+ * the URL as it is read. */
+function takeSecretFragment():
+  | { privateKey: string; agentSubject: string }
+  | undefined {
+  const secret = new URLSearchParams(window.location.hash.slice(1)).get(
+    'secret',
+  );
+
+  if (!secret) return undefined;
+
+  window.history.replaceState(
+    window.history.state,
+    '',
+    window.location.pathname + window.location.search,
+  );
+
+  try {
+    const { privateKey, subject } = decodeSecret(secret);
+
+    return subject ? { privateKey, agentSubject: subject } : undefined;
+  } catch {
+    return undefined;
+  }
+}

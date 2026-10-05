@@ -1,13 +1,23 @@
 import { hasManagedApi, managedFetch } from './api';
 
+/** The "Continue with …" options, in the order they are shown. */
+export const SIGN_IN_PROVIDERS = ['google', 'apple', 'github'] as const;
+export type SignInProvider = (typeof SIGN_IN_PROVIDERS)[number];
+
 export type AccountProviders = {
-  /** "Continue with Google" is configured on the account service. */
-  google: boolean;
+  /** Each "Continue with …" the account service has configured. */
+  [P in SignInProvider]: boolean;
+} & {
   /** Signing in to the account is enough to unlock the identity. */
   assisted_recovery: boolean;
 };
 
-const NONE: AccountProviders = { google: false, assisted_recovery: false };
+const NONE: AccountProviders = {
+  google: false,
+  apple: false,
+  github: false,
+  assisted_recovery: false,
+};
 let pending: Promise<AccountProviders> | null = null;
 
 /**
@@ -21,6 +31,8 @@ export function getAccountProviders(): Promise<AccountProviders> {
     .then(res => (res.ok ? res.json() : NONE))
     .then((body: Partial<AccountProviders>) => ({
       google: body?.google === true,
+      apple: body?.apple === true,
+      github: body?.github === true,
       assisted_recovery: body?.assisted_recovery === true,
     }))
     .catch(() => {
@@ -35,11 +47,15 @@ export function getAccountProviders(): Promise<AccountProviders> {
 }
 
 /**
- * Where "Continue with Google" starts, on the account service, returning to
- * `returnTo` (this page) once signed in.
+ * Where "Continue with Google" (or Apple, or GitHub) starts, on the account
+ * service, returning to `returnTo` (this page) once signed in.
  */
-export function googleSignInUrl(portalUrl: string, returnTo: string): string {
-  const start = new URL('/api/auth/google/start', portalUrl);
+export function providerSignInUrl(
+  provider: SignInProvider,
+  portalUrl: string,
+  returnTo: string,
+): string {
+  const start = new URL(`/api/auth/${provider}/start`, portalUrl);
   start.searchParams.set('next', returnTo);
 
   return start.toString();

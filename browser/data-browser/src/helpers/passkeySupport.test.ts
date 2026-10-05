@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { hasPasskeyApi } from './passkeySupport';
+import { deviceCanUsePasskeys, hasPasskeyApi } from './passkeySupport';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -24,5 +24,59 @@ describe('passkey API availability', () => {
       PublicKeyCredential: class {},
     });
     expect(hasPasskeyApi()).toBe(false);
+  });
+});
+
+describe('a device that can use passkeys', () => {
+  const withApi = (api: Record<string, unknown>) => {
+    vi.stubGlobal('window', {
+      isSecureContext: true,
+      PublicKeyCredential: Object.assign(function () {}, api),
+    });
+    vi.stubGlobal('navigator', { credentials: { create() {}, get() {} } });
+  };
+
+  it('is no without the API', async () => {
+    vi.stubGlobal('window', { isSecureContext: true });
+    expect(await deviceCanUsePasskeys()).toBe(false);
+  });
+
+  it('follows the client capabilities when the browser reports them', async () => {
+    withApi({
+      getClientCapabilities: async () => ({
+        passkeyPlatformAuthenticator: true,
+      }),
+    });
+    expect(await deviceCanUsePasskeys()).toBe(true);
+    withApi({
+      getClientCapabilities: async () => ({
+        passkeyPlatformAuthenticator: false,
+        hybridTransport: false,
+      }),
+    });
+    expect(await deviceCanUsePasskeys()).toBe(false);
+  });
+
+  it('falls back to the platform authenticator probes', async () => {
+    withApi({
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => false,
+      isConditionalMediationAvailable: async () => false,
+    });
+    expect(await deviceCanUsePasskeys()).toBe(false);
+    withApi({
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => true,
+    });
+    expect(await deviceCanUsePasskeys()).toBe(true);
+  });
+
+  it('keeps the button when the browser cannot answer', async () => {
+    withApi({});
+    expect(await deviceCanUsePasskeys()).toBe(true);
+    withApi({
+      getClientCapabilities: async () => {
+        throw new Error('unavailable');
+      },
+    });
+    expect(await deviceCanUsePasskeys()).toBe(true);
   });
 });

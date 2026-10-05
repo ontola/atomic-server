@@ -1,8 +1,10 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import type { ProxyHost } from '@helpers/proxyConnections';
+import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import { ViewChanges } from '@helpers/extensions/viewApply';
+import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
-  CollectionBuilder,
   core,
   errorMessageFromResponse,
   findSchema,
@@ -85,8 +87,22 @@ export async function handleRequest(
    * Absent where the host cannot (no signed-in agent, or a host without it).
    */
   proxy?: ProxyHost,
+  /** This frame's `apply` and `undo` history. */
+  changes?: ViewChanges,
 ): Promise<unknown> {
   switch (request.op) {
+    case 'apply':
+      if (!changes) throw new Error('This host cannot apply changes.');
+
+      return await changes.apply(
+        (request as unknown as { intents?: unknown }).intents,
+      );
+
+    case 'undo':
+      if (!changes) throw new Error('This host cannot undo changes.');
+
+      return await changes.undo();
+
     case 'app':
       return app;
 
@@ -130,19 +146,27 @@ export async function handleRequest(
       };
     }
 
-    case 'query': {
+    case 'query':
       // A collection, not `search`. Search drops `filters` whenever it falls
       // back to the local index — property-value constraints need the
       // server's — so an app asking for its own children quietly received the
       // whole drive. Wrong, and a far bigger answer than it asked for.
-      const collection = new CollectionBuilder(store)
-        .setProperty(required(request.property, 'property'))
-        .setValue(required(request.value, 'value'))
-        .setPageSize(500)
-        .build();
+      return await runViewQuery(
+        store,
+        parseViewQuery(request as unknown as Record<string, unknown>),
+      );
 
-      return await collection.getAllMembers();
-    }
+    case 'search':
+      return await runViewSearch(
+        store,
+        parseViewSearch(request as unknown as Record<string, unknown>),
+      );
+
+    case 'context':
+      return {
+        subject: table ?? app,
+        agent: store.getAgent()?.subject,
+      };
 
     case 'create': {
       // Defaulting the parent to the app is not a convenience: it is the one
@@ -199,7 +223,7 @@ export async function handleRequest(
       const subject = required(request.subject, 'subject');
 
       await refuseOutsideApp(store, subject, app);
-      await writeAsApp(store, drive, app, { op: 'destroy', subject });
+      await destroyAsApp(store, drive, app, subject);
 
       return { subject };
     }
@@ -236,6 +260,47 @@ export async function handleRequest(
         `This app asked for something the host does not do: ${request.op}`,
       );
   }
+}
+
+/**
+ * `store.apply` and `store.undo` for one app frame: written as the app, and
+ * only under the app, like every other write it makes.
+ */
+export function appChanges(
+  store: Store,
+  drive: string,
+  app: string,
+): ViewChanges {
+  return new ViewChanges(store, {
+    authorize: subject => refuseOutsideApp(store, subject, app),
+    writes: {
+      create: async ({ parent, isA, propVals }) => {
+        const { subject } = await writeAsApp(store, drive, app, {
+          op: 'create',
+          parent,
+          isA,
+          propVals,
+        });
+        // Into this store, so a query right after already lists it.
+        await refresh(store, subject);
+
+        return subject;
+      },
+      set: async (subject, propVals) => {
+        await writeAsApp(store, drive, app, { op: 'save', subject, propVals });
+        await refresh(store, subject);
+      },
+      remove: async (subject, properties) => {
+        await writeAsApp(store, drive, app, {
+          op: 'remove',
+          subject,
+          properties,
+        });
+        await refresh(store, subject);
+      },
+      destroy: subject => destroyAsApp(store, drive, app, subject),
+    },
+  });
 }
 
 /**
@@ -277,6 +342,23 @@ async function writeAsApp(
   }
 
   return (await response.json()) as { subject: string };
+}
+
+/**
+ * Destroys as the app, then forgets the resource here too.
+ *
+ * Like `refresh`: the write bypassed this store, so its copy (and the local
+ * database's, which answers queries) still held the resource, and a query
+ * right after listed what the app had just deleted.
+ */
+async function destroyAsApp(
+  store: Store,
+  drive: string,
+  app: string,
+  subject: string,
+): Promise<void> {
+  await writeAsApp(store, drive, app, { op: 'destroy', subject });
+  store.removeResource(subject);
 }
 
 /**

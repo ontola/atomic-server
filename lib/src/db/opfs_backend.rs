@@ -14,6 +14,11 @@ use wasm_bindgen_futures::JsFuture;
 /// available on the main thread.
 pub struct OpfsBackend {
     handle: web_sys::FileSystemSyncAccessHandle,
+    /// The file's size. This backend holds the file's only access handle, so
+    /// the size changes only through `write` and `set_len` here. Asking the
+    /// browser (`getSize`) on every check cost as much time as the writes
+    /// themselves when a large drive was first synced.
+    size: std::cell::Cell<u64>,
 }
 
 impl std::fmt::Debug for OpfsBackend {
@@ -228,8 +233,12 @@ impl OpfsBackend {
         for attempt in 0..=BACKOFF_MS.len() {
             match JsFuture::from(file_handle.create_sync_access_handle()).await {
                 Ok(handle) => {
+                    let handle: web_sys::FileSystemSyncAccessHandle = handle.unchecked_into();
+                    let size = handle.get_size()? as u64;
+
                     return Ok(OpfsBackend {
-                        handle: handle.unchecked_into(),
+                        handle,
+                        size: std::cell::Cell::new(size),
                     });
                 }
                 Err(e) => {
@@ -260,11 +269,7 @@ fn js_err(msg: &str, e: JsValue) -> io::Error {
 
 impl redb::StorageBackend for OpfsBackend {
     fn len(&self) -> io::Result<u64> {
-        let size = self
-            .handle
-            .get_size()
-            .map_err(|e| js_err("OPFS get_size", e))?;
-        Ok(size as u64)
+        Ok(self.size.get())
     }
 
     fn read(&self, offset: u64, out: &mut [u8]) -> io::Result<()> {
@@ -298,6 +303,8 @@ impl redb::StorageBackend for OpfsBackend {
         self.handle
             .write_with_u8_array_and_options(data, &opts)
             .map_err(|e| js_err("OPFS write", e))?;
+        self.size
+            .set(self.size.get().max(offset + data.len() as u64));
 
         Ok(())
     }
@@ -305,7 +312,10 @@ impl redb::StorageBackend for OpfsBackend {
     fn set_len(&self, len: u64) -> io::Result<()> {
         self.handle
             .truncate_with_u32(len as u32)
-            .map_err(|e| js_err("OPFS truncate", e))
+            .map_err(|e| js_err("OPFS truncate", e))?;
+        self.size.set(len);
+
+        Ok(())
     }
 
     fn sync_data(&self) -> io::Result<()> {

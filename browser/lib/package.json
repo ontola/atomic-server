@@ -62,6 +62,16 @@
       },
       "require": "./dist/ontologies/*.cjs"
     },
+    "./calendar-recurrence.js": {
+      "import": {
+        "types": "./dist/src/calendar-recurrence.d.ts",
+        "default": "./dist/calendar-recurrence.js"
+      },
+      "require": {
+        "types": "./dist/src/calendar-recurrence.d.ts",
+        "default": "./dist/calendar-recurrence.cjs"
+      }
+    },
     "./client-db.worker.js": "./dist/client-db.worker.js",
     "./plugin-run.worker.js": "./dist/plugin-run.worker.js"
   },

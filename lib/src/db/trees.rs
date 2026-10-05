@@ -31,12 +31,12 @@ pub enum Tree {
     LoroSnapshots,
     /// Content-addressed storage for binary files, keyed by BLAKE3 hash.
     Blobs,
-    /// Full-text search postings: `field_id || token || 0x00 || subject` → tf (u32 BE).
+    /// Full-text search postings: `field_id || token || 0x00 || doc_id (8 bytes)` → tf (varint).
     SearchPostings,
-    /// Per-document FTS metadata: subject → `{drive, parent, field_lens}`.
+    /// Per-document FTS row, keyed by doc id (first 8 bytes of blake3 of the
+    /// subject): subject, drive and parent ids, field lengths and the tokens
+    /// a delete needs to drop the matching postings.
     SearchDocs,
-    /// Tokens stored per subject so a delete can drop the matching postings.
-    SearchDocTokens,
     /// Trigram → term map for 1-edit candidate generation on longer tokens.
     SearchTrigrams,
     /// Signed commit envelopes kept per resource (the audit floor, F6/F7 in
@@ -76,16 +76,15 @@ const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";
 const LORO_SNAPSHOTS: &str = "loro_snapshots";
 const BLOBS: &str = "blobs";
-const SEARCH_POSTINGS: &str = "search_postings_v1";
-const SEARCH_DOCS: &str = "search_docs_v1";
-const SEARCH_DOC_TOKENS: &str = "search_doc_tokens_v1";
-const SEARCH_TRIGRAMS: &str = "search_trigrams_v1";
+const SEARCH_POSTINGS: &str = "search_postings_v2";
+const SEARCH_DOCS: &str = "search_docs_v2";
+const SEARCH_TRIGRAMS: &str = "search_trigrams_v2";
 const ENVELOPES: &str = "envelopes_v1";
 const OUTBOX: &str = "outbox_v1";
 
 impl Tree {
     /// Every tree, in the order backends create them.
-    pub const ALL: [Tree; 20] = [
+    pub const ALL: [Tree; 19] = [
         Tree::Resources,
         Tree::WatchedQueries,
         Tree::PropValSub,
@@ -102,7 +101,6 @@ impl Tree {
         Tree::Blobs,
         Tree::SearchPostings,
         Tree::SearchDocs,
-        Tree::SearchDocTokens,
         Tree::SearchTrigrams,
         Tree::Envelopes,
         Tree::Outbox,
@@ -129,7 +127,6 @@ impl Tree {
             Tree::Blobs => BLOBS,
             Tree::SearchPostings => SEARCH_POSTINGS,
             Tree::SearchDocs => SEARCH_DOCS,
-            Tree::SearchDocTokens => SEARCH_DOC_TOKENS,
             Tree::SearchTrigrams => SEARCH_TRIGRAMS,
             Tree::Envelopes => ENVELOPES,
             Tree::Outbox => OUTBOX,

@@ -1,5 +1,10 @@
 import * as React from 'react';
-import { isUnauthorized, useStore } from '@tomic/react';
+import {
+  NOT_AVAILABLE_LOCALLY_MESSAGE,
+  isNotAvailableLocally,
+  isUnauthorized,
+  useStore,
+} from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
@@ -16,6 +21,7 @@ import { isOriginWithoutNode } from '../helpers/originNode';
 import { RootWelcomeGate } from './RootWelcomeGate';
 import { VaultRestoreAction } from '../components/Vault/VaultRestoreAction';
 import { constructOpenURL } from '../helpers/navigation';
+import { DriveUnavailable } from './DriveUnavailable';
 
 import type { JSX } from 'react';
 
@@ -131,6 +137,23 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
           </Row>
         </Column>
       </ContainerWide>
+    );
+  }
+
+  // No copy here and nothing to fetch it from right now: an explanation that
+  // keeps retrying, not a raw transport error. Only for a whole drive this
+  // device lacks, or when there is no server at all: an item missing from a
+  // local-only drive this device does hold was more likely deleted. The open
+  // drive counts as a drive even before this device registered it.
+  if (
+    isNotAvailableLocally(resource.error) &&
+    (resource.error!.message === NOT_AVAILABLE_LOCALLY_MESSAGE ||
+      store.isLocalOnlyDrive(resource.subject) ||
+      store.normalizeSubject(resource.subject) ===
+        (drive && store.normalizeSubject(drive)))
+  ) {
+    return (
+      <DriveUnavailable subject={resource.subject} error={resource.error!} />
     );
   }
 

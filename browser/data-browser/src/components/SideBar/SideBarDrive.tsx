@@ -31,6 +31,7 @@ import { useSidebarDnd } from './useSidebarDnd';
 import { closestCenter, DndContext, DragOverlay } from '@dnd-kit/core';
 import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
 import { DropEdge } from './ResourceSideBar/DropEdge';
+import { SIDEBAR_CHILD_LIMIT, SideBarMoreRow } from './SideBarMoreRow';
 import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LoaderInline } from '../Loader';
@@ -60,8 +61,11 @@ export function SideBarDrive({
     announcements,
   } = useSidebarDnd(onIsRearangingChange);
   const driveResource = useResource(drive);
-  const { subjects: allChildren, loading: childrenLoading } =
-    useChildren(drive);
+  const {
+    subjects: allChildren,
+    loading: childrenLoading,
+    total: totalChildren,
+  } = useChildren(drive, { limit: SIDEBAR_CHILD_LIMIT });
 
   // The drive's default ontology is schema plumbing (auto-created by
   // `createDrive`) — hide it from the tree so users aren't confronted with an
@@ -207,6 +211,13 @@ export function SideBarDrive({
                   : driveResource.error.message}
               </SideBarErr>
             ) : null}
+            {totalChildren > allChildren.length && (
+              <SideBarMoreRow
+                parent={drive}
+                hidden={totalChildren - allChildren.length}
+                onClick={onItemClick}
+              />
+            )}
             {agentCanWrite && (
               <NewResourceRow gap='0' center>
                 <QuickCreateRow

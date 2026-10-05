@@ -3,8 +3,6 @@ import { styled } from 'styled-components';
 import remarkGFM from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
 import { Button } from '@components/Button';
 import { truncateMarkdown } from '@helpers/markdown';
 import { tryExpandRef } from '@helpers/subjectRefs';
@@ -14,6 +12,7 @@ import { isAtomicIdentifier } from '@tomic/react';
 import { remarkMention, Mention } from './markdown/MarkdownMention';
 import { addFieldsIf, addIf } from '@helpers/addIf';
 import { diffComponents, remarkDiff } from './markdown/MarkdownDiff';
+import { useRehypeKatex } from './markdown/useRehypeKatex';
 
 type Props = {
   text: string;
@@ -71,6 +70,7 @@ const Markdown: FC<Props> = ({
   markExternalLinks = false,
 }) => {
   const [collapsed, setCollapsed] = useState(true);
+  const rehypeKatex = useRehypeKatex(text);
 
   if (!text) {
     return null;
@@ -86,7 +86,7 @@ const Markdown: FC<Props> = ({
           remarkMention,
           remarkDiff,
         ]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={rehypeKatex ? [rehypeKatex] : []}
         // The default transform strips unknown protocols, which would turn
         // links to atomic subjects (did:...) into dead anchors.
         urlTransform={url =>

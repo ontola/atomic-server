@@ -30,9 +30,9 @@ pub use fuzzy::{min_prefix_levenshtein, one_edits};
 pub use tokenize::tokenize;
 
 use keys::{
-    decode_doc, decode_tf, decode_tokens, encode_doc, encode_tf, encode_tokens, posting_key,
-    posting_prefix, posting_typeahead_prefix, search_trees, token_from_posting_key, trigram_key,
-    trigram_prefix, Field, SearchDoc, SEARCH_INDEX_VERSION_KEY,
+    decode_doc, decode_tf, doc_id, encode_doc, encode_tf, posting_key, posting_prefix,
+    posting_typeahead_prefix, search_trees, token_from_posting_key, trigram_key, trigram_prefix,
+    DocId, DocToken, Field, SearchDoc, SEARCH_INDEX_VERSION_KEY,
 };
 
 /// A ranked hit from [`query`].
@@ -54,9 +54,14 @@ const MAX_PARENT_WALK: usize = 64;
 const EDIT_GEN_MAX_LEN: usize = 12;
 const MIN_FUZZY_LEN: usize = 2;
 
+/// Terms shorter than this are never looked up through trigrams: a query only
+/// uses them for tokens longer than [`EDIT_GEN_MAX_LEN`], and a one-edit match
+/// of such a token cannot be shorter than this.
+const TRIGRAM_MIN_TERM_LEN: usize = EDIT_GEN_MAX_LEN;
+
 /// Index (or re-index) a resource into the FTS trees.
-/// Skips commits and documents with no searchable text. Replaces any previous
-/// posting lists for the same subject.
+/// Skips commits and documents with no searchable text. Only the postings that
+/// differ from what is stored for the same subject are written.
 pub fn index_resource(
     store: &Db,
     resource: &Resource,
@@ -67,76 +72,108 @@ pub fn index_resource(
     }
 
     let subject = resource.get_subject().pure_id();
-    unindex_subject(store, &subject, transaction)?;
+    let id = doc_id(&subject);
+    let previous = load_doc_by_id(store, id, true)?;
 
     let fields = extract_fields(resource);
     if fields.iter().all(|(_, text)| text.is_empty()) {
+        if let Some(previous) = previous {
+            remove_doc(id, &previous, transaction);
+        }
         return Ok(());
     }
 
     let drive = resource
         .get_drive()
-        .map(|d| d.pure_id())
+        .map(|d| doc_id(&d.pure_id()))
         .unwrap_or_default();
     let parent = resource
         .get(urls::PARENT)
         .ok()
-        .map(|v| Subject::from(v.to_string()).pure_id())
+        .map(|v| doc_id(&Subject::from(v.to_string()).pure_id()))
         .unwrap_or_default();
 
-    let mut token_list: Vec<(u8, String)> = Vec::new();
+    let mut tokens: Vec<DocToken> = Vec::new();
     let mut field_lens = [0u32; 3];
-    let mut unique_terms: HashSet<String> = HashSet::new();
 
     for (field, text) in fields {
         if text.is_empty() {
             continue;
         }
-        let tokens = tokenize(&text);
-        field_lens[field as usize] = tokens.len() as u32;
+        let list = tokenize(&text);
+        field_lens[field as usize] = list.len() as u32;
         let mut tf: HashMap<String, u32> = HashMap::new();
-        for token in tokens {
+        for token in list {
             *tf.entry(token).or_insert(0) += 1;
         }
-        for (token, count) in tf {
-            unique_terms.insert(token.clone());
-            token_list.push((field as u8, token.clone()));
+        let mut entries: Vec<(String, u32)> = tf.into_iter().collect();
+        entries.sort();
+        for (token, count) in entries {
+            tokens.push((field as u8, token, count));
+        }
+    }
+
+    let old: HashMap<(u8, &str), u32> = previous
+        .as_ref()
+        .map(|p| {
+            p.tokens
+                .iter()
+                .map(|(f, t, tf)| ((*f, t.as_str()), *tf))
+                .collect()
+        })
+        .unwrap_or_default();
+    let new_keys: HashSet<(u8, &str)> = tokens.iter().map(|(f, t, _)| (*f, t.as_str())).collect();
+
+    for (field_id, token) in old.keys() {
+        if !new_keys.contains(&(*field_id, *token)) {
             transaction.push(Operation {
                 tree: Tree::SearchPostings,
-                method: Method::Insert,
-                key: posting_key(field, &token, &subject),
-                val: Some(encode_tf(count)),
+                method: Method::Delete,
+                key: posting_key(Field::from_u8(*field_id).unwrap_or(Field::Title), token, id),
+                val: None,
             });
         }
     }
 
-    for term in unique_terms {
-        for gram in trigrams(&term) {
+    let mut new_terms: HashSet<&str> = HashSet::new();
+    for (field_id, token, tf) in &tokens {
+        if old.get(&(*field_id, token.as_str())) == Some(tf) {
+            continue;
+        }
+        transaction.push(Operation {
+            tree: Tree::SearchPostings,
+            method: Method::Insert,
+            key: posting_key(Field::from_u8(*field_id).unwrap_or(Field::Title), token, id),
+            val: Some(encode_tf(*tf)),
+        });
+        if token.chars().count() >= TRIGRAM_MIN_TERM_LEN {
+            new_terms.insert(token.as_str());
+        }
+    }
+
+    for term in new_terms {
+        for gram in trigrams(term) {
             transaction.push(Operation {
                 tree: Tree::SearchTrigrams,
                 method: Method::Insert,
-                key: trigram_key(&gram, &term),
+                key: trigram_key(&gram, term),
                 val: Some(Vec::new()),
             });
         }
     }
 
     let doc = SearchDoc {
+        subject,
         drive,
         parent,
         field_lens,
+        tokens,
     };
     transaction.push(Operation {
         tree: Tree::SearchDocs,
         method: Method::Insert,
-        key: subject.as_bytes().to_vec(),
+        key: id.to_be_bytes().to_vec(),
         val: Some(encode_doc(&doc)),
-    });
-    transaction.push(Operation {
-        tree: Tree::SearchDocTokens,
-        method: Method::Insert,
-        key: subject.as_bytes().to_vec(),
-        val: Some(encode_tokens(&token_list)),
     });
 
     Ok(())
@@ -160,38 +197,98 @@ pub fn index_resources(store: &Db, resources: &[Resource], chunk: usize) -> Atom
     Ok(())
 }
 
+/// Key prefix of the marker left for a resource whose search entries were left
+/// out of a bulk write (see [`pending_marker`]).
+const PENDING_PREFIX: &[u8] = b"search-pending/v1/";
+
+/// Whether an operation writes a full-text search tree.
+pub(crate) fn is_search_op(op: &Operation) -> bool {
+    matches!(
+        op.tree,
+        Tree::SearchPostings | Tree::SearchDocs | Tree::SearchTrigrams
+    )
+}
+
+/// The operation that records that `subject` still has to be indexed. A bulk
+/// write of pulled resources leaves their search entries out (about three
+/// quarters of everything it would write) and files one of these instead, in
+/// the same transaction, so a crash loses nothing.
+pub(crate) fn pending_marker(subject: &str) -> Operation {
+    let mut key = PENDING_PREFIX.to_vec();
+    key.extend_from_slice(subject.as_bytes());
+    Operation {
+        tree: Tree::PluginMeta,
+        method: Method::Insert,
+        key,
+        val: Some(b"1".to_vec()),
+    }
+}
+
+/// Index up to `limit` resources that were stored without search entries.
+/// Returns how many were done; call again until it returns 0.
+pub async fn index_pending(store: &Db, limit: usize) -> AtomicResult<usize> {
+    let mut subjects = Vec::new();
+    for pair in store.kv.scan_prefix(Tree::PluginMeta, PENDING_PREFIX) {
+        let (key, _) = pair?;
+        if let Ok(subject) = String::from_utf8(key[PENDING_PREFIX.len()..].to_vec()) {
+            subjects.push(subject);
+        }
+        if subjects.len() >= limit {
+            break;
+        }
+    }
+
+    let mut transaction = Transaction::new();
+    for subject in &subjects {
+        let subj = Subject::from_raw(subject, store.get_base_domain().as_deref());
+        if let Ok(resource) = store.get_resource(&subj).await {
+            index_resource(store, &resource, &mut transaction)?;
+        }
+        let mut key = PENDING_PREFIX.to_vec();
+        key.extend_from_slice(subject.as_bytes());
+        transaction.push(Operation {
+            tree: Tree::PluginMeta,
+            method: Method::Delete,
+            key,
+            val: None,
+        });
+    }
+    if !transaction.is_empty() {
+        store.apply_transaction(&mut transaction)?;
+    }
+
+    Ok(subjects.len())
+}
+
 /// Drop every posting for `subject`. Idempotent if the subject is not indexed.
 pub fn unindex_subject(
     store: &Db,
     subject: &str,
     transaction: &mut Transaction,
 ) -> AtomicResult<()> {
-    let Some(token_bytes) = store.kv.get(Tree::SearchDocTokens, subject.as_bytes())? else {
-        return Ok(());
-    };
-    let tokens = decode_tokens(&token_bytes);
-    for (field_id, token) in tokens {
-        let field = Field::from_u8(field_id).unwrap_or(Field::Title);
+    let id = doc_id(subject);
+    if let Some(doc) = load_doc_by_id(store, id, true)? {
+        remove_doc(id, &doc, transaction);
+    }
+    Ok(())
+}
+
+fn remove_doc(id: DocId, doc: &SearchDoc, transaction: &mut Transaction) {
+    for (field_id, token, _) in &doc.tokens {
+        let field = Field::from_u8(*field_id).unwrap_or(Field::Title);
         transaction.push(Operation {
             tree: Tree::SearchPostings,
             method: Method::Delete,
-            key: posting_key(field, &token, subject),
+            key: posting_key(field, token, id),
             val: None,
         });
     }
     transaction.push(Operation {
-        tree: Tree::SearchDocTokens,
-        method: Method::Delete,
-        key: subject.as_bytes().to_vec(),
-        val: None,
-    });
-    transaction.push(Operation {
         tree: Tree::SearchDocs,
         method: Method::Delete,
-        key: subject.as_bytes().to_vec(),
+        key: id.to_be_bytes().to_vec(),
         val: None,
     });
-    Ok(())
 }
 
 /// Wipe and rebuild the FTS trees from every stored resource.
@@ -234,9 +331,34 @@ pub fn maybe_rebuild_search_index(store: &Db) -> AtomicResult<()> {
             "Search index missing on a store with {} resources; rebuilding",
             n_resources
         );
+        #[cfg(target_arch = "wasm32")]
+        file_all_as_pending(store)?;
+        #[cfg(not(target_arch = "wasm32"))]
         build_search_index(store)?;
     }
     mark_search_ready(store)
+}
+
+/// Browser upgrade: indexing every resource at open would hold the database
+/// worker for a long time on a big drive, so each one is only filed as pending
+/// and [`index_pending`] adds them in slices once the app is up.
+#[cfg(target_arch = "wasm32")]
+fn file_all_as_pending(store: &Db) -> AtomicResult<()> {
+    let mut transaction = Transaction::new();
+    for pair in store.kv.iter_tree(Tree::Resources) {
+        let (key, _) = pair?;
+        if let Ok(subject) = String::from_utf8(key.to_vec()) {
+            transaction.push(pending_marker(&subject));
+        }
+        if transaction.len() >= 2000 {
+            store.apply_transaction(&mut transaction)?;
+            transaction.clear();
+        }
+    }
+    if !transaction.is_empty() {
+        store.apply_transaction(&mut transaction)?;
+    }
+    Ok(())
 }
 
 /// Drop the FTS trees and rebuild from every stored resource. Used after the
@@ -290,34 +412,47 @@ pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec
         return Ok(Vec::new());
     }
 
-    // Per query token: subject → best score for that token.
-    let mut per_token: Vec<HashMap<String, f32>> = Vec::with_capacity(tokens.len());
+    // Per query token: document → best score for that token.
+    let mut per_token: Vec<HashMap<DocId, f32>> = Vec::with_capacity(tokens.len());
     for token in &tokens {
         per_token.push(score_token(store, token, n_docs)?);
     }
 
     // AND: a doc must score on every query token.
-    let mut subjects: HashSet<String> = per_token[0].keys().cloned().collect();
+    let mut ids: HashSet<DocId> = per_token[0].keys().copied().collect();
     for map in per_token.iter().skip(1) {
-        subjects.retain(|s| map.contains_key(s));
+        ids.retain(|id| map.contains_key(id));
     }
     if let Some(allowed) = &filter_set {
-        subjects.retain(|s| allowed.contains(s));
+        let allowed_ids: HashSet<DocId> = allowed.iter().map(|s| doc_id(s)).collect();
+        ids.retain(|id| allowed_ids.contains(id));
     }
 
     let mut hits: Vec<SearchHit> = Vec::new();
-    let mut doc_cache: HashMap<String, SearchDoc> = HashMap::new();
+    let mut doc_cache: HashMap<DocId, SearchDoc> = HashMap::new();
 
-    for subject in subjects {
-        if !parents.is_empty() && !subject_in_parents(store, &subject, &parents, &mut doc_cache)? {
+    for id in ids {
+        let doc = load_doc(store, id, &mut doc_cache)?;
+        if doc.subject.is_empty() {
+            continue;
+        }
+        // An entry whose resource is gone (left behind by an interrupted
+        // write, or by a store older than the unindex-on-destroy) would
+        // otherwise be listed and then fail to open.
+        if !store.has_resource_locally(&doc.subject) {
+            continue;
+        }
+        if !parents.is_empty()
+            && !subject_in_parents(store, &doc.subject, &parents, &mut doc_cache)?
+        {
             continue;
         }
         let mut score = 0.0;
         for map in &per_token {
-            score += map.get(&subject).copied().unwrap_or(0.0);
+            score += map.get(&id).copied().unwrap_or(0.0);
         }
         hits.push(SearchHit {
-            subject: Subject::from(subject),
+            subject: Subject::from(doc.subject),
             score,
         });
     }
@@ -428,7 +563,7 @@ fn filter_only_hits(
     limit: usize,
 ) -> AtomicResult<Vec<SearchHit>> {
     let mut hits = Vec::new();
-    let mut doc_cache: HashMap<String, SearchDoc> = HashMap::new();
+    let mut doc_cache: HashMap<DocId, SearchDoc> = HashMap::new();
     let mut subjects: Vec<String> = allowed.into_iter().collect();
     subjects.sort();
     for subject in subjects {
@@ -450,9 +585,10 @@ fn subject_in_parents(
     store: &Db,
     subject: &str,
     parents: &[String],
-    cache: &mut HashMap<String, SearchDoc>,
+    cache: &mut HashMap<DocId, SearchDoc>,
 ) -> AtomicResult<bool> {
-    let doc = load_doc(store, subject, cache)?;
+    let id = doc_id(subject);
+    let doc = load_doc(store, id, cache)?;
     if in_scope(subject, &doc, parents, store, cache)? {
         return Ok(true);
     }
@@ -498,8 +634,8 @@ fn resource_in_parents(store: &Db, subject: &str, parents: &[String]) -> AtomicR
     Ok(false)
 }
 
-fn score_token(store: &Db, q: &str, n_docs: f32) -> AtomicResult<HashMap<String, f32>> {
-    let mut scores: HashMap<String, f32> = HashMap::new();
+fn score_token(store: &Db, q: &str, n_docs: f32) -> AtomicResult<HashMap<DocId, f32>> {
+    let mut scores: HashMap<DocId, f32> = HashMap::new();
     let mut seen_terms: HashSet<(u8, String)> = HashSet::new();
 
     // Always prefix-scan the original token (typeahead).
@@ -513,35 +649,38 @@ fn score_token(store: &Db, q: &str, n_docs: f32) -> AtomicResult<HashMap<String,
         collect_trigram_candidates(store, q, &mut seen_terms)?;
     }
 
+    let mut lengths: HashMap<DocId, f32> = HashMap::new();
     for (field_id, term) in seen_terms {
         let field = Field::from_u8(field_id).unwrap_or(Field::Title);
         let kind = classify_match(q, &term);
         let boost = field.boost(kind);
         let prefix = posting_prefix(field, &term);
-        let mut df = 0u32;
-        let mut postings: Vec<(String, u32)> = Vec::new();
+        let mut postings: Vec<(DocId, u32)> = Vec::new();
         for pair in store.kv.scan_prefix(Tree::SearchPostings, &prefix) {
             let (key, val) = pair?;
-            let subject = match subject_from_posting(&key, &prefix) {
-                Some(s) => s,
-                None => continue,
+            let Some(id) = id_from_posting(&key, &prefix) else {
+                continue;
             };
-            df += 1;
-            postings.push((subject, decode_tf(&val)));
+            postings.push((id, decode_tf(&val)));
         }
+        let df = postings.len() as u32;
         if df == 0 {
             continue;
         }
         let idf = ((n_docs - df as f32 + 0.5) / (df as f32 + 0.5) + 1.0).ln();
-        for (subject, tf) in postings {
-            let dl = doc_len(store, &subject).unwrap_or(AVGDL);
+        for (id, tf) in postings {
+            let dl = match lengths.get(&id) {
+                Some(dl) => *dl,
+                None => {
+                    let dl = doc_len(store, id).unwrap_or(AVGDL);
+                    lengths.insert(id, dl);
+                    dl
+                }
+            };
             let tf_norm = (tf as f32 * (BM25_K1 + 1.0))
                 / (tf as f32 + BM25_K1 * (1.0 - BM25_B + BM25_B * (dl / AVGDL)));
             let add = boost * idf * tf_norm;
-            scores
-                .entry(subject)
-                .and_modify(|s| *s += add)
-                .or_insert(add);
+            scores.entry(id).and_modify(|s| *s += add).or_insert(add);
         }
     }
 
@@ -722,11 +861,9 @@ fn trigrams(term: &str) -> Vec<String> {
     chars.windows(3).map(|w| w.iter().collect()).collect()
 }
 
-fn subject_from_posting(key: &[u8], prefix: &[u8]) -> Option<String> {
-    if key.len() <= prefix.len() {
-        return None;
-    }
-    String::from_utf8(key[prefix.len()..].to_vec()).ok()
+fn id_from_posting(key: &[u8], prefix: &[u8]) -> Option<DocId> {
+    let rest = key.get(prefix.len()..)?;
+    Some(u64::from_be_bytes(rest.try_into().ok()?))
 }
 
 fn term_from_trigram_key(key: &[u8], gram: &str) -> Option<String> {
@@ -739,24 +876,26 @@ fn term_from_trigram_key(key: &[u8], gram: &str) -> Option<String> {
 
 fn load_doc(
     store: &Db,
-    subject: &str,
-    cache: &mut HashMap<String, SearchDoc>,
+    id: DocId,
+    cache: &mut HashMap<DocId, SearchDoc>,
 ) -> AtomicResult<SearchDoc> {
-    if let Some(doc) = cache.get(subject) {
+    if let Some(doc) = cache.get(&id) {
         return Ok(doc.clone());
     }
-    let bytes = store
-        .kv
-        .get(Tree::SearchDocs, subject.as_bytes())?
-        .unwrap_or_default();
-    let doc = decode_doc(&bytes);
-    cache.insert(subject.to_string(), doc.clone());
+    let doc = load_doc_by_id(store, id, false)?.unwrap_or_default();
+    cache.insert(id, doc.clone());
     Ok(doc)
 }
 
-fn doc_len(store: &Db, subject: &str) -> Option<f32> {
-    let bytes = store.kv.get(Tree::SearchDocs, subject.as_bytes()).ok()??;
-    let doc = decode_doc(&bytes);
+fn load_doc_by_id(store: &Db, id: DocId, with_tokens: bool) -> AtomicResult<Option<SearchDoc>> {
+    Ok(store
+        .kv
+        .get(Tree::SearchDocs, &id.to_be_bytes())?
+        .map(|bytes| decode_doc(&bytes, with_tokens)))
+}
+
+fn doc_len(store: &Db, id: DocId) -> Option<f32> {
+    let doc = load_doc_by_id(store, id, false).ok()??;
     let len = doc.field_lens.iter().sum::<u32>();
     if len == 0 {
         Some(AVGDL)
@@ -770,37 +909,25 @@ fn in_scope(
     doc: &SearchDoc,
     parents: &[String],
     store: &Db,
-    cache: &mut HashMap<String, SearchDoc>,
+    cache: &mut HashMap<DocId, SearchDoc>,
 ) -> AtomicResult<bool> {
-    for scope in parents {
-        if subject == scope {
-            return Ok(true);
-        }
-        if !doc.drive.is_empty() && doc.drive == *scope {
-            return Ok(true);
-        }
+    let scope_ids: HashSet<DocId> = parents.iter().map(|p| doc_id(p)).collect();
+    if parents.iter().any(|p| p == subject) {
+        return Ok(true);
     }
-    let mut current = subject.to_string();
+    if doc.drive != 0 && scope_ids.contains(&doc.drive) {
+        return Ok(true);
+    }
     let mut seen = HashSet::new();
+    let mut node = doc.clone();
     for _ in 0..MAX_PARENT_WALK {
-        if !seen.insert(current.clone()) {
+        if node.parent == 0 || !seen.insert(node.parent) {
             break;
         }
-        let node = if current == subject {
-            doc.clone()
-        } else {
-            load_doc(store, &current, cache)?
-        };
-        if parents.contains(&current) {
+        if scope_ids.contains(&node.parent) {
             return Ok(true);
         }
-        if node.parent.is_empty() {
-            break;
-        }
-        if parents.contains(&node.parent) {
-            return Ok(true);
-        }
-        current = node.parent;
+        node = load_doc(store, node.parent, cache)?;
     }
     Ok(false)
 }

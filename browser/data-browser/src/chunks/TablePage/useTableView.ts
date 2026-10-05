@@ -48,6 +48,12 @@ import {
   normalizeViewKind,
   VIEW_KIND_LABELS,
 } from './tableViewKinds';
+import {
+  canChangeViewType,
+  canDeleteView,
+  nameAfterTypeChange,
+  viewTypeKey,
+} from './viewTypeChoice';
 
 const DEFAULT_SORT: TableSorting = { prop: DEFAULT_SORT_PROP, sortDesc: false };
 
@@ -100,8 +106,16 @@ export interface UseTableViewResult {
   setActiveView: (subject: string) => void;
   /** Create a new (empty) view of the given kind, link it, and switch to it. */
   createView: (kind?: ViewKind | string, label?: string) => void;
-  /** Change a view's renderer kind (table/kanban/calendar/timer). */
-  setViewKind: (subject: string, kind: ViewKind | string) => void;
+  /**
+   * Change a view's renderer kind in place — only when another view of its
+   * current type remains (#1806); otherwise a new view is added instead. A
+   * default name ("All pieces", "Table") becomes the new type's `label`.
+   */
+  setViewKind: (
+    subject: string,
+    kind: ViewKind | string,
+    label?: string,
+  ) => void;
   /** Copy a view (its config) into a new "<name> copy" view and switch to it. */
   duplicateView: (subject: string) => void;
   /** Put the table's views in a new order (the tab order). */
@@ -205,6 +219,12 @@ export function useTableView(
    * cannot say which view each of them shows.
    */
   viewOverride?: string,
+  /**
+   * An embedded table never reads the host page's `?view=`: that param names a
+   * view of the host's table, and for a dashboard block of its own table it is
+   * the dashboard itself, which would render itself inside itself.
+   */
+  embedded = false,
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
@@ -223,7 +243,7 @@ export function useTableView(
   const navigate = ShowRoute.useNavigate();
   const activeView =
     viewOverride ??
-    activeViewParam ??
+    (embedded ? undefined : activeViewParam) ??
     defaultViewSubject ??
     views[0] ??
     undefined;
@@ -577,10 +597,16 @@ export function useTableView(
         const from = liveViewParam.current;
 
         // A table with no saved views shows one implicit Table tab, and that
-        // tab disappears the moment a real view exists. So adding an app to a
-        // fresh table would take the table away — the one thing an extra way
-        // of looking at rows must never do. Give it back explicitly first.
-        if (appViewOf(kind) && views.length === 0 && !defaultViewSubject) {
+        // tab disappears the moment a real view exists. So adding a Calendar,
+        // a Kanban or an app to a fresh table would take the table away — the
+        // one thing an extra way of looking at rows must never do. Give it back
+        // explicitly first. A dashboard does this itself in `createViewResource`.
+        if (
+          kind !== DEFAULT_VIEW_KIND &&
+          kind !== 'dashboard' &&
+          views.length === 0 &&
+          !defaultViewSubject
+        ) {
           await createViewResource(
             VIEW_KIND_LABELS[DEFAULT_VIEW_KIND],
             DEFAULT_VIEW_KIND,
@@ -943,11 +969,51 @@ export function useTableView(
     [ensureView],
   );
 
+  /** Each saved view's type, read as the tabs show it right now. */
+  const readViewTypes = useCallback(
+    (): Map<string, string> =>
+      new Map(
+        (views as string[]).map(s => [
+          s,
+          viewTypeKey(
+            store.getResourceLoading(s).get(dataBrowser.properties.viewKind) as
+              | string
+              | undefined,
+          ),
+        ]),
+      ),
+    [views, store],
+  );
+
   const setViewKind = useCallback(
-    (subject: string, kind: ViewKind | string) => {
+    (subject: string, kind: ViewKind | string, label?: string) => {
+      const typesBySubject = readViewTypes();
+
+      // Changing the only view of a type makes that type unreachable — for
+      // the last table view, the rows' own layout. Add a view instead and
+      // leave this one as it is (#1806).
+      if (!canChangeViewType(subject, typesBySubject)) {
+        createView(kind, label);
+
+        return;
+      }
+
       void (async () => {
         const v = store.getResourceLoading(subject);
+        const fromType = typesBySubject.get(subject)!;
+        const fromApp = appViewOf(fromType);
+        const newName = nameAfterTypeChange(
+          v.get(core.properties.name) as string | undefined,
+          fromType,
+          label ?? VIEW_KIND_LABELS[normalizeViewKind(kind)],
+          fromApp ? store.getResourceLoading(fromApp).title : undefined,
+        );
+
         await v.set(dataBrowser.properties.viewKind, kind, false);
+
+        if (newName !== undefined) {
+          await v.set(core.properties.name, newName, false);
+        }
 
         // Switching an existing tab to a dashboard needs one to show; keep
         // any it already names, so switching away and back loses nothing.
@@ -969,7 +1035,7 @@ export function useTableView(
         await v.save();
       })().catch(() => undefined);
     },
-    [store, table, createDashboardResource],
+    [store, table, createDashboardResource, createView, readViewTypes],
   );
 
   const duplicateView = useCallback(
@@ -1032,6 +1098,12 @@ export function useTableView(
 
   const deleteView = useCallback(
     (subject: string) => {
+      // The last table view stays while other views exist: without it the
+      // rows' own layout is gone (#1806). The tab menu disables this too.
+      if (!canDeleteView(subject, readViewTypes())) {
+        return;
+      }
+
       void (async () => {
         const next = (views as string[]).filter(v => v !== subject);
         await table.set(dataBrowser.properties.tableViews, next, false);
@@ -1055,7 +1127,7 @@ export function useTableView(
         await store.getResourceLoading(subject).destroy();
       })().catch(() => undefined);
     },
-    [views, table, defaultViewSubject, activeView, store],
+    [views, table, defaultViewSubject, activeView, store, readViewTypes],
   );
 
   const reorderViews = useCallback(

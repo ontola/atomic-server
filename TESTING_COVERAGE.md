@@ -1091,6 +1091,17 @@ editors do not expose state/commands) and `oxc-react-compiler.test.ts` (producti
 compilation does not hoist command getters into render). `sentry.test.ts` covers
 packaged WebView initialization without server-injected Sentry configuration.
 
+`react-compiler-cli.test.ts` covers the file-targeted compiler command: emitted
+memoization, a bailout in a partially optimized file, explicit opt-outs, relative
+paths, and continued checking after an unreadable file with a failing exit code.
+It also verifies compact line/column diagnostics and optional verbose output.
+`react-compiler-hook.test.mjs` covers UTF-8 source locations, advisory hook JSON,
+per-session content caching, source changes, staged/untracked/deleted files,
+excluded files, subdirectory invocation, ignored non-PostToolUse events and
+advisory output when the hook cannot run. It feeds an Edit event to the script
+through a symlinked path, verifying compact advisory JSON and silence on a
+repeated check. The hook is opt-in personal config, so no agent config is tested.
+
 Automatic Vault scheduling (`vaultAutoBackup.test.ts`) covers sustained-edit
 maximum delay, queued edits across drive switches, late account availability,
 connectivity recovery, enrollment rediscovery after reload, account expiry during
@@ -2163,7 +2174,9 @@ failure checks also pass. Actual staging phone restore latency remains unmeasure
 
 ## Right-panel lifecycle
 
-`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets. It also covers the comments panel's target: aiming it at another resource switches threads instead of toggling, the NavBar button (no target) returns to the page's own thread rather than closing a row's, the target is dropped when another panel takes over, and `closePanelState` closes the panel whatever it is aimed at — which a targetless toggle cannot express.
+
+`e2e/tests/table-row-comments.spec.ts` covers commenting on a table row from the gutter bubble: the panel opens headed by the row's title, the count is live and belongs to that row alone, another row's bubble switches threads, the same row's closes the panel, the comment survives a reload, and the trailing entry row (no resource yet) offers no bubble. What is NOT covered: reaching the bubble by keyboard — it shares the row-gutter's mouse-only reachability with the existing expand button, since the grid owns Tab for cell navigation.
 
 `e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
 
@@ -2319,6 +2332,8 @@ triggers and verifies only action labels disappear. `presence-follow.spec.ts`
 uses two tabs sharing one stored test identity, checks the avatar at 320px,
 opens Follow and verifies subsequent navigation. The updated Chromium test
 passed against the local app; cross-network staging presence was not certified.
+`sidebar-layout.spec.ts` checks the resource menu stays inside 390px and 320px
+viewports, action labels collapse, and the menu opens on tap.
 
 `recovery-fetch.test.ts` verifies 429 cooldowns (Retry-After seconds and a
 60-second fallback), retry after expiry, in-flight sharing and fresh successful

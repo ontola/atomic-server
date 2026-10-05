@@ -2,12 +2,8 @@
 // @wc-ignore-file
 import { afterEach, expect, it, vi } from 'vitest';
 import { streamText, generateText } from 'ai';
-import {
-  createHostedModel,
-  enableHostedAI,
-  getHostedAIStatus,
-  HOSTED_AI_USAGE_EVENT,
-} from './ai';
+import { createHostedModel } from '../../chunks/AI/hostedModel';
+import { enableHostedAI, getHostedAIStatus, HOSTED_AI_USAGE_EVENT } from './ai';
 import { managedFetch } from './api';
 import { getManagedAccount } from './session';
 

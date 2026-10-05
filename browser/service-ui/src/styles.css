@@ -148,11 +148,6 @@
   border-top: 1px solid
     var(--service-border, var(--surface-border, rgba(0, 0, 0, 0.12)));
 }
-.atomic-signin-hint {
-  margin: 0;
-  color: var(--service-muted, var(--color-text-light, #666));
-  font-size: 14px;
-}
 .atomic-signin-email {
   display: grid;
   gap: 8px;
@@ -203,7 +198,8 @@
   background: #1f1f20;
 }
 
-.atomic-signin-info-open {
+.atomic-signin-info-open,
+.atomic-signin-link {
   justify-self: center;
   margin: 0;
   padding: 4px;
@@ -218,9 +214,46 @@
   cursor: pointer;
   transform: none;
 }
-.atomic-signin-info-open:hover {
+.atomic-signin-info-open:hover,
+.atomic-signin-link:hover {
   background: none;
   color: var(--service-text, var(--color-text, #111));
+}
+/* A secret just made: shown once, whole, to be saved. */
+.atomic-signin-title {
+  margin: 0;
+  font-size: 18px;
+}
+.atomic-signin-secret {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: start;
+}
+.atomic-signin-secret code {
+  padding: 8px 10px;
+  border: 1px solid var(--service-border, var(--color-bg-2, #ccc));
+  border-radius: var(--service-radius, var(--radius, 8px));
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.atomic-signin-email .atomic-signin-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--service-text, var(--color-text, #111));
+  font-size: 14px;
+  font-weight: 400;
+}
+.atomic-signin-email .atomic-signin-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
 }
 .atomic-signin-info {
   box-sizing: border-box;

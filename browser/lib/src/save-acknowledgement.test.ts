@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { core } from './ontologies/core.js';
+import { Resource } from './resource.js';
 import { testStore } from './test-store.js';
 import { AtomicError, ErrorType, RequestCancelledError } from './error.js';
 import { BLOCK_AFTER_FAILURES } from './local-outbox.js';
@@ -55,6 +56,35 @@ describe('explicit save acknowledgement', () => {
     expect(store.outbox.hasPending(doc.subject)).toBe(true);
     expect(store.serverConnected).toBe(false);
   });
+  it('still reports a save the server acknowledged when the local mirror fails', async () => {
+    const { store } = await testStore();
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      noParent: true,
+    });
+    vi.spyOn(Resource.prototype, 'persistToClientDb').mockRejectedValue(
+      new Error('ClientDb unavailable: parked'),
+    );
+
+    await expect(doc.save()).resolves.toBe('persisted');
+    expect(doc.commitError).toBeUndefined();
+    store.setServerConnected(false);
+  });
+
+  it('does not hold an acknowledged save on a local mirror that never answers', async () => {
+    const { store } = await testStore();
+    const doc = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      noParent: true,
+    });
+    vi.spyOn(Resource.prototype, 'persistToClientDb').mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await expect(doc.save()).resolves.toBe('persisted');
+    store.setServerConnected(false);
+  }, 10_000);
+
   it('clears the error after a successful retry', async () => {
     const { store, postCommitSpy } = await testStore();
     const doc = await store.newResource({

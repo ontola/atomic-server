@@ -48,6 +48,12 @@ interface IndexCellProps extends CellProps {
   onExpand: (rowIndex: number) => void;
   /** Rendered before the expand button, e.g. a row-select tick box. */
   Extra?: React.ComponentType<{ index: number }>;
+  /**
+   * Rendered in the gutter at the start of the row, left of the row number —
+   * where a row-scoped affordance belongs (the table view hangs its comment
+   * bubble here). See {@link FancyTableProps.RowHeaderAddonComponent}.
+   */
+  RowHeaderAddonComponent?: React.ComponentType<{ rowIndex: number }>;
 }
 
 export function Cell({
@@ -330,6 +336,7 @@ export function IndexCell({
   children,
   onExpand,
   Extra,
+  RowHeaderAddonComponent,
   ...props
 }: React.PropsWithChildren<IndexCellProps>): JSX.Element {
   const { markings } = useTableEditorContext();
@@ -338,7 +345,14 @@ export function IndexCell({
 
   return (
     <StyledIndexCell role='rowheader' {...props} hasMarking={!!marking}>
-      {Extra && <Extra index={props.rowIndex} />}
+      {(Extra || RowHeaderAddonComponent) && (
+        <AddonSlot>
+          {Extra && <Extra index={props.rowIndex} />}
+          {RowHeaderAddonComponent && (
+            <RowHeaderAddonComponent rowIndex={props.rowIndex} />
+          )}
+        </AddonSlot>
+      )}
       <IconButton
         title='Open resource'
         onClick={() => onExpand(props.rowIndex)}
@@ -352,17 +366,34 @@ export function IndexCell({
 
 const IndexNumber = styled.span``;
 
+/**
+ * Holds the gutter affordance at the start of the row. It keeps its box even
+ * when empty, so a row number never shifts sideways as the affordance appears
+ * and disappears on hover.
+ */
+const AddonSlot = styled.span`
+  margin-inline-end: auto;
+  display: flex;
+  align-items: center;
+  gap: ${p => p.theme.size(1)};
+`;
+
+/* The addon's buttons (`data-row-affordance`) are
+ * row-scoped and are revealed from the row itself (see TableRow); only the
+ * expand button is shown and hidden by this cell's own hover rules. */
 const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
   justify-content: flex-end !important;
-  gap: 0.4rem;
+  /* Tighter than a data cell: the gutter fits two controls side by side. */
+  padding-inline: 0.25rem;
+  gap: ${p => p.theme.size(1)};
   color: ${p => p.theme.colors.textLight};
 
-  /* Pinned left, so it doesn't move when the number swaps for the expand
-     button under a hovering or tapping pointer. */
+  /* The row-select tick box sits in the slot pinned left, so it doesn't move
+     when the number swaps for the expand button under a hovering or tapping
+     pointer. */
   & [data-row-select] {
     display: flex;
     align-items: center;
-    margin-right: auto;
   }
 
   & [data-row-select]:not([data-active='true']) {
@@ -381,6 +412,8 @@ const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
     display: flex;
   }
 
+  /* Only the expand button: the tick box and the addon's buttons live in the
+     slot and are shown by their own rules. */
   & > button {
     display: none;
   }

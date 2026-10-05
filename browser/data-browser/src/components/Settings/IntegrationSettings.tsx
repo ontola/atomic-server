@@ -24,8 +24,14 @@ import {
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
   const catalogUrl = usePluginCatalogUrl();
-  const { showExperimentalPlugins, ready, pending, error, setVisibility } =
-    useIntegrationVisibility();
+  const {
+    showExperimentalPlugins,
+    experimentalToggleVisible,
+    ready,
+    pending,
+    error,
+    setVisibility,
+  } = useIntegrationVisibility();
 
   return (
     <SettingsSection
@@ -38,19 +44,23 @@ export function IntegrationSettings() {
         data-ready={ready}
         aria-busy={pending}
       >
-        <CheckboxLabel>
-          <Checkbox
-            checked={showExperimentalPlugins}
-            onChange={value =>
-              setVisibility('show-experimental-plugins', value)
-            }
-          />
-          <span>Show experimental plugins</span>
-        </CheckboxLabel>
-        <Description>
-          These preferences are saved in your private Atomic drive. Existing
-          connections remain available.
-        </Description>
+        {experimentalToggleVisible && (
+          <>
+            <CheckboxLabel>
+              <Checkbox
+                checked={showExperimentalPlugins}
+                onChange={value =>
+                  setVisibility('show-experimental-plugins', value)
+                }
+              />
+              <span>Show experimental plugins</span>
+            </CheckboxLabel>
+            <Description>
+              These preferences are saved in your private Atomic drive. Existing
+              connections remain available.
+            </Description>
+          </>
+        )}
         {error && <ErrMessage role='alert'>{error}</ErrMessage>}
         <ProxyForm key={proxy} proxy={proxy} />
         <CatalogUrlForm key={catalogUrl} catalogUrl={catalogUrl} />

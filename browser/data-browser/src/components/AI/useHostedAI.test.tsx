@@ -9,6 +9,7 @@ vi.mock('@helpers/managed/ai', () => ({
   getHostedAIStatus: vi.fn(),
   HOSTED_AI_USAGE_EVENT: 'atomic-hosted-ai-usage',
 }));
+vi.mock('@helpers/managed/api', () => ({ hasManagedApi: () => true }));
 vi.mock('@helpers/managed/session', () => ({
   onManagedLogout: () => () => {},
 }));
@@ -45,6 +46,37 @@ it('refreshes after usage and once more after server settlement, then stops', as
     await vi.advanceTimersByTimeAsync(1000);
   });
   expect(result.current.hostedAI?.remaining_micros).toBe(4_999_123);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000);
+  });
+  expect(getHostedAIStatus).toHaveBeenCalledTimes(3);
+});
+
+it('asks again when the first read finds no status, instead of settling on none', async () => {
+  vi.useFakeTimers();
+  vi.mocked(getHostedAIStatus)
+    .mockResolvedValueOnce(undefined)
+    .mockRejectedValueOnce(new Error('network'))
+    .mockResolvedValueOnce({
+      enabled: true,
+      consent: false,
+      model: 'test',
+      paid: false,
+      allowance_micros: 1,
+      used_micros: 0,
+      remaining_micros: 1,
+      resets_at: 1790812800,
+    });
+  const { result } = renderHook(useHostedAI);
+  await act(async () => {});
+  expect(result.current.hostedAI).toBeUndefined();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1500);
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(4000);
+  });
+  expect(result.current.hostedAI?.enabled).toBe(true);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(60_000);
   });

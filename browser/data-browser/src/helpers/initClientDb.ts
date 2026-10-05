@@ -387,6 +387,17 @@ async function startForIdentity(
     // fetched resources).
     const existingSet = new Set<string>();
 
+    // Listing every subject reads the whole database (0.25 s at 10k
+    // resources, in front of the first reads of the screen). When the
+    // bundled defaults are unchanged since the last start there is nothing
+    // to decide, so skip it.
+    if (!bootstrapChanged && storedFingerprint !== null) {
+      endAllSubjects({ skipped: true });
+      endPostInit({ seeded: false, skipped: true });
+
+      return;
+    }
+
     try {
       const existing = await clientDb.allSubjects();
       for (const s of existing) existingSet.add(s);

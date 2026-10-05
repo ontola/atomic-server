@@ -130,6 +130,11 @@ export function drainBackoffMs(failures: number): number {
 // few-second window an ordering race needs.
 export const BLOCK_AFTER_FAILURES = 8;
 
+/** Consecutive failed drains of one entry before it counts as persistently
+ *  failing and is reported once through `onRepeatedFailure`. Earlier than
+ *  `BLOCK_AFTER_FAILURES`, which only applies to errors classed as blocking. */
+export const REPORT_AFTER_FAILURES = 4;
+
 /** How many subjects of one tier are drained at once when the caller
  *  supplies `tierOf`. Bounded so a reconnect with hundreds of dirty
  *  subjects does not open hundreds of concurrent COMMITs. */
@@ -171,6 +176,10 @@ export interface OutboxDrainContext {
   /** Notification hook fired once when an entry transitions to blocked —
    *  caller typically surfaces a persistent "could not sync" message. */
   onBlocked?: (entry: OutboxEntry, error: unknown) => void;
+  /** Fired once per failure streak, when an entry has failed
+   *  `REPORT_AFTER_FAILURES` drains in a row, whatever the error. For
+   *  reporting only: the entry keeps retrying as before. */
+  onRepeatedFailure?: (entry: OutboxEntry, error: unknown) => void;
 }
 
 /**
@@ -280,6 +289,15 @@ export function isUnrecoverableCommitErrorMessage(message: string): boolean {
   // has to stay. Found in the field as two people adding table rows that
   // rendered locally, were refused one at a time, and were reported nowhere.
   if (message.includes('Failed getting class')) {
+    return true;
+  }
+
+  // Server emits: "Parent of <subject> (<parent>) not found: ..."
+  // (`resources.rs` get_parent). The node does not hold the commit's parent,
+  // e.g. a drive that was switched to a node without its root ever being
+  // copied. Every retry fails identically, so park the entry (keep the edit)
+  // instead of spinning; a resync of the drive re-arms it.
+  if (/Parent of .+ not found/.test(message)) {
     return true;
   }
 
@@ -1075,6 +1093,10 @@ export class LocalOutbox {
           // — long past any ordering race — do we park it as genuinely
           // unauthorized ("stop + surface"); a later `markDirty` re-arms it.
           live.failures = (live.failures ?? 0) + 1;
+
+          if (live.failures === REPORT_AFTER_FAILURES) {
+            ctx.onRepeatedFailure?.(live, e);
+          }
 
           if (
             live.failures >= BLOCK_AFTER_FAILURES &&

@@ -546,6 +546,79 @@ impl Db {
         self.persist_replicated(resource, Some(snapshot)).await
     }
 
+    /// [`Self::persist_replicated_resource_with_snapshot`] for many resources in
+    /// one write. Each resource costs the same index entries as on its own, but
+    /// they share one commit, so a page the batch touches repeatedly (a
+    /// parent's member list, the name index) is written once instead of once
+    /// per resource. A large first sync is bound by that cost.
+    ///
+    /// A resource named twice keeps its last entry. One with an import
+    /// identity goes through the single-resource path, which serialises on the
+    /// identity lock and flushes.
+    pub async fn persist_replicated_resources(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+    ) -> AtomicResult<()> {
+        self.persist_replicated_resources_opts(entries, false).await
+    }
+
+    /// [`Self::persist_replicated_resources`] for a bulk pull: with
+    /// `defer_search` the full-text entries (most of the index writes) are left
+    /// out and each resource is filed for [`crate::search::index_pending`].
+    pub async fn persist_replicated_resources_opts(
+        &self,
+        entries: Vec<(Resource, Option<Vec<u8>>)>,
+        defer_search: bool,
+    ) -> AtomicResult<()> {
+        let mut last: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for (i, (resource, _)) in entries.iter().enumerate() {
+            last.insert(self.normalize_subject(resource.get_subject()).pure_id(), i);
+        }
+        let mut transaction = Transaction::new();
+        let mut batched: Vec<&Resource> = Vec::new();
+        for (i, (resource, snapshot)) in entries.iter().enumerate() {
+            let key = self.normalize_subject(resource.get_subject()).pure_id();
+            if last.get(&key) != Some(&i) {
+                continue;
+            }
+            if crate::import_identity::identity(resource).is_some() {
+                self.persist_replicated(resource, snapshot.clone()).await?;
+                continue;
+            }
+            let before = transaction.len();
+            self.build_projection_tx(
+                resource,
+                false,
+                true,
+                true,
+                snapshot.clone(),
+                &mut transaction,
+            )
+            .await?;
+            if defer_search {
+                let mut added = transaction.split_off(before);
+                added.retain(|op| !crate::search::is_search_op(op));
+                transaction.extend(added);
+                transaction.push(crate::search::pending_marker(&key));
+            }
+            batched.push(resource);
+        }
+        if batched.is_empty() {
+            return Ok(());
+        }
+        self.apply_transaction(&mut transaction)?;
+        for resource in batched {
+            let _ = self.db_events.send(DbEvent::Changed {
+                subject: resource.get_subject().without_params(),
+                delta: None,
+                source_id: crate::sync::ws_apply::current_import_source(),
+                is_new: false,
+                from_commit: false,
+            });
+        }
+        Ok(())
+    }
+
     async fn persist_replicated(
         &self,
         resource: &Resource,
@@ -578,6 +651,45 @@ impl Db {
         overwrite_existing: bool,
         snapshot: Option<Vec<u8>>,
     ) -> AtomicResult<()> {
+        let mut transaction = Transaction::new();
+        self.build_projection_tx(
+            resource,
+            check_required_props,
+            update_index,
+            overwrite_existing,
+            snapshot,
+            &mut transaction,
+        )
+        .await?;
+        self.apply_transaction(&mut transaction)?;
+        if crate::import_identity::identity(resource).is_some() {
+            self.flush()?;
+        }
+        let _ = self.db_events.send(DbEvent::Changed {
+            subject: resource.get_subject().without_params(),
+            delta: None,
+            // Attributed here, while the importing write is still on the stack:
+            // the live push loop uses it to avoid sending an update straight
+            // back to the peer it came from.
+            source_id: crate::sync::ws_apply::current_import_source(),
+            is_new: false,
+            from_commit: false,
+        });
+        Ok(())
+    }
+
+    /// Everything [`Self::persist_resource_projection`] writes for one
+    /// resource, appended to `transaction` instead of applied: the index
+    /// entries, the Loro snapshot and the row.
+    async fn build_projection_tx(
+        &self,
+        resource: &Resource,
+        check_required_props: bool,
+        update_index: bool,
+        overwrite_existing: bool,
+        snapshot: Option<Vec<u8>>,
+        transaction: &mut Transaction,
+    ) -> AtomicResult<()> {
         // This only works if no external functions rely on using add_resource for atom-like operations!
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
@@ -596,9 +708,6 @@ impl Db {
         if check_required_props {
             resource.check_required_props(self).await?;
         }
-        // Build a single transaction for index updates + resource persistence
-        let mut transaction = Transaction::new();
-
         if update_index {
             // Every atom is removed and filed again, not only the changed
             // ones. Identical re-puts from a tab are already skipped before
@@ -612,15 +721,15 @@ impl Db {
             if let Some(pv) = existing {
                 let old = Resource::from_propvals(pv, resource.get_subject().clone());
                 for atom in old.to_atoms() {
-                    self.remove_atom_from_index(&atom, &old, &mut transaction)
+                    self.remove_atom_from_index(&atom, &old, transaction)
                         .map_err(|e| format!("Failed to remove atom from index {}. {}", atom, e))?;
                 }
             }
             for atom in resource.to_atoms() {
-                self.add_atom_to_index(&atom, resource, &mut transaction)
+                self.add_atom_to_index(&atom, resource, transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", atom, e))?;
             }
-            crate::search::index_resource(self, resource, &mut transaction)?;
+            crate::search::index_resource(self, resource, transaction)?;
         }
         // The snapshot in `Tree::LoroSnapshots` is the authoritative CRDT
         // state. Store it for every CRDT resource in the same transaction as
@@ -642,21 +751,7 @@ impl Db {
         // The row (a projection without `loroUpdate`), its DID routing hint
         // and the removal of other identifier spellings: the same write a
         // commit makes.
-        self.add_resource_tx(resource, &mut transaction)?;
-        self.apply_transaction(&mut transaction)?;
-        if crate::import_identity::identity(resource).is_some() {
-            self.flush()?;
-        }
-        let _ = self.db_events.send(DbEvent::Changed {
-            subject: resource.get_subject().without_params(),
-            delta: None,
-            // Attributed here, while the importing write is still on the stack:
-            // the live push loop uses it to avoid sending an update straight
-            // back to the peer it came from.
-            source_id: crate::sync::ws_apply::current_import_source(),
-            is_new: false,
-            from_commit: false,
-        });
+        self.add_resource_tx(resource, transaction)?;
         Ok(())
     }
 
@@ -2042,6 +2137,14 @@ impl Db {
         }
 
         Ok(out)
+    }
+
+    /// Whether `host` (no port) has a Drive mapping in this store: bound by
+    /// hand through `/bind-drive`, or installed by a control plane through
+    /// [`Self::sync_drive_mappings`]. Either way the server answers for it.
+    pub fn has_drive_mapping(&self, host: &str) -> bool {
+        let key = drive_mapping_key(host);
+        !key.is_empty() && matches!(self.kv.get(Tree::DriveMapping, key.as_bytes()), Ok(Some(_)))
     }
 
     /// Returns the full Drive DID for a given host (domain/subdomain).
@@ -4368,6 +4471,11 @@ impl Storelike for Db {
                     new,
                     &mut transaction,
                 )?;
+                if let Some(old) = &commit_response.resource_old {
+                    if !removal_queued {
+                        query_index::refile_sort_order_entries(store, old, new, &mut transaction)?;
+                    }
+                }
                 crate::search::index_resource(store, new, &mut transaction)?;
             }
             if commit_response.resource_new.is_none() && !removal_queued {
@@ -5244,6 +5352,25 @@ mod drive_mapping_tests {
             .await
             .unwrap()
             .is_some());
+    }
+
+    /// A vanity name the control plane routed here is a host this server
+    /// answers for, whatever suffix it sits under; a released one is not.
+    #[tokio::test]
+    async fn mapped_hosts_are_served_here() {
+        let store = Db::init_temp("drive_mapping_served").await.unwrap();
+        assert!(!store.has_drive_mapping("ontola.atomic.place"));
+
+        store
+            .sync_drive_mappings(&desired(&[("ontola.atomic.place", "did:ad:ontola")]))
+            .unwrap();
+        assert!(store.has_drive_mapping("ontola.atomic.place"));
+        assert!(store.has_drive_mapping("Ontola.Atomic.Place"));
+        assert!(!store.has_drive_mapping("evil.atomic.place"));
+        assert!(!store.has_drive_mapping(""));
+
+        store.sync_drive_mappings(&desired(&[])).unwrap();
+        assert!(!store.has_drive_mapping("ontola.atomic.place"));
     }
 
     /// Hostnames are case-insensitive, but the `Host` header is echoed in

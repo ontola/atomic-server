@@ -158,6 +158,26 @@ export const matchesQuery = (item: MenuItemMinimial, query: string): boolean =>
   item.label.toLowerCase().includes(query) ||
   (item.keywords ?? []).some(keyword => keyword.toLowerCase().includes(query));
 
+/**
+ * How well an item matches a filter query, lower is better: a label starting
+ * with the query beats one with a word starting with it, which beats a keyword
+ * hit, which beats the query appearing mid-word. Typing "re" should put
+ * "Reload" and "Restart" above "Add icon" (a keyword match).
+ */
+const matchRank = (item: MenuItemMinimial, query: string): number => {
+  const label = item.label.toLowerCase();
+
+  if (label.startsWith(query)) return 0;
+
+  if (label.split(/\s+/).some(word => word.startsWith(query))) return 1;
+
+  if ((item.keywords ?? []).some(k => k.toLowerCase().startsWith(query))) {
+    return 2;
+  }
+
+  return label.includes(query) ? 3 : 4;
+};
+
 export function DropdownMenu({
   items,
   Trigger,
@@ -204,11 +224,26 @@ export function DropdownMenu({
   const filteredItems = useMemo(() => {
     if (!searchable || !search) {
       // Search-only items surface exclusively through the filter query.
-      return items.filter(item => !isItem(item) || !item.searchOnly);
+      // Dropping them can strand a divider at the end or double one up.
+      return items
+        .filter(item => !isItem(item) || !item.searchOnly)
+        .filter(
+          (item, i, all) =>
+            isItem(item) ||
+            (i > 0 && i < all.length - 1 && all[i - 1] !== DIVIDER),
+        );
     }
 
     // Dividers are dropped while filtering.
-    return items.filter(item => isItem(item) && matchesQuery(item, search));
+    return items
+      .filter(item => isItem(item) && matchesQuery(item, search))
+      .map((item, i) => ({ item, i }))
+      .sort(
+        (a, b) =>
+          matchRank(a.item as MenuItemMinimial, search) -
+            matchRank(b.item as MenuItemMinimial, search) || a.i - b.i,
+      )
+      .map(({ item }) => item);
   }, [items, searchable, search]);
 
   // A matching section header alone isn't a match: nothing to pick under it.
@@ -256,7 +291,11 @@ export function DropdownMenu({
       menu.style.maxHeight = `${Math.max(0, Math.min(window.innerHeight * 0.8, visibleHeight - 16))}px`;
     }
 
-    const menuRect = menu.getBoundingClientRect();
+    // Layout size, not getBoundingClientRect: the open transition scales the
+    // menu (`scale: 0.95`), and a rect measured mid-transition is 5% too
+    // small. The menu would then end up that much too low once it settled,
+    // and nothing re-positions it (a ResizeObserver ignores transforms).
+    const menuRect = { width: menu.offsetWidth, height: menu.offsetHeight };
 
     if (anchorPoint) {
       const left =

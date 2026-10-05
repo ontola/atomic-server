@@ -11,7 +11,13 @@ import {
 } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { FrameBridge } from '@helpers/extensions/FrameBridge';
-import { handleRequest, isHostRequest, type HostReply } from './hostStore';
+import {
+  appChanges,
+  handleRequest,
+  isHostRequest,
+  isWithinApp,
+  type HostReply,
+} from './hostStore';
 import { LoaderBlock } from '@components/Loader';
 import { Button } from '@components/Button';
 import { Row } from '@components/Row';
@@ -28,6 +34,8 @@ import {
 } from '@helpers/proxyConnections';
 import { appAgentOf } from './appAgent';
 import { ConnectDialog } from './ConnectDialog';
+import { useHostUI } from '@components/HostUI/hostUI';
+import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
@@ -97,6 +105,14 @@ function AppFrameSession({
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
+  const hostUI = useHostUI({
+    writeRoot: app,
+    mayWriteUnder: subject => isWithinApp(store, subject, app),
+    appTitle,
+    frame: frameRef,
+    table,
+  });
+  const { handle: handleUI, forwardKey } = hostUI;
 
   // Which plugin renders it. Resolved here rather than by each caller: a
   // table tab and an app page both need it, and two copies would drift.
@@ -158,6 +174,8 @@ function AppFrameSession({
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
+    // Per frame: `undo` reverts what this frame applied, nothing older.
+    const changes = appChanges(store, drive, app);
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -167,6 +185,8 @@ function AppFrameSession({
         ? viewSession(originalSession, wire.id)
         : originalSession;
       const message = data as Record<string, unknown>;
+
+      if (forwardKey(message)) return;
 
       if (message.type === '__atomic_plugin_error') {
         const failure: AppError = {
@@ -190,6 +210,15 @@ function AppFrameSession({
       }
 
       if (!isHostRequest(data)) return;
+
+      if (
+        handleUI(
+          data as unknown as Parameters<typeof handleUI>[0],
+          session.post,
+        )
+      ) {
+        return;
+      }
 
       if (data.op === 'proxyConnect') {
         if (!isPlatformId(data.platform)) {
@@ -243,7 +272,7 @@ function AppFrameSession({
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post);
+      void answer(store, app, drive, table, data, session.post, changes);
     });
     bridgeRef.current = bridge;
 
@@ -251,7 +280,7 @@ function AppFrameSession({
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src]);
+  }, [store, app, drive, table, src, handleUI, forwardKey]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`);
@@ -367,6 +396,7 @@ function AppFrameSession({
           </Row>
         </ErrorBar>
       )}
+      {hostUI.element}
       {connectAsk && (
         <ConnectDialog
           app={appTitle}
@@ -417,6 +447,7 @@ async function answer(
   table: string | undefined,
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
+  changes: ViewChanges,
 ): Promise<void> {
   try {
     post({
@@ -428,6 +459,7 @@ async function answer(
         request,
         table,
         proxyHost(store, app, drive),
+        changes,
       ),
     });
   } catch (e) {

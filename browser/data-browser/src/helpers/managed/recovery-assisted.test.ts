@@ -135,6 +135,8 @@ it('a build without an account service asks nobody', async () => {
 
   expect(await getAccountProviders()).toEqual({
     google: false,
+    apple: false,
+    github: false,
     assisted_recovery: false,
   });
   expect(managedFetch).not.toHaveBeenCalled();

@@ -4,12 +4,19 @@ import BugsnagPluginReact, {
   BugsnagErrorBoundary,
 } from '@bugsnag/plugin-react';
 
+import * as Sentry from '@sentry/react';
+
 import { isDev } from '../config';
 
 export function handleErrorBugsnag(e: Error): void {
-  if (!isDev) {
+  if (!isDev()) {
     Bugsnag.notify(e);
   }
+}
+
+/** No-op unless Sentry was initialised (a DSN is configured and not in dev). */
+export function reportStoreError(e: Error): void {
+  Sentry.captureException(e, { tags: { source: 'store' } });
 }
 
 export function initBugsnag(apiKey: string): BugsnagErrorBoundary {

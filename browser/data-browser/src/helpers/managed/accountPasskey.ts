@@ -28,7 +28,7 @@ async function request(path: string, body?: unknown) {
   );
   if (!response.ok)
     throw new Error(
-      'Could not set up your account passkey. Sign in to your account and try again.',
+      `Could not set up your account passkey. Sign in to your account and try again. (${path || '/status'}: ${response.status})`,
     );
 
   return response.status === 204 ? undefined : response.json();

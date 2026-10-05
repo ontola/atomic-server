@@ -281,3 +281,108 @@ test.describe('calendar grid alignment', () => {
     }
   });
 });
+
+test.describe('choosing a view type from a tab (#1806)', () => {
+  test.beforeEach(before);
+
+  test('adds a Calendar view next to the only Table view', async ({ page }) => {
+    await createTableFromDialog(page, { name: 'Content plan' });
+
+    // Save the implicit tab as a real Table view, so it has a menu.
+    await page.getByRole('button', { name: 'Add view' }).click();
+    await page.getByTestId('menu-item-table').click();
+    const tableTab = page.getByRole('tab', { name: 'Table', exact: true });
+    await expect(tableTab).toHaveAttribute('aria-selected', 'true');
+    // The tab reads as selected before `?view=` carries it. The switch that
+    // wrote the Table view lands in the URL a moment later, and a menu action
+    // started before then sees that arrival as the person choosing another tab,
+    // so it adds its view and does not switch to it.
+    await expect(page).toHaveURL(/[?&]view=/);
+
+    // Clicking the active tab opens its menu. The only table view cannot be
+    // changed in place; Calendar there adds a view instead.
+    await tableTab.click();
+    await expect(page.getByTestId('menu-item-kind-calendar')).toHaveCount(0);
+    await page.getByTestId('menu-item-add-calendar').click();
+
+    await expect(page.getByTestId('calendar-view')).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveText(['Table', 'Calendar']);
+
+    // The table layout is one click away.
+    await tableTab.click();
+    await expect(page.getByTestId('calendar-view')).toHaveCount(0);
+    await expect(tableTab).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+/** The civil date `days` after a YYYY-MM-DD key. */
+function addDays(dayKey: string, days: number): string {
+  const date = new Date(`${dayKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return date.toISOString().slice(0, 10);
+}
+
+// #1801: making an event repeat took hand-written JSON.
+test.describe('calendar repeat', () => {
+  test.beforeEach(before);
+
+  test('a Repeat of weekly puts the event on the following weeks', async ({
+    page,
+  }) => {
+    // Builds a table from a template, adds a view and an item, and the first
+    // repeat adds a Recurrence column to the class: past the 60s wall on a
+    // contended server, like the tests above.
+    test.setTimeout(120_000);
+    await createIssueTracker(page, 'Rituals');
+    await page.getByRole('button', { name: 'Add view' }).click();
+    await page.getByTestId('menu-item-calendar').click();
+    await expect(page.getByTestId('calendar-view')).toBeVisible();
+
+    // The grid's first day: at least three more weeks follow it in the grid.
+    const first = (await page
+      .getByTestId('calendar-day')
+      .first()
+      .getAttribute('data-date'))!;
+    const cell = (dayKey: string) =>
+      page.locator(`[data-testid="calendar-day"][data-date="${dayKey}"]`);
+    const retro = (dayKey: string) =>
+      cell(dayKey).getByTestId('calendar-event').filter({ hasText: 'Retro' });
+
+    await cell(first).hover();
+    await cell(first).getByTestId('calendar-day-add').click();
+    const input = cell(first).getByPlaceholder('New item…');
+    await input.fill('Retro');
+    await input.press('Enter');
+    await expect(retro(first)).toBeVisible();
+    await expect(retro(addDays(first, 7))).toHaveCount(0);
+
+    await retro(first).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Repeat').selectOption('weekly');
+    await expect(dialog.getByTestId('repeat-summary')).toHaveText(
+      /^Every \w+$/,
+    );
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+
+    for (const week of [0, 1, 2, 3]) {
+      await expect(retro(addDays(first, 7 * week))).toBeVisible({
+        timeout: 15000,
+      });
+    }
+
+    // Only on its own weekday.
+    await expect(retro(addDays(first, 1))).toHaveCount(0);
+
+    // "Does not repeat" takes the series away again.
+    await retro(first).click();
+    await dialog.getByLabel('Repeat').selectOption('none');
+    await expect(dialog.getByTestId('repeat-summary')).toHaveText(
+      'Does not repeat',
+    );
+    await page.keyboard.press('Escape');
+    await expect(retro(addDays(first, 7))).toHaveCount(0);
+    await expect(retro(first)).toBeVisible();
+  });
+});

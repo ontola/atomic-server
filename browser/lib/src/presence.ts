@@ -131,7 +131,10 @@ export class DrivePresenceManager {
     private store: Store,
     private drive: string,
   ) {
-    this.sessionId = crypto.randomUUID();
+    // One id per tab across every channel it is in: a session announcing in
+    // its drive and in a shared resource's channel is one person to anyone
+    // who reads both.
+    this.sessionId = store.presenceSessionId;
   }
 
   /**

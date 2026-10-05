@@ -3729,6 +3729,48 @@ async fn replica_keeps_the_callers_snapshot() {
     assert_eq!(read.get(urls::NAME).unwrap().to_string(), "kept");
 }
 
+/// Persisting many replicas in one write stores each row and snapshot as
+/// writing them one at a time would, and a subject named twice keeps its last
+/// entry.
+#[tokio::test]
+#[timeout(120000)]
+async fn replicas_written_in_a_batch_match_single_writes() {
+    let store = Db::init_temp("replica_batch").await.unwrap();
+    let make = |n: usize, name: &str| {
+        let subject = format!("did:ad:batch{n:02}{}==", "a".repeat(70));
+        let mut authored = crate::Resource::new(subject.clone());
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(name.into()))
+            .unwrap();
+        let snapshot = authored.build_state_doc().unwrap().export_snapshot();
+        let mut replica = crate::Resource::new(subject.clone());
+        replica
+            .apply_state_doc(crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap())
+            .unwrap();
+        (subject, replica, snapshot)
+    };
+    let (s0, r0, snap0) = make(0, "zero");
+    let (s1, r1, snap1) = make(1, "one");
+    let (s1b, r1b, snap1b) = make(1, "one again");
+    assert_eq!(s1, s1b);
+
+    store
+        .persist_replicated_resources(vec![
+            (r0, Some(snap0.clone())),
+            (r1, Some(snap1)),
+            (r1b, Some(snap1b.clone())),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(store.get_loro_snapshot_bytes(&s0), Some(snap0));
+    assert_eq!(store.get_loro_snapshot_bytes(&s1), Some(snap1b));
+    let read0 = store.get_resource(&s0.as_str().into()).await.unwrap();
+    let read1 = store.get_resource(&s1.as_str().into()).await.unwrap();
+    assert_eq!(read0.get(urls::NAME).unwrap().to_string(), "zero");
+    assert_eq!(read1.get(urls::NAME).unwrap().to_string(), "one again");
+}
+
 /// A replica that is written again with a changed value only re-indexes that
 /// value, and the watched queries still follow it: a renamed row moves in a
 /// sorted view, a row whose class changes leaves a class-filtered view, and a
@@ -3976,6 +4018,88 @@ async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
     );
 }
 
+/// A pulled batch is merged and stored in one write, and a state that does not
+/// decode is skipped without failing the rest.
+#[tokio::test]
+#[timeout(120000)]
+async fn apply_state_updates_stores_a_batch_and_skips_garbage() {
+    let store = Db::init_temp("apply_state_updates_batch").await.unwrap();
+    let drive =
+        "did:ad:driveBATCHaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let state = |i: usize| {
+        let subj = format!("did:ad:batch{:0>67}==", format!("{i}"));
+        let mut authored = crate::Resource::new(subj.clone());
+        authored
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(format!("row {i}")))
+            .unwrap();
+        (subj, authored.build_state_doc().unwrap().export_snapshot())
+    };
+
+    let mut items: Vec<(String, Vec<u8>)> = (0..3).map(state).collect();
+    items.push(("did:ad:garbage".to_string(), vec![1, 2, 3, 4, 5]));
+
+    let applied = crate::sync::ws_apply::apply_state_updates(&store, &items, false)
+        .await
+        .unwrap();
+
+    assert_eq!(applied, 3);
+
+    for (i, (subj, _)) in items.iter().take(3).enumerate() {
+        let stored = store
+            .get_resource(&crate::Subject::from_raw(subj, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            stored.get(urls::NAME).unwrap().to_string(),
+            format!("row {i}")
+        );
+    }
+}
+
+/// Bulk-pulled resources can be stored without search entries and indexed
+/// later, after which search finds them.
+#[tokio::test]
+#[timeout(120000)]
+async fn deferred_search_entries_are_added_by_index_pending() {
+    let store = Db::init_temp("deferred_search").await.unwrap();
+    let drive =
+        "did:ad:driveDEFERaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let subj = "did:ad:defer00000000000000000000000000000000000000000000000000000000000000000==";
+    let mut authored = crate::Resource::new(subj.to_string());
+    authored
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    authored
+        .set_unsafe(
+            urls::NAME.into(),
+            Value::String("zebrafish handbook".into()),
+        )
+        .unwrap();
+    let state = authored.build_state_doc().unwrap().export_snapshot();
+    let items = vec![(subj.to_string(), state)];
+
+    crate::sync::ws_apply::apply_state_updates(&store, &items, true)
+        .await
+        .unwrap();
+
+    let opts = crate::client::search::SearchOpts::default();
+    assert!(store.search_hits("zebrafish", &opts).unwrap().is_empty());
+
+    assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 1);
+    assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 0);
+    assert_eq!(store.search_hits("zebrafish", &opts).unwrap().len(), 1);
+}
+
 /// An `after_commit` extender runs after the commit is persisted, so its
 /// failure must not turn into a failed commit: the client would retry or show
 /// an error for a change that was saved. The error is logged instead, and the
@@ -4048,4 +4172,143 @@ async fn failing_after_commit_does_not_fail_a_saved_commit() {
         later_ran.load(Ordering::SeqCst),
         "the extender after the failing one should still run"
     );
+}
+
+/// A table row is indexed by `createdAt` while it has no `sortOrder`, and is
+/// given one by a later commit (Shift+Enter inserts a row between two others).
+/// The old `createdAt` entry must go: left behind, the row is listed at its
+/// creation time instead of where its `sortOrder` puts it.
+#[tokio::test]
+#[timeout(120000)]
+async fn sort_order_added_by_a_later_commit_replaces_the_created_at_entry() {
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+
+    let store = Db::init_temp("sort_order_later_commit").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+    let drive_did = store.create_drive("Test Drive").await.unwrap();
+    let row_class = "https://atomicdata.dev/classes/Test";
+
+    let opts = CommitOpts {
+        update_index: true,
+        ..CommitOpts::no_validations_no_index()
+    };
+    // A table row is a draft first (parent and class only) and gets its
+    // content, with its sortOrder, in a later commit.
+    let mut rows: Vec<(Subject, String)> = Vec::new();
+    for _ in 0..3 {
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(drive_did.clone().into()),
+        );
+        b.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![row_class.into()]),
+        );
+        let commit = Commit::create_did(b, &agent, &store).await.unwrap();
+        let subject = commit.subject.clone();
+        let result = store.apply_commit(commit, &opts).await.unwrap();
+        rows.push((subject, result.commit_resource.get_subject().to_string()));
+        // createdAt has millisecond resolution.
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+    query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    query.sort_by = Some(urls::SORT_ORDER.to_string());
+    query.drive = Some(drive_did.clone().into());
+    query.limit = Some(100);
+
+    // Builds and watches the index: creation order.
+    let before = store.query(&query).await.unwrap();
+    assert_eq!(before.subjects.len(), 3, "got {:?}", before.subjects);
+
+    // Give the first row a sortOrder far above every createdAt: it must go
+    // last.
+    let (subject, previous) = rows[0].clone();
+    let stored = store.get_resource(&subject).await.unwrap();
+    let mut b = CommitBuilder::new(subject.clone());
+    b.set(urls::NAME.into(), Value::String("first".into()));
+    b.set(urls::SORT_ORDER.into(), Value::Float(1.0e18));
+    b.set_previous_commit(previous);
+    let commit = b.sign(&agent, &store, &stored).await.unwrap();
+    store.apply_commit(commit, &opts).await.unwrap();
+
+    let after = store.query(&query).await.unwrap();
+    let order: Vec<String> = after.subjects.iter().map(|s| s.to_string()).collect();
+    assert_eq!(
+        order.last().map(String::as_str),
+        Some(subject.as_str()),
+        "the row with the big sortOrder must list last, got {order:?}"
+    );
+    assert_eq!(order.len(), 3, "no duplicate entries, got {order:?}");
+}
+
+/// Shift+Enter in a table: the third row is created after the first query
+/// built the index and carries a `sortOrder` between the other two, so it must
+/// list between them.
+#[tokio::test]
+#[timeout(120000)]
+async fn row_inserted_between_two_others_after_the_index_was_built_lists_between_them() {
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+    let store = Db::init_temp("zz_insert").await.unwrap();
+    let agent = store.create_agent(Some("test-agent")).await.unwrap();
+    store.set_default_agent(agent.clone());
+    let drive_did = store.create_drive("Test Drive").await.unwrap();
+    let row_class = "https://atomicdata.dev/classes/Test";
+    let opts = CommitOpts {
+        update_index: true,
+        ..CommitOpts::no_validations_no_index()
+    };
+    let now = 1_791_033_284_445.0_f64;
+    let mut subjects = Vec::new();
+    for (i, v) in [now, now + 265.0, now + 130.0].into_iter().enumerate() {
+        if i == 2 {
+            let mut q = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+            q.filters = vec![crate::storelike::PropVal {
+                property: Some(urls::IS_A.to_string()),
+                value: Some(Value::AtomicUrl(row_class.into())),
+                ..Default::default()
+            }];
+            q.sort_by = Some(urls::SORT_ORDER.to_string());
+            q.drive = Some(drive_did.clone().into());
+            q.limit = Some(100);
+            // Builds and watches the index with the first two rows in it.
+            let first = store.query(&q).await.unwrap();
+            assert_eq!(first.subjects.len(), 2);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+        let doc = loro::LoroDoc::new();
+        let props = doc.get_map("properties");
+        props.insert(urls::PARENT, drive_did.as_str()).unwrap();
+        props.insert(urls::SORT_ORDER, v).unwrap();
+        let list = props
+            .insert_container(urls::IS_A, loro::LoroList::new())
+            .unwrap();
+        list.push(row_class).unwrap();
+        doc.commit();
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set_loro_update(doc.export(loro::ExportMode::Snapshot).unwrap());
+        let commit = Commit::create_did(b, &agent, &store).await.unwrap();
+        subjects.push(commit.subject.clone());
+        store.apply_commit(commit, &opts).await.unwrap();
+    }
+    let mut q = crate::storelike::Query::new_prop_val(urls::PARENT, &drive_did);
+    q.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    q.sort_by = Some(urls::SORT_ORDER.to_string());
+    q.drive = Some(drive_did.clone().into());
+    q.limit = Some(100);
+    let res = store.query(&q).await.unwrap();
+    let order: Vec<String> = res.subjects.iter().map(|s| s.to_string()).collect();
+    let expect: Vec<String> = [0, 2, 1].iter().map(|i| subjects[*i].to_string()).collect();
+    assert_eq!(order, expect);
 }
