@@ -58,7 +58,6 @@ function useRouteTitle(): string | undefined {
     case pathNames.onboarding:
       return 'Get started';
     case pathNames.history:
-    case pathNames.allVersions:
       return 'History';
     case pathNames.invite:
       return 'Invitation';
