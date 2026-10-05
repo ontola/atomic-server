@@ -5,9 +5,9 @@ import {
   ServiceTitle,
   ServiceDescription,
   CLOUD_VAULT_DESCRIPTION,
-  CLOUD_VAULT_ON,
 } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
+import type { ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
 import {
@@ -39,7 +39,13 @@ export function VaultPanel({
   embedded = false,
   offerUrl,
   onOfferClick,
+  badge,
 }: {
+  /**
+   * Where this tier stands for the drive in view ("Current", "Included"),
+   * set by a host that shows the tiers as steps.
+   */
+  badge?: ReactNode;
   vault: UseVaultBackup;
   /** Called after a successful restore, so the host can refresh its view. */
   onRestored?: () => void;
@@ -169,32 +175,39 @@ export function VaultPanel({
     >
       <ServiceIcon kind='vault' active={!suspended} />
       <Body>
-        <Title>{CLOUD_VAULT_ON}</Title>
+        <TitleRow>
+          <Title>Cloud Vault</Title>
+          {badge}
+        </TitleRow>
+        <Sub>Encrypted backup of your data. Only you can read it.</Sub>
         {/* The object count is an attribute as well as prose: a test asserting
             that a second backup actually stored something should read the
             number, not parse a sentence that is free to be reworded. */}
-        <Sub
+        <StatusLine
           data-testid='vault-summary'
           data-vault-objects={details.confirmed_objects}
           data-vault-bytes={enrollment.used_bytes}
         >
-          {/* Name where it goes, in the state the user actually sits in. The
-              off-state copy says "in {PRODUCT_NAME}" and then the on-state used
-              to drop it, so the one screen you see every day never mentioned
-              that your data leaves the device at all. Sealed or not, who is
-              holding it is not a detail to infer. */}
-          {details.confirmed_objects === 0
-            ? `Nothing has been backed up to ${PRODUCT_NAME} yet.`
-            : `${details.confirmed_objects} encrypted object${
-                details.confirmed_objects === 1 ? '' : 's'
-              } stored in ${PRODUCT_NAME} · ${formatShareUsed(
-                enrollment.used_bytes,
-                enrollment.quota_bytes,
-              )}.`}
-          {enrollment.last_backup_at
-            ? ` Last backup ${formatWhen(enrollment.last_backup_at)}.`
-            : ''}
-        </Sub>
+          <StatusDot $ok={!suspended} aria-hidden />
+          <span>
+            {details.confirmed_objects === 0
+              ? `Nothing backed up to ${PRODUCT_NAME} yet`
+              : [
+                  enrollment.last_backup_at
+                    ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
+                    : `Backed up to ${PRODUCT_NAME}`,
+                  `${details.confirmed_objects} object${
+                    details.confirmed_objects === 1 ? '' : 's'
+                  }`,
+                  formatShareUsed(
+                    enrollment.used_bytes,
+                    enrollment.quota_bytes,
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+          </span>
+        </StatusLine>
 
         {suspended && (
           <ErrorText data-testid='vault-suspended'>
@@ -246,11 +259,12 @@ export function VaultPanel({
  * not a figure to advertise.
  */
 function formatShareUsed(usedBytes: number, quotaBytes: number): string {
-  if (!quotaBytes || !usedBytes || usedBytes <= 0) return '0% used';
+  if (!quotaBytes || !usedBytes || usedBytes <= 0) return '';
 
   const percent = (usedBytes / quotaBytes) * 100;
 
-  if (percent < 1) return 'Less than 1% used';
+  // Below a percent the share says nothing worth reading on the status line.
+  if (percent < 1) return '';
 
   return `${Math.min(100, Math.round(percent))}% used`;
 }
@@ -292,10 +306,13 @@ const Panel = styled(ServiceSection)<{
       border: none;
       background: none;
       padding: 0;
+      flex: 1;
+      min-width: 0;
     `}
 `;
 
 const Body = styled(ServiceBody)`
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: ${CARD_BODY_GAP};
@@ -318,6 +335,30 @@ const ErrorText = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
   font-size: ${CARD_SUB_FONT};
+`;
+
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+`;
+
+const StatusLine = styled.p`
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.2rem 0 0;
+  color: ${p => p.theme.colors.text};
+  font-size: ${CARD_SUB_FONT};
+`;
+
+const StatusDot = styled.span<{ $ok: boolean }>`
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: ${p => (p.$ok ? '#3fb950' : p.theme.colors.alert)};
 `;
 
 const OfferLink = styled.a`

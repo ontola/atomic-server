@@ -5795,11 +5795,6 @@ msgid "Restore my workspace"
 msgstr "Restore my workspace"
 
 #. 0: PRODUCT_NAME
-#: src/components/Vault/VaultPanel.tsx
-msgid "Nothing has been backed up to {0} yet."
-msgstr "Nothing has been backed up to {0} yet."
-
-#. 0: PRODUCT_NAME
 #: src/helpers/managed/enrollment.ts
 msgid "Your {0} session expired. Sign in and retry."
 msgstr "Your {0} session expired. Sign in and retry."
@@ -5818,6 +5813,7 @@ msgstr "Could not enable {0} hosting (HTTP {1})."
 msgid "Manage account →"
 msgstr "Manage account →"
 
+#: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
@@ -9422,15 +9418,6 @@ msgstr "Anyone can open it through {0}"
 msgid "This {0} is not public"
 msgstr "This {0} is not public"
 
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: PRODUCT_NAME; 3: formatShareUsed( enrollment.used_bytes, enrollment.quota_bytes, )
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} encrypted object{1} stored in {2} · {3}."
-msgstr "{0} encrypted object{1} stored in {2} · {3}."
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Less than 1% used"
-msgstr "Less than 1% used"
-
 #. 0: String(reason)
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Could not set up this importer: {0}"
@@ -11674,17 +11661,65 @@ msgid "Step up to Cloud Server"
 msgstr "Step up to Cloud Server"
 
 #: src/routes/SyncRoute.tsx
-msgid "Everything in Cloud Vault, plus hosting: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
-msgstr "Everything in Cloud Vault, plus hosting: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
-
-#: src/routes/SyncRoute.tsx
-msgid "Where this drive is kept"
-msgstr "Where this drive is kept"
-
-#: src/routes/SyncRoute.tsx
 msgid "Your plan is active. The workspace is being copied over and switches on by itself. You can keep working."
 msgstr "Your plan is active. The workspace is being copied over and switches on by itself. You can keep working."
 
 #: src/routes/SyncRoute.tsx
 msgid "The workspace is being copied over and switches on by itself. You can keep working."
 msgstr "The workspace is being copied over and switches on by itself. You can keep working."
+
+#: src/routes/SyncRoute.tsx
+msgid "Your plan"
+msgstr "Your plan"
+
+#: src/routes/SyncRoute.tsx
+msgid "See plans"
+msgstr "See plans"
+
+#: src/routes/SyncRoute.tsx
+msgid "Current"
+msgstr "Current"
+
+#: src/routes/SyncRoute.tsx
+msgid "Shareable links and API access"
+msgstr "Shareable links and API access"
+
+#: src/routes/SyncRoute.tsx
+msgid "Search across everything"
+msgstr "Search across everything"
+
+#: src/routes/SyncRoute.tsx
+msgid "No need for another device to be awake"
+msgstr "No need for another device to be awake"
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online:"
+msgstr "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online:"
+
+#: src/routes/SyncRoute.tsx
+msgid "Unlike Cloud Vault, our servers process what you put here."
+msgstr "Unlike Cloud Vault, our servers process what you put here."
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Nothing backed up to {0} yet"
+msgstr "Nothing backed up to {0} yet"
+
+#. 0: formatWhen(enrollment.last_backup_at)
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backed up {0}"
+msgstr "Backed up {0}"
+
+#. 0: PRODUCT_NAME
+#: src/components/Vault/VaultPanel.tsx
+msgid "Backed up to {0}"
+msgstr "Backed up to {0}"
+
+#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'
+#: src/components/Vault/VaultPanel.tsx
+msgid "{0} object{1}"
+msgstr "{0} object{1}"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Encrypted backup of your data. Only you can read it."
+msgstr "Encrypted backup of your data. Only you can read it."

@@ -1456,6 +1456,12 @@ function SyncPage() {
     }
   }
 
+  const cloudTier: CloudTier =
+    managedServer || hostedCopyOrigin
+      ? 'server'
+      : vault.status.state === 'on'
+        ? 'vault'
+        : 'local';
   const planActive =
     subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
   /**
@@ -1712,6 +1718,9 @@ function SyncPage() {
         {accountPortalUrl && (
           <ProviderCard data-testid='provider-card'>
             <ProviderHeader>
+              <CardIcon $tone='provider'>
+                <FaCloud />
+              </CardIcon>
               <AccountBody>
                 <AccountLabel>{PRODUCT_NAME}</AccountLabel>
                 <AccountEmail data-testid='provider-account'>
@@ -1807,18 +1816,16 @@ function SyncPage() {
               </ProviderService>
             )}
 
-            <ProviderService data-testid='cloud-tier'>
-              <TierLadder
-                tier={
-                  managedServer || hostedCopyOrigin
-                    ? 'server'
-                    : vault.status.state === 'on'
-                      ? 'vault'
-                      : 'local'
-                }
-                pending={autoEnroll || cloudBusy}
-              />
-            </ProviderService>
+            {/* The plan as steps: Cloud Vault, then Cloud Server on top of
+                it. "Current" marks the step this drive is on. */}
+            <PlanLabelRow data-testid='cloud-tier' data-tier={cloudTier}>
+              <PlanLabel>Your plan</PlanLabel>
+              <LearnMore
+                {...externalLinkProps(tierOfferUrl(accountPortalUrl, 'server'))}
+              >
+                See plans
+              </LearnMore>
+            </PlanLabelRow>
 
             {/* The highest step the drive is on goes first. With Cloud Server
                 on, the vault is what it includes; without it, the vault is
@@ -1848,8 +1855,13 @@ function SyncPage() {
               <VaultPanel
                 vault={vault}
                 embedded
-                offerUrl={tierOfferUrl(accountPortalUrl, 'vault')}
-                onOfferClick={url => void openExternal(url)}
+                badge={
+                  cloudTier === 'server' ? (
+                    <TierBadge>Included</TierBadge>
+                  ) : cloudTier === 'vault' ? (
+                    <TierBadge $current>Current</TierBadge>
+                  ) : undefined
+                }
                 onRestored={() => window.location.reload()}
               />
             </ProviderService>
@@ -1955,11 +1967,27 @@ function SyncPage() {
                     <>
                       <ServiceTitle>Step up to Cloud Server</ServiceTitle>
                       <ServiceDescription>
-                        Everything in Cloud Vault, plus hosting: shareable
-                        links, search across everything, API access, and no
-                        waiting on another device to be awake. Unlike Cloud
-                        Vault, our servers process what you put here.
+                        Everything in Cloud Vault, plus a hosted workspace on
+                        AtomicServer.eu, always online:
                       </ServiceDescription>
+                      <SellingPoints>
+                        <li>
+                          <FaCheck aria-hidden />
+                          <span>Shareable links and API access</span>
+                        </li>
+                        <li>
+                          <FaCheck aria-hidden />
+                          <span>Search across everything</span>
+                        </li>
+                        <li>
+                          <FaCheck aria-hidden />
+                          <span>No need for another device to be awake</span>
+                        </li>
+                      </SellingPoints>
+                      <ConnMeta>
+                        Unlike Cloud Vault, our servers process what you put
+                        here.
+                      </ConnMeta>
                       {cloudServerBlocked && (
                         <ConnMeta>{cloudServerBlocked}</ConnMeta>
                       )}
@@ -1978,13 +2006,6 @@ function SyncPage() {
                             Upgrade this drive
                           </Button>
                         )}
-                        <LearnMore
-                          {...externalLinkProps(
-                            tierOfferUrl(accountPortalUrl, 'server'),
-                          )}
-                        >
-                          See plans
-                        </LearnMore>
                       </ConnActions>
                     </>
                   )}
@@ -2725,71 +2746,58 @@ function readOfferDismissed(drive: string): boolean {
 
 type CloudTier = 'local' | 'vault' | 'server';
 
-const TIERS: { tier: CloudTier; label: string }[] = [
-  { tier: 'local', label: 'On this device' },
-  { tier: 'vault', label: 'Cloud Vault' },
-  { tier: 'server', label: 'Cloud Server' },
-];
-
-/**
- * Where this drive stands, as one ladder: each step includes the ones before
- * it. Filled is the step the drive is on, outlined the steps it includes.
- * `pending` outlines Cloud Server while it is being switched on.
- */
-function TierLadder({
-  tier,
-  pending,
-}: {
-  tier: CloudTier;
-  pending: boolean;
-}): JSX.Element {
-  const reached = TIERS.findIndex(t => t.tier === tier);
-
-  return (
-    <Ladder aria-label='Where this drive is kept' data-tier={tier}>
-      {TIERS.map(({ tier: step, label }, i) => (
-        <LadderStep
-          key={step}
-          $state={
-            i === reached
-              ? 'on'
-              : i < reached || (pending && step === 'server')
-                ? 'included'
-                : 'off'
-          }
-          aria-current={i === reached ? 'step' : undefined}
-        >
-          {label}
-        </LadderStep>
-      ))}
-    </Ladder>
-  );
-}
-
-const Ladder = styled.ol`
+const PlanLabelRow = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 0.2rem;
+  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
 `;
 
-const LadderStep = styled.li<{ $state: 'on' | 'included' | 'off' }>`
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
+const PlanLabel = styled.span`
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.75rem;
-  border: 1px solid
-    ${p => (p.$state === 'off' ? p.theme.colors.bg2 : p.theme.colors.main)};
-  color: ${p =>
-    p.$state === 'on'
-      ? p.theme.colors.bg
-      : p.$state === 'included'
-        ? p.theme.colors.main
-        : p.theme.colors.textLight};
-  background: ${p => (p.$state === 'on' ? p.theme.colors.main : 'transparent')};
-  font-weight: ${p => (p.$state === 'on' ? 600 : 400)};
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`;
+
+const TierBadge = styled.span<{ $current?: boolean }>`
+  flex-shrink: 0;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid ${p => p.theme.colors.main};
+  color: ${p => (p.$current ? p.theme.colors.bg : p.theme.colors.main)};
+  background: ${p => (p.$current ? p.theme.colors.main : 'transparent')};
+`;
+
+const SellingPoints = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0.2rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: ${p => p.theme.colors.text};
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  svg {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: ${p => p.theme.colors.main};
+  }
 `;
 
 /** The one warning this card carries: what accepting hosting means. */
