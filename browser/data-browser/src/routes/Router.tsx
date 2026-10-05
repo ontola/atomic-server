@@ -7,6 +7,7 @@ import { IntegrationStoreRoute } from './IntegrationStore';
 import { EditRoute } from './EditRoute';
 import { DataRoute } from './DataRoute';
 import { ShortcutsRoute } from './ShortcutsRoute';
+import { StorageRoute } from './StorageRoute';
 import { AboutRoute } from './AboutRoute';
 import { NotificationsRoute } from './NotificationsRoute';
 import { AgentSettingsRoute } from './SettingsAgent';
@@ -76,6 +77,7 @@ const routeTree = rootRoute.addChildren({
     IntegrationStoreRoute,
     SyncRoute,
     ShortcutsRoute,
+    StorageRoute,
     AgentSettingsRoute,
     ServerSettingsRoute,
     DataRoute,

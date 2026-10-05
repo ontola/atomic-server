@@ -479,6 +479,60 @@ export async function getVaultState(
   });
 }
 
+/** One row of the storage breakdown, from `GET /api/cloud-vault/{drive}/usage`. */
+export type VaultUsageCategory = {
+  kind: string;
+  objects: number;
+  bytes: number;
+};
+
+/**
+ * What a drive's Cloud Vault storage is made of. The host is blind, so this is
+ * by kind of object, never by file or note.
+ */
+export type VaultUsage = {
+  used_bytes: number;
+  quota_bytes: number;
+  by_kind: VaultUsageCategory[];
+  /** Superseded history and unused files; freeing these loses nothing. */
+  reclaimable_bytes: number;
+  reclaimable_objects: number;
+  /** Extra bytes kept only so a recently deleted item can come back. */
+  undo_window_bytes: number;
+  undo_window_objects: number;
+  pending_bytes: number;
+  unaccounted_bytes: number;
+};
+
+export type VaultFreeUpResult = {
+  pruned: number;
+  blobs_pruned: number;
+  bytes_reclaimed: number;
+  delete_failures: number;
+};
+
+export async function getVaultUsage(
+  drivePseudonym: string,
+  signal?: AbortSignal,
+): Promise<VaultUsage> {
+  return api<VaultUsage>(`/cloud-vault/${drivePseudonym}/usage`, { signal });
+}
+
+/**
+ * Free reclaimable storage now. `includeUndoWindow` also gives up the chance to
+ * bring back recently deleted items, so it is only ever passed when the person
+ * chose that.
+ */
+export async function freeUpVaultStorage(
+  drivePseudonym: string,
+  includeUndoWindow: boolean,
+): Promise<VaultFreeUpResult> {
+  return api<VaultFreeUpResult>(`/cloud-vault/${drivePseudonym}/free-up`, {
+    method: 'POST',
+    body: JSON.stringify({ include_undo_window: includeUndoWindow }),
+  });
+}
+
 /**
  * The segment number this device should write next.
  *
