@@ -11947,4 +11947,16 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this workspace on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
+
+#. 0: address
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forget {0} on this device"
+msgstr ""
+
+#~ msgid "Saved {0}, identity {1}"
+#~ msgstr ""
+
+#. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Saved {0}, identity …{1}"
 msgstr ""
