@@ -728,7 +728,10 @@ function SyncPage() {
   // `true` = already enrolled (hide it).
   const [cloudEnrollment, setCloudEnrollment] =
     useState<ScopedDriveValue<boolean> | null>(null);
-  const cloudEnrolled = currentDriveValue(
+  // Only what THIS account has enrolled. Hosting belongs to the drive, so a
+  // member who isn't the subscriber sees `false` here; `cloudEnrolled` below
+  // folds in what the node itself says about the drive.
+  const accountEnrolled = currentDriveValue(
     cloudEnrollment,
     status.drive,
     status.serverUrl,
@@ -983,6 +986,22 @@ function SyncPage() {
     status.drive,
     status.serverUrl,
   );
+
+  // A managed node only accepts drives that are enrolled and active, and a
+  // member can read the drive's usage from it. So a drive that this device has
+  // finished syncing with a managed node, and that holds data there, is hosted
+  // for everyone with access, whichever account pays for it. The account's own
+  // enrollment list cannot say that: it only knows its own drives. Data alone
+  // is not enough (a disabled enrollment leaves it behind), hence the sync.
+  const hostedByNode =
+    managedInfo.managed &&
+    !!status.drive &&
+    store.isLiveSyncedDrive(status.drive) &&
+    !store.isDriveRefusedByServer(status.drive) &&
+    status.serverConnected &&
+    !!currentDriveSync(status) &&
+    (nodeUsage?.resourceCount ?? 0) > 0;
+  const cloudEnrolled = hostedByNode ? true : accountEnrolled;
 
   // Sign in with a secret on a fresh device and you get the identity but none
   // of the data. Detect that so the page can lead with "pair a device".
@@ -1609,13 +1628,15 @@ function SyncPage() {
               <AccountBody>
                 <AccountLabel>{PRODUCT_NAME}</AccountLabel>
                 <AccountEmail data-testid='provider-account'>
-                  {managedAccount
-                    ? subscriptionStatus === 'active'
-                      ? 'Your Cloud Server subscription is active'
-                      : subscriptionStatus === 'trialing'
-                        ? 'Your Cloud Server trial is active'
-                        : 'Your cloud services'
-                    : 'Cloud services for this workspace'}
+                  {subscriptionStatus === 'active'
+                    ? 'This drive’s Cloud Server plan is active'
+                    : subscriptionStatus === 'trialing'
+                      ? 'This drive’s Cloud Server trial is active'
+                      : hostedByNode
+                        ? 'This drive is hosted on Cloud Server'
+                        : managedAccount
+                          ? 'Your cloud services'
+                          : 'Cloud services for this workspace'}
                 </AccountEmail>
               </AccountBody>
               {/* The way out to the portal, in both states. It used to appear
@@ -1773,7 +1794,7 @@ function SyncPage() {
                       ? 'Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived.'
                       : subscriptionStatus === 'active' ||
                           subscriptionStatus === 'trialing'
-                        ? 'Included in your plan. Turn it on to start hosting this drive; nothing more to buy.'
+                        ? 'This drive’s plan includes hosting. Turn it on to start; nothing more to buy.'
                         : CLOUD_SERVER_PLAN_DESCRIPTION}
                   </ConnMeta>
                   {hostedCopyOrigin && (

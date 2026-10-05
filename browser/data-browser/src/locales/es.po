@@ -117,11 +117,9 @@ msgstr "Agentes de IA"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
-<<<<<<< HEAD
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
-=======
+
 #: src/chunks/TablePage/CellSelectionMenu.tsx
->>>>>>> 90e3f2676b7d717644855127f9384b0fcba6f55b
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -6668,6 +6666,8 @@ msgid "Your Cloud Server trial is active"
 msgstr ""
 
 #: src/components/ProfileForm.tsx
+
+#: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr ""
 
@@ -11679,13 +11679,10 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
-
-#: src/routes/SyncRoute.tsx
-msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -11707,7 +11704,6 @@ msgstr ""
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 
-<<<<<<< HEAD
 #: src/components/SideBar/MessagesPanel.tsx
 msgid "Messages"
 msgstr ""
@@ -11846,6 +11842,29 @@ msgstr ""
 
 #: src/components/MetaSetter.tsx
 msgid "The easiest way to create, share and model Linked Atomic Data."
-=======
->>>>>>> 90e3f2676b7d717644855127f9384b0fcba6f55b
+
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "See Cloud Server plans"
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server plan is active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s Cloud Server trial is active"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive is hosted on Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."
 msgstr ""
