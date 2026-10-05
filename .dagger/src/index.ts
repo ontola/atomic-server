@@ -681,11 +681,14 @@ export class AtomicServer {
         .withWorkdir('/app')
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
-        //    `@tomic/edit-mode/react` unresolvable. All five build from
-        //    TypeScript alone, so this stays in the cheap static tier beside
-        //    lint and `cargo fmt`: no WASM, no Rust.
+        //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
+        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    alone, so this stays in the cheap static tier beside lint and
+        //    `cargo fmt`: no WASM, no Rust.
         .withExec([
           'pnpm',
+          '--filter',
+          '@tomic/form-renderer',
           '--filter',
           '@tomic/lib',
           '--filter',
@@ -1341,6 +1344,18 @@ export class AtomicServer {
       )
       .withFile('/app/plugin/package.json', browser.file('plugin/package.json'))
       .withFile('/app/e2e/package.json', browser.file('e2e/package.json'))
+      // The published-form runtime and its renderer. Without their manifests
+      // here, the install gives `form-app` no node_modules and no link to
+      // `@tomic/form-renderer`, so its typecheck and build cannot resolve
+      // either (or `altcha`).
+      .withFile(
+        '/app/form-app/package.json',
+        browser.file('form-app/package.json'),
+      )
+      .withFile(
+        '/app/form-renderer/package.json',
+        browser.file('form-renderer/package.json'),
+      )
       // Cache pnpm's content-addressable store across CI runs. Without
       // this, every push re-downloaded all node_modules from the
       // registry — adding ~30-60s per run depending on registry latency.
@@ -1489,11 +1504,50 @@ export class AtomicServer {
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch', '--locked']);
 
-    const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
-    const containerWithAssets = sourceContainer.withDirectory(
-      '/code/server/assets_tmp',
-      browserDir,
-    );
+    const jsContainer = this.jsBuild(e2e);
+    const formAppDist = jsContainer.directory('/app/form-app/dist');
+    // The published-form runtime (`browser/form-app`) is a SECOND bundle,
+    // separate from the data-browser one. `server/build.rs::copy_form_assets`
+    // copies it from `../browser/form-app/dist` into
+    // `assets_tmp/form-assets/`, which `handlers/form.rs` `include_str!`s and
+    // `static_files::generate()` serves at `/form-assets/*`. Mounting only
+    // `data-browser/dist` left that path absent, so every dagger-built server
+    // — the e2e one AND the release binary this same function produces —
+    // embedded build.rs's placeholder shell: `/form/{id}` answered with an
+    // inert "form runtime not built" page carrying no <script>. Silent,
+    // because a missing form-app build is only a `cargo:warning` (it has to
+    // be: the fmt/clippy/nextest containers stub `assets_tmp` and run no JS
+    // build at all).
+    //
+    // Both halves are needed. The mount under `/code/browser` is what
+    // `copy_form_assets` reads — without it, a build.rs that DOES run
+    // overwrites any bundle we place with the placeholder. Pre-placing the
+    // same bundle inside `assets_tmp` covers the opposite case: `/code/target`
+    // is a cache volume shared across runs, and cargo will happily treat the
+    // build script as fresh (replaying its stored output) while still
+    // recompiling the lib — leaving `include_str!` to read whatever the
+    // mounted `assets_tmp` holds.
+    //
+    // Only `dist` goes under `/code/browser`, deliberately: mounting
+    // `form-app/src` too would add JS sources to what `should_build()`
+    // compares.
+    //
+    // Even so, that mount is what creates `/code/browser` in this container,
+    // so `build.rs` no longer takes its "no browser folder, skip the JS
+    // build" path. It finds no `data-browser/dist` but does find its other
+    // watched sources (`lib/src`, `wasm/src`), and runs `pnpm install`, which
+    // this container does not have (run 36717450608). The JS is already
+    // built above and placed in `assets_tmp`, so say so: with
+    // `ATOMICSERVER_SKIP_JS_BUILD`, `build.rs` leaves the mounted
+    // `assets_tmp` as it is and still refreshes `form-assets/` from the
+    // mounted `form-app/dist`.
+    const assetsDir = jsContainer
+      .directory('/app/data-browser/dist')
+      .withDirectory('form-assets', formAppDist);
+    const containerWithAssets = sourceContainer
+      .withDirectory('/code/server/assets_tmp', assetsDir)
+      .withDirectory('/code/browser/form-app/dist', formAppDist)
+      .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true');
 
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
