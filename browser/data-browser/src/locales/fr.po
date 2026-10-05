@@ -3581,7 +3581,6 @@ msgstr ""
 msgid "Enter the recovery password you set for {0}."
 msgstr ""
 
-#: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -4468,8 +4467,6 @@ msgstr ""
 
 #: src/chunks/PluginRuns/FileImport.tsx
 #: src/components/AccountRecoveryCard.tsx
-#: src/components/Vault/VaultPanel.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Setting up…"
 msgstr ""
 
@@ -5702,6 +5699,7 @@ msgid "Bearer {0}"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Cloud Server"
 msgstr ""
 
@@ -5807,7 +5805,6 @@ msgstr ""
 msgid "Manage account →"
 msgstr ""
 
-#: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
@@ -6315,14 +6312,6 @@ msgid "Connected to Cloud Server. Syncing this workspace…"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Cloud Server is on"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "This workspace has been copied to Cloud Server. You’re still using the source server."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Use Cloud Server"
 msgstr ""
 
@@ -6789,14 +6778,6 @@ msgstr ""
 
 #: src/views/InvitePage.tsx
 msgid "Accepting your invitation…"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "This status describes data synchronization. View this drive’s subscription and price in billing."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Manage this drive’s plan →"
 msgstr ""
 
 #: src/helpers/managed/recovery.ts
@@ -8010,6 +7991,7 @@ msgid "Find links to these copies"
 msgstr ""
 
 #: src/chunks/PluginRuns/ImportReferences.tsx
+#: src/components/Cloud/ServiceRow.tsx
 msgid "Included"
 msgstr ""
 
@@ -11008,7 +10990,6 @@ msgid "You missed {0} messages while you were away"
 msgstr ""
 
 #: src/components/Notifications/MessageNotifier.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Not now"
 msgstr ""
 
@@ -11595,64 +11576,7 @@ msgid "{0} · Email recovery on"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "Moving this drive to Cloud Server…"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Trying again…"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server could not start"
-msgstr ""
-
-#. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-msgid "{0} offers to host this drive"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server is ready for this drive"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server was added to this drive for you. It turns on once you accept."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "This drive’s plan includes Cloud Server. It turns on once you accept."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Accept and turn on"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "<0>Before you accept:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Review offer"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server offered"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Hosting for this drive is waiting for your consent."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Step up to Cloud Server"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Your plan is active. The workspace is being copied over and switches on by itself. You can keep working."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "The workspace is being copied over and switches on by itself. You can keep working."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -11663,7 +11587,7 @@ msgstr ""
 msgid "See plans"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
+#: src/components/Cloud/ServiceRow.tsx
 msgid "Current"
 msgstr ""
 
@@ -11677,14 +11601,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "No need for another device to be awake"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online:"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Unlike Cloud Vault, our servers process what you put here."
 msgstr ""
 
 #. 0: PRODUCT_NAME
@@ -11709,4 +11625,66 @@ msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Encrypted backup of your data. Only you can read it."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Manage plan"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace is on Cloud Server. This device still syncs with its old server."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Moving this workspace to Cloud Server. It switches on by itself; you can keep working."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Turn on Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Upgrade to Cloud Server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here."
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Sealed on your device, so we cannot read it"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restore this workspace on any device"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Free with an account"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Turning on…"
+msgstr ""
+
+#. 0: Math.round(restoreProgress * 100)
+#: src/components/Vault/VaultPanel.tsx
+msgid "Restoring… {0}%"
+msgstr ""
+
+#: src/components/Cloud/ServiceRow.tsx
+msgid "Offered"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "{0} added Cloud Server to this workspace. It waits for your consent."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace’s plan includes Cloud Server. It waits for your consent."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this workspace on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr ""

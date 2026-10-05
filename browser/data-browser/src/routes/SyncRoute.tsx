@@ -1,11 +1,4 @@
-import {
-  ServiceGroup,
-  ServiceSection,
-  ServiceIcon,
-  ServiceBody,
-  ServiceTitle,
-  ServiceDescription,
-} from '@tomic/service-ui';
+import { ServiceGroup, ServiceSection } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
 import { Checkbox } from '../components/forms/Checkbox';
 import { resumePeerLinks } from '../helpers/browserPeerSync';
@@ -68,6 +61,12 @@ import {
 } from 'react-icons/fa6';
 import { Button } from '../components/Button';
 import { VaultPanel } from '../components/Vault/VaultPanel';
+import {
+  ServiceRow,
+  ServiceRows,
+  type ServiceStanding,
+  type ServiceTone,
+} from '../components/Cloud/ServiceRow';
 import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
 import { isDeviceLinked } from '../helpers/managed/deviceLink';
 import {
@@ -448,15 +447,7 @@ function ServerCard({
           : undefined
       }
       footer={
-        isCloud && managedInfo.portalUrl ? (
-          <ManagedLink
-            {...externalLinkProps(
-              driveBillingUrl(managedInfo.portalUrl, status.drive),
-            )}
-          >
-            {'Manage this drive’s plan →'}
-          </ManagedLink>
-        ) : !isSelectedServer ? (
+        !isSelectedServer ? (
           // Removing the server you're using would strand the app.
           <NodeActionSubtle onClick={() => onRemove(server)}>
             Remove
@@ -464,12 +455,6 @@ function ServerCard({
         ) : undefined
       }
     >
-      {isCloud && (
-        <ConnMeta>
-          This status describes data synchronization. View this drive’s
-          subscription and price in billing.
-        </ConnMeta>
-      )}
       {refusedByServer && (
         <ConnError role='alert'>
           <FaCircleExclamation aria-hidden />
@@ -727,9 +712,6 @@ function SyncPage() {
   // The drive this page already tried to start Cloud Server for by itself.
   // Once per drive per visit: a failure gets a button, not a loop.
   const autoEnrollTried = useRef<string | null>(null);
-  // "Not now" on a Cloud Server someone else added to this drive. Per drive,
-  // per browser: the offer stays findable behind one button.
-  const [offerDismissals, setOfferDismissals] = useState(0);
   // Resolved in an effect rather than read off a Resource during render: the
   // React Compiler memoizes on the proxy identity, so a resource that finishes
   // loading would never re-render this.
@@ -1504,25 +1486,144 @@ function SyncPage() {
     void backupToCloud({ auto: true });
   }, [autoEnroll, status.drive, cloudBusy]);
 
-  // Read during render: a localStorage lookup is cheap, and `offerDismissals`
-  // changing is what re-renders after a click.
-  const offerDismissed =
-    offerDismissals >= 0 && !!status.drive && readOfferDismissed(status.drive);
+  /**
+   * Cloud Server's row, as one state. Each state fills the same slots of
+   * `ServiceRow`, so the row only ever changes what it says, never its shape.
+   */
+  const serverRow: {
+    state: 'on' | 'copied' | 'moving' | 'failed' | 'offered' | 'off';
+    standing: ServiceStanding | null;
+    status: { tone: ServiceTone; text: ReactNode } | null;
+    actions: ReactNode;
+  } = (() => {
+    const managePlan = accountPortalUrl && status.drive && (
+      <Button
+        subtle
+        data-testid='cloud-server-manage'
+        onClick={() =>
+          void openExternal(driveBillingUrl(accountPortalUrl, status.drive))
+        }
+      >
+        Manage plan
+      </Button>
+    );
 
-  function setOfferDismissed(dismissed: boolean) {
-    if (!status.drive) return;
+    if (managedServer) {
+      const tone = nodes.server;
 
-    const key = `atomic-hosting-offer-dismissed:${status.drive}`;
-
-    try {
-      if (dismissed) localStorage.setItem(key, '1');
-      else localStorage.removeItem(key);
-    } catch {
-      /* Not remembered; the offer just stays open. */
+      return {
+        state: 'on',
+        standing: 'current',
+        status: {
+          tone:
+            tone === 'synced'
+              ? 'ok'
+              : tone === 'offline'
+                ? 'error'
+                : tone === 'unknown'
+                  ? 'muted'
+                  : 'busy',
+          text: `${statusLabel(tone)} · ${serverHostname ?? managedServer}`,
+        },
+        actions: managePlan,
+      };
     }
 
-    setOfferDismissals(n => n + 1);
-  }
+    if (hostedCopyOrigin) {
+      return {
+        state: 'copied',
+        standing: 'current',
+        status: {
+          tone: 'waiting',
+          text: 'This workspace is on Cloud Server. This device still syncs with its old server.',
+        },
+        actions: (
+          <>
+            <Button onClick={() => switchToServer(hostedCopyOrigin)}>
+              Use Cloud Server
+            </Button>
+            {managePlan}
+          </>
+        ),
+      };
+    }
+
+    if (autoEnroll && autoEnrollError) {
+      return {
+        state: 'failed',
+        standing: 'current',
+        status: { tone: 'error', text: autoEnrollError },
+        actions: (
+          <>
+            <Button
+              onClick={() => {
+                setAutoEnrollError(null);
+                void backupToCloud();
+              }}
+              disabled={cloudBusy}
+            >
+              {cloudBusy ? 'Trying again…' : 'Try again'}
+            </Button>
+            {managePlan}
+          </>
+        ),
+      };
+    }
+
+    if (autoEnroll || cloudBusy) {
+      return {
+        state: 'moving',
+        standing: 'current',
+        status: {
+          tone: 'busy',
+          text: 'Moving this workspace to Cloud Server. It switches on by itself; you can keep working.',
+        },
+        actions: managePlan,
+      };
+    }
+
+    if (needsHostingConsent) {
+      return {
+        state: 'offered',
+        standing: 'offered',
+        status: {
+          tone: 'waiting',
+          text:
+            subscriptionSource === 'grant'
+              ? `${PRODUCT_NAME} added Cloud Server to this workspace. It waits for your consent.`
+              : 'This workspace’s plan includes Cloud Server. It waits for your consent.',
+        },
+        actions: (
+          <Button
+            data-testid='cloud-server-accept'
+            onClick={() => void backupToCloud()}
+            disabled={cloudBusy}
+          >
+            Turn on Cloud Server
+          </Button>
+        ),
+      };
+    }
+
+    return {
+      state: 'off',
+      standing: null,
+      status: cloudServerBlocked
+        ? { tone: 'muted', text: cloudServerBlocked }
+        : null,
+      actions:
+        !cloudServerBlocked && accountPortalUrl && status.drive ? (
+          <Button
+            data-testid='cloud-server-upgrade'
+            onClick={() =>
+              void openExternal(driveBillingUrl(accountPortalUrl, status.drive))
+            }
+          >
+            Upgrade to Cloud Server
+          </Button>
+        ) : undefined,
+    };
+  })();
 
   function savePeers(peers: KnownPeer[]) {
     setKnownPeers(peers);
@@ -1746,9 +1847,13 @@ function SyncPage() {
               </ManagedLink>
             </ProviderHeader>
 
-            {/* Folded into the header once it is set up: a row that only
-                says "this is fine" competes with the ones that need you. */}
-            {!(managedAccount && recoveryBackup === 'stored') && (
+            {/* Only when it needs you: signed out, or no backup that gets you
+                back in on a new device. Set up, it is one phrase in the
+                header; unknown, the header just shows the account. */}
+            {(!managedAccount ||
+              recoveryBackup === 'none' ||
+              recoveryBackup === 'device-only' ||
+              recoveryBackup === 'passkey-only') && (
               <ProviderService data-testid='recovery-row'>
                 <CardIcon
                   $tone={
@@ -1817,7 +1922,10 @@ function SyncPage() {
             )}
 
             {/* The plan as steps: Cloud Vault, then Cloud Server on top of
-                it. "Current" marks the step this drive is on. */}
+                it. Both are the same `ServiceRow`, so they read the same way:
+                name and standing, what it is, what you get, how it is doing,
+                what you can do. Where the drive's data syncs is the Devices
+                list's business, further down. */}
             <PlanLabelRow data-testid='cloud-tier' data-tier={cloudTier}>
               <PlanLabel>Your plan</PlanLabel>
               <LearnMore
@@ -1826,192 +1934,40 @@ function SyncPage() {
                 See plans
               </LearnMore>
             </PlanLabelRow>
-
-            {/* The highest step the drive is on goes first. With Cloud Server
-                on, the vault is what it includes; without it, the vault is
-                what you have and Cloud Server is the next step. */}
-            {managedServer && (
-              <ProviderService data-testid='cloud-server-row'>
-                <ServerCard
-                  server={managedServer}
-                  status={status}
-                  managedInfo={managedInfo}
-                  cloudHosted={cloudHosted}
-                  cloudEnrolled={cloudEnrolled}
-                  serverStatus={nodes.server}
-                  hasWorkingLocalStore={hasWorkingLocalStore}
-                  nodeUsage={nodeUsage}
-                  quotaBytes={quotaBytes}
-                  serverNodeId={serverNodeId}
-                  onSwitch={switchToServer}
-                  onRemove={removeServer}
-                />
-              </ProviderService>
-            )}
-
-            {/* Unconditional: a service that disappears when it is off cannot
-                be found. `VaultPanel` renders every state itself. */}
-            <ProviderService>
+            <ServiceRows>
               <VaultPanel
                 vault={vault}
-                embedded
-                badge={
-                  cloudTier === 'server' ? (
-                    <TierBadge>Included</TierBadge>
-                  ) : cloudTier === 'vault' ? (
-                    <TierBadge $current>Current</TierBadge>
-                  ) : undefined
-                }
+                included={serverRow.standing === 'current'}
                 onRestored={() => window.location.reload()}
               />
-            </ProviderService>
-
-            {!managedServer && (
-              <ProviderService data-testid='cloud-server-row'>
-                <ServiceIcon
-                  kind='server'
-                  active={!!hostedCopyOrigin || autoEnroll || cloudBusy}
-                />
-                <ServiceBody>
-                  {hostedCopyOrigin ? (
+              <ServiceRow
+                data-testid='cloud-server-row'
+                data-state={serverRow.state}
+                kind='server'
+                title='Cloud Server'
+                standing={serverRow.standing}
+                tagline='Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here.'
+                points={[
+                  'Shareable links and API access',
+                  'Search across everything',
+                  'No need for another device to be awake',
+                ]}
+                status={serverRow.status}
+                notice={
+                  serverRow.state === 'offered' ? (
                     <>
-                      <ServiceTitle>Cloud Server is on</ServiceTitle>
-                      <ConnMeta>
-                        This workspace has been copied to Cloud Server. You’re
-                        still using the source server.
-                      </ConnMeta>
-                      <ConnActions>
-                        <Button
-                          onClick={() => switchToServer(hostedCopyOrigin)}
-                        >
-                          Use Cloud Server
-                        </Button>
-                      </ConnActions>
+                      <strong>Before you turn it on:</strong> unlike Cloud
+                      Vault, Cloud Server stores a readable, unencrypted copy of
+                      this workspace on our servers, so we can run search,
+                      shareable links and the API for it. Your sharing
+                      permissions still control who else sees it, and you can
+                      turn it off at any time.
                     </>
-                  ) : autoEnroll && !autoEnrollError ? (
-                    <>
-                      <ServiceTitle data-testid='cloud-server-moving'>
-                        Moving this drive to Cloud Server…
-                      </ServiceTitle>
-                      <ServiceDescription>
-                        {planActive
-                          ? 'Your plan is active. The workspace is being copied over and switches on by itself. You can keep working.'
-                          : 'The workspace is being copied over and switches on by itself. You can keep working.'}
-                      </ServiceDescription>
-                    </>
-                  ) : autoEnroll && autoEnrollError ? (
-                    <>
-                      <ServiceTitle>Cloud Server could not start</ServiceTitle>
-                      <ConnError role='alert'>
-                        <FaCircleExclamation aria-hidden />
-                        <span>{autoEnrollError}</span>
-                      </ConnError>
-                      <ConnActions>
-                        <Button
-                          onClick={() => {
-                            setAutoEnrollError(null);
-                            void backupToCloud();
-                          }}
-                          disabled={cloudBusy}
-                        >
-                          {cloudBusy ? 'Trying again…' : 'Try again'}
-                        </Button>
-                      </ConnActions>
-                    </>
-                  ) : needsHostingConsent && !offerDismissed ? (
-                    <>
-                      <ServiceTitle data-testid='cloud-server-offer'>
-                        {subscriptionSource === 'grant'
-                          ? `${PRODUCT_NAME} offers to host this drive`
-                          : 'Cloud Server is ready for this drive'}
-                      </ServiceTitle>
-                      <ServiceDescription>
-                        {subscriptionSource === 'grant'
-                          ? 'Cloud Server was added to this drive for you. It turns on once you accept.'
-                          : 'This drive’s plan includes Cloud Server. It turns on once you accept.'}
-                      </ServiceDescription>
-                      <ConsentNotice data-testid='cloud-server-consent'>
-                        <strong>Before you accept:</strong> unlike Cloud Vault,
-                        Cloud Server stores a readable, unencrypted copy of this
-                        drive on our servers, so we can run search, shareable
-                        links and the API for it. Your sharing permissions still
-                        control who else sees it, and you can turn it off at any
-                        time.
-                      </ConsentNotice>
-                      <ConnActions>
-                        <Button
-                          data-testid='cloud-server-accept'
-                          onClick={() => void backupToCloud()}
-                          disabled={cloudBusy}
-                        >
-                          {cloudBusy ? 'Setting up…' : 'Accept and turn on'}
-                        </Button>
-                        <Button subtle onClick={() => setOfferDismissed(true)}>
-                          Not now
-                        </Button>
-                      </ConnActions>
-                    </>
-                  ) : needsHostingConsent ? (
-                    <>
-                      <ServiceTitle>Cloud Server offered</ServiceTitle>
-                      <ServiceDescription>
-                        Hosting for this drive is waiting for your consent.
-                      </ServiceDescription>
-                      <ConnActions>
-                        <Button subtle onClick={() => setOfferDismissed(false)}>
-                          Review offer
-                        </Button>
-                      </ConnActions>
-                    </>
-                  ) : (
-                    <>
-                      <ServiceTitle>Step up to Cloud Server</ServiceTitle>
-                      <ServiceDescription>
-                        Everything in Cloud Vault, plus a hosted workspace on
-                        AtomicServer.eu, always online:
-                      </ServiceDescription>
-                      <SellingPoints>
-                        <li>
-                          <FaCheck aria-hidden />
-                          <span>Shareable links and API access</span>
-                        </li>
-                        <li>
-                          <FaCheck aria-hidden />
-                          <span>Search across everything</span>
-                        </li>
-                        <li>
-                          <FaCheck aria-hidden />
-                          <span>No need for another device to be awake</span>
-                        </li>
-                      </SellingPoints>
-                      <ConnMeta>
-                        Unlike Cloud Vault, our servers process what you put
-                        here.
-                      </ConnMeta>
-                      {cloudServerBlocked && (
-                        <ConnMeta>{cloudServerBlocked}</ConnMeta>
-                      )}
-                      <ConnActions>
-                        {/* Buying is the whole setup: once the drive's plan is
-                            paid, the row above starts hosting by itself. */}
-                        {!cloudServerBlocked && status.drive && (
-                          <Button
-                            data-testid='cloud-server-upgrade'
-                            onClick={() =>
-                              void openExternal(
-                                driveBillingUrl(accountPortalUrl, status.drive),
-                              )
-                            }
-                          >
-                            Upgrade this drive
-                          </Button>
-                        )}
-                      </ConnActions>
-                    </>
-                  )}
-                </ServiceBody>
-              </ProviderService>
-            )}
+                  ) : undefined
+                }
+                actions={serverRow.actions}
+              />
+            </ServiceRows>
             {/* Credits belong to the account, not to a plan or a drive: shown
                 with or without a Cloud Server, only while signed in. */}
             {managedAccount && <ProviderAICredits />}
@@ -2161,15 +2117,14 @@ function SyncPage() {
               </EmptyConnections>
             )}
 
-          {/* Servers we do not own — one stable list; the active one is marked,
-              not moved. A managed node is deliberately absent: it moved up into
-              the account card, because "what am I paying for" and "where does
-              this drive live" are different questions and it was answering the
-              second while looking like the first. */}
+          {/* Every server, Cloud Server included, in one stable list; the
+              active one is marked, not moved. The plan card above answers
+              "what am I paying for"; this list answers "where does this drive
+              sync", for ours and everyone else's alike. */}
           {connectionServers
             .filter(
               server =>
-                !isManagedServer(server) &&
+                isManagedServer(server) ||
                 showSavedServer({
                   managed: isCloudSyncAvailable(managedInfo),
                   activeForDrive:
@@ -2736,14 +2691,6 @@ const ProviderAICredits = styled(AICreditsService)`
   ${providerRowCss}
 `;
 
-function readOfferDismissed(drive: string): boolean {
-  try {
-    return !!localStorage.getItem(`atomic-hosting-offer-dismissed:${drive}`);
-  } catch {
-    return false;
-  }
-}
-
 type CloudTier = 'local' | 'vault' | 'server';
 
 const PlanLabelRow = styled.div`
@@ -2761,55 +2708,6 @@ const PlanLabel = styled.span`
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-`;
-
-const TierBadge = styled.span<{ $current?: boolean }>`
-  flex-shrink: 0;
-  padding: 0.1rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  white-space: nowrap;
-  border: 1px solid ${p => p.theme.colors.main};
-  color: ${p => (p.$current ? p.theme.colors.bg : p.theme.colors.main)};
-  background: ${p => (p.$current ? p.theme.colors.main : 'transparent')};
-`;
-
-const SellingPoints = styled.ul`
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin: 0.4rem 0 0.2rem;
-  padding: 0;
-  list-style: none;
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.text};
-
-  li {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    margin: 0;
-    padding: 0;
-  }
-
-  svg {
-    flex-shrink: 0;
-    font-size: 0.7rem;
-    color: ${p => p.theme.colors.main};
-  }
-`;
-
-/** The one warning this card carries: what accepting hosting means. */
-const ConsentNotice = styled.p`
-  margin: 0.6rem 0 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.warning}66;
-  background: ${p => p.theme.colors.warning}14;
-  color: ${p => p.theme.colors.text};
-  font-size: 0.85rem;
-  line-height: 1.4;
 `;
 
 const ProviderService = styled(ServiceSection)`
