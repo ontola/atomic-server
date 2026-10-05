@@ -719,7 +719,10 @@ function SyncPage() {
   // `true` = already enrolled (hide it).
   const [cloudEnrollment, setCloudEnrollment] =
     useState<ScopedDriveValue<boolean> | null>(null);
-  const cloudEnrolled = currentDriveValue(
+  // Only what THIS account has enrolled. Hosting belongs to the drive, so a
+  // member who isn't the subscriber sees `false` here; `cloudEnrolled` below
+  // folds in what the node itself says about the drive.
+  const accountEnrolled = currentDriveValue(
     cloudEnrollment,
     status.drive,
     status.serverUrl,
@@ -974,6 +977,17 @@ function SyncPage() {
     status.drive,
     status.serverUrl,
   );
+
+  // A managed node only accepts drives that are enrolled, and a member can read
+  // the drive's usage from it. So a drive that holds data on a managed node is
+  // hosted for everyone with access, whichever account pays for it. The
+  // account's own enrollment list cannot say that: it only knows its own drives.
+  const hostedByNode =
+    managedInfo.managed &&
+    !!status.drive &&
+    store.isLiveSyncedDrive(status.drive) &&
+    (nodeUsage?.resourceCount ?? 0) > 0;
+  const cloudEnrolled = hostedByNode ? true : accountEnrolled;
 
   // Sign in with a secret on a fresh device and you get the identity but none
   // of the data. Detect that so the page can lead with "pair a device".

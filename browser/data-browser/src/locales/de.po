@@ -10380,7 +10380,6 @@ msgstr ""
 msgid "Signed in on another device? Use a code"
 msgstr ""
 
-
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
 msgid "Could not save the repeat: {0}"
@@ -10667,6 +10666,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
@@ -10694,4 +10694,12 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "See Cloud Server plans"
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
 msgstr ""

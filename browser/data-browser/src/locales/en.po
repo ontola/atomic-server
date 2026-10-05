@@ -10713,3 +10713,11 @@ msgstr "Discard upload"
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
 msgstr "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "See Cloud Server plans"
+msgstr "See Cloud Server plans"
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+msgstr "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
