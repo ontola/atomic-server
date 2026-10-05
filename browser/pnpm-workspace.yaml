@@ -59,3 +59,4 @@ patchedDependencies:
   '@reactflow/core': patches/@reactflow__core.patch
   playwright-core@1.63.0: patches/playwright-core@1.63.0.patch
   loro-prosemirror@0.4.3: patches/loro-prosemirror@0.4.3.patch
+  wuchale@0.25.6: patches/wuchale@0.25.6.patch
