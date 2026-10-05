@@ -21,6 +21,7 @@ import {
   FaLockOpen,
   FaCircle,
   FaTriangleExclamation,
+  FaArrowsRotate,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
@@ -55,6 +56,12 @@ import { grantRowAccess, revokeRowAccess } from '@chunks/AppPage/rowGrant';
 import { followTable } from '@chunks/AppPage/afterCommit';
 import { useAfterCommit } from '@chunks/AppPage/useAfterCommit';
 import { useRowGrant } from '@chunks/AppPage/useRowGrant';
+import { piecesEnabled } from '@chunks/Pieces/piecesFlag';
+import {
+  offerHelper,
+  usePieceOffers,
+  type PieceOffers,
+} from '@chunks/Pieces/usePieceOffers';
 import type { QuickAddSpec } from './quickAdd';
 
 interface TableViewTabsProps {
@@ -128,7 +135,13 @@ export function TableViewTabs({
   const store = useStore();
   const drive = store.getDrive();
   const driveApps = useDriveApps(drive);
-  const apps = appsForClass(driveApps.apps, rowClass);
+  // The split-pieces exploration: views and integrations offered by row class
+  // and through lenses. Off by default; then this is exactly `appsForClass`.
+  const pieces = piecesEnabled();
+  const offers = usePieceOffers(drive, driveApps.apps, rowClass, pieces);
+  const apps = pieces
+    ? offers.views.map(o => o.piece)
+    : appsForClass(driveApps.apps, rowClass);
   // An app about to become a view, waiting on the person's answer to "may
   // it edit rows?" (#1740). `view` is set when an existing tab is switched.
   const [pendingApp, setPendingApp] = useState<{
@@ -182,6 +195,7 @@ export function TableViewTabs({
             chooseApp={(view, app) => setPendingApp({ app, view })}
             table={table}
             apps={apps}
+            integrations={offers}
             refreshApps={driveApps.refresh}
             duplicateView={duplicateView}
             deleteView={deleteView}
@@ -195,6 +209,7 @@ export function TableViewTabs({
             createView={createView}
             chooseApp={app => setPendingApp({ app })}
             apps={apps}
+            integrations={offers}
             refreshApps={driveApps.refresh}
           />
         )}
@@ -232,12 +247,14 @@ function AddViewMenu({
   createView,
   chooseApp,
   apps,
+  integrations,
   refreshApps,
 }: {
   createView: (kind?: ViewKind | string, label?: string) => unknown;
   /** An app is added only after the person answers whether it may edit. */
   chooseApp: (app: DriveApp) => void;
   apps: DriveApp[];
+  integrations: PieceOffers;
   /** Asks the drive for its apps again; called as the menu opens. */
   refreshApps: () => void;
 }): JSX.Element {
@@ -261,8 +278,9 @@ function AddViewMenu({
         icon: <FaWindowMaximize />,
         onClick: () => chooseApp(app),
       })),
+      ...integrationItems(integrations, createView, 'add-integration'),
     ],
-    [createView, chooseApp, apps],
+    [createView, chooseApp, apps, integrations],
   );
 
   return (
@@ -345,6 +363,7 @@ function ViewTab({
   chooseApp,
   table,
   apps,
+  integrations,
   refreshApps,
   duplicateView,
   deleteView,
@@ -364,6 +383,8 @@ function ViewTab({
   table: string;
   /** Resolved once by the tab bar rather than once per tab. */
   apps: DriveApp[];
+  /** Integrations this table offers (split-pieces exploration). */
+  integrations: PieceOffers;
   /** Asks the drive for its apps again; called as the menu opens. */
   refreshApps: () => void;
   duplicateView: (subject: string) => void;
@@ -377,7 +398,12 @@ function ViewTab({
   const [storedKind] = useString(resource, dataBrowser.properties.viewKind);
   const currentKind = normalizeViewKind(storedKind);
   const name = subject ? title || 'Untitled view' : (fallbackName ?? 'View');
-  const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
+  const isIntegration = integrations.integrations.some(
+    o => o.piece.subject === storedKind,
+  );
+  const ViewKindIcon = isIntegration
+    ? FaArrowsRotate
+    : VIEW_KIND_ICONS[currentKind];
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -820,4 +846,49 @@ const TabInput = styled(InputStyled)`
 const CheckPlaceholder = styled.span`
   display: inline-block;
   width: 1em;
+`;
+
+/**
+ * Integrations, offered after the views under their own header. Installing
+ * one adds a tab like any view, but that tab shows the table's sync state
+ * rather than its rows. An offer that goes through a lens says which.
+ */
+function integrationItems(
+  { integrations, lensNames }: PieceOffers,
+  createView: (kind?: ViewKind | string, label?: string) => void,
+  idPrefix: string,
+): DropdownItem[] {
+  if (integrations.length === 0) return [];
+
+  return [
+    DIVIDER,
+    {
+      id: `${idPrefix}-header`,
+      label: 'Integrations',
+      header: true,
+      onClick: () => undefined,
+    },
+    ...integrations.map(offer => ({
+      id: `${idPrefix}-${offer.piece.subject}`,
+      label: offer.piece.name,
+      helper: offerHelper(offer, lensNames),
+      suffix:
+        offer.path.length > 0 ? (
+          <ViaLens>
+            {offer.path.length === 1
+              ? 'via lens'
+              : `via ${offer.path.length} lenses`}
+          </ViaLens>
+        ) : undefined,
+      icon: <FaArrowsRotate />,
+      onClick: () => createView(offer.piece.subject, offer.piece.name),
+    })),
+  ];
+}
+
+const ViaLens = styled.span`
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  margin-left: auto;
+  padding-left: ${p => p.theme.size(2)};
 `;

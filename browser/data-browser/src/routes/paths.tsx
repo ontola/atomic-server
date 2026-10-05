@@ -28,6 +28,7 @@ export const pathNames = {
   linkOpenRouter: '/link-openrouter',
   devDrive: '/dev-drive',
   demo: '/demo',
+  piecesDemo: '/pieces-demo',
   invite: '/invite',
   routeConsent: '/route-consent',
 } as const;
@@ -58,4 +59,5 @@ export const paths = {
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
   devDrive: `${pathNames.app}${pathNames.devDrive}`,
   demo: `${pathNames.app}${pathNames.demo}`,
+  piecesDemo: `${pathNames.app}${pathNames.piecesDemo}`,
 } as const;

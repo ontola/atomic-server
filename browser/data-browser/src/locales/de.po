@@ -7491,6 +7491,7 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -10171,4 +10172,9 @@ msgstr ""
 
 #: src/views/Installation/AfterCommitTables.tsx
 msgid "One row waiting"
+msgstr ""
+
+#. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
+#: src/chunks/Pieces/usePieceOffers.ts
+msgid "Through {0}"
 msgstr ""

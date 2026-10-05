@@ -7502,6 +7502,7 @@ msgstr "Fix it"
 msgid "Dismiss"
 msgstr "Dismiss"
 
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -10190,3 +10191,8 @@ msgstr "One proposed edit is waiting for review."
 #: src/views/Installation/AfterCommitTables.tsx
 msgid "One row waiting"
 msgstr "One row waiting"
+
+#. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
+#: src/chunks/Pieces/usePieceOffers.ts
+msgid "Through {0}"
+msgstr "Through {0}"

@@ -2,6 +2,8 @@ import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
 import { isPlatformId, type ProxyHost } from '@helpers/proxyConnections';
 import { fetchRowGrant } from './rowGrant';
+import { piecesEnabled } from '@chunks/Pieces/piecesFlag';
+import { lensPathFor } from '@chunks/Pieces/loadPieces';
 import {
   connectionsOf,
   forgetInstallationConnection,
@@ -163,12 +165,25 @@ export async function handleRequest(
       // manifest `destination.tables`): its siblings, by the keys the
       // manifest declared, so a view of transactions can find statements.
       const tables = await destinationTablesFor(store, drive, subject);
+      const rowClass = tableResource.get(core.properties.classtype) as
+        | string
+        | undefined;
+
+      // Split-pieces exploration: an integration offered on this table
+      // through lenses is told which ones, so it can translate the rows into
+      // the shape it syncs. Additive, and only when the flag is on.
+      if (piecesEnabled() && table) {
+        return {
+          table: subject,
+          rowClass,
+          ...(tables ? { tables } : {}),
+          lensPath: await lensPathFor(store, drive, app, rowClass),
+        };
+      }
 
       return {
         table: subject,
-        rowClass: tableResource.get(core.properties.classtype) as
-          | string
-          | undefined,
+        rowClass,
         ...(tables ? { tables } : {}),
       };
     }
