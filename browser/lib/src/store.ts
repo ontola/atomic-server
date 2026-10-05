@@ -2584,7 +2584,9 @@ export class Store {
     );
 
     if (schemaError) {
-      resource.setError(new Error(schemaError));
+      resource.setError(
+        new Error(`Rejected resource ${subject}: ${schemaError}`),
+      );
 
       return 'invalid';
     }

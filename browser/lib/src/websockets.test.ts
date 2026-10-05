@@ -1,3 +1,4 @@
+import { core } from './ontologies/core.js';
 import { Resource } from './resource.js';
 import { AtomicError, ErrorType } from './error.js';
 import { describe, it, vi, afterEach, expect as assert } from 'vitest';
@@ -1210,6 +1211,8 @@ describe('schema sync failure reporting', () => {
     const drive = 'atomic:schema-drive';
     const doc = new LoroLoader.Loro.LoroDoc();
     doc.getMap('atomic:schema-definitions').set('atomic:frozen:forged', '{}');
+    const healthy = new LoroLoader.Loro.LoroDoc();
+    healthy.getMap('properties').set(core.properties.name, 'Healthy resource');
     const finish = vi.spyOn(store, 'finishDriveSync');
     const fail = vi.spyOn(store, 'failDriveSync');
     socket.receive(
@@ -1219,6 +1222,10 @@ describe('schema sync failure reporting', () => {
           {
             subject: 'atomic:poison',
             loroBytes: doc.export({ mode: 'snapshot' }),
+          },
+          {
+            subject: 'atomic:healthy-after-poison',
+            loroBytes: healthy.export({ mode: 'snapshot' }),
           },
         ],
         false,
@@ -1235,7 +1242,15 @@ describe('schema sync failure reporting', () => {
       ]),
     );
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert(fail).toHaveBeenCalled();
+    assert(fail).toHaveBeenCalledWith(
+      drive,
+      assert.stringContaining('atomic:poison'),
+    );
+    assert(
+      store.resources
+        .get('atomic:healthy-after-poison')
+        ?.get(core.properties.name),
+    ).toBe('Healthy resource');
     assert(finish).not.toHaveBeenCalled();
     assert(store.hasCompletedDriveSyncFor(drive)).toBe(false);
     client.close();

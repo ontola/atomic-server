@@ -708,10 +708,18 @@ impl Db {
         }
         // Resolve without writes; only admitted, fully validated data installs
         // its reachable definitions, in the same transaction as the resource.
-        let definitions = crate::schema::dependencies::resolve(resource, self).await?;
-        crate::schema::dependencies::validate_data(resource, &definitions)?;
+        let schema_error = |error| format!("Rejected resource {}: {error}", resource.get_subject());
+        let definitions = crate::schema::dependencies::resolve(resource, self)
+            .await
+            .map_err(schema_error)?;
         if check_required_props {
-            resource.check_required_props(self).await?;
+            resource
+                .check_required_props_with_definitions(self, &definitions)
+                .await
+                .map_err(schema_error)?;
+        } else {
+            crate::schema::dependencies::validate_data(resource, &definitions)
+                .map_err(schema_error)?;
         }
         for definition in definitions.values() {
             if !self.has_stored_resource(definition.get_subject()) {

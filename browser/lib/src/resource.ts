@@ -1,3 +1,4 @@
+import { validateIncomingSchema } from './schema-admission.js';
 import { applyAppListEdit, type AppListEdit } from './schema-list.js';
 import type { SchemaValue } from './schema-frozen.js';
 import {
@@ -1667,15 +1668,14 @@ export class Resource<C extends OptionalClass = any> {
       LoroLoader.isLoaded()
     ) {
       // Validate the prospective merged state before changing the live doc.
-      const staged = options.replaceLoroDocs
-        ? new LoroLoader.Loro.LoroDoc()
-        : (this.getLoroDoc()?.fork() ?? new LoroLoader.Loro.LoroDoc());
-      const status = staged.import(incomingSnapshot);
-      if (status.pending?.size) throw new Error('Incomplete resource snapshot');
-      const definitions = resolveSchemaDependencies(staged, id =>
-        this._store?.resources.get(id),
+      this.sealPendingEdits();
+      const checked = validateIncomingSchema(
+        options.replaceLoroDocs ? undefined : this.getLoroDoc(),
+        incomingSnapshot,
+        id => this._store?.resources.get(id),
       );
-      validateSchemaData(staged, definitions);
+      if (!checked.complete) throw new Error('Incomplete resource snapshot');
+      const definitions = checked.definitions;
       // Ensure we have a local Loro doc
       const localDoc = this.getLoroDoc();
 
@@ -4058,18 +4058,19 @@ export class Resource<C extends OptionalClass = any> {
      */
     replace = false,
   ): { complete: boolean; schemaError?: string } {
-    // Stage incoming state before touching the live doc or schema cache.
+    // Seal edits with their drain token before fork/import can auto-commit them.
+    this.sealPendingEdits();
+
+    // A delta can introduce schema attachments even on a previously untyped
+    // resource. Keep admission isolated; never gate this on cached state alone.
     if (LoroLoader.isLoaded() && !isCommitSubject(this.subject)) {
       try {
-        const staged = replace
-          ? new LoroLoader.Loro.LoroDoc()
-          : (this.getLoroDoc()?.fork() ?? new LoroLoader.Loro.LoroDoc());
-        const status = staged.import(loroUpdate);
-        if (status.pending?.size) return { complete: false };
-        const definitions = resolveSchemaDependencies(staged, id =>
-          this._store?.resources.get(id),
+        const checked = validateIncomingSchema(
+          replace ? undefined : this.getLoroDoc(),
+          loroUpdate,
+          id => this._store?.resources.get(id),
         );
-        validateSchemaData(staged, definitions);
+        if (!checked.complete) return { complete: false };
       } catch (error) {
         return { complete: false, schemaError: String(error) };
       }

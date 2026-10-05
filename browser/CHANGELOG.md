@@ -5,6 +5,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 ## UNRELEASED
 
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
+- Reuse a short-lived isolated validation document during repeated sync updates
+  and inspect only schema-relevant values. Preserve local history tokens before
+  preflight and report the rejected resource without acknowledging failed sync.
+
 - Bounded JSON Schema 2020-12 import/export with verified Atomic identity
   sidecars, explicit compatibility errors and conventional generated accessors.
 

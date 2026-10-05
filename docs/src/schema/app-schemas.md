@@ -119,10 +119,11 @@ because they participate in the hash.
 Reusing an existing Property ID means reusing its meaning. Changes to units,
 meaning or datatype require a new definition and an explicit data migration.
 Do not use display labels as semantic scope changes. Presentation metadata,
-reference-based recursive schemas, a schema catalog, global dependency inventory,
-JSON Schema import/export and a Dart convenience API are follow-up work. Flutter
-can call these Rust APIs through its existing native bridge; this change does
-provide the Audio migration UI (maintained in the Audio repository).
+reference-based recursive schemas, a schema catalog, a global dependency inventory
+and a complete Dart client remain follow-up work. Bounded JSON Schema interchange
+and generated Dart models are available below. Flutter calls the Rust store APIs
+through its native bridge; Audio's migration UI lives in the separate Audio
+repository.
 
 
 ## Delivery and trust
@@ -324,3 +325,25 @@ subset. Standard JSON Schema describes the data; a separate verified Atomic
 bundle preserves Class/Property identities and local aliases. JSON Schema
 `$ref` resolves a local schema definition, whereas an Atomic reference shape
 represents a link **in the data**.
+
+
+## Compatibility when upgrading existing applications
+
+This draft also changes shared value encoding, including resources without app
+schemas. New writers preserve nested JSON `null` entries and tag strings that
+look like JSON or resource identifiers as `string`. Old readers may still parse
+those strings as objects, arrays or links; code that distinguishes an absent key
+from a key containing `null` also observes a change. These are semantic changes,
+not a guarantee of mixed-version equivalence. Upgrade readers and writers together
+and test stored representative data before rollout. Explicit schema migrations
+change app data; they do not upgrade a remote peer's decoder or enforcement.
+
+Rust `Resource::set_string` now validates through `set`, including `allowsOnly`
+and app shapes. Callers must handle rejected values that were previously accepted.
+Frozen definitions remain immutable: publish a new definition and migrate data
+instead of attempting to edit a frozen subject.
+
+The existing plugin-schema API still creates mutable ontology resources. This
+draft does not convert existing plugin schemas or expose the app SDK's nested
+and list edit operations through plugin RPC. Choosing a common plugin contract
+and adding those RPC operations require a separate coordinated change.

@@ -1123,3 +1123,22 @@ can rely on the contract end to end. Definitions are duplicated across resource
 snapshots; no global dependency-inventory deduplication is implemented. Existing
 frame/CRDT limits remain necessary before this post-import validation.
 See [app schemas](schema/app-schemas.md) for migration and compatibility rules.
+
+
+Schema admission errors include the rejected resource subject. The browser's
+per-resource push loop can admit valid entries after a rejected entry, but keeps
+the drive in an error state and withholds completion. The worker's bulk native
+projection path can reject a whole batch; do not infer that every other resource
+in that batch was imported. Previously persisted batches are not rolled back.
+Retry after repairing the rejected resource or upgrading an incompatible writer.
+
+Schema preflight never trusts the live document's previous schema status: an
+incoming delta may introduce a class or an invalid attachment into an ordinary
+resource. Browser preflight uses one isolated replica at a time, refreshes it with
+local operations, and discards it on rejection or after five idle seconds. It
+reads only schema-relevant values, but initial cloning/import still costs memory
+and work proportional to document size. Root limits apply after Loro import and
+are not a replacement for transport and CRDT decoding limits.
+
+Shared string tags and preserved nested nulls also require compatible readers;
+see [upgrade compatibility](schema/app-schemas.md#compatibility-when-upgrading-existing-applications).

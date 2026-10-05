@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import {
+  validateIncomingSchema,
+  clearSchemaAdmissionReplica,
+} from './schema-admission.js';
+import { LoroLoader } from './loro-loader.js';
+import {
+  resolveSchemaDependencies,
+  validateSchemaData,
+} from './schema-dependencies.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Resource } from './resource.js';
 import { Store } from './store.js';
 import { core } from './ontologies/core.js';
@@ -259,4 +268,141 @@ it('allows two complete 128-field versions during a migration', async () => {
   ).toBe(true);
   expect(cold.store.resources.has(first.class_id)).toBe(true);
   expect(cold.store.resources.has(second.class_id)).toBe(true);
+});
+
+describe('isolated schema admission hot path', () => {
+  afterEach(() => {
+    clearSchemaAdmissionReplica();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('does not deep-read unrelated canvas bodies', () => {
+    const doc = new LoroLoader.Loro.LoroDoc();
+    doc
+      .getMap('properties')
+      .set('https://example.test/canvas', { points: [1, 2, 3] });
+    const deep = vi
+      .spyOn(Object.getPrototypeOf(doc.getMap('properties')), 'toJSON')
+      .mockImplementation(() => {
+        throw new Error('Unexpected full property materialization');
+      });
+    const definitions = resolveSchemaDependencies(doc, () => undefined);
+    validateSchemaData(doc, definitions);
+    expect(deep).not.toHaveBeenCalled();
+  });
+
+  it.each(['valid', 'poison', 'missing'])(
+    'checks newly introduced schema dependencies on an ordinary resource: %s',
+    async kind => {
+      const source = new Resource('atomic:plain-to-frozen');
+      const store = new Store();
+      registerAppSchema(store, v1);
+      const doc = source.getLoroDoc()!;
+      doc.getMap('properties').set(core.properties.name, 'Before');
+      const target = new Resource(source.subject);
+      expect(
+        target.importLoroUpdate(doc.export({ mode: 'snapshot' })).complete,
+      ).toBe(true);
+      const from = doc.version();
+      doc.getMap('properties').set(core.properties.isA, [v1.class_id]);
+      doc.getMap('properties').set(v1.fields.semitones, 7);
+      doc.getMap('properties').set(core.properties.name, 'After');
+      attachSchemaDependencies(doc, id => store.resources.get(id));
+      if (kind === 'poison') doc.getMap(SCHEMA_ROOT).set(v1.class_id, '{}');
+      if (kind === 'missing') doc.getMap(SCHEMA_ROOT).delete(v1.class_id);
+      expect(
+        target.importLoroUpdate(doc.export({ mode: 'update', from })).complete,
+      ).toBe(kind === 'valid');
+      expect(target.get(core.properties.name)).toBe(
+        kind === 'valid' ? 'After' : 'Before',
+      );
+    },
+  );
+
+  it('reuses one replica, incorporates local edits and expires it', () => {
+    vi.useFakeTimers();
+    const base = new LoroLoader.Loro.LoroDoc();
+    base.getMap('properties').set(core.properties.name, 'Before');
+    base.commit();
+    const remote = base.fork();
+    const from = remote.version();
+    remote.getMap('properties').set(core.properties.description, 'Remote');
+    const delta = remote.export({ mode: 'update', from });
+    const fork = vi.spyOn(base, 'fork');
+    expect(validateIncomingSchema(base, delta, () => undefined).complete).toBe(
+      true,
+    );
+    base.import(delta);
+    base.getMap('properties').set(core.properties.name, 'Local');
+    base.commit();
+    expect(validateIncomingSchema(base, delta, () => undefined).complete).toBe(
+      true,
+    );
+    expect(fork).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(5001);
+    expect(validateIncomingSchema(base, delta, () => undefined).complete).toBe(
+      true,
+    );
+    expect(fork).toHaveBeenCalledTimes(2);
+  });
+
+  it('discards a replica ahead of the live state after an unapplied import', async () => {
+    const source = await author();
+    const base = source.doc;
+    const snapshot = base.export({ mode: 'snapshot' });
+    const from = base.version();
+    const abandoned = new LoroLoader.Loro.LoroDoc();
+    abandoned.import(snapshot);
+    abandoned.getMap('properties').delete(core.properties.isA);
+    abandoned.getMap('properties').delete(v1.fields.semitones);
+    expect(
+      validateIncomingSchema(
+        base,
+        abandoned.export({ mode: 'update', from }),
+        () => undefined,
+      ).complete,
+    ).toBe(true);
+    // Simulate live persistence/import failure: the preceding candidate never
+    // reaches base. A later removal must be checked against base's required class.
+    const malicious = new LoroLoader.Loro.LoroDoc();
+    malicious.import(snapshot);
+    malicious.getMap('properties').delete(v1.fields.semitones);
+    expect(() =>
+      validateIncomingSchema(
+        base,
+        malicious.export({ mode: 'update', from }),
+        () => undefined,
+      ),
+    ).toThrow('Missing required');
+    expect(base.getMap('properties').get(v1.fields.semitones)).toBe(7);
+  });
+
+  it('rejects a local invalid edit when refreshing a cached replica', async () => {
+    const source = await author();
+    const base = source.doc;
+    const bytes = base.export({ mode: 'snapshot' });
+    expect(validateIncomingSchema(base, bytes, () => undefined).complete).toBe(
+      true,
+    );
+    base.getMap('properties').set(v1.fields.semitones, 1000);
+    base.commit();
+    expect(() =>
+      validateIncomingSchema(base, bytes, () => undefined),
+    ).toThrow();
+  });
+
+  it('seals a local edit before speculative fork can commit it without a token', async () => {
+    const target = new Resource('atomic:local-history');
+    const remote = new LoroLoader.Loro.LoroDoc();
+    remote.import(target.getLoroDoc()!.export({ mode: 'snapshot' }));
+    await target.set(core.properties.name, 'Local', false);
+    remote.getMap('properties').set(core.properties.description, 'Remote');
+    expect(
+      target.importLoroUpdate(remote.export({ mode: 'snapshot' })).complete,
+    ).toBe(true);
+    const changes = target.getLoroDoc()!.exportJsonUpdates().changes;
+    expect(changes.some(change => change.msg?.startsWith('c-'))).toBe(true);
+    expect(target.get(core.properties.name)).toBe('Local');
+  });
 });

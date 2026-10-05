@@ -388,46 +388,42 @@ impl Resource {
         if definitions.is_empty() {
             return Ok(());
         }
-        let mut all = self.attached_schema_definitions()?;
-        all.extend(definitions.clone());
-        if all.len() > crate::schema::dependencies::MAX_DEFINITIONS {
-            return Err("Too many schema dependencies".into());
-        }
-        let bodies: Vec<_> = all
-            .iter()
-            .map(|(id, definition)| {
-                Ok((
-                    id,
-                    serde_jcs::to_string(&crate::schema::frozen::body(definition)?)?,
-                ))
-            })
-            .collect::<AtomicResult<_>>()?;
-        if bodies
-            .iter()
-            .map(|(id, body)| id.len() + body.len())
-            .sum::<usize>()
-            > crate::schema::dependencies::MAX_BYTES
-        {
-            return Err("Schema dependencies exceed byte budget".into());
-        }
         self.ensure_materialized()?;
-        let map = self.loro().doc().get_map(crate::schema::dependencies::ROOT);
-        for (id, body) in bodies {
-            if map.get(id).and_then(|v| v.into_value().ok())
-                != Some(loro::LoroValue::String(body.clone().into()))
-            {
-                map.insert(id, body.as_str())
-                    .map_err(|e| format!("Schema attachment failed: {e}"))?;
-            }
-        }
-        Ok(())
+        crate::schema::dependencies::write_doc(self.loro(), definitions)
     }
 
     /// Fetches all 'required' properties. Returns an error if any are missing in this Resource.
     pub async fn check_required_props(&self, store: &impl Storelike) -> AtomicResult<()> {
         let definitions = crate::schema::dependencies::resolve(self, store).await?;
-        crate::schema::dependencies::validate_data(self, &definitions)?;
-        let classvec = self.get_classes(store).await?;
+        self.check_required_props_with_definitions(store, &definitions)
+            .await
+    }
+
+    pub(crate) async fn check_required_props_with_definitions(
+        &self,
+        store: &impl Storelike,
+        definitions: &crate::schema::dependencies::Definitions,
+    ) -> AtomicResult<()> {
+        crate::schema::dependencies::validate_data(self, definitions)?;
+        let mut classvec = Vec::new();
+        if let Ok(value) = self.get(crate::urls::IS_A) {
+            for id in value.to_subjects(None)? {
+                // Frozen requirements were checked against the verified closure,
+                // including definitions not installed in this store yet.
+                if crate::schema::frozen::is_frozen(&id.as_str().into()) {
+                    continue;
+                }
+                match store.get_class(&id).await {
+                    Ok(class) => classvec.push(class),
+                    Err(error) => tracing::warn!(
+                        "Class {} is not available here, so {} is not validated against it: {}",
+                        id,
+                        self.get_subject(),
+                        error
+                    ),
+                }
+            }
+        }
         for class in classvec.iter() {
             tracing::debug!(
                 "Checking required props for class {} on resource {}",

@@ -15,6 +15,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   recipient could hold. Read rights are checked per subscriber against the
   resource when it is sent, and a connection already reached through the
   resource or its drive doesn't get it twice.
+- Preserve genesis creator messages and signed history tokens when attaching
+  frozen schemas; avoid snapshot round trips and duplicate schema resolution.
+  Sync schema errors identify the rejected resource.
+
 - Bounded JSON Schema 2020-12 import/export with verified Atomic identity
   sidecars, explicit compatibility errors and conventional generated accessors.
 

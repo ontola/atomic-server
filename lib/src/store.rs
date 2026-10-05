@@ -178,9 +178,12 @@ impl Storelike for Store {
     ) -> AtomicResult<()> {
         crate::schema::frozen::verify(resource)?;
         let definitions = crate::schema::dependencies::resolve(resource, self).await?;
-        crate::schema::dependencies::validate_data(resource, &definitions)?;
         if check_required_props {
-            resource.check_required_props(self).await?;
+            resource
+                .check_required_props_with_definitions(self, &definitions)
+                .await?;
+        } else {
+            crate::schema::dependencies::validate_data(resource, &definitions)?;
         }
         // Keyed by the canonical spelling, like `Db`: a resource added as
         // `did:ad:x` and looked up as `atomic:x` is one resource.

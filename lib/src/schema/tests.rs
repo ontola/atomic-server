@@ -515,9 +515,21 @@ async fn hostile_dependencies_leave_no_resource_or_cache_entries() {
         }
         let mut incoming = Resource::new(resource.get_subject().to_string());
         incoming.apply_state_doc(doc).unwrap();
+        let error = sink
+            .persist_replicated_resource(&incoming)
+            .await
+            .unwrap_err();
         assert!(
-            sink.persist_replicated_resource(&incoming).await.is_err(),
-            "{attack}"
+            error.to_string().contains(incoming.get_subject().as_str()),
+            "{attack}: {error}"
+        );
+        let error = sink
+            .persist_replicated_resources(vec![(incoming.clone(), None)])
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains(incoming.get_subject().as_str()),
+            "{attack}: {error}"
         );
         assert!(
             sink.get_resource(resource.get_subject()).await.is_err(),
@@ -1154,4 +1166,147 @@ fn json_schema_expansion_and_generated_name_collisions_are_bounded() {
         .unwrap_err()
         .to_string()
         .contains("collision"));
+}
+
+#[tokio::test]
+async fn low_level_signing_preserves_genesis_and_edit_attribution() {
+    use crate::{
+        commit::{Commit, CommitBuilder},
+        envelopes::{attribute_history, EnvelopeRetention},
+        sync::engine::{ingest_commit_json, CommitIngestOpts},
+        urls,
+    };
+    for frozen in [false, true] {
+        let db = Db::init_temp("schema-signing-attribution").await.unwrap();
+        db.set_envelope_retention(EnvelopeRetention::All);
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let schema = audio();
+        schema.register(&db).await.unwrap();
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(urls::PARENT.into(), Value::AtomicUrl(drive.into()));
+        builder.set(urls::NAME.into(), Value::String("Original".into()));
+        builder.set(urls::DESCRIPTION.into(), Value::String("Remove me".into()));
+        if frozen {
+            builder.set(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![schema.class_id.clone().into()]),
+            );
+            builder.set(schema.property("tune").unwrap().into(), Value::Float(0.));
+            builder.set(
+                schema.property("envelope").unwrap().into(),
+                Value::Json(json!({"attack":0.01,"release":0.2})),
+            );
+        }
+        let genesis = Commit::create_did(builder, &alice, &db).await.unwrap();
+        let doc = crate::loro::AtomicLoroDoc::from_snapshot(genesis.loro_update.as_ref().unwrap())
+            .unwrap();
+        assert_eq!(
+            doc.get_history().last().unwrap().message.as_deref(),
+            Some(alice.subject.as_str()),
+            "genesis must retain creator message, frozen={frozen}"
+        );
+        let subject = genesis.subject.clone();
+        let serialized = genesis
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+        ingest_commit_json(&db, &serialized, &CommitIngestOpts::peer())
+            .await
+            .unwrap();
+        for n in 0..2 {
+            let resource = db.get_resource(&subject).await.unwrap();
+            let mut edit = CommitBuilder::new(subject.clone());
+            edit.set(urls::NAME.into(), Value::String(format!("Edit {n}")));
+            edit.remove(urls::DESCRIPTION.into());
+            let commit = edit.sign(&alice, &db, &resource).await.unwrap();
+            let doc =
+                crate::loro::AtomicLoroDoc::from_snapshot(commit.loro_update.as_ref().unwrap())
+                    .unwrap();
+            assert!(
+                doc.get_history()
+                    .iter()
+                    .any(|v| v.message.as_deref().is_some_and(|m| m.starts_with("c-"))),
+                "builder edit must carry a token"
+            );
+            let serialized = commit
+                .into_resource(&db)
+                .await
+                .unwrap()
+                .to_json_ad(None)
+                .unwrap();
+            ingest_commit_json(&db, &serialized, &CommitIngestOpts::peer())
+                .await
+                .unwrap();
+        }
+        let report = attribute_history(&db, subject.as_str()).await.unwrap();
+        assert!(report.complete);
+        assert_eq!(report.attributions.len(), 3);
+        assert!(report
+            .attributions
+            .iter()
+            .all(|a| a.verified && a.signer == alice.subject.as_str() && a.tokens.len() == 1));
+        assert_ne!(report.attributions[1].tokens, report.attributions[2].tokens);
+        assert_eq!(
+            report.attributions[0].tokens,
+            vec![alice.subject.to_string()]
+        );
+    }
+}
+
+#[tokio::test]
+async fn schema_doc_fast_path_still_checks_classes_and_unreferenced_attachments() {
+    let db = Db::init_temp("schema-attachment-gating").await.unwrap();
+    let schema = audio();
+    schema.register(&db).await.unwrap();
+    let ordinary = crate::loro::AtomicLoroDoc::new();
+    ordinary
+        .set_property(crate::urls::NAME, &Value::String("ordinary".into()))
+        .unwrap();
+    assert!(!super::dependencies::doc_needs_schema(&ordinary));
+    super::dependencies::attach_doc(&ordinary, &db)
+        .await
+        .unwrap();
+    assert!(
+        ordinary.doc().get_pending_txn_len() > 0,
+        "schema no-op must not commit pending edits"
+    );
+    for value in [
+        Value::ResourceArray(vec![schema.class_id.clone().into()]),
+        Value::AtomicUrl(schema.class_id.clone().into()),
+        Value::String(schema.class_id.clone()),
+        Value::String(json!([schema.class_id]).to_string()),
+    ] {
+        let doc = crate::loro::AtomicLoroDoc::new();
+        doc.set_property(crate::urls::IS_A, &value).unwrap();
+        assert!(super::dependencies::doc_needs_schema(&doc));
+        super::dependencies::attach_doc(&doc, &db).await.unwrap();
+        assert!(!super::dependencies::read_doc(&doc).unwrap().is_empty());
+        assert!(
+            doc.doc().get_pending_txn_len() > 0,
+            "attachment must stay in pending transaction"
+        );
+    }
+    ordinary
+        .doc()
+        .get_map(super::dependencies::ROOT)
+        .insert("atomic:frozen:forged", "{}")
+        .unwrap();
+    assert!(super::dependencies::doc_needs_schema(&ordinary));
+    assert!(super::dependencies::attach_doc(&ordinary, &db)
+        .await
+        .is_err());
+    let docless = Resource::from_propvals(
+        [(
+            crate::urls::LORO_UPDATE.into(),
+            Value::LoroDoc(ordinary.export_snapshot()),
+        )]
+        .into(),
+        "atomic:poisoned-docless".into(),
+    );
+    assert!(
+        super::dependencies::resolve(&docless, &db).await.is_err(),
+        "raw snapshot attachments must be checked even without visible frozen keys"
+    );
 }

@@ -140,7 +140,9 @@ fn verified_definition(id: &str, body: &str) -> AtomicResult<Arc<Resource>> {
 }
 
 pub fn read_doc(doc: &crate::loro::AtomicLoroDoc) -> AtomicResult<Definitions> {
-    let map = doc.doc().get_map(ROOT);
+    let Some(map) = doc.doc().try_get_map(ROOT) else {
+        return Ok(Definitions::new());
+    };
     if map.len() > MAX_DEFINITIONS {
         return Err("Too many schema dependencies".into());
     }
@@ -168,10 +170,15 @@ pub fn read_doc(doc: &crate::loro::AtomicLoroDoc) -> AtomicResult<Definitions> {
 /// Missing frozen definitions fail explicitly rather than weakening validation.
 pub async fn resolve(resource: &Resource, store: &impl Storelike) -> AtomicResult<Definitions> {
     let attached = resource.attached_schema_definitions()?;
-    let mut queue: VecDeque<_> = references(resource, false)?
-        .into_iter()
-        .map(|id| (id, 0))
-        .collect();
+    resolve_attached(references(resource, false)?, store, attached).await
+}
+
+async fn resolve_attached(
+    initial: BTreeSet<String>,
+    store: &impl Storelike,
+    attached: Definitions,
+) -> AtomicResult<Definitions> {
+    let mut queue: VecDeque<_> = initial.into_iter().map(|id| (id, 0)).collect();
     let mut resolved = BTreeMap::new();
     let mut total = 0usize;
     while let Some((id, depth)) = queue.pop_front() {
@@ -239,6 +246,91 @@ pub fn validate_data(resource: &Resource, definitions: &Definitions) -> AtomicRe
 pub async fn attach(resource: &mut Resource, store: &impl Storelike) -> AtomicResult<()> {
     let definitions = resolve(resource, store).await?;
     resource.attach_schema_definitions(&definitions)
+}
+
+/// Inspect only root keys and isA, never materialize a canvas/document body just
+/// to decide whether schema work is needed. Attachments must still be verified
+/// even when none of their definitions are referenced by the resource.
+fn doc_references(doc: &crate::loro::AtomicLoroDoc) -> BTreeSet<String> {
+    let properties = doc.doc().get_map("properties");
+    let mut ids: BTreeSet<String> = properties
+        .keys()
+        .filter_map(|key| canonical_id(&key))
+        .collect();
+    if let Some(value) = properties.get(crate::urls::IS_A) {
+        if let Some(value) =
+            crate::loro::loro_value_to_atomic_value_tagged(&value.get_deep_value(), None)
+        {
+            let view = Resource::from_propvals(
+                [(crate::urls::IS_A.into(), value)].into(),
+                "atomic:schema-projection".into(),
+            );
+            ids.extend(
+                view.class_subjects()
+                    .iter()
+                    .filter_map(|id| canonical_id(id)),
+            );
+        }
+    }
+    ids
+}
+
+pub fn doc_needs_schema(doc: &crate::loro::AtomicLoroDoc) -> bool {
+    doc.doc()
+        .try_get_map(ROOT)
+        .is_some_and(|map| !map.is_empty())
+        || !doc_references(doc).is_empty()
+}
+
+/// Attach to the original pending transaction. Exporting or reading history
+/// here would auto-commit edits before the caller sets its signed message.
+pub async fn attach_doc(
+    doc: &crate::loro::AtomicLoroDoc,
+    store: &impl Storelike,
+) -> AtomicResult<()> {
+    let references = doc_references(doc);
+    let attached = read_doc(doc)?;
+    if references.is_empty() {
+        return Ok(());
+    }
+    let definitions = resolve_attached(references, store, attached).await?;
+    write_doc(doc, &definitions)
+}
+
+pub(crate) fn write_doc(
+    doc: &crate::loro::AtomicLoroDoc,
+    definitions: &Definitions,
+) -> AtomicResult<()> {
+    if definitions.is_empty() {
+        return Ok(());
+    }
+    let map = doc.doc().get_map(ROOT);
+    let mut all = read_doc(doc)?;
+    all.extend(definitions.clone());
+    if all.len() > MAX_DEFINITIONS {
+        return Err("Too many schema dependencies".into());
+    }
+    let bodies = all
+        .iter()
+        .map(|(id, definition)| Ok((id, serde_jcs::to_string(&frozen::body(definition)?)?)))
+        .collect::<AtomicResult<Vec<_>>>()?;
+    if bodies
+        .iter()
+        .map(|(id, body)| id.len() + body.len())
+        .sum::<usize>()
+        > MAX_BYTES
+    {
+        return Err("Schema dependencies exceed byte budget".into());
+    }
+    for (id, body) in bodies {
+        if map.get(id).and_then(|v| v.into_value().ok())
+            != Some(loro::LoroValue::String(body.clone().into()))
+        {
+            map.insert(id, body.as_str())
+                .map_err(|e| format!("Schema attachment failed: {e}"))?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

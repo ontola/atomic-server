@@ -2449,3 +2449,19 @@ refused subscribe is dropped.
 - The paired SaaS `portal/e2e/onboarding.spec.ts` closes the original context,
   downloads the vault into a fresh browser, verifies the saved document and
   profile, requires a clean console, and budgets metadata reads after reload.
+
+
+## Frozen-schema review regressions
+
+- `schema::tests::low_level_signing_preserves_genesis_and_edit_attribution`:
+  low-level genesis and two signed edits preserve distinct envelope attribution
+  for ordinary and frozen-schema resources. Failed before the correction.
+- `schema_doc_fast_path_still_checks_classes_and_unreferenced_attachments`:
+  attachment preserves pending operations; ordinary resources and multiple class
+  encodings are handled without ignoring poisoned docless snapshots.
+- `browser/lib/src/schema-dependencies.test.ts`: selective reads, replica expiry,
+  local updates, abandoned candidates, new schema-bearing deltas and local history.
+- `browser/lib/src/websockets.test.ts`: a good resource following a bad one still
+  imports, the error names the bad subject, and sync completion remains blocked.
+- `browser/lib/src/schema-import.perf.test.ts`: opt-in large-document measurement;
+  comparison and limits are in [the review follow-up](planning/schema-review-followup.md).

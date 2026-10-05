@@ -1,4 +1,4 @@
-import type { LoroDoc } from 'loro-crdt';
+import { isContainer, type LoroDoc } from 'loro-crdt';
 import type { Resource } from './resource.js';
 import type { Store } from './store.js';
 import { core } from './ontologies/core.js';
@@ -163,10 +163,16 @@ export function resolveSchemaDependencies(
     attached.set(id, verifiedDefinition(id, text));
   }
 
-  const queue = links(
-    doc.getMap('properties').toJSON() as Record<string, SchemaValue>,
-    false,
-  ).map(id => ({ id, depth: 0 }));
+  const properties = doc.getMap('properties');
+  const classes = properties.get(core.properties.isA);
+  // Inspect only root keys and class membership. Deep-converting unrelated
+  // canvas/document properties makes every tiny delta cost the full body size.
+  const queue = [
+    ...properties.keys().filter(isFrozenSchema),
+    ...classIds(
+      (isContainer(classes) ? classes.toJSON() : classes) as SchemaValue,
+    ).filter(isFrozenSchema),
+  ].map(id => ({ id: identifier(id), depth: 0 }));
   const resolved: Definitions = new Map();
   bytes = 0;
 
@@ -195,14 +201,13 @@ export function validateSchemaData(
   doc: LoroDoc,
   definitions: Definitions,
 ): void {
-  const values = doc.getMap('properties').toJSON() as Record<
-    string,
-    SchemaValue
-  >;
+  const properties = doc.getMap('properties');
   const tags = doc.getMap('datatypes');
 
-  for (const [property, value] of Object.entries(values)) {
+  for (const property of properties.keys()) {
     if (!isFrozenSchema(property)) continue;
+    const raw = properties.get(property);
+    const value = (isContainer(raw) ? raw.toJSON() : raw) as SchemaValue;
     const definition = definitions.get(identifier(property));
     if (
       !definition ||
@@ -218,7 +223,10 @@ export function validateSchemaData(
     validateAppValue(shape, parsed);
   }
 
-  const classes = values[core.properties.isA];
+  const rawClasses = properties.get(core.properties.isA);
+  const classes = (
+    isContainer(rawClasses) ? rawClasses.toJSON() : rawClasses
+  ) as SchemaValue;
 
   for (const id of classIds(classes)) {
     if (typeof id !== 'string' || !isFrozenSchema(id)) continue;
@@ -233,7 +241,7 @@ export function validateSchemaData(
     for (const required of definition.get(
       core.properties.requires,
     ) as string[]) {
-      if (!Object.hasOwn(values, required))
+      if (!properties.keys().includes(required))
         throw new Error(`Missing required schema field ${required}`);
     }
   }
