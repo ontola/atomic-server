@@ -10725,10 +10725,8 @@ msgstr ""
 msgid "Where space goes"
 msgstr ""
 
-#. 0: ' '
-#: src/components/StorageView.tsx
-msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
-msgstr ""
+#~ msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
+#~ msgstr ""
 
 #: src/helpers/storageMap.ts
 msgid "This workspace"
@@ -10801,4 +10799,28 @@ msgstr ""
 
 #: src/components/Vault/VaultStorage.tsx
 msgid "Other"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Colours"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Each tile is an item in this workspace. Bigger tile, more space."
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> resource"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> resource with other resources"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> mixed (files and resources)"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "<0/> file or image"
 msgstr ""
