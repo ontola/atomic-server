@@ -27,6 +27,30 @@ async fn pass(
     checkpoint_n: u64,
     has_checkpoint: bool,
 ) -> Option<(SegmentKind, usize, usize, usize)> {
+    pass_with(
+        store,
+        drive,
+        key,
+        vault,
+        segment,
+        checkpoint_n,
+        has_checkpoint,
+        CheckpointPolicy::default(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn pass_with(
+    store: &Db,
+    drive: &Subject,
+    key: &DriveVaultKey,
+    vault: &MemoryVaultStore,
+    segment: u32,
+    checkpoint_n: u64,
+    has_checkpoint: bool,
+    policy: CheckpointPolicy,
+) -> Option<(SegmentKind, usize, usize, usize)> {
     let summary = export_vault_segment(
         store,
         drive,
@@ -38,7 +62,7 @@ async fn pass(
         checkpoint_n,
         has_checkpoint,
         &BTreeMap::new(),
-        CheckpointPolicy::default(),
+        policy,
     )
     .await
     .unwrap()?;
@@ -117,5 +141,79 @@ async fn vault_incremental_cost() {
 
         println!("| {n} | {anchor_bytes} | {anchor_ms} | {idle_ms} | {delta_bytes} | {delta_ms} |");
         let _ = vault.list(&drive_prefix(PSEUDONYM));
+    }
+}
+
+/// Delta cost of repeated edits to one document, per envelope retention.
+///
+/// Delta packs ship only envelopes newer than the lane's cursor, so under
+/// `all` retention the bytes per pass stay flat instead of growing with the
+/// number of earlier edits. Run with
+/// `cargo test --features db-redb --release vault_envelope_growth -- --ignored --nocapture`.
+#[tokio::test]
+#[ignore]
+async fn vault_envelope_growth() {
+    use atomic_lib::envelopes::EnvelopeRetention;
+
+    for retention in [EnvelopeRetention::Latest, EnvelopeRetention::All] {
+        let store = Db::init_temp(&format!("vault_envelope_growth_{}", retention.as_str()))
+            .await
+            .unwrap();
+        store.set_envelope_retention(retention);
+        let (_agent, drive) = store.setup("alice").await.unwrap();
+        let drive_subject = Subject::from_raw(&drive, store.get_base_domain().as_deref());
+        let note = store
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let key = DriveVaultKey::from_bytes([5u8; 32], 1);
+        let vault = MemoryVaultStore::new();
+        pass(&store, &drive_subject, &key, &vault, 1, 1, false)
+            .await
+            .expect("anchor");
+
+        let subject = Subject::from_raw(&note, store.get_base_domain().as_deref());
+        let mut sizes = Vec::new();
+        // A tiny drive would otherwise trip the bytes-ratio and write a
+        // checkpoint, which ships every envelope by design.
+        let policy = CheckpointPolicy {
+            max_segments: 1000,
+            bytes_ratio: 1e9,
+        };
+        for i in 0..40usize {
+            let mut resource = store.get_resource(&subject).await.unwrap();
+            resource
+                .set(
+                    atomic_lib::urls::NAME.into(),
+                    atomic_lib::Value::String(format!("edit-{i}")),
+                    &store,
+                )
+                .await
+                .unwrap();
+            // A signed commit, so the resource gains an envelope.
+            resource.save_locally(&store).await.unwrap();
+            let (kind, _, _, bytes) = pass_with(
+                &store,
+                &drive_subject,
+                &key,
+                &vault,
+                i as u32 + 1,
+                1,
+                true,
+                policy,
+            )
+            .await
+            .expect("edit ships");
+            assert_eq!(kind, SegmentKind::Pack);
+            sizes.push(bytes);
+        }
+        println!(
+            "retention={} first={} last={} total={} per-edit={:?}",
+            retention.as_str(),
+            sizes[0],
+            sizes[39],
+            sizes.iter().sum::<usize>(),
+            sizes
+        );
     }
 }
