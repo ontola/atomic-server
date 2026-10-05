@@ -5118,6 +5118,8 @@ msgid "More profile fields"
 msgstr ""
 
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SignOutRoute.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Sign out"
 msgstr ""
 
@@ -6123,6 +6125,7 @@ msgid "Add a recovery code"
 msgstr ""
 
 #: src/components/IdentityReconcileGate.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Signing out…"
 msgstr ""
 
@@ -11138,6 +11141,7 @@ msgstr ""
 
 #: src/chunks/FormBuilder/ShareLinkPanel.tsx
 msgid "Forms need a server to receive answers."
+msgstr ""
 
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Could not read that image"
@@ -11313,7 +11317,6 @@ msgstr ""
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Signed in on another device? Use a code"
 msgstr ""
-
 
 #. 0: errorMessage(error)
 #: src/chunks/TablePage/Calendar/CalendarRowFields.tsx
@@ -11602,6 +11605,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
+msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
@@ -11732,4 +11736,8 @@ msgstr ""
 #. 0: quickFilterQuery
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
+msgstr ""
+
+#: src/routes/SignOutRoute.tsx
+msgid "This signs you out of your account and removes your key from this browser."
 msgstr ""

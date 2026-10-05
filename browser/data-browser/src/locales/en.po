@@ -5124,6 +5124,8 @@ msgid "More profile fields"
 msgstr "More profile fields"
 
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SignOutRoute.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Sign out"
 msgstr "Sign out"
 
@@ -6129,6 +6131,7 @@ msgid "Add a recovery code"
 msgstr "Add a recovery code"
 
 #: src/components/IdentityReconcileGate.tsx
+#: src/routes/SignOutRoute.tsx
 msgid "Signing out…"
 msgstr "Signing out…"
 
@@ -11749,3 +11752,7 @@ msgstr "Find rows containing text"
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
 msgstr "No rows show “{0}”."
+
+#: src/routes/SignOutRoute.tsx
+msgid "This signs you out of your account and removes your key from this browser."
+msgstr "This signs you out of your account and removes your key from this browser."
