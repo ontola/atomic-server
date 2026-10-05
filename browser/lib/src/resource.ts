@@ -2779,7 +2779,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    this.writeLoroListInPlace(map, propUrl, items);
+    this.patchLoroListInPlace(map, propUrl, items);
 
     // Single commit at end → single UndoManager checkpoint for the whole
     // replacement.
@@ -2844,6 +2844,77 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.writeJsonToLoroList(list, value);
+  }
+
+  /**
+   * Like {@link writeLoroListInPlace}, but only touches the elements that
+   * differ: the common prefix and suffix stay, the changed middle is deleted
+   * and re-inserted. Undoing the last stroke of a 2000-stroke canvas deletes
+   * one element instead of draining and rewriting all of them, which keeps
+   * the commit (and the oplog) proportional to the change.
+   */
+  private patchLoroListInPlace(
+    map: {
+      get: (key: string) => unknown;
+      setContainer: (key: string, container: LoroList) => LoroList;
+    },
+    prop: string,
+    value: JSONValue[],
+  ): void {
+    const existing = map.get(prop);
+
+    if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
+      this.writeLoroListInPlace(map, prop, value);
+
+      return;
+    }
+
+    const list = existing as LoroList;
+    const old = list.toJSON() as JSONValue[];
+    const max = Math.min(old.length, value.length);
+    let start = 0;
+
+    while (start < max && jsonEqual(old[start], value[start])) start++;
+
+    let oldEnd = old.length;
+    let newEnd = value.length;
+
+    while (
+      oldEnd > start &&
+      newEnd > start &&
+      jsonEqual(old[oldEnd - 1], value[newEnd - 1])
+    ) {
+      oldEnd--;
+      newEnd--;
+    }
+
+    if (oldEnd > start) {
+      list.delete(start, oldEnd - start);
+    }
+
+    const { LoroList: LoroListClass, LoroMap } = LoroLoader.Loro;
+
+    for (let i = start; i < newEnd; i++) {
+      const item = value[i];
+
+      if (Array.isArray(item)) {
+        this.writeJsonToLoroList(
+          list.insertContainer(i, new LoroListClass()),
+          item,
+        );
+      } else if (item && typeof item === 'object') {
+        this.writeJsonToLoroMap(
+          list.insertContainer(i, new LoroMap()),
+          item as JSONObject,
+        );
+      } else if (
+        typeof item === 'string' ||
+        typeof item === 'number' ||
+        typeof item === 'boolean'
+      ) {
+        list.insert(i, item);
+      }
+    }
   }
 
   private writeJsonToLoroList(list: LoroList, arr: JSONValue[]): void {
@@ -4220,4 +4291,30 @@ function isNetworkError(e: unknown): boolean {
   }
 
   return false;
+}
+
+/** Structural equality of two JSON values, ignoring object key order. */
+function jsonEqual(a: JSONValue, b: JSONValue): boolean {
+  if (a === b) return true;
+
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+
+    return a.every((v, i) => jsonEqual(v, b[i]));
+  }
+
+  const ka = Object.keys(a);
+
+  if (ka.length !== Object.keys(b).length) return false;
+
+  return ka.every(k =>
+    jsonEqual(
+      (a as JSONObject)[k] as JSONValue,
+      (b as JSONObject)[k] as JSONValue,
+    ),
+  );
 }
