@@ -118,7 +118,6 @@ msgstr "Agents IA"
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
-
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
@@ -311,10 +310,7 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
-
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/views/InvitePage.tsx
-#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Continuer"
 
@@ -1713,6 +1709,7 @@ msgstr "Définir un titre"
 #: src/chunks/FormBuilder/useFormQuestions.ts
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
+#: src/helpers/storageMap.ts
 msgid "Untitled"
 msgstr "Sans titre"
 
@@ -6667,17 +6664,13 @@ msgstr ""
 #~ msgid "You can add or change your picture later in your profile."
 #~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr ""
+#~ msgid "Your Cloud Server subscription is active"
+#~ msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr ""
+#~ msgid "Your Cloud Server trial is active"
+#~ msgstr ""
 
 #: src/components/ProfileForm.tsx
-
-#: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr ""
 
@@ -8697,7 +8690,6 @@ msgid "Resume"
 msgstr ""
 
 #: src/components/ConnectedAppsCard.tsx
-
 #: src/chunks/FormBuilder/FormAccessSection.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -11402,6 +11394,7 @@ msgstr ""
 #. 0: getSyncLabel(syncStatus)
 #: src/components/SideBar/AccountMenu.tsx
 msgid "Sync: {0}"
+msgstr ""
 
 #. 0: appTitle
 #. 0: appTitle
@@ -11760,7 +11753,6 @@ msgstr ""
 msgid "End time"
 msgstr ""
 
-
 #: src/actions/resourceActions.tsx
 msgid "Reload resource"
 msgstr ""
@@ -11789,13 +11781,6 @@ msgstr ""
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
-msgstr ""
-
-
-#: src/routes/SyncRoute.tsx
-msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
-msgstr ""
-
 #: src/routes/SyncRoute.tsx
 msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
 msgstr ""
@@ -11818,6 +11803,7 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+msgstr ""
 
 #: src/components/SideBar/MessagesPanel.tsx
 msgid "Messages"
@@ -11858,6 +11844,7 @@ msgstr ""
 
 #: src/views/Conversation/NewMessageDialog.tsx
 msgid "Start conversation"
+msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Your profile picture could not be uploaded. You can add it later in your profile."
@@ -11869,6 +11856,7 @@ msgstr ""
 
 #: src/views/InvitePage.tsx
 msgid "Account created"
+msgstr ""
 
 #: src/components/MetaSetter.tsx
 msgid "Welcome"
@@ -11924,6 +11912,7 @@ msgstr ""
 #. 0: host
 #: src/routes/AuthorizeMcpRoute.tsx
 msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
+msgstr ""
 
 #: src/chunks/TablePage/QuickFilterField.tsx
 msgid "Find rows"
@@ -11940,43 +11929,6 @@ msgstr ""
 #. 0: quickFilterQuery
 #: src/chunks/TablePage/TableResource.tsx
 msgid "No rows show “{0}”."
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Welcome"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Account"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Server settings"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Token"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Data"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Get started"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Invitation"
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "Your own place for documents, tables, meetings and chat. Local-first and open source, with optional cloud backup and sync."
-msgstr ""
-
-#: src/components/MetaSetter.tsx
-msgid "The easiest way to create, share and model Linked Atomic Data."
-
 msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
@@ -12001,6 +11953,7 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."
+msgstr ""
 
 #: src/routes/InviteRoute.tsx
 msgid "Opening invitation..."
@@ -12009,6 +11962,7 @@ msgstr ""
 #. 0: candidates[0]
 #: src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
+msgstr ""
 
 #. 0: address
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -12021,7 +11975,111 @@ msgstr ""
 #. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Saved {0}, identity …{1}"
+msgstr ""
 
 #: src/routes/SignOutRoute.tsx
 msgid "This signs you out of your account and removes your key from this browser."
+msgstr ""
+
+#: src/components/StorageView.tsx
+#: src/components/StorageView.tsx
+msgid "This item itself"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Location"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Measuring…"
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "This server could not report storage for the workspace. It may be an older version, or you may not be allowed to read it."
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Nothing here takes up space."
+msgstr ""
+
+#: src/components/StorageView.tsx
+msgid "Where space goes"
+msgstr ""
+
+#. 0: ' '
+#: src/components/StorageView.tsx
+msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> files and images, <1/> edit history."
+msgstr ""
+
+#: src/helpers/storageMap.ts
+msgid "This workspace"
+msgstr ""
+
+#: src/helpers/storageMap.ts
+msgid "Drive"
+msgstr ""
+
+#: src/routes/StorageRoute.tsx
+msgid "Back to sync settings"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "See where space goes →"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not read storage use."
+msgstr ""
+
+#. 0: formatBytes(result.bytes_reclaimed)
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freed {0}."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Nothing to free."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not free storage."
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Manage storage"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Storage in Cloud Vault"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freeing…"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Free up space"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Change history"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Snapshots"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Files and images"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Search index"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Compression data"
+msgstr ""
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Other"
 msgstr ""

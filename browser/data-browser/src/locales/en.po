@@ -118,7 +118,6 @@ msgstr "AI Agents"
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/CreateTableFormDialog.tsx
-
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
@@ -311,10 +310,7 @@ msgid "Ollama"
 msgstr "Ollama"
 
 #: src/chunks/AI/AISetupPanel.tsx
-
 #: src/chunks/Templates/DriveTemplateSetup.tsx
-#: src/views/InvitePage.tsx
-#: src/views/InvitePage.tsx
 msgid "Continue"
 msgstr "Continue"
 
@@ -1713,6 +1709,7 @@ msgstr "Set a title"
 #: src/chunks/FormBuilder/useFormQuestions.ts
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
+#: src/helpers/storageMap.ts
 msgid "Untitled"
 msgstr "Untitled"
 
@@ -6673,17 +6670,13 @@ msgstr "How your colleagues see you"
 #~ msgid "You can add or change your picture later in your profile."
 #~ msgstr "You can add or change your picture later in your profile."
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server subscription is active"
-msgstr "Your Cloud Server subscription is active"
+#~ msgid "Your Cloud Server subscription is active"
+#~ msgstr "Your Cloud Server subscription is active"
 
-#: src/routes/SyncRoute.tsx
-msgid "Your Cloud Server trial is active"
-msgstr "Your Cloud Server trial is active"
+#~ msgid "Your Cloud Server trial is active"
+#~ msgstr "Your Cloud Server trial is active"
 
 #: src/components/ProfileForm.tsx
-
-#: src/components/TeamProfileStep.tsx
 msgid "Profile picture (optional)"
 msgstr "Profile picture (optional)"
 
@@ -8703,7 +8696,6 @@ msgid "Resume"
 msgstr "Resume"
 
 #: src/components/ConnectedAppsCard.tsx
-
 #: src/chunks/FormBuilder/FormAccessSection.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -11879,7 +11871,6 @@ msgstr "Use your full name and a picture so people recognize you. You can change
 msgid "Account created"
 msgstr "Account created"
 
-
 #: src/components/MetaSetter.tsx
 msgid "Welcome"
 msgstr "Welcome"
@@ -11953,7 +11944,6 @@ msgstr "Find rows containing text"
 msgid "No rows show “{0}”."
 msgstr "No rows show “{0}”."
 
-
 #: src/components/BrowserPeerPanel.tsx
 msgid "See Cloud Server plans"
 msgstr "See Cloud Server plans"
@@ -12003,3 +11993,106 @@ msgstr "Saved {0}, identity …{1}"
 #: src/routes/SignOutRoute.tsx
 msgid "This signs you out of your account and removes your key from this browser."
 msgstr "This signs you out of your account and removes your key from this browser."
+
+#: src/components/StorageView.tsx
+#: src/components/StorageView.tsx
+msgid "This item itself"
+msgstr "This item itself"
+
+#: src/components/StorageView.tsx
+msgid "Location"
+msgstr "Location"
+
+#: src/components/StorageView.tsx
+msgid "Measuring…"
+msgstr "Measuring…"
+
+#: src/components/StorageView.tsx
+msgid "This server could not report storage for the workspace. It may be an older version, or you may not be allowed to read it."
+msgstr "This server could not report storage for the workspace. It may be an older version, or you may not be allowed to read it."
+
+#: src/components/StorageView.tsx
+msgid "Nothing here takes up space."
+msgstr "Nothing here takes up space."
+
+#: src/components/StorageView.tsx
+msgid "Where space goes"
+msgstr "Where space goes"
+
+#. 0: ' '
+#: src/components/StorageView.tsx
+msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> files and images, <1/> edit history."
+msgstr "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> files and images, <1/> edit history."
+
+#: src/helpers/storageMap.ts
+msgid "This workspace"
+msgstr "This workspace"
+
+#: src/helpers/storageMap.ts
+msgid "Drive"
+msgstr "Drive"
+
+#: src/routes/StorageRoute.tsx
+msgid "Back to sync settings"
+msgstr "Back to sync settings"
+
+#: src/routes/SyncRoute.tsx
+msgid "See where space goes →"
+msgstr "See where space goes →"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not read storage use."
+msgstr "Could not read storage use."
+
+#. 0: formatBytes(result.bytes_reclaimed)
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freed {0}."
+msgstr "Freed {0}."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Nothing to free."
+msgstr "Nothing to free."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Could not free storage."
+msgstr "Could not free storage."
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Manage storage"
+msgstr "Manage storage"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Storage in Cloud Vault"
+msgstr "Storage in Cloud Vault"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Freeing…"
+msgstr "Freeing…"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Free up space"
+msgstr "Free up space"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Change history"
+msgstr "Change history"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Snapshots"
+msgstr "Snapshots"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Files and images"
+msgstr "Files and images"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Search index"
+msgstr "Search index"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Compression data"
+msgstr "Compression data"
+
+#: src/components/Vault/VaultStorage.tsx
+msgid "Other"
+msgstr "Other"
