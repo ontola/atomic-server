@@ -11959,4 +11959,12 @@ msgstr ""
 #. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Saved {0}, identity …{1}"
+
+#: src/routes/InviteRoute.tsx
+msgid "Opening invitation..."
+msgstr ""
+
+#. 0: candidates[0]
+#: src/routes/InviteRoute.tsx
+msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
 msgstr ""
