@@ -7,6 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX` takes a comma-separated list (`atomicserver.eu,atomic.place`), so a node can answer under two domains while it moves from one to the other.
 - Forms (beta): guests can fill in a form without an account, and each answer
   becomes a row in a Table. New default ontology `forms`
   (`lib/defaults/forms.json`: `Form`, `FormPage`, `FormField`, `FormHeading`,
