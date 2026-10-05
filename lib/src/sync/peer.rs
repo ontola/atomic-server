@@ -1441,17 +1441,30 @@ fn register_live_peer(
                                 // only after admission and successful persistence,
                                 // and only from the peer that supplied this resource.
                                 if persisted.is_ok() {
-                                    let subject = crate::Subject::from_raw(&decoded.subject, store.get_base_domain().as_deref());
+                                    let subject = crate::Subject::from_raw(
+                                        &decoded.subject,
+                                        store.get_base_domain().as_deref(),
+                                    );
                                     if let Ok(resource) = store.get_resource(&subject).await {
                                         if let Ok(value) = resource.get(crate::urls::BLOB) {
-                                            let blob = crate::Subject::from_raw(&value.to_string(), None);
+                                            let blob =
+                                                crate::Subject::from_raw(&value.to_string(), None);
                                             if let Some(hash_hex) = blob.blob_hash_hex() {
                                                 if let Ok(bytes) = hex::decode(hash_hex) {
                                                     if let Ok(hash) = <[u8; 32]>::try_from(bytes) {
-                                                        if !store.has_blob(&hash).await.unwrap_or(false) {
-                                                            store.note_pending_blob_request(hash, admitted_drive);
+                                                        if !store
+                                                            .has_blob(&hash)
+                                                            .await
+                                                            .unwrap_or(false)
+                                                        {
+                                                            store.note_pending_blob_request(
+                                                                hash,
+                                                                admitted_drive,
+                                                            );
                                                             let frame = super::protocol::encode_blob_request(&hash);
-                                                            let _ = tx_for_read.send(frame_with_len(&frame)).await;
+                                                            let _ = tx_for_read
+                                                                .send(frame_with_len(&frame))
+                                                                .await;
                                                         }
                                                     }
                                                 }
