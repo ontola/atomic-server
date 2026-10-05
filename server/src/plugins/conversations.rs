@@ -41,9 +41,10 @@ fn handle_conversations_request<'a>(
 
         let mut resource = Resource::new(subject.to_string());
         resource.set_class(urls::ENDPOINT_RESPONSE)?;
-        // `status` is required on an endpoint response; clients refuse the
-        // resource without it.
+        // `status` and `response-message` are required on an endpoint
+        // response; clients refuse the resource without them.
         resource.set_unsafe(urls::STATUS.to_string(), 200.into())?;
+        resource.set_unsafe(urls::RESPONSE_MESSAGE.to_string(), "OK".to_string().into())?;
         resource
             .set_string(
                 urls::DESCRIPTION.into(),
