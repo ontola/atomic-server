@@ -304,6 +304,7 @@ const SettingsAgent: React.FunctionComponent = () => {
                 <Heading as='h2'>Account recovery</Heading>
                 <InfoHint title='How you get back in on a new device — and where to find your agent secret.' />
               </Row>
+              <AddPasskeyLanding />
               <AccountRecoveryCard agentSubject={effectiveAgent.subject} />
 
               <Margin />
@@ -367,3 +368,29 @@ const InfoHintIcon = styled.span`
   cursor: help;
   font-size: 0.9rem;
 `;
+
+/**
+ * atomic.place sends someone here to add a passkey when their backup has no
+ * assisted wrapper (`?add=passkey`): only this app holds the identity, so only
+ * here can a new passkey also open the backup. Say so, and bring the recovery
+ * card into view, instead of leaving them on a settings page with no clue.
+ */
+function AddPasskeyLanding() {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [fromPortal] = useState(
+    () => new URLSearchParams(window.location.search).get('add') === 'passkey',
+  );
+
+  useEffect(() => {
+    if (fromPortal) ref.current?.scrollIntoView({ block: 'start' });
+  }, [fromPortal]);
+
+  if (!fromPortal) return null;
+
+  return (
+    <p ref={ref} data-test='add-passkey-landing'>
+      Add your passkey here. A passkey added in the app also unlocks your
+      encrypted backup, which only the app can do.
+    </p>
+  );
+}

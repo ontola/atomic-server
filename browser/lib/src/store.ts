@@ -106,6 +106,7 @@ import {
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
+  isMissingParentMessage,
   isNotEnrolledMessage,
   type OutboxEntry,
 } from './local-outbox.js';
@@ -5129,6 +5130,9 @@ export class Store {
   /** Drives whose "not enrolled" refusal was already reported this session. */
   private _notifiedRefusedDrives = new Set<string>();
 
+  /** Drives whose "server lacks the parent" refusal was already reported. */
+  private _notifiedMissingParentDrives = new Set<string>();
+
   /**
    * Tell the person a write stopped syncing. The entry stays queued and
    * visible, and a fresh edit re-arms it.
@@ -5157,6 +5161,28 @@ export class Store {
             `Your changes are kept on this device and are not being sent. ` +
             `Ask the server's operator to enrol the workspace, or turn on ` +
             `browser-only sync for it in the sync settings.`,
+        ),
+      );
+
+      return;
+    }
+
+    if (isMissingParentMessage(message)) {
+      // Every write under a workspace the server does not hold is refused the
+      // same way, and each one used to toast on every page load. Say it once
+      // per workspace, in terms of the workspace, and say what to do.
+      const drive = this.driveOf(this.normalizeSubject(subject)) ?? subject;
+
+      if (this._notifiedMissingParentDrives.has(drive)) return;
+
+      this._notifiedMissingParentDrives.add(drive);
+      this.notifyError(
+        new Error(
+          `Some changes could not be sent: the server does not have the ` +
+            `workspace they belong to (${drive.slice(0, 40)}…). They are ` +
+            `kept on this device and are not being retried. Once the workspace ` +
+            `is back on the server, syncing it sends them; if it is gone, ` +
+            `discard them on the Sync page.`,
         ),
       );
 
@@ -5369,6 +5395,19 @@ export class Store {
       if (this._lastDriveSyncError?.drive === drive) {
         this._lastDriveSyncError = undefined;
       }
+
+      // Writes the server refused for a missing parent (a drive root it never
+      // received) were parked after their retries. This resync is what offers
+      // that parent, so try them once more.
+      const syncedDrive = this.normalizeSubject(drive);
+      const rearmed = this.outbox.rearmParentBlocked(
+        subject =>
+          this.normalizeSubject(
+            this.driveOf(this.normalizeSubject(subject)),
+          ) === syncedDrive,
+      );
+
+      if (rearmed > 0) this.scheduleOutboxDrain();
     }
 
     this.emitSyncStatus();
