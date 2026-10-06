@@ -434,16 +434,8 @@ pub async fn handle_frame_full_for_caps(
             // readable subjects both so it can match the client's and so an
             // anonymous socket learns nothing about a drive it cannot read.
             Some(sync) if sync.probe => {
-                match drive_sync_hash_for_wire_version(
-                    store,
-                    &sync.drive,
-                    agent,
-                    wire,
-                    sync.hash_version,
-                )
-                .await
-                {
-                    Ok(server_hash) if server_hash == sync.drive_hash => {
+                match drive_probe_hash(store, &sync.drive, agent, wire, sync.hash_version).await {
+                    Ok(Some(server_hash)) if server_hash == sync.drive_hash => {
                         vec![protocol::encode_sync_ok(&wire.subject(&sync.drive))]
                     }
                     Ok(_) => vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
@@ -647,6 +639,50 @@ pub async fn handle_frame_full_for_caps(
         frames,
         subscribe: None,
         unsubscribe: None,
+    }
+}
+
+/// A missing drive has no readable inventory to hash yet. Ask for a full
+/// reconcile only when importing it could be admitted, without performing any
+/// of the enrollment or grace bookkeeping reserved for actual writes.
+async fn drive_probe_hash(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    hash_version: u8,
+) -> Result<Option<String>, String> {
+    let subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let key = subject.pure_id();
+    match store
+        .kv
+        .get(Tree::Resources, key.as_bytes())
+        .map_err(|e| e.to_string())?
+    {
+        Some(_) => {
+            // get_resource can fall back after a row decode failure. Such a
+            // failure is not absence and must never authorize bootstrap.
+            store
+                .get_resource_shallow(&subject)
+                .map_err(|e| e.to_string())?;
+            drive_sync_hash_for_wire_version(store, drive, agent, wire, hash_version)
+                .await
+                .map(Some)
+        }
+        None => {
+            if !crate::identifiers::is_resource_id(&key)
+                || matches!(agent, crate::agents::ForAgent::Public)
+                || super::tombstones::try_is_tombstoned(store, &key).map_err(|e| e.to_string())?
+            {
+                return Err("not readable".to_string());
+            }
+            let policy = store.sync_policy();
+            if policy.preview_unknown_drive(&key, agent) {
+                Ok(None)
+            } else {
+                Err(policy.not_enrolled_message(&key))
+            }
+        }
     }
 }
 
@@ -2163,6 +2199,176 @@ mod bootstrap_and_sub_tests {
     fn empty_push(drive: &str) -> protocol::DecodedSyncPush {
         let frame = protocol::encode_sync_push(drive, &[], true);
         protocol::decode_sync_push(&frame[1..]).unwrap()
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_requests_reconcile_then_imports_on_open() {
+        let source = Db::init_temp("first_probe_source").await.unwrap();
+        let (alice, drive) = source.setup("Alice").await.unwrap();
+        let child = source
+            .create_resource(crate::urls::FOLDER, &drive, "Offline note", None)
+            .await
+            .unwrap();
+        let sink = Db::init_temp("first_probe_sink").await.unwrap();
+        let mut agent = ForAgent::from(alice);
+        for wire in [WireScheme::CANONICAL, WireScheme::LEGACY] {
+            for hash_version in [1, 2] {
+                let wire_drive = wire.subject(&drive);
+                let empty_hash = if hash_version == 1 {
+                    compute_drive_hash(&Default::default())
+                } else {
+                    compute_drive_hash_v2(&Default::default())
+                };
+                let frame = if hash_version == 1 {
+                    protocol::encode_sync_probe(&wire_drive, &empty_hash)
+                } else {
+                    protocol::encode_sync_probe_v2(&wire_drive, &empty_hash)
+                };
+                let out = handle_frame_full_for_caps(&frame, &sink, &mut agent, wire).await;
+                assert_eq!(out.frames[0], protocol::encode_sync_resend(&wire_drive));
+                assert!(sink
+                    .kv
+                    .get(Tree::Resources, drive.as_bytes())
+                    .unwrap()
+                    .is_none());
+                assert!(sink
+                    .kv
+                    .get(Tree::LoroSnapshots, drive.as_bytes())
+                    .unwrap()
+                    .is_none());
+            }
+        }
+        let subjects: Vec<String> = collect_drive_subjects(&source, &drive.as_str().into())
+            .await
+            .into_iter()
+            .collect();
+        let snapshots = collect_readable_snapshots(&source, &agent, &subjects, None).await;
+        let items = drive_items_for(&source, &drive, &agent).await.unwrap();
+        let vvs = items
+            .into_iter()
+            .map(|(s, vv)| (s, vv.into_iter().collect()))
+            .collect();
+        let frame = protocol::encode_sync_sparse(&drive, "client-hash", &vvs);
+        let frames = handle_frame_full(&frame, &sink, &mut agent).await.frames;
+        let diff = frames
+            .iter()
+            .find_map(|frame| protocol::decode_sync_diff(&frame[1..]))
+            .unwrap();
+        assert!(diff.pull.contains(&drive));
+        assert!(diff.pull.contains(&child));
+        let entries: Vec<(&str, &[u8])> = snapshots
+            .iter()
+            .map(|(s, b)| (s.as_str(), b.as_slice()))
+            .collect();
+        let frame = protocol::encode_sync_push(&drive, &entries, true);
+        let out = handle_frame_full(&frame, &sink, &mut agent).await;
+        assert_eq!(out.frames[0], protocol::encode_sync_ok(&drive));
+        let imported = sink.get_resource(&drive.as_str().into()).await.unwrap();
+        crate::hierarchy::check_read(&sink, &imported, &agent)
+            .await
+            .unwrap();
+        let imported_child = sink.get_resource(&child.as_str().into()).await.unwrap();
+        assert_eq!(
+            imported_child.get(crate::urls::NAME).unwrap().to_string(),
+            "Offline note"
+        );
+    }
+
+    async fn probe(db: &Db, drive: &str, mut agent: ForAgent) -> Vec<u8> {
+        handle_frame_full(&protocol::encode_sync_probe(drive, "hash"), db, &mut agent)
+            .await
+            .frames
+            .remove(0)
+    }
+
+    fn assert_probe_refused(frame: &[u8], drive: &str) {
+        assert_eq!(frame[0], tag::ERROR);
+        let error = protocol::decode_error(&frame[1..]).unwrap();
+        assert_eq!(error.request_id, 0);
+        assert_eq!(error.code, error_code::UNAUTHORIZED_READ);
+        assert!(error
+            .message
+            .starts_with(&format!("SYNC refused for {drive}: ")));
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_refuses_public_private_tombstoned_and_nonresource() {
+        let db = Db::init_temp("first_probe_refusals").await.unwrap();
+        let (alice, private_drive) = db.setup("Alice").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+        let agent = ForAgent::from(alice);
+        assert_probe_refused(
+            &probe(&db, "atomic:missing", ForAgent::Public).await,
+            "atomic:missing",
+        );
+        assert_probe_refused(
+            &probe(&db, &private_drive, ForAgent::from(stranger)).await,
+            &private_drive,
+        );
+        super::super::tombstones::record_tombstone(&db, "atomic:deleted");
+        for drive in [
+            "did:ad:deleted",
+            "atomic:agent:missing",
+            "did:ad:blob:missing",
+            "atomic:node:missing",
+            "did:ad:commit:missing",
+            "atomic:future:missing",
+            "atomic:",
+            "https://example.test/absent",
+        ] {
+            assert_probe_refused(&probe(&db, drive, agent.clone()).await, drive);
+        }
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_previews_owner_and_allowlist_without_enrollment() {
+        use crate::sync::policy::{AllowlistPolicy, SyncPolicy};
+        let db = Db::init_temp("first_probe_policy").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+        let policy = Arc::new(OwnerPolicy::new(owner.subject.to_string()));
+        db.set_sync_policy(policy.clone());
+        let drive = "atomic:newownerdrive";
+        assert_probe_refused(&probe(&db, drive, ForAgent::from(stranger)).await, drive);
+        assert_eq!(
+            probe(&db, drive, ForAgent::from(owner.clone())).await[0],
+            tag::SYNC_RESEND
+        );
+        assert!(
+            !policy.drive_is_allowed(drive),
+            "a probe must not enroll the owner's drive"
+        );
+
+        let policy = Arc::new(AllowlistPolicy::new());
+        db.set_sync_policy(policy.clone());
+        assert_eq!(
+            probe(&db, drive, ForAgent::from(owner.clone())).await[0],
+            tag::SYNC_RESEND
+        );
+        assert!(!policy.drive_is_allowed(drive));
+        policy.set_grace(std::time::Duration::ZERO);
+        assert_probe_refused(
+            &probe(&db, drive, ForAgent::from(owner.clone())).await,
+            drive,
+        );
+        policy.set_drive_policies([(drive, Some(100))]);
+        assert_eq!(
+            probe(&db, drive, ForAgent::from(owner.clone())).await[0],
+            tag::SYNC_RESEND
+        );
+        policy.record_drive_usage([(drive, 100)]);
+        assert_probe_refused(&probe(&db, drive, ForAgent::from(owner)).await, drive);
+    }
+
+    #[tokio::test]
+    async fn first_drive_probe_refuses_a_corrupt_stored_resource_row() {
+        let db = Db::init_temp("first_probe_corrupt").await.unwrap();
+        let (alice, _) = db.setup("Alice").await.unwrap();
+        let drive = "atomic:corrupt";
+        db.kv
+            .insert(Tree::Resources, drive.as_bytes(), b"invalid propvals")
+            .unwrap();
+        assert_probe_refused(&probe(&db, drive, ForAgent::from(alice)).await, drive);
     }
 
     /// A pushed envelope is kept only when it is verified and names a subject
