@@ -2408,7 +2408,7 @@ export class WSClient {
    *  as `SYNC_PUSH rejected for drive <drive>: <reason>`; when that shape
    *  is not recognised, fall back to the drive we are syncing. */
   private driveFromRejection(message: string): string {
-    const match = /rejected for drive (\S+?):/.exec(message);
+    const match = /rejected for drive (\S+): /.exec(message);
 
     return match?.[1] ?? this.store.getDrive() ?? '';
   }
