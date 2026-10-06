@@ -19,6 +19,7 @@ import {
   isAgentSubject,
   isAtomicIdentifier,
   commitSubject,
+  currentAgentSubject,
 } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
@@ -2134,6 +2135,12 @@ export class Resource<C extends OptionalClass = any> {
    * propvals and the founding Loro change message remain legacy fallbacks.
    */
   public getCreatedBy(): string | undefined {
+    const creator = this.getCreatedByRaw();
+
+    return creator === undefined ? undefined : currentAgentSubject(creator);
+  }
+
+  private getCreatedByRaw(): string | undefined {
     const cert = this.getGenesisCertificate();
 
     if (cert) {
