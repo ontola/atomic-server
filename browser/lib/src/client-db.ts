@@ -25,6 +25,10 @@
  * ```
  */
 
+import {
+  publishIndexMigration,
+  type IndexMigrationProgress,
+} from './client-db-migration.js';
 import { RequestCancelledError } from './error.js';
 import { versionVectorRecords } from './version-vector-records.js';
 import {
@@ -689,6 +693,14 @@ export class ClientDbWorker {
     endSpawn();
 
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      if ((event.data as { type: string }).type === 'migration-progress') {
+        const { done, total, finished } =
+          event.data as unknown as IndexMigrationProgress;
+        publishIndexMigration({ done, total, finished });
+
+        return;
+      }
+
       const { id, type, ...rest } = event.data;
       const pending = this.pending.get(String(id));
       if (!pending) return;
