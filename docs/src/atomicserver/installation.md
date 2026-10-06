@@ -5,11 +5,11 @@
 You can run AtomicServer in different ways:
 
 1. Using docker (probably the quickest): `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`
-2. From a published [binary](https://github.com/atomicdata-dev/atomic-server/releases)
+2. From a published [binary](https://github.com/ontola/atomic-server/releases)
 3. Using [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) from crates.io: `cargo install atomic-server`
 4. Manually from source
 
-If you want to run AtomicServer locally as a developer / contributor, check out [the Contributors guide](https://github.com/atomicdata-dev/atomic-server/blob/develop/CONTRIBUTING.md).
+If you want to run AtomicServer locally as a developer / contributor, check out [the Contributors guide](https://github.com/ontola/atomic-server/blob/develop/CONTRIBUTING.md).
 
 ## Privacy: your server never phones home
 
@@ -62,7 +62,7 @@ The `dockerfile` is located in the project root, above this `server` folder.
 
 ## 2. Run pre-compiled binary
 
-Get the binaries from the [releases page](https://github.com/atomicdata-dev/atomic-server/releases) and copy them to your `bin` folder.
+Get the binaries from the [releases page](https://github.com/ontola/atomic-server/releases) and copy them to your `bin` folder.
 
 ## 3. Install using cargo
 
@@ -97,7 +97,7 @@ sudo apt-get install -y build-essential pkg-config libssl-dev --fix-missing
 
 - You can configure the server by passing arguments (see `atomic-server --help`), or by setting ENV variables.
 - The server loads the `.env` from the current path by default. Create a `.env` file from the default template in your current directory with `atomic-server generate-dotenv`
-- After running the server, check the logs and take note of the `Agent Subject` and `Private key`. You should use these in the [`atomic-cli`](https://crates.io/crates/atomic-cli) and [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) clients for authorization.
+- After running the server, check the logs and take note of the `Agent Subject` and `Private key`. You should use these in the [`atomic-cli`](https://crates.io/crates/atomic-cli) and [atomic-data-browser](https://github.com/ontola/atomic-server/tree/develop/browser) clients for authorization.
 - A directory is made: `~/.config/atomic`, which stores your newly created Agent keys, the HTTPS certificates other configuration. Depending on your OS, the actual data is stored in different locations. See use the `show-config` command to find out where, if you need the files.
 - Visit `http://localhost:9883/setup` to **register your first (admin) user**. You can use an existing Agent, or create a new one. Note that if you create a `localhost` agent, it cannot be used on the web (since, well, it's local). More info and steps in [getting started with the GUI](gui.md).
 
@@ -116,7 +116,7 @@ If your server hosts a single site, wiki or dataset that the public should just
 ATOMIC_HOME_DRIVE=internal:/
 
 # ...or a specific Drive
-# ATOMIC_HOME_DRIVE=did:ad:drive:hqfpna7s5ke
+# ATOMIC_HOME_DRIVE=atomic:{genesis}
 ```
 
 Visiting `/` then opens that Drive directly, for signed-out visitors too.
@@ -218,7 +218,7 @@ as private as their permissions say. It is about who may put *new* data here.
 ### Name yourself as the owner
 
 You need your Agent ID: a public identifier that looks like
-`did:ad:agent:AbCd...`. If you do not have one yet, run the server on your own
+`atomic:agent:AbCd...`. If you do not have one yet, run the server on your own
 machine first, click **Create account**, and copy the Agent ID from Settings.
 Your phone or the desktop app work equally well — an identity is a keypair, it
 does not belong to any particular server.
@@ -226,13 +226,13 @@ does not belong to any particular server.
 Then set it on the server that will be public:
 
 ```ini
-ATOMIC_OWNER_AGENT=did:ad:agent:AbCd...
+ATOMIC_OWNER_AGENT=atomic:agent:AbCd...
 ```
 
 That is the whole setup. Restart, and the server will say so at boot:
 
 ```text
-Only its owner can create new Drives here (did:ad:agent:AbCd...).
+Only its owner can create new Drives here (atomic:agent:AbCd...).
 ```
 
 > **Use the Agent ID, never the secret.** The ID is public and safe to put in a
