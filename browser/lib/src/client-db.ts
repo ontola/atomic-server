@@ -1511,8 +1511,39 @@ export class ClientDbWorker {
 
     const id = String(this.nextId++);
 
+    // A worker that died without an `error` event (the browser killed it under
+    // memory pressure, say) never answers. The leader's own callers would wait
+    // forever, and so would every follower behind it, because this tab keeps
+    // answering `leader-ping`. Point reads take milliseconds, so give up on
+    // them and let the caller fall back to the server.
+    const limit =
+      typeof msg.type === 'string' && POINT_READ_TYPES.has(msg.type)
+        ? POINT_READ_TIMEOUT_MS
+        : undefined;
+
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer =
+        limit === undefined
+          ? undefined
+          : setTimeout(() => {
+              if (!this.pending.delete(id)) return;
+              reject(
+                new Error(
+                  `ClientDb worker did not answer ${msg.type} within ${limit / 1000}s — the local database is not responding.`,
+                ),
+              );
+            }, limit);
+
+      this.pending.set(id, {
+        resolve: (data: unknown) => {
+          clearTimeout(timer);
+          resolve(data);
+        },
+        reject: (e: Error) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      });
       this.worker!.postMessage({ ...msg, id } as unknown as WorkerRequest);
     });
   }

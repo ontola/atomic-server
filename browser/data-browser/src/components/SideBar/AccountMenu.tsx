@@ -257,7 +257,9 @@ function AccountTrigger({
   // the 'User' it first rendered, before the profile had loaded or after a
   // rename.
   const [agentName] = useString(agentResource, core.properties.name);
-  const name = agent ? (agentName ?? (agentResource.loading ? '' : 'Signed in')) : 'Login / New User';
+  const name = agent
+    ? (agentName ?? (agentResource.loading ? '' : 'Signed in'))
+    : 'Login / New User';
 
   return (
     <TriggerButton
