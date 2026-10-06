@@ -184,6 +184,19 @@ const DEFAULT_DB_NAME = 'atomic_data.redb';
 const LEADER_LOCK_PREFIX = 'atomic-db-leader';
 const RPC_CHANNEL_PREFIX = 'atomic-db-rpc';
 
+/**
+ * Point reads that answer in milliseconds from a healthy leader. One that has
+ * gone unanswered this long means the leader's database is stuck, and the
+ * caller is better served by an error it can fall back from (to the server)
+ * than by half a minute of nothing.
+ */
+const POINT_READ_TIMEOUT_MS = 10_000;
+const POINT_READ_TYPES = new Set([
+  'getResource',
+  'getResourceWithSnapshot',
+  'getLoroSnapshot',
+]);
+
 /** Operations whose result remains valid when repeated by a new DB owner. */
 const REPEATABLE_RPC_TYPES = new Set([
   'blake3Hash',
@@ -1549,6 +1562,10 @@ export class ClientDbWorker {
     }
 
     const id = String(this.nextId++);
+    const timeoutMs =
+      typeof msg.type === 'string' && POINT_READ_TYPES.has(msg.type)
+        ? POINT_READ_TIMEOUT_MS
+        : 30_000;
 
     return new Promise((resolve, reject) => {
       // If the leader tab dies between sending the request and the
@@ -1567,11 +1584,11 @@ export class ClientDbWorker {
           this.pending.delete(id);
           reject(
             new Error(
-              `ClientDb sendToLeader timed out after 30s — leader tab may have closed.`,
+              `ClientDb sendToLeader timed out after ${timeoutMs / 1000}s — leader tab may have closed.`,
             ),
           );
         }
-      }, 30_000);
+      }, timeoutMs);
 
       this.pending.set(id, {
         onLeaderChanged: () => {

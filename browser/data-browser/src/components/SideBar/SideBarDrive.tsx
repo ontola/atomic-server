@@ -1,3 +1,4 @@
+import { driveDisplayName } from '../../helpers/driveDisplayName';
 import {
   ai,
   dataBrowser,
@@ -123,7 +124,7 @@ export function SideBarDrive({
 
   const driveName = driveResource.isUnauthorized()
     ? 'Unauthorized'
-    : title || drive;
+    : driveDisplayName(title, drive);
 
   return (
     <>
