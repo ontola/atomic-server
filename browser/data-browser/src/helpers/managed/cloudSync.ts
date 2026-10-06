@@ -201,12 +201,6 @@ export async function enableCloudSyncForDrive(params: {
   }
 
   const wasLocalOnly = store.isLocalOnlyDrive(drive);
-  // An identity minted against a non-node origin registered its own agent
-  // resource as local-only too (see `NewIdentitySection`), so the node has
-  // never seen the profile that names this account. It is promoted alongside
-  // the drive: `promoteLocalDrive` reconciles a subject and what it parents,
-  // and for a free-standing agent DID that is the agent resource itself.
-  const agentWasLocalOnly = store.isLocalOnlyDrive(agentSubject);
 
   // The proof needs the key (the store's agent) and, for a drive that is not
   // the agent's personal one, the drive's genesis certificate. A drive we
@@ -271,7 +265,7 @@ export async function enableCloudSyncForDrive(params: {
 
   // React's setting update is asynchronous. Reset the store connection now,
   // or the wait below may see the old server as connected and push there.
-  store.setServerUrl(httpOrigin);
+  store.setServerUrl(httpOrigin, { connect: false });
   setServer(httpOrigin);
 
   // Force a fresh socket. `setServerUrl` opens none when this device was
@@ -286,9 +280,9 @@ export async function enableCloudSyncForDrive(params: {
     );
   });
 
-  // Agent first: the drive's commits are signed by it, and a node that can
-  // resolve the signer before the drive arrives has nothing to defer.
-  if (agentWasLocalOnly) await store.promoteLocalDrive(agentSubject);
+  // The enrollment admits this workspace only. A standalone agent profile
+  // is not an enrolled drive; syncing it separately is refused by managed
+  // nodes. Authentication verifies the key in the agent DID directly.
 
   // Also for a drive that was already synced elsewhere: switching servers
   // copies nothing, and reporting success without this left the node without

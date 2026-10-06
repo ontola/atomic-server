@@ -16,7 +16,7 @@ In order to make this process of inviting others as simple as possible, we've co
 
 1. The Owner of a resource creates an invite token. This token is signed with the owner's private key and contains the `target` resource, optional `write` rights, and an expiration timestamp.
 1. The token is encoded into a URL: `/invites?token={token}&public-key={publicKey}`.
-1. The Guest opens the invite URL. If the guest provides a `public-key` query parameter, the server derives a DID-based Agent (`did:ad:{publicKey}`) from that key.
+1. The Guest opens the invite URL. If the guest provides a `public-key` query parameter, the server derives a DID-based Agent (`atomic:{publicKey}`) from that key.
 1. The server verifies the token signature, grants the requested rights to the guest's Agent, and responds with a Redirect to the `target` resource.
 1. The Guest will now be able to access the Resource.
 
