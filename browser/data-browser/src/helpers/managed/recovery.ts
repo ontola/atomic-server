@@ -1132,6 +1132,7 @@ export async function enableAssistedForBackup(
   recoveryCode?: string,
 ): Promise<RecoverySecret> {
   let dek: Uint8Array<ArrayBuffer> | undefined;
+
   const keep = (opened: Uint8Array<ArrayBuffer>) => {
     dek = opened;
   };
