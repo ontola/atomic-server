@@ -801,6 +801,7 @@ function SyncPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(
     null,
   );
+  const [serverAccessGranted, setServerAccessGranted] = useState(false);
   /**
    * Who made this drive's plan: `stripe` when the account paid for it, `grant`
    * when an operator added it by hand. Unknown from a control plane that does
@@ -814,6 +815,7 @@ function SyncPage() {
   useEffect(() => {
     setSubscriptionStatus(null);
     setSubscriptionSource(null);
+    setServerAccessGranted(false);
     if (!managedAccount || !status.drive) return;
     const drive = status.drive;
     const controller = new AbortController();
@@ -826,6 +828,10 @@ function SyncPage() {
         const subscription = await response.json();
 
         if (!controller.signal.aborted) {
+          setServerAccessGranted(
+            typeof subscription.server_access?.quota_bytes === 'number' &&
+              subscription.server_access.quota_bytes > 0,
+          );
           setSubscriptionStatus(
             subscription.plan === 'server' ? subscription.status : 'free',
           );
@@ -1037,7 +1043,13 @@ function SyncPage() {
     const agent = store.getAgent();
 
     // A local-only drive isn't on the server — asking for its usage 500s.
-    if (!drive || !serverUrl || !agent || store.isLocalOnlyDrive(drive)) {
+    if (
+      !drive ||
+      !serverUrl ||
+      !agent ||
+      cloudBusy ||
+      store.isLocalOnlyDrive(drive)
+    ) {
       setNodeUsageState(null);
 
       return;
@@ -1058,7 +1070,13 @@ function SyncPage() {
     return () => {
       cancelled = true;
     };
-  }, [status.drive, status.serverUrl, status.lastDriveSync?.timestamp, store]);
+  }, [
+    status.drive,
+    status.serverUrl,
+    status.lastDriveSync?.timestamp,
+    cloudBusy,
+    store,
+  ]);
 
   // Plan quota — managed nodes only, from the control plane. Billing stays a
   // managed concern; the usage numbers above are generic to every node.
@@ -1501,8 +1519,7 @@ function SyncPage() {
     !hostedCopyOrigin &&
     !cloudServerBlocked &&
     cloudEnrolled === false &&
-    planActive &&
-    subscriptionSource !== 'stripe';
+    (serverAccessGranted || (planActive && subscriptionSource !== 'stripe'));
 
   useEffect(() => {
     const drive = status.drive;
@@ -1636,7 +1653,7 @@ function SyncPage() {
         status: {
           tone: 'waiting',
           text:
-            subscriptionSource === 'grant'
+            serverAccessGranted || subscriptionSource === 'grant'
               ? `${PRODUCT_NAME} added Cloud Server to this workspace. It waits for your consent.`
               : 'This workspace’s plan includes Cloud Server. It waits for your consent.',
         },

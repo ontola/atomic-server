@@ -880,6 +880,18 @@ Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enro
 
 ## Cloud Server setup
 
+- October 6 local audit: `atomic_lib`'s
+  `sync_probe_bootstraps_an_admitted_missing_drive_only` covers first-upload
+  hash probes, dense/sparse negotiation, unlisted and over-quota refusal,
+  anonymous access and existing private roots. Probes create no resource.
+- `cloudSync.test.ts` verifies that a standalone local agent profile is not
+  promoted as an unenrolled drive. `local-only-drive.test.ts` verifies that
+  copy verification waits for a readable root before requesting inventory.
+  WebSocket rejection tests retain complete atomic, DID and HTTP drive IDs.
+- `managedServer.test.ts` keeps public metadata requests free of cookies
+  that belong to a different server on the same localhost hostname.
+- The paired `drive-switcher-hosting.spec.ts` verifies that reopening the
+  menu bypasses the brief metadata cache and reflects updated receipts.
 - `data-browser/src/helpers/managed/cloudSync.setup.test.ts`: missing placement,
   source-server replication and refusal, assigned-server connection ordering,
   and failed connection without local-drive promotion.
@@ -899,6 +911,14 @@ Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enro
   Verified with plain and managed destinations. `ATOMIC_HOSTING_MANAGED=1`
   additionally checks Active usage receipts and the switcher state. Production
   deployment and Desktop/Tauri replication are not runtime-tested.
+- October 6: the live hosting spec also exercises a drive registered as
+  local-only, a standalone local agent profile, and a fresh browser signing in
+  with the same agent secret and reloading the hosted drive. Both variants
+  passed with strict console checks on two isolated current nodes. The local
+  variant originates from `/app/dev-drive`; browser-only onboarding was
+  additionally exercised manually. Paired portal regressions cover invitation
+  quotas, retrying a refused admin revocation and editing an enrollment whose
+  owner is an account ID. Production billing and deployment remain untested.
 
 - Hosting consent: `cloudSync.setup.test.ts` refuses transfer/enrollment without
   an explicit agreement; paired SaaS HTTP tests enforce and record version 1.

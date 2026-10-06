@@ -1359,6 +1359,10 @@ export class Store {
       await db.flush();
 
       try {
+        // A first upload's reconcile can still be sending its root. GET
+        // has a correlated, quiet NotFound response; inventory requires a
+        // readable root and would otherwise be refused and time out.
+        await ws.fetch(drive);
         const remote = await ws.driveInventory(drive, '');
         const local = await db.getVersionVectorsForDrive(drive);
         const remoteBySubject = new Map(remote.map(i => [i.subject, i.vv]));
