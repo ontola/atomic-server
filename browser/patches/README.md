@@ -57,3 +57,19 @@ Upstream: not yet reported; the same code shape is still in wuchale 0.26.7.
 Remove when an upstream release isolates expression children in
 `adapter-utils/mixed-visitor.js`, then re-run `pnpm clean-translations` and
 check that no entries move.
+
+## @wuchale/jsx@0.12.5.patch
+
+The runtime component that renders a message with markup in it (an icon next
+to a label, a link inside a sentence) returns the pieces as an array, and the
+elements in it carry no key. In development React logs "Each child in a list
+should have a unique key" for every such message, with the owner named after
+the surrounding component (for example `TitleDecorationAffordances`). The
+patch wraps each piece in a `Fragment` keyed by its position, which cannot
+change for a given message. Production builds never logged it, but a Vite dev
+server does, and the atomic-saas portal e2e runs one and fails on any console
+error. `Children.toArray` does not help: React still warns for elements it
+keys that way.
+
+Upstream: not yet reported. Remove when the `@wuchale/jsx` runtime keys the
+pieces it returns; `src/locales/wuchaleRuntime.test.tsx` fails if it does not.
