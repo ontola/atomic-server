@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
   getIndexMigration,

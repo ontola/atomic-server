@@ -952,15 +952,6 @@ msgstr "Create account and accept"
 msgid "I already have an account"
 msgstr "I already have an account"
 
-#~ msgid "Agent created!"
-#~ msgstr "Agent created!"
-
-#~ msgid "Agent Secret"
-#~ msgstr "Agent Secret"
-
-#~ msgid "Copy secret to continue"
-#~ msgstr "Copy secret to continue"
-
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/File/ConvertToDocumentButton.tsx
@@ -2695,24 +2686,6 @@ msgstr "Paste your secret here"
 msgid "Enter your Agent Secret"
 msgstr "Enter your Agent Secret"
 
-#~ msgid "Set your profile name!"
-#~ msgstr "Set your profile name!"
-
-#~ msgid "Others can read this. You can change this later."
-#~ msgstr "Others can read this. You can change this later."
-
-#~ msgid "Enter your name"
-#~ msgstr "Enter your name"
-
-#~ msgid "Profile Name"
-#~ msgstr "Profile Name"
-
-#~ msgid "Creating drive…"
-#~ msgstr "Creating drive…"
-
-#~ msgid "Save & continue"
-#~ msgstr "Save & continue"
-
 #: src/components/ResourceUsage/UsageCard.tsx
 msgid "Previous page"
 msgstr "Previous page"
@@ -3823,12 +3796,6 @@ msgstr "This removes drives created for automated tests or local dev: names cont
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
-
-#~ msgid "Accept as"
-#~ msgstr "Accept as"
-
-#~ msgid "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
-#~ msgstr "IMPORTANT! Below is your agent secret, you use this to login. Save it somewhere safe, the secret will not be show again and if you lose it you will not be able to access this user again."
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
@@ -5431,12 +5398,6 @@ msgstr "Pick a number and something to group it by"
 msgid "No data yet"
 msgstr "No data yet"
 
-#~ msgid "Showing the largest"
-#~ msgstr "Showing the largest"
-
-#~ msgid "groups"
-#~ msgstr "groups"
-
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
@@ -5766,7 +5727,9 @@ msgstr "Email recovery"
 msgid "{0} resources"
 msgstr "{0} resources"
 
+#. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
+#: src/components/DatabaseUpgradeNotice.tsx
 #: src/routes/SyncRoute.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
@@ -6210,18 +6173,6 @@ msgstr "Use Cloud Server"
 msgid "See plans"
 msgstr "See plans"
 
-#~ msgid "<0>Local:</0> data stays on your devices unless you connect a service or share it."
-#~ msgstr "<0>Local:</0> data stays on your devices unless you connect a service or share it."
-
-#~ msgid "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
-#~ msgstr "<0>Cloud Vault:</0> an encrypted backup that the provider cannot read. It does not host your workspace."
-
-#~ msgid "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
-#~ msgstr "<0>Cloud Server:</0> you agree to us storing and processing a readable copy of this drive to provide hosting. Your sharing permissions still control other users’ access."
-
-#~ msgid "Agree and enable Cloud Server"
-#~ msgstr "Agree and enable Cloud Server"
-
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to your personal drive."
 msgstr "Switch to your personal drive."
@@ -6487,18 +6438,6 @@ msgstr "Picture ready to save."
 #: src/components/ProfileForm.tsx
 msgid "How your colleagues see you"
 msgstr "How your colleagues see you"
-
-#~ msgid "Use your full name and a picture so people recognize you. This updates your Atomic profile wherever you collaborate."
-#~ msgstr "Use your full name and a picture so people recognize you. This updates your Atomic profile wherever you collaborate."
-
-#~ msgid "You can add or change your picture later in your profile."
-#~ msgstr "You can add or change your picture later in your profile."
-
-#~ msgid "Your Cloud Server subscription is active"
-#~ msgstr "Your Cloud Server subscription is active"
-
-#~ msgid "Your Cloud Server trial is active"
-#~ msgstr "Your Cloud Server trial is active"
 
 #: src/components/ProfileForm.tsx
 msgid "Profile picture (optional)"
@@ -9781,9 +9720,6 @@ msgstr "All columns are on this form. Add a column to the table to ask something
 msgid "Add a column to the table"
 msgstr "Add a column to the table"
 
-#~ msgid "Also delete the results table and its responses"
-#~ msgstr "Also delete the results table and its responses"
-
 #: src/chunks/FormBuilder/DeleteFormDialog.tsx
 msgid "Are you sure you want to delete this form?"
 msgstr "Are you sure you want to delete this form?"
@@ -10025,9 +9961,6 @@ msgstr "Are you sure you want to delete this page? Its fields will no longer be 
 msgid "Delete page"
 msgstr "Delete page"
 
-#~ msgid "Back to table"
-#~ msgstr "Back to table"
-
 #: src/chunks/FormBuilder/FormBuilderPage.tsx
 msgid "Fields"
 msgstr "Fields"
@@ -10035,12 +9968,6 @@ msgstr "Fields"
 #: src/chunks/FormBuilder/FormBuilderPage.tsx
 msgid "Summary"
 msgstr "Summary"
-
-#~ msgid "Required table columns are missing from this form:"
-#~ msgstr "Required table columns are missing from this form:"
-
-#~ msgid ". Responses cannot be saved without them."
-#~ msgstr ". Responses cannot be saved without them."
 
 #. 0: formatScheduleMoment(availability.opensAt)
 #: src/chunks/FormBuilder/PublishToggle.tsx
@@ -10449,15 +10376,6 @@ msgstr "A select column contributes its tags. Any other column turns each row in
 msgid "This table has no columns to link to."
 msgstr "This table has no columns to link to."
 
-#~ msgid "Everyone who opens this form sees every row of"
-#~ msgstr "Everyone who opens this form sees every row of"
-
-#~ msgid "as an option. Only link a table whose contents you are happy to make public."
-#~ msgstr "as an option. Only link a table whose contents you are happy to make public."
-
-#~ msgid "This publishes the rows"
-#~ msgstr "This publishes the rows"
-
 #: src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 msgid "Link options"
 msgstr "Link options"
@@ -10477,9 +10395,6 @@ msgstr "Replace"
 #: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
 msgid "Add image"
 msgstr "Add image"
-
-#~ msgid "points"
-#~ msgstr "points"
 
 #: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
 msgid "Scale"
@@ -10547,21 +10462,6 @@ msgstr "Max rows"
 msgid "Option {0}"
 msgstr "Option {0}"
 
-#~ msgid "Showing first"
-#~ msgstr "Showing first"
-
-#~ msgid "answers"
-#~ msgstr "answers"
-
-#~ msgid "min"
-#~ msgstr "min"
-
-#~ msgid "· mean"
-#~ msgstr "· mean"
-
-#~ msgid "· max"
-#~ msgstr "· max"
-
 #. 0: summary.responses
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "{0} responses"
@@ -10582,9 +10482,6 @@ msgstr "No summary available. The server may need to be updated."
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "No responses yet"
 msgstr "No responses yet"
-
-#~ msgid "skipped"
-#~ msgstr "skipped"
 
 #. 0: field.answered
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
@@ -11542,9 +11439,6 @@ msgstr "Nothing here takes up space."
 msgid "Where space goes"
 msgstr "Where space goes"
 
-#~ msgid "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
-#~ msgstr "Each tile is an item in this workspace. Bigger tile, more space.{0} <0/> resource, <1/> resource with other resources, <2/> mixed (files and resources), <3/> files and images."
-
 #: src/helpers/storageMap.ts
 msgid "This workspace"
 msgstr "This workspace"
@@ -11786,9 +11680,6 @@ msgstr "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Forget {0} on this device"
 msgstr "Forget {0} on this device"
-
-#~ msgid "Saved {0}, identity {1}"
-#~ msgstr "Saved {0}, identity {1}"
 
 #. 0: new Date(account.updated_at || account.created_at).toLocaleDateString(); 1: account.agent_subject.slice(-6)
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -12278,12 +12169,6 @@ msgstr "Create {0}:{1} <0/>"
 msgid "Create{0} <0/>"
 msgstr "Create{0} <0/>"
 
-#~ msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
-#~ msgstr "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
-
-#~ msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-#~ msgstr "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-
 #: src/chunks/FormBuilder/DeleteFormDialog.tsx
 msgid "<0/> Also delete the results table and its responses"
 msgstr "<0/> Also delete the results table and its responses"
@@ -12369,3 +12254,11 @@ msgstr "{0} points"
 #: src/chunks/FormBuilder/Summary/AnswerList.tsx
 msgid "Showing first {0} answers"
 msgstr "Showing first {0} answers"
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "Updating your local data"
+msgstr "Updating your local data"
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "This is needed once after an update and takes a moment. Keep this tab open."
+msgstr "This is needed once after an update and takes a moment. Keep this tab open."
