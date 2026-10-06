@@ -1267,6 +1267,23 @@ export class WSClient {
             msg.message,
           );
         } else if (
+          msg.code === ErrorCode.UNAUTHORIZED_READ &&
+          /^SYNC refused for (\S+): .+$/su.test(msg.message)
+        ) {
+          // Probe errors have no request id. Match only the server's SYNC
+          // refusal shape and the still-current probe, so subscription errors
+          // and responses from an earlier identity or drive cannot fail sync.
+          const drive = /^SYNC refused for (\S+): /u.exec(msg.message)![1];
+          const pendingKey = this._pendingSyncState.has(drive)
+            ? drive
+            : canonicalizeScheme(drive);
+          const pending = this._pendingSyncState.get(pendingKey);
+          this._pendingSyncState.delete(pendingKey);
+
+          if (pending?.current()) {
+            this.store.failDriveSync(pendingKey, msg.message);
+          }
+        } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||
           msg.code === ErrorCode.UNAUTHORIZED_READ
         ) {

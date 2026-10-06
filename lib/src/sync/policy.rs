@@ -69,6 +69,15 @@ pub trait SyncPolicy: Send + Sync {
         self.admit_decision(drive_subject).is_admitted()
     }
 
+    /// Read-only preview for a hash probe of a drive not stored here yet.
+    /// This must neither enroll the drive nor start its bootstrap grace.
+    /// Policies with bootstrap rules override this conservative default.
+    fn preview_unknown_drive(&self, drive_subject: &str, agent: &crate::agents::ForAgent) -> bool {
+        !matches!(agent, crate::agents::ForAgent::Public)
+            && self.drive_is_allowed(drive_subject)
+            && self.drive_within_quota(drive_subject)
+    }
+
     /// Whether `agent` may bring a drive this node has **never hosted** into
     /// existence here.
     ///
@@ -163,6 +172,30 @@ impl Default for AllowlistState {
             usage: HashMap::new(),
             first_seen: HashMap::new(),
             grace: DEFAULT_GRACE,
+        }
+    }
+}
+
+impl AllowlistState {
+    fn preview_at(&self, drive_subject: &str, now: Instant) -> AdmitDecision {
+        if let Some(policy) = self.allowed.get(drive_subject) {
+            return if policy
+                .quota_bytes
+                .is_some_and(|quota| self.usage.get(drive_subject).copied().unwrap_or(0) >= quota)
+            {
+                AdmitDecision::OverQuota
+            } else {
+                AdmitDecision::Admitted
+            };
+        }
+        let within_grace = match self.first_seen.get(drive_subject) {
+            Some(first) => now.saturating_duration_since(*first) < self.grace,
+            None => !self.grace.is_zero(),
+        };
+        if within_grace {
+            AdmitDecision::Admitted
+        } else {
+            AdmitDecision::NotEnrolled
         }
     }
 }
@@ -288,6 +321,19 @@ impl SyncPolicy for AllowlistPolicy {
         self.decide_at(drive_subject, Instant::now())
     }
 
+    fn preview_unknown_drive(&self, drive_subject: &str, agent: &crate::agents::ForAgent) -> bool {
+        !matches!(agent, crate::agents::ForAgent::Public)
+            && self
+                .inner
+                .read()
+                .map(|guard| {
+                    guard
+                        .preview_at(drive_subject, Instant::now())
+                        .is_admitted()
+                })
+                .unwrap_or(false)
+    }
+
     /// Nobody, by asking. A managed node's allowlist is the control plane's to
     /// populate; a drive appears here because it was enrolled out of band, not
     /// because someone pushed it.
@@ -368,6 +414,22 @@ impl SyncPolicy for OwnerPolicy {
         self.hosted.admit_decision(drive_subject)
     }
 
+    fn preview_unknown_drive(&self, drive_subject: &str, agent: &crate::agents::ForAgent) -> bool {
+        if matches!(agent, crate::agents::ForAgent::Public) {
+            return false;
+        }
+        let Ok(guard) = self.hosted.inner.read() else {
+            return false;
+        };
+        if guard.allowed.contains_key(drive_subject) {
+            guard
+                .preview_at(drive_subject, Instant::now())
+                .is_admitted()
+        } else {
+            self.may_enroll_drive(drive_subject, agent)
+        }
+    }
+
     fn may_enroll_drive(&self, _drive_subject: &str, agent: &crate::agents::ForAgent) -> bool {
         match agent {
             // The node acting on its own behalf: initialization, migrations,
@@ -409,6 +471,41 @@ mod tests {
 
     fn agent(subject: &str) -> ForAgent {
         ForAgent::AgentSubject(crate::Subject::from_raw(subject, None))
+    }
+
+    #[test]
+    fn preview_does_not_start_or_extend_allowlist_grace() {
+        let p = AllowlistPolicy::new();
+        let t0 = Instant::now();
+        assert!(p.preview_unknown_drive("atomic:new", &agent(STRANGER)));
+        assert!(p.inner.read().unwrap().first_seen.is_empty());
+        assert!(!p.preview_unknown_drive("atomic:new", &ForAgent::Public));
+        p.set_grace(Duration::from_secs(600));
+        assert!(p.decide_at("atomic:new", t0).is_admitted());
+        let first = p.inner.read().unwrap().first_seen["atomic:new"];
+        let guard = p.inner.read().unwrap();
+        assert!(guard
+            .preview_at("atomic:new", t0 + Duration::from_secs(599))
+            .is_admitted());
+        assert_eq!(
+            guard.preview_at("atomic:new", t0 + Duration::from_secs(600)),
+            AdmitDecision::NotEnrolled
+        );
+        assert_eq!(guard.first_seen["atomic:new"], first);
+    }
+
+    #[test]
+    fn owner_preview_cannot_bypass_quota_or_poisoned_hosted_state() {
+        let p = OwnerPolicy::new(OWNER);
+        p.hosted.set_drive_policies([("atomic:hosted", Some(0))]);
+        assert!(!p.preview_unknown_drive("atomic:hosted", &agent(OWNER)));
+        assert!(p.preview_unknown_drive("atomic:new", &agent(OWNER)));
+        assert!(!p.hosted.drive_is_allowed("atomic:new"));
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = p.hosted.inner.write().unwrap();
+            panic!("poison admission state");
+        });
+        assert!(!p.preview_unknown_drive("atomic:new", &agent(OWNER)));
     }
 
     #[test]

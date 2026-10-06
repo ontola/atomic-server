@@ -212,6 +212,20 @@ counters ordered by the sorted peer set (`engine::compute_drive_hash`; the
 browser builds the byte-identical string and hashes it with
 `crypto.subtle`).
 
+For a resource drive this node has never stored, a probe answers
+`SYNC_RESEND` when the authenticated session's hosting policy permits its
+first upload. The receiver then sends the full version vectors, allowing
+the normal `SYNC_DIFF` / `SYNC_PUSH` exchange to import the drive. This
+preview does not enroll the drive or start a managed bootstrap grace
+window; actual import still performs admission checks. A missing drive
+never answers `SYNC_OK`, even for an empty-inventory hash.
+
+Existing unreadable drives, destroyed drives and denied bootstrap attempts
+answer `ERROR UNAUTHORIZED_READ` (`SYNC refused for <drive>: <reason>`).
+The browser records a current probe refusal as a failed drive sync rather
+than leaving its progress indicator running. Subscription refusals retain
+their separate handling.
+
 ### SYNC_DIFF (0x32)
 
 ```
