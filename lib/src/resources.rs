@@ -110,7 +110,7 @@ impl Resource {
             let tag = datatypes.get(&prop).map(String::as_str);
             if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value_tagged(&loro_val, tag)
             {
-                propvals.insert(prop, atomic_val);
+                propvals.insert(prop.clone(), dedupe_rights(&prop, atomic_val));
             }
         }
 
@@ -2518,5 +2518,49 @@ mod test {
 
         assert_eq!(children.len(), 1);
         assert_eq!(children[0].get_subject().to_string(), subject2);
+    }
+}
+
+/// Concurrent writers that rewrite a rights list in place (drain + insert) merge
+/// into a list that repeats every agent. A right is a set, so repeats carry no
+/// meaning: collapse them (first occurrence wins) when materializing.
+fn dedupe_rights(property: &str, value: Value) -> Value {
+    match value {
+        Value::ResourceArray(items) if property == urls::READ || property == urls::WRITE => {
+            let mut seen = std::collections::HashSet::new();
+            Value::ResourceArray(
+                items
+                    .into_iter()
+                    .filter(|i| seen.insert(i.to_string()))
+                    .collect(),
+            )
+        }
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod dedupe_rights_tests {
+    use super::*;
+
+    #[test]
+    fn rights_lists_collapse_repeats_but_other_lists_are_untouched() {
+        let list = || {
+            Value::ResourceArray(vec![
+                "did:ad:agent:a".into(),
+                "did:ad:agent:b".into(),
+                "did:ad:agent:a".into(),
+            ])
+        };
+        for prop in [urls::READ, urls::WRITE] {
+            match dedupe_rights(prop, list()) {
+                Value::ResourceArray(v) => assert_eq!(v.len(), 2),
+                _ => panic!("expected array"),
+            }
+        }
+        match dedupe_rights(urls::IS_A, list()) {
+            Value::ResourceArray(v) => assert_eq!(v.len(), 3),
+            _ => panic!("expected array"),
+        }
     }
 }
