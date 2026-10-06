@@ -24,6 +24,7 @@ import {
   unknownSubject,
   useCurrentAgent,
   useResource,
+  useString,
 } from '@tomic/react';
 import { paths } from '../../routes/paths';
 import { shortcuts } from '../../actions/shortcuts';
@@ -251,9 +252,12 @@ function AccountTrigger({
   const combinedRef = useCombineRefs([ref, triggerRef]);
   const [agent] = useCurrentAgent();
   const agentResource = useResource(agent?.subject ?? unknownSubject);
-  const name = agent
-    ? (agentResource.get(core.properties.name) ?? 'User')
-    : 'Login / New User';
+  // `useString`, not `agentResource.get(...)`: the resource object is stable
+  // across renders, so the compiler caches a plain read of it and the row kept
+  // the 'User' it first rendered, before the profile had loaded or after a
+  // rename.
+  const [agentName] = useString(agentResource, core.properties.name);
+  const name = agent ? (agentName ?? 'User') : 'Login / New User';
 
   return (
     <TriggerButton
