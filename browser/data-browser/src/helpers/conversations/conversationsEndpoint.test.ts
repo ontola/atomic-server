@@ -44,9 +44,9 @@ describe('hasConversationsEndpoint', () => {
       vi.fn(async () => answer(401, 'application/ad+json')),
     );
 
-    expect(await hasConversationsEndpoint('http://node', '/conversations')).toBe(
-      true,
-    );
+    expect(
+      await hasConversationsEndpoint('http://node', '/conversations'),
+    ).toBe(true);
   });
 
   it('asks once per server, and does not remember a network error', async () => {
