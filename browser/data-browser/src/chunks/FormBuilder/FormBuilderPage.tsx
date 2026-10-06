@@ -191,7 +191,10 @@ export function FormBuilderPage({ resource }: ResourcePageProps): JSX.Element {
         </ResultsSlot>
       ) : (
         <ResultsSlot>
-          <SummaryTab formSubject={resource.subject} />
+          <SummaryTab
+            formSubject={resource.subject}
+            noServer={!hostOrigin && !hostPending}
+          />
         </ResultsSlot>
       )}
     </Shell>
