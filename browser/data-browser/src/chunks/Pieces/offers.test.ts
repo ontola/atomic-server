@@ -7,6 +7,7 @@ const CLOCKIFY = 'https://drive.example/classes/clockify-time-entry';
 const TEMPLATE = 'https://drive.example/classes/time-tracker-row';
 const GROCERY = 'https://drive.example/classes/grocery-item';
 const FAR = 'https://drive.example/classes/far-away';
+const TOGGL = 'https://drive.example/classes/toggl-time-entry';
 
 const timesheet: PieceInfo = {
   subject: 'https://drive.example/apps/timesheet',
@@ -27,6 +28,7 @@ const entryToClockify: LensInfo = {
   name: 'Time entry ↔ Clockify time entry',
   source: TIME_ENTRY,
   target: CLOCKIFY,
+  trusted: true,
 };
 
 const templateToEntry: LensInfo = {
@@ -34,6 +36,7 @@ const templateToEntry: LensInfo = {
   name: 'Time tracker row ↔ Time entry',
   source: TEMPLATE,
   target: TIME_ENTRY,
+  trusted: true,
 };
 
 const farToTemplate: LensInfo = {
@@ -41,6 +44,7 @@ const farToTemplate: LensInfo = {
   name: 'Far ↔ Time tracker row',
   source: FAR,
   target: TEMPLATE,
+  trusted: true,
 };
 
 const names = (offers: ReturnType<typeof offersForTable>) =>
@@ -87,17 +91,6 @@ describe('offersForTable', () => {
     expect(names(offers)).toEqual(['Clockify']);
   });
 
-  it('can be told to let views follow lenses', () => {
-    const offers = offersForTable(
-      [timesheet, clockify],
-      [entryToClockify],
-      CLOCKIFY,
-      { viewsFollowLenses: true },
-    );
-
-    expect(names(offers)).toEqual(['Timesheet', 'Clockify']);
-  });
-
   it('chains lenses up to the hop limit', () => {
     const lenses = [entryToClockify, templateToEntry, farToTemplate];
 
@@ -123,6 +116,66 @@ describe('offersForTable', () => {
       offersForTable([timesheet, clockify], [entryToClockify], GROCERY),
     ).toEqual([]);
     expect(offersForTable([timesheet], [], undefined)).toEqual([]);
+  });
+
+  it('offers several integrations on one table, each on its own path', () => {
+    const toggl: PieceInfo = {
+      subject: 'https://drive.example/apps/toggl',
+      name: 'Toggl',
+      kind: 'integration',
+      renders: [TOGGL],
+    };
+    const entryToToggl: LensInfo = {
+      subject: 'https://drive.example/lenses/entry-toggl',
+      name: 'Time entry ↔ Toggl time entry',
+      source: TIME_ENTRY,
+      target: TOGGL,
+      trusted: true,
+    };
+    const offers = offersForTable(
+      [clockify, toggl],
+      [entryToClockify, entryToToggl],
+      TIME_ENTRY,
+    );
+
+    expect(names(offers)).toEqual(['Clockify', 'Toggl']);
+    expect(offers.every(o => o.pendingReview.length === 0)).toBe(true);
+  });
+
+  it('holds back an integration behind an unreviewed lens', () => {
+    const unreviewed = { ...entryToClockify, trusted: false };
+    const offers = offersForTable([clockify], [unreviewed], TIME_ENTRY);
+
+    expect(names(offers)).toEqual(['Clockify']);
+    expect(offers[0].pendingReview).toEqual([entryToClockify.subject]);
+  });
+
+  it('names only the unreviewed lenses of a chain', () => {
+    const offers = offersForTable(
+      [clockify],
+      [entryToClockify, { ...templateToEntry, trusted: false }],
+      TEMPLATE,
+    );
+
+    expect(offers[0].pendingReview).toEqual([templateToEntry.subject]);
+  });
+
+  it('prefers a reviewed path over a shorter unreviewed one', () => {
+    const shortcut: LensInfo = {
+      subject: 'https://drive.example/lenses/template-clockify',
+      name: 'Time tracker row ↔ Clockify time entry',
+      source: TEMPLATE,
+      target: CLOCKIFY,
+      trusted: false,
+    };
+    const offers = offersForTable(
+      [clockify],
+      [shortcut, entryToClockify, templateToEntry],
+      TEMPLATE,
+    );
+
+    expect(offers[0].pendingReview).toEqual([]);
+    expect(offers[0].path).toHaveLength(2);
   });
 
   it('agrees with appsForClass when there are only views and no lenses', () => {

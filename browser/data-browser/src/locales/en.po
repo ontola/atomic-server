@@ -4225,6 +4225,8 @@ msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
 #: src/chunks/AppPage/ConnectDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -7432,7 +7434,6 @@ msgstr "Fix it"
 msgid "Dismiss"
 msgstr "Dismiss"
 
-#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -10719,3 +10720,12 @@ msgstr "Included AI isn't reachable right now. Check your connection and sign-in
 #: src/chunks/Pieces/usePieceOffers.ts
 msgid "Through {0}"
 msgstr "Through {0}"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Sync this table with"
+msgstr "Sync this table with"
+
+#. 0: offer.pendingReview .map(l => lensNames.get(l) ?? l) .join(', ')
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Waiting for review of {0}"
+msgstr "Waiting for review of {0}"

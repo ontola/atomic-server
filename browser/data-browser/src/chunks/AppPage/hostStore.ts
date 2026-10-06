@@ -5,7 +5,7 @@ import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import { piecesEnabled } from '@chunks/Pieces/piecesFlag';
-import { lensPathFor } from '@chunks/Pieces/loadPieces';
+import { lensRouteFor } from '@chunks/Pieces/loadPieces';
 import {
   core,
   errorMessageFromResponse,
@@ -136,7 +136,7 @@ export async function handleRequest(
         return {
           table: subject,
           rowClass,
-          lensPath: await lensPathFor(store, drive, app, rowClass),
+          ...(await lensRouteFor(store, drive, app, rowClass)),
         };
       }
 

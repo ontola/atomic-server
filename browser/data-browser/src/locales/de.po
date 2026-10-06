@@ -4214,6 +4214,8 @@ msgid "Could not copy — select and copy the code manually."
 msgstr ""
 
 #: src/chunks/AppPage/ConnectDialog.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -7421,7 +7423,6 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/components/SideBar/AccountMenu.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Integrations"
@@ -10700,4 +10701,13 @@ msgstr ""
 #. 0: offer.path .map(step => lensNames.get(step.lens) ?? step.lens) .join(', then ')
 #: src/chunks/Pieces/usePieceOffers.ts
 msgid "Through {0}"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Sync this table with"
+msgstr ""
+
+#. 0: offer.pendingReview .map(l => lensNames.get(l) ?? l) .join(', ')
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Waiting for review of {0}"
 msgstr ""

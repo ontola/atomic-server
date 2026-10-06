@@ -18,10 +18,12 @@ import {
   FaWindowMaximize,
   FaTrash,
   FaArrowsRotate,
+  FaPlug,
 } from 'react-icons/fa6';
 import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
 import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
 import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
+import type { DropdownTriggerProps } from '@components/Dropdown/DropdownTrigger';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
@@ -168,12 +170,20 @@ export function TableViewTabs({
           <AddViewMenu
             createView={createView}
             apps={apps}
-            integrations={offers}
             refreshApps={driveApps.refresh}
           />
         )}
       </Tabs>
       <Actions>
+        {pieces && canWrite && offers.integrations.length > 0 && (
+          <ConnectMenu
+            offers={offers}
+            typesBySubject={typesBySubject}
+            createView={createView}
+            setActiveView={setActiveView}
+            refreshApps={driveApps.refresh}
+          />
+        )}
         <FilterMenu columns={columns} derivedColumns={derivedColumns} />
         <ColumnsMenu
           allColumns={allColumns}
@@ -221,12 +231,10 @@ const AddViewTrigger = buildDefaultTrigger(<FaPlus />, 'Add view');
 function AddViewMenu({
   createView,
   apps,
-  integrations,
   refreshApps,
 }: {
   createView: (kind?: ViewKind | string, label?: string) => void;
   apps: DriveApp[];
-  integrations: PieceOffers;
   /** Asks the drive for its apps again; called as the menu opens. */
   refreshApps: () => void;
 }): JSX.Element {
@@ -250,9 +258,8 @@ function AddViewMenu({
         icon: <FaWindowMaximize />,
         onClick: () => createView(app.subject, app.name),
       })),
-      ...integrationItems(integrations, createView, 'add-integration'),
     ],
-    [createView, apps, integrations],
+    [createView, apps],
   );
 
   return (
@@ -475,7 +482,6 @@ function ViewTab({
           icon: <FaWindowMaximize />,
           onClick: () => createView(app.subject, app.name),
         })),
-        ...integrationItems(integrations, createView, 'add-integration'),
         // Changing this view in place, only while another view of its type
         // remains — so the last table view can never be converted away.
         ...(canChangeType
@@ -775,43 +781,130 @@ const CheckPlaceholder = styled.span`
   width: 1em;
 `;
 
-/**
- * Integrations, offered after the views under their own header. Installing
- * one adds a tab like any view, but that tab shows the table's sync state
- * rather than its rows. An offer that goes through a lens says which.
- */
-function integrationItems(
-  { integrations, lensNames }: PieceOffers,
-  createView: (kind?: ViewKind | string, label?: string) => void,
-  idPrefix: string,
-): DropdownItem[] {
-  if (integrations.length === 0) return [];
+/** The Connect button: labelled, since an icon alone would not say "sync". */
+function ConnectTrigger({
+  onClick,
+  menuId,
+  isActive,
+  ref,
+  id,
+}: DropdownTriggerProps): JSX.Element {
+  return (
+    <ConnectButton
+      id={id}
+      ref={ref}
+      type='button'
+      aria-controls={menuId}
+      aria-expanded={isActive}
+      aria-haspopup='menu'
+      onClick={onClick}
+      title='Connect'
+    >
+      <FaPlug />
+      <ConnectLabel>Connect</ConnectLabel>
+    </ConnectButton>
+  );
+}
 
-  return [
-    DIVIDER,
+/**
+ * Integrations get their own entry beside the view tabs (Q-092) instead of a
+ * section of the "+" view menu: connecting a table to a platform is a
+ * different act from choosing a way to look at it. Connecting still adds a
+ * tab, which shows that integration's sync state. Several integrations can
+ * be connected to one table (Q-090). One reachable only through an
+ * unreviewed lens is listed, disabled, with the lens that holds it back.
+ */
+function ConnectMenu({
+  offers: { integrations, lensNames },
+  typesBySubject,
+  createView,
+  setActiveView,
+  refreshApps,
+}: {
+  offers: PieceOffers;
+  typesBySubject: Map<string, string>;
+  createView: (kind?: ViewKind | string, label?: string) => void;
+  setActiveView: (subject: string) => void;
+  refreshApps: () => void;
+}): JSX.Element {
+  const tabOf = (app: string) =>
+    [...typesBySubject].find(([, type]) => type === app)?.[0];
+
+  const items: DropdownItem[] = [
     {
-      id: `${idPrefix}-header`,
-      label: 'Integrations',
+      id: 'connect-header',
+      label: 'Sync this table with',
       header: true,
       onClick: () => undefined,
     },
-    ...integrations.map(offer => ({
-      id: `${idPrefix}-${offer.piece.subject}`,
-      label: offer.piece.name,
-      helper: offerHelper(offer, lensNames),
-      suffix:
-        offer.path.length > 0 ? (
+    ...integrations.map(offer => {
+      const { subject, name } = offer.piece;
+      const tab = tabOf(subject);
+      const waiting = offer.pendingReview.length > 0;
+
+      return {
+        id: `connect-${subject}`,
+        label: name,
+        icon: <FaArrowsRotate />,
+        disabled: waiting,
+        helper: waiting
+          ? `Waiting for review of ${offer.pendingReview
+              .map(l => lensNames.get(l) ?? l)
+              .join(', ')}`
+          : offerHelper(offer, lensNames),
+        suffix: (
           <ViaLens>
-            {offer.path.length === 1
-              ? 'via lens'
-              : `via ${offer.path.length} lenses`}
+            {waiting
+              ? 'needs review'
+              : tab
+                ? 'connected'
+                : offer.path.length === 0
+                  ? undefined
+                  : offer.path.length === 1
+                    ? 'via lens'
+                    : `via ${offer.path.length} lenses`}
           </ViaLens>
-        ) : undefined,
-      icon: <FaArrowsRotate />,
-      onClick: () => createView(offer.piece.subject, offer.piece.name),
-    })),
+        ),
+        onClick: () => (tab ? setActiveView(tab) : createView(subject, name)),
+      };
+    }),
   ];
+
+  return (
+    <DropdownMenu
+      Trigger={ConnectTrigger}
+      items={items}
+      searchable={false}
+      bindActive={active => active && refreshApps()}
+    />
+  );
 }
+
+/** Icon-only on phones, where the view tabs need the room. */
+const ConnectLabel = styled.span`
+  @media (max-width: 600px) {
+    display: none;
+  }
+`;
+
+const ConnectButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 1.85rem;
+  padding: 0.1rem 0.7rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background-color: transparent;
+  color: ${p => p.theme.colors.text};
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background-color: ${p => p.theme.colors.bg1};
+  }
+`;
 
 const ViaLens = styled.span`
   font-size: 0.75rem;
