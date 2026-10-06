@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Tables: hiding a column no longer hides its active filter chip, so a filter that still excludes rows stays visible and removable.
 - Forms (beta): build a form or survey and share a link; guests fill it in
   without an account and each answer becomes a table row. Create one with
   New > Form, or from a table with "Create form from this table" (pick its
