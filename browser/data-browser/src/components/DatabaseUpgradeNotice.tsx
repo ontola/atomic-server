@@ -32,11 +32,13 @@ export function DatabaseUpgradeNotice(): JSX.Element | null {
           This is needed once after an update and takes a moment. Keep this tab
           open.
         </p>
-        <ProgressBar
-          value={
-            counted ? Math.round((progress.done / progress.total) * 100) : 0
-          }
-        />
+        <Bar>
+          <ProgressBar
+            value={
+              counted ? Math.round((progress.done / progress.total) * 100) : 0
+            }
+          />
+        </Bar>
         {counted && (
           <Count aria-live='polite'>
             {progress.done} of {progress.total}
@@ -68,6 +70,10 @@ const Card = styled.div`
 const Title = styled.h1`
   margin: 0;
   font-size: 1.4rem;
+`;
+
+const Bar = styled.div`
+  display: flex;
 `;
 
 const Count = styled.span`
