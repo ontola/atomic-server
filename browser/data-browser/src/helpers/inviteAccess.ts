@@ -44,6 +44,8 @@ export interface AccessResource {
 
 export interface AccessStore {
   getResource(subject: string): Promise<AccessResource>;
+  /** Forget the cached entry for a subject, without touching its data. */
+  evictResource?(subject: string): void;
 }
 
 /**
@@ -70,7 +72,15 @@ export async function alreadyHasInviteAccess(
     try {
       const resource = await store.getResource(grant.target);
 
-      if (resource.error) return false;
+      if (resource.error) {
+        // The store keeps the failed read as the answer for this subject. A
+        // browser invite's drive only arrives when the person joins, and a
+        // cached failure would keep it from ever showing as ready.
+        store.evictResource?.(grant.target);
+
+        return false;
+      }
+
       if (!grant.write) return true;
 
       return (await resource.canWrite(agent))[0];

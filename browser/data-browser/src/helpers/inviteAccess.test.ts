@@ -82,3 +82,15 @@ it('shows the invite when signed out or when the check stalls', async () => {
     await alreadyHasInviteAccess(stalled, 'atomic:agent:me', grant(false), 10),
   ).toBe(false);
 });
+
+it('forgets a failed read, so a drive that arrives later can load', async () => {
+  const store = {
+    ...storeWith({ error: new Error('not found'), canWrite: vi.fn() }),
+    evictResource: vi.fn(),
+  };
+
+  expect(
+    await alreadyHasInviteAccess(store, 'atomic:agent:me', grant(true)),
+  ).toBe(false);
+  expect(store.evictResource).toHaveBeenCalledWith('atomic:drive');
+});

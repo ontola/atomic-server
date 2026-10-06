@@ -205,8 +205,12 @@ mod tests {
         let agent = Agent::new(None).unwrap().subject.to_string();
 
         for _ in 0..3 {
-            add_rights(&agent, drive.as_str(), true, &store).await.unwrap();
-            add_rights(&agent, drive.as_str(), false, &store).await.unwrap();
+            add_rights(&agent, drive.as_str(), true, &store)
+                .await
+                .unwrap();
+            add_rights(&agent, drive.as_str(), false, &store)
+                .await
+                .unwrap();
         }
 
         let drive = store.get_resource(&drive).await.unwrap();
