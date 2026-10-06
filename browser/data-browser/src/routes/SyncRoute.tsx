@@ -82,6 +82,7 @@ import {
 import {
   envelopeWrapperKinds,
   getRecoverySecret,
+  isAssistedRecoveryAvailable,
   readCachedBackups,
   sameAgent,
 } from '../helpers/managed/recovery';
@@ -873,7 +874,13 @@ function SyncPage() {
    */
   const [recoveryState, setRecoveryState] = useState<{
     account: ManagedAccount;
-    value: 'stored' | 'passkey-only' | 'device-only' | 'none' | null;
+    value:
+      | 'stored'
+      | 'sign-in-not-on'
+      | 'passkey-only'
+      | 'device-only'
+      | 'none'
+      | null;
   } | null>(null);
   const recoveryBackup =
     recoveryState?.account === managedAccount
@@ -896,9 +903,31 @@ function SyncPage() {
         if (cancelled) return;
 
         if (stored) {
-          const { hasPasskey, hasCode } = envelopeWrapperKinds(stored);
+          const { hasPasskey, hasCode, hasAccount } =
+            envelopeWrapperKinds(stored);
 
-          setRecoveryBackup(hasPasskey && !hasCode ? 'passkey-only' : 'stored');
+          if (hasAccount) {
+            setRecoveryBackup('stored');
+
+            return;
+          }
+
+          // A backup from before assisted recovery: signing in does not open
+          // it yet, which is the whole promise of this row. Settings adds the
+          // key with one passkey prompt or the code.
+          const assisted =
+            !managedAccount.assisted_recovery_off &&
+            (await isAssistedRecoveryAvailable().catch(() => false));
+
+          if (cancelled) return;
+
+          setRecoveryBackup(
+            assisted
+              ? 'sign-in-not-on'
+              : hasPasskey && !hasCode
+                ? 'passkey-only'
+                : 'stored',
+          );
 
           return;
         }
@@ -1900,6 +1929,7 @@ function SyncPage() {
             {(!managedAccount ||
               recoveryBackup === 'none' ||
               recoveryBackup === 'device-only' ||
+              recoveryBackup === 'sign-in-not-on' ||
               recoveryBackup === 'passkey-only') && (
               <ProviderService data-testid='recovery-row'>
                 <CardIcon
@@ -1920,11 +1950,13 @@ function SyncPage() {
                         ? `Signed in as ${managedAccount.email}.`
                         : recoveryBackup === 'stored'
                           ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
-                          : recoveryBackup === 'passkey-only'
-                            ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
-                            : recoveryBackup === 'device-only'
-                              ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                              : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
+                          : recoveryBackup === 'sign-in-not-on'
+                            ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
+                            : recoveryBackup === 'passkey-only'
+                              ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                              : recoveryBackup === 'device-only'
+                                ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                                : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
                   </ConnSub>
                   {/* Signed out, the account itself is the missing piece, and it
                       is made in the portal: on a device that cannot hold our
@@ -1950,6 +1982,7 @@ function SyncPage() {
                     </ConnActions>
                   ) : recoveryBackup === 'none' ||
                     recoveryBackup === 'device-only' ||
+                    recoveryBackup === 'sign-in-not-on' ||
                     recoveryBackup === 'passkey-only' ? (
                     <ConnActions>
                       <LearnMoreLink
@@ -1958,9 +1991,11 @@ function SyncPage() {
                       >
                         {recoveryBackup === 'device-only'
                           ? 'Store it with ' + PRODUCT_NAME
-                          : recoveryBackup === 'passkey-only'
-                            ? 'Add a recovery code'
-                            : 'Set up email recovery'}
+                          : recoveryBackup === 'sign-in-not-on'
+                            ? 'Turn it on'
+                            : recoveryBackup === 'passkey-only'
+                              ? 'Add a recovery code'
+                              : 'Set up email recovery'}
                       </LearnMoreLink>
                     </ConnActions>
                   ) : null}

@@ -4800,6 +4800,8 @@ msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
+#: src/components/AccountRecoveryCard.tsx
+#: src/components/AccountRecoveryCard.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
@@ -4842,9 +4844,11 @@ msgid "Passkey added {0}"
 msgstr ""
 
 #: src/helpers/managed/recovery.ts
+#: src/helpers/managed/recovery.ts
 msgid "That passkey could not unlock this backup."
 msgstr ""
 
+#: src/helpers/managed/recovery.ts
 #: src/helpers/managed/recovery.ts
 msgid "Wrong recovery code"
 msgstr ""
@@ -11631,6 +11635,7 @@ msgstr ""
 msgid "Free with an account"
 msgstr ""
 
+#: src/components/AccountRecoveryCard.tsx
 #: src/components/Vault/VaultPanel.tsx
 msgid "Turning on…"
 msgstr ""
@@ -12249,8 +12254,33 @@ msgstr ""
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr ""
 
-#~ msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
-#~ msgstr ""
+#: src/components/AccountRecoveryCard.tsx
+msgid "Could not turn this on. Please try again."
+msgstr ""
 
-#~ msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-#~ msgstr ""
+#: src/components/AccountRecoveryCard.tsx
+msgid "Confirm with your passkey"
+msgstr ""
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Confirm with your code"
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Turn it on"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your passkey to turn it on."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr ""
