@@ -6,6 +6,7 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { constructOpenURL } from '../navigation';
 import { fetchPrivateDriveSubject } from '../privateDrive';
 import { hasMembers, startConversation } from './conversations';
+import { hasConversationsEndpoint } from './conversationsEndpoint';
 
 const CONVERSATIONS_PATH = '/conversations';
 
@@ -51,6 +52,17 @@ export function useConversations(): string[] {
  *  Empty when the server can't say, such as one without the endpoint. */
 async function fetchMemberOf(store: Store): Promise<string[]> {
   try {
+    // A server without the endpoint is not worth a store fetch: the client
+    // logs every failed parse as a console error.
+    if (
+      !(await hasConversationsEndpoint(
+        store.getServerUrl(),
+        CONVERSATIONS_PATH,
+      ))
+    ) {
+      return [];
+    }
+
     // Always from the server: a cached answer predates new conversations.
     const endpoint = await store.fetchResourceFromServer(
       `${store.getServerUrl()}${CONVERSATIONS_PATH}`,
