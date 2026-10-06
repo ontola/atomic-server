@@ -4,7 +4,57 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Share dialog: the role for new invites (email field and Copy invite link) is a single-click Read / Write switch in the same style as the Public switch, instead of a Can write dropdown.
+- Invites: opening an invite link uses the server in the link instead of whichever server the browser had saved, so an invitee with a stale saved server no longer gets "Unrecognized token '<'". When the link points at a host that runs no server, a plain message says so. Creating a link for a drive whose server runs no node fails up front.
+- Tables: a computed duration reads a date-only start as local midnight, like a local date-and-time, so it no longer differs by the timezone offset (#2083).
+- Tables: clearing a Localized Text cell removes that language, so the fallback and the missing-translation marker come back (#2084).
+- Calendar: the date filter explains that a repeating entry is matched on its first date (#2087).
+- Cards: a record embedded in a document shows property names instead of slugs, hides created-at, drive and sort-order, and no longer shows an empty description line (#2081).
+- Tables: hiding a column no longer hides its active filter chip, so a filter that still excludes rows stays visible and removable.
+- Forms (beta): build a form or survey and share a link; guests fill it in
+  without an account and each answer becomes a table row. Create one with
+  New > Form, or from a table with "Create form from this table" (pick its
+  columns). The builder has 21 question types, pages, drag-to-reorder,
+  "Show when" rules that hide questions and pages based on earlier answers,
+  required fields and limits, a Results tab (the table) and a Summary tab
+  (charts). Settings cover public or invite-only access, an open/close
+  schedule, a thank-you message, appearance and custom CSS. Share with a
+  link, QR code or embed snippet. Guests get a small separate app
+  (`@tomic/form-app`, built on the new `@tomic/form-renderer`) with a
+  progress bar and answers saved on their device until they submit.
+  [#875](https://github.com/ontola/atomic-server/issues/875)
+- Forms: share links use the server that hosts the workspace. Without one, the
+  builder says forms need a server instead of offering a link guests cannot open.
+- `@tomic/lib`: the forms ontology (`forms`) is exported and, like
+  `notifications`, fetched from the host rather than atomicdata.dev.
+- Fix: after the server refuses a commit that depends on ops it never
+  received, the next save resends the whole history instead of dropping the
+  edit.
+- Fix: uploaded SVG files display in the data browser.
+
+- The per-group summary under a table has column headings, such as "Sum of Plus ones" and "Rows", so a bare number says what it measures.
+- Tables: deleting a row you typed in the same session no longer shows its
+  neighbour twice until you reload.
+- Sidebar: notifications and sync have their own icon buttons next to Settings
+  (they stay in the account menu too), in the same muted color as the menu's
+  items, with an unread dot on the bell. The dividers in the menu are gone.
+- Share: names under "People with access" open that person's profile.
+- Error toasts: long subject URLs are shortened in the message. Copy still
+  copies the full text.
+- Tables: right-click a row's number to get the same menu as right-clicking one
+  of its cells. Select several cells with shift+click or by dragging and
+  right-click them for a menu that acts on all of them: clear the values, set
+  one value in all of them, or delete the rows they touch. Delete is one undo
+  step.
+- Tables: drag a view's tab to change the order of the views.
+- Tables: tick rows to delete several at once. Hover a row's number (or look
+  left of it on a touch screen) for a checkbox. Once one row is ticked every
+  row shows its checkbox, and the toolbar next to the filter button shows how
+  many are ticked with a delete button. Undo brings all of them back at once.
+
 - Signing in with an account whose identity is stored under the older `atomic:agent:` spelling no longer fails to keep the previous identity on this device ("no stored key for ..."). The same agent is now recognised in either spelling.
+- A link or mention that points at a table View now opens the table with that view selected, instead of the view's configuration.
+- A Number column's total or average no longer shows a small nonzero value as 0, and a Number filter typed as `2.5e-5` or with trailing zeros finds the same rows as the plain number.
 - The shared sign-in card no longer says "This browser does not support passkeys".
   Where a passkey cannot work it shows no passkey option at all, and the
   portal and the app now decide that the same way.
@@ -52,6 +102,23 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   list), and leaves the drive channel alone when it can't read the drive. One
   tab is one session across channels (`Store.presenceSessionId`), so nobody
   shows up twice.
+- Signed in to a hosted account, the app now links its identity to that
+  account (`/api/agent-link`), once per session and only after the identity
+  check has settled on it. Services that only ever see a signature, like the
+  integration proxy, can then tell which account a request is for, also when
+  the account has no drive or paid plan. An account service without agent
+  links, an email that was never confirmed, or an identity linked to another
+  account are left alone. Builds that know no account service make no
+  requests for it.
+- Messages: send someone a direct message that only the two of you can
+  read. Pick "Message" on anyone's avatar, or start one from the new Messages
+  section in the sidebar with their Atomic ID. The server that holds the
+  conversation stores it encrypted. It can see who talks to whom and when,
+  not what is said. Someone who has never opened the app since this release
+  has no key yet, and the app says so.
+- `@tomic/lib`: the `conversations` ontology, and `Store.subscribeLive` to
+  keep a resource outside the open drive live.
+
 - Notifications are less noisy. The Notifications page shows one row per
   conversation ("Sanne and Polle: 3 new messages in Team chat") with names and
   titles as they are now, in your language. Coming back to the window while
@@ -117,6 +184,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   demo that does finish after the notice sends a second, informational report
   with its total time. The notice fires at a fixed 45 seconds, so until now a
   slow machine and a stuck one looked the same in Sentry (`ATOMIC-BROWSER-1J`).
+- Settings → Integrations: the proxy and plugin catalog URL fields only show
+  a Save button below them. Resetting to the default is now a small Reset
+  button at the end of the field, shown only while the value differs from the
+  default.
 
 - Pasting an agent secret that opens a different agent than the signed-in
   account no longer signs that account out on its own. The app now says which

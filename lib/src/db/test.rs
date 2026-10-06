@@ -379,6 +379,153 @@ async fn unauthorized_query_count_matches_subjects() {
     );
 }
 
+async fn genesis_child(store: &Db, parent: &Subject) -> Subject {
+    let mut res = Resource::new("did:ad:placeholder".into());
+    res.set(urls::PARENT.into(), Value::AtomicUrl(parent.clone()), store)
+        .await
+        .unwrap();
+    res.save_as_genesis(store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap()
+        .get_subject()
+        .clone()
+}
+
+fn parent_query(parent: &Subject, limit: Option<usize>, for_agent: ForAgent) -> Query {
+    Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(parent.clone())),
+        filters: Vec::new(),
+        limit,
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: None,
+        sort_desc: false,
+        include_external: true,
+        include_nested: false,
+        for_agent,
+        drive: None,
+        aggregation: None,
+        expression_filters: Vec::new(),
+    }
+}
+
+/// Synthetic repro from `planning/slow-collection-queries.md`: drive → folder
+/// → form → many private children, queried `parent=form` as a non-authorized
+/// agent. Pins remaining cost to *call counts* (a fresh store's snapshots are
+/// too small to show wall-clock):
+///
+/// The rights walk must not full-decode ancestors (`get_resource` stays 0)
+/// and must not re-fetch a parent whose verdict is already cached. Each
+/// member is still shallow-fetched — a later readable sibling after a
+/// private streak must not be skipped.
+#[tokio::test]
+async fn unauthorized_collection_query_bounds_fetch_counts() {
+    let store = Db::init_temp("unauthorized_collection_query_bounds_fetch_counts")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let folder = genesis_child(&store, &drive).await;
+    let form = genesis_child(&store, &folder).await;
+
+    const CHILDREN: usize = 100;
+    for _ in 0..CHILDREN {
+        genesis_child(&store, &form).await;
+    }
+
+    let sudo = store
+        .query(&parent_query(&form, Some(500), ForAgent::Sudo))
+        .await
+        .unwrap();
+    assert_eq!(
+        sudo.subjects.len(),
+        CHILDREN,
+        "sanity: the form has {CHILDREN} children visible to sudo"
+    );
+
+    store.reset_fetch_counters();
+
+    let denied = store
+        .query(&parent_query(&form, Some(1), urls::PUBLIC_AGENT.into()))
+        .await
+        .unwrap();
+    assert!(
+        denied.subjects.is_empty(),
+        "the public agent must not see private invite-code children"
+    );
+
+    let full_decodes = store.get_resource_call_count();
+    let shallow = store.get_resource_shallow_call_count();
+    assert_eq!(
+        full_decodes, 0,
+        "rights walk must not Loro-decode ancestors; get_resource was called {full_decodes} times"
+    );
+    assert!(
+        shallow >= CHILDREN,
+        "every member must still be shallow-fetched (a readable row after a private streak would otherwise be skipped); got {shallow}"
+    );
+    assert!(
+        shallow <= CHILDREN + 8,
+        "expected one shallow fetch per member plus a handful of ancestors, got {shallow} — \
+         the parent memo is not skipping refetches"
+    );
+}
+
+/// Denied members must not consume the page: a public child after a long
+/// private streak is still returned. Each member can carry its own grant,
+/// so a run of private siblings must not stop the scan.
+#[tokio::test]
+async fn unauthorized_query_skips_denials_to_fill_the_page() {
+    let store = Db::init_temp("unauthorized_query_skips_denials_to_fill_the_page")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let form = genesis_child(&store, &drive).await;
+
+    for _ in 0..20 {
+        genesis_child(&store, &form).await;
+    }
+
+    let mut public_child = Resource::new("did:ad:placeholder".into());
+    public_child
+        .set(urls::PARENT.into(), Value::AtomicUrl(form.clone()), &store)
+        .await
+        .unwrap();
+    public_child
+        .set(
+            urls::READ.into(),
+            Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+            &store,
+        )
+        .await
+        .unwrap();
+    let public_subject = public_child
+        .save_as_genesis(&store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap()
+        .get_subject()
+        .clone();
+
+    let res = store
+        .query(&parent_query(&form, Some(1), urls::PUBLIC_AGENT.into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        res.subjects,
+        vec![public_subject],
+        "a public child after many private siblings must still fill page_size=1"
+    );
+}
+
 #[tokio::test]
 async fn get_extended_resource_pagination() {
     let store = Db::init_temp("get_extended_resource_pagination")
@@ -436,7 +583,8 @@ async fn queries() {
     let store = &store_owned;
 
     let demo_val = Value::Slug("myval".to_string());
-    let demo_reference = Value::AtomicUrl(urls::PARAGRAPH.into());
+    // Nothing else in the seeded store points at it, so the count is exact.
+    let demo_reference = Value::AtomicUrl("https://example.com/queries-test-target".into());
 
     let count = 10;
     let limit = 5;
@@ -503,10 +651,16 @@ async fn queries() {
     );
     assert_eq!(limit, res.subjects.len(), "limit");
 
+    // The value index answers "what points at X". A plain value has no row in
+    // it, so without a property only a reference is found.
     q.property = None;
     q.value = Some(demo_val);
     let res = store.query(&q).await.unwrap();
-    assert_eq!(res.count, count, "literal value, no property filter");
+    assert_eq!(res.count, 0, "literal value, no property filter");
+
+    q.value = Some(demo_reference.clone());
+    let res = store.query(&q).await.unwrap();
+    assert_eq!(res.count, count, "reference value, no property filter");
 
     q.offset = 9;
     let res = store.query(&q).await.unwrap();
@@ -3953,13 +4107,13 @@ async fn replica_row_keeps_unresolvable_props_from_snapshot() {
 
 /// A critical commit's `Tree::Resources` row is self-contained: its blob
 /// keeps the signed `loroUpdate` (a CRDT resource's blob drops it in favour
-/// of `Tree::LoroSnapshots`), and the row is findable by the resource it is
-/// about through the `subject` index. See `envelopes::tests::
+/// of `Tree::LoroSnapshots`). A creation's commit is not in the atom indexes;
+/// it is found by its id. See `envelopes::tests::
 /// stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit` for
 /// why the payload cannot be borrowed from the envelope.
 #[tokio::test]
 #[timeout(120000)]
-async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
+async fn commit_resource_blob_keeps_loro_update_and_is_not_indexed() {
     let store = Db::init_temp("commit_row_self_contained").await.unwrap();
     let (_alice, drive) = store.setup("Alice").await.unwrap();
     let subject = store
@@ -4009,11 +4163,11 @@ async fn commit_resource_blob_keeps_loro_update_and_is_indexed_by_subject() {
         .await
         .unwrap();
     assert!(
-        found
+        !found
             .subjects
             .iter()
             .any(|s| s.as_str() == genesis_id.as_str()),
-        "the commit row is indexed by the subject it is about: {:?}",
+        "a creation's commit is found by its id, not by the subject index: {:?}",
         found.subjects
     );
 }
@@ -4098,6 +4252,59 @@ async fn deferred_search_entries_are_added_by_index_pending() {
     assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 1);
     assert_eq!(crate::search::index_pending(&store, 10).await.unwrap(), 0);
     assert_eq!(store.search_hits("zebrafish", &opts).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
+    use crate::db::trees::{Method, Operation, Transaction, Tree};
+    let store = Db::init_temp("legacy_atom_rows").await.unwrap();
+    let atom = crate::atoms::IndexAtom {
+        subject: Subject::from("did:ad:legacy-subject"),
+        property: urls::NAME.to_string(),
+        ref_value: "Legacy Title".to_string(),
+        sort_value: "Legacy Title".to_string(),
+    };
+    let legacy_pvs = crate::db::prop_val_sub_index::propvalsub_legacy_key(&atom);
+    let legacy_vps = crate::db::val_prop_sub_index::valpropsub_legacy_key(&atom);
+    let mut tx = Transaction::new();
+    for (tree, key) in [
+        (Tree::PropValSub, &legacy_pvs),
+        (Tree::ValPropSub, &legacy_vps),
+    ] {
+        tx.push(Operation {
+            tree,
+            method: Method::Insert,
+            key: key.clone(),
+            val: Some(Vec::new()),
+        });
+    }
+    store.apply_transaction(&mut tx).unwrap();
+    // An old row is still read back as the same atom.
+    let found: Vec<_> = crate::db::prop_val_sub_index::find_in_prop_val_sub_index(
+        &store,
+        urls::NAME,
+        Some(&Value::String("Legacy Title".into())),
+    )
+    .map(|a| a.unwrap())
+    .collect();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].sort_value, "Legacy Title");
+
+    let mut tx = Transaction::new();
+    for op in Operation::remove_atom_from_legacy_indexes(&atom) {
+        tx.push(op);
+    }
+    store.apply_transaction(&mut tx).unwrap();
+    assert!(store
+        .kv
+        .get(Tree::PropValSub, &legacy_pvs)
+        .unwrap()
+        .is_none());
+    assert!(store
+        .kv
+        .get(Tree::ValPropSub, &legacy_vps)
+        .unwrap()
+        .is_none());
 }
 
 /// An `after_commit` extender runs after the commit is persisted, so its
@@ -4311,4 +4518,197 @@ async fn row_inserted_between_two_others_after_the_index_was_built_lists_between
     let order: Vec<String> = res.subjects.iter().map(|s| s.to_string()).collect();
     let expect: Vec<String> = [0, 2, 1].iter().map(|i| subjects[*i].to_string()).collect();
     assert_eq!(order, expect);
+}
+
+/// Prints where the bytes of a 50-message chat go, per tree, with the
+/// compressed trees counted as stored. Run with `--ignored --nocapture`.
+#[tokio::test]
+#[ignore = "measurement, not a check"]
+async fn measure_chat_message_bytes() {
+    let store = Db::init_temp("measure_chat").await.unwrap();
+    let mut chat = Resource::new("did:ad:placeholder".into());
+    chat.set(urls::NAME.into(), Value::String("Chat".into()), &store)
+        .await
+        .unwrap();
+    chat.set(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::CHATROOM.into()]),
+        &store,
+    )
+    .await
+    .unwrap();
+    let chat = chat
+        .save_as_genesis(&store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap();
+    let parent = chat.get_subject().clone();
+    let trees = [
+        Tree::Resources,
+        Tree::LoroSnapshots,
+        Tree::Envelopes,
+        Tree::PropValSub,
+        Tree::ValPropSub,
+        Tree::QueryMembers,
+        Tree::WatchedQueries,
+        Tree::SearchPostings,
+        Tree::SearchDocs,
+        Tree::SearchTrigrams,
+        Tree::DidMapping,
+        Tree::DriveMapping,
+        Tree::Outbox,
+    ];
+    let stored = super::compressed_kv::CompressedKv::new(store.kv.clone());
+    let tally = |store: &Db| {
+        trees
+            .iter()
+            .map(|t| {
+                let (mut n, mut k, mut v) = (0usize, 0usize, 0usize);
+                for kv in store.kv.iter_tree(*t) {
+                    let (key, val) = kv.unwrap();
+                    n += 1;
+                    k += key.len();
+                    v += if super::compressed_kv::is_compressed_tree(*t) {
+                        stored.encoded(*t, &key, &val, &[]).len()
+                    } else {
+                        val.len()
+                    };
+                }
+                (*t, n, k, v)
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = tally(&store);
+    const N: usize = 50;
+    let mut last = None;
+    for i in 0..N {
+        let mut msg = Resource::new("did:ad:placeholder".into());
+        msg.set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(parent.clone()),
+            &store,
+        )
+        .await
+        .unwrap();
+        msg.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::MESSAGE.into()]),
+            &store,
+        )
+        .await
+        .unwrap();
+        msg.set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown(format!("Hallo dit is bericht nummer {i}, een gewone zin.")),
+            &store,
+        )
+        .await
+        .unwrap();
+        let r = msg.save_as_genesis(&store).await.unwrap();
+        last = r.resource_new;
+    }
+    let after = tally(&store);
+    println!(
+        "{:<16}{:>6}{:>10}{:>10}{:>10}",
+        "tree", "rows", "key B", "val B", "B/msg"
+    );
+    let mut total = 0;
+    for (b, a) in before.iter().zip(after.iter()) {
+        let rows = a.1 - b.1;
+        let kb = a.2 - b.2;
+        let vb = a.3 - b.3;
+        total += kb + vb;
+        println!(
+            "{:<16}{:>6}{:>10}{:>10}{:>10}",
+            format!("{:?}", a.0),
+            rows,
+            kb,
+            vb,
+            (kb + vb) / N
+        );
+    }
+    println!("TOTAL per message: {}", total / N);
+    let _ = last;
+}
+
+/// A snapshot is stored as the changes after the genesis commit, and read
+/// back as the same document, also after later edits.
+#[tokio::test]
+#[timeout(120000)]
+async fn snapshot_is_stored_as_a_delta_on_the_genesis_commit() {
+    let store = Db::init_temp("snapshot_delta").await.unwrap();
+    let mut resource = Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("hallo".into()), &store)
+        .await
+        .unwrap();
+    resource
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("een gewone zin".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    let response = resource.save_as_genesis(&store).await.unwrap();
+    let subject = response.resource_new.unwrap().get_subject().clone();
+    let key = subject.pure_id();
+
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let stored = super::compressed_kv::CompressedKv::new(store.kv.clone());
+    let packed = stored.encoded(Tree::LoroSnapshots, key.as_bytes(), &snapshot, &[]);
+    assert_eq!(
+        &packed[..2],
+        &[0, 2],
+        "a fresh resource's snapshot is a delta"
+    );
+    assert!(
+        packed.len() * 2 < snapshot.len(),
+        "{} vs {}",
+        packed.len(),
+        snapshot.len()
+    );
+
+    let read = store.get_resource(&subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "hallo");
+
+    // Edits sit on top of the genesis and survive a read.
+    let mut edit = store.get_resource(&subject).await.unwrap();
+    edit.set(urls::NAME.into(), Value::String("edited".into()), &store)
+        .await
+        .unwrap();
+    edit.save_locally(&store).await.unwrap();
+    let read = store.get_resource(&subject).await.unwrap();
+    assert_eq!(read.get(urls::NAME).unwrap().to_string(), "edited");
+    assert_eq!(
+        read.get(urls::DESCRIPTION).unwrap().to_string(),
+        "een gewone zin"
+    );
+
+    // Without the genesis commit there is nothing to be a delta on, so the
+    // whole snapshot is kept.
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let orphan = stored.encoded(
+        Tree::LoroSnapshots,
+        b"atomic:no-such-genesis",
+        &snapshot,
+        &[],
+    );
+    assert_ne!(orphan.get(1), Some(&2), "no base, no delta");
+    assert_eq!(
+        stored
+            .get(Tree::LoroSnapshots, key.as_bytes())
+            .unwrap()
+            .unwrap(),
+        snapshot
+    );
 }

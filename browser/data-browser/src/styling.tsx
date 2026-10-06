@@ -114,7 +114,8 @@ export const zIndex = {
 /** Default animation duration in ms */
 export const animationDuration = 100;
 
-const breadCrumbBarHeight = '2.2rem';
+/** Taller on touch screens (see GlobalStyle) so the bar's buttons are easy to hit. */
+const breadCrumbBarHeight = 'var(--breadcrumb-bar-height, 2.2rem)';
 const floatingSearchBarPadding = '4.2rem';
 
 function size(index = 3): string {
@@ -195,7 +196,7 @@ export const buildTheme = (
     containerWidth: 40,
     containerWidthWide: '900px',
     fontSizeBody: 1,
-    fontSizeH1: 2,
+    fontSizeH1: 1.5,
     sideBarWidth: 15,
     margin: 1,
     radius: '9px',
@@ -349,6 +350,12 @@ export const GlobalStyle = createGlobalStyle`
 
   :root {
     --view-transition-duration: 150ms;
+  }
+
+  @media (pointer: coarse) {
+    :root {
+      --breadcrumb-bar-height: 3.25rem;
+    }
   }
 
   /* Firefox 144 sizes the root view-transition snapshot from :root's

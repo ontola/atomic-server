@@ -19,6 +19,7 @@ import {
   isAgentSubject,
   isAtomicIdentifier,
   commitSubject,
+  currentAgentSubject,
 } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
@@ -792,9 +793,11 @@ export class Resource<C extends OptionalClass = any> {
           datatypesJson?.[key] ?? this.untaggedDatatypeTag(key, value),
           value,
         );
-        nextCache[key] = origin
+        const localized = origin
           ? localizeInternalSubjects(normalized, origin)
           : normalized;
+
+        nextCache[key] = dedupeRights(key, localized);
       }
     }
 
@@ -998,7 +1001,17 @@ export class Resource<C extends OptionalClass = any> {
       // original list (OPFS cold-load, WS GET) merges two concurrent lists
       // and the array order flashes — table columns (`requires`/`recommends`)
       // and sidebar `isA` were the visible cases.
-      this.writeLoroListInPlace(map, prop, value);
+      //
+      // Lists of plain strings (subjects, rights) are patched instead of
+      // drained: rewriting every element on each `set()` meant two
+      // concurrent writers each deleted and re-inserted the same agents,
+      // and the merge kept both copies (the drive's read/write lists
+      // filled with repeats after invites were accepted).
+      if (value.every(item => typeof item === 'string')) {
+        this.patchLoroListInPlace(map, prop, value);
+      } else {
+        this.writeLoroListInPlace(map, prop, value);
+      }
     } else {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
@@ -1233,6 +1246,34 @@ export class Resource<C extends OptionalClass = any> {
 
     const { VersionVector: VersionVectorClass } = LoroLoader.Loro;
     this._loroVersionAtLastSave = new VersionVectorClass(merged);
+  }
+
+  /**
+   * Rewind the save cursor to the empty version so the next drain export
+   * carries the WHOLE oplog instead of a delta. Recovery path for the
+   * server's pending-deps rejection ("your update depends on ops I don't
+   * have"): the cursor sits past ops the server never received — usually
+   * because an earlier commit was lost in transit after the cursor advanced —
+   * so every delta exported from it is un-importable. An update from the
+   * empty version is self-contained: the server merges it and recovers the
+   * missing range along the way.
+   *
+   * Rewound, not cleared: an `undefined` cursor reads as "fresh", and the
+   * next import or merge (`initLoroSaveCursorIfFresh`) would re-seat it at
+   * the current version — past the unsent edit, which the drain would then
+   * see as saved and drop.
+   *
+   * @internal store-level drain only — not part of the public API.
+   */
+  public clearLoroSaveCursor(): void {
+    if (!this._loroDoc) {
+      this._loroVersionAtLastSave = undefined;
+
+      return;
+    }
+
+    const { VersionVector: VersionVectorClass } = LoroLoader.Loro;
+    this._loroVersionAtLastSave = new VersionVectorClass(new Map());
   }
 
   /** Base64-encode the current save cursor (last-synced Loro version) for
@@ -1503,8 +1544,18 @@ export class Resource<C extends OptionalClass = any> {
     this._loroDoc.import(snapshot);
     this._loroMap = this._loroDoc.getMap('properties');
 
+    // Carry over the source's cursor VALUE, not the doc's current version.
+    // Stamping `oplogVersion()` here would mark any not-yet-drained local
+    // ops as "already saved" — the next export would start past them and
+    // silently drop the edit on the wire (the incident class described in
+    // `initLoroSaveCursorIfFresh`). Copy via encode/decode: the clone's doc
+    // was seeded from the source's full snapshot, so the vector is valid
+    // for it, and sharing the WASM object would tie its lifetime to the
+    // source doc.
     this._loroVersionAtLastSave = resource._loroVersionAtLastSave
-      ? this._loroDoc.oplogVersion()
+      ? LoroLoader.Loro.VersionVector.decode(
+          resource._loroVersionAtLastSave.encode(),
+        )
       : undefined;
   }
 
@@ -1614,6 +1665,14 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Cannot merge resources with different subjects');
     }
 
+    // Captured before any mutation below: does `this` already carry real
+    // content? A failed fetch (e.g. a 404 for a subject only known to the
+    // locally-connected server, never published upstream) produces an empty
+    // placeholder Resource with nothing but `.error` set. Letting that
+    // clobber `.error` here would flip an otherwise fully-populated,
+    // healthy resource into a permanent "not found" state.
+    const hadContent = this.getEntries().length > 0;
+
     const incomingSnapshot = Resource.extractLoroSnapshot(resourceB);
 
     if (
@@ -1718,7 +1777,17 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.new = resourceB.new;
-    this.error = resourceB.error;
+
+    // Adopt the incoming error UNLESS it's a content-free failure trying to
+    // override a resource that already had something better. A successful
+    // incoming resource (no error) always wins — that's the recovery path.
+    const incomingIsEmptyFailure =
+      resourceB.error !== undefined && resourceB.getEntries().length === 0;
+
+    if (!incomingIsEmptyFailure || !hadContent) {
+      this.error = resourceB.error;
+    }
+
     this.commitError = resourceB.commitError;
 
     // Only update _lastCommit if the remote version has one and we don't have one,
@@ -2066,6 +2135,12 @@ export class Resource<C extends OptionalClass = any> {
    * propvals and the founding Loro change message remain legacy fallbacks.
    */
   public getCreatedBy(): string | undefined {
+    const creator = this.getCreatedByRaw();
+
+    return creator === undefined ? undefined : currentAgentSubject(creator);
+  }
+
+  private getCreatedByRaw(): string | undefined {
     const cert = this.getGenesisCertificate();
 
     if (cert) {
@@ -2779,7 +2854,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    this.writeLoroListInPlace(map, propUrl, items);
+    this.patchLoroListInPlace(map, propUrl, items);
 
     // Single commit at end → single UndoManager checkpoint for the whole
     // replacement.
@@ -2844,6 +2919,91 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.writeJsonToLoroList(list, value);
+  }
+
+  /**
+   * Like {@link writeLoroListInPlace}, but only touches the elements that
+   * differ: the common prefix and suffix stay, the changed middle is deleted
+   * and re-inserted. Undoing the last stroke of a 2000-stroke canvas deletes
+   * one element instead of draining and rewriting all of them, which keeps
+   * the commit (and the oplog) proportional to the change.
+   */
+  private patchLoroListInPlace(
+    map: {
+      get: (key: string) => unknown;
+      setContainer: (key: string, container: LoroList) => LoroList;
+    },
+    prop: string,
+    value: JSONValue[],
+  ): void {
+    const existing = map.get(prop);
+
+    if (!existing || typeof existing !== 'object' || !('delete' in existing)) {
+      this.writeLoroListInPlace(map, prop, value);
+
+      return;
+    }
+
+    const list = existing as LoroList;
+    const old = list.toJSON() as JSONValue[];
+    const max = Math.min(old.length, value.length);
+    let start = 0;
+
+    while (start < max && jsonEqual(old[start], value[start])) start++;
+
+    let oldEnd = old.length;
+    let newEnd = value.length;
+
+    while (
+      oldEnd > start &&
+      newEnd > start &&
+      jsonEqual(old[oldEnd - 1], value[newEnd - 1])
+    ) {
+      oldEnd--;
+      newEnd--;
+    }
+
+    const oldMid = old.slice(start, oldEnd);
+    const newMid = value.slice(start, newEnd);
+    const ops = lcsEditScript(oldMid, newMid);
+    let pos = start;
+
+    for (const op of ops) {
+      if (op === 'keep') {
+        pos++;
+      } else if (op === 'delete') {
+        list.delete(pos, 1);
+      } else {
+        this.insertJsonIntoLoroList(list, pos, newMid[op.insert]);
+        pos++;
+      }
+    }
+  }
+
+  private insertJsonIntoLoroList(
+    list: LoroList,
+    index: number,
+    item: JSONValue,
+  ): void {
+    const { LoroList: LoroListClass, LoroMap } = LoroLoader.Loro;
+
+    if (Array.isArray(item)) {
+      this.writeJsonToLoroList(
+        list.insertContainer(index, new LoroListClass()),
+        item,
+      );
+    } else if (item && typeof item === 'object') {
+      this.writeJsonToLoroMap(
+        list.insertContainer(index, new LoroMap()),
+        item as JSONObject,
+      );
+    } else if (
+      typeof item === 'string' ||
+      typeof item === 'number' ||
+      typeof item === 'boolean'
+    ) {
+      list.insert(index, item);
+    }
   }
 
   private writeJsonToLoroList(list: LoroList, arr: JSONValue[]): void {
@@ -4115,6 +4275,21 @@ function parseJsonPropval(value: string): JSONValue {
   return value;
 }
 
+/**
+ * Rights are a set. Concurrent writers can merge a rights list into repeats of
+ * every agent; collapse them (first occurrence wins) when reading.
+ */
+function dedupeRights(property: string, value: JSONValue): JSONValue {
+  if (
+    (property === core.properties.read || property === core.properties.write) &&
+    Array.isArray(value)
+  ) {
+    return [...new Set(value as JSONValue[])];
+  }
+
+  return value;
+}
+
 function normalizeLoroValue(
   loroDatatypeTag: string | undefined,
   value: unknown,
@@ -4220,4 +4395,106 @@ function isNetworkError(e: unknown): boolean {
   }
 
   return false;
+}
+
+/** Structural equality of two JSON values, ignoring object key order. */
+function jsonEqual(a: JSONValue, b: JSONValue): boolean {
+  if (a === b) return true;
+
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+
+    return a.every((v, i) => jsonEqual(v, b[i]));
+  }
+
+  const ka = Object.keys(a);
+
+  if (ka.length !== Object.keys(b).length) return false;
+
+  return ka.every(k =>
+    jsonEqual(
+      (a as JSONObject)[k] as JSONValue,
+      (b as JSONObject)[k] as JSONValue,
+    ),
+  );
+}
+
+/** Key-order-insensitive string form of a JSON value, for hashing. */
+function stableKey(v: JSONValue): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null';
+
+  if (Array.isArray(v)) return `[${v.map(stableKey).join(',')}]`;
+
+  const o = v as JSONObject;
+
+  return `{${Object.keys(o)
+    .sort()
+    .map(k => `${JSON.stringify(k)}:${stableKey(o[k] as JSONValue)}`)
+    .join(',')}}`;
+}
+
+/** Above this many table cells the LCS is skipped for one plain replace. */
+const LCS_CELL_LIMIT = 4_000_000;
+
+type LcsOp = 'keep' | 'delete' | { insert: number };
+
+/**
+ * Edit script turning `a` into `b` by keeping their longest common
+ * subsequence: items in both lists stay (and keep their Loro containers),
+ * the rest is deleted or inserted. `insert` carries the index into `b`.
+ * Falls back to delete-all + insert-all when the table would be too big.
+ */
+function lcsEditScript(a: JSONValue[], b: JSONValue[]): LcsOp[] {
+  const n = a.length;
+  const m = b.length;
+  const ops: LcsOp[] = [];
+
+  if (n === 0 || m === 0 || (n + 1) * (m + 1) > LCS_CELL_LIMIT) {
+    for (let i = 0; i < n; i++) ops.push('delete');
+
+    for (let j = 0; j < m; j++) ops.push({ insert: j });
+
+    return ops;
+  }
+
+  const ka = a.map(stableKey);
+  const kb = b.map(stableKey);
+  const w = m + 1;
+  const table = new Uint32Array((n + 1) * w);
+
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      table[i * w + j] =
+        ka[i] === kb[j]
+          ? table[(i + 1) * w + j + 1] + 1
+          : Math.max(table[(i + 1) * w + j], table[i * w + j + 1]);
+    }
+  }
+
+  let i = 0;
+  let j = 0;
+
+  while (i < n && j < m) {
+    if (ka[i] === kb[j]) {
+      ops.push('keep');
+      i++;
+      j++;
+    } else if (table[(i + 1) * w + j] >= table[i * w + j + 1]) {
+      ops.push('delete');
+      i++;
+    } else {
+      ops.push({ insert: j });
+      j++;
+    }
+  }
+
+  for (; i < n; i++) ops.push('delete');
+
+  for (; j < m; j++) ops.push({ insert: j });
+
+  return ops;
 }

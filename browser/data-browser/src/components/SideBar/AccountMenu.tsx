@@ -24,12 +24,13 @@ import {
   unknownSubject,
   useCurrentAgent,
   useResource,
+  useString,
 } from '@tomic/react';
 import { paths } from '../../routes/paths';
 import { shortcuts } from '../../actions/shortcuts';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useInbox } from '../../hooks/useInbox';
-import { DIVIDER, DropdownMenu, type DropdownItem } from '../Dropdown';
+import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
 import { IconButton } from '../IconButton/IconButton';
 import { ResourceGlyph } from '../ResourceGlyph';
@@ -148,7 +149,6 @@ function AccountMenuRow({
           },
         ]
       : []),
-    DIVIDER,
     {
       id: 'integrations',
       label: 'Integrations',
@@ -165,7 +165,6 @@ function AccountMenuRow({
       helper: getSyncLabel(syncStatus),
       onClick: goTo(paths.sync),
     },
-    DIVIDER,
     {
       id: 'feedback',
       label: 'Feedback',
@@ -201,7 +200,33 @@ function AccountMenuRow({
           items={items}
           searchable={false}
         />
+        {/* Also in the menu; these are checked often enough for their own
+         * button. All muted like the menu's items. */}
+        {agent && (
+          <BellWrap>
+            <IconButton
+              color='textLight'
+              title={unreadLabel ?? 'Notifications'}
+              aria-label={unreadLabel ?? 'Notifications'}
+              data-testid='sidebar-notifications-button'
+              onClick={goTo(paths.notifications)}
+            >
+              <FaBell />
+            </IconButton>
+            {unread > 0 && <BellDot aria-hidden />}
+          </BellWrap>
+        )}
         <IconButton
+          color='textLight'
+          title={`Sync: ${getSyncLabel(syncStatus)}`}
+          aria-label='Sync'
+          data-testid='sidebar-sync-button'
+          onClick={goTo(paths.sync)}
+        >
+          {getSyncIcon(syncStatus)}
+        </IconButton>
+        <IconButton
+          color='textLight'
           title='Settings'
           aria-label='Settings'
           data-testid='sidebar-settings-button'
@@ -227,9 +252,12 @@ function AccountTrigger({
   const combinedRef = useCombineRefs([ref, triggerRef]);
   const [agent] = useCurrentAgent();
   const agentResource = useResource(agent?.subject ?? unknownSubject);
-  const name = agent
-    ? (agentResource.get(core.properties.name) ?? 'User')
-    : 'Login / New User';
+  // `useString`, not `agentResource.get(...)`: the resource object is stable
+  // across renders, so the compiler caches a plain read of it and the row kept
+  // the 'User' it first rendered, before the profile had loaded or after a
+  // rename.
+  const [agentName] = useString(agentResource, core.properties.name);
+  const name = agent ? (agentName ?? 'User') : 'Login / New User';
 
   return (
     <TriggerButton
@@ -306,6 +334,22 @@ const Row = styled.div`
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+`;
+
+const BellWrap = styled.span`
+  position: relative;
+  display: inline-flex;
+`;
+
+const BellDot = styled.span`
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: ${p => p.theme.colors.main};
+  pointer-events: none;
 `;
 
 const TriggerButton = styled(SideBarMenuRow)`

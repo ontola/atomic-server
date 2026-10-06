@@ -94,6 +94,16 @@ export default defineConfig(({ mode }) => {
     process.env.VITE_ATOMIC_SERVER_URL ??
     env.VITE_ATOMIC_SERVER_URL ??
     'http://localhost:9883';
+  // The hosted distribution (atomic.place) carries its own name. A build from
+  // source is the self-hostable server and keeps a neutral one.
+  const hostedFlag =
+    process.env.VITE_ATOMIC_HOSTED_DISTRIBUTION ??
+    env.VITE_ATOMIC_HOSTED_DISTRIBUTION;
+  const hosted = hostedFlag === '1' || hostedFlag === 'true';
+  const appName = hosted ? 'atomic.place' : 'AtomicServer';
+  const appDescription = hosted
+    ? 'Your own place for documents, tables, meetings and chat. Local-first and open source, with optional cloud backup and sync.'
+    : 'The easiest way to create, share and model Linked Atomic Data.';
 
   return {
     define: {
@@ -256,6 +266,14 @@ export default defineConfig(({ mode }) => {
         transformIndexHtml: (html: string) =>
           html.replaceAll('__WASM_VERSION__', wasmVersionHash),
       },
+      {
+        // The tab title, description and splash caption before the bundle runs.
+        name: 'atomic-app-name-html',
+        transformIndexHtml: (html: string) =>
+          html
+            .replaceAll('__APP_NAME__', appName)
+            .replaceAll('__APP_DESCRIPTION__', appDescription),
+      },
       !isVitest && webfontDownload(),
       !isVitest && wuchale(),
       // Native React Compiler (oxc-transform-react). Must run before JSX
@@ -272,10 +290,9 @@ export default defineConfig(({ mode }) => {
           registerType: 'autoUpdate',
           injectRegister: 'auto',
           manifest: {
-            name: 'Atomic Data Browser',
-            short_name: 'Atomic',
-            description:
-              'The easiest way to create, share and model Linked Atomic Data.',
+            name: appName,
+            short_name: hosted ? 'atomic.place' : 'Atomic',
+            description: appDescription,
             theme_color: '#ffffff',
             icons: [
               {

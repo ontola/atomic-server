@@ -9,6 +9,7 @@ import {
   resumePeerLinks,
 } from '../../helpers/browserPeerSync';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { isOriginWithoutNode } from '../../helpers/originNode';
 
 export interface InviteLinkOptions {
   write: boolean;
@@ -86,6 +87,14 @@ export function useCreateInviteLink(
 
     if (browserPeer) {
       return `${window.location.origin}/app/invite?token=${encodeURIComponent(tokenBase64)}`;
+    }
+
+    // A link to a host that runs no node opens a page that cannot find the
+    // invite. Better to say so now than to hand over a link that never works.
+    if (isOriginWithoutNode(serverUrl)) {
+      throw new Error(
+        'This drive is not on a server this app can reach, so it cannot be shared with a link yet. Open it from its own server and try again.',
+      );
     }
 
     return `${inviteLinkPrefix(serverUrl)}${encodeURIComponent(tokenBase64)}${inviteLinkSuffix(serverUrl)}`;

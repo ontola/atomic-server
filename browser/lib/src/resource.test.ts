@@ -228,6 +228,21 @@ describe('resource.ts', () => {
     expect(reloaded.getCreatedBy()).toBe(genesisSignerDid(cert));
   });
 
+  it('names a pre-DID creator by the agent profile that is live today', async ({
+    expect,
+  }) => {
+    const resource = new Resource('https://example.com/old-message');
+    await resource.set(
+      'https://atomicdata.dev/properties/createdBy',
+      'https://atomicdata.dev/agents/QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=',
+      false,
+    );
+
+    expect(resource.getCreatedBy()).toBe(
+      'atomic:agent:QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=',
+    );
+  });
+
   it('merges remote state without dropping local unsaved loro edits', async ({
     expect,
   }) => {
@@ -359,6 +374,61 @@ describe('resource.ts', () => {
       doc.getMap('properties').get(prop) as unknown as { id?: string }
     )?.id;
     expect(newListId).toBe(originalListId);
+  });
+
+  it('replaceListItems only rewrites the changed part of a list', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+    const strokes = Array.from({ length: 50 }, (_, i) => ({
+      color: i,
+      width: 2,
+      path: [[i, i]],
+    }));
+    const resource = new Resource('https://example.com/patch-list');
+    const doc = resource.getLoroDoc()!;
+
+    for (const s of strokes) resource.pushListItem(prop, s);
+
+    doc.commit();
+    const before = doc.opCount();
+
+    // Undo the last stroke: one deletion, no rewrite of the other 49.
+    resource.replaceListItems(prop, strokes.slice(0, -1));
+    expect(doc.opCount() - before).toBeLessThan(5);
+    expect(resource.get(prop)).toEqual(strokes.slice(0, -1));
+
+    // Erase one in the middle, then redo it.
+    const without = strokes.filter((_, i) => i !== 20);
+    resource.replaceListItems(prop, without);
+    expect(resource.get(prop)).toEqual(without);
+
+    resource.replaceListItems(prop, strokes);
+    expect(resource.get(prop)).toEqual(strokes);
+  });
+
+  it('replaceListItems keeps unchanged strokes between two separate edits', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/ontology/canvas/strokeData';
+    const strokes = Array.from({ length: 40 }, (_, i) => ({
+      color: i,
+      width: 2,
+      path: [[i, i]],
+    }));
+    const resource = new Resource('https://example.com/lcs-list');
+    const doc = resource.getLoroDoc()!;
+
+    for (const s of strokes) resource.pushListItem(prop, s);
+
+    doc.commit();
+    const before = doc.opCount();
+    // Removes strokes 5 and 30: two separate hunks.
+    const target = strokes.filter((_, i) => i !== 5 && i !== 30);
+
+    resource.replaceListItems(prop, target);
+    expect(resource.get(prop)).toEqual(target);
+    expect(doc.opCount() - before).toBeLessThan(5);
   });
 
   /**
@@ -795,6 +865,48 @@ describe('resource.ts', () => {
     // The next export from that cursor must carry the "b" op, not a
     // header-only no-op.
     const delta = doc.export({ mode: 'update', from: lvasAfterEcho });
+    expect(delta.length).toBeGreaterThan(40);
+  });
+
+  /**
+   * Regression: `cloneLoroStateFrom` used to stamp the CLONE's current
+   * oplog version as its save cursor whenever the source had any cursor.
+   * A clone (or `merge(…, { replaceLoroDocs: true })`) of a resource
+   * holding not-yet-drained local ops thereby marked those ops "already
+   * saved" — the next export started past them and the edit silently
+   * never reached the server. The clone must carry the source's cursor
+   * VALUE.
+   */
+  it('clone preserves the save cursor value, keeping un-drained ops exportable', async ({
+    expect,
+  }) => {
+    const name = 'https://atomicdata.dev/properties/name';
+    const r = new Resource('https://example.com/clone-cursor');
+    await r.set(name, 'a', false);
+    const doc = r.getLoroDoc()!;
+    doc.commit();
+
+    // Cursor state after a successful sign of "a".
+    const lvasAtSign = doc.oplogVersion();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r as any)._loroVersionAtLastSave = lvasAtSign;
+
+    // A local edit that has NOT been drained yet.
+    await r.set(name, 'ab', false);
+    doc.commit();
+    expect(r.hasOpsPastSaveCursor()).toBe(true);
+
+    const cloned = r.clone();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const clonedCursor = (cloned as any)._loroVersionAtLastSave;
+    expect(clonedCursor.encode()).toEqual(lvasAtSign.encode());
+    expect(cloned.hasOpsPastSaveCursor()).toBe(true);
+
+    // The next export from the clone still carries the un-drained op.
+    const delta = cloned
+      .getLoroDoc()!
+      .export({ mode: 'update', from: clonedCursor });
     expect(delta.length).toBeGreaterThan(40);
   });
 });

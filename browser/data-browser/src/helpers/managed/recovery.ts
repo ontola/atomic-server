@@ -410,7 +410,7 @@ export function passkeyRpId(): string | undefined {
 export class PrfUnsupportedError extends Error {
   constructor(message = 'This device cannot protect a backup with a passkey.') {
     super(message);
-    this.name = 'PrfUnsupportedError';
+    this.name = /* @wc-ignore */ 'PrfUnsupportedError';
   }
 }
 
@@ -1775,10 +1775,14 @@ const LEGACY_RECOVERY_CACHE_KEY = 'atomic.recovery.backup';
  */
 function cacheRecoverySecret(secret: RecoverySecret): void {
   try {
-    // Keyed by agent, so a shared machine accumulates one entry per account
-    // rather than each sign-in evicting the last.
+    // One entry per account, so a shared machine accumulates one per person
+    // rather than each sign-in evicting the last. An account holds one backup
+    // on the server, so a newer one for another agent replaces the old: kept,
+    // it showed the same address twice and only one of them opened.
     const others = readCachedBackups().filter(
-      entry => !sameAgent(entry.agent_subject, secret.agent_subject),
+      entry =>
+        !sameAgent(entry.agent_subject, secret.agent_subject) &&
+        entry.owner_email !== secret.owner_email,
     );
     localStorage.setItem(
       RECOVERY_CACHE_KEY,

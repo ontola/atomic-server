@@ -8,6 +8,7 @@ export const pathNames = {
   integrations: '/integrations',
   notifications: '/notifications',
   sync: '/sync',
+  storage: '/storage',
   serverSettings: '/server',
   new: '/new',
   newDrive: '/new-drive',
@@ -29,6 +30,7 @@ export const pathNames = {
   devDrive: '/dev-drive',
   demo: '/demo',
   invite: '/invite',
+  signOut: '/sign-out',
 } as const;
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
@@ -37,6 +39,7 @@ export const paths = {
   integrations: `${pathNames.app}${pathNames.integrations}`,
   notifications: `${pathNames.app}${pathNames.notifications}`,
   sync: `${pathNames.app}${pathNames.sync}`,
+  storage: `${pathNames.app}${pathNames.storage}`,
   serverSettings: `${pathNames.app}${pathNames.serverSettings}`,
   new: `${pathNames.app}${pathNames.new}`,
   newDrive: `${pathNames.app}${pathNames.newDrive}`,
@@ -57,4 +60,5 @@ export const paths = {
   linkOpenRouter: `${pathNames.app}${pathNames.linkOpenRouter}`,
   devDrive: `${pathNames.app}${pathNames.devDrive}`,
   demo: `${pathNames.app}${pathNames.demo}`,
+  signOut: `${pathNames.app}${pathNames.signOut}`,
 } as const;

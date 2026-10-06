@@ -264,16 +264,20 @@ test.describe('data-browser', async () => {
         driveTitle,
       );
       await expect(
-        page2.getByRole('heading', { name: 'Agent created!' }),
+        page2.getByRole('heading', { name: 'This is your account' }),
       ).toHaveCount(0);
 
-      // A saved avatar suppresses the profile nudge in both directions.
+      // The inviter already has what the link grants: it opens the drive
+      // instead of asking them to accept their own invite.
       await page.goto(
         `${FRONTEND_URL}${invitePath.pathname}${invitePath.search}`,
       );
-      await page.locator('[data-test="accept-existing"]').click();
       await expect(page.getByTestId('current-drive-title')).toHaveText(
         driveTitle,
+      );
+      await expect(page).not.toHaveURL(/\/app\/invite/);
+      await expect(page.locator('[data-test="accept-existing"]')).toHaveCount(
+        0,
       );
       await expect(
         page.getByRole('heading', { name: 'How your colleagues see you' }),
@@ -400,8 +404,11 @@ test.describe('data-browser', async () => {
       .getByRole('button', { name: 'Save and continue', exact: true })
       .click();
     await page
-      .getByLabel('Role for people who join with the link')
-      .selectOption('write');
+      .getByRole('radiogroup', {
+        name: 'Role for people who join with the link',
+      })
+      .getByRole('radio', { name: 'Write' })
+      .check();
     await page.getByRole('button', { name: 'Copy invite link' }).click();
     const inviteUrl = await page
       .locator('[data-invite-link]')

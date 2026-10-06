@@ -10,7 +10,9 @@ import {
   server,
   core,
   ai,
+  forms,
   notifications,
+  conversations,
   useArray,
 } from '@tomic/react';
 
@@ -26,6 +28,7 @@ import { FilePage } from './File/FilePage';
 import { ResourcePageDefault } from './ResourcePageDefault';
 import { Spinner } from '../components/Spinner';
 import { ChatRoomPage } from './ChatRoomPage';
+import { ConversationPage } from './Conversation/ConversationPage';
 import { InboxPage } from './InboxPage';
 import { MessagePage } from './MessagePage';
 import { BookmarkPage } from './BookmarkPage/BookmarkPage';
@@ -79,6 +82,10 @@ const ImportResolutionNotice = lazy(() =>
 
 const AppPage = lazy(() =>
   import('../chunks/AppPage').then(m => ({ default: m.AppPage })),
+);
+
+const FormBuilderPage = lazy(() =>
+  import('../chunks/FormBuilder').then(m => ({ default: m.FormBuilderPage })),
 );
 
 /** These properties are passed to every View at Page level */
@@ -302,6 +309,8 @@ function selectComponent(klass: string | undefined) {
       return FilePage;
     case dataBrowser.classes.chatroom:
       return ChatRoomPage;
+    case conversations.classes.conversation:
+      return ConversationPage;
     case dataBrowser.classes.message:
       return MessagePage;
     case dataBrowser.classes.bookmark:
@@ -328,6 +337,8 @@ function selectComponent(klass: string | undefined) {
       return MeetingPage;
     case canvas.classes.canvas:
       return CanvasPage;
+    case forms.classes.form:
+      return FormBuilderPage;
     case notifications.classes.inbox:
       return InboxPage;
     case server.classes.installation:

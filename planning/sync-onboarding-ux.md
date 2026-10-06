@@ -101,8 +101,8 @@ Keep these in step. A change to one is usually a change to its twin.
 
 | Concern | Browser | Flutter |
 | --- | --- | --- |
-| sync screen | `data-browser/src/routes/SyncRoute.tsx` | `flutter/lib/atomic/widgets/server_settings_section.dart` |
-| settings shell | (same route) | `flutter/lib/atomic/widgets/agent_settings_dialog.dart` |
+| sync screen | `data-browser/src/routes/SyncRoute.tsx` | `packages/atomic_flutter/lib/src/server_settings_section.dart` |
+| settings shell | (same route) | `packages/atomic_flutter/lib/src/agent_settings_dialog.dart` |
 | onboarding, data elsewhere | `data-browser/src/views/getting-started/ConnectDeviceStep.tsx` | `flutter/lib/screens/login_screen.dart` |
 | pairing code, show / scan | `components/PairingCode.tsx`, `ConnectToDeviceForm.tsx` | `flutter/lib/screens/pair_screen.dart` |
 | pairing code, format | `browser/lib/src/pairing.ts` | `pair_screen.dart` (`_parsePairingUri`) |
@@ -202,6 +202,23 @@ Existing records retain unknown consent; no consent is inferred from a drive
 being present. Browser switcher rows carry compact service state labels, with
 one Storage and hosting action for details. Unknown cloud status stays explicit.
 
+### Plan steps and automatic hosting (2026-10-05)
+
+The Sync page's account card is a header (atomic.place, email, recovery,
+Manage account) over "Your plan": Cloud Vault, then Cloud Server, both drawn
+by the same `ServiceRow` (`components/Cloud/ServiceRow.tsx`): name and a
+Current / Included / Offered badge, one fixed tagline, selling points while
+off, one status line with a coloured dot, then actions, primary first.
+Cloud Server is the step up and includes Cloud Vault. The managed node itself
+is listed under Devices with every other server.
+
+There is no "Finish setup". A drive with a paid plan (`source: stripe` from
+`/api/billing/subscription`), or one already enrolled, enrolls and switches by
+itself and shows "Moving…"; a failure shows the reason and Try again. Consent
+is asked only for a plan nobody bought (`source: grant`, or no `source` from an
+older control plane), because hosting stores a readable copy. The checkout is
+where a buyer agrees to that. Flutter has no plan UI, so nothing changes there.
+
 ## Desktop workspace discovery (2026-09-08)
 
 A restored Tauri identity now inspects its personal drive's PKARR peer before
@@ -228,3 +245,11 @@ homepage panel, the app's sign-in and restore steps) renders the same
 adds only what the portal cannot do, pasting an agent secret. Native builds that
 cannot hold the account cookie link the device with a code instead. Flutter has
 no account sign-in yet.
+
+## Shared Flutter settings package
+
+`packages/atomic_flutter` now owns the Canvas settings and Devices widgets.
+Canvas delegates storage and transport through `flutter/lib/atomic/settings_backend.dart`.
+Atomic Audio can provide its own adapter without copying the dialog. The browser
+SyncRoute remains the visual/wording twin; this extraction changes no browser
+behavior. Pairing and authentication screens remain host-owned for now.
