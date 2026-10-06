@@ -1,7 +1,13 @@
 import { PeerInvitePage } from '../views/PeerInvitePage';
-import { createRoute } from '@tanstack/react-router';
-import { useServerURL, useResource, useStore } from '@tomic/react';
-import { useEffect, useState } from 'react';
+import { createRoute, useNavigate } from '@tanstack/react-router';
+import { server, useServerURL, useResource, useStore } from '@tomic/react';
+import { useEffect, useState, type JSX } from 'react';
+import {
+  alreadyHasInviteAccess,
+  readInviteGrant,
+} from '../helpers/inviteAccess';
+import { useSettings } from '../helpers/AppSettings';
+import { constructOpenURL } from '../helpers/navigation';
 import { isDev } from '../config';
 import { inviteNodeCandidates, pickInviteNode } from '../helpers/inviteNode';
 import {
@@ -43,9 +49,68 @@ function InviteRouteComponent() {
   }
 
   if (invalid) return <p>Invalid invitation.</p>;
-  if (browserInvite) return <PeerInvitePage token={token} />;
 
-  return <NodeInvite token={token} />;
+  return (
+    <OpenIfAlreadyShared token={token}>
+      {browserInvite ? (
+        <PeerInvitePage token={token} />
+      ) : (
+        <NodeInvite token={token} />
+      )}
+    </OpenIfAlreadyShared>
+  );
+}
+
+/**
+ * Someone who already has what the invite grants (they made the link, or the
+ * resource is already shared with them) goes straight to it: there is nothing
+ * to accept, and on a host with no node the invite could not be resolved
+ * anyway. Everyone else gets the invite screen.
+ */
+function OpenIfAlreadyShared({
+  token,
+  children,
+}: {
+  token: string;
+  children: JSX.Element;
+}) {
+  const store = useStore();
+  const navigate = useNavigate();
+  const { agent, setDrive } = useSettings();
+  const agentSubject = agent?.subject;
+  const [grant] = useState(() => readInviteGrant(token));
+  const [checked, setChecked] = useState(!agentSubject || !grant);
+
+  useEffect(() => {
+    if (!agentSubject || !grant) return;
+
+    let active = true;
+
+    void (async () => {
+      const has = await alreadyHasInviteAccess(store, agentSubject, grant);
+      if (!active) return;
+
+      if (!has) {
+        setChecked(true);
+
+        return;
+      }
+
+      // A shared drive becomes the active one, as accepting would make it.
+      const target = await store.getResource(grant.target).catch(() => {});
+      if (!active) return;
+      if (target?.hasClasses(server.classes.drive)) setDrive(grant.target);
+      navigate({ to: constructOpenURL(grant.target), replace: true });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [grant, agentSubject, store, navigate, setDrive]);
+
+  if (!checked) return <p>Opening invitation...</p>;
+
+  return children;
 }
 
 /**
