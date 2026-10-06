@@ -1125,6 +1125,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       removeDerivedColumn,
       addItemsToHistoryStack,
       rowSource,
+      viewKind,
     }),
     [
       resource.subject,
@@ -1155,6 +1156,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       removeDerivedColumn,
       addItemsToHistoryStack,
       rowSource,
+      viewKind,
     ],
   );
 

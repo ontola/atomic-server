@@ -104,6 +104,8 @@ export interface TablePageContextType {
    * until it materializes.
    */
   rowSource: (index: number) => RowSource | undefined;
+  /** The kind of the active view ('table', 'calendar', …). */
+  viewKind?: string;
 }
 
 export type RowSource =

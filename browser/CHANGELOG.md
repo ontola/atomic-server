@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Tables: a computed duration reads a date-only start as local midnight, like a local date-and-time, so it no longer differs by the timezone offset (#2083).
+- Tables: clearing a Localized Text cell removes that language, so the fallback and the missing-translation marker come back (#2084).
+- Calendar: the date filter explains that a repeating entry is matched on its first date (#2087).
+- Cards: a record embedded in a document shows property names instead of slugs, hides created-at, drive and sort-order, and no longer shows an empty description line (#2081).
 - Forms (beta): build a form or survey and share a link; guests fill it in
   without an account and each answer becomes a table row. Create one with
   New > Form, or from a table with "Create form from this table" (pick its
