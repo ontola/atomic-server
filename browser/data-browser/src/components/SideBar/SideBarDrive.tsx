@@ -124,7 +124,7 @@ export function SideBarDrive({
 
   const driveName = driveResource.isUnauthorized()
     ? 'Unauthorized'
-    : driveDisplayName(title, drive);
+    : driveDisplayName(driveResource.error ? undefined : title, drive);
 
   return (
     <>
