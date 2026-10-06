@@ -4712,3 +4712,73 @@ async fn snapshot_is_stored_as_a_delta_on_the_genesis_commit() {
         snapshot
     );
 }
+
+#[tokio::test]
+#[timeout(120000)]
+async fn index_keys_migration_rebuilds_old_rows_in_slices() {
+    use super::prop_val_sub_index::{propvalsub_key, propvalsub_legacy_key};
+
+    let store = Db::init_temp("index-keys-migration").await.unwrap();
+    let mut resource = Resource::new_instance(urls::PARAGRAPH, &store)
+        .await
+        .unwrap();
+    resource
+        .set(
+            urls::PARENT.into(),
+            Value::AtomicUrl("https://localhost/p".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    resource
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("hallo".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    resource.save_locally(&store).await.unwrap();
+    let atom = crate::atoms::IndexAtom {
+        property: urls::PARENT.into(),
+        ref_value: "https://localhost/p".into(),
+        sort_value: "https://localhost/p".into(),
+        subject: resource.get_subject().to_string().into(),
+    };
+
+    // An index as an older store left it: the full property URL in the key,
+    // no marker.
+    store.clear_index().unwrap();
+    let old_key = propvalsub_legacy_key(&atom);
+    store.kv.insert(Tree::PropValSub, &old_key, b"").unwrap();
+    store
+        .kv
+        .remove(Tree::PluginMeta, super::index_keys::DONE_KEY)
+        .unwrap();
+    assert!(store.index_migration_pending().unwrap());
+
+    let mut seen = Vec::new();
+    loop {
+        let step = store.migrate_index_keys_step(1).unwrap();
+        seen.push(step.done);
+        if step.finished {
+            assert_eq!(step.done, step.total);
+            break;
+        }
+        assert!(step.total > 0 && step.done <= step.total);
+    }
+    assert!(seen.windows(2).all(|w| w[0] <= w[1]));
+    assert!(
+        seen.len() > 2,
+        "a slice of one resource means several steps"
+    );
+
+    assert!(!store.index_migration_pending().unwrap());
+    assert!(store.kv.get(Tree::PropValSub, &old_key).unwrap().is_none());
+    assert!(store
+        .kv
+        .get(Tree::PropValSub, &propvalsub_key(&atom))
+        .unwrap()
+        .is_some());
+    assert!(propvalsub_key(&atom).len() < old_key.len());
+}
