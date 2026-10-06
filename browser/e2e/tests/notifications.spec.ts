@@ -103,8 +103,11 @@ test.describe('notifications', () => {
       .getByRole('button', { name: 'Save and continue', exact: true })
       .click();
     await page
-      .getByLabel('Role for people who join with the link')
-      .selectOption('write');
+      .getByRole('radiogroup', {
+        name: 'Role for people who join with the link',
+      })
+      .getByRole('radio', { name: 'Write' })
+      .check();
     await page.getByRole('button', { name: 'Copy invite link' }).click();
     const inviteUrl = await page
       .locator('[data-invite-link]')

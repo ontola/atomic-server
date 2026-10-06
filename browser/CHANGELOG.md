@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Share dialog: the role for new invites (email field and Copy invite link) is a single-click Read / Write switch in the same style as the Public switch, instead of a Can write dropdown.
 - Invites: opening an invite link uses the server in the link instead of whichever server the browser had saved, so an invitee with a stale saved server no longer gets "Unrecognized token '<'". When the link points at a host that runs no server, a plain message says so. Creating a link for a drive whose server runs no node fails up front.
 - Forms (beta): build a form or survey and share a link; guests fill it in
   without an account and each answer becomes a table row. Create one with
