@@ -226,6 +226,21 @@ export function agentSubject(pubkey: string): string {
   return ATOMIC_AGENT_PREFIX + pubkey;
 }
 
+/**
+ * The agent a pre-DID `https://server/agents/{pubkey}` subject stands for.
+ *
+ * Old resources name their author by that URL. It is a different resource from
+ * the agent's current profile: it keeps whatever name the person had back
+ * then, and nothing a later rename touches. Anything that shows an author
+ * therefore has to go through the key to the live profile. Any other subject,
+ * including a DID agent, is returned unchanged.
+ */
+export function currentAgentSubject(subject: string): string {
+  const legacy = subject.match(/^https?:\/\/[^/]+\/agents\/([^/?#]+)$/);
+
+  return legacy ? agentSubject(decodeURIComponent(legacy[1])) : subject;
+}
+
 export function resourceSubject(genesisSig: string): string {
   return ATOMIC_PREFIX + genesisSig;
 }
