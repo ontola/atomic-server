@@ -7,6 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- A `SYNC_PUSH` imports an unstamped child (`parent` set, no `drive`) in the same frame as its parent regardless of entry order. The child is still skipped, with no snapshot left behind, when that parent is missing, rejected, or belongs to another drive. [#2063](https://github.com/ontola/atomic-server/issues/2063)
 - `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX` takes a comma-separated list (`atomicserver.eu,atomic.place`), so a node can answer under two domains while it moves from one to the other.
 - Forms (beta): guests can fill in a form without an account, and each answer
   becomes a row in a Table. New default ontology `forms`
