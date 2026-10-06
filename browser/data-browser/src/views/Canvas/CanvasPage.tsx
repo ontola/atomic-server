@@ -481,10 +481,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   }, [writeHistoryNow]);
 
   useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') writeHistoryNow();
+    };
+
     window.addEventListener('pagehide', writeHistoryNow);
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       window.removeEventListener('pagehide', writeHistoryNow);
+      document.removeEventListener('visibilitychange', onVisibility);
 
       if (persistTimerRef.current !== undefined) {
         writeHistoryNow();

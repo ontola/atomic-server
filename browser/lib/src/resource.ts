@@ -2944,32 +2944,46 @@ export class Resource<C extends OptionalClass = any> {
       newEnd--;
     }
 
-    if (oldEnd > start) {
-      list.delete(start, oldEnd - start);
-    }
+    const oldMid = old.slice(start, oldEnd);
+    const newMid = value.slice(start, newEnd);
+    const ops = lcsEditScript(oldMid, newMid);
+    let pos = start;
 
+    for (const op of ops) {
+      if (op === 'keep') {
+        pos++;
+      } else if (op === 'delete') {
+        list.delete(pos, 1);
+      } else {
+        this.insertJsonIntoLoroList(list, pos, newMid[op.insert]);
+        pos++;
+      }
+    }
+  }
+
+  private insertJsonIntoLoroList(
+    list: LoroList,
+    index: number,
+    item: JSONValue,
+  ): void {
     const { LoroList: LoroListClass, LoroMap } = LoroLoader.Loro;
 
-    for (let i = start; i < newEnd; i++) {
-      const item = value[i];
-
-      if (Array.isArray(item)) {
-        this.writeJsonToLoroList(
-          list.insertContainer(i, new LoroListClass()),
-          item,
-        );
-      } else if (item && typeof item === 'object') {
-        this.writeJsonToLoroMap(
-          list.insertContainer(i, new LoroMap()),
-          item as JSONObject,
-        );
-      } else if (
-        typeof item === 'string' ||
-        typeof item === 'number' ||
-        typeof item === 'boolean'
-      ) {
-        list.insert(i, item);
-      }
+    if (Array.isArray(item)) {
+      this.writeJsonToLoroList(
+        list.insertContainer(index, new LoroListClass()),
+        item,
+      );
+    } else if (item && typeof item === 'object') {
+      this.writeJsonToLoroMap(
+        list.insertContainer(index, new LoroMap()),
+        item as JSONObject,
+      );
+    } else if (
+      typeof item === 'string' ||
+      typeof item === 'number' ||
+      typeof item === 'boolean'
+    ) {
+      list.insert(index, item);
     }
   }
 
@@ -4373,4 +4387,80 @@ function jsonEqual(a: JSONValue, b: JSONValue): boolean {
       (b as JSONObject)[k] as JSONValue,
     ),
   );
+}
+
+/** Key-order-insensitive string form of a JSON value, for hashing. */
+function stableKey(v: JSONValue): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null';
+
+  if (Array.isArray(v)) return `[${v.map(stableKey).join(',')}]`;
+
+  const o = v as JSONObject;
+
+  return `{${Object.keys(o)
+    .sort()
+    .map(k => `${JSON.stringify(k)}:${stableKey(o[k] as JSONValue)}`)
+    .join(',')}}`;
+}
+
+/** Above this many table cells the LCS is skipped for one plain replace. */
+const LCS_CELL_LIMIT = 4_000_000;
+
+type LcsOp = 'keep' | 'delete' | { insert: number };
+
+/**
+ * Edit script turning `a` into `b` by keeping their longest common
+ * subsequence: items in both lists stay (and keep their Loro containers),
+ * the rest is deleted or inserted. `insert` carries the index into `b`.
+ * Falls back to delete-all + insert-all when the table would be too big.
+ */
+function lcsEditScript(a: JSONValue[], b: JSONValue[]): LcsOp[] {
+  const n = a.length;
+  const m = b.length;
+  const ops: LcsOp[] = [];
+
+  if (n === 0 || m === 0 || (n + 1) * (m + 1) > LCS_CELL_LIMIT) {
+    for (let i = 0; i < n; i++) ops.push('delete');
+
+    for (let j = 0; j < m; j++) ops.push({ insert: j });
+
+    return ops;
+  }
+
+  const ka = a.map(stableKey);
+  const kb = b.map(stableKey);
+  const w = m + 1;
+  const table = new Uint32Array((n + 1) * w);
+
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      table[i * w + j] =
+        ka[i] === kb[j]
+          ? table[(i + 1) * w + j + 1] + 1
+          : Math.max(table[(i + 1) * w + j], table[i * w + j + 1]);
+    }
+  }
+
+  let i = 0;
+  let j = 0;
+
+  while (i < n && j < m) {
+    if (ka[i] === kb[j]) {
+      ops.push('keep');
+      i++;
+      j++;
+    } else if (table[(i + 1) * w + j] >= table[i * w + j + 1]) {
+      ops.push('delete');
+      i++;
+    } else {
+      ops.push({ insert: j });
+      j++;
+    }
+  }
+
+  for (; i < n; i++) ops.push('delete');
+
+  for (; j < m; j++) ops.push({ insert: j });
+
+  return ops;
 }
