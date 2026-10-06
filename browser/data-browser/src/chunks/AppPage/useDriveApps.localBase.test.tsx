@@ -26,7 +26,7 @@ const OWN = 'atomic:resource:class-own';
 const TXN = 'atomic:resource:class-txn';
 const APP = 'atomic:resource:app';
 
-vi.mock('@chunks/PluginRuns/runScript', () => ({
+vi.mock('@chunks/PluginRuns/useDriveClass', () => ({
   useAppClass: () => APP_CLASS,
 }));
 
