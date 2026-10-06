@@ -1551,6 +1551,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
           {!embedded && (
             <TableFilterBar
               columns={uniqueColumnProperties}
+              allColumns={allColumns}
               derivedColumns={derivedSpecs}
             />
           )}

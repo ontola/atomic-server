@@ -10,6 +10,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Tables: clearing a Localized Text cell removes that language, so the fallback and the missing-translation marker come back (#2084).
 - Calendar: the date filter explains that a repeating entry is matched on its first date (#2087).
 - Cards: a record embedded in a document shows property names instead of slugs, hides created-at, drive and sort-order, and no longer shows an empty description line (#2081).
+- Tables: hiding a column no longer hides its active filter chip, so a filter that still excludes rows stays visible and removable.
 - Forms (beta): build a form or survey and share a link; guests fill it in
   without an account and each answer becomes a table row. Create one with
   New > Form, or from a table with "Create form from this table" (pick its
