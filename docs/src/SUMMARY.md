@@ -1,5 +1,12 @@
 ## Table of contents
 
+# Why Atomic
+
+- [Why Atomic](why-atomic.md)
+  - [Personal Data Store](personal-data-store.md)
+  - [All-in-One Workspace](all-in-one-workspace.md)
+  - [Local-first Sync Engine](sync-engine.md)
+
 # What is Atomic Data
 
 - [Atomic Data Overview](atomic-data-overview.md)
