@@ -11261,19 +11261,6 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
-
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Turn on Cloud Server"
 msgstr ""
 
 #: src/helpers/sentry.ts
@@ -12256,7 +12243,14 @@ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
+msgstr ""
 
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr ""
+
+#~ msgid "Setting up Cloud Server. Your workspace is being copied over; this turns on by itself once it has arrived."
+#~ msgstr ""
+
+#~ msgid "Included in your plan. Turn it on to start hosting this drive; nothing more to buy."
+#~ msgstr ""
