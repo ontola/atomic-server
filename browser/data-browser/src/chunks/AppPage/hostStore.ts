@@ -3,7 +3,7 @@ import type { Store } from '@tomic/react';
 import { isPlatformId, type ProxyHost } from '@helpers/proxyConnections';
 import { fetchRowGrant } from './rowGrant';
 import { piecesEnabled } from '@chunks/Pieces/piecesFlag';
-import { lensPathFor } from '@chunks/Pieces/loadPieces';
+import { lensRouteFor } from '@chunks/Pieces/loadPieces';
 import {
   connectionsOf,
   forgetInstallationConnection,
@@ -177,7 +177,7 @@ export async function handleRequest(
           table: subject,
           rowClass,
           ...(tables ? { tables } : {}),
-          lensPath: await lensPathFor(store, drive, app, rowClass),
+          ...(await lensRouteFor(store, drive, app, rowClass)),
         };
       }
 

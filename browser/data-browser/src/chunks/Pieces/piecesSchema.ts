@@ -47,6 +47,13 @@ export function piecesSchema(): SchemaSpec {
         datatype: Datatype.JSON,
       },
       {
+        shortname: 'lens-review',
+        name: 'Review',
+        description:
+          '"approved" once someone has reviewed this drive-local lens. Until then it offers nothing: integrations it would reach show as waiting for review. Lenses from the shared catalog need no review here.',
+        datatype: Datatype.STRING,
+      },
+      {
         shortname: 'synced-table',
         name: 'Synced table',
         description: 'The table an integration binding syncs.',
@@ -65,8 +72,9 @@ export function piecesSchema(): SchemaSpec {
         shortname: 'lens',
         name: 'Lens',
         description:
-          'A declarative, two-way translation between two row classes. A view or integration written for the target class can then be offered on tables of the source class, and the other way round.',
+          'A drive-local, declarative, two-way translation between two row classes. Once approved, an integration written for one class can be offered on tables of the other. Shared lenses live in the catalog next to the ontology instead.',
         requires: ['lens-source', 'lens-target', 'lens-mapping'],
+        recommends: ['lens-review'],
       },
       {
         shortname: 'sync-binding',

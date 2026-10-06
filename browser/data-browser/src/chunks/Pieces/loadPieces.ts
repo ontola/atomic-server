@@ -9,6 +9,7 @@ import {
 import type { DriveApp } from '@chunks/AppPage/useDriveApps';
 import { piecesSchema } from './piecesSchema';
 import { parseLensMapping, type LensMapping } from './lens';
+import { loadLensCatalog } from './lensCatalog';
 import {
   offersForTable,
   type LensInfo,
@@ -18,6 +19,8 @@ import {
 
 export interface StoredLens extends LensInfo {
   mapping: LensMapping;
+  /** Where the lens comes from: the shared catalog, or this drive. */
+  origin: 'catalog' | 'drive';
 }
 
 export interface DrivePieces {
@@ -50,6 +53,14 @@ export async function loadPieces(
     }),
   );
 
+  // Catalog lenses were reviewed where they were published, so they are
+  // trusted everywhere.
+  const catalog: StoredLens[] = (await loadLensCatalog()).map(lens => ({
+    ...lens,
+    trusted: true,
+    origin: 'catalog',
+  }));
+
   const lensClass = schema.classes?.lens;
   const props = schema.properties ?? {};
 
@@ -59,7 +70,7 @@ export async function loadPieces(
     !props['lens-target'] ||
     !props['lens-mapping']
   ) {
-    return { pieces, lenses: [] };
+    return { pieces, lenses: catalog };
   }
 
   const subjects = await new CollectionBuilder(store)
@@ -69,7 +80,7 @@ export async function loadPieces(
     .build()
     .getAllMembers();
 
-  const lenses: StoredLens[] = [];
+  const lenses: StoredLens[] = [...catalog];
 
   for (const subject of subjects) {
     const resource = await store.getResource(subject);
@@ -81,6 +92,11 @@ export async function loadPieces(
         source: resource.get(props['lens-source']) as string,
         target: resource.get(props['lens-target']) as string,
         mapping: parseLensMapping(resource.get(props['lens-mapping'])),
+        // A drive-local lens offers nothing until someone approves it.
+        trusted:
+          !!props['lens-review'] &&
+          resource.get(props['lens-review']) === 'approved',
+        origin: 'drive',
       });
     } catch (e) {
       console.warn(`Skipping lens ${subject}:`, e);
@@ -90,19 +106,32 @@ export async function loadPieces(
   return { pieces, lenses };
 }
 
+export interface LensRoute {
+  /** The chain the frame reads rows through. Empty for a native match. */
+  lensPath: {
+    subject: string;
+    name: string;
+    direction: string;
+    mapping: LensMapping;
+  }[];
+  /**
+   * Names of unreviewed lenses that hold this integration back on this
+   * table. When non-empty the frame gets no path and must not sync.
+   */
+  pendingReview: string[];
+}
+
 /**
- * The lens chain an integration was offered through on `table`, with each
- * lens's mapping, for the integration's frame. Empty for a native match or
- * when the app is not offered there at all.
+ * How an integration reaches `rowClass`'s table, for the integration's frame:
+ * the chain of lenses with their mappings, or the unreviewed lenses that are
+ * in the way.
  */
-export async function lensPathFor(
+export async function lensRouteFor(
   store: Store,
   drive: string,
   app: string,
   rowClass: string | undefined,
-): Promise<
-  { subject: string; name: string; direction: string; mapping: LensMapping }[]
-> {
+): Promise<LensRoute> {
   const resource = await store.getResource(app);
   const { pieces, lenses } = await loadPieces(store, drive, [
     {
@@ -112,19 +141,30 @@ export async function lensPathFor(
     },
   ]);
   const offer: Offer | undefined = offersForTable(pieces, lenses, rowClass)[0];
+  const named = (subject: string) => lenses.find(l => l.subject === subject)!;
 
-  if (!offer) return [];
+  if (!offer) return { lensPath: [], pendingReview: [] };
 
-  return offer.path.map(step => {
-    const lens = lenses.find(l => l.subject === step.lens)!;
-
+  if (offer.pendingReview.length > 0) {
     return {
-      subject: lens.subject,
-      name: lens.name,
-      direction: step.direction,
-      mapping: lens.mapping,
+      lensPath: [],
+      pendingReview: offer.pendingReview.map(s => named(s).name),
     };
-  });
+  }
+
+  return {
+    lensPath: offer.path.map(step => {
+      const lens = named(step.lens);
+
+      return {
+        subject: lens.subject,
+        name: lens.name,
+        direction: step.direction,
+        mapping: lens.mapping,
+      };
+    }),
+    pendingReview: [],
+  };
 }
 
 async function rendersOf(store: Store, drive: string, app: string) {

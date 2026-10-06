@@ -13,7 +13,7 @@ import { handOverAppKey } from '@chunks/AppPage/appAgent';
 import { piecesSchema } from '../piecesSchema';
 import { getAlongPath, type LensMapping } from '../lens';
 import { timesheetSource } from './timesheetSource';
-import { clockifySource } from './clockifySource';
+import { integrationSource } from './integrationSource';
 
 /**
  * Row classes for the demo, minted in the drive so it runs offline.
@@ -78,6 +78,30 @@ function demoSchema(): SchemaSpec {
         datatype: Datatype.BOOLEAN,
       },
       {
+        shortname: 'toggl-description',
+        name: 'Description',
+        description: 'Toggl Track TimeEntry.description',
+        datatype: Datatype.STRING,
+      },
+      {
+        shortname: 'toggl-start',
+        name: 'Start',
+        description: 'Toggl Track TimeEntry.start (ISO 8601)',
+        datatype: Datatype.STRING,
+      },
+      {
+        shortname: 'toggl-stop',
+        name: 'Stop',
+        description: 'Toggl Track TimeEntry.stop (ISO 8601)',
+        datatype: Datatype.STRING,
+      },
+      {
+        shortname: 'toggl-billable',
+        name: 'Billable',
+        description: 'Toggl Track TimeEntry.billable',
+        datatype: Datatype.BOOLEAN,
+      },
+      {
         shortname: 'grocery-quantity',
         name: 'Quantity',
         description: 'How many to buy.',
@@ -102,6 +126,14 @@ function demoSchema(): SchemaSpec {
         recommends: ['clockify-end', 'clockify-billable'],
       },
       {
+        shortname: 'toggl-time-entry',
+        name: 'Toggl time entry',
+        description:
+          'A Toggl Track TimeEntry as syncables would produce it from the Toggl OpenAPI document.',
+        requires: ['toggl-description', 'toggl-start'],
+        recommends: ['toggl-stop', 'toggl-billable'],
+      },
+      {
         shortname: 'grocery-item',
         name: 'Grocery item',
         description: 'Something to buy.',
@@ -119,6 +151,8 @@ export interface SeededDemo {
   timesheet: string;
   clockify: string;
   lens: string;
+  toggl: string;
+  togglLens: string;
 }
 
 const at = (day: number, hour: number, minute = 0) =>
@@ -186,6 +220,36 @@ export async function seedPiecesDemo(
     [pieces.properties['lens-source']]: c['time-entry'],
     [pieces.properties['lens-target']]: c['clockify-time-entry'],
     [pieces.properties['lens-mapping']]: mapping as unknown as JSONValue,
+    // Already reviewed, so Clockify is offered on Hours from the start.
+    [pieces.properties['lens-review']]: 'approved',
+  });
+
+  // A second, drive-local lens nobody has reviewed yet (Q-089). Toggl shows on
+  // Hours as waiting for review until it is approved on the demo page.
+  const togglLens = await create(store, drive, pieces.classes.lens, {
+    [core.properties.name]: 'Time entry ↔ Toggl time entry',
+    [core.properties.description]:
+      'Lets Toggl Track sync tables of time entries. Drive-local: needs review.',
+    [pieces.properties['lens-source']]: c['time-entry'],
+    [pieces.properties['lens-target']]: c['toggl-time-entry'],
+    [pieces.properties['lens-mapping']]: {
+      version: 1,
+      fields: [
+        { source: core.properties.name, target: p['toggl-description'] },
+        {
+          source: p['entry-start'],
+          target: p['toggl-start'],
+          convert: 'ms-to-iso',
+        },
+        {
+          source: p['entry-end'],
+          target: p['toggl-stop'],
+          convert: 'ms-to-iso',
+        },
+        { source: p['entry-billable'], target: p['toggl-billable'] },
+      ],
+    } as unknown as JSONValue,
+    [pieces.properties['lens-review']]: 'pending',
   });
 
   // Table X: time entries. Offers Timesheet natively, Clockify through the lens.
@@ -267,7 +331,9 @@ export async function seedPiecesDemo(
       singular: 'Clockify time entry',
       plural: 'Clockify mirror',
     },
-    source: clockifySource({
+    source: integrationSource({
+      provider: 'Clockify',
+      account: 'Demo workspace (fixture, no network)',
       description: p['clockify-description'],
       start: p['clockify-start'],
       end: p['clockify-end'],
@@ -371,6 +437,35 @@ export async function seedPiecesDemo(
     [pieces.properties['sync-state']]: syncState as unknown as JSONValue,
   });
 
+  // A second integration (Q-090): several can sync one table, each with its
+  // own binding. Offered on Hours once its lens is approved.
+  const toggl = await createApp(store, {
+    drive,
+    name: 'Toggl Track',
+    emoji: '🟣',
+    description:
+      'Syncs a table with Toggl Track and shows its sync state. Demo: the platform is a fixture.',
+    rowClass: c['toggl-time-entry'],
+    rowName: { singular: 'Toggl time entry', plural: 'Toggl mirror' },
+    source: integrationSource({
+      provider: 'Toggl Track',
+      account: 'Demo Toggl workspace (fixture, no network)',
+      description: p['toggl-description'],
+      start: p['toggl-start'],
+      end: p['toggl-stop'],
+      billable: p['toggl-billable'],
+      bindingClass: pieces.classes['sync-binding'],
+      syncedTable: pieces.properties['synced-table'],
+      syncState: pieces.properties['sync-state'],
+      name: core.properties.name,
+    }),
+  });
+  await setProps(store, toggl.app, {
+    [pieces.properties['piece-kind']]: 'integration',
+    [pieces.properties['piece-provider']]: 'toggl',
+  });
+  await handOver(store, drive, toggl);
+
   return {
     hours,
     groceries,
@@ -378,6 +473,8 @@ export async function seedPiecesDemo(
     timesheet: timesheet.app,
     clockify: clockify.app,
     lens,
+    toggl: toggl.app,
+    togglLens,
   };
 }
 

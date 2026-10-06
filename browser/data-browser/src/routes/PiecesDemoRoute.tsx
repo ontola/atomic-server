@@ -1,7 +1,9 @@
 // @wc-ignore-file
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type JSX } from 'react';
+import { findSchema } from '@tomic/lib';
 import { useStore } from '@tomic/react';
+import { piecesSchema } from '@chunks/Pieces/piecesSchema';
 import { ContainerFull } from '../components/Containers';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
@@ -22,7 +24,23 @@ function PiecesDemo(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [seeded, setSeeded] = useState<SeededDemo>();
   const [error, setError] = useState<string>();
+  const [togglApproved, setTogglApproved] = useState(false);
   const drive = store.getDrive();
+
+  // Reviewing a drive-local lens (Q-089). In a real flow this would sit on the
+  // lens's own page, showing the mapping; here one button is enough.
+  const approveTogglLens = async () => {
+    if (!drive || !seeded) return;
+
+    const schema = await findSchema(store, drive, piecesSchema());
+    const review = schema.properties?.['lens-review'];
+    if (!review) return;
+
+    const lens = await store.getResource(seeded.togglLens);
+    await lens.set(review, 'approved');
+    await lens.save();
+    setTogglApproved(true);
+  };
 
   const seed = async () => {
     if (!drive) return;
@@ -44,10 +62,11 @@ function PiecesDemo(): JSX.Element {
     <ContainerFull>
       <h1>Split pieces demo</h1>
       <p>
-        One <strong>table view</strong> (Timesheet, bound to Time entry), one{' '}
-        <strong>integration</strong> (Clockify, native class Clockify time
-        entry, whose tab shows sync state) and one <strong>lens</strong> (Time
-        entry ↔ Clockify time entry). The Clockify platform is a fixture:
+        One <strong>table view</strong> (Timesheet, bound to Time entry), two{' '}
+        <strong>integrations</strong> (Clockify and Toggl Track, each with its
+        own native class, whose tabs show sync state) and two drive-local{' '}
+        <strong>lenses</strong> to them from Time entry. The Clockify lens is
+        approved; the Toggl lens waits for review. Both platforms are fixtures:
         nothing leaves the browser.
       </p>
       <p>
@@ -75,28 +94,48 @@ function PiecesDemo(): JSX.Element {
       {error && <p role='alert'>Seeding failed: {error}</p>}
       {seeded && (
         <>
-          <h2>Open a table and press + in its view tabs</h2>
+          <h2>Lens review</h2>
           <ul>
             <li>
-              <a href={constructOpenURL(seeded.hours)}>Hours</a> (Time entry):
-              offers Timesheet natively and Clockify through the lens. Clockify
-              is already installed with an outbox to look at.
+              <a href={constructOpenURL(seeded.lens)}>
+                Time entry ↔ Clockify time entry
+              </a>
+              : approved
+            </li>
+            <li>
+              <a href={constructOpenURL(seeded.togglLens)}>
+                Time entry ↔ Toggl time entry
+              </a>
+              : {togglApproved ? 'approved' : 'waiting for review'}{' '}
+              {!togglApproved && (
+                <Button subtle onClick={approveTogglLens}>
+                  Approve lens
+                </Button>
+              )}
+            </li>
+          </ul>
+          <h2>Open a table: + adds views, Connect adds integrations</h2>
+          <ul>
+            <li>
+              <a href={constructOpenURL(seeded.hours)}>Hours</a> (Time entry): +
+              offers Timesheet. Connect offers Clockify through its lens (with
+              an outbox to look at), and Toggl Track once its lens is approved.
             </li>
             <li>
               <a href={constructOpenURL(seeded.clockifyMirror)}>
                 Clockify mirror
               </a>{' '}
-              (Clockify time entry): offers Clockify natively, not Timesheet
-              (views do not follow lenses yet).
+              (Clockify time entry): Connect offers Clockify natively. + does
+              not offer Timesheet: views match their row class exactly.
             </li>
             <li>
               <a href={constructOpenURL(seeded.groceries)}>Groceries</a>{' '}
-              (Grocery item): offers neither.
+              (Grocery item): offers neither, and shows no Connect button.
             </li>
             <li>
               Pieces: <a href={constructOpenURL(seeded.timesheet)}>Timesheet</a>
               , <a href={constructOpenURL(seeded.clockify)}>Clockify</a>,{' '}
-              <a href={constructOpenURL(seeded.lens)}>the lens</a>
+              <a href={constructOpenURL(seeded.toggl)}>Toggl Track</a>
             </li>
           </ul>
         </>

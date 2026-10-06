@@ -1,6 +1,10 @@
 // @wc-ignore-file
 
-export interface ClockifyTerms {
+export interface IntegrationTerms {
+  /** Display name of the platform, e.g. "Clockify". */
+  provider: string;
+  /** The fixture account the demo connects to. */
+  account: string;
   /** The provider-shaped properties (what syncables would produce). */
   description: string;
   start: string;
@@ -18,7 +22,7 @@ export interface ClockifyTerms {
  * the rows: connected account, last sync, the outbox (pending, held, failed,
  * uncertain, blocked) with conflicts, and retry / approve / discard.
  *
- * It only knows the Clockify-shaped row class. When it is installed on a
+ * It only knows its provider-shaped row class. When it is installed on a
  * table of another class, the host hands it the lens chain (`getData()`'s
  * `lensPath`) and it reads every row through that chain. The external
  * platform is a fixture inside this module: nothing leaves the browser.
@@ -28,8 +32,8 @@ export interface ClockifyTerms {
  * failure classes, field-level conflicts `{ field, base, remote, local }`.
  * `held` is the issue-tracker's "review before sending".
  */
-export function clockifySource(terms: ClockifyTerms): string {
-  return `// Clockify (demo): an integration. Shows sync state; renders no rows.
+export function integrationSource(terms: IntegrationTerms): string {
+  return `// ${terms.provider} (demo): an integration. Shows sync state; renders no rows.
 const T = ${JSON.stringify(terms)};
 const PARENT = 'https://atomicdata.dev/properties/parent';
 const LABELS = { [T.description]: 'description', [T.start]: 'start', [T.end]: 'end', [T.billable]: 'billable' };
@@ -54,12 +58,12 @@ function lensGet(mapping, row, direction) {
 const along = (path, row) => path.reduce((r, step) => lensGet(step.mapping, r, step.direction), row);
 const back = (path, view) => [...path].reverse().reduce((r, step) => lensGet(step.mapping, r, step.direction === 'forward' ? 'backward' : 'forward'), view);
 
-// --- The fixture platform. No network: a few rules standing in for Clockify.
-const fixtureClockify = {
-  account: { id: 'ws-demo', label: 'Demo workspace (fixture, no network)' },
+// --- The fixture platform. No network: a few rules standing in for the provider.
+const fixturePlatform = {
+  account: { id: 'ws-demo', label: T.account },
   send(write) {
     if (!write.payload[T.end]) {
-      return { ok: false, status: 400, class: 'permanent', error: 'Clockify refuses an entry without an end time. Stop the timer, then retry.' };
+      return { ok: false, status: 400, class: 'permanent', error: T.provider + ' refuses an entry without an end time. Stop the timer, then retry.' };
     }
     return { ok: true, id: write.remoteId || 'ce_' + Math.random().toString(36).slice(2, 8) };
   },
@@ -100,7 +104,7 @@ function fresh(lensPath) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 export async function view({ root, store }) {
-  const { table, rowClass, lensPath = [] } = await store.getData();
+  const { table, rowClass, lensPath = [], pendingReview = [] } = await store.getData();
   const app = await store.getApp();
   const style = document.createElement('style');
   style.textContent = css;
@@ -108,7 +112,20 @@ export async function view({ root, store }) {
   wrap.className = 'wrap';
   root.append(style, wrap);
 
-  // The binding: this integration on this table. It lives under the app,
+  // Reachable only through a lens nobody has reviewed: sync nothing, and say
+  // which lens is in the way.
+  if (pendingReview.length) {
+    const style0 = document.createElement('div');
+    style0.className = 'wrap';
+    style0.innerHTML = '<h2></h2><div class="lens"></div>';
+    style0.children[0].textContent = T.provider + ' sync';
+    style0.children[1].textContent = 'Waiting for review of ' + pendingReview.join(', ') + '. Until a drive-local lens is approved, nothing on this table is translated or sent.';
+    wrap.replaceWith(style0);
+    return;
+  }
+
+  // The binding: this integration on this table. Several integrations can
+  // sync one table; each keeps its own binding under its own app. It lives under the app,
   // which is where an app may always write.
   const existing = (await store.query({ property: T.syncedTable, value: table })) || [];
   let binding;
@@ -120,7 +137,7 @@ export async function view({ root, store }) {
     binding = await store.newResource({
       parent: app,
       isA: [T.bindingClass],
-      propVals: { [T.name]: 'Clockify sync', [T.syncedTable]: table, [T.syncState]: fresh(lensPath) },
+      propVals: { [T.name]: T.provider + ' sync', [T.syncedTable]: table, [T.syncState]: fresh(lensPath) },
     });
   }
   let state = binding.get(T.syncState) || fresh(lensPath);
@@ -147,7 +164,7 @@ export async function view({ root, store }) {
     // A write in conflict waits for the person, whatever its state says.
     for (const w of state.writes.filter(w => w.state === 'pending' && !w.conflicts)) {
       w.attempts = (w.attempts || 0) + 1;
-      const res = fixtureClockify.send(w);
+      const res = fixturePlatform.send(w);
       if (res.ok) {
         state.remote[w.row] = { id: res.id, payload: w.payload };
         w.state = 'done';
@@ -236,11 +253,11 @@ export async function view({ root, store }) {
     wrap.textContent = '';
     const synced = Object.keys(state.remote).filter(r => !state.writes.some(w => w.row === r)).length;
     wrap.append(
-      el('h2', {}, 'Clockify sync'),
-      el('div', { class: 'sub' }, 'An integration: it syncs this table with Clockify and shows the sync state here. The rows stay in the other tabs.'),
+      el('h2', {}, T.provider + ' sync'),
+      el('div', { class: 'sub' }, 'An integration: it syncs this table with ' + T.provider + ' and shows the sync state here. The rows stay in the other tabs.'),
     );
     if (lensPath.length) {
-      wrap.append(el('div', { class: 'lens' }, 'This table is not Clockify-shaped. Rows are translated through ' + lensPath.map(l => l.name).join(' → ') + '.'));
+      wrap.append(el('div', { class: 'lens' }, 'This table is not ' + T.provider + '-shaped. Rows are translated through ' + lensPath.map(l => l.name).join(' → ') + '.'));
     }
     const card = (k, v) => el('div', { class: 'card' }, el('div', { class: 'k' }, k), el('div', { class: 'v' }, v));
     const counts = s => state.writes.filter(w => (s === 'conflict' ? !!w.conflicts : w.state === s && !w.conflicts)).length;
@@ -253,7 +270,7 @@ export async function view({ root, store }) {
 
     const bar = el('div', { class: 'bar' });
     if (!state.account) {
-      bar.append(el('button', { class: 'primary', onclick: async () => { state.account = fixtureClockify.account; await save(); } }, 'Connect Clockify (fixture account)'));
+      bar.append(el('button', { class: 'primary', onclick: async () => { state.account = fixturePlatform.account; await save(); } }, 'Connect ' + T.provider + ' (fixture account)'));
     } else {
       bar.append(el('button', { class: 'primary', onclick: syncNow }, 'Sync now'));
       if (counts('held')) bar.append(el('button', { onclick: async () => { for (const w of state.writes) if (w.state === 'held') w.state = 'pending'; sendPending(); await save(); } }, 'Approve all held'));
@@ -267,15 +284,15 @@ export async function view({ root, store }) {
     }
 
     const cols = el('colgroup', {}, el('col', { class: 'c-row' }), el('col', { class: 'c-state' }), el('col', { class: 'hide-sm' }), el('col', { class: 'c-actions' }));
-    const t = el('table', {}, cols, el('tr', {}, el('th', {}, 'Row'), el('th', {}, 'State'), el('th', { class: 'hide-sm' }, 'Sent to Clockify as'), el('th', {}, '')));
+    const t = el('table', {}, cols, el('tr', {}, el('th', {}, 'Row'), el('th', {}, 'State'), el('th', { class: 'hide-sm' }, 'Sent to ' + T.provider + ' as'), el('th', {}, '')));
     for (const w of state.writes) {
       const label = w.conflicts ? 'conflict' : w.state;
       const stateCell = el('td', {}, el('span', { class: 'state ' + label }, label + (w.type === 'create' ? ' · create' : ' · update')));
       if (w.lastError) stateCell.append(el('div', { class: 'err' }, (w.lastStatus ? w.lastStatus + ': ' : '') + w.lastError));
-      if (w.conflicts) for (const c of w.conflicts) stateCell.append(el('div', { class: 'err' }, (LABELS[c.field] || c.field) + ': was ' + JSON.stringify(c.base) + ', Clockify has ' + JSON.stringify(c.remote) + ', here ' + JSON.stringify(c.local)));
+      if (w.conflicts) for (const c of w.conflicts) stateCell.append(el('div', { class: 'err' }, (LABELS[c.field] || c.field) + ': was ' + JSON.stringify(c.base) + ', ' + T.provider + ' has ' + JSON.stringify(c.remote) + ', here ' + JSON.stringify(c.local)));
       const actions = el('div', { class: 'actions' });
       const btn = (text, a) => actions.append(el('button', { onclick: () => act(w, a) }, text));
-      if (w.conflicts) { btn('Keep this table\\'s', 'keep-local'); btn('Take Clockify\\'s', 'take-remote'); }
+      if (w.conflicts) { btn('Keep this table\\'s', 'keep-local'); btn('Take ' + T.provider + '\\'s', 'take-remote'); }
       else if (w.state === 'held') btn('Approve', 'approve');
       else if (w.state === 'failed' || w.state === 'uncertain') btn('Retry', 'retry');
       btn('Discard', 'discard');
