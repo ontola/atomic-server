@@ -693,7 +693,7 @@ const INDEX_MIGRATION_SLICE = 100;
  * only sees the database as ready once this is done.
  */
 async function migrateIndexKeys(opened: WasmModule): Promise<void> {
-  if (!opened.indexMigrationPending()) return;
+  if (!opened.indexMigrationPending?.()) return;
 
   const report = (done: number, total: number, finished: boolean) =>
     self.postMessage({ type: 'migration-progress', done, total, finished });
