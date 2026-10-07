@@ -2,9 +2,11 @@ import { useCallback, useRef } from 'react';
 
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE = 8;
+const CLICK_SETTLE_MS = 50;
 
 /**
- * Fires `onLongPress` with the press point when a touch or pen is held still.
+ * Fires `onLongPress` with the press point when a touch or pen is held still
+ * and then released.
  * Mouse right-click is left to `onContextMenu`. Spread the returned handlers on
  * the element. `consumeClick()` is true once after a long press so the click
  * that follows the release can be ignored.
@@ -26,11 +28,22 @@ export function useLongPress(
       cancel();
       timer.current = setTimeout(() => {
         fired.current = true;
-        onLongPress(start.current);
+        navigator.vibrate?.(10);
       }, LONG_PRESS_MS);
     },
-    [cancel, onLongPress],
+    [cancel],
   );
+
+  // Opens on release, after the click that follows it: an open menu would
+  // otherwise count that click as one outside itself and close again.
+  const onPointerUp = useCallback(() => {
+    cancel();
+
+    if (fired.current) {
+      const point = start.current;
+      setTimeout(() => onLongPress(point), CLICK_SETTLE_MS);
+    }
+  }, [cancel, onLongPress]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -55,7 +68,7 @@ export function useLongPress(
     handlers: {
       onPointerDown,
       onPointerMove,
-      onPointerUp: cancel,
+      onPointerUp,
       onPointerCancel: cancel,
     },
     consumeClick,

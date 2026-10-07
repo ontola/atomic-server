@@ -651,15 +651,9 @@ msgstr "Impossible de se connecter au serveur Ollama. Vérifiez si le serveur es
 
 #: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
-#: src/components/HighlightedCodeBlock.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
-#: src/views/Card/ResourceCard.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
-#: src/views/ResourcePage.tsx
 #: src/views/ResourceRow.tsx
 msgid "Loading..."
 msgstr "Chargement..."
@@ -12321,4 +12315,14 @@ msgstr ""
 
 #: src/views/Conversation/NewMessageDialog.tsx
 msgid "Search people in this drive by name, or paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+msgstr ""
+
+#: src/components/Spinner.tsx
+msgid "Loading"
+msgstr ""
+t under their account. Only the two of you can read what you send."
+msgstr ""
+
+#: src/components/Spinner.tsx
+msgid "Loading"
 msgstr ""
