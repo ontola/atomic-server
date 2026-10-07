@@ -11619,10 +11619,6 @@ msgstr ""
 msgid "Upgrade to Cloud Server"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here."
-msgstr ""
-
 #: src/components/Vault/VaultPanel.tsx
 msgid "Sealed on your device, so we cannot read it"
 msgstr ""
@@ -12283,4 +12279,20 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "See Cloud Server plans"
+msgstr ""
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Sign in to {0} to see whether this workspace is hosted."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr ""
