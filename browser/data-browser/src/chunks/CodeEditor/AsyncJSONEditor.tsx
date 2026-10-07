@@ -5,6 +5,7 @@ import CodeMirror, {
   type ReactCodeMirrorRef,
 } from '@uiw/react-codemirror';
 import { githubLight, githubDark } from '@uiw/codemirror-theme-github';
+import { disableErrorLogging } from 'best-effort-json-parser';
 import { json, jsonParseLinter, jsonLanguage } from '@codemirror/lang-json';
 import {
   jsonSchemaLinter,
@@ -48,6 +49,12 @@ const basicSetup: BasicSetupOptions = {
 };
 
 type Reports = Record<string, boolean>;
+
+// The schema tooling parses the document on every lint and hover, and the
+// parser reports unbalanced text (an extra `}` while someone is typing) with
+// console.error. That is the person's draft being invalid, which the editor
+// already shows; it is not an error of the app.
+disableErrorLogging();
 
 /**
  * ASYNC COMPONENT DO NOT IMPORT DIRECTLY, USE {@link JSONEditor.tsx}.

@@ -62,6 +62,7 @@
     "@zip.js/zip.js": "^2.8.26",
     "ai": "^6.0.191",
     "ajv": "^8.20.0",
+    "best-effort-json-parser": "1.4.0",
     "clsx": "^2.1.1",
     "codemirror-json-schema": "^0.8.1",
     "diff": "^8.0.4",
