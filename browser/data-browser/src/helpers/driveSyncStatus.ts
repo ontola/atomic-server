@@ -69,3 +69,31 @@ export function hasHostedDriveConnection(
     liveSyncedDrive && managed && enrolled === true && (resourceCount ?? 0) > 0
   );
 }
+
+/**
+ * Is this drive hosted on Cloud Server, as the node itself shows it?
+ *
+ * Hosting belongs to the drive, not to whoever is looking. A managed node only
+ * accepts drives that are enrolled and active, and any member can read the
+ * drive's usage from it. So a drive this device has finished syncing with a
+ * managed node, and that holds data there, is hosted for everyone with
+ * access, whichever account pays for it and whether or not this person is
+ * signed in to the portal. Data alone is not enough (a disabled enrollment
+ * leaves it behind), hence the finished sync on a live connection.
+ */
+export function driveHostedByNode(input: {
+  managed: boolean;
+  liveSyncedDrive: boolean;
+  refusedByServer: boolean;
+  status: StoreSyncStatus;
+  resourceCount: number | undefined;
+}): boolean {
+  return (
+    input.managed &&
+    input.liveSyncedDrive &&
+    !input.refusedByServer &&
+    input.status.serverConnected &&
+    !!currentDriveSync(input.status) &&
+    (input.resourceCount ?? 0) > 0
+  );
+}

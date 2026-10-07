@@ -7,6 +7,7 @@ import { driveBillingUrl } from '../helpers/driveBillingUrl';
 import {
   deriveNodeStatuses,
   currentDriveSync,
+  driveHostedByNode,
   currentDriveValue,
   hasHostedDriveConnection,
   type ScopedDriveValue,
@@ -730,7 +731,10 @@ function SyncPage() {
   // `true` = already enrolled (hide it).
   const [cloudEnrollment, setCloudEnrollment] =
     useState<ScopedDriveValue<boolean> | null>(null);
-  const cloudEnrolled = currentDriveValue(
+  // Only what THIS account has enrolled. Hosting belongs to the drive, so a
+  // member who isn't the subscriber (or isn't signed in) can't learn it here;
+  // `cloudEnrolled` below folds in what the node itself says about the drive.
+  const accountEnrolled = currentDriveValue(
     cloudEnrollment,
     status.drive,
     status.serverUrl,
@@ -1013,6 +1017,17 @@ function SyncPage() {
     status.serverUrl,
   );
 
+  // Hosting belongs to the drive: a member sees it whether or not their own
+  // account pays for it, or is signed in at all.
+  const hostedByNode = driveHostedByNode({
+    managed: managedInfo.managed,
+    liveSyncedDrive: !!status.drive && store.isLiveSyncedDrive(status.drive),
+    refusedByServer: store.isDriveRefusedByServer(status.drive),
+    status,
+    resourceCount: nodeUsage?.resourceCount,
+  });
+  const cloudEnrolled = hostedByNode ? true : accountEnrolled;
+
   // Sign in with a secret on a fresh device and you get the identity but none
   // of the data. Detect that so the page can lead with "pair a device".
   useEffect(() => {
@@ -1272,7 +1287,11 @@ function SyncPage() {
     }
 
     if (cloudEnrolled === null) {
-      return 'Checking whether this workspace is hosted…';
+      // The enrollment list needs a portal session. Without one the answer
+      // never arrives, so say what would get it instead of waiting forever.
+      return managedAccount
+        ? 'Checking whether this workspace is hosted…'
+        : `Sign in to ${PRODUCT_NAME} to see whether this workspace is hosted.`;
     }
 
     if (!isAtomicIdentifier(status.drive)) {
@@ -1505,8 +1524,10 @@ function SyncPage() {
     !hostedCopyOrigin &&
     !cloudServerBlocked &&
     !!managedAccount &&
-    (cloudEnrolled === true ||
-      (cloudEnrolled === false &&
+    // The account's own enrollment: a member of someone else's hosted drive
+    // has nothing to start.
+    (accountEnrolled === true ||
+      (accountEnrolled === false &&
         planActive &&
         subscriptionSource === 'stripe'));
   /**
@@ -1993,7 +2014,7 @@ function SyncPage() {
                 kind='server'
                 title='Cloud Server'
                 standing={serverRow.standing}
-                tagline='Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here.'
+                tagline='Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here.'
                 points={[
                   'Shareable links and API access',
                   'Search across everything',
