@@ -11326,10 +11326,6 @@ msgid "Who"
 msgstr "Who"
 
 #: src/views/Conversation/NewMessageDialog.tsx
-msgid "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
-msgstr "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
-
-#: src/views/Conversation/NewMessageDialog.tsx
 msgid "Starting…"
 msgstr "Starting…"
 
@@ -12310,3 +12306,32 @@ msgstr "Sign in to {0} to see whether this workspace is hosted."
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+
+#: src/routes/AppSettings.tsx
+msgid "Show Messages panel"
+msgstr "Show Messages panel"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Favorites panel"
+msgstr "Show Favorites panel"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Shared with me panel"
+msgstr "Show Shared with me panel"
+
+#. 0: title
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Hide {0}"
+msgstr "Hide {0}"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Name or did:ad:agent:…"
+msgstr "Name or did:ad:agent:…"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "People in this drive"
+msgstr "People in this drive"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Search people in this drive by name, or paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+msgstr "Search people in this drive by name, or paste their Atomic ID. They find it under their account. Only the two of you can read what you send."

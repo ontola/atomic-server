@@ -29,7 +29,7 @@ const stableEmpty: string[] = [];
  * data is not part of the drive, so search never finds them; the rights list
  * is the one place the drive names them, and each is fetched by subject.
  */
-function useDriveMembers(
+export function useDriveMembers(
   drive: string,
   classType: string | undefined,
   searchValue: string,
