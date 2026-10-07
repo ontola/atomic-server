@@ -52,9 +52,12 @@ test.describe('sync page devices', () => {
         },
       });
     });
+    // The node holds nothing for this drive: a drive that finished syncing
+    // with a managed node and has data there counts as hosted for everyone,
+    // so any data here would make the Upgrade row race the real sync.
     await page.route('**/drive-usage?**', route =>
       route.fulfill({
-        json: { resourceCount: 3, blobBytes: 0, loroBytes: 7800 },
+        json: { resourceCount: 0, blobBytes: 0, loroBytes: 0 },
       }),
     );
     await page.route('**/api/**', route => {
