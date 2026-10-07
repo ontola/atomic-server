@@ -6307,10 +6307,6 @@ msgid "No signed envelope covers this change on this node"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
-msgid "This drive uses a legacy server address. Cloud Server requires a portable DID drive."
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
 msgid "Sign-in wasn’t completed — hosting setup was cancelled."
 msgstr ""
 
@@ -10706,4 +10702,8 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "This drive’s plan includes hosting. Turn it on to start; nothing more to buy."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This drive uses a legacy server address. Cloud Server requires a portable atomic: drive."
 msgstr ""

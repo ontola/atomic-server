@@ -1247,7 +1247,7 @@ function SyncPage() {
     // Only a drive that is not hosted yet needs a DID to be enrolled. One that
     // already lives on a managed node must not be told it can't be hosted.
     if (!cloudEnrolled && !isAtomicIdentifier(status.drive)) {
-      return 'This drive uses a legacy server address. Cloud Server requires a portable DID drive.';
+      return 'This drive uses a legacy server address. Cloud Server requires a portable atomic: drive.';
     }
 
     return null;
