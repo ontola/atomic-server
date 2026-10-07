@@ -2646,3 +2646,43 @@ tamper rejection, and closing during a pending request. Atomic Audio additionall
 checks isolated native identity installation and actual bidirectional iroh/Loro
 with BLAKE3 files introduced after pairing. Production account approval, Vault
 transport and recovery on a physical device are not covered by these tests.
+
+## Deeper cloud coverage audit (October 7)
+
+The paired private SaaS coverage report records two locally reproduced control
+plane findings and further transition tests. These are open findings, not fixes
+in the October 7 Vault toggle change. Public client/browser gaps include:
+
+- Partial Vault recovery: `lib/src/vault/sync.rs` returns
+  `objects_unreadable` when only some objects open. `VaultPanel.handleRestore`
+  calls `onRestored` for any returned outcome, and automatic recovery treats a
+  readable root as recovered. Add a real corrupt-object case that retains good
+  content, exposes incomplete recovery and preserves a retry path.
+- Identity reconciliation: paired `identity-scenarios.spec.ts` ends at sign-in
+  and a portal account assertion. Complete the switch with unsent local work,
+  verify the intended account's recovered content, then return to the old
+  identity and verify its pending edits and routing.
+- Interrupted setup: close a tab after identity creation, after recovery
+  envelope storage and during first hosted replication. Resume with the same
+  identity, preserve offline edits and verify children/blob bytes on a fresh
+  device before reporting success. Current setup helper tests mock transfer.
+- Concurrent Vault writers: race two real browser contexts through key setup
+  and checkpoint publication, then close both and restore their edits in a
+  third context. Unit tests cover individual races; the full browser/S3 path
+  still needs the combined case.
+- OPFS quota and eviction during backup/restore: verify visible failure and
+  durable outbox/key state after reload; existing locks tests cover orderly
+  leader closure rather than this storage failure.
+- Weak sync smoke assertion: `sync.spec.ts`'s online save/reload case checks
+  that the drive and any first sidebar link exist, not that the created
+  document's subject/title came back. A lost document could pass this case.
+- Engine and origin fidelity: the paired portal suite has one Chromium
+  project; public Firefox coverage is scoped to locks and WebKit is opt-in
+  and scoped to sign-out persistence. Neither proves cloud recovery through
+  real native origins or mobile authenticator/storage behavior.
+
+The private audit also records partial deletion, outstanding object-store
+leases, account purge acknowledgment, multiple placements, device removal,
+real vanity routing and incomplete diagnostic-fixture adoption. Existing
+unit/protocol coverage should be retained; these are additional acceptance
+checks above it.
