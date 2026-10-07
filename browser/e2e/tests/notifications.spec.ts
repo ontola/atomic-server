@@ -25,6 +25,9 @@ import {
   acceptInvite,
   topBarShareButton,
   FRONTEND_URL,
+  getDevDriveSecret,
+  signIn,
+  newDrive,
 } from './test-utils';
 
 declare global {
@@ -79,6 +82,9 @@ test.describe('notifications', () => {
     });
     await page.reload();
 
+    // The conversation lives outside the recipient's personal Inbox drive.
+    await newDrive(page);
+
     await newResource('chatroom', page);
     await editableTitle(page).click();
     await page.keyboard.press(
@@ -109,9 +115,7 @@ test.describe('notifications', () => {
       .getByRole('radio', { name: 'Write' })
       .check();
     await page.getByRole('button', { name: 'Copy invite link' }).click();
-    const inviteUrl = await page
-      .locator('[data-invite-link]')
-      .getAttribute('data-invite-link');
+    const inviteUrl = await page.evaluate(() => navigator.clipboard.readText());
     expect(inviteUrl).toBeTruthy();
     await page.keyboard.press('Escape');
     await waitForSynced(page);
@@ -161,6 +165,20 @@ test.describe('notifications', () => {
       page.getByRole('button', { name: /in Notify Chat/ }),
     ).toHaveCount(0);
 
+    // A second instance of the recipient starts with an empty local database.
+    // Keep its Inbox open: remote writes must update it without a reload.
+    const otherContext = await browser.newContext();
+    const other = await otherContext.newPage();
+    await other.goto(`${FRONTEND_URL}/app/welcome`);
+    await signIn(other, await getDevDriveSecret(page));
+    const { driveURL: otherProject } = await newDrive(other);
+    await clickAccountMenuItem(other, 'Notifications');
+    const otherList = other.getByRole('list', { name: 'Notifications' });
+    await expect(otherList.getByRole('listitem')).toHaveCount(1);
+    expect(await other.evaluate(() => window.store.getDrive())).toBe(
+      otherProject,
+    );
+
     // The owner switches to another window: the OS shows it instead.
     await page.evaluate(() => (window.__blurred = true));
     const away = `Come back ${timestamp()}`;
@@ -188,6 +206,14 @@ test.describe('notifications', () => {
     await page.keyboard.press('Escape');
     const awayItem = list.getByRole('button', { name: new RegExp(away) });
     await expect(awayItem.getByLabel('Unread')).toBeVisible();
+    const otherAway = otherList.getByRole('button', { name: new RegExp(away) });
+    await expect(otherAway.getByLabel('Unread')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      (await openAccountMenu(other)).getByLabel('Notifications, 1 unread'),
+    ).toBeVisible();
+    await other.keyboard.press('Escape');
     await expect(
       list
         .getByRole('button', { name: new RegExp(inApp) })
@@ -196,6 +222,16 @@ test.describe('notifications', () => {
 
     await page.getByRole('button', { name: 'Mark all as read' }).click();
     await expect(awayItem.getByLabel('Unread')).toHaveCount(0);
+    await expect(otherAway.getByLabel('Unread')).toHaveCount(0, {
+      timeout: 30_000,
+    });
+    await expect(
+      (await openAccountMenu(other)).getByLabel(/^Notifications, \d+ unread$/),
+    ).toHaveCount(0);
+    await other.keyboard.press('Escape');
+    await other.reload();
+    await expect(otherAway).toBeVisible();
+    await expect(otherAway.getByLabel('Unread')).toHaveCount(0);
     const menu = await openAccountMenu(page);
     await expect(
       menu.getByRole('menuitem', { name: /^Notifications\b/ }),
@@ -208,6 +244,39 @@ test.describe('notifications', () => {
       page.getByRole('heading', { name: 'Notify Chat' }),
     ).toBeVisible({ timeout: 15_000 });
 
+    // An existing browser instance also catches up after a missed delivery.
+    await page.getByTestId('sidebar-settings-button').click();
+    await expect(
+      page.getByRole('heading', { name: 'Settings', exact: true }),
+    ).toBeVisible();
+    await waitForSynced(other);
+    await other.evaluate(() => window.store.disconnect());
+    await otherContext.setOffline(true);
+    expect(await other.evaluate(() => window.store.serverConnected)).toBe(
+      false,
+    );
+    const offlineMessage = `While your other browser was offline ${timestamp()}`;
+    await send(guest, offlineMessage);
+    await clickAccountMenuItem(page, 'Notifications');
+    const offlineItem = list.getByRole('button', {
+      name: new RegExp(offlineMessage),
+    });
+    await expect(offlineItem.getByLabel('Unread')).toBeVisible();
+    await otherContext.setOffline(false);
+    await other.evaluate(() => window.store.reconnect());
+    const caughtUp = otherList.getByRole('button', {
+      name: new RegExp(offlineMessage),
+    });
+    await expect(caughtUp.getByLabel('Unread')).toBeVisible({
+      timeout: 30_000,
+    });
+    await caughtUp.click();
+    await expect(other.getByText(offlineMessage).first()).toBeVisible();
+    await expect(offlineItem.getByLabel('Unread')).toHaveCount(0, {
+      timeout: 30_000,
+    });
+
     await guestContext.close();
+    await otherContext.close();
   });
 });

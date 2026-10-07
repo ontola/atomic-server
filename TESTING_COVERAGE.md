@@ -2686,3 +2686,32 @@ leases, account purge acknowledgment, multiple placements, device removal,
 real vanity routing and incomplete diagnostic-fixture adoption. Existing
 unit/protocol coverage should be retained; these are additional acceptance
 checks above it.
+
+## Notification sync between browser instances (October 7, 2026)
+
+`browser/e2e/tests/notifications.spec.ts` now uses an invited sender and two
+isolated browser contexts signed in as the recipient. The conversation lives
+in a project; the second recipient keeps an unrelated project selected with
+its Notifications page open. It checks new inbox rows, unread dots and the
+account-menu badge without reload, remote Mark all as read, reload persistence,
+and a real WebSocket disconnect followed by missed-item catch-up without
+reload. Opening that item on the second instance marks it read on the first.
+All contexts use the strict browser diagnostic fixture. OS notifications use
+a stub; message commits, inbox resources, WebSockets and OPFS are real.
+
+The previous fixture only had one recipient instance, and placing the chat in
+the personal drive hid the missing personal-drive subscription. Merely setting
+Playwright offline leaves existing WebSockets alive: the new test explicitly
+disconnects the Store and checks its connection state before sending.
+
+`hooks/useInbox.test.tsx` covers subscription ownership and cleanup on identity
+change. `browser/lib/src/websockets.test.ts` covers overlapping active/live
+drive subscriptions and reconciliation of a live drive outside the selected
+workspace, including subscription replay. These tests failed before the fixes.
+
+Remaining notification acceptance gaps: simultaneous duplicate recording by
+two recipient instances; read-state changes missed while disconnected; more
+than 100 inbox items (the page/read-about cap); comments/replies across instances;
+account-switch isolation; OPFS-disabled browsers; and delivery while every app
+instance is closed. Notification recording currently depends on an open app.
+This Chromium journey does not prove native OS permission or delivery behavior.
