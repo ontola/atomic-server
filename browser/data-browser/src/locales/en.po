@@ -4806,6 +4806,8 @@ msgstr "Enter the recovery code you saved for {0}."
 
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/AccountRecoveryCard.tsx
+#: src/components/AccountRecoveryCard.tsx
+#: src/components/AccountRecoveryCard.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
@@ -4848,9 +4850,11 @@ msgid "Passkey added {0}"
 msgstr "Passkey added {0}"
 
 #: src/helpers/managed/recovery.ts
+#: src/helpers/managed/recovery.ts
 msgid "That passkey could not unlock this backup."
 msgstr "That passkey could not unlock this backup."
 
+#: src/helpers/managed/recovery.ts
 #: src/helpers/managed/recovery.ts
 msgid "Wrong recovery code"
 msgstr "Wrong recovery code"
@@ -11627,10 +11631,6 @@ msgstr "Turn on Cloud Server"
 msgid "Upgrade to Cloud Server"
 msgstr "Upgrade to Cloud Server"
 
-#: src/routes/SyncRoute.tsx
-msgid "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here."
-msgstr "Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here."
-
 #: src/components/Vault/VaultPanel.tsx
 msgid "Sealed on your device, so we cannot read it"
 msgstr "Sealed on your device, so we cannot read it"
@@ -11643,6 +11643,7 @@ msgstr "Restore this workspace on any device"
 msgid "Free with an account"
 msgstr "Free with an account"
 
+#: src/components/AccountRecoveryCard.tsx
 #: src/components/Vault/VaultPanel.tsx
 msgid "Turning on…"
 msgstr "Turning on…"
@@ -12268,3 +12269,51 @@ msgstr "Signed in"
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Could not turn this on. Please try again."
+msgstr "Could not turn this on. Please try again."
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Confirm with your passkey"
+msgstr "Confirm with your passkey"
+
+#: src/components/AccountRecoveryCard.tsx
+msgid "Confirm with your code"
+msgstr "Confirm with your code"
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
+msgstr "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
+
+#: src/routes/SyncRoute.tsx
+msgid "Turn it on"
+msgstr "Turn it on"
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your passkey to turn it on."
+msgstr "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your passkey to turn it on."
+
+#. 0: PRODUCT_NAME
+#: src/components/AccountRecoveryCard.tsx
+msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "See Cloud Server plans"
+msgstr "See Cloud Server plans"
+
+#: src/components/BrowserPeerPanel.tsx
+msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+msgstr "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
+
+#. 0: PRODUCT_NAME
+#: src/routes/SyncRoute.tsx
+msgid "Sign in to {0} to see whether this workspace is hosted."
+msgstr "Sign in to {0} to see whether this workspace is hosted."
+
+#: src/routes/SyncRoute.tsx
+msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
