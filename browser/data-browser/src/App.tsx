@@ -16,7 +16,10 @@ import {
 } from './helpers/originNode';
 
 import { useEffect, type JSX } from 'react';
-import { reportRepeatedCommitFailures } from './helpers/sentry';
+import {
+  identifyAgentInSentry,
+  reportRepeatedCommitFailures,
+} from './helpers/sentry';
 import { RouterProvider } from '@tanstack/react-router';
 import { ProxyConnectReturn } from './chunks/AppPage/ProxyConnectReturn';
 import { router } from './routes/Router';
@@ -245,6 +248,7 @@ window.store = store;
 // dump a snapshot.
 attachStoreToProfiler(store);
 reportRepeatedCommitFailures(store);
+identifyAgentInSentry(store);
 
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');
