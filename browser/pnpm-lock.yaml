@@ -296,6 +296,9 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
+      best-effort-json-parser:
+        specifier: 1.4.0
+        version: 1.4.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
