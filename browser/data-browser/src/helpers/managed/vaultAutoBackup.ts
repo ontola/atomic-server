@@ -7,6 +7,7 @@ import {
 } from '@tomic/lib';
 import {
   VaultSessionEndedError,
+  ensureVaultKeyForEnrollment,
   agentVaultProof,
   canEnrollVault,
   getVaultState,
@@ -79,6 +80,7 @@ export type VaultAutoBackupDeps = {
   listVaultDrives: typeof listVaultDrives;
   getVaultState: typeof getVaultState;
   recoverDriveKey: typeof recoverDriveKey;
+  ensureKey?: typeof ensureVaultKeyForEnrollment;
   restoreDrive: typeof restoreDrive;
   /** Whether the user switched backup off for this drive on purpose. */
   optedOut: (driveSubject: string) => boolean;
@@ -94,11 +96,9 @@ const OPT_OUT_KEY = 'atomic.vault.optOut';
 /**
  * Drives whose owner turned Cloud Vault off by hand.
  *
- * The control plane cannot tell us: a disabled enrollment is simply absent from
- * the list, exactly like one that never existed, and re-enrolling is how the
- * server implements "enable". So the choice is remembered here — per browser,
- * which is the scope the choice was made in. Without this, every sign-in would
- * switch back on the thing the user just switched off.
+ * The eligibility endpoint now preserves disabled enrollments across devices.
+ * This local choice is a fallback for clients without that endpoint; when it
+ * is available, the persisted choice also lets a portal enable lift the opt-out.
  */
 function readOptOuts(): Set<string> {
   try {
@@ -155,6 +155,7 @@ const defaultDeps: VaultAutoBackupDeps = {
   listVaultDrives,
   getVaultState,
   recoverDriveKey,
+  ensureKey: ensureVaultKeyForEnrollment,
   restoreDrive,
   optedOut: isVaultOptedOut,
   reopenDrive: reopenRestoredDrive,
@@ -289,7 +290,7 @@ async function ensureVaultBackupOnce(
 
   if (!agent?.subject) return { status: 'skipped', reason: 'not signed in' };
 
-  if (deps.optedOut(driveSubject)) {
+  if (!deps.canEnroll && deps.optedOut(driveSubject)) {
     return { status: 'skipped', reason: 'backup switched off for this drive' };
   }
 
@@ -319,6 +320,19 @@ async function ensureVaultBackupOnce(
 
     let known = enrolled.get(driveSubject);
 
+    // A portal or another device can disable Vault while this tab holds its
+    // key. Check the persisted choice before using that cached enrollment.
+    signal.throwIfAborted();
+
+    if (deps.canEnroll && !(await deps.canEnroll(driveSubject, signal))) {
+      enrolled.delete(driveSubject);
+
+      return {
+        status: 'skipped',
+        reason: 'drive backup is off or unavailable for this account',
+      };
+    }
+
     // Display metadata is shared with SaaS; read it from the local drive.
     const metadata = await driveDisplayMetadata(store, driveSubject);
     const metadataKey = JSON.stringify(metadata);
@@ -335,13 +349,6 @@ async function ensureVaultBackupOnce(
       }
 
       signal.throwIfAborted();
-
-      if (deps.canEnroll && !(await deps.canEnroll(driveSubject, signal))) {
-        return {
-          status: 'skipped',
-          reason: 'drive backup belongs to another account',
-        };
-      }
 
       const keys = await deps.loadKeys();
       const proof = await agentVaultProof(agent, keys.proofMessage);
@@ -405,15 +412,19 @@ async function ensureVaultBackupOnce(
       },
       // The drive was re-keyed since this key was cached: fetch the current
       // envelope, and remember it so the next tick does not refetch.
-      refreshDriveKey: async () => {
+      refreshDriveKey: async enrollment => {
         const keys = await deps.loadKeys();
-        const fresh = await deps.recoverDriveKey({
-          keys,
-          drivePseudonym: held.drivePseudonym,
-          agentSecret: await agentVaultProof(agent, keys.proofMessage),
-        });
+        const agentSecret = await agentVaultProof(agent, keys.proofMessage);
+        const fresh = deps.ensureKey
+          ? await deps.ensureKey({ enrollment, keys, agentSecret, signal })
+          : await deps.recoverDriveKey({
+              keys,
+              drivePseudonym: held.drivePseudonym,
+              agentSecret,
+            });
         enrolled.set(driveSubject, {
           drivePseudonym: held.drivePseudonym,
+          metadata: metadataKey,
           ...fresh,
         });
 
@@ -540,6 +551,7 @@ export async function restoreFromVault(
       drivePseudonym: enrollment.drive_pseudonym,
       devicePubkey: lane,
       driveKey,
+      keyEpoch,
     });
 
     // Restoring a vault copy does not upload it to the node. Preserve a

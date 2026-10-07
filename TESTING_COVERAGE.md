@@ -933,6 +933,35 @@ Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enro
   authenticated read from the real managed node. Plan purchase alone creates
   no enrollment. Real Stripe-hosted test-card checkout remains a deployment check.
 
+## Cloud lifecycle audit (October 7)
+
+- `vaultAutoBackup.test.ts`: a persisted Vault disable prevents automatic
+  enrollment after reload and stops a tab with cached enrollment state. An
+  explicit portal enable overrides an older browser-local opt-out. Restore
+  passes the key envelope's epoch to the importer, including epochs above 1.
+- `vault.test.ts`: an empty, re-enabled Vault refreshes its durable key envelope
+  before uploading from a tab that still holds the old key. Existing epoch
+  mismatch tests continue to refuse stale writes.
+- Paired SaaS `cloud-admin-vault-live.spec.ts`: real API and S3, portal off/on
+  with and without an app reload, edits while off, automatic backup remains
+  off, then recovery in a fresh browser after closing both owner tabs. These
+  two cases run in the default portal suite, with strict console diagnostics.
+- Paired SaaS `cloud-admin-invite-live.spec.ts`: admin grant/revoke, active
+  drive plan, initial managed upload, distinct editor invitation, edits in
+  both directions, plan cancellation and real node write refusal, then
+  resumption and queued edit convergence after reconnect/reload. A member
+  downgraded to read still receives owner edits. Requires
+  `ATOMIC_CLOUD_ADMIN_LIVE=1`, a managed node, S3 and development mail.
+
+Remaining gaps: that managed browser journey is opt-in and is not wired into
+CI. Its invitation includes the server origin; it does not prove fresh member
+host discovery without it. Resume explicitly reconnects clients after the
+policy poll. Missing invited profile names, complete member revocation,
+expired invitations, simultaneous toggles/uploads, attachment recovery and
+node replacement need dedicated coverage. The portal has no admin Vault
+toggle or direct Cloud Server de-enrollment control; an access grant revoke
+deliberately leaves an existing enrollment active.
+
 ## Host-to-Drive routing and hosted vanity subdomains
 
 `Tree::DriveMapping` is what makes one server answer for many hostnames. It
