@@ -80,6 +80,8 @@ pub mod datatype;
 pub mod db;
 #[cfg(feature = "discovery")]
 pub mod discovery;
+#[doc(hidden)]
+pub mod document_markdown;
 #[cfg(feature = "db")]
 pub mod endpoints;
 #[cfg(feature = "db")]
@@ -91,7 +93,6 @@ pub mod hierarchy;
 pub mod history;
 pub mod identifiers;
 pub mod import_identity;
-#[doc(hidden)]
 pub mod loro;
 pub mod mapping;
 pub mod metrics;

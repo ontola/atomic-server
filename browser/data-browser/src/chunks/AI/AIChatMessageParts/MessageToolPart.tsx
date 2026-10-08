@@ -21,7 +21,7 @@ import { InlineFormattedResourceList } from '@components/InlineFormattedResource
 import { useResource } from '@tomic/react';
 import { MCP_TOOL_NAMES } from '../defaultMCPServers';
 import { core, Client } from '@tomic/lib';
-import { tryExpandRef } from '@helpers/subjectRefs';
+import { tryExpandRef } from '@tomic/react';
 
 interface ToolMessageProps {
   part: ToolUIPart | DynamicToolUIPart;

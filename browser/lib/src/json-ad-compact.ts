@@ -1,4 +1,3 @@
-// @wc-ignore-file
 /**
  * JSON-AD-Compact: the single wire dialect for LLM assistant tool I/O.
  * See planning/json-ad-compact.md for the format spec and rules.
@@ -14,18 +13,15 @@
  * place the dialect is implemented — tools and context providers must not
  * hand-roll their own serialization. Compact is never stored.
  */
-import {
-  Client,
-  Datatype,
-  core,
-  dataBrowser,
-  commits,
-  type Core,
-  type JSONValue,
-  type Resource,
-  type Store,
-} from '@tomic/react';
-import { expandSubject, tryExpandRef } from '@helpers/subjectRefs';
+import { Client } from './client.js';
+import { Datatype } from './datatypes.js';
+import { core, type Core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
+import { commits } from './ontologies/commits.js';
+import type { JSONValue } from './value.js';
+import type { Resource } from './resource.js';
+import type { Store } from './store.js';
+import { expandSubject, tryExpandRef } from './subject-refs.js';
 
 export interface CompactPropertyInfo {
   subject: string;

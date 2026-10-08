@@ -8,6 +8,32 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 ## UNRELEASED
 
 - `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX` takes a comma-separated list (`atomicserver.eu,atomic.place`), so a node can answer under two domains while it moves from one to the other.
+
+- MCP endpoint: `POST /mcp` (Streamable HTTP) is the one implementation of the
+  MCP tools, for clients that cannot run a local process, such as claude.ai, and
+  for the local `@tomic/mcp`, which now only bridges to it. It is an OAuth 2.1
+  resource server (RFC 9728 metadata at `/.well-known/oauth-protected-resource`)
+  with the node as authorization server (`/oauth/register`, `/oauth/authorize`,
+  `/oauth/token`, PKCE S256, dynamic client registration, `resource` checked).
+  The person approves in the app (`/app/authorize-mcp`): which drives, and read
+  only or read and edit. Reading is as an issued agent under the normal rights
+  checks. If editing was allowed, `edit_resource`, `create_resource` (documents
+  take Markdown as `_documentText`) and `delete_resource` exist, and the node
+  signs those commits as that issued agent, never as the person. Revoking is
+  removing it under Connected apps. `list_drives`, `get_resource`, `search`,
+  `query`, `get_user_classes` and `get_schema` are the read tools.
+  `--app-url` / `ATOMIC_APP_URL` says where the approval page lives when the app
+  is not served by this node.
+- The approval page only works with a node the person is already using: a link
+  naming another server is refused, and the redirect back to the client must be
+  exactly the one registered, so a crafted link cannot grant access to someone
+  else's key or run script in the app.
+
+- `atomic-cli connect`: connect the CLI with a key made on this machine,
+  approved in the app (`/app/connect-agent`), instead of pasting your agent
+  secret. Without a config file, the CLI now points you to it rather than
+  asking for the secret.
+
 - Forms (beta): guests can fill in a form without an account, and each answer
   becomes a row in a Table. New default ontology `forms`
   (`lib/defaults/forms.json`: `Form`, `FormPage`, `FormField`, `FormHeading`,

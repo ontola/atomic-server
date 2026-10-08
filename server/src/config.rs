@@ -87,6 +87,11 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_WEBSITE_ORIGIN")]
     pub website_origin: Option<String>,
 
+    /// Where people approve MCP clients (the data-browser), when that is not this server.
+    /// A managed node whose app lives elsewhere sets it. Defaults to this server's own origin.
+    #[clap(long, env = "ATOMIC_APP_URL")]
+    pub app_url: Option<String>,
+
     // 9.883 is decimal for the `⚛` character.
     /// The port where the HTTP app is available. Set to 80 if you want this to be available on the network.
     #[clap(short, long, default_value = "9883", env = "ATOMIC_PORT")]
