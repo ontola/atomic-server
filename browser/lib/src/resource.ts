@@ -22,6 +22,7 @@ import {
   currentAgentSubject,
   canonicalizeScheme,
 } from './subject.js';
+import { checkResourceConstraints } from './class-constraints.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized, RequestCancelledError } from './error.js';
@@ -3539,6 +3540,18 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error(
         'The local node is not connected; this change was not saved.',
       );
+    }
+
+    // Class `constraints`, for classes already in the local store. Never
+    // fetches: an unloaded class is skipped and the server is the authority.
+    if (hasChanges) {
+      checkResourceConstraints(this, subject => {
+        const local =
+          this.store.resources.get(subject) ??
+          this.store.resources.get(canonicalizeScheme(subject));
+
+        return local?.isReady() ? local : undefined;
+      });
     }
 
     if (!this._lastCommit) {

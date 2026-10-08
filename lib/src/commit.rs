@@ -105,6 +105,10 @@ pub struct CommitApplied {
 pub struct CommitOpts {
     /// Makes sure all `required` properties are present.
     pub validate_schema: bool,
+    /// Checks values against the `constraints` of the resource's classes (and
+    /// the shape of a Class's own map). Needs `validate_schema`. Off for peer
+    /// transports: a replica must accept what another node already accepted.
+    pub validate_constraints: bool,
     /// Checks the public key and the signature of the Commit.
     pub validate_signature: bool,
     /// Checks whether the Commit isn't too old, or has been created in the future.
@@ -134,6 +138,7 @@ impl CommitOpts {
     pub fn no_validations_no_index() -> Self {
         Self {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: false,
             validate_timestamp: false,
             validate_rights: false,
@@ -1184,6 +1189,13 @@ impl Commit {
         if opts.validate_schema {
             applied.resource_new.check_required_props(store).await?;
         }
+        // Value constraints from the resource's classes, and the shape of a
+        // Class's own `constraints` map. Reconcile writes snapshots straight
+        // to the store and never gets here; peer commits opt out.
+        if opts.validate_schema && opts.validate_constraints {
+            crate::class_constraints::validate_constraints_prop(&applied.resource_new)?;
+            crate::class_constraints::check_resource(store, &applied.resource_new).await?;
+        }
 
         let commit_resource: Resource = commit.into_resource(store).await?;
 
@@ -1770,6 +1782,7 @@ mod test {
     lazy_static::lazy_static! {
         pub static ref OPTS: CommitOpts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: true,
             validate_loro_causality: true,
@@ -3066,6 +3079,7 @@ mod test {
         let subject = "https://localhost/body_merge_guard";
         let opts = CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: true,
             validate_timestamp: false,
             validate_loro_causality: true,
@@ -3153,6 +3167,7 @@ mod test {
         // `previousCommit`, so that check is not the gate under test).
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: false,
             validate_loro_causality: true,
@@ -3211,6 +3226,128 @@ mod test {
         );
     }
 
+    /// Class `constraints` are enforced on commits, a bad map is refused when
+    /// the Class is written, and a peer-style apply (`validate_constraints`
+    /// off) keeps what another node already accepted.
+    #[tokio::test]
+    async fn class_constraints_are_enforced_on_commits() {
+        let (store, agent) = store_with_known_agent().await;
+        let opts = CommitOpts {
+            validate_schema: true,
+            validate_constraints: true,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_loro_causality: false,
+            validate_rights: false,
+            validate_for_agent: None,
+            update_index: true,
+            source_id: None,
+        };
+        let class_subject = "https://localhost/constrained_class";
+
+        async fn commit_doc(
+            store: &crate::Store,
+            agent: &crate::agents::Agent,
+            subject: &str,
+            props: &[(&str, Value)],
+            opts: &CommitOpts,
+        ) -> AtomicResult<()> {
+            let doc = crate::loro::AtomicLoroDoc::new();
+            for (prop, value) in props {
+                doc.set_property(prop, value)?;
+            }
+            let mut builder = CommitBuilder::new(subject.into());
+            builder.set_loro_update(doc.export_snapshot());
+            let commit = builder
+                .sign(agent, store, &Resource::new(subject.into()))
+                .await?;
+            store.apply_commit(commit, opts).await.map(|_| ())
+        }
+
+        let class_props = |constraints: serde_json::Value| {
+            vec![
+                (
+                    crate::urls::IS_A,
+                    Value::ResourceArray(vec![crate::urls::CLASS.to_string().into()]),
+                ),
+                (crate::urls::SHORTNAME, Value::String("constrained".into())),
+                (crate::urls::DESCRIPTION, Value::String("desc".into())),
+                (crate::urls::CONSTRAINTS, Value::Json(constraints)),
+            ]
+        };
+
+        let bad = commit_doc(
+            &store,
+            &agent,
+            "https://localhost/bad_class",
+            &class_props(serde_json::json!({ crate::urls::NAME: { "minimun": 1 } })),
+            &opts,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(bad.contains("Unknown constraint keyword"), "{bad}");
+
+        commit_doc(
+            &store,
+            &agent,
+            class_subject,
+            &class_props(serde_json::json!({ crate::urls::NAME: { "maxLength": 3 } })),
+            &opts,
+        )
+        .await
+        .unwrap();
+
+        let instance = |name: &str| {
+            vec![
+                (
+                    crate::urls::IS_A,
+                    Value::ResourceArray(vec![class_subject.to_string().into()]),
+                ),
+                (crate::urls::NAME, Value::String(name.into())),
+            ]
+        };
+
+        commit_doc(
+            &store,
+            &agent,
+            "https://localhost/ok_inst",
+            &instance("abc"),
+            &opts,
+        )
+        .await
+        .unwrap();
+
+        let err = commit_doc(
+            &store,
+            &agent,
+            "https://localhost/long_inst",
+            &instance("abcd"),
+            &opts,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("Value for name breaks maxLength on class constrained:"),
+            "{err}"
+        );
+
+        let peer_opts = CommitOpts {
+            validate_constraints: false,
+            ..opts.clone()
+        };
+        commit_doc(
+            &store,
+            &agent,
+            "https://localhost/peer_inst",
+            &instance("abcd"),
+            &peer_opts,
+        )
+        .await
+        .unwrap();
+    }
+
     /// A commit whose Loro delta depends on ops the server never received
     /// must be REJECTED — not silently accepted as an "idempotent replay".
     /// Loro parks such ops as pending (VV doesn't advance, diff is empty),
@@ -3225,6 +3362,7 @@ mod test {
 
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: false,
             validate_loro_causality: true,

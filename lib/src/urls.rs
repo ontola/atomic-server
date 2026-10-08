@@ -72,6 +72,7 @@ pub const ALLOWS_ONLY: &str = "https://atomicdata.dev/properties/allowsOnly";
 pub const COLOR: &str = "https://atomicdata.dev/properties/color";
 // ... for Classes
 pub const REQUIRES: &str = "https://atomicdata.dev/properties/requires";
+pub const CONSTRAINTS: &str = "https://atomicdata.dev/properties/constraints";
 pub const RECOMMENDS: &str = "https://atomicdata.dev/properties/recommends";
 // ... for Drives
 pub const DEFAULT_ONTOLOGY: &str =

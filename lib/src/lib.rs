@@ -66,6 +66,7 @@ pub mod agents;
 pub mod aggregate;
 pub mod atoms;
 pub mod authentication;
+pub mod class_constraints;
 #[cfg(feature = "db")]
 pub mod class_extender;
 pub mod client;

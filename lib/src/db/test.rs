@@ -1719,6 +1719,7 @@ async fn did_loro_only_commit_sled() {
         validate_loro_causality: false,
         validate_rights: true,
         validate_schema: true,
+        validate_constraints: true,
         update_index: true,
         validate_for_agent: Some(agent.subject.to_string()),
         source_id: None,
@@ -1772,6 +1773,7 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
         validate_loro_causality: true,
         validate_rights: true,
         validate_schema: true,
+        validate_constraints: true,
         update_index: true,
         validate_for_agent: Some(agent.subject.to_string()),
         source_id: None,
@@ -2273,6 +2275,7 @@ async fn a_cascade_deleted_child_names_its_drive() {
 
             let opts = crate::commit::CommitOpts {
                 validate_schema: true,
+                validate_constraints: true,
                 validate_signature: true,
                 validate_timestamp: false,
                 validate_rights: true,
@@ -2462,6 +2465,7 @@ async fn find_resource_scoped_to_its_drive() {
 
     let opts = crate::commit::CommitOpts {
         validate_schema: true,
+        validate_constraints: true,
         validate_signature: true,
         validate_timestamp: false,
         validate_rights: true,

@@ -85,6 +85,15 @@
     "https://atomicdata.dev/properties/shortname": "recommends"
   },
   {
+    "@id": "https://atomicdata.dev/properties/constraints",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Per-property value constraints for instances of this Class: a JSON object keyed by property subject whose values use a subset of JSON Schema keywords (`enum`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `pattern`, `class`).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "constraints"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/requires",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
@@ -122,7 +131,8 @@
     ],
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/recommends",
-      "https://atomicdata.dev/properties/requires"
+      "https://atomicdata.dev/properties/requires",
+      "https://atomicdata.dev/properties/constraints"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/shortname",

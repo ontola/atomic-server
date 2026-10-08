@@ -3,7 +3,7 @@
  * For more info on how to use ontologies: https://github.com/atomicdata-dev/atomic-server/blob/develop/browser/cli/readme.md
  * -------------------------------- */
 
-import type { OntologyBaseObject, BaseProps } from '../index.js';
+import type { OntologyBaseObject, BaseProps, JSONObject } from '../index.js';
 
 export const core = {
   classes: {
@@ -16,6 +16,7 @@ export const core = {
   properties: {
     allowsOnly: 'https://atomicdata.dev/properties/allowsOnly',
     classtype: 'https://atomicdata.dev/properties/classtype',
+    constraints: 'https://atomicdata.dev/properties/constraints',
     datatype: 'https://atomicdata.dev/properties/datatype',
     description: 'https://atomicdata.dev/properties/description',
     incomplete: 'https://atomicdata.dev/properties/incomplete',
@@ -47,6 +48,7 @@ export const core = {
       'https://atomicdata.dev/properties/description',
       'https://atomicdata.dev/properties/recommends',
       'https://atomicdata.dev/properties/requires',
+      'https://atomicdata.dev/properties/constraints',
     ],
     ['https://atomicdata.dev/classes/Property']: [
       'https://atomicdata.dev/properties/shortname',
@@ -97,7 +99,8 @@ declare module '../index.js' {
         | typeof core.properties.description;
       recommends:
         | typeof core.properties.recommends
-        | typeof core.properties.requires;
+        | typeof core.properties.requires
+        | typeof core.properties.constraints;
     };
     [core.classes.property]: {
       requires:
@@ -142,6 +145,7 @@ declare module '../index.js' {
   interface PropTypeMapping {
     [core.properties.allowsOnly]: string[];
     [core.properties.classtype]: string;
+    [core.properties.constraints]: JSONObject;
     [core.properties.datatype]: string;
     [core.properties.description]: string;
     [core.properties.incomplete]: boolean;
@@ -167,6 +171,7 @@ declare module '../index.js' {
   interface PropSubjectToNameMapping {
     [core.properties.allowsOnly]: 'allowsOnly';
     [core.properties.classtype]: 'classtype';
+    [core.properties.constraints]: 'constraints';
     [core.properties.datatype]: 'datatype';
     [core.properties.description]: 'description';
     [core.properties.incomplete]: 'incomplete';

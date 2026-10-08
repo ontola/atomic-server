@@ -1222,6 +1222,7 @@ impl Resource {
         let agent = store.get_default_agent()?;
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: false,
             validate_timestamp: false,
             validate_rights: false,
@@ -1371,6 +1372,7 @@ impl Resource {
 
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: false,
             validate_rights: false,
@@ -1769,6 +1771,7 @@ mod test {
             let subject = commit.subject.to_string();
             let opts = crate::commit::CommitOpts {
                 validate_schema: false,
+                validate_constraints: false,
                 validate_signature: true,
                 validate_timestamp: false,
                 validate_rights: false,
@@ -1986,6 +1989,7 @@ mod test {
                 commit,
                 &CommitOpts {
                     validate_schema: true,
+                    validate_constraints: true,
                     validate_signature: true,
                     validate_timestamp: true,
                     validate_rights: false,
