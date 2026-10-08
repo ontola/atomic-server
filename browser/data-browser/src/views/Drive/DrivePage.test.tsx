@@ -15,14 +15,8 @@ const state = vi.hoisted(() => ({
 vi.mock('@tomic/react', () => ({
   Datatype: { MARKDOWN: 'markdown' },
   core: { properties: { description: 'description' } },
-  dataBrowser: { properties: { tagList: 'tagList' } },
-  server: {
-    properties: { defaultOntology: 'defaultOntology', llmTxt: 'llmTxt' },
-  },
-  useArray: () => [[], vi.fn(), vi.fn()],
   useCanWrite: () => false,
   useChildren: () => ({ subjects: [] }),
-  useProperty: () => ({}),
   useStore: () => state.store,
 }));
 
@@ -63,38 +57,24 @@ vi.mock('@components/Row', () => ({
   ),
   Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-vi.mock('@components/forms/InputSwitcher', () => ({
-  default: () => <input />,
+vi.mock('react-icons/fa6', () => ({
+  FaGear: () => <svg />,
+  FaPlus: () => <svg />,
 }));
-vi.mock('@components/Settings', () => ({
-  SettingsGroup: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  SettingsSection: ({ children }: { children: React.ReactNode }) => (
-    <section>{children}</section>
-  ),
+vi.mock('@components/Dialog/useDialog', () => ({
+  useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
-vi.mock('./PluginList', () => ({ PluginList: () => <div /> }));
-vi.mock('@components/Tag/Tag', () => ({ Tag: () => <span /> }));
-vi.mock('@components/Tag/CreateTagRow', () => ({
-  CreateTagRow: () => <div />,
+vi.mock('@helpers/useNewRoute', () => ({ useNewRoute: () => vi.fn() }));
+vi.mock('./DriveSettingsDialog', () => ({
+  DriveSettingsDialog: () => <div />,
 }));
-vi.mock('@helpers/navigation', () => ({
-  constructOpenURL: (url: string) => url,
-}));
-vi.mock('../../hooks/useNavigateWithTransition', () => ({
-  useNavigateWithTransition: () => vi.fn(),
-}));
-vi.mock('react-icons/fa6', () => ({ FaXmark: () => <svg /> }));
-vi.mock('@components/NewInstanceButton', () => ({
-  QuickCreateRow: () => <div />,
-}));
-vi.mock('@components/SideBar/ResourceSideBar/ResourceSideBar', () => ({
-  ResourceSideBar: () => <div />,
-}));
-vi.mock('@components/ScrollArea', () => ({
-  ScrollArea: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+vi.mock('./DriveHome', () => ({
+  DrivePeople: () => <div />,
+  QuickCreateCards: () => <div />,
+  RecentlyOpened: () => <div />,
+  ResourceTiles: () => <div />,
+  SectionTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
   ),
 }));
 vi.mock('@hooks/useVectorIndexStatus', () => ({
