@@ -4,6 +4,7 @@ import { Checkbox } from '../components/forms/Checkbox';
 import { resumePeerLinks } from '../helpers/browserPeerSync';
 import { syncSummary, showSavedServer } from '../helpers/syncPresentation';
 import { driveBillingUrl } from '../helpers/driveBillingUrl';
+import { reportUserFacingFailure } from '../helpers/sentry';
 import {
   deriveNodeStatuses,
   currentDriveSync,
@@ -1462,6 +1463,10 @@ function SyncPage() {
         // popup on web) so the user signs in / creates an account there; it
         // shares our cookie jar, so once done we just retry — no token handoff.
         if (!result.portalUrl) {
+          reportUserFacingFailure('Cloud Server setup: no portal configured', {
+            drive,
+            server: status.serverUrl,
+          });
           toast.error(
             `No ${PRODUCT_NAME} portal is configured for this server.`,
           );
@@ -1480,6 +1485,11 @@ function SyncPage() {
         result = await enableCloudSyncForDrive(args);
 
         if (!result.ok) {
+          reportUserFacingFailure('Cloud Server setup failed after sign-in', {
+            drive,
+            server: status.serverUrl,
+            reason: result.reason,
+          });
           toast.error(`Could not set up Cloud Server.`);
 
           return;
@@ -1499,6 +1509,16 @@ function SyncPage() {
           : 'Connected to Cloud Server. Syncing this workspace…',
       );
     } catch (e) {
+      // The manual path ends in `store.notifyError`, which Sentry already
+      // gets. The automatic one only fills an inline message.
+      if (auto && !(e instanceof HostingPaymentRequiredError)) {
+        reportUserFacingFailure('Cloud Server setup failed on its own', {
+          drive,
+          server: status.serverUrl,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+
       if (auto) {
         setAutoEnrollError(
           e instanceof HostingPaymentRequiredError

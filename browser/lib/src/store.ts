@@ -135,6 +135,18 @@ export interface RepeatedCommitFailure {
   failures: number;
   /** Origin the writes are sent to. */
   server: string;
+  /** Drive the store was on when the write kept failing. */
+  drive?: string;
+  /** Milliseconds since the write first became dirty. */
+  ageMs: number;
+  /** Writes still waiting in the outbox, this one included. */
+  outboxSize: number;
+  /** Whether the websocket to the server was up. */
+  connected: boolean;
+  /** The write creates the resource, so it can fail for its parent. */
+  isGenesis: boolean;
+  /** A finished drive resync already re-armed this write once. */
+  rearmedAfterResync: boolean;
 }
 
 type RepeatedCommitFailureCallback = (failure: RepeatedCommitFailure) => void;
@@ -1554,6 +1566,12 @@ export class Store {
             error: e instanceof Error ? e : new Error(String(e)),
             failures: entry.failures ?? 0,
             server: this.getServerUrl(),
+            drive: this.getDrive(),
+            ageMs: Math.max(0, Date.now() - entry.enqueuedAt),
+            outboxSize: this.outbox.size,
+            connected: this._serverConnected,
+            isGenesis: entry.signedGenesis !== undefined,
+            rearmedAfterResync: entry.rearmedAfterResync === true,
           });
         },
         onBlocked: (entry, e) => {
