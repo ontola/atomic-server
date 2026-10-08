@@ -3522,24 +3522,46 @@ export class Store {
     // Local hits come from the durable KV index in ClientDb (title,
     // description, Loro body, 1-edit prefix fuzzy, PropValSub filters).
     const clientDb = this.clientDb;
-    const kvResults =
+    const offline = !this._serverConnected && !opts.serverOnly;
+    const limit = opts.limit ?? 30;
+
+    // The local OPFS search can take a while on a large drive, so it must not
+    // delay the hosted request: both start now and run concurrently.
+    const localSearch: Promise<string[]> =
       !opts.serverOnly &&
       clientDb?.isReady &&
       typeof clientDb.search === 'function'
-        ? await clientDb.search(query, {
-            limit: opts.limit ?? 30,
-            parents: parentScope,
-            filters: opts.filters,
-          })
-        : [];
+        ? Promise.resolve()
+            .then(() =>
+              clientDb.search(query, {
+                limit,
+                parents: parentScope,
+                filters: opts.filters,
+              }),
+            )
+            .then(hits => {
+              if (hits.length > 0) {
+                searchDebug('[search] local kv →', hits.length, hits);
+                opts.onPartial?.(this.withoutDestroyed(hits));
+              }
 
-    if (kvResults.length > 0) {
-      searchDebug('[search] local kv →', kvResults.length, kvResults);
-    }
+              return hits;
+            })
+            .catch(e => {
+              // When the server can still answer, a broken local index must
+              // not take the whole search down.
+              if (offline) throw e;
+
+              searchDebug('[search] local kv failed', e);
+
+              return [] as string[];
+            })
+        : Promise.resolve([]);
 
     // Offline: hosted `/search` is unreachable. Return whatever the local
     // index has (empty if ClientDb is down).
-    if (!this._serverConnected && !opts.serverOnly) {
+    if (offline) {
+      const kvResults = await localSearch;
       searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
       return this.withoutDestroyed(kvResults);
@@ -3555,15 +3577,21 @@ export class Store {
     // returns new matches. Evict only the in-memory synthetic resource so every
     // retry observes the server's current result set.
     this._resources.delete(this.resolveSubject(searchSubject));
-    const searchResource = await this.fetchResourceFromServer(searchSubject, {
+    const serverSearch = this.fetchResourceFromServer(searchSubject, {
       noWebSocket: true,
     });
+    // Avoid an unhandled rejection if the server fails while we still await
+    // the local search.
+    serverSearch.catch(() => undefined);
+
+    const kvResults = await localSearch;
+    const searchResource = await serverSearch;
     const results = searchResource.get(server.properties.results) ?? [];
     searchDebug('[search] server search returned', results.length);
 
     return this.withoutDestroyed([
       ...new Set([...kvResults, ...results]),
-    ]).slice(0, opts.limit ?? 30);
+    ]).slice(0, limit);
   }
 
   /**

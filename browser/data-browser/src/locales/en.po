@@ -3358,6 +3358,7 @@ msgstr "Document body"
 msgid "(empty)"
 msgstr "(empty)"
 
+#: src/chunks/RTE/SlashMenu/CommandList.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "Searching..."
 msgstr "Searching..."
