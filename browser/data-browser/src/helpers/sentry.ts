@@ -223,3 +223,38 @@ export function reportUserFacingFailure(
     extra: context,
   });
 }
+
+/** Whether problems are reported at all: false unless this install opted in. */
+export function isErrorReportingEnabled(): boolean {
+  return Sentry.isEnabled();
+}
+
+const reportedSyncProblems = new Set<string>();
+
+/**
+ * Report a sync problem the Sync page found that nothing else reports, once
+ * per problem. A commit that keeps failing is reported by
+ * {@link reportRepeatedCommitFailures}; pass only what that does not cover, or
+ * it is counted twice.
+ */
+export function reportSyncProblem(problem: {
+  key: string;
+  server: string;
+  detail?: string;
+}): void {
+  if (!Sentry.isEnabled()) return;
+
+  const message = withoutIdentifiers(problem.detail ?? '');
+  const id = [problem.key, problem.server, message].join('|');
+
+  if (reportedSyncProblems.has(id)) return;
+
+  reportedSyncProblems.add(id);
+
+  Sentry.captureMessage(/* @wc-ignore */ 'Sync problem', {
+    level: 'warning',
+    fingerprint: ['sync-problem', problem.key, problem.server, message],
+    tags: { server: problem.server },
+    extra: { detail: problem.detail },
+  });
+}

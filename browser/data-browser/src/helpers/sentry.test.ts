@@ -7,6 +7,7 @@ import {
   identifyAgentInSentry,
   initSentry,
   reportRepeatedCommitFailures,
+  reportSyncProblem,
   reportUserFacingFailure,
 } from './sentry';
 vi.mock('@sentry/react', () => ({
@@ -188,6 +189,19 @@ describe('Sentry configuration', () => {
     vi.mocked(Sentry.isEnabled).mockReturnValueOnce(false);
     reportUserFacingFailure('anything');
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('reports a sync problem once, however often the page asks', () => {
+    const problem = { key: 'drive-sync', server: 'https://n.example' };
+    reportSyncProblem(problem);
+    reportSyncProblem(problem);
+    expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      'Sync problem',
+      expect.objectContaining({
+        fingerprint: ['sync-problem', 'drive-sync', 'https://n.example', ''],
+      }),
+    );
   });
 });
 

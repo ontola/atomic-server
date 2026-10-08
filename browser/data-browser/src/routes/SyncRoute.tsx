@@ -48,6 +48,7 @@ import {
   CARD_TITLE_FONT,
 } from '../components/cardSurface';
 import { openExternal } from '../helpers/openExternal';
+import { formatBytes } from '../helpers/formatBytes';
 import { AICreditsService } from '../components/Vault/AICreditsService';
 import {
   FaLaptop,
@@ -57,7 +58,6 @@ import {
   FaQuestion,
   FaCircleExclamation,
   FaCloud,
-  FaPlus,
   FaMobileScreenButton,
   FaCloudArrowUp,
   FaKey,
@@ -70,6 +70,10 @@ import {
   type ServiceStanding,
   type ServiceTone,
 } from '../components/Cloud/ServiceRow';
+import { CloudServerDetails } from '../components/Cloud/CloudServerDetails';
+import { SyncProblemBanner } from '../components/SyncProblemBanner';
+import { describeSyncProblem } from '../helpers/syncProblem';
+import { isErrorReportingEnabled, reportSyncProblem } from '../helpers/sentry';
 import { LinkProviderPanel } from '../components/Vault/LinkProviderPanel';
 import { isDeviceLinked } from '../helpers/managed/deviceLink';
 import {
@@ -102,23 +106,13 @@ import {
 } from '../helpers/managedServer';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { getDriveUsage } from '../helpers/managedUsage';
-import {
-  normalizeServerUrl,
-  sameOrigin,
-  serverLabel,
-} from '../helpers/serverUrl';
+import { sameOrigin, serverLabel } from '../helpers/serverUrl';
 import { ResourceInline } from '../views/ResourceInline';
 import { AtomicLink } from '../components/AtomicLink';
 import { formatTimeAgo } from '../helpers/formatTimeAgo';
-import {
-  getLocalServerOrigin,
-  isMobileTauri,
-  isRunningInTauri,
-} from '../helpers/tauri';
+import { getLocalServerOrigin, isRunningInTauri } from '../helpers/tauri';
 import { deviceHasDriveData } from '../helpers/driveData';
-import { deliverDeepLink } from '../helpers/deepLinkQueue';
-import { PairingCode } from '../components/PairingCode';
-import { ConnectToDeviceForm } from '../components/ConnectToDeviceForm';
+import { ConnectDevice, focusConnectDevice } from '../components/ConnectDevice';
 import {
   decodePairingEnvelope,
   PairingEnvelopeError,
@@ -197,20 +191,6 @@ function statusLabel(status: NodeStatus): string {
     case 'unknown':
       return 'Connecting…';
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = bytes / 1024;
-  let unit = 0;
-
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
 type ServerCardProps = {
@@ -312,16 +292,6 @@ function ServerCard({
   const serverHostname = status.serverUrl
     ? new URL(status.serverUrl).hostname
     : undefined;
-  const usagePct =
-    nodeUsage && quotaBytes
-      ? Math.min(
-          100,
-          Math.round(
-            ((nodeUsage.blobBytes + nodeUsage.loroBytes) / quotaBytes) * 100,
-          ),
-        )
-      : null;
-
   const driveSync = isActive ? currentDriveSync(status) : undefined;
   const syncedAgo = driveSync
     ? formatTimeAgo(new Date(driveSync.timestamp))
@@ -348,7 +318,10 @@ function ServerCard({
    */
   const facts: ReactNode[] = [];
 
-  if (nodeUsage && usedBytes !== null) {
+  // A Cloud Server's resource count, space and storage link live on its row in
+  // the plan card, where the portal shows them too. The device card keeps what
+  // is true of the device.
+  if (nodeUsage && usedBytes !== null && !isCloud) {
     facts.push(`${nodeUsage.resourceCount.toLocaleString()} resources`);
 
     const usedText = quotaBytes
@@ -411,8 +384,6 @@ function ServerCard({
   return (
     <SyncCard
       active={isActive}
-      provider={isCloud}
-      embedded={isCloud}
       icon={isCloud ? <FaCloud /> : <FaServer />}
       iconTone={isCloud ? 'provider' : 'neutral'}
       title={isCloud ? 'Cloud Server' : serverLabel(server)}
@@ -457,9 +428,9 @@ function ServerCard({
       }
       subtitle={
         isActive
-          ? [isCloud ? serverHostname : 'Always-on · in use', syncedFact]
-              .filter(Boolean)
-              .join(' · ')
+          ? isCloud
+            ? serverHostname
+            : ['Always-on · in use', syncedFact].filter(Boolean).join(' · ')
           : 'Always-on device'
       }
       facts={isActive ? facts : undefined}
@@ -530,15 +501,6 @@ function ServerCard({
           <span>{status.serverConnectionError}</span>
         </ConnError>
       )}
-
-      {isActive && usagePct !== null && (
-        <UsageBar
-          aria-label={`${usagePct}% of storage used`}
-          title={`${usagePct}% used`}
-        >
-          <UsageFill style={{ width: `${usagePct}%` }} />
-        </UsageBar>
-      )}
     </SyncCard>
   );
 }
@@ -572,16 +534,14 @@ interface SyncCardProps {
   /** What is true of this connection, joined by dots. Empty entries drop out,
    *  so callers can build the list conditionally without filtering. */
   facts?: ReactNode[];
-  /** Anything between the facts and the node id: errors, a usage bar. */
+  /** Anything between the facts and the node id, such as errors. */
   children?: ReactNode;
   /** Rendered as a click-to-copy row. Pass the full `did:ad:node:…`. */
   nodeId?: string;
   footer?: ReactNode;
   active?: boolean;
-  provider?: boolean;
   /** The standalone spacing "This device" uses; the list cards sit tighter. */
   spacious?: boolean;
-  embedded?: boolean;
 }
 
 function SyncCard({
@@ -597,20 +557,13 @@ function SyncCard({
   nodeId,
   footer,
   active,
-  provider,
   spacious,
-  embedded,
 }: SyncCardProps): JSX.Element {
   const store = useStore();
   const shown = (facts ?? []).filter(f => !!f);
 
   return (
-    <ConnCard
-      $active={active}
-      $provider={provider}
-      $spacious={spacious}
-      $embedded={embedded}
-    >
+    <ConnCard $active={active} $spacious={spacious}>
       <CardIcon $tone={iconTone}>{icon}</CardIcon>
       <ConnBody>
         <ConnTopRow>
@@ -719,12 +672,8 @@ function SyncPage() {
     setKnownServers(serverURLStorage.getKnownServers());
   }, [baseURL]);
 
-  // Switching + adding happen inline in the Devices section (not a separate
-  // dialog): `showAddServer` reveals the add-a-device form. An always-on device
-  // is added by address; one you carry is added by pairing with its code.
-  const [showAddServer, setShowAddServer] = useState(false);
-  const [serverInput, setServerInput] = useState('');
   const [localNodeId, setLocalNodeId] = useState<string | null>(null);
+  const [syncRetrying, setSyncRetrying] = useState(false);
   const [peerSyncing, setPeerSyncing] = useState(false);
   const [peerSyncResult, setPeerSyncResult] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
@@ -1628,6 +1577,7 @@ function SyncPage() {
     state: 'on' | 'copied' | 'moving' | 'failed' | 'offered' | 'off';
     standing: ServiceStanding | null;
     status: { tone: ServiceTone; text: ReactNode } | null;
+    details?: ReactNode;
     actions: ReactNode;
   } = (() => {
     const managePlan = accountPortalUrl && status.drive && (
@@ -1659,6 +1609,15 @@ function SyncPage() {
                   : 'busy',
           text: `${statusLabel(tone)} · ${serverHostname ?? managedServer}`,
         },
+        details: status.drive ? (
+          <CloudServerDetails
+            key={status.drive}
+            drive={status.drive}
+            usage={nodeUsage}
+            quotaBytes={quotaBytes}
+            signedIn={!!managedAccount}
+          />
+        ) : undefined,
         actions: managePlan,
       };
     }
@@ -1900,11 +1859,72 @@ function SyncPage() {
     setKnownServers(serverURLStorage.getKnownServers());
   }
 
+  // Why this workspace is not syncing, if it is not. A local-only workspace is
+  // not supposed to be, so it has nothing to explain.
+  const syncProblem = localOnlyDrive
+    ? null
+    : describeSyncProblem({
+        status,
+        refusedByServer: store.isDriveRefusedByServer(status.drive),
+        entries: store.outbox.pending(),
+        serverName: serverLabel(status.serverUrl ?? ''),
+      });
+  const syncProblemKey = syncProblem?.key;
+  const syncProblemOurs = syncProblem?.cause === 'ours';
+  const syncProblemReported = syncProblem?.reported ?? true;
+  const syncProblemDetail = syncProblem?.detail;
+
+  // A commit that keeps failing is already reported by the outbox. Everything
+  // else we own is reported here, once.
+  useEffect(() => {
+    if (syncProblemKey && syncProblemOurs && !syncProblemReported) {
+      reportSyncProblem({
+        key: syncProblemKey,
+        server: status.serverUrl,
+        detail: syncProblemDetail,
+      });
+    }
+  }, [
+    syncProblemKey,
+    syncProblemOurs,
+    syncProblemReported,
+    syncProblemDetail,
+    status.serverUrl,
+  ]);
+
+  async function tryAgainSync() {
+    if (syncRetrying) return;
+
+    setSyncRetrying(true);
+
+    // A parked change is only sent again after a fresh signal. Reconnecting
+    // repeats the workspace handshake, which also retries a refused sync.
+    for (const entry of store.outbox.pending()) {
+      if (entry.blocked) store.outbox.markDirty(entry.subject);
+    }
+
+    try {
+      await store.reconnect();
+    } catch (e) {
+      store.notifyError(e as Error);
+    }
+
+    setSyncRetrying(false);
+  }
+
   return (
     <Main>
       <ContainerNarrow>
         <h1>Sync</h1>
         <Lead>{summaryLine()}</Lead>
+        {syncProblem && (
+          <SyncProblemBanner
+            problem={syncProblem}
+            notified={isErrorReportingEnabled()}
+            retrying={syncRetrying}
+            onTryAgain={() => void tryAgainSync()}
+          />
+        )}
         {/* Everything our paid services own, in one card.
 
             These used to be loose entries in the Devices list, on the reasoning
@@ -2076,6 +2096,7 @@ function SyncPage() {
                   'No need for another device to be awake',
                 ]}
                 status={serverRow.status}
+                details={serverRow.details}
                 notice={
                   serverRow.state === 'offered' ? (
                     <>
@@ -2125,7 +2146,7 @@ function SyncPage() {
                   </ConnSub>
                   <ConnActions>
                     {!pairNodeId && (
-                      <Button onClick={() => setShowAddServer(true)}>
+                      <Button onClick={focusConnectDevice}>
                         Connect a device
                       </Button>
                     )}
@@ -2173,7 +2194,7 @@ function SyncPage() {
           </LocalDriveNotice>
         )}
 
-        <Section>
+        <Section id='sync-devices'>
           <SectionTitle>Devices</SectionTitle>
 
           {/* Devices only. The hosted services moved up into the provider
@@ -2376,115 +2397,25 @@ function SyncPage() {
               {peerSyncResult}
             </PeerSyncResult>
           )}
-
-          {/* Add-a-server: inline (no dialog) — the same act as the switch
-              cards above, so it lives in the same list. */}
-          <AddRow>
-            {showAddServer ? (
-              <AddServerForm
-                onSubmit={e => {
-                  e.preventDefault();
-
-                  if (!serverInput.trim()) {
-                    return;
-                  }
-
-                  setServer(normalizeServerUrl(serverInput));
-                  setServerInput('');
-                  setShowAddServer(false);
-                }}
-              >
-                {/* Only promise the code when there is one to scan. It is
-                    rendered from the connected node's id, so a node that never
-                    reported one (offline, or an older server) leaves the whole
-                    pairing section out and this line pointing at nothing. */}
-                <AddServerExplainer>
-                  {pairNodeId
-                    ? 'An always-on device has an address. One you carry has a code instead, shown below.'
-                    : 'An always-on device has an address. Type it here.'}
-                </AddServerExplainer>
-                <ServerInputRow>
-                  <ServerInput
-                    autoFocus
-                    autoComplete='off'
-                    placeholder='localhost:9883 or your-server.example'
-                    value={serverInput}
-                    onChange={e => setServerInput(e.target.value)}
-                  />
-                  <Button type='submit' disabled={!serverInput.trim()}>
-                    Connect
-                  </Button>
-                  <NodeAction
-                    type='button'
-                    onClick={() => {
-                      setShowAddServer(false);
-                      setServerInput('');
-                    }}
-                  >
-                    Cancel
-                  </NodeAction>
-                </ServerInputRow>
-                <DocsLink
-                  href='https://docs.atomicdata.dev/atomicserver/installation.html'
-                  target='_blank'
-                  rel='noopener'
-                >
-                  How to run your own server
-                </DocsLink>
-              </AddServerForm>
-            ) : (
-              <AddButton onClick={() => setShowAddServer(true)}>
-                <FaPlus aria-hidden /> <span>Connect a device</span>
-              </AddButton>
-            )}
-          </AddRow>
         </Section>
 
         {/* Pairing is the point of this page on a peer node, so it's shown
             outright rather than hidden behind a button: the code is routing
-            only, and safe to leave on screen. */}
-        {pairNodeId &&
-          (isNode ||
-            (showServerConn &&
-              (!isCloudSyncAvailable(managedInfo) ||
-                cloudEnrolled === true))) && (
-            <Section>
-              <SectionTitle>Sync a device</SectionTitle>
-              {/* One line, not three: the card above already said what
-                `localhost:9883` is, and a paragraph on how keys work belongs
-                where someone asks — not over a QR they came here to scan. */}
-              <ConnNote>
-                {isNode
-                  ? 'Codes only route — your key still decides what syncs. Show yours, or take theirs.'
-                  : `Scan from your other device to sync with ${serverLabel(status.serverUrl ?? '')}. Safe to show: a code only routes.`}
-              </ConnNote>
-              <PairCard>
-                <PairSide>
-                  {isNode && <PairLabel>Show this code</PairLabel>}
-                  <QrCentered>
-                    <PairingCode nodeDid={rawToNodeDid(pairNodeId)} />
-                  </QrCentered>
-                </PairSide>
-
-                {/* Taking someone else's code needs a node to dial from, which a
-                  browser tab is not. */}
-                {isNode && (
-                  <>
-                    <PairDivider aria-hidden />
-
-                    <PairSide>
-                      <PairLabel>
-                        {isMobileTauri() ? 'Or scan theirs' : 'Or paste theirs'}
-                      </PairLabel>
-                      {/* Same path a scanned deep link takes (PairingLinkHandler):
-                        validate, persist the peer, start a sync. */}
-                      <ConnectToDeviceForm onCode={deliverDeepLink} />
-                    </PairSide>
-                  </>
-                )}
-              </PairCard>
-            </Section>
-          )}
+            only, and safe to leave on screen. The section itself always
+            renders, in the same place, because adding a device is always
+            possible; only the "show this device" half is gated. */}
+        <ConnectDevice
+          pairNodeDid={pairNodeId ? rawToNodeDid(pairNodeId) : null}
+          showPairing={
+            !!pairNodeId &&
+            (isNode ||
+              (showServerConn &&
+                (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true)))
+          }
+          canTakeCode={isNode}
+          serverName={serverLabel(status.serverUrl ?? '')}
+          onAddServer={setServer}
+        />
 
         {/* Developer: diagnostics + advanced toggles, tucked away. */}
         <DevDetails>
@@ -2991,43 +2922,22 @@ const NodeIdValue = styled.button`
   }
 `;
 
-/** `$active` marks the server actually in use. The list order is stable across
- *  switches, so this accent is the only thing that changes — which is the point:
- *  a reshuffling list is far harder to follow than a highlighted row. */
 /**
- * Blue means "one of the provider's services", not "the one in use".
+ * One device or server card. `$active` marks the server in use with a neutral
+ * emphasis. The list order is stable across switches, so that accent is the
+ * only thing that changes: a reshuffling list is far harder to follow than a
+ * highlighted row.
  *
- * These used to be the same thing, because the accent keyed off `$active`. A
- * self-hosted node someone runs on their own hardware is not a hosted product
- * no matter how live it is, and painting it the same blue as the account card
- * said it was. Being in use is still worth showing, so it keeps a neutral
- * emphasis, and the "In sync" badge next to the title carries the state.
+ * Every device looks like this, Cloud Server included. The provider's blue
+ * belongs to the plan card above, which is where it is bought and managed.
  */
 const ConnCard = styled.div<{
   $active?: boolean;
-  $provider?: boolean;
   $spacious?: boolean;
-  $embedded?: boolean;
 }>`
   ${cardBase}
   margin-bottom: ${p => (p.$spacious ? '1.5rem' : '0.6rem')};
-  border-color: ${p =>
-    p.$provider
-      ? p.theme.colors.main
-      : p.$active
-        ? p.theme.colors.textLight
-        : undefined};
-  background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
-  ${p =>
-    p.$embedded &&
-    css`
-      border: 0;
-      background: transparent;
-      padding: 0;
-      margin: 0;
-      width: 100%;
-      box-shadow: none;
-    `}
+  border-color: ${p => (p.$active ? p.theme.colors.textLight : undefined)};
 `;
 
 /** A call to action, but still one of the cards in this list. The button
@@ -3041,56 +2951,6 @@ const ConnNote = styled.p`
   margin: 0 0 0.6rem;
   color: ${p => p.theme.colors.textLight};
   font-size: 0.82rem;
-`;
-
-/** The two halves of pairing, side by side — one card, not two columns. */
-const PairCard = styled.div`
-  ${cardBase}
-  align-items: stretch;
-  gap: 1.5rem;
-
-  /* Below this the two halves read better stacked; the divider turns with
-     them. A container query would be truer, but the page has a single column
-     whose width tracks the viewport. */
-  @media (max-width: 40rem) {
-    flex-direction: column;
-    gap: 1.1rem;
-  }
-`;
-
-const PairSide = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-`;
-
-/** The QR is a fixed square; centre it rather than letting it hug the edge. */
-const QrCentered = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-`;
-
-const PairDivider = styled.div`
-  flex-shrink: 0;
-  align-self: stretch;
-  width: 1px;
-  background: ${p => p.theme.colors.bg2};
-
-  @media (max-width: 40rem) {
-    width: auto;
-    height: 1px;
-  }
-`;
-
-const PairLabel = styled.span`
-  align-self: flex-start;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: ${p => p.theme.colors.textLight};
 `;
 
 const ConnBody = styled.div`
@@ -3221,21 +3081,6 @@ const StatusPill = styled.span<{ $status: NodeStatus }>`
   }
 `;
 
-const UsageBar = styled.div`
-  margin-top: 0.5rem;
-  height: 6px;
-  border-radius: 3px;
-  background: ${p => p.theme.colors.bg2};
-  overflow: hidden;
-`;
-
-const UsageFill = styled.div`
-  height: 100%;
-  border-radius: 3px;
-  background: ${p => p.theme.colors.main};
-  transition: width 0.3s ease;
-`;
-
 const EmptyConnections = styled.div`
   padding: 1rem 1.1rem;
   border-radius: ${p => p.theme.radius};
@@ -3251,73 +3096,6 @@ const EmptyConnections = styled.div`
   p + p {
     margin-top: 0.4rem;
   }
-`;
-
-const AddRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
-`;
-
-const AddButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  border: 1px dashed ${p => p.theme.colors.bg2};
-  background: none;
-  color: ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.5rem 0.9rem;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-
-  svg {
-    font-size: 0.7rem;
-  }
-
-  &:hover {
-    border-color: ${p => p.theme.colors.main};
-    background: ${p => p.theme.colors.main}0d;
-  }
-`;
-
-const AddServerForm = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  width: 100%;
-`;
-
-const AddServerExplainer = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.8rem;
-  margin: 0;
-`;
-
-const ServerInputRow = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-`;
-
-const ServerInput = styled.input`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.45rem 0.6rem;
-  font-size: 0.85rem;
-  background: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
-  flex: 1;
-  min-width: 12rem;
-`;
-
-const DocsLink = styled.a`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-  display: inline-block;
 `;
 
 // --- Developer disclosure ---

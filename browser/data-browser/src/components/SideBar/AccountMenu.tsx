@@ -37,7 +37,12 @@ import { ResourceGlyph } from '../ResourceGlyph';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
 import { useFeedbackDialog } from './FeedbackButton';
 import { OPEN_FEEDBACK_EVENT } from '../../actions/appMenuItems';
-import { getSyncIcon, getSyncLabel, useSyncStatus } from './syncStatus';
+import {
+  getSyncIcon,
+  getSyncLabel,
+  hasSyncWarning,
+  useSyncStatus,
+} from './syncStatus';
 import {
   SideBarMenuRow,
   SideBarMenuRowIcon,
@@ -116,6 +121,16 @@ function AccountMenuRow({
   const unreadLabel =
     unread > 0 ? `Notifications, ${unread} unread` : undefined;
 
+  // A warning icon leads to the banner that explains it.
+  const goToSync = () => {
+    if (hasSyncWarning(syncStatus)) {
+      void navigate({ to: paths.sync, hash: 'sync-problem' });
+      onItemClick();
+    } else {
+      goTo(paths.sync)();
+    }
+  };
+
   const items: DropdownItem[] = [
     agent
       ? {
@@ -163,7 +178,7 @@ function AccountMenuRow({
       // item's accessible name "Sync".
       icon: <IconSlot aria-hidden>{getSyncIcon(syncStatus)}</IconSlot>,
       helper: getSyncLabel(syncStatus),
-      onClick: goTo(paths.sync),
+      onClick: goToSync,
     },
     {
       id: 'feedback',
@@ -221,7 +236,7 @@ function AccountMenuRow({
           title={`Sync: ${getSyncLabel(syncStatus)}`}
           aria-label='Sync'
           data-testid='sidebar-sync-button'
-          onClick={goTo(paths.sync)}
+          onClick={goToSync}
         >
           {getSyncIcon(syncStatus)}
         </IconButton>

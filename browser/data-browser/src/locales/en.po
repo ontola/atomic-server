@@ -117,8 +117,8 @@ msgstr "AI Agents"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
-#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -127,6 +127,7 @@ msgstr "AI Agents"
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
+#: src/components/Cloud/DriveAddress.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/HostUI/hostUIDialogs.tsx
@@ -145,7 +146,6 @@ msgstr "AI Agents"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Conversation/NewMessageDialog.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/Installation/AssignRights.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1167,6 +1167,7 @@ msgstr "Save failed: {0}"
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/components/Cloud/DriveAddress.tsx
 #: src/components/ProfileForm.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
@@ -4076,9 +4077,9 @@ msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
 #: src/chunks/AppPage/ConnectDialog.tsx
+#: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
-#: src/routes/SyncRoute.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr "Connect"
@@ -4143,15 +4144,8 @@ msgstr "Cached locally · works offline"
 msgid "Server-only · no local cache"
 msgstr "Server-only · no local cache"
 
-#. 0: usagePct
-#: src/routes/SyncRoute.tsx
-msgid "{0}% of storage used"
-msgstr "{0}% of storage used"
-
-#. 0: Math.min(100, Math.round(percent))
-#. 0: usagePct
-#: src/components/Vault/VaultPanel.tsx
-#: src/routes/SyncRoute.tsx
+#. 0: percent
+#: src/components/Cloud/UsageMeter.tsx
 msgid "{0}% used"
 msgstr "{0}% used"
 
@@ -4247,6 +4241,7 @@ msgstr "Pairing device"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SyncProblemBanner.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 #: src/routes/DemoRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4303,10 +4298,6 @@ msgstr "Paired with {0}"
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Synced {0} {1} with {2}"
 msgstr "Synced {0} {1} with {2}"
-
-#: src/routes/SyncRoute.tsx
-msgid "Show this code"
-msgstr "Show this code"
 
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "This device can’t tell which workspace to open. Open the app on your other device, then pair again."
@@ -4505,8 +4496,9 @@ msgstr "Your data lives on the device you’re connected to."
 msgid "Syncing this workspace…"
 msgstr "Syncing this workspace…"
 
+#: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
-#: src/routes/SyncRoute.tsx
+#: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Connect a device"
 msgstr "Connect a device"
@@ -4530,23 +4522,6 @@ msgstr "Always-on · in use"
 #: src/routes/SyncRoute.tsx
 msgid "Always-on device"
 msgstr "Always-on device"
-
-#: src/routes/SyncRoute.tsx
-msgid "Codes only route — your key still decides what syncs. Show yours, or take theirs."
-msgstr "Codes only route — your key still decides what syncs. Show yours, or take theirs."
-
-#. 0: serverLabel(status.serverUrl ?? '')
-#: src/routes/SyncRoute.tsx
-msgid "Scan from your other device to sync with {0}. Safe to show: a code only routes."
-msgstr "Scan from your other device to sync with {0}. Safe to show: a code only routes."
-
-#: src/routes/SyncRoute.tsx
-msgid "Or scan theirs"
-msgstr "Or scan theirs"
-
-#: src/routes/SyncRoute.tsx
-msgid "Or paste theirs"
-msgstr "Or paste theirs"
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Scan this from that device"
@@ -5705,13 +5680,17 @@ msgid "Email recovery"
 msgstr "Email recovery"
 
 #. 0: count
+#. 0: usage.resourceCount.toLocaleString()
 #. 0: nodeUsage.resourceCount.toLocaleString()
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+#: src/components/Cloud/CloudServerDetails.tsx
 #: src/routes/SyncRoute.tsx
 msgid "{0} resources"
 msgstr "{0} resources"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
+#: src/components/Cloud/UsageMeter.tsx
 #: src/routes/SyncRoute.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
@@ -5866,14 +5845,6 @@ msgstr "Store it with {0}"
 #: src/routes/SyncRoute.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
-
-#: src/routes/SyncRoute.tsx
-msgid "An always-on device has an address. One you carry has a code instead, shown below."
-msgstr "An always-on device has an address. One you carry has a code instead, shown below."
-
-#: src/routes/SyncRoute.tsx
-msgid "An always-on device has an address. Type it here."
-msgstr "An always-on device has an address. Type it here."
 
 #. 0: detail
 #: src/actions/resourceActions.tsx
@@ -8096,6 +8067,7 @@ msgid "Unpublish website"
 msgstr "Unpublish website"
 
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/Cloud/DriveAddress.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Release"
@@ -11452,7 +11424,7 @@ msgstr "Nothing to free."
 msgid "Could not free storage."
 msgstr "Could not free storage."
 
-#: src/components/Vault/VaultStorage.tsx
+#: src/components/Vault/VaultPanel.tsx
 msgid "Manage storage"
 msgstr "Manage storage"
 
@@ -11542,6 +11514,7 @@ msgstr "Could not start Cloud Server."
 msgid "{0} · Email recovery on"
 msgstr "{0} · Email recovery on"
 
+#: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Trying again…"
 msgstr "Trying again…"
@@ -11701,8 +11674,8 @@ msgstr "You can get back in with:{0} {1}"
 msgid "Add a server"
 msgstr "Add a server"
 
+#: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
-#: src/routes/SyncRoute.tsx
 msgid "How to run your own server"
 msgstr "How to run your own server"
 
@@ -11775,10 +11748,6 @@ msgstr "No other devices yet — your data is safe on this one."
 #: src/routes/SyncRoute.tsx
 msgid "Devices"
 msgstr "Devices"
-
-#: src/routes/SyncRoute.tsx
-msgid "Sync a device"
-msgstr "Sync a device"
 
 #. 0: status.pendingDirtyCount
 #: src/routes/SyncRoute.tsx
@@ -12316,3 +12285,197 @@ msgstr "person can join"
 #: src/components/Share/UsageLimit.tsx
 msgid "people can join"
 msgstr "people can join"
+
+#: src/components/ConnectDevice.tsx
+msgid "This looks like a pairing code. A browser tab can’t take one. Enter it on a device that runs the app, or type a server address here."
+msgstr "This looks like a pairing code. A browser tab can’t take one. Enter it on a device that runs the app, or type a server address here."
+
+#: src/components/ConnectDevice.tsx
+msgid "That is not a pairing code or a server address."
+msgstr "That is not a pairing code or a server address."
+
+#: src/components/ConnectDevice.tsx
+msgid "That is not a server address."
+msgstr "That is not a server address."
+
+#: src/components/ConnectDevice.tsx
+msgid "Codes only route. Your key still decides what syncs."
+msgstr "Codes only route. Your key still decides what syncs."
+
+#: src/components/ConnectDevice.tsx
+msgid "An always-on device has an address. One you carry has a code."
+msgstr "An always-on device has an address. One you carry has a code."
+
+#: src/components/ConnectDevice.tsx
+msgid "Scan this from your other device, or copy the code."
+msgstr "Scan this from your other device, or copy the code."
+
+#. 0: serverName
+#: src/components/ConnectDevice.tsx
+msgid "Scan from your other device to sync with {0}."
+msgstr "Scan from your other device to sync with {0}."
+
+#: src/components/ConnectDevice.tsx
+msgid "Show this device"
+msgstr "Show this device"
+
+#: src/components/ConnectDevice.tsx
+msgid "Paste a pairing code, or type the address of an always-on device."
+msgstr "Paste a pairing code, or type the address of an always-on device."
+
+#: src/components/ConnectDevice.tsx
+msgid "Type the address of an always-on device."
+msgstr "Type the address of an always-on device."
+
+#: src/components/ConnectDevice.tsx
+msgid "Pairing code or server address"
+msgstr "Pairing code or server address"
+
+#: src/components/ConnectDevice.tsx
+msgid "Add a device"
+msgstr "Add a device"
+
+#: src/components/SyncProblemBanner.tsx
+msgid "Turn off server sync"
+msgstr "Turn off server sync"
+
+#: src/components/Cloud/CloudServerDetails.tsx
+#: src/components/SyncProblemBanner.tsx
+msgid "See where space goes"
+msgstr "See where space goes"
+
+#: src/helpers/syncProblem.ts
+msgid "This server does not have this workspace"
+msgstr "This server does not have this workspace"
+
+#. 0: serverName
+#: src/helpers/syncProblem.ts
+msgid "{0} refuses changes to it, so they stay on this device for now. Connect a device that has this workspace, or turn off server sync for it to keep working here."
+msgstr "{0} refuses changes to it, so they stay on this device for now. Connect a device that has this workspace, or turn off server sync for it to keep working here."
+
+#: src/helpers/syncProblem.ts
+msgid "Your storage is full"
+msgstr "Your storage is full"
+
+#: src/helpers/syncProblem.ts
+msgid "New changes stay on this device until there is room. Free up space or move to a bigger plan, and they will sync."
+msgstr "New changes stay on this device until there is room. Free up space or move to a bigger plan, and they will sync."
+
+#: src/helpers/syncProblem.ts
+msgid "You can’t change this workspace on the server"
+msgstr "You can’t change this workspace on the server"
+
+#: src/helpers/syncProblem.ts
+msgid "Your account has no write access there. Your changes stay on this device. Ask the owner to give you access."
+msgstr "Your account has no write access there. Your changes stay on this device. Ask the owner to give you access."
+
+#: src/helpers/syncProblem.ts
+msgid "This is a problem on our side, not something you did. Your changes are safe on this device and will sync once it is fixed."
+msgstr "This is a problem on our side, not something you did. Your changes are safe on this device and will sync once it is fixed."
+
+#. 0: serverName
+#: src/helpers/syncProblem.ts
+msgid "Can’t reach {0}"
+msgstr "Can’t reach {0}"
+
+#: src/helpers/syncProblem.ts
+msgid "Your changes are kept on this device and sync when the connection is back."
+msgstr "Your changes are kept on this device and sync when the connection is back."
+
+#: src/helpers/syncProblem.ts
+msgid "This workspace could not sync"
+msgstr "This workspace could not sync"
+
+#: src/helpers/syncProblem.ts
+msgid "Some changes could not sync"
+msgstr "Some changes could not sync"
+
+#: src/helpers/syncProblem.ts
+msgid "Some changes keep failing to sync"
+msgstr "Some changes keep failing to sync"
+
+#. 0: formatBytes(usedBytes)
+#: src/components/Cloud/UsageMeter.tsx
+msgid "{0} used"
+msgstr "{0} used"
+
+#: src/components/Cloud/UsageMeter.tsx
+msgid "Storage used"
+msgstr "Storage used"
+
+#: src/components/Cloud/DriveAddress.tsx
+#: src/helpers/managed/aliases.ts
+msgid "Could not save that address."
+msgstr "Could not save that address."
+
+#. 0: alias.host
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Release {0}? Links to it stop working, and the name becomes available for anyone else to take."
+msgstr "Release {0}? Links to it stop working, and the name becomes available for anyone else to take."
+
+#: src/components/Cloud/DriveAddress.tsx
+#: src/helpers/managed/aliases.ts
+msgid "Could not release that address."
+msgstr "Could not release that address."
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Not available."
+msgstr "Not available."
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Checking…"
+msgstr "Checking…"
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Setting up"
+msgstr "Setting up"
+
+#: src/components/Cloud/DriveAddress.tsx
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Web address"
+msgstr "Web address"
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Change address"
+msgstr "Change address"
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "New web address"
+msgstr "New web address"
+
+#: src/helpers/managed/aliases.ts
+msgid "Web addresses are not available on your account yet."
+msgstr "Web addresses are not available on your account yet."
+
+#: src/helpers/managed/aliases.ts
+msgid "Could not load your web address."
+msgstr "Could not load your web address."
+
+#: src/helpers/managed/aliases.ts
+msgid "Could not check that address."
+msgstr "Could not check that address."
+
+#: src/helpers/managed/vault.ts
+msgid "This is not available on your account yet."
+msgstr "This is not available on your account yet."
+
+#: src/helpers/managed/vault.ts
+msgid "Storage details are not available on your account yet."
+msgstr "Storage details are not available on your account yet."
+
+#: src/components/ConnectDevice.tsx
+msgid "Code or server address"
+msgstr "Code or server address"
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Change"
+msgstr "Change"
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Claim"
+msgstr "Claim"
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Available."
+msgstr "Available."
+

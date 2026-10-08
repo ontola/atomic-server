@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   agentVaultProof,
   enrollVault,
+  getVaultUsage,
+  freeUpVaultStorage,
   vaultLaneId,
   backupDrive,
   restoreDrive,
@@ -1625,6 +1627,33 @@ describe('vaultLaneId', () => {
     expect(await vaultLaneId('device-a')).toBe(await vaultLaneId('device-a'));
     expect(await vaultLaneId('device-a')).not.toBe(
       await vaultLaneId('device-b'),
+    );
+  });
+});
+
+describe('storage routes the control plane does not have yet', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('answers an HTML page with a plain sentence, not a parse error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<!doctype html><html></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    );
+
+    await expect(getVaultUsage('pseudonym')).rejects.toThrow(
+      'Storage details are not available on your account yet.',
+    );
+  });
+
+  it('answers a 404 with the same sentence', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Not found', { status: 404 }),
+    );
+
+    await expect(freeUpVaultStorage('pseudonym', false)).rejects.toThrow(
+      'Storage details are not available on your account yet.',
     );
   });
 });

@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { Button } from '../Button';
 import { CARD_SUB_FONT } from '../cardSurface';
+import { formatBytes } from '../../helpers/formatBytes';
 import {
   freeUpVaultStorage,
   getVaultUsage,
@@ -19,29 +20,40 @@ import {
 export function VaultStorage({
   drivePseudonym,
   onChanged,
+  onClose,
 }: {
   drivePseudonym: string;
   /** Called after storage was freed, so the host can refresh its numbers. */
   onChanged?: () => void;
+  /** Closes the panel. The row's "Manage storage" action opens it. */
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [usage, setUsage] = useState<VaultUsage | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Reading can fail for reasons that are nobody's fault (the account does not
+  // have this yet), so it is a muted note, not an error.
+  const [readNote, setReadNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setError(null);
       setUsage(await getVaultUsage(drivePseudonym));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not read storage use.');
+      setReadNote(
+        e instanceof Error ? e.message : 'Could not read storage use.',
+      );
     }
   }, [drivePseudonym]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function free(includeUndoWindow: boolean) {
     setBusy(true);
     setMessage(null);
+    setError(null);
 
     try {
       const result = await freeUpVaultStorage(
@@ -63,28 +75,16 @@ export function VaultStorage({
     }
   }
 
-  if (!open) {
-    return (
-      <Link
-        type='button'
-        data-testid='vault-manage-storage'
-        onClick={() => {
-          setOpen(true);
-          void load();
-        }}
-      >
-        Manage storage
-      </Link>
-    );
-  }
-
   return (
     <Wrapper data-testid='vault-storage'>
       <Heading>Storage in Cloud Vault</Heading>
+      {readNote && !usage && (
+        <Muted data-testid='vault-storage-note'>{readNote}</Muted>
+      )}
       {error && (
         <ErrorText data-testid='vault-storage-error'>{error}</ErrorText>
       )}
-      {!usage && !error && <Muted>Reading what is stored…</Muted>}
+      {!usage && !error && !readNote && <Muted>Reading what is stored…</Muted>}
       {usage && (
         <>
           <Muted data-testid='vault-storage-total'>
@@ -160,9 +160,9 @@ export function VaultStorage({
         </>
       )}
       {message && <Muted data-testid='vault-storage-message'>{message}</Muted>}
-      <Link type='button' onClick={() => setOpen(false)}>
+      <Button subtle onClick={onClose} data-testid='vault-storage-hide'>
         Hide
-      </Link>
+      </Button>
     </Wrapper>
   );
 }
@@ -199,27 +199,15 @@ function kindHint(kind: string): string {
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = bytes / 1024;
-  let unit = 0;
-
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
-}
-
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
+  gap: 0.35rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.7rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => p.theme.colors.bg};
   font-size: ${CARD_SUB_FONT};
 `;
 
@@ -233,6 +221,7 @@ const Muted = styled.span`
 `;
 
 const Rows = styled.div`
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -254,15 +243,4 @@ const Block = styled.div`
 const ErrorText = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
-`;
-
-const Link = styled.button`
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: none;
-  color: ${p => p.theme.colors.main};
-  font-size: ${CARD_SUB_FONT};
-  text-decoration: underline;
-  cursor: pointer;
 `;
