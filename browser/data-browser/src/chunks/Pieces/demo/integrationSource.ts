@@ -37,6 +37,7 @@ export function integrationSource(terms: IntegrationTerms): string {
   return `// ${terms.provider} (demo): an integration. Shows sync state; renders no rows.
 const T = ${JSON.stringify(terms)};
 const PARENT = 'https://atomicdata.dev/properties/parent';
+const IS_A = 'https://atomicdata.dev/properties/isA';
 const LABELS = { [T.description]: 'description', [T.start]: 'start', [T.end]: 'end', [T.billable]: 'billable' };
 
 // --- Lens interpreter: the host's own (chunks/Pieces/lens.ts, vendored from
@@ -144,7 +145,10 @@ export async function view({ root, store }) {
     for (const s of subjects) {
       const r = await store.getResource(s);
       // A table's children include its saved views; only rows are synced.
-      if (!r.getClasses().includes(rowClass)) continue;
+      // getClasses() and title exist in develop's view-client, not in older
+      // hosts' (the pinned candidates), so read isA and the name directly.
+      const classes = typeof r.getClasses === 'function' ? r.getClasses() : (r.get(IS_A) || []);
+      if (!classes.includes(rowClass)) continue;
       let payload;
       try {
         payload = along(lensPath, r.props);
@@ -154,7 +158,7 @@ export async function view({ root, store }) {
         console.warn('Not syncing ' + s + ': ' + e.message);
         continue;
       }
-      out.push({ subject: s, title: r.title, props: r.props, payload });
+      out.push({ subject: s, title: r.title ?? r.get(T.name), props: r.props, payload });
     }
     return out;
   }
