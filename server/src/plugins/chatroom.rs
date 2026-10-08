@@ -54,6 +54,7 @@ pub fn construct_chatroom<'a>(
             drive: Some(drive_prefix_from_subject(resource.get_subject())),
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
 
         let QueryResult {

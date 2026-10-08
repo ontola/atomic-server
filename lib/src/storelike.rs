@@ -756,6 +756,50 @@ pub struct PropVal {
     pub operator: FilterOperator,
 }
 
+/// An OR over values of one property: a resource matches when the property
+/// holds **any** of `values` (each compared like [FilterOperator::Equal]).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct ValueIn {
+    pub property: String,
+    pub values: Vec<Value>,
+}
+
+/// A filter over a *related* resource: a subject matches when the resource
+/// that its `via` property references has `target.property` equal to any of
+/// `target.values`. `via` may hold several references (a resource array); one
+/// matching reference is enough. The related resource must be readable by the
+/// querying agent, otherwise it never matches (no information leaks through
+/// filters on resources the agent cannot see).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PathFilter {
+    /// Property of the queried resource that references the related resource.
+    pub via: String,
+    /// The condition on the related resource.
+    pub target: ValueIn,
+}
+
+/// Filters that go beyond the AND-of-constraints the query index answers:
+/// OR groups and conditions over related resources.
+///
+/// All clauses are ANDed with each other and with the query's other
+/// constraints. They are answered from the existing property/value indexes
+/// (and the reverse reference index) instead of a full scan, but they are not
+/// persisted as watched queries. A `Query` with an empty `CompositeFilter`
+/// takes exactly the code path it always did.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct CompositeFilter {
+    /// `property IN (values)` clauses (OR within a clause, AND between clauses).
+    pub value_in: Vec<ValueIn>,
+    /// Conditions on resources referenced by the queried resource.
+    pub paths: Vec<PathFilter>,
+}
+
+impl CompositeFilter {
+    pub fn is_empty(&self) -> bool {
+        self.value_in.is_empty() && self.paths.is_empty()
+    }
+}
+
 /// Use this to construct a list of Resources
 #[derive(Debug)]
 pub struct Query {
@@ -803,6 +847,9 @@ pub struct Query {
     /// they're a separate field rather than folded into `filters`: nothing else
     /// should silently lose its index.
     pub expression_filters: Vec<crate::expression::ExpressionFilter>,
+    /// OR groups and filters over related resources. Empty by default, in which
+    /// case it costs nothing. See [CompositeFilter].
+    pub composite: CompositeFilter,
 }
 
 impl Query {
@@ -812,6 +859,7 @@ impl Query {
             value: None,
             filters: Vec::new(),
             expression_filters: Vec::new(),
+            composite: Default::default(),
             limit: None,
             start_val: None,
             end_val: None,

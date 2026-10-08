@@ -26,6 +26,7 @@ fn query_for(table: &str, aggregation: Aggregation, limit: Option<usize>) -> Que
         value: Some(Value::AtomicUrl(table.to_string().into())),
         filters: Vec::new(),
         expression_filters: Vec::new(),
+        composite: Default::default(),
         limit,
         start_val: None,
         end_val: None,

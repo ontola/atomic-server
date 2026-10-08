@@ -68,6 +68,8 @@ pub struct CollectionBuilder {
     /// Constraints on values computed per row (a duration, an amount) rather than
     /// stored on it. Evaluated over the set the index narrows to.
     pub expression_filters: Vec<crate::expression::ExpressionFilter>,
+    /// OR groups (`value_in`) and filters over related resources (`paths`).
+    pub composite: crate::storelike::CompositeFilter,
 }
 
 impl CollectionBuilder {
@@ -155,6 +157,7 @@ impl CollectionBuilder {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         })
     }
 
@@ -213,6 +216,15 @@ pub async fn delocalize_filter_value(
         None => raw.to_string(),
     };
     Value::String(crate::identifiers::canonicalize_scheme(&rewritten))
+}
+
+async fn delocalize_values(store: &impl Storelike, property: &str, values: &mut [Value]) {
+    for value in values.iter_mut() {
+        if let Value::String(raw) = value {
+            let raw = raw.clone();
+            *value = delocalize_filter_value(store, Some(property), &raw).await;
+        }
+    }
 }
 
 /// Dynamic resource used for ordering, filtering and querying content.
@@ -340,11 +352,21 @@ impl Collection {
             filter.value = Some(delocalize_filter_value(store, Some(property), &raw).await);
         }
 
+        // Same delocalization as `filters`, only when there is something to do.
+        let mut composite = collection_builder.composite.clone();
+        for clause in composite.value_in.iter_mut() {
+            delocalize_values(store, &clause.property, &mut clause.values).await;
+        }
+        for path in composite.paths.iter_mut() {
+            delocalize_values(store, &path.target.property, &mut path.target.values).await;
+        }
+
         let q = Query {
             property: collection_builder.property.clone(),
             value: value_filter,
             filters,
             expression_filters: collection_builder.expression_filters.clone(),
+            composite,
             limit: Some(collection_builder.page_size),
             start_val: None,
             end_val: None,
@@ -530,6 +552,7 @@ pub async fn construct_collection_from_params(
     let mut drive: Option<Subject> = None;
     let mut aggregation: Option<crate::aggregate::Aggregation> = None;
     let mut expression_filters: Vec<crate::expression::ExpressionFilter> = Vec::new();
+    let mut composite = crate::storelike::CompositeFilter::default();
 
     if let Ok(val) = resource.get(urls::COLLECTION_PROPERTY) {
         property = Some(val.to_string());
@@ -605,6 +628,52 @@ pub async fn construct_collection_from_params(
                     )
                 })?;
             }
+            // OR over values of one property, as JSON:
+            // `[{"property":"…","values":["a","b"]}]`. Clauses are ANDed.
+            "value_in" => {
+                #[derive(serde::Deserialize)]
+                struct ValueInParam {
+                    property: String,
+                    values: Vec<String>,
+                }
+                let parsed: Vec<ValueInParam> = serde_json::from_str(v.as_ref()).map_err(|e| {
+                    format!(
+                        "Invalid `value_in` param (expected JSON array of {{property, values}}): {e}"
+                    )
+                })?;
+                composite.value_in = parsed
+                    .into_iter()
+                    .map(|c| crate::storelike::ValueIn {
+                        property: c.property,
+                        values: c.values.into_iter().map(Value::String).collect(),
+                    })
+                    .collect();
+            }
+            // Filter by a property of the resource referenced through `via`, as JSON:
+            // `[{"via":"…","property":"…","values":["a","b"]}]`.
+            "path_filters" => {
+                #[derive(serde::Deserialize)]
+                struct PathParam {
+                    via: String,
+                    property: String,
+                    values: Vec<String>,
+                }
+                let parsed: Vec<PathParam> = serde_json::from_str(v.as_ref()).map_err(|e| {
+                    format!(
+                        "Invalid `path_filters` param (expected JSON array of {{via, property, values}}): {e}"
+                    )
+                })?;
+                composite.paths = parsed
+                    .into_iter()
+                    .map(|c| crate::storelike::PathFilter {
+                        via: c.via,
+                        target: crate::storelike::ValueIn {
+                            property: c.property,
+                            values: c.values.into_iter().map(Value::String).collect(),
+                        },
+                    })
+                    .collect();
+            }
             e => {
                 return Err(format!("Invalid query param: {}", e).into());
             }
@@ -625,6 +694,7 @@ pub async fn construct_collection_from_params(
         drive: Some(drive.unwrap_or_else(|| drive_prefix_from_subject(resource.get_subject()))),
         aggregation,
         expression_filters,
+        composite,
     };
     let collection = Collection::collect_members(store, collection_builder, for_agent).await?;
     collection.add_to_resource(resource, store).await
@@ -711,6 +781,7 @@ mod test {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -737,6 +808,7 @@ mod test {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -793,6 +865,7 @@ mod test {
             drive: Some(drive),
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -864,6 +937,7 @@ mod test {
                         drive: None,
                         aggregation: None,
                         expression_filters: Vec::new(),
+                        composite: Default::default(),
                     },
                     &ForAgent::Sudo,
                 )
@@ -931,6 +1005,7 @@ mod test {
                 drive: None,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
             },
             &ForAgent::Sudo,
         )
@@ -983,6 +1058,7 @@ mod test {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await
@@ -1020,6 +1096,7 @@ mod test {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -1055,6 +1132,7 @@ mod test {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
 
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
@@ -1111,6 +1189,7 @@ mod test {
                 drive: None,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
             },
             &ForAgent::Sudo,
         )
@@ -1151,6 +1230,7 @@ mod test {
                 drive: None,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
             },
             &ForAgent::Sudo,
         )
@@ -1181,6 +1261,7 @@ mod test {
                 drive: None,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
             },
             &ForAgent::Sudo,
         )
@@ -1222,6 +1303,7 @@ mod test {
                     drive: None,
                     aggregation: None,
                     expression_filters: Vec::new(),
+                    composite: Default::default(),
                 },
                 &ForAgent::Sudo,
             )
@@ -1268,6 +1350,7 @@ mod test {
                     drive: None,
                     aggregation: None,
                     expression_filters: Vec::new(),
+                    composite: Default::default(),
                 },
                 &ForAgent::Sudo,
             )
@@ -1300,6 +1383,7 @@ mod test {
                 drive: None,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
             },
             &ForAgent::Sudo,
         )
@@ -1333,6 +1417,7 @@ mod test {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
         let collection = Collection::collect_members(&store, collection_builder, &ForAgent::Sudo)
             .await

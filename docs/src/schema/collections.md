@@ -22,7 +22,11 @@ Collections have various filters (`subject`, `property`, `value`) that can help 
 - [`page_size`](https://atomicdata.dev/properties/collection/pageSize): How many items (members) are visible per page.
 - [`total_pages`](https://atomicdata.dev/properties/collection/totalPages): How many pages there are for the current collection.
 - [`total_members`](https://atomicdata.dev/properties/collection/totalMembers): How many items (members) are visible per page.
+- `value_in`: A URL-encoded JSON array `[{"property": "…", "values": ["a", "b"]}]`. A member matches a clause when the property holds _any_ of its values (an OR). Clauses are ANDed with each other and with all other filters.
+- `path_filters`: A URL-encoded JSON array `[{"via": "…", "property": "…", "values": ["a", "b"]}]`. A member matches when the resource that its `via` property references has `property` equal to any of `values`, for example tasks whose project has status `open` or `review`. Related resources the requesting agent cannot read never match.
 <!-- - `scope`: The parent resource in which to limit the query (see Atomic Hierarchy) -->
+
+`value_in` and `path_filters` are answered from the existing property and reference indexes, not by scanning every resource, but unlike `property` / `value` they are not kept as a live, persisted index: the work is proportional to the number of matching resources on every request.
 
 ## Persisting Properties vs Query Parameters
 

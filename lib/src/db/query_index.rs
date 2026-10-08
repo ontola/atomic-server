@@ -168,7 +168,7 @@ pub fn query_id_from_filter_bytes(encoded_filter: &[u8]) -> [u8; QUERY_ID_LEN] {
 // numeric encodings (strings escape it), so the 0x00 0x00 terminator that
 // precedes the subject is unambiguous given the tag.
 
-const TAG_NONE: u8 = 0x05;
+pub(crate) const TAG_NONE: u8 = 0x05;
 const TAG_BOOL: u8 = 0x10;
 const TAG_NUMBER: u8 = 0x20;
 const TAG_STRING: u8 = 0x30;
@@ -354,7 +354,7 @@ fn compare_values(actual: &Value, query: &Value) -> std::cmp::Ordering {
 }
 
 /// Whether a single resource value satisfies the constraint's value + operator.
-fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
+pub(crate) fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
     use std::cmp::Ordering;
     use FilterOperator::*;
 
@@ -381,7 +381,7 @@ fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> boo
 }
 
 /// Whether a single `(property, value)` constraint matches a resource.
-fn constraint_matches(resource: &Resource, c: &PropVal) -> bool {
+pub(crate) fn constraint_matches(resource: &Resource, c: &PropVal) -> bool {
     match (&c.property, &c.value) {
         (Some(property), Some(value)) => {
             matches!(resource.get(property), Ok(v) if value_matches(v, value, c.operator))

@@ -3744,9 +3744,12 @@ impl Db {
             drive: q.drive.clone(),
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: q.composite.clone(),
         };
 
-        let subjects = if requires_query_index(&scan) {
+        let subjects = if !scan.composite.is_empty() {
+            self.query_composite(&scan).await?.subjects
+        } else if requires_query_index(&scan) {
             self.query_complex(&scan).await?.subjects
         } else {
             self.query_basic(&scan).await?.subjects
@@ -3931,6 +3934,292 @@ impl Db {
         }
 
         Ok(outcomes)
+    }
+
+    /// Whether `target` (a related resource) satisfies a [ValueIn] and the
+    /// querying agent may read it. Unreadable resources never match, so a
+    /// filter can't be used to probe resources the agent can't see.
+    async fn related_matches(
+        &self,
+        target: &Resource,
+        clause: &crate::storelike::ValueIn,
+        q: &Query,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> bool {
+        let Ok(actual) = target.get(&clause.property) else {
+            return false;
+        };
+        if !clause
+            .values
+            .iter()
+            .any(|v| query_index::value_matches(actual, v, crate::storelike::FilterOperator::Equal))
+        {
+            return false;
+        }
+        q.for_agent == ForAgent::Sudo
+            || crate::hierarchy::check_rights_cached(
+                self,
+                target,
+                &q.for_agent,
+                crate::hierarchy::Right::Read,
+                Some(rights_cache),
+            )
+            .await
+            .is_ok()
+    }
+
+    /// Answers a query that carries a [CompositeFilter] (OR groups, filters
+    /// over related resources).
+    ///
+    /// The cheapest clause by a scan-capped index estimate supplies the
+    /// candidates, straight from the `PropValSub` index (and, for a path
+    /// filter, one reverse `ValPropSub` lookup per matching related
+    /// resource). Every other clause is then checked on the candidate's
+    /// materialized row. No clause scans the resources table. The result is
+    /// sorted in memory, so the cost is proportional to the matching set, not
+    /// to the store. These queries are not watched: nothing keeps a
+    /// persisted index for them.
+    async fn query_composite(&self, q: &Query) -> AtomicResult<QueryResult> {
+        use crate::storelike::{FilterOperator, PropVal};
+
+        let rights_cache = std::sync::Mutex::new(RightsCache::default());
+        let base_domain = self.get_base_domain();
+
+        // The constraints that have a point-lookup in PropValSub.
+        let mut plain: Vec<PropVal> = Vec::new();
+        if q.property.is_some() || q.value.is_some() {
+            plain.push(PropVal {
+                property: q.property.clone(),
+                value: q.value.clone(),
+                operator: FilterOperator::Equal,
+            });
+        }
+        plain.extend(q.filters.iter().cloned());
+
+        enum Driver {
+            Plain(usize),
+            ValueIn(usize),
+            Path(usize),
+        }
+        let cap = PLANNER_SCAN_CAP;
+        let mut best: Option<(usize, Driver)> = None;
+        let mut consider = |estimate: usize, driver: Driver| {
+            if best.as_ref().is_none_or(|(e, _)| estimate < *e) {
+                best = Some((estimate, driver));
+            }
+        };
+        for (i, c) in plain.iter().enumerate() {
+            if let (Some(prop), Some(v), FilterOperator::Equal) =
+                (&c.property, &c.value, c.operator)
+            {
+                consider(
+                    self.estimate_prop_val_count(prop, Some(v), cap),
+                    Driver::Plain(i),
+                );
+            }
+        }
+        for (i, c) in q.composite.value_in.iter().enumerate() {
+            let est = c
+                .values
+                .iter()
+                .map(|v| self.estimate_prop_val_count(&c.property, Some(v), cap))
+                .sum();
+            consider(est, Driver::ValueIn(i));
+        }
+        for (i, p) in q.composite.paths.iter().enumerate() {
+            let est = p
+                .target
+                .values
+                .iter()
+                .map(|v| self.estimate_prop_val_count(&p.target.property, Some(v), cap))
+                .sum();
+            consider(est, Driver::Path(i));
+        }
+
+        // Candidate subjects (canonical identity), deduplicated.
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut candidates: Vec<Subject> = Vec::new();
+        let mut push_candidate = |subject: &Subject| {
+            let identity = subject.pure_id();
+            if seen.insert(identity.clone()) {
+                candidates.push(Subject::from_raw(&identity, base_domain.as_deref()));
+            }
+        };
+        let mut skip_path: Option<usize> = None;
+        match best.map(|(_, d)| d) {
+            Some(Driver::Plain(i)) => {
+                let c = &plain[i];
+                for atom in find_in_prop_val_sub_index(
+                    self,
+                    c.property.as_deref().unwrap_or_default(),
+                    c.value.as_ref(),
+                ) {
+                    push_candidate(&atom?.subject);
+                }
+            }
+            Some(Driver::ValueIn(i)) => {
+                let c = &q.composite.value_in[i];
+                for v in &c.values {
+                    for atom in find_in_prop_val_sub_index(self, &c.property, Some(v)) {
+                        push_candidate(&atom?.subject);
+                    }
+                }
+            }
+            Some(Driver::Path(i)) => {
+                skip_path = Some(i);
+                let p = &q.composite.paths[i];
+                let mut targets: HashSet<String> = HashSet::new();
+                for v in &p.target.values {
+                    for atom in find_in_prop_val_sub_index(self, &p.target.property, Some(v)) {
+                        let identity = atom?.subject.pure_id();
+                        if !targets.insert(identity.clone()) {
+                            continue;
+                        }
+                        let t_subject = Subject::from_raw(&identity, base_domain.as_deref());
+                        let Ok(t_row) = self.get_resource_shallow(&t_subject) else {
+                            continue;
+                        };
+                        if !self
+                            .related_matches(&t_row, &p.target, q, &rights_cache)
+                            .await
+                        {
+                            continue;
+                        }
+                        for back in find_in_val_prop_sub_index(
+                            self,
+                            &Value::AtomicUrl(t_subject.clone()),
+                            Some(&p.via),
+                        ) {
+                            push_candidate(&back?.subject);
+                        }
+                    }
+                }
+            }
+            // Only reachable for an empty composite, which doesn't come here.
+            None => {}
+        }
+
+        let drive_filter = q
+            .drive
+            .clone()
+            .map(|drive| QueryFilter::single(None, None, None, drive));
+        let start = q
+            .start_val
+            .as_ref()
+            .map(|v| query_index::encode_sort_value(Some(v)));
+        let end = q.end_val.as_ref().map(|v| {
+            let mut e = query_index::encode_sort_value(Some(v));
+            e.push(0xFF);
+            e
+        });
+
+        // (sort segment, identity, subject)
+        let mut matched: Vec<(Vec<u8>, String, Subject)> = Vec::new();
+        'candidates: for subject in candidates {
+            if !q.include_external && !subject.is_local() {
+                continue;
+            }
+            let Ok(row) = self.get_resource_shallow(&subject) else {
+                continue;
+            };
+            if let Some(f) = &drive_filter {
+                if !self.filter_accepts_resource_drive(f, &row) {
+                    continue;
+                }
+            }
+            if !plain
+                .iter()
+                .all(|c| query_index::constraint_matches(&row, c))
+            {
+                continue;
+            }
+            for clause in &q.composite.value_in {
+                let hit = row.get(&clause.property).is_ok_and(|actual| {
+                    clause
+                        .values
+                        .iter()
+                        .any(|v| query_index::value_matches(actual, v, FilterOperator::Equal))
+                });
+                if !hit {
+                    continue 'candidates;
+                }
+            }
+            for (i, path) in q.composite.paths.iter().enumerate() {
+                if skip_path == Some(i) {
+                    continue;
+                }
+                let mut hit = false;
+                if let Some(refs) = row
+                    .get(&path.via)
+                    .ok()
+                    .and_then(|v| v.to_reference_index_strings())
+                {
+                    for r in refs {
+                        let t_subject = Subject::from_raw(&r, base_domain.as_deref());
+                        if let Ok(t_row) = self.get_resource_shallow(&t_subject) {
+                            if self
+                                .related_matches(&t_row, &path.target, q, &rights_cache)
+                                .await
+                            {
+                                hit = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if !hit {
+                    continue 'candidates;
+                }
+            }
+            let sort_seg = match &q.sort_by {
+                Some(prop) => query_index::sort_key_for(&row, prop),
+                None => vec![query_index::TAG_NONE],
+            };
+            if start.as_ref().is_some_and(|s| sort_seg < *s)
+                || end.as_ref().is_some_and(|e| sort_seg > *e)
+            {
+                continue;
+            }
+            matched.push((sort_seg, subject.pure_id(), subject));
+        }
+
+        matched.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+        if q.sort_desc {
+            matched.reverse();
+        }
+
+        // Paging with the same bookkeeping as `query_basic`: denied members
+        // don't grow the page and don't count.
+        let mut subjects: Vec<Subject> = vec![];
+        let mut resources: Vec<Resource> = vec![];
+        let mut total_count = 0;
+        let limit = q.limit.unwrap_or(usize::MAX);
+        for (index, (_, _, subject)) in matched.into_iter().enumerate() {
+            total_count += 1;
+            if q.offset > index || subjects.len() >= limit {
+                continue;
+            }
+            if q.for_agent == ForAgent::Sudo && !q.include_nested {
+                subjects.push(subject);
+                continue;
+            }
+            match self.resolve_query_member(&subject, q, &rights_cache).await {
+                Some(body) => {
+                    subjects.push(subject);
+                    if let Some(resource) = body {
+                        resources.push(resource);
+                    }
+                }
+                None => total_count -= 1,
+            }
+        }
+
+        Ok(QueryResult {
+            subjects,
+            resources,
+            aggregates: Vec::new(),
+            count: total_count,
+        })
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -5162,6 +5451,8 @@ impl Storelike for Db {
         // happen after it, not in it.
         let mut result = if !q.expression_filters.is_empty() {
             self.query_with_expression_filters(q).await?
+        } else if !q.composite.is_empty() {
+            self.query_composite(q).await?
         } else if requires_query_index(q) {
             self.query_complex(q).await?
         } else {
