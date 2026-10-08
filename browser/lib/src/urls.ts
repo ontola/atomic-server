@@ -17,6 +17,7 @@ export const classes = {
   datatype: 'https://atomicdata.dev/classes/Datatype',
   endpoint: 'https://atomicdata.dev/classes/Endpoint',
   drive: 'https://atomicdata.dev/classes/Drive',
+  group: 'https://atomicdata.dev/classes/Group',
   redirect: 'https://atomicdata.dev/classes/Redirect',
   invite: 'https://atomicdata.dev/classes/Invite',
   file: 'https://atomicdata.dev/classes/File',
