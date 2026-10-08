@@ -81,7 +81,12 @@ fn value_fits_datatype(value: &Value, wanted: &crate::datatype::DataType) -> boo
             Value::Float(_) | Value::Integer(_) | Value::Timestamp(_)
         ),
         D::Boolean => matches!(value, Value::Boolean(_)),
-        D::AtomicUrl => matches!(value, Value::AtomicUrl(_) | Value::NestedResource(_)),
+        // Plain strings stay valid: existing data holds non-URL references
+        // such as `blake3:<hash>` release ids under AtomicUrl properties.
+        D::AtomicUrl => matches!(
+            value,
+            Value::AtomicUrl(_) | Value::NestedResource(_) | Value::String(_)
+        ),
         D::ResourceArray => matches!(value, Value::ResourceArray(_)),
         D::Json | D::LoroDoc | D::LocalizedText | D::Unsupported(_) => true,
     }
