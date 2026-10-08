@@ -20,6 +20,7 @@ import {
   core,
   dataBrowser,
   commits,
+  getEffectiveConstraint,
   type Core,
   type JSONValue,
   type Resource,
@@ -239,6 +240,7 @@ const UNIVERSAL_PROPERTIES = [
 const loadPropertyInfo = async (
   store: Store,
   propertySubject: string,
+  classSubjects: string[] = [],
 ): Promise<CompactPropertyInfo | undefined> => {
   const property = await store.getResource<Core.Property>(propertySubject);
 
@@ -260,11 +262,20 @@ const loadPropertyInfo = async (
     classtype: property.props.classtype as string | undefined,
   };
 
-  const allowsOnly = property.get(core.properties.allowsOnly) as
-    | string[]
-    | undefined;
+  // The class's `constraints` first (options as `enum`, the linked class as
+  // `class`), then the Property's legacy `allowsOnly` and `classtype`.
+  const constraint = getEffectiveConstraint(
+    store,
+    classSubjects,
+    propertySubject,
+  );
+  const allowsOnly = (constraint.enum ?? []).filter(
+    (v): v is string => typeof v === 'string',
+  );
 
-  if (info.classtype === dataBrowser.classes.tag && allowsOnly?.length) {
+  info.classtype = constraint.class ?? info.classtype;
+
+  if (info.classtype === dataBrowser.classes.tag && allowsOnly.length) {
     info.tags = {};
     info.tagNames = {};
 
@@ -305,7 +316,9 @@ export const buildClassContext = async (
     ];
 
     for (const propertySubject of propertySubjects) {
-      const info = await loadPropertyInfo(store, propertySubject);
+      const info = await loadPropertyInfo(store, propertySubject, [
+        classSubject,
+      ]);
 
       if (info) {
         addPropertyToContext(ctx, info);

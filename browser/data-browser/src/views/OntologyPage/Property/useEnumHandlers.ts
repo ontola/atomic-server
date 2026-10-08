@@ -2,6 +2,8 @@ import {
   Resource,
   Core,
   core,
+  getEffectiveConstraint,
+  setClassConstraint,
   useArray,
   useStore,
   Store,
@@ -82,5 +84,78 @@ const isTagUsed = async (
     }
   }
 
+  // ...or listed as an option in the constraints of one of its classes.
+  for (const classSubject of ontology.props.classes ?? []) {
+    const klass = await store.getResource(classSubject);
+
+    for (const propertySubject of [
+      ...(klass.get(core.properties.requires) ?? []),
+      ...(klass.get(core.properties.recommends) ?? []),
+    ] as string[]) {
+      if (
+        getEffectiveConstraint(
+          store,
+          [classSubject],
+          propertySubject,
+        ).enum?.includes(tagSubject)
+      ) {
+        return true;
+      }
+    }
+  }
+
   return false;
 };
+
+/**
+ * Add and remove handlers for the options of a property as one class sees it:
+ * the `enum` in the class's `constraints`. Same bookkeeping as
+ * {@link useEnumHandlers}: a new tag is registered on the ontology, and a
+ * removed one is deleted when nothing else uses it.
+ */
+export function useClassEnumHandlers(
+  classResource: Resource,
+  propertySubject: string,
+  options: string[],
+  ontology: Resource<Core.Ontology>,
+) {
+  const store = useStore();
+  const [instances, setInstances] = useArray(
+    ontology,
+    core.properties.instances,
+    { commit: true },
+  );
+
+  const saveOptions = useCallback(
+    async (next: string[]) => {
+      await setClassConstraint(classResource, propertySubject, {
+        enum: next.length > 0 ? next : undefined,
+      });
+      await classResource.save();
+    },
+    [classResource, propertySubject],
+  );
+
+  const addTag = useCallback(
+    async (tag: Resource) => {
+      await tag.save();
+      await setInstances([...(instances ?? []), tag.subject]);
+      await saveOptions([...options, tag.subject]);
+    },
+    [instances, options, setInstances, saveOptions],
+  );
+
+  const removeTag = useCallback(
+    async (subject: string) => {
+      await saveOptions(options.filter(tag => tag !== subject));
+
+      if (!(await isTagUsed(subject, ontology, store))) {
+        await setInstances(instances?.filter(instance => instance !== subject));
+        await store.getResourceLoading(subject).destroy();
+      }
+    },
+    [options, saveOptions, instances, setInstances, store, ontology],
+  );
+
+  return { addTag, removeTag };
+}

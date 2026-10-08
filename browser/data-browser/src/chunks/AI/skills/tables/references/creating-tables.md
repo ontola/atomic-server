@@ -53,11 +53,12 @@ Here is a list of these types and what the underlying property looks like:
 - Number: A property with a datatype of `integer` or `float`.
 - Date: A property with a datatype of `date` or `timestamp`.
 - Checkbox: A property with a datatype of `boolean`.
-- Select: A property with a datatype of `resourceArray`, a classtype of [tag](https://atomicdata.dev/classes/Tag) and allowsOnly set to a list of tags.
+- Select: A property with a datatype of `resourceArray`.
   - The select values should be tag resources with the property as parent.
-- File: A property with a datatype of `atomicURL` and classtype set to [file](https://atomicdata.dev/classes/File).
+  - The options live on the table's Class, not on the property: add the property to the Class's `https://atomicdata.dev/properties/constraints` map as `{"<property subject>": {"enum": ["<tag subject>", ...]}}`. Add `"maxItems": 1` to allow a single pick.
+- File: A property with a datatype of `atomicURL`. Add `{"<property subject>": {"class": "https://atomicdata.dev/classes/File"}}` to the Class's `constraints` map.
 - JSON: A property with a datatype of `json`.
-- Relation: a property with a datatype of either `atomicURL` or `resourceArray`.
+- Relation: a property with a datatype of either `atomicURL` or `resourceArray`. The class it links to is `class` in the Class's `constraints` entry for the property.
 - Existing property: a property that already exists can also be used as a column.
 
 Note: Datatypes are also resources and thus should be referenced by their subject e.g. `https://atomicdata.dev/datatypes/string`.

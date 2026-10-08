@@ -7,6 +7,9 @@ import {
   dataBrowser,
   perfSpan,
   isAtomicIdentifier,
+  setClassConstraint,
+  getEffectiveConstraint,
+  type ConstraintPatch,
 } from '@tomic/react';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 import { stringToSlug } from '@helpers/stringToSlug';
@@ -18,6 +21,9 @@ export interface TagSeed {
   color?: string;
   emoji?: string;
 }
+
+/** Where a column's options, limits and linked class are stored. */
+export type ConstraintsOn = 'class' | 'property';
 
 export interface CreatedSelectProperty {
   subject: string;
@@ -249,7 +255,19 @@ export async function createPropertyOnClass(
   tableClass: Resource,
   opts: PropertyNaming & {
     datatype: Datatype;
+    /**
+     * The class a link points at. Stored in the table class's `constraints`
+     * map (`class`), not on the Property, which is immutable.
+     */
     classtype?: string;
+    /**
+     * Where `classtype` goes: the table class's constraints (default), or the
+     * Property's legacy `classtype`. Only the form builder still wants the
+     * latter, until forms move to the class map.
+     */
+    constraintsOn?: ConstraintsOn;
+    /** Other class constraints for this column, e.g. `{ minimum: 0 }`. */
+    constraint?: ConstraintPatch;
     description?: string;
     /**
      * Extra classes the property is an instance of — how a number becomes a
@@ -283,6 +301,8 @@ export async function createPropertyOnClass(
       parent.isOntology &&
       isCompatiblePlainProperty(existing, opts.datatype)
     ) {
+      await writeColumnConstraint(tableClass, existing.subject, opts);
+
       if (!opts.deferAttach) {
         await attachPropertiesToClass(store, tableClass, [existing.subject]);
       }
@@ -305,7 +325,7 @@ export async function createPropertyOnClass(
     ...opts.propVals,
   };
 
-  if (opts.classtype) {
+  if (opts.classtype && opts.constraintsOn === 'property') {
     propVals[core.properties.classtype] = opts.classtype;
   }
 
@@ -318,12 +338,41 @@ export async function createPropertyOnClass(
     contentAddressedProperty: true,
   });
   await property.save();
+  await writeColumnConstraint(tableClass, property.subject, opts);
 
   if (!opts.deferAttach) {
     await attachPropertiesToClass(store, tableClass, [property.subject]);
   }
 
   return property.subject;
+}
+
+/**
+ * Puts a new column's linked class and other limits in the table class's
+ * `constraints` map. Does not save: the class is saved when the column is
+ * attached to it (see {@link attachPropertiesToClass}).
+ */
+async function writeColumnConstraint(
+  tableClass: Resource,
+  propertySubject: string,
+  opts: {
+    classtype?: string;
+    constraint?: ConstraintPatch;
+    constraintsOn?: ConstraintsOn;
+  },
+): Promise<void> {
+  if (opts.constraintsOn === 'property') {
+    return;
+  }
+
+  const patch: ConstraintPatch = {
+    ...opts.constraint,
+    ...(opts.classtype ? { class: opts.classtype } : {}),
+  };
+
+  if (Object.keys(patch).length > 0) {
+    await setClassConstraint(tableClass, propertySubject, patch);
+  }
 }
 
 /**
@@ -377,11 +426,101 @@ async function reuseSelectProperty(
   return { subject: existing.subject, tags: tagsByName };
 }
 
+const isColumnOf = (tableClass: Resource, propertySubject: string): boolean =>
+  [
+    ...((tableClass.get(core.properties.requires) ?? []) as string[]),
+    ...((tableClass.get(core.properties.recommends) ?? []) as string[]),
+  ].includes(propertySubject);
+
+/** Option name (as created) to tag subject, for tags that already exist. */
+async function tagSubjectsByName(
+  store: Store,
+  tagSubjects: string[],
+): Promise<Record<string, string>> {
+  const byName: Record<string, string> = {};
+
+  for (const subject of tagSubjects) {
+    const tag = await store.getResource(subject);
+    const name =
+      tag.get(core.properties.name) ?? tag.get(core.properties.shortname);
+
+    if (typeof name === 'string') byName[name] = subject;
+  }
+
+  return byName;
+}
+
+/**
+ * Creates the Tags for a select column's options, parented to the property.
+ * Returns their subjects in order, and by option name.
+ */
+export async function createOptionTags(
+  store: Store,
+  propertySubject: string,
+  seeds: TagSeed[],
+): Promise<{ subjects: string[]; byName: Record<string, string> }> {
+  const subjects: string[] = [];
+  const byName: Record<string, string> = {};
+
+  for (const seed of seeds) {
+    const closeTag = perfSpan('table.tag');
+    const closeSubject = perfSpan('table.tagUniqueSubject');
+    const subject = isAtomicIdentifier(propertySubject)
+      ? undefined
+      : await store.buildUniqueSubjectFromParts(
+          ['tag', seed.name],
+          propertySubject,
+        );
+    closeSubject();
+
+    const tag = await store.newResource({
+      subject,
+      parent: propertySubject,
+      isA: dataBrowser.classes.tag,
+      propVals: {
+        // `shortname` is the slug the class requires; `name` carries the
+        // label verbatim, since a seed like "Strongly agree — daily" does not
+        // survive slugification. `useTitle` prefers `name`, so every tag
+        // renderer shows the original text.
+        [core.properties.shortname]: stringToSlug(seed.name),
+        [core.properties.name]: seed.name,
+        [dataBrowser.properties.color]: seed.color ?? randomItem(tagColours),
+        ...(seed.emoji ? { [dataBrowser.properties.emoji]: seed.emoji } : {}),
+      },
+    });
+    await tag.save();
+    closeTag();
+    subjects.push(tag.subject);
+    byName[seed.name] = tag.subject;
+  }
+
+  return { subjects, byName };
+}
+
+/**
+ * A select column's options and pick limit as a class constraint: `enum` lists
+ * the Tags, `maxItems: 1` makes it a single pick. Does not save the class.
+ */
+export function selectConstraintPatch(
+  tagSubjects: string[],
+  max?: number,
+): ConstraintPatch {
+  return {
+    enum: tagSubjects,
+    ...(max !== undefined ? { maxItems: max } : {}),
+  };
+}
+
 /**
  * Creates a SelectProperty (enum) with the given Tags and attaches it to a
  * table's row Class — mirroring `NewPropertyDialog`'s "select" genesis path so
  * the property is indistinguishable from one a user made by hand. Returns the
  * new property's subject.
+ *
+ * The options (`enum`) and a single pick (`maxItems: 1`) are written to the
+ * ROW CLASS's `constraints` map, so each table owns its own option list and
+ * editing it never touches the immutable Property. An existing select property
+ * of the same shortname is reused, with fresh Tags for this class.
  *
  * This deliberately does NOT touch the canonical atomic-data ontology: the
  * property is parented under the table class's own ontology (or the class
@@ -395,16 +534,19 @@ export async function createSelectPropertyOnClass(
     tags: TagSeed[];
     /**
      * How many tags may be picked at once. A SelectProperty is always a
-     * `resourceArray`, so single-select is `max: 1` rather than a different
-     * datatype — see `SelectProperty`'s `max` in `lib/defaults/table.json`.
+     * `resourceArray`, so single-select is `maxItems: 1` rather than a
+     * different datatype.
      */
     max?: number;
     /** See {@link createPropertyOnClass}'s `deferAttach`. */
     deferAttach?: boolean;
     /** See {@link createPropertyOnClass}'s `reuse`. */
     reuse?: boolean;
+    /** See {@link createPropertyOnClass}'s `constraintsOn`. */
+    constraintsOn?: ConstraintsOn;
   },
 ): Promise<CreatedSelectProperty> {
+  const legacy = opts.constraintsOn === 'property';
   const parent = await resolvePropertyParent(store, tableClass);
   let shortname = namingShortname(opts);
   const taken = await loadTakenShortnames(store, parent, tableClass);
@@ -416,14 +558,52 @@ export async function createSelectPropertyOnClass(
       parent.isOntology &&
       isCompatibleSelectProperty(existing)
     ) {
-      const reused = await reuseSelectProperty(
-        store,
-        tableClass,
-        existing,
-        opts,
-      );
+      if (legacy) {
+        const reused = await reuseSelectProperty(
+          store,
+          tableClass,
+          existing,
+          opts,
+        );
 
-      if (reused) return reused;
+        if (reused) return reused;
+      } else {
+        // Already a column of this class with its options: nothing to add.
+        const own = getEffectiveConstraint(
+          store,
+          [tableClass.subject],
+          existing.subject,
+        );
+        const ownTags = (own.enum ?? []).filter(
+          (v): v is string => typeof v === 'string',
+        );
+
+        if (isColumnOf(tableClass, existing.subject) && ownTags.length > 0) {
+          return {
+            subject: existing.subject,
+            tags: await tagSubjectsByName(store, ownTags),
+          };
+        }
+
+        // Options belong to the class, so the property itself is shared and
+        // this table gets Tags of its own.
+        const { subjects, byName } = await createOptionTags(
+          store,
+          existing.subject,
+          opts.tags,
+        );
+        await setClassConstraint(
+          tableClass,
+          existing.subject,
+          selectConstraintPatch(subjects, opts.max),
+        );
+
+        if (!opts.deferAttach) {
+          await attachPropertiesToClass(store, tableClass, [existing.subject]);
+        }
+
+        return { subject: existing.subject, tags: byName };
+      }
     }
 
     // A different, incompatible property already owns this shortname —
@@ -442,51 +622,33 @@ export async function createSelectPropertyOnClass(
       [core.properties.shortname]: shortname,
       [core.properties.description]: '',
       [core.properties.datatype]: Datatype.RESOURCEARRAY,
+      // The SelectProperty class requires `allowsOnly`, so it stays on the
+      // Property as an empty marker. The options are in the class map.
       [core.properties.classtype]: dataBrowser.classes.tag,
       [core.properties.allowsOnly]: [],
-      ...(opts.max !== undefined
+      ...(legacy && opts.max !== undefined
         ? { [dataBrowser.properties.max]: opts.max }
         : {}),
     },
   });
 
   // Create the tags, parented to the property (same as SelectPropertyForm).
-  const tagSubjects: string[] = [];
-  const tagsByName: Record<string, string> = {};
+  const { subjects: tagSubjects, byName: tagsByName } = await createOptionTags(
+    store,
+    property.subject,
+    opts.tags,
+  );
 
-  for (const seed of opts.tags) {
-    const closeTag = perfSpan('table.tag');
-    const closeSubject = perfSpan('table.tagUniqueSubject');
-    const subject = isAtomicIdentifier(property.subject)
-      ? undefined
-      : await store.buildUniqueSubjectFromParts(
-          ['tag', seed.name],
-          property.subject,
-        );
-    closeSubject();
-
-    const tag = await store.newResource({
-      subject,
-      parent: property.subject,
-      isA: dataBrowser.classes.tag,
-      propVals: {
-        // `shortname` is the slug the class requires; `name` carries the
-        // label verbatim, since a seed like "Strongly agree — daily" does not
-        // survive slugification. `useTitle` prefers `name`, so every tag
-        // renderer shows the original text.
-        [core.properties.shortname]: stringToSlug(seed.name),
-        [core.properties.name]: seed.name,
-        [dataBrowser.properties.color]: seed.color ?? randomItem(tagColours),
-        ...(seed.emoji ? { [dataBrowser.properties.emoji]: seed.emoji } : {}),
-      },
-    });
-    await tag.save();
-    closeTag();
-    tagSubjects.push(tag.subject);
-    tagsByName[seed.name] = tag.subject;
+  if (legacy) {
+    await property.set(core.properties.allowsOnly, tagSubjects);
+  } else {
+    await setClassConstraint(
+      tableClass,
+      property.subject,
+      selectConstraintPatch(tagSubjects, opts.max),
+    );
   }
 
-  await property.set(core.properties.allowsOnly, tagSubjects);
   await property.save();
 
   if (!opts.deferAttach) {

@@ -2737,6 +2737,7 @@ msgid "To large for preview"
 msgstr "To large for preview"
 
 #: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
 msgid "Datatype"
 msgstr "Datatype"
 
@@ -3478,6 +3479,7 @@ msgid "Slug"
 msgstr "Slug"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 msgid "Length"
 msgstr "Length"
 
@@ -5408,6 +5410,7 @@ msgstr "No data yet"
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 msgid "Value"
 msgstr "Value"
 
@@ -10425,6 +10428,7 @@ msgid "♥ Heart"
 msgstr "♥ Heart"
 
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Min length"
 msgstr "Min length"
 
@@ -10433,6 +10437,7 @@ msgid "The fewest characters an answer may carry. An unanswered question still c
 msgstr "The fewest characters an answer may carry. An unanswered question still counts as unanswered rather than as too short — that is what Required is for."
 
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Max length"
 msgstr "Max length"
 
@@ -12330,3 +12335,94 @@ msgstr "Could not change datatype: {0}"
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
 msgstr "Failed to save column: {0}"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Minimum"
+msgstr "Minimum"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Maximum"
+msgstr "Maximum"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Min items"
+msgstr "Min items"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Max items"
+msgstr "Max items"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Constraints"
+msgstr "Constraints"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Enter a number"
+msgstr "Enter a number"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Enter a whole number, zero or more"
+msgstr "Enter a whole number, zero or more"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Pattern"
+msgstr "Pattern"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Pattern (regular expression)"
+msgstr "Pattern (regular expression)"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Linked class"
+msgstr "Linked class"
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Links to <0/>"
+msgstr "Links to <0/>"
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Allows only: <0/>"
+msgstr "Allows only: <0/>"
+
+#. 0: constraint.pattern.source
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Pattern: {0}"
+msgstr "Pattern: {0}"
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "The linked class, options and limits of this property are set per class. Open a class that uses it to edit them."
+msgstr "The linked class, options and limits of this property are set per class. Open a class that uses it to edit them."
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Classtype: <0/>"
+msgstr "Classtype: <0/>"
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Stored on this property (legacy)"
+msgstr "Stored on this property (legacy)"
+
+#. 0: String(min ?? '…'); 1: String(max ?? '…')
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "{0} to {1}"
+msgstr "{0} to {1}"
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Items"
+msgstr "Items"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Remove from the allowed list"
+msgstr "Remove from the allowed list"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "<0/> Add"
+msgstr "<0/> Add"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Add an item to the allows-only list"
+msgstr "Add an item to the allows-only list"
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Allows only"
+msgstr "Allows only"

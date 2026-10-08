@@ -2737,6 +2737,7 @@ msgid "To large for preview"
 msgstr "Trop grand pour l'aperçu"
 
 #: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
 msgid "Datatype"
 msgstr "Type de données"
 
@@ -3478,6 +3479,7 @@ msgid "Slug"
 msgstr "Slug"
 
 #: src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 msgid "Length"
 msgstr "Longueur"
 
@@ -5402,6 +5404,7 @@ msgstr ""
 #: src/chunks/TablePage/CellSelectionMenu.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/rowActions.ts
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 msgid "Value"
 msgstr ""
 
@@ -10412,6 +10415,7 @@ msgid "♥ Heart"
 msgstr ""
 
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Min length"
 msgstr ""
 
@@ -10420,6 +10424,7 @@ msgid "The fewest characters an answer may carry. An unanswered question still c
 msgstr ""
 
 #: src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Max length"
 msgstr ""
 
@@ -12316,4 +12321,95 @@ msgstr ""
 #. 0: (err as Error).message
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 msgid "Failed to save column: {0}"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Minimum"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Maximum"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Min items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Max items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Constraints"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Enter a number"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Enter a whole number, zero or more"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Pattern"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Pattern (regular expression)"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Linked class"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Links to <0/>"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Allows only: <0/>"
+msgstr ""
+
+#. 0: constraint.pattern.source
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Pattern: {0}"
+msgstr ""
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "The linked class, options and limits of this property are set per class. Open a class that uses it to edit them."
+msgstr ""
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Classtype: <0/>"
+msgstr ""
+
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
+msgid "Stored on this property (legacy)"
+msgstr ""
+
+#. 0: String(min ?? '…'); 1: String(max ?? '…')
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "{0} to {1}"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintSummary.tsx
+msgid "Items"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Remove from the allowed list"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "<0/> Add"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Add an item to the allows-only list"
+msgstr ""
+
+#: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+msgid "Allows only"
 msgstr ""

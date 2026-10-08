@@ -2393,6 +2393,23 @@ truncation (a table with more than 1,000 rows silently offering only the first
 1,000, and rejecting a pick past the cap) is untested, and the preview
 deliberately applies no cap at all.
 
+Class constraints in tables, kanban and the ontology editor
+(`planning/class-constraints-and-forms.md`, step 2): `getEffectiveConstraint` /
+`setClassConstraint` are unit-tested in `browser/lib/src/effective-constraint.test.ts`
+(merge across classes, per-keyword fallback to `allowsOnly` / `classtype` /
+`min` / `max`, edit semantics). `createSelectProperty.test.ts` pins that a new
+select column's options and single pick land in the row class's `constraints`
+(not on the Property), that a reused property gets Tags of its own, and the
+`constraintsOn: 'property'` mode the form builder still uses. `ontology.spec.ts`
+drives linked class, options and instance restrictions through the class card;
+`tables.spec.ts` creates and fills a select column. Not covered: editing an
+existing select column's options in `EditPropertyDialog` (class save, legacy
+dual-write), the number / text range and relation class going from the dialog
+to the class map, `useTableColumns` re-reading columns when the class map
+changes, `TagPropertyCard`'s class usage rows, and forms bound to a table column
+whose options now live only in the class map (they read the Property until the
+forms step).
+
 Not covered (drafts): the debounce/flush wiring in `useFormDraft` — the
 `pagehide` and `visibilitychange` flushes in particular — is only exercised
 through the e2e (which waits for the debounced write rather than forcing a

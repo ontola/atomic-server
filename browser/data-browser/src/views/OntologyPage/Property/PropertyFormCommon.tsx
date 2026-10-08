@@ -20,6 +20,9 @@ import InputResourceArray from '../../../components/forms/InputResourceArray';
 import { EnumFormPart } from './EnumFormPart';
 import { LabelText } from '../LabelText';
 import { filterAllowsOnly } from './filterAllowsOnly';
+import { isContentAddressed } from '../../../helpers/propertyIdentity';
+import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
+import { ResourceInline } from '../../ResourceInline';
 
 interface PropertyFormCommonProps {
   resource: Resource;
@@ -45,9 +48,13 @@ export function PropertyFormCommon({
     { commit: true },
   );
   const [datatype] = useString(resource, core.properties.datatype);
-  const [_, setAllowsOnly] = useArray(resource, core.properties.allowsOnly, {
-    commit: true,
-  });
+  const [allowsOnly, setAllowsOnly] = useArray(
+    resource,
+    core.properties.allowsOnly,
+    {
+      commit: true,
+    },
+  );
 
   const [ontologySubject] = useCurrentSubject();
   const ontologyResource = useResource(ontologySubject);
@@ -88,9 +95,29 @@ export function PropertyFormCommon({
     [setClassType, filterNotAllowedTypesFromAllowsOnly],
   );
 
+  // A content-addressed property is immutable: the linked class and the
+  // options are set per class, in the class card.
+  const contentAddressed = isContentAddressed(resource.subject);
   const disableExtras = !datatypesWithExtraControls.has(datatype ?? '');
   const showEnumForm =
     !classType && datatypesWithExtraControls.has(datatype ?? '');
+
+  if (contentAddressed) {
+    return (
+      <Column>
+        <OntologyDescription resource={resource} edit />
+        <Column fullWidth as='label'>
+          <LabelText>Datatype</LabelText>
+          <PropertyDatatypePicker disabled={!canEdit} resource={resource} />
+        </Column>
+        <p>
+          The linked class, options and limits of this property are set per
+          class. Open a class that uses it to edit them.
+        </p>
+        <LegacyConstraints classType={classType} allowsOnly={allowsOnly} />
+      </Column>
+    );
+  }
 
   return (
     <Column>
@@ -123,6 +150,37 @@ export function PropertyFormCommon({
             isA={classType}
           />
         </Column>
+      )}
+    </Column>
+  );
+}
+
+interface LegacyConstraintsProps {
+  classType: string | undefined;
+  allowsOnly: string[];
+}
+
+/** Read-only view of constraints an older version stored on the Property itself. */
+function LegacyConstraints({
+  classType,
+  allowsOnly,
+}: LegacyConstraintsProps): JSX.Element | null {
+  if (!classType && allowsOnly.length === 0) {
+    return null;
+  }
+
+  return (
+    <Column>
+      <LabelText>Stored on this property (legacy)</LabelText>
+      {classType && (
+        <div>
+          Classtype: <ResourceInline subject={classType} />
+        </div>
+      )}
+      {allowsOnly.length > 0 && (
+        <div>
+          Allows only: <InlineFormattedResourceList subjects={allowsOnly} />
+        </div>
       )}
     </Column>
   );

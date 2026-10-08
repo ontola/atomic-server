@@ -30,6 +30,10 @@ import {
 import { Button } from '@components/Button';
 import { FormValidationContextProvider } from '@components/forms/formValidation/FormValidationContextProvider';
 import { PropertyForm } from './PropertyForm';
+import {
+  CONSTRAINT_FIELDS,
+  constraintPatchFromDraft,
+} from './columnConstraints';
 
 interface NewPropertyDialogProps {
   showDialog: boolean;
@@ -101,14 +105,15 @@ const getCategoryGenesisPropVals = (
   }
 };
 
+// Fields the dialog passes on separately. The constraint fields (options,
+// linked class, limits) go to the table class's `constraints` map, not to the
+// immutable Property.
 const FORM_HANDLED_KEYS = [
   core.properties.name,
   core.properties.shortname,
   core.properties.description,
   core.properties.datatype,
-  core.properties.classtype,
-  core.properties.allowsOnly,
-  dataBrowser.properties.max,
+  ...CONSTRAINT_FIELDS,
 ];
 
 /** The tags the user added to a select draft, as seeds for the real property. */
@@ -182,9 +187,14 @@ export function NewPropertyDialog({
       return createPropertyOnClass(store, tableClassResource, {
         ...naming,
         datatype,
-        classtype: draft.get(core.properties.classtype) as string | undefined,
+        constraint: constraintPatchFromDraft(draft),
         description: (draft.get(core.properties.description) as string) ?? '',
-        classes: isA.filter(c => c !== core.classes.property),
+        // The range class only marked properties that carried `min` / `max`.
+        classes: isA.filter(
+          c =>
+            c !== core.classes.property &&
+            c !== dataBrowser.classes.rangeProperty,
+        ),
         propVals,
       });
     },

@@ -6,6 +6,7 @@ import {
   server,
   unknownSubject,
   useArray,
+  useEffectiveConstraint,
   useResource,
   useString,
   useTitle,
@@ -38,10 +39,12 @@ import { FaXmark } from 'react-icons/fa6';
 import { usePopover } from '@components/CustomPopover';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 
-const useClassType = (subject: string) => {
-  const property = useResource<Core.Property>(subject);
+// The linked class comes from the row's class constraints, falling back to the
+// Property's legacy `classtype`.
+const useClassType = (subject: string, rowClasses: string[]) => {
+  const { class: linkedClass } = useEffectiveConstraint(rowClasses, subject);
 
-  const classType = useResource<Core.Class>(property.props.classtype);
+  const classType = useResource<Core.Class>(linkedClass);
   const hasClassType = classType?.subject !== unknownSubject;
 
   return {
@@ -58,7 +61,7 @@ function AtomicURLCellEdit({
 }: EditCellProps<JSONValue>): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const cell = useResource(value as string);
-  const { classType, hasClassType } = useClassType(property);
+  const { classType, hasClassType } = useClassType(property, row.getClasses());
   const [title] = useTitle(cell);
   // `defaultOpen` only seeds the *initial* isOpen state — if this component
   // remounts (e.g. its row briefly re-resolving after this cell's own save,

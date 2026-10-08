@@ -1,4 +1,10 @@
-import { core, useCanWrite, useProperty, useResource } from '@tomic/react';
+import {
+  core,
+  useCanWrite,
+  useProperty,
+  useResource,
+  type Resource,
+} from '@tomic/react';
 
 import { styled } from 'styled-components';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
@@ -13,17 +19,21 @@ import { useOntologyContext } from '../OntologyContext';
 import { ErrorLook } from '../../../components/ErrorLook';
 import { Button } from '../../../components/Button';
 import { isContentAddressed } from '../../../helpers/propertyIdentity';
+import { ClassConstraintEditor } from '../Class/ClassConstraintEditor';
 
 import type { JSX } from 'react';
 
 interface PropertyLineWriteProps {
   subject: string;
   onRemove: (subject: string) => void;
+  /** The class this line belongs to. Its constraints for the property are editable under the line. */
+  classResource?: Resource;
 }
 
 export function PropertyLineWrite({
   subject,
   onRemove,
+  classResource,
 }: PropertyLineWriteProps): JSX.Element {
   const resource = useResource(subject);
   const shortnameProp = useProperty(core.properties.shortname);
@@ -88,6 +98,12 @@ export function PropertyLineWrite({
           </IconButton>
         </Row>
       </Row>
+      {classResource && (
+        <ClassConstraintEditor
+          classResource={classResource}
+          propertySubject={subject}
+        />
+      )}
       <PropertyWriteDialog
         resource={resource}
         {...dialogProps}

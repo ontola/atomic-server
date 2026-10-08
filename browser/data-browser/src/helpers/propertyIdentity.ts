@@ -54,6 +54,12 @@ export function copyablePropertyFields(source: Resource): {
   return { isA, propVals };
 }
 
+/** Fields and classes a copy of a Property leaves behind. */
+export interface CopyOmit {
+  fields?: string[];
+  classes?: string[];
+}
+
 /**
  * An unsaved Property that only holds form state. It is never saved: the
  * real, content-addressed Property is created on confirm (see
@@ -87,8 +93,15 @@ export async function createContentAddressedFromDraft(
   store: Store,
   parent: string,
   draft: Resource,
+  omit: CopyOmit = {},
 ): Promise<Resource> {
-  const { isA, propVals } = copyablePropertyFields(draft);
+  const copied = copyablePropertyFields(draft);
+  const isA = copied.isA.filter(c => !omit.classes?.includes(c));
+  const propVals = Object.fromEntries(
+    Object.entries(copied.propVals).filter(
+      ([key]) => !omit.fields?.includes(key),
+    ),
+  );
   const property = await store.newResource({
     parent,
     isA,
@@ -191,9 +204,15 @@ export async function recreatePropertyWithDatatype(
   original: Resource,
   draft: Resource,
   knownClasses: Resource[] = [],
+  omit: CopyOmit = {},
 ): Promise<Resource> {
   const parent = original.get(core.properties.parent) as string;
-  const created = await createContentAddressedFromDraft(store, parent, draft);
+  const created = await createContentAddressedFromDraft(
+    store,
+    parent,
+    draft,
+    omit,
+  );
 
   if (created.subject !== original.subject) {
     await replacePropertyReferences(
@@ -211,13 +230,22 @@ export async function recreatePropertyWithDatatype(
 export async function applyDraftFields(
   target: Resource,
   draft: Resource,
+  omit: CopyOmit = {},
 ): Promise<void> {
-  const { propVals } = copyablePropertyFields(draft);
+  const omitted = (key: string) => omit.fields?.includes(key) ?? false;
+  const drafted = copyablePropertyFields(draft);
+  const propVals = Object.fromEntries(
+    Object.entries(drafted.propVals).filter(([key]) => !omitted(key)),
+  );
   const identity: string[] = [
     core.properties.shortname,
     core.properties.datatype,
   ];
-  const current = copyablePropertyFields(target).propVals;
+  const current = Object.fromEntries(
+    Object.entries(copyablePropertyFields(target).propVals).filter(
+      ([key]) => !omitted(key),
+    ),
+  );
 
   for (const [key, value] of Object.entries(propVals)) {
     if (identity.includes(key) && isContentAddressed(target.subject)) {
@@ -229,8 +257,8 @@ export async function applyDraftFields(
     }
   }
 
-  const wanted = copyablePropertyFields(draft).isA;
-  const have = target.getClasses();
+  const wanted = drafted.isA.filter(c => !omit.classes?.includes(c));
+  const have = target.getClasses().filter(c => !omit.classes?.includes(c));
 
   await target.addClasses(...wanted.filter(c => !have.includes(c)));
   target.removeClasses(...have.filter(c => !wanted.includes(c)));

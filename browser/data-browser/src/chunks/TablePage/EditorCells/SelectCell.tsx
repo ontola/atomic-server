@@ -1,10 +1,8 @@
 import {
   core,
-  dataBrowser,
   JSONValue,
   Store,
-  useArray,
-  useResource,
+  useEffectiveConstraint,
   useStore,
 } from '@tomic/react';
 import { useRef, useState, type JSX } from 'react';
@@ -20,6 +18,7 @@ import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
 import { AbsoluteCell } from './CellComponents';
 import { FaXmark, FaPlus } from 'react-icons/fa6';
 import { CustomPopover, usePopover } from '@components/CustomPopover';
+import { optionSubjects } from '../useColumnConstraint';
 
 const TAG_SPACING = '0.5rem';
 
@@ -48,20 +47,21 @@ function SelectCellEdit({
   value,
   property,
   onChange,
+  resource: row,
 }: EditCellProps<JSONValue>): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const val = (value as string[]) ?? emptyArray;
   const store = useStore();
-  const propertyResource = useResource(property);
-  const [allowsOnly] = useArray(propertyResource, core.properties.allowsOnly);
+  // Options and the pick limit come from the row's class `constraints`,
+  // falling back to the Property's legacy `allowsOnly` and `max`.
+  const constraint = useEffectiveConstraint(row.getClasses(), property);
+  const allowsOnly = optionSubjects(constraint);
   const [query, setQuery] = useState('');
 
-  // `max` on a SelectProperty caps how many tags may be picked at once — it is
-  // how single-select is expressed, since a SelectProperty is always a
-  // resourceArray. Form questions of a single-pick type set `max: 1`.
-  const max = propertyResource.get(dataBrowser.properties.max) as
-    | number
-    | undefined;
+  // `maxItems` caps how many tags may be picked at once. It is how
+  // single-select is expressed, since a select column is always a
+  // resourceArray. Form questions of a single-pick type set `maxItems: 1`.
+  const max = constraint.maxItems;
 
   const filteredTags = buildListWithTitles(store, allowsOnly, val)
     .filter(v => v.title.toLowerCase().includes(query.toLowerCase()))

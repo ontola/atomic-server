@@ -99,7 +99,10 @@ spec and before forms or kanban grow more users:
 1. Class constraints map in `atomic_lib` and `@tomic/lib`, with validation on
    write. Read `allowsOnly`, `max` and `classtype` from the Property as a
    fallback for existing data.
-2. Table, kanban and ontology editor write to the class map.
+2. Table, kanban and ontology editor write to the class map. **Done** for new
+   data: `getEffectiveConstraint` / `useEffectiveConstraint` read the class map
+   with the Property as per-keyword fallback; tables, kanban, the ontology
+   class card and `InputSwitcher` use them. Forms still read the Property.
 3. Forms read and write the class map; form options become tightenings.
 4. Drop the Property fallback once existing drives are converted.
 

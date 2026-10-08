@@ -156,6 +156,9 @@ export async function createFormField(
             shortname,
             tags: (opts.choices ?? DEFAULT_CHOICE_TAGS).map(name => ({ name })),
             max: SINGLE_CHOICE_FIELD_TYPES.includes(opts.type) ? 1 : undefined,
+            // Forms still read options and the pick limit off the Property;
+            // they move to the class map in a later step.
+            constraintsOn: 'property',
           })
         ).subject
       : await createPropertyOnClass(store, dataClass, {

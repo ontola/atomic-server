@@ -5,6 +5,7 @@ import {
   unknownSubject,
   urls,
   useArray,
+  useEffectiveConstraint,
   useResource,
   useTitle,
 } from '@tomic/react';
@@ -34,10 +35,12 @@ import { AtomicLink } from '@components/AtomicLink';
 import { usePopover } from '@components/CustomPopover';
 import { CELL_WIDTH } from '@chunks/TableEditor/Cell';
 
-const useClassType = (subject: string) => {
-  const property = useResource<Core.Property>(subject);
+// The linked class comes from the row's class constraints, falling back to the
+// Property's legacy `classtype`.
+const useClassType = (subject: string, rowClasses: string[]) => {
+  const { class: linkedClass } = useEffectiveConstraint(rowClasses, subject);
 
-  const classType = useResource<Core.Class>(property.props.classtype);
+  const classType = useResource<Core.Class>(linkedClass);
   const hasClassType = classType?.subject !== unknownSubject;
 
   return {
@@ -50,10 +53,11 @@ function MultiRelationCellEdit({
   value,
   onChange,
   property,
+  resource: row,
 }: EditCellProps<JSONValue>): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const val = Array.isArray(value) ? value : [];
-  const { classType, hasClassType } = useClassType(property);
+  const { classType, hasClassType } = useClassType(property, row.getClasses());
   const { triggerProps, popoverProps } = usePopover({
     defaultOpen: true,
     autoFocusElement: inputRef,
