@@ -3358,6 +3358,7 @@ msgstr ""
 msgid "(empty)"
 msgstr ""
 
+#: src/chunks/RTE/SlashMenu/CommandList.tsx
 #: src/routes/Search/SearchOverlay.tsx
 msgid "Searching..."
 msgstr ""
@@ -12285,6 +12286,7 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
 msgid "See Cloud Server plans"
