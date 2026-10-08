@@ -56,6 +56,21 @@ export * from './error.js';
 export * from './withDeadline.js';
 export * from './datatypes.js';
 export * from './class-constraints.js';
+export {
+  planOntology,
+  slugify,
+  type ConstraintInput,
+  type OntologyClassInput,
+  type OntologyInput,
+  type OntologyPlan,
+  type OntologyPropertyInput,
+} from './ontology-input.js';
+export {
+  JSON_SCHEMA_DIALECT,
+  ontologyFromJsonSchema,
+  ontologyToJsonSchema,
+  type JsonSchemaImportOptions,
+} from './schema-json-schema.js';
 export * from './safeHref.js';
 export { EventManager } from './EventManager.js';
 export * from './parse.js';
@@ -177,9 +192,12 @@ export {
   type CreateRequest,
 } from './plugin-apply.js';
 export {
+  ensureOntology,
   ensureSchema,
   findSchema,
   type ClassSpec,
+  type EnsureOntologyOptions,
+  type EnsuredOntology,
   type EnsuredSchema,
   type PropertySpec,
   type SchemaSpec,

@@ -1,5 +1,7 @@
 //! Structs and models at the core of Atomic Schema (Class, Property, Datatype).
 
+pub mod json_schema;
+
 use crate::{datatype::DataType, errors::AtomicResult, urls, Resource, Value};
 use serde::{Deserialize, Serialize};
 
