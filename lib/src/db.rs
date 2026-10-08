@@ -3127,7 +3127,11 @@ impl Db {
     /// PropValSub index. Scans at most `cap` entries — enough to rank
     /// constraints by selectivity without paying for exact counts.
     fn estimate_prop_val_count(&self, prop: &str, val: Option<&Value>, cap: usize) -> usize {
-        let mut prefix: Vec<u8> = [prop.as_bytes(), &[query_index::SEPARATION_BIT]].concat();
+        let mut prefix: Vec<u8> = [
+            &query_index::property_key_part(prop)[..],
+            &[query_index::SEPARATION_BIT],
+        ]
+        .concat();
         if let Some(value) = val {
             prefix.extend(value.to_sortable_string().as_bytes());
             prefix.extend([query_index::SEPARATION_BIT]);
