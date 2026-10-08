@@ -979,6 +979,13 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
+        // `server/src/forms.rs` pins its validation verdicts to the cases the
+        // browser form renderer shares (`include_str!`), so the Rust tests need
+        // this one file from `browser/`.
+        .withFile(
+          '/code/browser/form-renderer/shared/validation-cases.json',
+          this.source.file('browser/form-renderer/shared/validation-cases.json'),
+        )
         .withMountedCache('/code/target', this.targetCache('rust-slim-target-v3'))
         .with(touchWorkspaceSources)
         .withWorkdir('/code')
@@ -1503,6 +1510,12 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
+      // See the slim container above: the form validation cases are shared
+      // with the browser and `include_str!`d by the Rust tests.
+      .withFile(
+        '/code/browser/form-renderer/shared/validation-cases.json',
+        source.file('browser/form-renderer/shared/validation-cases.json'),
+      )
       .withMountedCache('/code/target', this.targetCache('rust-target-v3'))
       .with(touchWorkspaceSources)
       .withWorkdir('/code')
