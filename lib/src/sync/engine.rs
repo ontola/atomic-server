@@ -1019,6 +1019,7 @@ pub async fn collect_drive_subjects(
                 for_agent: crate::agents::ForAgent::Sudo,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
                 drive: None,
             };
 

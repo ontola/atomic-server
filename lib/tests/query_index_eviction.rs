@@ -36,6 +36,7 @@ fn low_stock_query(table: &str, max: i64) -> Query {
             operator: FilterOperator::LessThanOrEqual,
         }],
         expression_filters: Vec::new(),
+        composite: Default::default(),
         limit: None,
         start_val: None,
         end_val: None,

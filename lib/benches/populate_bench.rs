@@ -32,6 +32,7 @@ async fn seed_watched_queries_with_drive(store: &atomic_lib::Db, count: usize, d
             value: None,
             filters: vec![],
             expression_filters: vec![],
+            composite: Default::default(),
             limit: Some(1),
             offset: 0,
             // `sort_by` makes `requires_query_index(q)` return true, which

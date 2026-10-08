@@ -181,6 +181,7 @@ impl<'a> CSVExporter<'a> {
             drive: None,
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: Default::default(),
         };
 
         let results = self.store.query(&query).await?;

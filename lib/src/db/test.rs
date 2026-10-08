@@ -271,6 +271,7 @@ async fn destroy_clears_parent_index_count() {
         drive: None,
         aggregation: None,
         expression_filters: Vec::new(),
+        composite: Default::default(),
     };
 
     let before = store.query(&q).await.unwrap();
@@ -358,6 +359,7 @@ async fn unauthorized_query_count_matches_subjects() {
         drive: None,
         aggregation: None,
         expression_filters: Vec::new(),
+        composite: Default::default(),
     };
 
     let res = store.query(&q).await.unwrap();
@@ -410,6 +412,7 @@ fn parent_query(parent: &Subject, limit: Option<usize>, for_agent: ForAgent) -> 
         drive: None,
         aggregation: None,
         expression_filters: Vec::new(),
+        composite: Default::default(),
     }
 }
 
@@ -643,6 +646,7 @@ async fn queries() {
         drive: None,
         aggregation: None,
         expression_filters: Vec::new(),
+        composite: Default::default(),
     };
     let res = store.query(&q).await.unwrap();
     assert_eq!(
@@ -788,6 +792,7 @@ async fn query_include_external() {
         drive: None,
         aggregation: None,
         expression_filters: Vec::new(),
+        composite: Default::default(),
     };
     let res_include = store.query(&q).await.unwrap();
     q.include_external = false;
@@ -939,6 +944,7 @@ async fn test_collection_update_value(
         drive: Some(Subject::from("internal:/")),
         aggregation: None,
         expression_filters: Vec::new(),
+        composite: Default::default(),
     };
     let mut res = store.query(&q).await.unwrap();
     assert_eq!(

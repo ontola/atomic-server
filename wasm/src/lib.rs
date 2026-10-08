@@ -591,6 +591,7 @@ impl ClientDb {
             value,
             filters: extra,
             expression_filters,
+            composite: Default::default(),
             aggregation,
             sort_by,
             sort_desc: sort_desc.unwrap_or(false),
