@@ -59,16 +59,15 @@ vi.mock('@components/Row', () => ({
 }));
 vi.mock('react-icons/fa6', () => ({
   FaGear: () => <svg />,
-  FaPlus: () => <svg />,
 }));
 vi.mock('@components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
-vi.mock('@helpers/useNewRoute', () => ({ useNewRoute: () => vi.fn() }));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,
 }));
 vi.mock('./DriveHome', () => ({
+  ActivityFeed: () => <div />,
   DrivePeople: () => <div />,
   QuickCreateCards: () => <div />,
   RecentlyOpened: () => <div />,

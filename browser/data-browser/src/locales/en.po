@@ -2257,6 +2257,7 @@ msgstr "<0/> Note"
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
 #: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
+#: src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "New"
 
@@ -3622,6 +3623,8 @@ msgid "Previous month"
 msgstr "Previous month"
 
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
+#: src/views/Drive/DriveHome.tsx
+#: src/views/Drive/DriveHome.tsx
 msgid "Today"
 msgstr "Today"
 
@@ -7841,6 +7844,8 @@ msgid "Integration sections"
 msgstr "Integration sections"
 
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/views/Drive/DriveHome.tsx
+#: src/views/Drive/DriveHome.tsx
 msgid "Activity"
 msgstr "Activity"
 
@@ -12318,10 +12323,6 @@ msgid "Currently on this drive"
 msgstr "Currently on this drive"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> New"
-msgstr "<0/> New"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "<0/> Drive settings"
 msgstr "<0/> Drive settings"
 
@@ -12336,3 +12337,36 @@ msgstr "Nothing here yet."
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Drive settings"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "Activity will show up here"
+msgstr "Activity will show up here"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "Show less"
+msgstr "Show less"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "Show all"
+msgstr "Show all"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "created"
+msgstr "created"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "deleted"
+msgstr "deleted"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "edited"
+msgstr "edited"
+
+#: src/views/Drive/DriveHome.tsx
+#: src/views/Drive/DriveHome.tsx
+msgid "This week"
+msgstr "This week"
+
+#: src/views/Drive/DriveHome.tsx
+msgid "Earlier"
+msgstr "Earlier"

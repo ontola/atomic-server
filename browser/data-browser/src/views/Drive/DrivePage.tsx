@@ -16,15 +16,15 @@ import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { Column, Row } from '@components/Row';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
-import { FaGear, FaPlus } from 'react-icons/fa6';
+import { FaGear } from 'react-icons/fa6';
 import type { JSX } from 'react';
-import { useNewRoute } from '@helpers/useNewRoute';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
 import { DriveSettingsDialog } from './DriveSettingsDialog';
 import {
+  ActivityFeed,
   DrivePeople,
   QuickCreateCards,
   RecentlyOpened,
@@ -37,7 +37,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
   const { subjects: subResources } = useChildren(resource.subject);
   const [dialogProps, showSettings, , settingsOpen] = useDialog();
-  const navigateToNewRoute = useNewRoute(resource.subject);
 
   const vectorIndexing = useVectorIndexStatus();
 
@@ -81,14 +80,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 <Button subtle onClick={showSettings}>
                   <FaGear /> Drive settings
                 </Button>
-                {canEdit && (
-                  <Button
-                    data-testid='drive-new-button'
-                    onClick={navigateToNewRoute}
-                  >
-                    <FaPlus /> New
-                  </Button>
-                )}
               </Row>
             </Header>
 
@@ -115,6 +106,8 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 </EmptyHint>
               )}
             </section>
+
+            <ActivityFeed drive={resource} />
           </Column>
         </ContainerNarrow>
       </FileDropZone>
