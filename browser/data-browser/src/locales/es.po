@@ -12507,14 +12507,7 @@ msgstr ""
 msgid "Updating your local data"
 msgstr ""
 
-#~ msgid "This is needed once after an update and takes a moment. Keep this tab open.======="
-#~ msgstr ""
-
-#: src/views/getting-started/chrome.tsx
-msgid "The server could not be reached"
-msgstr ""
-
-#~ msgid "Check your connection and that your server is running, then try again.>>>>>>> refs/remotes/pr/2130"
+#~ msgid "The server could not be reached"
 #~ msgstr ""
 
 #: src/components/DatabaseUpgradeNotice.tsx
@@ -12538,9 +12531,8 @@ msgstr ""
 msgid "Cloud Server setup failed on its own"
 msgstr ""
 
-#: src/views/getting-started/chrome.tsx
-msgid "Check your connection and that your server is running, then try again."
-msgstr ""
+#~ msgid "Check your connection and that your server is running, then try again."
+#~ msgstr ""
 
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
