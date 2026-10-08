@@ -494,10 +494,20 @@ mod tests {
         dir
     }
 
+    /// Opened with `Durability::None`: these tests are about the dead space
+    /// that unsynced overwrites leave in the file. A durable commit lets redb
+    /// reuse the pages an earlier commit freed, so the bloat they build on
+    /// would not exist.
     async fn open(dir: &std::path::Path, policy: &CompactionPolicy) -> crate::Db {
-        crate::Db::init_redb_file_with_policy(dir, None, &dir.join("uploads"), policy)
-            .await
-            .unwrap()
+        crate::Db::init_redb_file_with_options(
+            dir,
+            None,
+            &dir.join("uploads"),
+            policy,
+            crate::db::redb_store::Durability::None,
+        )
+        .await
+        .unwrap()
     }
 
     const RESOURCES: usize = 32;

@@ -37,6 +37,15 @@ pub struct Opts {
     #[clap(long, default_value = "latest", env = "ATOMIC_ENVELOPE_RETENTION")]
     pub envelope_retention: String,
 
+    /// When a commit is acknowledged relative to the fsync that protects it.
+    /// `group` (default): acknowledged only after an fsync, shared by all
+    /// commits in flight (group commit), so an acknowledged commit survives
+    /// `kill -9` and power loss. `immediate`: one fsync per commit. `none`:
+    /// acknowledged at once, flushed every 100 ms; fastest, but a crash can
+    /// lose the last 100 ms of acknowledged commits.
+    #[clap(long, default_value = "group", env = "ATOMIC_DURABILITY")]
+    pub durability: atomic_lib::db::redb_store::Durability,
+
     /// Compact the store file at startup when it is at least
     /// `--auto-compact-min-mb` and at least `--auto-compact-min-reclaimable-percent`
     /// of it is dead space (pages freed by overwrites and deletes that redb
@@ -686,5 +695,20 @@ mod tests {
         let err = config_from(&["--auto-compact-min-reclaimable-percent", "101"])
             .expect_err("101% must not build a config");
         assert!(err.to_string().contains("0-100"), "{err}");
+    }
+
+    #[test]
+    fn durability_defaults_to_group_and_is_configurable() {
+        use atomic_lib::db::redb_store::Durability;
+        assert_eq!(config_from(&[]).unwrap().opts.durability, Durability::Group);
+        for (flag, want) in [
+            ("immediate", Durability::Immediate),
+            ("group", Durability::Group),
+            ("none", Durability::None),
+        ] {
+            let config = config_from(&["--durability", flag]).unwrap();
+            assert_eq!(config.opts.durability, want);
+        }
+        assert!(Opts::try_parse_from(["atomic-server", "--durability", "sometimes"]).is_err());
     }
 }

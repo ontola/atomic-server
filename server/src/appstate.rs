@@ -68,11 +68,12 @@ impl AppState {
 
         // Opens the file, logs its size and open time, and compacts it
         // first when `config.compaction` says the dead space is worth it.
-        let mut store = atomic_lib::Db::init_redb_file_with_policy(
+        let mut store = atomic_lib::Db::init_redb_file_with_options(
             &config.store_path,
             Some(config.get_origin()),
             &config.uploads_path,
             &config.compaction,
+            config.opts.durability,
         )
         .await?;
 
