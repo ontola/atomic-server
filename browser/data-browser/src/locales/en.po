@@ -644,7 +644,6 @@ msgstr "Thinking"
 msgid "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
 msgstr "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
 
-#: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/File/FilePreview.tsx
@@ -1551,6 +1550,7 @@ msgid "Copy"
 msgstr "Copy"
 
 #: src/components/forms/SearchBox/SearchBox.tsx
+#: src/helpers/sentry.ts
 #: src/routes/LinkOpenRouter.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4416,13 +4416,10 @@ msgstr "Copy {0}"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Your data lives on the device you’re connected to."
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Syncing this workspace…"
-msgstr "Syncing this workspace…"
+#~ msgid "Syncing this workspace…"
+#~ msgstr "Syncing this workspace…"
 
 #: src/components/ConnectDevice.tsx
-
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
@@ -5614,13 +5611,11 @@ msgstr "Email recovery"
 msgid "{0} resources"
 msgstr "{0} resources"
 
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
-
 #: src/components/DatabaseUpgradeNotice.tsx
-
 #: src/routes/SyncRoute.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
@@ -8231,7 +8226,6 @@ msgid "Resume"
 msgstr "Resume"
 
 #: src/components/ConnectedAppsCard.tsx
-
 #: src/chunks/FormBuilder/FormAccessSection.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -11341,7 +11335,6 @@ msgstr "<0/> asks to {0} your data on {1}."
 msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
 msgstr "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
 
-
 #: src/chunks/TablePage/QuickFilterField.tsx
 msgid "Find rows"
 msgstr "Find rows"
@@ -12522,26 +12515,46 @@ msgstr "Search people in this drive by name, or paste their Atomic ID. They find
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Loading"
-d it under their account. Only the two of you can read what you send."
-
-#: src/components/Spinner.tsx
-msgid "Loading"
-msgstr "Loading"
 
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Updating your local data"
 msgstr "Updating your local data"
 
-#: src/components/DatabaseUpgradeNotice.tsx
-msgid "This is needed once after an update and takes a moment. Keep this tab open."
-msgstr "This is needed once after an update and takes a moment. Keep this tab open."
+#~ msgid "This is needed once after an update and takes a moment. Keep this tab open.======="
+#~ msgstr "This is needed once after an update and takes a moment. Keep this tab open.======="
 
-=======
 #: src/views/getting-started/chrome.tsx
 msgid "The server could not be reached"
 msgstr "The server could not be reached"
 
+#~ msgid "Check your connection and that your server is running, then try again.>>>>>>> refs/remotes/pr/2130"
+#~ msgstr "Check your connection and that your server is running, then try again.>>>>>>> refs/remotes/pr/2130"
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "This is needed once after an update and takes a moment. Keep this tab open."
+msgstr "This is needed once after an update and takes a moment. Keep this tab open."
+
+#. 0: count
+#: src/helpers/sentry.ts
+msgid "Event repeated {0} times"
+msgstr "Event repeated {0} times"
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup: no portal configured"
+msgstr "Cloud Server setup: no portal configured"
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup failed after sign-in"
+msgstr "Cloud Server setup failed after sign-in"
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup failed on its own"
+msgstr "Cloud Server setup failed on its own"
+
 #: src/views/getting-started/chrome.tsx
 msgid "Check your connection and that your server is running, then try again."
 msgstr "Check your connection and that your server is running, then try again."
->>>>>>> refs/remotes/pr/2130
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
+msgstr "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."

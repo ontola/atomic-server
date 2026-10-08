@@ -644,7 +644,6 @@ msgstr ""
 msgid "Unable to connect to Ollama server. Check if the server is running and you configured the correct url in the settings"
 msgstr ""
 
-#: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/File/FilePreview.tsx
@@ -1551,6 +1550,7 @@ msgid "Copy"
 msgstr ""
 
 #: src/components/forms/SearchBox/SearchBox.tsx
+#: src/helpers/sentry.ts
 #: src/routes/LinkOpenRouter.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4410,13 +4410,10 @@ msgstr ""
 msgid "Your data lives on the device you’re connected to."
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Syncing this workspace…"
-msgstr ""
+#~ msgid "Syncing this workspace…"
+#~ msgstr ""
 
 #: src/components/ConnectDevice.tsx
-
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
@@ -5608,13 +5605,11 @@ msgstr ""
 msgid "{0} resources"
 msgstr ""
 
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
-
 #: src/components/DatabaseUpgradeNotice.tsx
-
 #: src/routes/SyncRoute.tsx
 msgid "{0} of {1}"
 msgstr ""
@@ -8225,7 +8220,6 @@ msgid "Resume"
 msgstr ""
 
 #: src/components/ConnectedAppsCard.tsx
-
 #: src/chunks/FormBuilder/FormAccessSection.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -11326,7 +11320,7 @@ msgstr ""
 #. 0: host
 #: src/routes/AuthorizeMcpRoute.tsx
 msgid "When you allow it, you go back to {0}. The name is chosen by the app, so only allow it if that is where you expect to go. It gets its own access, so your secret stays with you, and you can revoke it at any time."
-
+msgstr ""
 
 #: src/chunks/TablePage/QuickFilterField.tsx
 msgid "Find rows"
@@ -12204,6 +12198,7 @@ msgstr ""
 
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
+msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Could not turn this on. Please try again."
@@ -12276,6 +12271,7 @@ msgstr ""
 
 #: src/components/Share/UsageLimit.tsx
 msgid "people can join"
+msgstr ""
 
 #: src/components/ConnectDevice.tsx
 msgid "This looks like a pairing code. A browser tab can’t take one. Enter it on a device that runs the app, or type a server address here."
@@ -12468,9 +12464,11 @@ msgstr ""
 
 #: src/components/Cloud/DriveAddress.tsx
 msgid "Available."
+msgstr ""
 
 #: src/views/ImporterPage.tsx
 msgid "Imported."
+msgstr ""
 
 #: src/routes/AppSettings.tsx
 msgid "Show Messages panel"
@@ -12504,25 +12502,46 @@ msgstr ""
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr ""
-t under their account. Only the two of you can read what you send."
-msgstr ""
-
-#: src/components/Spinner.tsx
-msgid "Loading"
 
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Updating your local data"
 msgstr ""
 
-#: src/components/DatabaseUpgradeNotice.tsx
-msgid "This is needed once after an update and takes a moment. Keep this tab open."
+#~ msgid "This is needed once after an update and takes a moment. Keep this tab open.======="
+#~ msgstr ""
 
-=======
 #: src/views/getting-started/chrome.tsx
 msgid "The server could not be reached"
 msgstr ""
 
+#~ msgid "Check your connection and that your server is running, then try again.>>>>>>> refs/remotes/pr/2130"
+#~ msgstr ""
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "This is needed once after an update and takes a moment. Keep this tab open."
+msgstr ""
+
+#. 0: count
+#: src/helpers/sentry.ts
+msgid "Event repeated {0} times"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup: no portal configured"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup failed after sign-in"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Cloud Server setup failed on its own"
+msgstr ""
+
 #: src/views/getting-started/chrome.tsx
 msgid "Check your connection and that your server is running, then try again."
->>>>>>> refs/remotes/pr/2130
+msgstr ""
+
+#: src/chunks/FormBuilder/Summary/SummaryTab.tsx
+msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
 msgstr ""
