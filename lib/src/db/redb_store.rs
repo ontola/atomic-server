@@ -111,6 +111,104 @@ pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     Ok((size_before, size_after, did_compact))
 }
 
+/// Rows copied per write transaction while scrubbing, bounding memory.
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+const SCRUB_CHUNK_ROWS: usize = 20_000;
+
+/// Rewrite the redb file at `path` into a fresh file that holds only live
+/// rows, overwrite the old file with zeros, and move the new one into place.
+/// Returns `(size_before, size_after)`.
+///
+/// This is what makes a purge physical. redb never zeroes a page it frees,
+/// and `Database::compact` moves live pages but leaves the freed ones that
+/// stay below the new end of the file as they were, so deleted rows remain
+/// readable in the file (measured: see `lib/tests/purge.rs`). A copy into a
+/// new file carries nothing but live data; zeroing the old file before it is
+/// released removes the rest. The caller must guarantee no other handle on
+/// the file (redb's own lock enforces it). On a crash the old file is intact
+/// until the zeroing starts, and the new file is complete before it does.
+///
+/// Limits: a copy-on-write filesystem, a snapshotting volume or an SSD's
+/// wear leveling may keep old blocks that an in-place overwrite never
+/// reaches; this works at the file level only.
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+pub fn scrub_file(path: &std::path::Path) -> AtomicResult<(u64, u64)> {
+    use std::io::Write;
+
+    let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let tmp = path.with_extension("redb.scrub");
+    let _ = std::fs::remove_file(&tmp);
+    let copy = || -> AtomicResult<()> {
+        let old = Database::create(path)
+            .map_err(|e| format!("Failed to open redb at {}: {e}", path.display()))?;
+        let new = Database::create(&tmp)
+            .map_err(|e| format!("Failed to create redb at {}: {e}", tmp.display()))?;
+        let read = old.begin_read().map_err(|e| format!("redb read tx: {e}"))?;
+        for tree in Tree::ALL {
+            let source = match read.open_table(table_def(tree)) {
+                Ok(table) => table,
+                Err(redb::TableError::TableDoesNotExist(_)) => continue,
+                Err(e) => return Err(format!("redb open table {}: {e}", tree.name()).into()),
+            };
+            let mut rows = source
+                .iter()
+                .map_err(|e| format!("redb iter {}: {e}", tree.name()))?
+                .peekable();
+            // An empty tree still gets its table in the new file.
+            loop {
+                let tx = new
+                    .begin_write()
+                    .map_err(|e| format!("redb write tx: {e}"))?;
+                {
+                    let mut table = tx
+                        .open_table(table_def(tree))
+                        .map_err(|e| format!("redb open table {}: {e}", tree.name()))?;
+                    for _ in 0..SCRUB_CHUNK_ROWS {
+                        let Some(row) = rows.next() else { break };
+                        let (key, value) = row.map_err(|e| format!("redb read row: {e}"))?;
+                        table
+                            .insert(key.value(), value.value())
+                            .map_err(|e| format!("redb insert row: {e}"))?;
+                    }
+                }
+                tx.commit().map_err(|e| format!("redb commit scrub: {e}"))?;
+                if rows.peek().is_none() {
+                    break;
+                }
+            }
+        }
+        // The last commit is Immediate: the new file is durable before the
+        // old one is touched.
+        Ok(())
+    };
+    if let Err(e) = copy() {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    // Overwrite the old file in place, then release it.
+    {
+        let mut old = std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .map_err(|e| format!("Failed to open {} for scrubbing: {e}", path.display()))?;
+        let zeros = vec![0u8; 1 << 20];
+        let mut remaining = size_before;
+        while remaining > 0 {
+            let n = remaining.min(zeros.len() as u64) as usize;
+            old.write_all(&zeros[..n])
+                .map_err(|e| format!("Failed to zero {}: {e}", path.display()))?;
+            remaining -= n as u64;
+        }
+        old.sync_all()
+            .map_err(|e| format!("Failed to sync {}: {e}", path.display()))?;
+    }
+    std::fs::rename(&tmp, path)
+        .map_err(|e| format!("Failed to move {} into place: {e}", tmp.display()))?;
+    let size_after = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    Ok((size_before, size_after))
+}
+
 impl RedbStore {
     /// Create a RedbStore backed by a file on disk. No startup compaction;
     /// see `new_file_with_policy` for the path `Db::init_redb_file` takes.

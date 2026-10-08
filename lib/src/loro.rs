@@ -2215,6 +2215,7 @@ mod test {
             signer: "https://localhost/agent".into(),
             loro_update: Some(update.clone()),
             destroy: None,
+            purge: None,
             previous_commit: None,
             is_genesis: None,
             signature: None,

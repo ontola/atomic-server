@@ -84,6 +84,9 @@ pub const SET: &str = "https://atomicdata.dev/properties/set";
 pub const PUSH: &str = "https://atomicdata.dev/properties/push";
 pub const REMOVE: &str = "https://atomicdata.dev/properties/remove";
 pub const DESTROY: &str = "https://atomicdata.dev/properties/destroy";
+/// With `destroy`: erase every trace of the resource, not just its current
+/// state. See `planning/purge.md`.
+pub const PURGE: &str = "https://atomicdata.dev/properties/purge";
 pub const LORO_UPDATE: &str = "https://atomicdata.dev/properties/loroUpdate";
 pub const SIGNER: &str = "https://atomicdata.dev/properties/signer";
 pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";

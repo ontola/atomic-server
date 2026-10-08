@@ -518,6 +518,43 @@ impl Resource {
         self.save_as(agent, store).await
     }
 
+    /// Erases the resource, its children and every trace of them
+    /// (`planning/purge.md`) with a signed `destroy` + `purge` commit by the
+    /// store's default agent. Unlike [`Self::destroy`], rights are enforced
+    /// here: only the owner of the resource's drive may purge.
+    pub async fn purge(
+        &mut self,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let agent = store.get_default_agent()?;
+        self.purge_as(&agent, store).await
+    }
+
+    /// [`Self::purge`] signed by an explicit agent.
+    pub async fn purge_as(
+        &mut self,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let mut builder = CommitBuilder::new(self.subject.clone());
+        builder.purge(true);
+        let commit = builder.sign(agent, store, self).await?;
+        let opts = CommitOpts {
+            validate_schema: false,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            validate_loro_causality: false,
+            update_index: true,
+            source_id: None,
+        };
+        store
+            .apply_commit(commit, &opts)
+            .await
+            .map_err(|e| format!("Failed to purge {} : {}", self.subject, e).into())
+    }
+
     /// Gets the children of this resource.
     #[tracing::instrument(skip(store))]
     pub async fn get_children(&self, store: &impl Storelike) -> AtomicResult<Vec<Resource>> {
@@ -1348,6 +1385,7 @@ impl Resource {
                 signer,
                 loro_update: None,
                 destroy: Some(false),
+                purge: None,
                 created_at: crate::utils::now(),
                 previous_commit: None,
                 is_genesis: None,

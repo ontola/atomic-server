@@ -597,6 +597,16 @@
     "https://atomicdata.dev/properties/shortname": "destroy"
   },
   {
+    "@id": "https://atomicdata.dev/properties/purge",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Only together with `destroy`. If set to true, the Subject resource (and its children) is erased completely: its Loro history, every earlier commit and envelope about it, search and index entries, and file bytes no other resource references. This commit stays behind as a value-free tombstone. Only the owner of the drive may purge.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "purge"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/documents/elements",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/description": "Set of sections in a document",
@@ -1044,6 +1054,7 @@
     ],
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/destroy",
+      "https://atomicdata.dev/properties/purge",
       "https://atomicdata.dev/properties/isGenesis",
       "https://atomicdata.dev/properties/previousCommit",
       "https://atomicdata.dev/properties/loroUpdate"

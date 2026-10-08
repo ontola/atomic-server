@@ -96,6 +96,10 @@ fn prefix(subject: &str) -> Vec<u8> {
     key
 }
 
+pub(crate) fn envelope_key(subject: &str, created_at: i64, signature: &str) -> Vec<u8> {
+    key(subject, created_at, signature)
+}
+
 fn key(subject: &str, created_at: i64, signature: &str) -> Vec<u8> {
     let mut key = prefix(subject);
     key.extend_from_slice(&(created_at.max(0) as u64).to_be_bytes());
@@ -137,6 +141,20 @@ pub fn record_ops(
     let subject = response.commit.subject.as_str();
     let json = response.commit_resource.to_json_ad(None)?;
     let new_key = key(subject, response.commit.created_at, signature);
+
+    // A purge keeps exactly one envelope: its own, which holds no values. No
+    // older envelope may be written or kept beside it, including the genesis
+    // that retention `all` would otherwise materialize below; the older rows
+    // are deleted by `Db::queue_purge`.
+    if response.commit.purge == Some(true) {
+        transaction.push(Operation {
+            tree: Tree::Envelopes,
+            method: Method::Insert,
+            key: new_key,
+            val: Some(json.into_bytes()),
+        });
+        return Ok(());
+    }
 
     if genesis_is_kept_as_row(response) {
         return Ok(());
@@ -317,8 +335,19 @@ pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> 
     store.kv.apply_batch(&ops)
 }
 
+/// The keys of every retained envelope of a resource, for a purge to delete.
+pub(crate) fn envelope_keys(store: &Db, subject: &str) -> Vec<Vec<u8>> {
+    store
+        .kv
+        .scan_prefix(Tree::Envelopes, &prefix(subject))
+        .flatten()
+        .map(|(k, _)| k)
+        .collect()
+}
+
 /// Drop every retained envelope of a resource. Not called on destroy: the
 /// destroy envelope is the proof a peer needs (`SYNC_DIFF.removeCommits`).
+/// A purge deletes the older ones and keeps its own value-free envelope.
 pub fn clear_envelopes(store: &Db, subject: &str) {
     for (k, _) in store
         .kv

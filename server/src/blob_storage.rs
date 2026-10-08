@@ -46,6 +46,12 @@ impl BlobBackend for ObjectBlobBackend {
             Err(error) => Err(error.to_string().into()),
         }
     }
+    async fn delete(&self, key: &[u8]) -> AtomicResult<()> {
+        match self.store.delete(&self.path(key)).await {
+            Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
+            Err(error) => Err(error.to_string().into()),
+        }
+    }
 }
 
 /// Explicit config, usable by embedders without changing process environment.
@@ -119,6 +125,12 @@ pub async fn configure(store: &mut atomic_lib::Db) -> AtomicResult<()> {
             migrated_blobs = count,
             "S3 file storage ready; local blob storage disabled"
         );
+    }
+    // Finish blob deletions a purge started before a crash or a storage error.
+    match store.resume_pending_blob_purges().await {
+        Ok(0) => {}
+        Ok(count) => tracing::info!(count, "finished pending blob purges"),
+        Err(e) => tracing::warn!("could not finish pending blob purges, will retry: {e}"),
     }
     Ok(())
 }
@@ -366,6 +378,9 @@ mod tests {
             }
         }
         async fn size(&self, _: &[u8]) -> AtomicResult<Option<u64>> {
+            Err("storage unavailable".into())
+        }
+        async fn delete(&self, _: &[u8]) -> AtomicResult<()> {
             Err("storage unavailable".into())
         }
     }

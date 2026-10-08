@@ -14,6 +14,9 @@ pub trait BlobBackend: Send + Sync {
     async fn put(&self, key: &[u8], bytes: &[u8]) -> AtomicResult<()>;
     /// Metadata only: usage accounting must not download every file.
     async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>>;
+    /// Remove the object. Deleting a missing key succeeds. Used by purge
+    /// (`Db::purge_unreferenced_blobs`) and nowhere else.
+    async fn delete(&self, key: &[u8]) -> AtomicResult<()>;
 }
 
 impl Db {
@@ -28,6 +31,16 @@ impl Db {
         match &self.blob_backend {
             Some(backend) => backend.put(key, bytes).await,
             None => self.kv.insert(Tree::Blobs, key, bytes),
+        }
+    }
+
+    /// Remove a blob. Only purge calls this: blobs are content-addressed and
+    /// otherwise immutable. Callers must have checked that nothing references
+    /// the hash (see [`Self::purge_unreferenced_blobs`]).
+    pub async fn delete_blob(&self, key: &[u8]) -> AtomicResult<()> {
+        match &self.blob_backend {
+            Some(backend) => backend.delete(key).await,
+            None => self.kv.remove(Tree::Blobs, key),
         }
     }
 
@@ -54,6 +67,16 @@ impl Db {
     /// Shared by the HTTP download route and the sync `BLOB_REQUEST` frame:
     /// the hash is not a capability on either transport.
     pub async fn readable_blob_referrers(
+        &self,
+        hash_hex: &str,
+        for_agent: &ForAgent,
+    ) -> AtomicResult<Vec<Resource>> {
+        self.blob_referrers(hash_hex, for_agent).await
+    }
+
+    /// The lookup behind [`Self::readable_blob_referrers`]; with
+    /// `ForAgent::Sudo` it lists every referrer, readable or not.
+    async fn blob_referrers(
         &self,
         hash_hex: &str,
         for_agent: &ForAgent,
@@ -101,6 +124,38 @@ impl Db {
         self.readable_blob_referrers(&hex::encode(hash), for_agent)
             .await
             .is_ok_and(|found| !found.is_empty())
+    }
+
+    /// Delete the blobs `candidates` (hex BLAKE3 hashes) that no remaining
+    /// resource references, after a purge removed the referrers. Uses the
+    /// same referrer lookup as [`Self::readable_blob_referrers`], as `Sudo`
+    /// (every referrer counts, readable or not). A blob some other resource
+    /// still points at is kept. Returns the hashes that were deleted.
+    ///
+    /// Not transactional with the graph: a File created for the same bytes
+    /// between the lookup and the delete loses its content. Purge is rare and
+    /// this window is a few milliseconds.
+    pub async fn purge_unreferenced_blobs(
+        &self,
+        candidates: &[String],
+    ) -> AtomicResult<Vec<String>> {
+        let mut deleted = Vec::new();
+        for hash_hex in candidates {
+            let Ok(key) = hex::decode(hash_hex) else {
+                continue;
+            };
+            if key.len() != 32
+                || !self
+                    .blob_referrers(hash_hex, &ForAgent::Sudo)
+                    .await?
+                    .is_empty()
+            {
+                continue;
+            }
+            self.delete_blob(&key).await?;
+            deleted.push(hash_hex.clone());
+        }
+        Ok(deleted)
     }
 
     pub async fn has_blob(&self, key: &[u8]) -> AtomicResult<bool> {
