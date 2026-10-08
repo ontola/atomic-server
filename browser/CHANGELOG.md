@@ -6,6 +6,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 - Calendar: the repeat "Last day" date keeps focus while you type and is saved when you leave the field or press Enter, instead of after every keystroke (#2137).
 - Documents: after mentioning a resource with `@` or the toolbar button, the caret sits in a paragraph after the card (one is added if needed), so typing no longer replaces the card (#2139).
+
+- Forms: without a server the Summary tab says that summaries need a server, instead of suggesting to check the connection (#2119).
+- Dashboard: a Count over no rows shows 0 instead of an em dash (#2111).
+
 - Share dialog: the role for new invites (email field and Copy invite link) is a single-click Read / Write switch in the same style as the Public switch, instead of a Can write dropdown.
 - Calendar: changing only the start or end time of a multi-day timed event keeps its end date (#2089).
 - Tables: a JSON filter value is normalized (keys sorted, no whitespace) when you leave the field, so the exact text of a saved value matches its row (#2093).
