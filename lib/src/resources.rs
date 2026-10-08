@@ -1492,7 +1492,9 @@ impl Resource {
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
         let full_prop = store.get_property(&property).await?;
-        if let Some(allowed) = full_prop.allows_only {
+        // An empty `allowsOnly` is a SelectProperty whose options live in the
+        // class constraint map; it restricts nothing here.
+        if let Some(allowed) = full_prop.allows_only.filter(|a| !a.is_empty()) {
             let error = Err(format!(
                 "Property '{}' does not allow value '{}'. Allowed: {:?}",
                 property, value, allowed
