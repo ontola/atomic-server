@@ -918,7 +918,7 @@ function ConnectTrigger({
  * unreviewed lens is listed, disabled, with the lens that holds it back.
  */
 function ConnectMenu({
-  offers: { integrations, lensNames },
+  offers: { integrations, lensNames, refresh },
   typesBySubject,
   createView,
   setActiveView,
@@ -978,7 +978,13 @@ function ConnectMenu({
       Trigger={ConnectTrigger}
       items={items}
       searchable={false}
-      bindActive={active => active && refreshApps()}
+      bindActive={active => {
+        if (!active) return;
+        // Lenses too: one approved since this table opened (Q-089) should
+        // stop showing as waiting without a page reload.
+        refreshApps();
+        refresh();
+      }}
     />
   );
 }

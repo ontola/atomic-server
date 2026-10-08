@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import type { DriveApp } from '@chunks/AppPage/useDriveApps';
 import { loadPieces } from './loadPieces';
@@ -9,18 +9,26 @@ export interface PieceOffers {
   integrations: Offer[];
   /** Lens subject to its name, to explain an offer that goes through one. */
   lensNames: Map<string, string>;
+  /**
+   * Reads the pieces and lenses again. The Connect menu calls it as it opens,
+   * so a lens approved since the table was opened is picked up without a
+   * reload.
+   */
+  refresh: () => void;
 }
 
 const EMPTY: PieceOffers = {
   views: [],
   integrations: [],
   lensNames: new Map(),
+  refresh: () => undefined,
 };
 
 /**
  * What `rowClass`'s table offers, split into views and integrations. Reloaded
  * whenever the drive's apps change (`useDriveApps` already watches those, and
- * refreshes when the menus open); lenses are read alongside.
+ * refreshes when the menus open) and on `refresh()`; lenses are read
+ * alongside.
  *
  * `enabled` false returns nothing and reads nothing, so tables pay no cost
  * unless the exploration is switched on.
@@ -32,7 +40,9 @@ export function usePieceOffers(
   enabled: boolean,
 ): PieceOffers {
   const store = useStore();
-  const [offers, setOffers] = useState<PieceOffers>(EMPTY);
+  const [offers, setOffers] = useState<Omit<PieceOffers, 'refresh'>>(EMPTY);
+  const [generation, setGeneration] = useState(0);
+  const refresh = useCallback(() => setGeneration(g => g + 1), []);
   const appsKey = JSON.stringify(apps);
 
   useEffect(() => {
@@ -56,9 +66,9 @@ export function usePieceOffers(
     return () => {
       cancelled = true;
     };
-  }, [store, drive, appsKey, rowClass, enabled]);
+  }, [store, drive, appsKey, rowClass, enabled, generation]);
 
-  return enabled ? offers : EMPTY;
+  return enabled ? { ...offers, refresh } : EMPTY;
 }
 
 /** "via Time entry ↔ Clockify time entry", or undefined for a native match. */
