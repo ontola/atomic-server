@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   getAlongPath,
   lensGet,
+  LENS_INTERPRETER_SOURCE,
   lensPut,
-  parseLensMapping,
+  parseMapping,
+  storedMapping,
   type LensMapping,
 } from './lens';
 
@@ -14,7 +16,7 @@ const DESCRIPTION = 'https://drive.example/properties/clockify-description';
 const C_START = 'https://drive.example/properties/clockify-start';
 const C_BILLABLE = 'https://drive.example/properties/clockify-billable';
 
-const mapping: LensMapping = parseLensMapping({
+const mapping: LensMapping = parseMapping({
   version: 1,
   fields: [
     { source: NAME, target: DESCRIPTION },
@@ -83,21 +85,60 @@ describe('lens', () => {
     ).toEqual({ title: 'Write the report' });
   });
 
-  it('rejects overlapping ownership', () => {
+  it('rejects overlapping ownership and unknown converters', () => {
     expect(() =>
-      parseLensMapping({
+      parseMapping({
         version: 1,
         fields: [
           { source: NAME, target: DESCRIPTION },
           { source: START, target: DESCRIPTION },
         ],
       }),
-    ).toThrow(/Two fields write/);
+    ).toThrow(expect.objectContaining({ code: 'overlap' }));
     expect(() =>
-      parseLensMapping({
+      parseMapping({
         version: 1,
         fields: [{ source: NAME, target: DESCRIPTION, convert: 'eval' }],
       }),
-    ).toThrow(/Unknown converter/);
+    ).toThrow(expect.objectContaining({ code: 'bad-mapping' }));
+  });
+
+  it('runs mapping version 2: pointers, read-only fields', () => {
+    const v2 = parseMapping({
+      version: 2,
+      fields: [
+        { source: '/timeInterval/start', target: START, convert: 'iso-to-ms' },
+        { source: '/description', target: NAME, readOnly: true },
+      ],
+    });
+    const record = {
+      description: 'Imported',
+      timeInterval: { start: '2026-10-05T09:00:00.000Z' },
+    };
+
+    expect(lensGet(v2, record)).toEqual({
+      [START]: Date.UTC(2026, 9, 5, 9, 0),
+      [NAME]: 'Imported',
+    });
+    expect(() => lensPut(v2, { [NAME]: 'Renamed' }, record)).toThrow(
+      expect.objectContaining({ code: 'read-only' }),
+    );
+  });
+
+  it('refuses a mapping version it cannot run', () => {
+    expect(() =>
+      parseMapping({ version: 3, fields: [{ source: NAME, target: NAME }] }),
+    ).toThrow(expect.objectContaining({ code: 'bad-mapping' }));
+  });
+
+  it('stores mappings as plain data, so a frame can receive them', () => {
+    expect(structuredClone(storedMapping(mapping))).toEqual(
+      storedMapping(mapping),
+    );
+  });
+
+  it('gives the interpreter as script text for a frame', () => {
+    expect(LENS_INTERPRETER_SOURCE).toMatch(/^function lensGet\(/m);
+    expect(LENS_INTERPRETER_SOURCE).not.toMatch(/^export /m);
   });
 });

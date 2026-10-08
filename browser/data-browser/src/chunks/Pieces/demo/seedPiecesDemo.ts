@@ -12,6 +12,7 @@ import {
 import { handOverAppKey } from '@chunks/AppPage/appAgent';
 import { piecesSchema } from '../piecesSchema';
 import { getAlongPath, type LensMapping } from '../lens';
+import { lensReviewDigest } from '../lensReview';
 import { timesheetSource } from './timesheetSource';
 import { integrationSource } from './integrationSource';
 
@@ -220,8 +221,14 @@ export async function seedPiecesDemo(
     [pieces.properties['lens-source']]: c['time-entry'],
     [pieces.properties['lens-target']]: c['clockify-time-entry'],
     [pieces.properties['lens-mapping']]: mapping as unknown as JSONValue,
-    // Already reviewed, so Clockify is offered on Hours from the start.
+    // Already reviewed, so Clockify is offered on Hours from the start. The
+    // digest binds the approval to this content (lensReview.ts).
     [pieces.properties['lens-review']]: 'approved',
+    [pieces.properties['lens-review-digest']]: await lensReviewDigest({
+      source: c['time-entry'],
+      target: c['clockify-time-entry'],
+      mapping,
+    }),
   });
 
   // A second, drive-local lens nobody has reviewed yet (Q-089). Toggl shows on

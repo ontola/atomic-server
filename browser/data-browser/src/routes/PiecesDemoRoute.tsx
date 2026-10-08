@@ -1,9 +1,8 @@
 // @wc-ignore-file
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState, type JSX } from 'react';
-import { findSchema, type Store } from '@tomic/lib';
 import { useStore } from '@tomic/react';
-import { piecesSchema } from '@chunks/Pieces/piecesSchema';
+import { approveLens } from '@chunks/Pieces/lensReview';
 import { ContainerFull } from '../components/Containers';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
@@ -18,20 +17,6 @@ import {
 } from '@chunks/Pieces/piecesFlag';
 import { useDevDrive } from '../hooks/useDevDrive';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
-
-/**
- * Reviewing a drive-local lens (Q-089). In a real flow this would sit on the
- * lens's own page, showing the mapping; here one button is enough.
- */
-async function approveLens(store: Store, drive: string, subject: string) {
-  const schema = await findSchema(store, drive, piecesSchema());
-  const review = schema.properties?.['lens-review'];
-  if (!review) return;
-
-  const lens = await store.getResource(subject);
-  await lens.set(review, 'approved');
-  await lens.save();
-}
 
 /** What the tester entry seeded into a drive, so a second visit does not seed again. */
 const seededKey = (drive: string) => `${PIECES_FLAG_KEY}.seeded:${drive}`;

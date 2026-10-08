@@ -1,0 +1,150 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/todoist-task-issue-v1",
+  "lensFormat": 1,
+  "release": "https://ontola.github.io/atomic-plugins/ontology/lenses/v1",
+  "name": "Todoist task ↔ Issue",
+  "description": "An active Todoist task (API v1), as syncables reads it through the Todoist overlays, and the shared issue-v1 class. Name and body are writable; completion and the due day are read-only.",
+  "source": {
+    "record": {
+      "provider": "todoist.com",
+      "resource": "task",
+      "openapi": "APIs/todoist.com/1"
+    }
+  },
+  "target": {
+    "class": "https://ontola.github.io/atomic-plugins/ontology/classes/issue-v1"
+  },
+  "mapping": {
+    "version": 2,
+    "fields": [
+      {
+        "source": "/content",
+        "target": "https://atomicdata.dev/properties/name"
+      },
+      {
+        "source": "/description",
+        "target": "https://atomicdata.dev/task/v1/body"
+      },
+      {
+        "source": "/checked",
+        "target": "https://atomicdata.dev/task/v1/status",
+        "convert": "map",
+        "args": {
+          "pairs": [
+            [
+              false,
+              [
+                "https://atomicdata.dev/task/v1/todo"
+              ]
+            ],
+            [
+              true,
+              [
+                "https://atomicdata.dev/task/v1/done"
+              ]
+            ]
+          ]
+        },
+        "readOnly": true
+      },
+      {
+        "source": "/due/date",
+        "target": "https://atomicdata.dev/task/v1/due-date",
+        "convert": "day-of",
+        "readOnly": true
+      }
+    ]
+  },
+  "limits": [
+    "No domain guard: the code lens refuses deleted tasks, an empty content and a non-boolean checked; this mapping maps any record it is given.",
+    "A task without a due date has no due-date here; the code lens also removes a stale due-date from the row, which a v2 mapping cannot express.",
+    "Doing and Blocked have no Todoist equivalent: a row with either status cannot be read back through this lens (unmapped-value).",
+    "Assignee, labels, priority and parent are not mapped.",
+    "A task whose due date has a fixed time zone (a date-time ending in Z or an offset) cannot be read through this lens: get refuses the whole task with bad-value, because the due date's day depends on the time zone, which day-of does not apply. The code lens takes its UTC day instead."
+  ],
+  "implementation": "integrations/issue-tracker/devonian/todoist/lens/index.ts",
+  "examples": [
+    {
+      "source": {
+        "id": "task-a",
+        "content": "Original",
+        "description": "**Body**",
+        "checked": false,
+        "labels": [
+          "invented"
+        ],
+        "due": {
+          "date": "2026-10-08T18:00:00",
+          "timezone": "Europe/Amsterdam",
+          "is_recurring": true,
+          "string": "every Thursday"
+        }
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "Original",
+        "https://atomicdata.dev/task/v1/body": "**Body**",
+        "https://atomicdata.dev/task/v1/status": [
+          "https://atomicdata.dev/task/v1/todo"
+        ],
+        "https://atomicdata.dev/task/v1/due-date": "2026-10-08"
+      },
+      "edits": [
+        {
+          "target": {
+            "https://atomicdata.dev/properties/name": "Edited",
+            "https://atomicdata.dev/task/v1/body": "",
+            "https://atomicdata.dev/task/v1/status": [
+              "https://atomicdata.dev/task/v1/todo"
+            ],
+            "https://atomicdata.dev/task/v1/due-date": "2026-10-08"
+          },
+          "source": {
+            "id": "task-a",
+            "content": "Edited",
+            "description": "",
+            "checked": false,
+            "labels": [
+              "invented"
+            ],
+            "due": {
+              "date": "2026-10-08T18:00:00",
+              "timezone": "Europe/Amsterdam",
+              "is_recurring": true,
+              "string": "every Thursday"
+            }
+          }
+        },
+        {
+          "target": {
+            "https://atomicdata.dev/task/v1/status": [
+              "https://atomicdata.dev/task/v1/done"
+            ]
+          },
+          "error": "read-only"
+        },
+        {
+          "target": {
+            "https://atomicdata.dev/task/v1/due-date": "2026-10-09"
+          },
+          "error": "read-only"
+        }
+      ]
+    },
+    {
+      "source": {
+        "id": "task-b",
+        "content": "Done already",
+        "description": "",
+        "checked": true,
+        "due": null
+      },
+      "target": {
+        "https://atomicdata.dev/properties/name": "Done already",
+        "https://atomicdata.dev/task/v1/body": "",
+        "https://atomicdata.dev/task/v1/status": [
+          "https://atomicdata.dev/task/v1/done"
+        ]
+      }
+    }
+  ]
+}
