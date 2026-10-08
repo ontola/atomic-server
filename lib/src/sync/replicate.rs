@@ -250,14 +250,16 @@ async fn drive_exchange(
                 // The remote imported a resource referencing a blob it lacks.
                 // Blobs are only ever served on request — it will not accept an
                 // unsolicited one.
-                match store.get_blob(&hash).await {
-                    Ok(Some(bytes)) => {
-                        client
-                            .send_binary(protocol::encode_blob_response(&hash, &bytes))
-                            .await?;
-                        outcome.blobs_served += 1;
-                    }
-                    _ => tracing::warn!("[replicate] remote asked for a blob we don't have"),
+                // Only what `export_as` may read leaves this server, blobs
+                // included: the hash alone is not a capability.
+                let answer = engine::answer_blob_request(store, &hash, export_as).await;
+                if answer.first() == Some(&protocol::tag::BLOB_RESPONSE) {
+                    client.send_binary(answer).await?;
+                    outcome.blobs_served += 1;
+                } else {
+                    tracing::warn!(
+                        "[replicate] remote asked for a blob we don't have or {export_as:?} may not read"
+                    );
                 }
             }
             // We are a pusher: whatever the remote offers us, we don't import.

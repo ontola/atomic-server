@@ -332,6 +332,107 @@ mod peer_sync_tests {
         assert_eq!(blob_b, test_content);
     }
 
+    /// The hash of a blob is not a capability: a `BLOB_REQUEST` is only
+    /// answered for an agent that can read a resource referencing the blob,
+    /// and a refusal is indistinguishable from "no such blob".
+    #[tokio::test]
+    async fn blob_request_requires_read_access_to_a_referrer() {
+        let db = Db::init_temp("sync_blob_request_acl").await.unwrap();
+        let owner = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(owner.clone());
+
+        let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::IS_A.into(),
+            crate::Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+        );
+        builder.set(
+            crate::urls::NAME.into(),
+            crate::Value::String("Private".into()),
+        );
+        for prop in [crate::urls::WRITE, crate::urls::READ] {
+            builder.set(
+                prop.into(),
+                crate::Value::ResourceArray(vec![owner.subject.to_string().into()]),
+            );
+        }
+        let commit = crate::commit::Commit::create_did(builder, &owner, &db)
+            .await
+            .unwrap();
+        let drive_did = commit.subject.to_string();
+        let opts = crate::commit::CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_rights: false,
+            update_index: true,
+            ..crate::commit::CommitOpts::no_validations_no_index()
+        };
+        db.apply_commit(commit, &opts).await.unwrap();
+        db.set_active_drive(&drive_did).unwrap();
+
+        let content = b"private bytes";
+        let hash = blake3::hash(content);
+        let hash_hex = hash.to_hex().to_string();
+        db.kv
+            .insert(crate::db::trees::Tree::Blobs, hash.as_bytes(), content)
+            .unwrap();
+        db.create_resource(
+            crate::urls::FILE,
+            &drive_did,
+            "secret.txt",
+            Some(vec![
+                (
+                    crate::urls::BLOB,
+                    crate::Value::AtomicUrl(format!("did:ad:blob:{hash_hex}").into()),
+                ),
+                (
+                    crate::urls::INTERNAL_ID,
+                    crate::Value::String(hash_hex.clone()),
+                ),
+            ]),
+        )
+        .await
+        .unwrap();
+
+        let request = crate::sync::protocol::encode_blob_request(hash.as_bytes());
+        let ask = |agent: ForAgent| {
+            let db = db.clone();
+            let request = request.clone();
+            async move {
+                let mut agent = agent;
+                crate::sync::engine::handle_frame(&request, &db, &mut agent).await
+            }
+        };
+
+        let stranger = crate::agents::Agent::new(Some("Mallory")).unwrap();
+        let denied_public = ask(ForAgent::Public).await;
+        let denied_stranger = ask(ForAgent::AgentSubject(stranger.subject.clone())).await;
+        for denied in [&denied_public, &denied_stranger] {
+            assert_eq!(denied.len(), 1);
+            assert_eq!(denied[0][0], crate::sync::protocol::tag::ERROR);
+        }
+
+        // An unknown hash answers with the very same frame as a refusal.
+        let unknown = blake3::hash(b"never stored");
+        let missing = crate::sync::engine::handle_frame(
+            &crate::sync::protocol::encode_blob_request(unknown.as_bytes()),
+            &db,
+            &mut ForAgent::AgentSubject(owner.subject.clone()),
+        )
+        .await;
+        assert_eq!(missing, denied_stranger, "refusal must equal not-found");
+
+        for allowed in [
+            ask(ForAgent::AgentSubject(owner.subject.clone())).await,
+            ask(ForAgent::Sudo).await,
+        ] {
+            assert_eq!(allowed.len(), 1);
+            assert_eq!(allowed[0][0], crate::sync::protocol::tag::BLOB_RESPONSE);
+            let resp = crate::sync::protocol::decode_blob_response(&allowed[0][1..]).unwrap();
+            assert_eq!(resp.bytes, content);
+        }
+    }
+
     /// F4 (planning/unified-sync.md): a `BLOB_RESPONSE` naming a hash the
     /// node never issued a `BLOB_REQUEST` for must be rejected outright,
     /// not stored unconditionally — otherwise a peer can push arbitrary

@@ -5,7 +5,6 @@ use crate::{
 use actix_web::http::header::{ContentDisposition, DispositionType};
 use actix_web::{web, HttpRequest, HttpResponse};
 use atomic_lib::agents::ForAgent;
-use atomic_lib::storelike::Query;
 use atomic_lib::{urls, Resource, Storelike, Subject, Value};
 
 use serde::Deserialize;
@@ -233,48 +232,18 @@ async fn blob_requester(
 }
 
 /// The resources that reference the blob `hash_hex` and that `for_agent` may
-/// read: Files whose whole-file `internalId` is the hash, resources whose
-/// `blob` is the hash, and chunked Files listing it in `chunks`. Empty means
-/// the requester has no business with these bytes. More than one File can
-/// share a hash: the same bytes uploaded twice are stored once, so reading any
-/// one of them is enough. Every lookup is an index read on (property, value);
-/// nothing scans the store.
+/// read; empty means the requester has no business with these bytes. The
+/// lookup is shared with the sync `BLOB_REQUEST` frame
+/// (`Db::readable_blob_referrers`).
 async fn readable_referrers(
     hash_hex: &str,
     for_agent: &ForAgent,
     appstate: &AppState,
 ) -> AtomicServerResult<Vec<Resource>> {
-    let mut queries = vec![Query::new_prop_val(urls::INTERNAL_ID, hash_hex)];
-    // Stored references are canonical (`atomic:blob:`), older ones `did:ad:blob:`.
-    for prefix in [atomic_lib::identifiers::ATOMIC_BLOB_PREFIX, "did:ad:blob:"] {
-        for property in [urls::BLOB, urls::CHUNKS] {
-            let mut q = Query::new();
-            q.property = Some(property.to_string());
-            q.value = Some(Value::AtomicUrl(format!("{prefix}{hash_hex}").into()));
-            queries.push(q);
-        }
-    }
-
-    let mut found: Vec<Resource> = Vec::new();
-    for mut q in queries {
-        q.for_agent = for_agent.clone();
-        for resource in appstate.store.query(&q).await?.resources {
-            if !found
-                .iter()
-                .any(|r| r.get_subject() == resource.get_subject())
-            {
-                found.push(resource);
-            }
-        }
-        // One readable referrer is enough: stop at the first query that has
-        // one, so the common case (an upload carries `internalId`) is a
-        // single index lookup.
-        if !found.is_empty() {
-            break;
-        }
-    }
-
-    Ok(found)
+    Ok(appstate
+        .store
+        .readable_blob_referrers(hash_hex, for_agent)
+        .await?)
 }
 
 /// The first chunked File among `resources`, so the content-addressed URL works
