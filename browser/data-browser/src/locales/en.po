@@ -8740,7 +8740,6 @@ msgid "AI settings…"
 msgstr "AI settings…"
 
 #: src/actions/appActions.ts
-#: src/components/SideBar/AccountMenu.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "User"
@@ -12262,6 +12261,14 @@ msgstr "Add your passkey here. A passkey added in the app also unlocks your encr
 #: src/chunks/TablePage/TableFilterChip.tsx
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
+
+#: src/components/SideBar/AccountMenu.tsx
+msgid "Signed in"
+msgstr "Signed in"
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
+msgstr "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Could not turn this on. Please try again."
