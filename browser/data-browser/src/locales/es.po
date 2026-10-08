@@ -9140,7 +9140,7 @@ msgstr ""
 msgid "Set up"
 msgstr ""
 
-#. 0: manifest.destination.table.name
+#. 0: names[0]
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates a {0} table for this importer. Nothing is imported yet."
 msgstr ""
@@ -12279,6 +12279,7 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
 msgid "See Cloud Server plans"
@@ -12295,4 +12296,9 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+msgstr ""
+
+#. 0: names.length
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr ""
