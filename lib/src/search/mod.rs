@@ -446,14 +446,14 @@ pub fn query_timed(
     // that pass the scope filter are scored (and have their length read); a
     // term's document frequency still counts every posting, so the scores of
     // surviving documents are exactly what an unscoped run would give them.
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     let mut per_token: Vec<HashMap<DocId, f32>> = Vec::with_capacity(tokens.len());
     for token in &tokens {
         per_token.push(score_token(store, token, n_docs, &mut candidates)?);
     }
 
     // AND: a doc must score on every query token.
-    let ranking = std::time::Instant::now();
+    let ranking = web_time::Instant::now();
     let mut ids: Vec<DocId> = per_token[0].keys().copied().collect();
     for map in per_token.iter().skip(1) {
         ids.retain(|id| map.contains_key(id));
@@ -535,7 +535,7 @@ impl<'a> Candidates<'a> {
         if let Some(known) = self.seen.get(&id) {
             return Ok(known.as_ref().map(|c| c.len));
         }
-        let started = std::time::Instant::now();
+        let started = web_time::Instant::now();
         let verdict = self.judge(id)?;
         self.spent += started.elapsed();
         let len = verdict.as_ref().map(|c| c.len);
