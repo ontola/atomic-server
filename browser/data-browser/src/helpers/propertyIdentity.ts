@@ -109,9 +109,12 @@ export async function createContentAddressedFromDraft(
     contentAddressedProperty: true,
   });
 
-  if (property.new) {
-    await property.save();
-  }
+  // Not `if (property.new)`: signing the genesis commit already clears `new`,
+  // while the commit itself stays parked on the resource until `save()`. Gating
+  // on `new` skipped the save, so the Property existed only in this session
+  // and every other load found nothing. `save()` is a no-op for a Property
+  // that is already known and clean.
+  await property.save();
 
   return property;
 }

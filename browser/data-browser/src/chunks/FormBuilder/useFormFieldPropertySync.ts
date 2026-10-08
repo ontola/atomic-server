@@ -1,7 +1,10 @@
 import {
+  canonicalizeScheme,
   core,
   forms,
+  parseConstraints,
   Resource,
+  setClassConstraint,
   Store,
   useResource,
   useStore,
@@ -86,6 +89,31 @@ async function takenShortnames(
   return taken;
 }
 
+/**
+ * Gives `to` the entry `from` has in the class's `constraints` map and drops
+ * `from`'s. Does not save; the caller saves the class.
+ */
+async function moveClassConstraint(
+  dataClass: Resource,
+  from: string,
+  to: string,
+): Promise<void> {
+  const raw = dataClass.get(core.properties.constraints);
+
+  if (raw === undefined) {
+    return;
+  }
+
+  const entry = parseConstraints(raw).get(canonicalizeScheme(from));
+
+  if (!entry) {
+    return;
+  }
+
+  await setClassConstraint(dataClass, to, entry);
+  await setClassConstraint(dataClass, from, undefined);
+}
+
 /** `base`, or `base-2` / `base-3` / … if that is already taken. */
 function uniqueShortname(base: string, taken: Set<string>): string {
   const root = base || FALLBACK_SHORTNAME;
@@ -155,7 +183,9 @@ export async function createFormField(
       ? (
           await createSelectPropertyOnClass(store, dataClass, {
             shortname,
-            tags: (opts.choices ?? DEFAULT_CHOICE_TAGS).map(name => ({ name })),
+            tags: (opts.choices ?? DEFAULT_CHOICE_TAGS).map(name => ({
+              name,
+            })),
             // Options and the pick limit go to the data class's constraints
             // for the column (`enum`, `maxItems: 1`), not onto the Property.
             max: SINGLE_CHOICE_FIELD_TYPES.includes(opts.type) ? 1 : undefined,
@@ -279,6 +309,9 @@ export function useFormFieldPropertySync(
         property.get(core.properties.parent) as string,
         draft,
       );
+      // The class's constraints (a choice question's options, its pick limit)
+      // are keyed by Property, so they follow the question to the new one.
+      await moveClassConstraint(dataClass, propertySubject, created.subject);
       await replacePropertyReferences(store, propertySubject, created.subject, [
         dataClass,
       ]);
