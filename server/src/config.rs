@@ -105,6 +105,15 @@ pub struct Opts {
     #[clap(long, default_value = "::", env = "ATOMIC_IP")]
     pub ip: IpAddr,
 
+    /// The public URL of this server, scheme included, e.g. `https://atomic.example.com`.
+    /// Set this when a reverse proxy or tunnel terminates TLS (or changes the
+    /// port) in front of atomic-server: `--https` only means that atomic-server
+    /// terminates TLS itself, so without this the server advertises itself as
+    /// `http://` and browsers block the resulting requests as mixed content.
+    /// If you leave this out, it is generated from `domain`, `port` and `https`.
+    #[clap(long, env = "ATOMIC_SERVER_URL")]
+    pub server_url: Option<String>,
+
     /// Use HTTPS instead of HTTP.
     /// Will get certificates from LetsEncrypt fully automated.
     #[clap(long, env = "ATOMIC_HTTPS")]
@@ -418,6 +427,12 @@ pub struct Config {
 impl Config {
     /// Returns the origin URL (scheme + domain + port) based on the configuration.
     pub fn get_origin(&self) -> String {
+        if let Some(url) = self.opts.server_url.as_deref().map(str::trim) {
+            if !url.is_empty() {
+                return url.trim_end_matches('/').to_string();
+            }
+        }
+
         let proto = if self.opts.https { "https" } else { "http" };
         let host = &self.opts.domain;
         let port = if self.opts.https {
@@ -570,6 +585,15 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         );
     }
 
+    if let Some(url) = opts.server_url.as_deref().map(str::trim) {
+        if !url.is_empty() && !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err(format!(
+                "ATOMIC_SERVER_URL / --server-url must start with http:// or https://, got `{url}`."
+            )
+            .into());
+        }
+    }
+
     // Resolved before anything binds: Owner mode with an unusable owner must
     // fail here, not after the socket is open. Mirrors the `--https` without
     // `--email` refusal above.
@@ -679,6 +703,32 @@ mod tests {
         assert!(!config.compaction.enabled);
         assert_eq!(config.compaction.min_file_bytes, 64 * MIB);
         assert!((config.compaction.min_reclaimable_fraction - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_origin_is_built_from_the_flags_unless_a_server_url_is_given() {
+        let plain = config_from(&["--domain", "atomic.example.de", "--port", "80"]).unwrap();
+        assert_eq!(plain.get_origin(), "http://atomic.example.de");
+
+        // Behind a TLS-terminating proxy: the public scheme wins, and a
+        // trailing slash is not part of an origin.
+        let proxied = config_from(&[
+            "--domain",
+            "atomic.example.de",
+            "--port",
+            "80",
+            "--server-url",
+            "https://atomic.example.de/",
+        ])
+        .unwrap();
+        assert_eq!(proxied.get_origin(), "https://atomic.example.de");
+    }
+
+    #[test]
+    fn a_server_url_without_a_scheme_is_refused() {
+        let err = config_from(&["--server-url", "atomic.example.de"])
+            .expect_err("a bare host is not a URL");
+        assert!(err.to_string().contains("http:// or https://"), "{err}");
     }
 
     #[test]
