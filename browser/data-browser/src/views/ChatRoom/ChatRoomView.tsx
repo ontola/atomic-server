@@ -43,6 +43,11 @@ import { formatCompactDateTime } from '../../helpers/dates/compactDateTime';
 import { ResourceInline } from '../ResourceInline';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { TypingIndicator } from '../../components/Presence/TypingIndicator';
+import { findMentionTrigger, insertMention } from '../../helpers/chatMention';
+import {
+  ChatMentionPicker,
+  type ChatMentionPickerHandle,
+} from './ChatMentionPicker';
 import {
   useSealedMessage,
   type SealedState,
@@ -93,6 +98,10 @@ export function ChatView({
   const internalInputRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = inputRefProp ?? internalInputRef;
   const [scrollToBottomTrigger, setScrollToBottomTrigger] = useState(0);
+  const [caret, setCaret] = useState(0);
+  // Start index of an `@` token closed with Escape; reopens on a new `@`.
+  const [dismissedAt, setDismissedAt] = useState<number>();
+  const pickerRef = useRef<ChatMentionPickerHandle>(null);
 
   const { typers, notifyTyping, stopTyping } = useTypingPresence(threadSubject);
 
@@ -162,7 +171,49 @@ export function ChatView({
     }
   };
 
+  const mentionTrigger = findMentionTrigger(newMessageVal, caret);
+  const openTrigger =
+    mentionTrigger && mentionTrigger.start !== dismissedAt
+      ? mentionTrigger
+      : undefined;
+
+  const handleSelectMention = (subject: string, label: string) => {
+    if (!openTrigger) return;
+    const result = insertMention(newMessageVal, openTrigger, subject, label);
+
+    setNewMessage(result.text);
+    setCaret(result.caret);
+    // Put the caret behind the inserted mention once React has rendered it.
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(result.caret, result.caret);
+    });
+    notifyTyping();
+  };
+
+  const syncCaret: React.ReactEventHandler<HTMLTextAreaElement> = e => {
+    setCaret(e.currentTarget.selectionStart);
+  };
+
   const handleKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = e => {
+    if (openTrigger) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setDismissedAt(openTrigger.start);
+
+        return;
+      }
+
+      if (
+        ['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(e.key) &&
+        pickerRef.current?.onKeyDown(e.key === 'Tab' ? 'Enter' : e.key)
+      ) {
+        e.preventDefault();
+
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -182,6 +233,7 @@ export function ChatView({
     HTMLTextAreaElement
   > = e => {
     setNewMessage(e.target.value);
+    setCaret(e.target.selectionStart);
 
     if (e.target.value === '') {
       stopTyping();
@@ -248,27 +300,38 @@ export function ChatView({
         </Detail>
       )}
       <TypingIndicator typers={typers} />
-      <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
-        <MessageInput
-          aria-label='Chat input'
-          rows={1}
-          ref={inputRef}
-          autoFocus
-          value={newMessageVal}
-          onChange={handleChangeMessageText}
-          onKeyDown={handleKeyDown}
-          onBlur={stopTyping}
-          placeholder={'type a message'}
-        />
-        <SendButton
-          title='Send message [enter]'
-          disabled={disableSend}
-          clean
-          onClick={() => sendMessage()}
-        >
-          Send
-        </SendButton>
-      </MessageForm>
+      <ComposerWrapper>
+        {openTrigger && (
+          <ChatMentionPicker
+            trigger={openTrigger}
+            onSelect={handleSelectMention}
+            handleRef={pickerRef}
+          />
+        )}
+        <MessageForm onSubmit={sendMessage} $viewTransition={viewTransition}>
+          <MessageInput
+            aria-label='Chat input'
+            rows={1}
+            ref={inputRef}
+            autoFocus
+            value={newMessageVal}
+            onChange={handleChangeMessageText}
+            onKeyDown={handleKeyDown}
+            onKeyUp={syncCaret}
+            onClick={syncCaret}
+            onBlur={stopTyping}
+            placeholder={'type a message'}
+          />
+          <SendButton
+            title='Send message [enter]'
+            disabled={disableSend}
+            clean
+            onClick={() => sendMessage()}
+          >
+            Send
+          </SendButton>
+        </MessageForm>
+      </ComposerWrapper>
     </ViewWrapper>
   );
 }
@@ -768,6 +831,11 @@ const MessageInput = styled.textarea`
   min-height: 2rem;
   max-height: 50vh;
   font-family: ${p => p.theme.fontFamily};
+`;
+
+/** Anchors the mention picker to the composer. */
+const ComposerWrapper = styled.div`
+  position: relative;
 `;
 
 /** Wrapper for the new message form */
