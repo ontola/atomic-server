@@ -164,6 +164,11 @@ pub struct Commit {
     /// If set to true, deletes the entire resource
     #[serde(rename = "https://atomicdata.dev/properties/destroy")]
     pub destroy: Option<bool>,
+    /// Only meaningful together with `destroy`: erase every trace of the
+    /// resource (history, earlier commits, envelopes, index rows, unshared
+    /// blobs) and keep only this commit as a value-free tombstone.
+    #[serde(rename = "https://atomicdata.dev/properties/purge")]
+    pub purge: Option<bool>,
     /// Base64 encoded signature of the JSON serialized Commit
     #[serde(rename = "https://atomicdata.dev/properties/signature")]
     pub signature: Option<String>,
@@ -191,6 +196,7 @@ impl std::fmt::Debug for Commit {
                     .map(|v| format!("<{} bytes>", v.len())),
             )
             .field("destroy", &self.destroy)
+            .field("purge", &self.purge)
             .field("signature", &self.signature)
             .field("previous_commit", &self.previous_commit)
             .field("is_genesis", &self.is_genesis)
@@ -336,6 +342,7 @@ impl Commit {
             signer: agent.subject.clone(),
             loro_update,
             destroy: Some(commit_builder.destroy),
+            purge: commit_builder.purge.then_some(true),
             created_at: now,
             previous_commit: None,
             is_genesis: Some(true),
@@ -685,6 +692,22 @@ impl Commit {
         // index read from propvals, which only get materialized when Loro
         // imports fire. A destroy commit is the one exception.
         let is_destroy = commit.destroy.unwrap_or(false);
+        if commit.purge == Some(true) {
+            if !is_destroy {
+                return Err("A purge commit must also set `destroy`.".into());
+            }
+            if commit.loro_update.is_some() {
+                // The tombstone is what stays behind; it must hold no values.
+                return Err("A purge commit cannot carry a `loroUpdate`.".into());
+            }
+            if is_new {
+                return Err(format!(
+                    "Cannot purge {}: it does not exist here, so there is nobody to authorize the purge.",
+                    commit.subject
+                )
+                .into());
+            }
+        }
         if commit.loro_update.is_none() && !is_destroy {
             return Err(format!(
                 "Commit for {} has no `loroUpdate` and is not a destroy. Loro \
@@ -1001,6 +1024,12 @@ impl Commit {
             } else {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
+                if commit.purge == Some(true) {
+                    // Erasure is irreversible and reaches every replica, so
+                    // write access alone is not enough.
+                    crate::hierarchy::check_purge(store, &resource_old, &validate_for.into())
+                        .await?;
+                }
             }
 
             if commit.destroy.unwrap_or(false) && !is_new {
@@ -1109,6 +1138,12 @@ impl Commit {
         // Check if all required props are there
         if opts.validate_schema {
             applied.resource_new.check_required_props(store).await?;
+            if !commit.destroy.unwrap_or(false) {
+                applied
+                    .resource_new
+                    .check_props_conform(&applied.changed_props, store)
+                    .await?;
+            }
         }
 
         let commit_resource: Resource = commit.into_resource(store).await?;
@@ -1293,6 +1328,10 @@ impl Commit {
             Ok(found) => Some(found.to_bool()?),
             Err(_) => None,
         };
+        let purge = match resource.get(urls::PURGE) {
+            Ok(found) => Some(found.to_bool()?),
+            Err(_) => None,
+        };
         let previous_commit = match resource.get(urls::PREVIOUS_COMMIT) {
             Ok(found) => Some(found.to_string()),
             Err(_) => None,
@@ -1310,6 +1349,7 @@ impl Commit {
             signer: signer.into(),
             loro_update,
             destroy,
+            purge,
             previous_commit,
             is_genesis,
             signature: Some(signature),
@@ -1354,6 +1394,9 @@ impl Commit {
             if destroy {
                 resource.set_unsafe(urls::DESTROY.into(), true.into())?;
             }
+        }
+        if self.purge == Some(true) {
+            resource.set_unsafe(urls::PURGE.into(), true.into())?;
         }
         if let Some(previous_commit) = &self.previous_commit {
             resource.set_unsafe(
@@ -1433,6 +1476,8 @@ pub struct CommitBuilderJSON {
     pub subject: String,
     pub loro_update: Option<String>,
     pub destroy: bool,
+    #[serde(default)]
+    pub purge: bool,
     pub previous_commit: Option<String>,
 }
 
@@ -1450,6 +1495,8 @@ pub struct CommitBuilder {
     loro_update: Option<Vec<u8>>,
     /// If set to true, deletes the entire resource
     destroy: bool,
+    /// Erase every trace of the destroyed resource; implies `destroy`.
+    purge: bool,
     /// Optional audit pointer at an earlier envelope. Not a causal gate.
     previous_commit: Option<String>,
     /// Whether this is a genesis commit (the first commit for a DID resource).
@@ -1465,6 +1512,7 @@ impl CommitBuilder {
             remove: HashSet::new(),
             loro_update: None,
             destroy: false,
+            purge: false,
             previous_commit: None,
             is_genesis: false,
         }
@@ -1474,6 +1522,9 @@ impl CommitBuilder {
         let mut commit_builder = CommitBuilder::new(commit_builder_json.subject.into());
 
         commit_builder.destroy(commit_builder_json.destroy);
+        if commit_builder_json.purge {
+            commit_builder.purge(true);
+        }
 
         if let Some(loro_b64) = commit_builder_json.loro_update {
             let bin = crate::agents::decode_base64(&loro_b64)
@@ -1510,6 +1561,16 @@ impl CommitBuilder {
     ) -> AtomicResult<Commit> {
         // previousCommit is optional audit metadata. Callers that want a
         // chain put it on the builder; Loro is the causal authority.
+
+        // A purge is the tombstone that stays behind: it must hold no values,
+        // so it never carries the resource's snapshot, as a plain destroy
+        // signed below would.
+        if self.purge {
+            if !self.set.is_empty() || !self.remove.is_empty() || self.loro_update.is_some() {
+                return Err("A purge commit cannot carry property changes.".into());
+            }
+            return sign_at(self, agent, crate::utils::now(), store, None).await;
+        }
 
         // If the resource has a live Loro doc but no snapshot was eagerly
         // exported to the commit builder, export it now (single export).
@@ -1586,6 +1647,16 @@ impl CommitBuilder {
     pub fn destroy(&mut self, destroy: bool) {
         self.destroy = destroy
     }
+
+    /// Whether the destroy must also erase every trace of the resource
+    /// (`planning/purge.md`). A purge is a destroy, so this sets `destroy`
+    /// too. Only the owner of the resource's drive may sign one.
+    pub fn purge(&mut self, purge: bool) {
+        self.purge = purge;
+        if purge {
+            self.destroy = true;
+        }
+    }
 }
 
 /// Signs a CommitBuilder at a specific unix timestamp.
@@ -1641,6 +1712,7 @@ async fn sign_at(
         signer: agent.subject.clone(),
         loro_update,
         destroy: Some(commitbuilder.destroy),
+        purge: commitbuilder.purge.then_some(true),
         created_at: sign_date,
         previous_commit: commitbuilder.previous_commit,
         is_genesis: if commitbuilder.is_genesis {
@@ -1752,6 +1824,7 @@ mod test {
             previous_commit: None,
             is_genesis: None,
             destroy: None,
+            purge: None,
             signature: None,
             url: None,
         };
@@ -2266,6 +2339,7 @@ mod test {
             signer: agent.subject.clone(),
             loro_update: Some(loro_doc.export_snapshot()),
             destroy: Some(false),
+            purge: None,
             created_at: crate::utils::now(),
             previous_commit: None,
             is_genesis: Some(true),

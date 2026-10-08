@@ -1491,6 +1491,33 @@ fn register_live_peer(
                 continue;
             }
 
+            // A paired peer WE dialed may replicate anything we ourselves can
+            // read (see `collect_readable_snapshots`), even though its own agent
+            // holds no rights; the blobs of those resources follow the same
+            // rule, so its BLOB_REQUEST is answered as our own identity. Every
+            // other peer is held to the agent it proved: the hash alone is not a
+            // capability.
+            if buf[0] == super::protocol::tag::BLOB_REQUEST
+                && initiated_by_us
+                && is_paired_peer(&store, &read_peer_id)
+            {
+                if let (Some(hash), Ok(own)) = (
+                    super::protocol::decode_blob_request(&buf[1..]),
+                    store.get_default_agent(),
+                ) {
+                    let answer =
+                        super::engine::answer_blob_request(&store, &hash, &ForAgent::from(own))
+                            .await;
+                    let mut framed = Vec::with_capacity(4 + answer.len());
+                    framed.extend_from_slice(&(answer.len() as u32).to_be_bytes());
+                    framed.extend_from_slice(&answer);
+                    if tx_for_read.send(framed).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+            }
+
             // Fallback: any unhandled tag (BLOB_REQUEST, BLOB_RESPONSE, future
             // additions) is dispatched through the sync engine, mirroring the
             // WS handler at server/src/handlers/web_sockets.rs. Live mode and

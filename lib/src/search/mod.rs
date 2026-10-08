@@ -273,6 +273,61 @@ pub fn unindex_subject(
     Ok(())
 }
 
+/// Purge only: drop the trigram rows of every term no document except
+/// `removed` still has a posting for.
+///
+/// Trigram rows are a shared, append-only term dictionary: neither an edit
+/// nor a delete removes a term from it, because nothing on those paths knows
+/// whether another document uses the term, and checking would cost every
+/// write. So a word that once appeared in a resource (also one edited away
+/// long ago) stays readable in `SearchTrigrams` after the resource is gone.
+/// A purge cannot leave that, and it does not know which words the resource
+/// ever held (the history is being erased), so it sweeps the dictionary:
+/// one pass over its rows, then up to three posting lookups per distinct
+/// term. Linear in the dictionary; nothing on the commit or read path calls
+/// it. `removed` are the subjects whose postings the same transaction drops,
+/// which therefore do not count as users of a term.
+pub fn purge_orphan_trigrams(
+    store: &Db,
+    removed: &[String],
+    transaction: &mut Transaction,
+) -> AtomicResult<()> {
+    let gone: HashSet<DocId> = removed.iter().map(|s| doc_id(s)).collect();
+    let mut terms: HashSet<String> = HashSet::new();
+    for entry in store.kv.iter_tree(Tree::SearchTrigrams) {
+        let (key, _) = entry?;
+        if let Some(zero) = key.iter().position(|&b| b == 0x00) {
+            if let Ok(term) = String::from_utf8(key[zero + 1..].to_vec()) {
+                terms.insert(term);
+            }
+        }
+    }
+    for term in terms {
+        let mut in_use = false;
+        'fields: for field in Field::ALL {
+            let prefix = posting_prefix(field, &term);
+            for posting in store.kv.scan_prefix(Tree::SearchPostings, &prefix) {
+                let (key, _) = posting?;
+                if id_from_posting(&key, &prefix).is_some_and(|id| !gone.contains(&id)) {
+                    in_use = true;
+                    break 'fields;
+                }
+            }
+        }
+        if !in_use {
+            for gram in trigrams(&term) {
+                transaction.push(Operation {
+                    tree: Tree::SearchTrigrams,
+                    method: Method::Delete,
+                    key: trigram_key(&gram, &term),
+                    val: None,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 fn remove_doc(id: DocId, doc: &SearchDoc, transaction: &mut Transaction) {
     for (field_id, token, _) in &doc.tokens {
         let field = Field::from_u8(*field_id).unwrap_or(Field::Title);

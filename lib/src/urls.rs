@@ -9,6 +9,8 @@ pub const AGENT: &str = "https://atomicdata.dev/classes/Agent";
 pub const COLLECTION: &str = "https://atomicdata.dev/classes/Collection";
 pub const ENDPOINT: &str = "https://atomicdata.dev/classes/Endpoint";
 pub const DRIVE: &str = "https://atomicdata.dev/classes/Drive";
+/// A set of agents (and other groups) that can be named in `read` / `write` / `append`.
+pub const GROUP: &str = "https://atomicdata.dev/classes/Group";
 pub const INVITE: &str = "https://atomicdata.dev/classes/Invite";
 pub const REDIRECT: &str = "https://atomicdata.dev/classes/Redirect";
 pub const ATOM: &str = "https://atomicdata.dev/classes/Atom";
@@ -82,6 +84,9 @@ pub const SET: &str = "https://atomicdata.dev/properties/set";
 pub const PUSH: &str = "https://atomicdata.dev/properties/push";
 pub const REMOVE: &str = "https://atomicdata.dev/properties/remove";
 pub const DESTROY: &str = "https://atomicdata.dev/properties/destroy";
+/// With `destroy`: erase every trace of the resource, not just its current
+/// state. See `planning/purge.md`.
+pub const PURGE: &str = "https://atomicdata.dev/properties/purge";
 pub const LORO_UPDATE: &str = "https://atomicdata.dev/properties/loroUpdate";
 pub const SIGNER: &str = "https://atomicdata.dev/properties/signer";
 pub const CREATED_AT: &str = "https://atomicdata.dev/properties/createdAt";
@@ -161,6 +166,8 @@ pub const COLLECTION_MEMBER_COUNT: &str =
 pub const COLLECTION_TOTAL_PAGES: &str = "https://atomicdata.dev/properties/collection/totalPages";
 pub const COLLECTION_CURRENT_PAGE: &str =
     "https://atomicdata.dev/properties/collection/currentPage";
+/// The agents and groups that make up a [`GROUP`].
+pub const GROUP_MEMBERS: &str = "https://atomicdata.dev/properties/group/members";
 pub const COLLECTION_MEMBERS: &str = "https://atomicdata.dev/properties/collection/members";
 pub const COLLECTION_INCLUDE_NESTED: &str =
     "https://atomicdata.dev/properties/collection/includeNested";

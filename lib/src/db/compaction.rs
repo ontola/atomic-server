@@ -65,6 +65,34 @@ impl CompactionPolicy {
     }
 }
 
+/// Name of the marker file a purge leaves in the store directory. redb never
+/// zeroes a freed page, so the bytes of a purged resource stay in the file
+/// until the pages are reused, and `compact()` does not reach them either.
+/// The next start sees the marker, rewrites the file with live rows only
+/// (`redb_store::scrub_file`), zeroes the old one, and removes the marker.
+pub const PURGE_MARKER: &str = "compact-after-purge";
+
+/// Whether a purge asked for a compaction that has not happened yet.
+pub fn pending_after_purge(store_dir: &std::path::Path) -> bool {
+    !store_dir.as_os_str().is_empty() && store_dir.join(PURGE_MARKER).exists()
+}
+
+/// Ask the next start to compact the store (see [`PURGE_MARKER`]). Best
+/// effort; an in-memory store (empty path) has no file to compact.
+pub fn request_after_purge(store_dir: &std::path::Path) {
+    if store_dir.as_os_str().is_empty() {
+        return;
+    }
+    if let Err(e) = std::fs::write(store_dir.join(PURGE_MARKER), b"") {
+        tracing::warn!("Could not leave the compact-after-purge marker: {e}");
+    }
+}
+
+/// Remove the marker once the compaction ran.
+pub fn clear_after_purge(store_dir: &std::path::Path) {
+    let _ = std::fs::remove_file(store_dir.join(PURGE_MARKER));
+}
+
 /// Bytes the file occupies on disk, as opposed to its length. redb grows the
 /// file with `set_len`, by doubling below 4 GiB and by whole regions above,
 /// which leaves a sparse, never-written tail on every common filesystem.
@@ -466,10 +494,20 @@ mod tests {
         dir
     }
 
+    /// Opened with `Durability::None`: these tests are about the dead space
+    /// that unsynced overwrites leave in the file. A durable commit lets redb
+    /// reuse the pages an earlier commit freed, so the bloat they build on
+    /// would not exist.
     async fn open(dir: &std::path::Path, policy: &CompactionPolicy) -> crate::Db {
-        crate::Db::init_redb_file_with_policy(dir, None, &dir.join("uploads"), policy)
-            .await
-            .unwrap()
+        crate::Db::init_redb_file_with_options(
+            dir,
+            None,
+            &dir.join("uploads"),
+            policy,
+            crate::db::redb_store::Durability::None,
+        )
+        .await
+        .unwrap()
     }
 
     const RESOURCES: usize = 32;

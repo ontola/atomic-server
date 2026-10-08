@@ -1,6 +1,11 @@
 //! File bytes have independent storage from transactional graph state.
 use super::{trees::Tree, Db};
 use crate::errors::AtomicResult;
+use crate::{
+    agents::ForAgent,
+    storelike::{Query, Storelike},
+    urls, Resource, Value,
+};
 use async_trait::async_trait;
 
 #[async_trait]
@@ -9,6 +14,9 @@ pub trait BlobBackend: Send + Sync {
     async fn put(&self, key: &[u8], bytes: &[u8]) -> AtomicResult<()>;
     /// Metadata only: usage accounting must not download every file.
     async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>>;
+    /// Remove the object. Deleting a missing key succeeds. Used by purge
+    /// (`Db::purge_unreferenced_blobs`) and nowhere else.
+    async fn delete(&self, key: &[u8]) -> AtomicResult<()>;
 }
 
 impl Db {
@@ -26,11 +34,128 @@ impl Db {
         }
     }
 
+    /// Remove a blob. Only purge calls this: blobs are content-addressed and
+    /// otherwise immutable. Callers must have checked that nothing references
+    /// the hash (see [`Self::purge_unreferenced_blobs`]).
+    pub async fn delete_blob(&self, key: &[u8]) -> AtomicResult<()> {
+        match &self.blob_backend {
+            Some(backend) => backend.delete(key).await,
+            None => self.kv.remove(Tree::Blobs, key),
+        }
+    }
+
     pub async fn blob_size(&self, key: &[u8]) -> AtomicResult<Option<u64>> {
         match &self.blob_backend {
             Some(backend) => backend.size(key).await,
             None => Ok(self.kv.get(Tree::Blobs, key)?.map(|b| b.len() as u64)),
         }
+    }
+
+    /// The resources that reference the blob `hash_hex` and that `for_agent`
+    /// may read: Files whose whole-file `internalId` is the hash, resources
+    /// whose `blob` is the hash, and chunked Files listing it in `chunks`.
+    /// Empty means the requester has no business with these bytes. More than
+    /// one File can share a hash (the same bytes uploaded twice are stored
+    /// once), so reading any one of them is enough.
+    ///
+    /// Every lookup is an index read on (property, value) and the rights check
+    /// runs through the query's per-call rights cache (a drive's ancestors are
+    /// resolved once, not once per referrer); nothing scans the store. The
+    /// first query with a readable hit ends the search, so the common case (an
+    /// upload carries `internalId`) is a single index lookup.
+    ///
+    /// Shared by the HTTP download route and the sync `BLOB_REQUEST` frame:
+    /// the hash is not a capability on either transport.
+    pub async fn readable_blob_referrers(
+        &self,
+        hash_hex: &str,
+        for_agent: &ForAgent,
+    ) -> AtomicResult<Vec<Resource>> {
+        self.blob_referrers(hash_hex, for_agent).await
+    }
+
+    /// The lookup behind [`Self::readable_blob_referrers`]; with
+    /// `ForAgent::Sudo` it lists every referrer, readable or not.
+    async fn blob_referrers(
+        &self,
+        hash_hex: &str,
+        for_agent: &ForAgent,
+    ) -> AtomicResult<Vec<Resource>> {
+        let mut queries = vec![Query::new_prop_val(urls::INTERNAL_ID, hash_hex)];
+        // Stored references are canonical (`atomic:blob:`), older ones `did:ad:blob:`.
+        for prefix in [crate::identifiers::ATOMIC_BLOB_PREFIX, "did:ad:blob:"] {
+            for property in [urls::BLOB, urls::CHUNKS] {
+                let mut q = Query::new();
+                q.property = Some(property.to_string());
+                q.value = Some(Value::AtomicUrl(format!("{prefix}{hash_hex}").into()));
+                queries.push(q);
+            }
+        }
+
+        let mut found: Vec<Resource> = Vec::new();
+        for mut q in queries {
+            q.for_agent = for_agent.clone();
+            for resource in self.query(&q).await?.resources {
+                if !found
+                    .iter()
+                    .any(|r| r.get_subject() == resource.get_subject())
+                {
+                    found.push(resource);
+                }
+            }
+            if !found.is_empty() {
+                break;
+            }
+        }
+
+        Ok(found)
+    }
+
+    /// Whether `for_agent` may be handed the bytes of the blob `hash`: it can
+    /// read at least one resource referencing it. `Sudo` (this node itself)
+    /// always may.
+    pub async fn agent_may_read_blob(&self, hash: &[u8], for_agent: &ForAgent) -> bool {
+        if matches!(for_agent, ForAgent::Sudo) {
+            return true;
+        }
+        if hash.len() != 32 {
+            return false;
+        }
+        self.readable_blob_referrers(&hex::encode(hash), for_agent)
+            .await
+            .is_ok_and(|found| !found.is_empty())
+    }
+
+    /// Delete the blobs `candidates` (hex BLAKE3 hashes) that no remaining
+    /// resource references, after a purge removed the referrers. Uses the
+    /// same referrer lookup as [`Self::readable_blob_referrers`], as `Sudo`
+    /// (every referrer counts, readable or not). A blob some other resource
+    /// still points at is kept. Returns the hashes that were deleted.
+    ///
+    /// Not transactional with the graph: a File created for the same bytes
+    /// between the lookup and the delete loses its content. Purge is rare and
+    /// this window is a few milliseconds.
+    pub async fn purge_unreferenced_blobs(
+        &self,
+        candidates: &[String],
+    ) -> AtomicResult<Vec<String>> {
+        let mut deleted = Vec::new();
+        for hash_hex in candidates {
+            let Ok(key) = hex::decode(hash_hex) else {
+                continue;
+            };
+            if key.len() != 32
+                || !self
+                    .blob_referrers(hash_hex, &ForAgent::Sudo)
+                    .await?
+                    .is_empty()
+            {
+                continue;
+            }
+            self.delete_blob(&key).await?;
+            deleted.push(hash_hex.clone());
+        }
+        Ok(deleted)
     }
 
     pub async fn has_blob(&self, key: &[u8]) -> AtomicResult<bool> {

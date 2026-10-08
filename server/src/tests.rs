@@ -620,6 +620,56 @@ async fn self_signed_agent_commit_keeps_name() {
     );
 }
 
+/// `POST /commit` refuses a commit whose value has the wrong datatype for its
+/// Property, and the error names the property. Incoming Loro updates bypass
+/// `Resource::set`, so the check happens when the commit is applied.
+#[actix_rt::test]
+async fn post_commit_rejects_wrong_datatype() {
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let agent = atomic_lib::agents::Agent::new(None).unwrap();
+    let agent_did = agent.subject.pure_id();
+    let empty = atomic_lib::Resource::new(agent_did.clone());
+    let mut builder = atomic_lib::commit::CommitBuilder::new(agent_did.clone().into());
+    builder.is_genesis = true;
+    builder.set(
+        urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![urls::AGENT.to_string().into()]),
+    );
+    // `name` is a string; send an integer.
+    builder.set(urls::NAME.into(), atomic_lib::Value::Integer(5));
+    let commit = builder.sign(&agent, &appstate.store, &empty).await.unwrap();
+    let body = commit
+        .into_resource(&appstate.store)
+        .await
+        .unwrap()
+        .to_json_ad(Some(&appstate.config.get_origin()))
+        .unwrap();
+
+    let req = TestRequest::post()
+        .uri("/commit")
+        .insert_header(("Content-Type", "application/ad+json"))
+        .set_payload(body)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_client_error(),
+        "a wrong datatype is a client error, got {:?}",
+        resp.status()
+    );
+    let body = get_body(resp);
+    assert!(
+        body.contains(urls::NAME) && body.contains("datatype"),
+        "the error should name the property and the datatype: {body}"
+    );
+}
+
 /// A fresh, initialized `AppState` on its own temporary directories, with
 /// `extra_args` appended to the command line (`["--domain", "x"]`).
 pub(crate) async fn init_test_appstate(extra_args: &[&str]) -> AppState {
@@ -899,6 +949,59 @@ async fn content_addressed_image_with_storage(remote: bool) {
         .put_blob(hash.as_bytes(), &bytes)
         .await
         .unwrap();
+    // An orphan blob is not served (ontola/atomic-server#2157): a publicly
+    // readable File has to reference it.
+    let drive = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
+    let mut file = atomic_lib::Resource::new_instance(atomic_lib::urls::FILE, &appstate.store)
+        .await
+        .unwrap();
+    file.set_string(
+        atomic_lib::urls::PARENT.into(),
+        drive.as_str(),
+        &appstate.store,
+    )
+    .await
+    .unwrap();
+    file.set_string(
+        atomic_lib::urls::INTERNAL_ID.into(),
+        &hash.to_hex(),
+        &appstate.store,
+    )
+    .await
+    .unwrap();
+    file.set_string(
+        atomic_lib::urls::MIMETYPE.into(),
+        "image/png",
+        &appstate.store,
+    )
+    .await
+    .unwrap();
+    file.set_string(
+        atomic_lib::urls::DOWNLOAD_URL.into(),
+        "http://localhost/x",
+        &appstate.store,
+    )
+    .await
+    .unwrap();
+    file.set(
+        atomic_lib::urls::FILESIZE.into(),
+        atomic_lib::Value::Integer(bytes.len() as i64),
+        &appstate.store,
+    )
+    .await
+    .unwrap();
+    file.set_string(atomic_lib::urls::FILENAME.into(), "a.png", &appstate.store)
+        .await
+        .unwrap();
+    file.push(
+        atomic_lib::urls::READ,
+        atomic_lib::urls::PUBLIC_AGENT.into(),
+        true,
+    )
+    .unwrap();
+    file.save_as_genesis(&appstate.store).await.unwrap();
     let app = test::init_service(
         App::new()
             .app_data(Data::new(appstate))
@@ -1095,6 +1198,65 @@ async fn upload_download_with_backend(
 
     let downloaded_bytes = test::read_body(resp).await;
     assert_eq!(downloaded_bytes, test_content.as_slice());
+
+    // 4. The hash is not a capability (ontola/atomic-server#2157): the drive is
+    // private, so anyone who cannot read the File gets the same 404 as for a
+    // hash that does not exist.
+    let path = format!("/download/files/{expected_hash}");
+    let missing = format!("/download/files/{}", "0".repeat(64));
+    let anonymous = test::call_service(&app, TestRequest::get().uri(&path).to_request()).await;
+    assert_eq!(
+        anonymous.status(),
+        404,
+        "anonymous must not read a private blob"
+    );
+    // Same status and message shape as a hash that was never stored.
+    let missing_resp =
+        test::call_service(&app, TestRequest::get().uri(&missing).to_request()).await;
+    assert_eq!(missing_resp.status(), 404);
+
+    let other = atomic_lib::agents::Agent::new(Some("other")).unwrap();
+    let other_url = format!("{}{}", appstate.config.get_origin(), path);
+    let mut other_req = TestRequest::get().uri(&path);
+    for (k, v) in atomic_lib::client::get_authentication_headers(&other_url, &other).unwrap() {
+        other_req = other_req.insert_header((k, v));
+    }
+    let other_resp = test::call_service(&app, other_req.to_request()).await;
+    assert_eq!(
+        other_resp.status(),
+        404,
+        "an agent without read rights on any referencing resource must get 404"
+    );
+
+    // The image rendition path is gated by the same check.
+    let rendition = test::call_service(
+        &app,
+        TestRequest::get()
+            .uri(&format!("{path}?f=webp&w=64"))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(rendition.status(), 404);
+
+    // 5. Once a referencing File is publicly readable, so are its bytes.
+    let mut file = appstate
+        .store
+        .get_resource(&atomic_lib::Subject::new_local(
+            &format!("/files/{expected_hash}"),
+            None,
+        ))
+        .await
+        .expect("uploaded file resource");
+    file.push(
+        atomic_lib::urls::READ,
+        atomic_lib::urls::PUBLIC_AGENT.into(),
+        true,
+    )
+    .unwrap();
+    file.save_locally(&appstate.store).await.unwrap();
+    let public = test::call_service(&app, TestRequest::get().uri(&path).to_request()).await;
+    assert_eq!(public.status(), 200, "public-read files must stay public");
+    assert_eq!(test::read_body(public).await, test_content.as_slice());
 }
 
 /// `GET /drive-usage` reports a drive's resource count + blob/Loro bytes for the

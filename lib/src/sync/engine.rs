@@ -307,6 +307,30 @@ async fn answer_get(
     }
 }
 
+/// The answer to a `BLOB_REQUEST` from `agent`: the bytes when `agent` can read
+/// at least one resource referencing the blob, otherwise the very same
+/// "Blob not found" as for a blob that does not exist, so a hash cannot be
+/// probed for existence. The hash is not a capability. The check is the same
+/// one the HTTP download route makes (`Db::readable_blob_referrers`): an index
+/// lookup plus a rights check on the referrers it finds, and it only runs when
+/// the blob exists locally, so a miss costs a single blob-store lookup.
+pub async fn answer_blob_request(
+    store: &Db,
+    hash: &[u8; 32],
+    agent: &crate::agents::ForAgent,
+) -> Vec<u8> {
+    // Blob first: the existence probe is cheap and most requests for an absent
+    // blob end here without touching the referrer index.
+    if let Ok(true) = store.has_blob(hash).await {
+        if store.agent_may_read_blob(hash, agent).await {
+            if let Ok(Some(bytes)) = store.get_blob(hash).await {
+                return protocol::encode_blob_response(hash, &bytes);
+            }
+        }
+    }
+    protocol::encode_error(0, protocol::error_code::UNKNOWN, "Blob not found")
+}
+
 /// Like [`handle_frame`], plus the `SUB`/`UNSUB` session commands a hub
 /// applies to its commit monitor.
 pub async fn handle_frame_full(
@@ -571,14 +595,7 @@ pub async fn handle_frame_full_for_caps(
 
         protocol::tag::BLOB_REQUEST => {
             if let Some(hash) = protocol::decode_blob_request(payload) {
-                match store.get_blob(&hash).await {
-                    Ok(Some(bytes)) => vec![protocol::encode_blob_response(&hash, &bytes)],
-                    _ => vec![protocol::encode_error(
-                        0,
-                        protocol::error_code::UNKNOWN,
-                        "Blob not found",
-                    )],
-                }
+                vec![answer_blob_request(store, &hash, agent).await]
             } else {
                 vec![protocol::encode_error(
                     0,
@@ -1026,6 +1043,7 @@ pub async fn collect_drive_subjects(
                 for_agent: crate::agents::ForAgent::Sudo,
                 aggregation: None,
                 expression_filters: Vec::new(),
+                composite: Default::default(),
                 drive: None,
             };
 

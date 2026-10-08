@@ -25,9 +25,21 @@ Although you are free to use Atomic Data with your own custom authorization syst
 ## Authorization
 
 - Any Resource might have [`read`](https://atomicdata.dev/properties/read) and [`write`](https://atomicdata.dev/properties/write) Atoms. These both contain a list of Agents. These Agents will be granted the rights to edit (using Commits) or read / use the Resources.
+- Instead of listing every Agent, a `read`, `write` or `append` list can also contain a [`Group`](#groups). Every member of that Group gets the right.
 - Rights are _additive_, which means that the rights add up. If a Resource itself has no `write` Atom containing your Agent, but it's `parent` _does_ have one, you will still get the `write` right.
 - Rights cannot be removed by children or parents - they can only be added.
 - `Commits` can not be edited. They can be `read` if the Agent has rights to read the [`subject`](https://atomicdata.dev/properties/subject) of the `Commit`.
+
+## Groups
+
+A [`Group`](https://atomicdata.dev/classes/Group) is a resource with a `name` and a list of `members` (`https://atomicdata.dev/properties/group/members`). A member is an Agent or another Group.
+Put the Group's subject anywhere an Agent can appear in `read`, `write` or `append`, and all of its members get that right, on the resource and on everything below it.
+
+- Membership is resolved when rights are checked, so adding or removing a member (a normal Commit on the Group) changes access to every resource that grants the Group on the next request. This includes collections, search results and WebSocket subscriptions, because they all use the same rights check.
+- Groups can contain Groups. Membership is the transitive closure, and cycles are harmless: a cycle grants nothing unless an Agent is reachable in it.
+- Only the `members` of a Group that exists on the same server, and that is really an instance of `Group`, count. A deleted Group, or an entry that is not a Group, grants nothing.
+- Who may change a Group's members is decided by the Group's own `write` rights, like any other Resource.
+- Group membership is checked after the plain Agent entries, so lists that only name Agents are evaluated exactly as before.
 
 ## Top-level resources
 
@@ -46,6 +58,6 @@ Authentication is about proving _who you are_, which is often the first step for
 The specification is growing (and please contribute in the [docs repo](https://github.com/atomicdata-dev/atomic-data-docs/issues)), but the current specification lacks some features:
 
 - Rights can only be added, but not removed in the hierarchy. This means that you cannot have a secret folder inside a public folder.
-- No model for representing groups of Agents, or other runtime checks for authorization. ([issue](https://github.com/atomicdata-dev/atomic-data-docs/issues/73))
+- Groups only model sets of Agents; there are no other runtime checks (attributes, roles, time-limited grants) for authorization. ([issue](https://github.com/atomicdata-dev/atomic-data-docs/issues/73))
 - No way to limit delete access or invite rights separately from write rights ([issue](https://github.com/atomicdata-dev/atomic-data-docs/issues/82))
 - No way to request a set of rights for a Resource

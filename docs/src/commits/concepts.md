@@ -24,6 +24,7 @@ The **optional fields** are:
 
 - `loroUpdate` - A [Loro CRDT](https://loro.dev) binary update, encoded as a base64 string. This is the primary way to carry property changes. The server imports this update into the resource's Loro document, materializes the properties, and computes index diffs.
 - `destroy` - If true, the entire Resource will be removed.
+- `purge` - Only together with `destroy`. If true, the Resource and its children are _erased_, not just removed: see [Purge](#purge-erasure) below.
 - `previousCommit` - Optional audit pointer at an earlier envelope. **Not a causal gate** — concurrent edits merge via Loro. Clients may still send it; servers do not require it.
 - `isGenesis` - If true, this is the first commit for a DID resource. The subject DID is derived from either the self-verifying genesis certificate signature (`atomic:<sig_of_cert>`) or, in legacy mode, the signature of the genesis commit itself.
 
@@ -93,7 +94,7 @@ This means that the process will always end in the exact same string.
 - Serialize the Commit as JSON-AD.
 - Do not serialize the signature field.
 - Do not include `undefined` or `null` fields.
-- If `destroy` is false or absent, do not include it.
+- If `destroy` is false or absent, do not include it. The same goes for `purge`.
 - All keys are sorted alphabetically.
 - The JSON-AD is minified: no newlines, no spaces.
 - For legacy DID genesis commits (`isGenesis: true` without an inline genesis certificate), exclude the `subject` field (since it is derived from the commit signature). For certificate-backed genesis commits, the `subject` DID is derived from the genesis certificate and included in the serialized commit body.
@@ -114,9 +115,29 @@ Here's how:
 5. Validate the rights of the signer.
 6. Import the `loroUpdate` into the resource's Loro document.
 7. Materialize the Loro document's properties into the resource's property-value store.
-8. If `destroy` is true, delete the resource.
+8. If `destroy` is true, delete the resource. If `purge` is also true, first check that the signer owns the drive, then erase the traces described in [Purge](#purge-erasure).
 9. Validate schema (check required properties for the resource's classes).
 10. Store the Commit as a resource, and store the modified resource.
+
+### Purge (erasure)
+
+A `destroy` removes the _current state_ of a resource, but traces stay behind on purpose: the signed commit rows (the genesis row holds the creation `loroUpdate`), the signed envelopes (with `ATOMIC_ENVELOPE_RETENTION=all` every one of them, values included), and file bytes, which are content-addressed and shared.
+That is the right default for an audit trail and the wrong one when personal data must be erased (for example a GDPR request).
+
+A commit with `destroy: true` **and** `purge: true` erases everything about the resource and its children (the destroy cascade):
+
+- the resource, its Loro snapshot and with it the whole Loro history, including values that were overwritten long ago;
+- every commit row and every envelope that is about them;
+- their search and query index entries, and the words they once held in the search term dictionary;
+- every file blob that only they referenced. A blob some other resource still references keeps its bytes (the check is the same referrer lookup the download route uses).
+
+What stays is the purge commit itself: a signed tombstone with a subject, a signer, a timestamp and `purge: true`, and **no values** (it cannot carry a `loroUpdate`). It is what peers receive (live as a `COMMIT` frame, later as `SYNC_DIFF.removeCommits`), and a peer that holds the resource applies it with the same effect on its own copy. The subject itself also remains in the tombstone, so use opaque subjects (a DID, a content hash) for personal data.
+
+**Who may purge.** Purge cannot be undone and reaches every replica, so `write` access is not enough. The signer must be the owner of the resource's drive: listed explicitly in the `write` of the drive root (a grant on an intermediate parent or to `PublicAgent` does not count), or be the Agent that is purged itself. A node's own agent (and Sudo, for in-process calls) may always purge. Everything else is refused with an error naming the drive.
+
+**Do it with** `POST /commit` like any other commit, or `Resource::purge` / `CommitBuilder::purge(true)` in Rust. A purge of a resource that does not exist on the node is refused: there is nobody to authorize it. Purge the resource, not a resource that was already destroyed.
+
+**Disk.** The database does not overwrite deleted pages. After a purge the node leaves a `compact-after-purge` marker next to the database file, and the next start rewrites the file with live rows only and overwrites the old file with zeros before serving. Until the node restarts, the erased bytes may still be present in unused pages of the database file. Copy-on-write filesystems, volume snapshots, backups and SSD wear levelling can keep older copies that no file-level overwrite reaches; backups taken before a purge are not touched.
 
 ### Real-time sync
 

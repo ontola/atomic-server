@@ -135,6 +135,24 @@ async fn commit_errors_echo_the_request_id_and_carry_a_code() -> AtomicResult<()
     seen.sort_unstable();
     assert_eq!(seen, vec![46, 47]);
 
+    // 5b. A signed commit with a value of the wrong datatype (`name` as an
+    // integer) is refused over the socket, naming the property.
+    let mut builder = atomic_lib::commit::CommitBuilder::new("placeholder".into());
+    builder.set(atomic_lib::urls::NAME.into(), atomic_lib::Value::Integer(5));
+    builder.set(
+        atomic_lib::urls::PARENT.into(),
+        atomic_lib::Value::AtomicUrl(private_drive.as_str().into()),
+    );
+    let bad = atomic_lib::commit::Commit::create_did(builder, &alice, client.store()).await?;
+    let bad = atomic_lib::client::commit_to_wire_json(&bad, client.store()).await?;
+    ws.send_binary(protocol::encode_commit(49, &bad)).await?;
+    let (rid, _code, message) = next_error(&mut rx).await;
+    assert_eq!(rid, 49, "{message}");
+    assert!(
+        message.contains(atomic_lib::urls::NAME) && message.contains("datatype"),
+        "the refusal names the property: {message}"
+    );
+
     // 6. The socket is still usable: the owner's valid commit is applied.
     let ok = genesis_commit_json(&client, &alice, &private_drive, "Fine").await?;
     let commit_id = ws.post_commit(48, &ok).await?;

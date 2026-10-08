@@ -1,8 +1,8 @@
 //! RedbStore: KvStore backed by redb — works natively and in WASM.
 //! Uses InMemoryBackend by default. Can be swapped to OPFS backend for persistence.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 
 use redb::{
     backends::InMemoryBackend, Database, ReadableDatabase, ReadableTable, ReadableTableMetadata,
@@ -48,6 +48,66 @@ fn create_all_tables(tx: &redb::WriteTransaction) {
     }
 }
 
+/// When a write is acknowledged relative to the fsync that makes it survive a
+/// crash (`kill -9`, power loss).
+///
+/// * [`Durability::Group`] (default): a write returns only after the fsync of
+///   the transaction that holds it, and concurrent writers share one
+///   transaction and one fsync (group commit).
+/// * [`Durability::Immediate`]: every write pays its own fsync.
+/// * [`Durability::None`]: a write returns at once and becomes durable on the
+///   next periodic [`KvStore::flush`] (100 ms in the server), so an
+///   acknowledged write can be lost in a crash. Fastest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Durability {
+    Immediate,
+    #[default]
+    Group,
+    None,
+}
+
+impl std::str::FromStr for Durability {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "immediate" => Ok(Durability::Immediate),
+            "group" => Ok(Durability::Group),
+            "none" => Ok(Durability::None),
+            other => Err(format!(
+                "unknown durability '{other}', expected immediate, group or none"
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for Durability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Durability::Immediate => "immediate",
+            Durability::Group => "group",
+            Durability::None => "none",
+        })
+    }
+}
+
+/// Write transactions committed with an fsync, process wide. Group commit makes
+/// this smaller than the number of acknowledged writes; benchmarks and tests
+/// read it to see how much sharing happened.
+pub static DURABLE_TRANSACTIONS: AtomicU64 = AtomicU64::new(0);
+
+/// Group-commit state, behind one mutex. `queued` holds writers waiting for a
+/// leader (id, operations); a leader moves their outcome to `done`, where each
+/// writer collects its own. `leader_active` is true while one writer runs the
+/// fsync for everyone queued.
+#[derive(Default)]
+struct GroupState {
+    next_id: u64,
+    queued: Vec<(u64, Vec<Operation>)>,
+    done: std::collections::HashMap<u64, Result<(), String>>,
+    leader_active: bool,
+}
+
 /// A KvStore backed by redb.
 /// Supports InMemoryBackend (default) or OPFS backend (WASM persistent).
 /// Thread-safe via redb's internal locking (MVCC).
@@ -61,6 +121,10 @@ pub struct RedbStore {
     /// durable-flush tick skip the fsync (and the sentinel write) when nothing
     /// changed, which is most ticks on an idle node or a phone in a pocket.
     dirty: AtomicBool,
+    durability: Durability,
+    /// Group commit (see [`RedbStore::group_write`]).
+    group: Mutex<GroupState>,
+    group_cv: Condvar,
 }
 
 /// Per-tree map of pending operations. Used for fast read-your-writes lookups.
@@ -111,6 +175,104 @@ pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     Ok((size_before, size_after, did_compact))
 }
 
+/// Rows copied per write transaction while scrubbing, bounding memory.
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+const SCRUB_CHUNK_ROWS: usize = 20_000;
+
+/// Rewrite the redb file at `path` into a fresh file that holds only live
+/// rows, overwrite the old file with zeros, and move the new one into place.
+/// Returns `(size_before, size_after)`.
+///
+/// This is what makes a purge physical. redb never zeroes a page it frees,
+/// and `Database::compact` moves live pages but leaves the freed ones that
+/// stay below the new end of the file as they were, so deleted rows remain
+/// readable in the file (measured: see `lib/tests/purge.rs`). A copy into a
+/// new file carries nothing but live data; zeroing the old file before it is
+/// released removes the rest. The caller must guarantee no other handle on
+/// the file (redb's own lock enforces it). On a crash the old file is intact
+/// until the zeroing starts, and the new file is complete before it does.
+///
+/// Limits: a copy-on-write filesystem, a snapshotting volume or an SSD's
+/// wear leveling may keep old blocks that an in-place overwrite never
+/// reaches; this works at the file level only.
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+pub fn scrub_file(path: &std::path::Path) -> AtomicResult<(u64, u64)> {
+    use std::io::Write;
+
+    let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let tmp = path.with_extension("redb.scrub");
+    let _ = std::fs::remove_file(&tmp);
+    let copy = || -> AtomicResult<()> {
+        let old = Database::create(path)
+            .map_err(|e| format!("Failed to open redb at {}: {e}", path.display()))?;
+        let new = Database::create(&tmp)
+            .map_err(|e| format!("Failed to create redb at {}: {e}", tmp.display()))?;
+        let read = old.begin_read().map_err(|e| format!("redb read tx: {e}"))?;
+        for tree in Tree::ALL {
+            let source = match read.open_table(table_def(tree)) {
+                Ok(table) => table,
+                Err(redb::TableError::TableDoesNotExist(_)) => continue,
+                Err(e) => return Err(format!("redb open table {}: {e}", tree.name()).into()),
+            };
+            let mut rows = source
+                .iter()
+                .map_err(|e| format!("redb iter {}: {e}", tree.name()))?
+                .peekable();
+            // An empty tree still gets its table in the new file.
+            loop {
+                let tx = new
+                    .begin_write()
+                    .map_err(|e| format!("redb write tx: {e}"))?;
+                {
+                    let mut table = tx
+                        .open_table(table_def(tree))
+                        .map_err(|e| format!("redb open table {}: {e}", tree.name()))?;
+                    for _ in 0..SCRUB_CHUNK_ROWS {
+                        let Some(row) = rows.next() else { break };
+                        let (key, value) = row.map_err(|e| format!("redb read row: {e}"))?;
+                        table
+                            .insert(key.value(), value.value())
+                            .map_err(|e| format!("redb insert row: {e}"))?;
+                    }
+                }
+                tx.commit().map_err(|e| format!("redb commit scrub: {e}"))?;
+                if rows.peek().is_none() {
+                    break;
+                }
+            }
+        }
+        // The last commit is Immediate: the new file is durable before the
+        // old one is touched.
+        Ok(())
+    };
+    if let Err(e) = copy() {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    // Overwrite the old file in place, then release it.
+    {
+        let mut old = std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .map_err(|e| format!("Failed to open {} for scrubbing: {e}", path.display()))?;
+        let zeros = vec![0u8; 1 << 20];
+        let mut remaining = size_before;
+        while remaining > 0 {
+            let n = remaining.min(zeros.len() as u64) as usize;
+            old.write_all(&zeros[..n])
+                .map_err(|e| format!("Failed to zero {}: {e}", path.display()))?;
+            remaining -= n as u64;
+        }
+        old.sync_all()
+            .map_err(|e| format!("Failed to sync {}: {e}", path.display()))?;
+    }
+    std::fs::rename(&tmp, path)
+        .map_err(|e| format!("Failed to move {} into place: {e}", tmp.display()))?;
+    let size_after = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    Ok((size_before, size_after))
+}
+
 impl RedbStore {
     /// Create a RedbStore backed by a file on disk. No startup compaction;
     /// see `new_file_with_policy` for the path `Db::init_redb_file` takes.
@@ -118,6 +280,20 @@ impl RedbStore {
     pub fn new_file(path: &std::path::Path) -> AtomicResult<Self> {
         Self::new_file_with_policy(path, &super::compaction::CompactionPolicy::disabled())
             .map(|(store, _)| store)
+    }
+
+    /// `new_file` with an explicit [`Durability`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_durability(
+        path: &std::path::Path,
+        durability: Durability,
+    ) -> AtomicResult<Self> {
+        Self::new_file_with_policy_and_durability(
+            path,
+            &super::compaction::CompactionPolicy::disabled(),
+            durability,
+        )
+        .map(|(store, _)| store)
     }
 
     /// Open (or create) the file, log its size and open duration, and run
@@ -129,6 +305,19 @@ impl RedbStore {
     pub fn new_file_with_policy(
         path: &std::path::Path,
         policy: &super::compaction::CompactionPolicy,
+    ) -> AtomicResult<(
+        Self,
+        Result<super::compaction::CompactionRecord, super::compaction::Skip>,
+    )> {
+        Self::new_file_with_policy_and_durability(path, policy, Durability::default())
+    }
+
+    /// `new_file_with_policy` with an explicit [`Durability`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_policy_and_durability(
+        path: &std::path::Path,
+        policy: &super::compaction::CompactionPolicy,
+        durability: Durability,
     ) -> AtomicResult<(
         Self,
         Result<super::compaction::CompactionRecord, super::compaction::Skip>,
@@ -177,14 +366,7 @@ impl RedbStore {
         }
         tracing::info!("RedbStore::new_file: table-create tx in {:?}", t.elapsed());
 
-        Ok((
-            RedbStore {
-                db: Arc::new(db),
-                batch_buffer: std::sync::Mutex::new(None),
-                dirty: AtomicBool::new(false),
-            },
-            compaction,
-        ))
+        Ok((RedbStore::with_db(db, durability), compaction))
     }
 
     /// Create a new in-memory RedbStore.
@@ -205,11 +387,19 @@ impl RedbStore {
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
 
-        Ok(RedbStore {
+        // Nothing to fsync in memory.
+        Ok(RedbStore::with_db(db, Durability::None))
+    }
+
+    fn with_db(db: Database, durability: Durability) -> Self {
+        RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
-        })
+            durability,
+            group: Mutex::new(GroupState::default()),
+            group_cv: Condvar::new(),
+        }
     }
 
     /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.
@@ -249,11 +439,136 @@ impl RedbStore {
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
 
-        Ok(RedbStore {
-            db: Arc::new(db),
-            batch_buffer: std::sync::Mutex::new(None),
-            dirty: AtomicBool::new(false),
-        })
+        // One thread in the browser: nothing can wait for a leader's fsync.
+        Ok(RedbStore::with_db(db, Durability::None))
+    }
+
+    /// The durability this store acknowledges writes at.
+    pub fn durability(&self) -> Durability {
+        self.durability
+    }
+
+    /// Applies `ops` and returns once the write is as durable as
+    /// `self.durability` promises.
+    fn write_ops(&self, ops: &[Operation]) -> AtomicResult<()> {
+        match self.durability {
+            Durability::Group => self.group_write(ops),
+            Durability::Immediate => self.write_batches(&[ops], true),
+            Durability::None => {
+                self.write_batches(&[ops], false)?;
+                self.dirty.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+    }
+
+    /// One write transaction holding every list in `batches`, in order.
+    /// `durable` commits with an fsync (and redb's two-phase commit, which
+    /// persists the allocator state so the next open after a crash skips the
+    /// full repair scan); otherwise the commit is only persisted by a later
+    /// durable one.
+    fn write_batches(&self, batches: &[&[Operation]], durable: bool) -> AtomicResult<()> {
+        let mut tx = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("redb write tx: {e}"))?;
+        if durable {
+            tx.set_quick_repair(true);
+        } else {
+            tx.set_durability(redb::Durability::None)
+                .map_err(|e| format!("redb set_durability: {e}"))?;
+        }
+        for ops in batches {
+            for op in *ops {
+                let mut table = tx
+                    .open_table(table_def(op.tree))
+                    .map_err(|e| format!("redb open table: {e}"))?;
+                match op.method {
+                    Method::Insert => {
+                        let val = op.val.as_deref().unwrap_or(b"");
+                        table
+                            .insert(op.key.as_slice(), val)
+                            .map_err(|e| format!("redb batch insert: {e}"))?;
+                    }
+                    Method::Delete => {
+                        table
+                            .remove(op.key.as_slice())
+                            .map_err(|e| format!("redb batch remove: {e}"))?;
+                    }
+                }
+            }
+        }
+        tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
+        if durable {
+            DURABLE_TRANSACTIONS.fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    /// Group commit. redb runs one write transaction at a time and every
+    /// durable one ends in an fsync, so N concurrent durable writes would pay N
+    /// fsyncs back to back. Instead each writer queues its operations; the
+    /// first one that finds no leader running becomes the leader and commits
+    /// *everything queued* in one transaction with one fsync, then hands each
+    /// writer its result. Writers that arrive while that fsync runs queue up
+    /// behind it and form the next group, so batches grow with load and a lone
+    /// writer pays exactly one plain durable commit. A write is acknowledged
+    /// only after the transaction holding it was fsynced.
+    fn group_write(&self, ops: &[Operation]) -> AtomicResult<()> {
+        let mut state = self.group.lock().unwrap_or_else(|e| e.into_inner());
+        let id = state.next_id;
+        state.next_id += 1;
+        state.queued.push((id, ops.to_vec()));
+        loop {
+            if let Some(outcome) = state.done.remove(&id) {
+                return outcome.map_err(Into::into);
+            }
+            if state.leader_active {
+                state = self.group_cv.wait(state).unwrap_or_else(|e| e.into_inner());
+                continue;
+            }
+            // Lead: take everything queued so far (our own write included).
+            state.leader_active = true;
+            let group = std::mem::take(&mut state.queued);
+            drop(state);
+
+            let batches: Vec<&[Operation]> = group.iter().map(|(_, ops)| ops.as_slice()).collect();
+            // A panic must not leave `leader_active` set and the group hanging.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.write_batches(&batches, true)
+                    .map_err(|e| e.to_string())
+            }))
+            .unwrap_or_else(|_| Err("redb group commit panicked".to_string()));
+
+            state = self.group.lock().unwrap_or_else(|e| e.into_inner());
+            for (writer, _) in &group {
+                state.done.insert(*writer, outcome.clone());
+            }
+            state.leader_active = false;
+            self.group_cv.notify_all();
+        }
+    }
+
+    /// An `Immediate` commit: redb fsyncs it and, with it, every earlier
+    /// `Durability::None` commit.
+    fn sync_commit_point(&self) -> AtomicResult<()> {
+        let mut tx = self
+            .db
+            .begin_write()
+            .map_err(|e| format!("redb flush begin_write: {e}"))?;
+        tx.set_quick_repair(true);
+        // Touch a sentinel key so the transaction is non-empty and redb
+        // definitely writes (and fsyncs) a new commit point.
+        {
+            let mut table = tx
+                .open_table(table_def(Tree::DriveMapping))
+                .map_err(|e| format!("redb flush open table: {e}"))?;
+            table
+                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
+                .map_err(|e| format!("redb flush sentinel: {e}"))?;
+        }
+        tx.commit().map_err(|e| format!("redb flush commit: {e}"))?;
+        Ok(())
     }
 }
 
@@ -308,6 +623,13 @@ impl KvStore for RedbStore {
     }
 
     fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
+        // Removing a key that is not there changes nothing, so it must not
+        // cost a write transaction and an fsync. The commit path clears a
+        // tombstone this way before every single commit.
+        let batching = self.batch_buffer.lock().unwrap().is_some();
+        if !batching && !self.contains_key(tree, key)? {
+            return Ok(());
+        }
         self.apply_batch(&[Operation {
             tree,
             method: Method::Delete,
@@ -508,38 +830,7 @@ impl KvStore for RedbStore {
             }
         }
 
-        let mut tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb write tx: {e}"))?;
-        // EXPERIMENT: relax durability to avoid an fsync per commit (was
-        // set_quick_repair(true) → 2PC + Immediate fsync ≈ 23ms/commit).
-        tx.set_durability(redb::Durability::None)
-            .map_err(|e| format!("redb set_durability: {e}"))?;
-        {
-            for op in operations {
-                let mut table = tx
-                    .open_table(table_def(op.tree))
-                    .map_err(|e| format!("redb open table: {e}"))?;
-
-                match op.method {
-                    Method::Insert => {
-                        let val = op.val.as_deref().unwrap_or(b"");
-                        table
-                            .insert(op.key.as_slice(), val)
-                            .map_err(|e| format!("redb batch insert: {e}"))?;
-                    }
-                    Method::Delete => {
-                        table
-                            .remove(op.key.as_slice())
-                            .map_err(|e| format!("redb batch remove: {e}"))?;
-                    }
-                }
-            }
-        }
-        tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
-        self.dirty.store(true, Ordering::SeqCst);
-        Ok(())
+        self.write_ops(operations)
     }
 
     fn flush(&self) -> AtomicResult<()> {
@@ -549,37 +840,18 @@ impl KvStore for RedbStore {
         if !self.dirty.swap(false, Ordering::SeqCst) {
             return Ok(());
         }
-        // Per-commit writes use Durability::None (no fsync) for throughput.
-        // redb only persists those to disk once a *subsequent* Immediate
-        // commit lands, so this flush — a quick Immediate commit — is what
-        // actually makes recent commits durable. The server calls it on a
-        // periodic tick (see `serve.rs`), amortizing one fsync across many
-        // commits instead of paying one per commit. `set_quick_repair`
-        // persists redb's allocator state so an unclean shutdown still boots
-        // fast.
-        let mut tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb flush begin_write: {e}"))?;
-        tx.set_quick_repair(true);
-        // Touch a sentinel key so the transaction is non-empty and redb
-        // definitely writes (and, at Immediate durability, fsyncs) a new
-        // commit point that persists all prior Durability::None commits.
-        {
-            let mut table = tx
-                .open_table(table_def(Tree::DriveMapping))
-                .map_err(|e| format!("redb flush open table: {e}"))?;
-            table
-                .insert(b"__flush_sentinel__".as_slice(), b"".as_slice())
-                .map_err(|e| format!("redb flush sentinel: {e}"))?;
+        // `Durability::None` writes are only persisted by a *subsequent*
+        // Immediate commit, so this flush is what makes them durable. The
+        // server calls it on a periodic tick (see `serve.rs`). In group mode
+        // writers run the same commit point themselves, so this is a
+        // harmless no-op unless something was left dirty.
+        match self.sync_commit_point() {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                self.dirty.store(true, Ordering::SeqCst);
+                Err(e)
+            }
         }
-        // Immediate is the default durability; committing flushes + fsyncs all
-        // prior Durability::None commits.
-        if let Err(e) = tx.commit() {
-            self.dirty.store(true, Ordering::SeqCst);
-            return Err(format!("redb flush commit: {e}").into());
-        }
-        Ok(())
     }
 
     fn len(&self, tree: Tree) -> AtomicResult<usize> {
@@ -609,37 +881,7 @@ impl KvStore for RedbStore {
             return Ok(());
         }
         // Apply all buffered operations in a single transaction
-        let mut tx = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("redb write tx: {e}"))?;
-        // EXPERIMENT: relax durability to avoid an fsync per commit.
-        tx.set_durability(redb::Durability::None)
-            .map_err(|e| format!("redb set_durability: {e}"))?;
-        {
-            for op in &ops {
-                let mut table = tx
-                    .open_table(table_def(op.tree))
-                    .map_err(|e| format!("redb open table: {e}"))?;
-
-                match op.method {
-                    Method::Insert => {
-                        let val = op.val.as_deref().unwrap_or(b"");
-                        table
-                            .insert(op.key.as_slice(), val)
-                            .map_err(|e| format!("redb batch insert: {e}"))?;
-                    }
-                    Method::Delete => {
-                        table
-                            .remove(op.key.as_slice())
-                            .map_err(|e| format!("redb batch remove: {e}"))?;
-                    }
-                }
-            }
-        }
-        tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
-        self.dirty.store(true, Ordering::SeqCst);
-        Ok(())
+        self.write_ops(&ops)
     }
 }
 
@@ -707,7 +949,7 @@ mod tests {
     const ABORT_TEST_NAME: &str =
         "db::redb_store::tests::unflushed_writes_are_lost_on_abort_and_flushed_ones_survive";
 
-    /// Per-commit writes are `Durability::None`; only `flush` makes them
+    /// With `Durability::None`, per-commit writes are not fsynced; only `flush` makes them
     /// survive an unclean exit. A clean `drop` closes redb durably, so the
     /// loss only shows when the process dies mid-flight: the Android app
     /// kill that motivated the library-owned flush tick. This test re-runs
@@ -716,7 +958,9 @@ mod tests {
     #[test]
     fn unflushed_writes_are_lost_on_abort_and_flushed_ones_survive() {
         if let Ok(path) = std::env::var(ABORT_CHILD_ENV) {
-            let store = RedbStore::new_file(std::path::Path::new(&path)).unwrap();
+            let store =
+                RedbStore::new_file_with_durability(std::path::Path::new(&path), Durability::None)
+                    .unwrap();
             store.insert(Tree::PluginMeta, b"kept", b"1").unwrap();
             assert!(store.dirty.load(Ordering::SeqCst));
             store.flush().unwrap();
@@ -758,7 +1002,7 @@ mod tests {
     #[test]
     fn flush_is_a_no_op_when_nothing_changed() {
         let path = temp_path("noop");
-        let store = RedbStore::new_file(&path).unwrap();
+        let store = RedbStore::new_file_with_durability(&path, Durability::None).unwrap();
         store.insert(Tree::PluginMeta, b"k", b"v").unwrap();
         store.flush().unwrap();
         let size_after_first_flush = std::fs::metadata(&path).unwrap().len();
@@ -774,5 +1018,60 @@ mod tests {
         );
         drop(store);
         std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn parse_durability() {
+        assert_eq!("group".parse(), Ok(Durability::Group));
+        assert_eq!("Immediate".parse(), Ok(Durability::Immediate));
+        assert_eq!(" none ".parse(), Ok(Durability::None));
+        assert!("maybe".parse::<Durability>().is_err());
+        assert_eq!(Durability::default(), Durability::Group);
+    }
+
+    /// Every concurrent group write is applied exactly once and acknowledged,
+    /// whichever writer ended up leading.
+    #[test]
+    fn group_commit_applies_every_concurrent_write() {
+        let store = Arc::new(RedbStore::new_file(&temp_path("group")).unwrap());
+        assert_eq!(store.durability(), Durability::Group);
+        let handles: Vec<_> = (0..8)
+            .map(|w| {
+                let store = store.clone();
+                std::thread::spawn(move || {
+                    for i in 0..50 {
+                        let key = format!("w{w}-{i}");
+                        store
+                            .insert(Tree::PluginMeta, key.as_bytes(), b"v")
+                            .unwrap();
+                        // Acknowledged means visible.
+                        assert!(store
+                            .contains_key(Tree::PluginMeta, key.as_bytes())
+                            .unwrap());
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(store.len(Tree::PluginMeta).unwrap(), 400);
+    }
+
+    #[test]
+    fn removing_a_missing_key_costs_no_write_transaction() {
+        let store =
+            RedbStore::new_file_with_durability(&temp_path("remove-missing"), Durability::None)
+                .unwrap();
+        store.insert(Tree::PluginMeta, b"k", b"v").unwrap();
+        assert!(store.dirty.swap(false, Ordering::SeqCst));
+        store.remove(Tree::PluginMeta, b"absent").unwrap();
+        assert!(
+            !store.dirty.load(Ordering::SeqCst),
+            "removing an absent key must not write"
+        );
+        store.remove(Tree::PluginMeta, b"k").unwrap();
+        assert!(store.dirty.load(Ordering::SeqCst));
+        assert_eq!(store.get(Tree::PluginMeta, b"k").unwrap(), None);
     }
 }

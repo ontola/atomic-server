@@ -6,7 +6,10 @@ use crate::storelike::Query;
 use crate::urls;
 use crate::utils::random_string;
 use crate::values::{SubResource, Value};
-use crate::{commit::CommitBuilder, errors::AtomicResult};
+use crate::{
+    commit::CommitBuilder,
+    errors::{AtomicError, AtomicResult},
+};
 use crate::{
     mapping::is_url,
     schema::{Class, Property},
@@ -48,6 +51,44 @@ impl Clone for Resource {
             commit: self.commit.clone(),
             loro,
         }
+    }
+}
+
+/// Whether a materialized value is acceptable for a Property's datatype.
+///
+/// Loro stores bare primitives, so the datatype of an untagged value is a
+/// heuristic: strings may come back as `String`, `Markdown`, `Slug`, `Uri` or
+/// `Date` (or `AtomicUrl` when URL-shaped), and integers as `Integer` or `Timestamp`. Those families are
+/// interchangeable here. Structured datatypes (`Json`, `LocalizedText`,
+/// `LoroDoc`) and unknown datatypes are not checked.
+fn value_fits_datatype(value: &Value, wanted: &crate::datatype::DataType) -> bool {
+    use crate::datatype::DataType as D;
+    let text = matches!(
+        value,
+        Value::String(_)
+            | Value::Markdown(_)
+            | Value::Slug(_)
+            | Value::Uri(_)
+            | Value::Date(_)
+            // URL-shaped strings are materialized as `AtomicUrl`.
+            | Value::AtomicUrl(_)
+    );
+    match wanted {
+        D::String | D::Markdown | D::Slug | D::Uri | D::Date => text,
+        D::Integer | D::Timestamp => matches!(value, Value::Integer(_) | Value::Timestamp(_)),
+        D::Float => matches!(
+            value,
+            Value::Float(_) | Value::Integer(_) | Value::Timestamp(_)
+        ),
+        D::Boolean => matches!(value, Value::Boolean(_)),
+        // Plain strings stay valid: existing data holds non-URL references
+        // such as `blake3:<hash>` release ids under AtomicUrl properties.
+        D::AtomicUrl => matches!(
+            value,
+            Value::AtomicUrl(_) | Value::NestedResource(_) | Value::String(_)
+        ),
+        D::ResourceArray => matches!(value, Value::ResourceArray(_)),
+        D::Json | D::LoroDoc | D::LocalizedText | D::Unsupported(_) => true,
     }
 }
 
@@ -392,6 +433,72 @@ impl Resource {
         Ok(())
     }
 
+    /// Checks that the current values of `properties` conform to their Property
+    /// definitions: the datatype and `allowsOnly`. Used on incoming commits,
+    /// where values arrive through Loro and bypass [`Self::set`].
+    ///
+    /// Lenient on purpose: a property that cannot be resolved here (unknown,
+    /// legacy, or not fetchable) is skipped with a warning. Untagged Loro values
+    /// are materialized heuristically, so text-like and number-like datatypes
+    /// are treated as interchangeable (see [`value_fits_datatype`]).
+    pub async fn check_props_conform<'a>(
+        &self,
+        properties: impl IntoIterator<Item = &'a String>,
+        store: &impl Storelike,
+    ) -> AtomicResult<()> {
+        for property in properties {
+            let Ok(value) = self.get(property) else {
+                continue;
+            };
+            let full_prop = match store.get_property(property).await {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(
+                        "Property {} is not available here, so its value on {} is not validated: {}",
+                        property,
+                        self.get_subject(),
+                        e
+                    );
+                    continue;
+                }
+            };
+            if !value_fits_datatype(value, &full_prop.data_type) {
+                return Err(AtomicError::parse_error(
+                    &format!(
+                    "Property '{}' on '{}' has the wrong datatype. Wanted '{}', got '{}' (value: '{}')",
+                    property,
+                    self.get_subject(),
+                    full_prop.data_type,
+                    value.datatype(),
+                    value
+                ),
+                    Some(&self.get_subject().to_string()),
+                    Some(property),
+                ));
+            }
+            if let Some(allowed) = &full_prop.allows_only {
+                let items: Vec<String> = match value {
+                    Value::ResourceArray(arr) => arr.iter().map(|i| i.to_string()).collect(),
+                    other => vec![other.to_string()],
+                };
+                if let Some(bad) = items.iter().find(|i| !allowed.contains(i)) {
+                    return Err(AtomicError::parse_error(
+                        &format!(
+                            "Property '{}' on '{}' does not allow value '{}'. Allowed: {:?}",
+                            property,
+                            self.get_subject(),
+                            bad,
+                            allowed
+                        ),
+                        Some(&self.get_subject().to_string()),
+                        Some(property),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Removes / deletes the resource from the store by performing a Commit.
     /// Recursively deletes the resource's children.
     #[tracing::instrument(skip(store))]
@@ -414,6 +521,43 @@ impl Resource {
     ) -> AtomicResult<crate::commit::CommitResponse> {
         self.commit.destroy(true);
         self.save_as(agent, store).await
+    }
+
+    /// Erases the resource, its children and every trace of them
+    /// (`planning/purge.md`) with a signed `destroy` + `purge` commit by the
+    /// store's default agent. Unlike [`Self::destroy`], rights are enforced
+    /// here: only the owner of the resource's drive may purge.
+    pub async fn purge(
+        &mut self,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let agent = store.get_default_agent()?;
+        self.purge_as(&agent, store).await
+    }
+
+    /// [`Self::purge`] signed by an explicit agent.
+    pub async fn purge_as(
+        &mut self,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let mut builder = CommitBuilder::new(self.subject.clone());
+        builder.purge(true);
+        let commit = builder.sign(agent, store, self).await?;
+        let opts = CommitOpts {
+            validate_schema: false,
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            validate_loro_causality: false,
+            update_index: true,
+            source_id: None,
+        };
+        store
+            .apply_commit(commit, &opts)
+            .await
+            .map_err(|e| format!("Failed to purge {} : {}", self.subject, e).into())
     }
 
     /// Gets the children of this resource.
@@ -1319,6 +1463,7 @@ impl Resource {
                 signer,
                 loro_update: None,
                 destroy: Some(false),
+                purge: None,
                 created_at: crate::utils::now(),
                 previous_commit: None,
                 is_genesis: None,

@@ -126,6 +126,45 @@ struct RemovedSubject {
     drive: Option<Subject>,
 }
 
+/// `Tree::PluginMeta` key prefix of a blob a purge still has to delete.
+const PURGE_BLOB_PREFIX: &str = "purge-blob:";
+
+fn purge_blob_key(hash_hex: &str) -> Vec<u8> {
+    format!("{PURGE_BLOB_PREFIX}{hash_hex}").into_bytes()
+}
+
+/// The blobs (hex BLAKE3 hashes) a stored resource references: the same three
+/// shapes [`Db::readable_blob_referrers`] looks up (a File's whole-file
+/// `internalId`, a `blob` reference, and the `chunks` of a chunked File).
+fn blob_hashes(propvals: &PropVals) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |candidate: &str| {
+        let hex = candidate
+            .strip_prefix(crate::identifiers::ATOMIC_BLOB_PREFIX)
+            .or_else(|| candidate.strip_prefix("did:ad:blob:"))
+            .unwrap_or(candidate);
+        if hex.len() == 64
+            && hex.bytes().all(|b| b.is_ascii_hexdigit())
+            && !out.iter().any(|h| h == hex)
+        {
+            out.push(hex.to_ascii_lowercase());
+        }
+    };
+    for prop in [urls::INTERNAL_ID, urls::BLOB] {
+        if let Some(value) = propvals.get(prop) {
+            push(&value.to_string());
+        }
+    }
+    if let Some(chunks) = propvals.get(urls::CHUNKS) {
+        if let Ok(list) = chunks.to_subjects(None) {
+            for chunk in list {
+                push(&chunk);
+            }
+        }
+    }
+    out
+}
+
 /// Event emitted when a resource is created, updated, or deleted.
 #[derive(Debug, Clone)]
 pub enum DbEvent {
@@ -913,6 +952,28 @@ impl Db {
         uploads_path: &std::path::Path,
         policy: &compaction::CompactionPolicy,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_options(
+            path,
+            base_domain,
+            uploads_path,
+            policy,
+            redb_store::Durability::default(),
+        )
+        .await
+    }
+
+    /// `init_redb_file_with_policy` with an explicit write [`redb_store::Durability`]:
+    /// when a commit is acknowledged relative to the fsync that protects it.
+    /// The default (`Group`) acknowledges only after an fsync, shared between
+    /// concurrent writers.
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_options(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
+        durability: redb_store::Durability,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -971,8 +1032,31 @@ impl Db {
         #[cfg(not(feature = "db-sled"))]
         let _ = uploads_path;
 
-        let (redb_store, compaction) =
-            redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
+        // A purge leaves a marker: its bytes sit in freed pages that redb
+        // never zeroes, and compaction does not reach them either. Rewrite
+        // the file with live rows only and zero the old one before serving.
+        if compaction::pending_after_purge(path) && redb_path.exists() {
+            match redb_store::scrub_file(&redb_path) {
+                Ok((before, after)) => {
+                    tracing::info!(
+                        "Scrubbed {} after a purge: {} -> {} bytes",
+                        redb_path.display(),
+                        before,
+                        after
+                    );
+                    compaction::clear_after_purge(path);
+                }
+                Err(e) => tracing::error!(
+                    "Could not scrub {} after a purge, deleted data may remain in free pages; \
+                     will retry on the next start: {e}",
+                    redb_path.display()
+                ),
+            }
+        }
+        let (redb_store, compaction) = redb_store::RedbStore::new_file_with_policy_and_durability(
+            &redb_path, policy, durability,
+        )?;
+        tracing::info!("Write durability: {durability}");
 
         let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 
@@ -1530,7 +1614,7 @@ impl Db {
         self.get_loro_snapshot_bytes(&self.normalize_subject(subject).pure_id())
     }
 
-    pub(crate) fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
+    pub fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
         let key = crate::identifiers::canonicalize_scheme(subject);
         self.kv
             .get(Tree::LoroSnapshots, key.as_bytes())
@@ -3552,16 +3636,42 @@ impl Db {
         q: &Query,
         rights_cache: &std::sync::Mutex<RightsCache>,
     ) -> Option<Option<Resource>> {
+        self.resolve_member(subject, &q.for_agent, q.include_nested, rights_cache)
+            .await
+    }
+
+    /// Whether `for_agent` may see this index hit at all. Used for the rows
+    /// outside the returned page: they never get a body, but they must still be
+    /// tested before they are counted, or `count` / `totalPages` reveal how many
+    /// rows the agent cannot read (issue #286).
+    pub(crate) async fn member_visible(
+        &self,
+        subject: &Subject,
+        for_agent: &ForAgent,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> bool {
+        if *for_agent == ForAgent::Sudo {
+            return true;
+        }
+        self.resolve_member(subject, for_agent, false, rights_cache)
+            .await
+            .is_some()
+    }
+
+    async fn resolve_member(
+        &self,
+        subject: &Subject,
+        for_agent: &ForAgent,
+        include_nested: bool,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> Option<Option<Resource>> {
         let mut resource = match self.get_resource_shallow(subject) {
             Ok(resource) => resource,
             Err(_) => {
                 // No materialized row — take the slow, complete path.
-                return match self
-                    .get_resource_extended(subject, true, &q.for_agent)
-                    .await
-                {
+                return match self.get_resource_extended(subject, true, for_agent).await {
                     Ok(response) => {
-                        if q.include_nested {
+                        if include_nested {
                             Some(Some(response.to_single()))
                         } else {
                             Some(None)
@@ -3572,11 +3682,11 @@ impl Db {
             }
         };
 
-        if q.for_agent != ForAgent::Sudo
+        if *for_agent != ForAgent::Sudo
             && crate::hierarchy::check_rights_cached(
                 self,
                 &resource,
-                &q.for_agent,
+                for_agent,
                 crate::hierarchy::Right::Read,
                 Some(rights_cache),
             )
@@ -3586,7 +3696,7 @@ impl Db {
             return None;
         }
 
-        if !q.include_nested {
+        if !include_nested {
             return Some(None);
         }
 
@@ -3673,40 +3783,35 @@ impl Db {
             let subject = Subject::from_raw(&identity, base_domain.as_deref());
             let index = seen.len() - 1;
 
-            total_count += 1;
+            // Sudo without nested bodies needs no per-member work at all.
+            let free = q.for_agent == ForAgent::Sudo && !q.include_nested;
+            let in_page = index >= q.offset && q.limit.is_none_or(|l| subjects.len() < l);
 
-            if q.offset > index {
+            // Denied members neither fill the page nor count. That holds for
+            // rows outside the page too: counting them blindly would let any
+            // reader learn how many rows they cannot see (issue #286), so
+            // they are tested for visibility (without a body) before they
+            // are counted.
+            if !in_page {
+                if free
+                    || self
+                        .member_visible(&subject, &q.for_agent, &rights_cache)
+                        .await
+                {
+                    total_count += 1;
+                }
                 continue;
             }
-
-            // Denied members do not grow `subjects`, so we keep resolving
-            // until the page is full of *authorized* hits — a private streak
-            // must not hide a later readable row.
-            if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
-                // Sudo without nested bodies needs no per-member work at all.
-                if q.for_agent == ForAgent::Sudo && !q.include_nested {
-                    subjects.push(subject);
-                    continue;
-                }
-
-                match self.resolve_query_member(&subject, q, &rights_cache).await {
-                    Some(body) => {
-                        subjects.push(subject);
-                        if let Some(resource) = body {
-                            resources.push(resource);
-                        }
-                    }
-                    None => {
-                        // The index has an entry for this subject but the
-                        // requesting agent can't resolve it — auth-filtered,
-                        // destroyed-with-stale-index, or otherwise invisible.
-                        // Roll back the count bump so it doesn't outrun the
-                        // returned subjects and produce a
-                        // `totalMembers: N, members: []` drift. We only do
-                        // this for in-page hits; entries past the limit stay
-                        // counted blindly (issue #286).
-                        total_count -= 1;
-                    }
+            if free {
+                total_count += 1;
+                subjects.push(subject);
+                continue;
+            }
+            if let Some(body) = self.resolve_query_member(&subject, q, &rights_cache).await {
+                total_count += 1;
+                subjects.push(subject);
+                if let Some(resource) = body {
+                    resources.push(resource);
                 }
             }
         }
@@ -3729,11 +3834,9 @@ impl Db {
     /// Every row the query matches, unpaged and in order.
     ///
     /// Subjects, not a count: these are the rows that actually resolved for this
-    /// agent. `QueryResult::count` deliberately counts raw index hits (including
-    /// unauthorized and stale-index entries, see issue #286), so a `count`
-    /// aggregate can legitimately come out lower than `totalMembers` — it counts
-    /// what the reader can see, which is the only number a sum over the same rows
-    /// can agree with.
+    /// agent. `QueryResult::count` counts the same rows (denied and stale-index
+    /// entries are excluded everywhere, see issue #286), so `totalMembers`, a
+    /// `count` aggregate and a sum over these rows all agree.
     ///
     /// Shared by the paging path and the aggregation pass, so a total can never
     /// summarize a different set than the rows on screen.
@@ -3759,9 +3862,12 @@ impl Db {
             drive: q.drive.clone(),
             aggregation: None,
             expression_filters: Vec::new(),
+            composite: q.composite.clone(),
         };
 
-        let subjects = if requires_query_index(&scan) {
+        let subjects = if !scan.composite.is_empty() {
+            self.query_composite(&scan).await?.subjects
+        } else if requires_query_index(&scan) {
             self.query_complex(&scan).await?.subjects
         } else {
             self.query_basic(&scan).await?.subjects
@@ -3946,6 +4052,298 @@ impl Db {
         }
 
         Ok(outcomes)
+    }
+
+    /// Whether `target` (a related resource) satisfies a [ValueIn] and the
+    /// querying agent may read it. Unreadable resources never match, so a
+    /// filter can't be used to probe resources the agent can't see.
+    async fn related_matches(
+        &self,
+        target: &Resource,
+        clause: &crate::storelike::ValueIn,
+        q: &Query,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> bool {
+        let Ok(actual) = target.get(&clause.property) else {
+            return false;
+        };
+        if !clause
+            .values
+            .iter()
+            .any(|v| query_index::value_matches(actual, v, crate::storelike::FilterOperator::Equal))
+        {
+            return false;
+        }
+        q.for_agent == ForAgent::Sudo
+            || crate::hierarchy::check_rights_cached(
+                self,
+                target,
+                &q.for_agent,
+                crate::hierarchy::Right::Read,
+                Some(rights_cache),
+            )
+            .await
+            .is_ok()
+    }
+
+    /// Answers a query that carries a [CompositeFilter] (OR groups, filters
+    /// over related resources).
+    ///
+    /// The cheapest clause by a scan-capped index estimate supplies the
+    /// candidates, straight from the `PropValSub` index (and, for a path
+    /// filter, one reverse `ValPropSub` lookup per matching related
+    /// resource). Every other clause is then checked on the candidate's
+    /// materialized row. No clause scans the resources table. The result is
+    /// sorted in memory, so the cost is proportional to the matching set, not
+    /// to the store. These queries are not watched: nothing keeps a
+    /// persisted index for them.
+    async fn query_composite(&self, q: &Query) -> AtomicResult<QueryResult> {
+        use crate::storelike::{FilterOperator, PropVal};
+
+        let rights_cache = std::sync::Mutex::new(RightsCache::default());
+        let base_domain = self.get_base_domain();
+
+        // The constraints that have a point-lookup in PropValSub.
+        let mut plain: Vec<PropVal> = Vec::new();
+        if q.property.is_some() || q.value.is_some() {
+            plain.push(PropVal {
+                property: q.property.clone(),
+                value: q.value.clone(),
+                operator: FilterOperator::Equal,
+            });
+        }
+        plain.extend(q.filters.iter().cloned());
+
+        enum Driver {
+            Plain(usize),
+            ValueIn(usize),
+            Path(usize),
+        }
+        let cap = PLANNER_SCAN_CAP;
+        let mut best: Option<(usize, Driver)> = None;
+        let mut consider = |estimate: usize, driver: Driver| {
+            if best.as_ref().is_none_or(|(e, _)| estimate < *e) {
+                best = Some((estimate, driver));
+            }
+        };
+        for (i, c) in plain.iter().enumerate() {
+            if let (Some(prop), Some(v), FilterOperator::Equal) =
+                (&c.property, &c.value, c.operator)
+            {
+                consider(
+                    self.estimate_prop_val_count(prop, Some(v), cap),
+                    Driver::Plain(i),
+                );
+            }
+        }
+        for (i, c) in q.composite.value_in.iter().enumerate() {
+            let est = c
+                .values
+                .iter()
+                .map(|v| self.estimate_prop_val_count(&c.property, Some(v), cap))
+                .sum();
+            consider(est, Driver::ValueIn(i));
+        }
+        for (i, p) in q.composite.paths.iter().enumerate() {
+            let est = p
+                .target
+                .values
+                .iter()
+                .map(|v| self.estimate_prop_val_count(&p.target.property, Some(v), cap))
+                .sum();
+            consider(est, Driver::Path(i));
+        }
+
+        // Candidate subjects (canonical identity), deduplicated.
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut candidates: Vec<Subject> = Vec::new();
+        let mut push_candidate = |subject: &Subject| {
+            let identity = subject.pure_id();
+            if seen.insert(identity.clone()) {
+                candidates.push(Subject::from_raw(&identity, base_domain.as_deref()));
+            }
+        };
+        let mut skip_path: Option<usize> = None;
+        match best.map(|(_, d)| d) {
+            Some(Driver::Plain(i)) => {
+                let c = &plain[i];
+                for atom in find_in_prop_val_sub_index(
+                    self,
+                    c.property.as_deref().unwrap_or_default(),
+                    c.value.as_ref(),
+                ) {
+                    push_candidate(&atom?.subject);
+                }
+            }
+            Some(Driver::ValueIn(i)) => {
+                let c = &q.composite.value_in[i];
+                for v in &c.values {
+                    for atom in find_in_prop_val_sub_index(self, &c.property, Some(v)) {
+                        push_candidate(&atom?.subject);
+                    }
+                }
+            }
+            Some(Driver::Path(i)) => {
+                skip_path = Some(i);
+                let p = &q.composite.paths[i];
+                let mut targets: HashSet<String> = HashSet::new();
+                for v in &p.target.values {
+                    for atom in find_in_prop_val_sub_index(self, &p.target.property, Some(v)) {
+                        let identity = atom?.subject.pure_id();
+                        if !targets.insert(identity.clone()) {
+                            continue;
+                        }
+                        let t_subject = Subject::from_raw(&identity, base_domain.as_deref());
+                        let Ok(t_row) = self.get_resource_shallow(&t_subject) else {
+                            continue;
+                        };
+                        if !self
+                            .related_matches(&t_row, &p.target, q, &rights_cache)
+                            .await
+                        {
+                            continue;
+                        }
+                        for back in find_in_val_prop_sub_index(
+                            self,
+                            &Value::AtomicUrl(t_subject.clone()),
+                            Some(&p.via),
+                        ) {
+                            push_candidate(&back?.subject);
+                        }
+                    }
+                }
+            }
+            // Only reachable for an empty composite, which doesn't come here.
+            None => {}
+        }
+
+        let drive_filter = q
+            .drive
+            .clone()
+            .map(|drive| QueryFilter::single(None, None, None, drive));
+        let start = q
+            .start_val
+            .as_ref()
+            .map(|v| query_index::encode_sort_value(Some(v)));
+        let end = q.end_val.as_ref().map(|v| {
+            let mut e = query_index::encode_sort_value(Some(v));
+            e.push(0xFF);
+            e
+        });
+
+        // (sort segment, identity, subject)
+        let mut matched: Vec<(Vec<u8>, String, Subject)> = Vec::new();
+        'candidates: for subject in candidates {
+            if !q.include_external && !subject.is_local() {
+                continue;
+            }
+            let Ok(row) = self.get_resource_shallow(&subject) else {
+                continue;
+            };
+            if let Some(f) = &drive_filter {
+                if !self.filter_accepts_resource_drive(f, &row) {
+                    continue;
+                }
+            }
+            if !plain
+                .iter()
+                .all(|c| query_index::constraint_matches(&row, c))
+            {
+                continue;
+            }
+            for clause in &q.composite.value_in {
+                let hit = row.get(&clause.property).is_ok_and(|actual| {
+                    clause
+                        .values
+                        .iter()
+                        .any(|v| query_index::value_matches(actual, v, FilterOperator::Equal))
+                });
+                if !hit {
+                    continue 'candidates;
+                }
+            }
+            for (i, path) in q.composite.paths.iter().enumerate() {
+                if skip_path == Some(i) {
+                    continue;
+                }
+                let mut hit = false;
+                if let Some(refs) = row
+                    .get(&path.via)
+                    .ok()
+                    .and_then(|v| v.to_reference_index_strings())
+                {
+                    for r in refs {
+                        let t_subject = Subject::from_raw(&r, base_domain.as_deref());
+                        if let Ok(t_row) = self.get_resource_shallow(&t_subject) {
+                            if self
+                                .related_matches(&t_row, &path.target, q, &rights_cache)
+                                .await
+                            {
+                                hit = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if !hit {
+                    continue 'candidates;
+                }
+            }
+            let sort_seg = match &q.sort_by {
+                Some(prop) => query_index::sort_key_for(&row, prop),
+                None => vec![query_index::TAG_NONE],
+            };
+            if start.as_ref().is_some_and(|s| sort_seg < *s)
+                || end.as_ref().is_some_and(|e| sort_seg > *e)
+            {
+                continue;
+            }
+            matched.push((sort_seg, subject.pure_id(), subject));
+        }
+
+        matched.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+        if q.sort_desc {
+            matched.reverse();
+        }
+
+        // Paging with the same bookkeeping as `query_basic`: denied members
+        // don't grow the page and don't count.
+        let mut subjects: Vec<Subject> = vec![];
+        let mut resources: Vec<Resource> = vec![];
+        let mut total_count = 0;
+        let limit = q.limit.unwrap_or(usize::MAX);
+        for (index, (_, _, subject)) in matched.into_iter().enumerate() {
+            let free = q.for_agent == ForAgent::Sudo && !q.include_nested;
+            if q.offset > index || subjects.len() >= limit {
+                if free
+                    || self
+                        .member_visible(&subject, &q.for_agent, &rights_cache)
+                        .await
+                {
+                    total_count += 1;
+                }
+                continue;
+            }
+            if free {
+                total_count += 1;
+                subjects.push(subject);
+                continue;
+            }
+            if let Some(body) = self.resolve_query_member(&subject, q, &rights_cache).await {
+                total_count += 1;
+                subjects.push(subject);
+                if let Some(resource) = body {
+                    resources.push(resource);
+                }
+            }
+        }
+
+        Ok(QueryResult {
+            subjects,
+            resources,
+            aggregates: Vec::new(),
+            count: total_count,
+        })
     }
 
     async fn query_complex(&self, q: &Query) -> AtomicResult<QueryResult> {
@@ -4144,6 +4542,145 @@ impl Db {
             .into());
         }
         Ok(())
+    }
+
+    /// Queues, into the transaction that destroys `removed`, everything a
+    /// purge erases beyond what a destroy does (`planning/purge.md`):
+    ///
+    /// - every envelope of each removed subject (`Tree::Envelopes`), except
+    ///   `keep_envelope`, the purge commit's own value-free one;
+    /// - every stored commit row about a removed subject (the genesis row
+    ///   keeps the creation `loroUpdate`; rights/parent commits keep deltas),
+    ///   with their index rows, except `keep_commit`, the purge commit;
+    /// - outbox entries for them (a queued genesis holds the values);
+    /// - a `purge-blob:` marker per blob they referenced, so a crash before
+    ///   the blob is deleted is finished by [`Db::resume_pending_blob_purges`].
+    ///
+    /// Returns those blob hashes (hex). Scans the commit rows once, which is
+    /// linear in their number: purge is rare and nothing on the normal
+    /// commit or read path calls this.
+    fn queue_purge(
+        &self,
+        removed: &[RemovedSubject],
+        keep_commit: &str,
+        keep_envelope: &[u8],
+        transaction: &mut Transaction,
+    ) -> AtomicResult<Vec<String>> {
+        // Every spelling a row about these subjects might use.
+        let mut names: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for r in removed {
+            let pure = r.subject.pure_id();
+            names.insert(crate::identifiers::canonicalize_scheme(&pure));
+            names.insert(pure);
+        }
+
+        let mut blobs: Vec<String> = Vec::new();
+        for name in &names {
+            if let Ok(propvals) = self.get_propvals(name) {
+                for hash in blob_hashes(&propvals) {
+                    if !blobs.contains(&hash) {
+                        blobs.push(hash);
+                    }
+                }
+            }
+            for key in crate::envelopes::envelope_keys(self, name) {
+                if key != keep_envelope {
+                    transaction.push(Operation {
+                        tree: Tree::Envelopes,
+                        method: trees::Method::Delete,
+                        key,
+                        val: None,
+                    });
+                }
+            }
+        }
+
+        // Words the resources once held also survive in the shared trigram
+        // dictionary; see `purge_orphan_trigrams`.
+        let removed_subjects: Vec<String> = removed.iter().map(|r| r.subject.pure_id()).collect();
+        crate::search::purge_orphan_trigrams(self, &removed_subjects, transaction)?;
+
+        let keep_commit = crate::identifiers::canonicalize_scheme(keep_commit);
+        for prefix in [crate::identifiers::ATOMIC_COMMIT_PREFIX, "did:ad:commit:"] {
+            for entry in self.kv.scan_prefix(Tree::Resources, prefix.as_bytes()) {
+                let (key, bytes) = entry?;
+                let Ok(key_str) = String::from_utf8(key) else {
+                    continue;
+                };
+                if crate::identifiers::canonicalize_scheme(&key_str) == keep_commit {
+                    continue;
+                }
+                let Ok(propvals) = decode_propvals(&bytes) else {
+                    continue;
+                };
+                let about = propvals
+                    .get(urls::SUBJECT)
+                    .map(|v| Subject::from(v.to_string()).pure_id())
+                    .map(|s| crate::identifiers::canonicalize_scheme(&s));
+                if !about.is_some_and(|a| names.contains(&a)) {
+                    continue;
+                }
+                let commit = Resource::from_propvals(propvals, Subject::from(key_str.as_str()));
+                // Index rows first: they are derived from the stored atoms.
+                for atom in commit.to_atoms() {
+                    self.remove_atom_from_index(&atom, &commit, transaction)?;
+                }
+                transaction.push(Operation::remove_resource(&key_str));
+                transaction.push(Operation::remove_loro_snapshot(&key_str));
+            }
+        }
+
+        for entry in self.kv.iter_tree(Tree::Outbox) {
+            let (key, bytes) = entry?;
+            let about = serde_json::from_slice::<crate::sync::outbox::OutboxEntry>(&bytes)
+                .map(|e| crate::identifiers::canonicalize_scheme(&e.subject));
+            if about.is_ok_and(|a| names.contains(&a)) {
+                transaction.push(Operation {
+                    tree: Tree::Outbox,
+                    method: trees::Method::Delete,
+                    key,
+                    val: None,
+                });
+            }
+        }
+
+        for hash in &blobs {
+            transaction.push(Operation {
+                tree: Tree::PluginMeta,
+                method: trees::Method::Insert,
+                key: purge_blob_key(hash),
+                val: Some(vec![1]),
+            });
+        }
+        Ok(blobs)
+    }
+
+    /// Deletes the blobs a purge found that nothing references any more,
+    /// and clears their pending markers. A blob another resource still
+    /// references keeps its bytes (the marker goes either way).
+    async fn finish_blob_purge(&self, hashes: &[String]) -> AtomicResult<()> {
+        let result = self.purge_unreferenced_blobs(hashes).await;
+        if result.is_ok() {
+            for hash in hashes {
+                self.kv.remove(Tree::PluginMeta, &purge_blob_key(hash))?;
+            }
+        }
+        result.map(|_| ())
+    }
+
+    /// Finishes blob deletions a purge started and a crash or a storage
+    /// error interrupted. Safe to run at any time; run it at startup.
+    /// Returns how many pending hashes were processed.
+    pub async fn resume_pending_blob_purges(&self) -> AtomicResult<usize> {
+        let prefix = PURGE_BLOB_PREFIX.as_bytes();
+        let hashes: Vec<String> = self
+            .kv
+            .scan_prefix(Tree::PluginMeta, prefix)
+            .flatten()
+            .filter_map(|(k, _)| String::from_utf8(k[prefix.len()..].to_vec()).ok())
+            .collect();
+        self.finish_blob_purge(&hashes).await?;
+        Ok(hashes.len())
     }
 
     /// Announces subjects `recursive_remove` collected, once the transaction
@@ -4547,6 +5084,8 @@ impl Storelike for Db {
         // cascade-deleted children). Tombstoned and announced once the
         // transaction has landed; empty for anything but a destroy.
         let mut removed: Vec<RemovedSubject> = Vec::new();
+        // Blobs a purge may delete once the removal has landed.
+        let mut purge_blobs: Vec<String> = Vec::new();
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
@@ -4580,6 +5119,21 @@ impl Storelike for Db {
                 // the children's `Destroyed` events follow the apply below.
                 self.recursive_remove(&subject, &mut transaction, &mut removed, None)
                     .await?;
+                if commit_response.commit.purge == Some(true) {
+                    // The purge commit is the one row that stays: it holds no
+                    // values, and carries the proof peers need to forget too.
+                    let keep_envelope = crate::envelopes::envelope_key(
+                        commit_response.commit.subject.as_str(),
+                        commit_response.commit.created_at,
+                        commit_response.commit.signature.as_deref().unwrap_or(""),
+                    );
+                    purge_blobs = self.queue_purge(
+                        &removed,
+                        commit_response.commit_resource.get_subject().as_str(),
+                        &keep_envelope,
+                        &mut transaction,
+                    )?;
+                }
             }
             _ => {}
         };
@@ -4671,6 +5225,23 @@ impl Storelike for Db {
         // for a resource that is still present would suppress it forever.
         for r in &removed {
             crate::sync::tombstones::record_tombstone(store, &r.subject.pure_id());
+        }
+
+        if commit_response.commit.purge == Some(true) {
+            compaction::request_after_purge(&store.path);
+        }
+
+        // File bytes are not part of the transaction: delete the ones nothing
+        // references now that the referrers are gone. A failure leaves the
+        // `purge-blob:` marker queued above, and the next start retries.
+        if !purge_blobs.is_empty() {
+            if let Err(e) = store.finish_blob_purge(&purge_blobs).await {
+                tracing::error!(
+                    "Purge of {} could not delete {} blob(s), will retry: {e}",
+                    commit_response.commit.subject,
+                    purge_blobs.len()
+                );
+            }
         }
 
         // Announce the cascade-deleted children now that the removal has
@@ -5177,6 +5748,8 @@ impl Storelike for Db {
         // happen after it, not in it.
         let mut result = if !q.expression_filters.is_empty() {
             self.query_with_expression_filters(q).await?
+        } else if !q.composite.is_empty() {
+            self.query_composite(q).await?
         } else if requires_query_index(q) {
             self.query_complex(q).await?
         } else {

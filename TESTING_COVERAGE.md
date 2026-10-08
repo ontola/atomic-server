@@ -554,6 +554,7 @@ Two things worth knowing about the runners:
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
 | `SyncSession` over an in-process `AtomicTransport` holds `AUTH` across frames | `lib/src/sync/session.rs` |
+| Purge (`destroy` + `purge`): value, edit, files; afterwards no value or file byte in any live row, in the redb file after the restart scrub (and the pre-scrub residue is measured), shared blob kept, collaborator refused, replica erases its copy, `purge` without `destroy` refused | `lib/tests/purge.rs` |
 | Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold | `lib/src/envelopes.rs` |
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
@@ -572,6 +573,8 @@ Both matter because `iroh_transport` holds the router and node identity in
 |---|---|
 | Drive reconciles across a real OS process boundary | `lib/tests/cross_process_sync.rs` |
 | Iroh NodeID survives an unclean kill (`abort()`, no flush) | `lib/tests/identity_durability.rs` |
+| Acknowledged commits (raw store and full `Db`) survive `kill -9` under group/immediate durability | `lib/tests/durable_writes.rs` |
+| Query `count` / collection totals never include rows the agent cannot read | `lib/tests/query_count_leak.rs` |
 | Paired peer + its relay/direct addresses survive a kill | `lib/tests/identity_durability.rs` |
 | Two whole servers pair via `POST /iroh-sync` and reconcile | `server/tests/it/iroh_pairing.rs` |
 | `/iroh-sync` refuses malformed node ids with a UI-showable error | `server/tests/it/iroh_pairing.rs` |

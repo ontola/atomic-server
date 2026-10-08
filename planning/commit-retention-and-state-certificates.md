@@ -663,3 +663,9 @@ materialized state before commit retention can safely become optional.
 | [`sync.md`](./sync.md) | Current WS `COMMIT` implementation and echo suppression. |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Future node boundary where retention becomes runtime policy. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser outbox must not assume retained commit resources. |
+
+## Erasure
+
+Retention is a floor for audit, not a promise to keep data forever: a signed
+`purge` removes every retained commit row and envelope of a resource (see
+[`purge.md`](./purge.md)).

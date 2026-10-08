@@ -183,7 +183,7 @@
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/description": "The agents that create new child Resources for this one. This is more strict then [write](https://atomicdata.dev/properties/append), as it only allows for creating Resources that have the current one as their parent.",
+    "https://atomicdata.dev/properties/description": "The agents and groups that create new child Resources for this one. This is more strict then [write](https://atomicdata.dev/properties/append), as it only allows for creating Resources that have the current one as their parent.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -597,6 +597,16 @@
     "https://atomicdata.dev/properties/shortname": "destroy"
   },
   {
+    "@id": "https://atomicdata.dev/properties/purge",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Only together with `destroy`. If set to true, the Subject resource (and its children) is erased completely: its Loro history, every earlier commit and envelope about it, search and index entries, and file bytes no other resource references. This commit stays behind as a value-free tombstone. Only the owner of the drive may purge.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "purge"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/documents/elements",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/description": "Set of sections in a document",
@@ -878,7 +888,7 @@
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/description": "The agents that can read this resource and its children.",
+    "https://atomicdata.dev/properties/description": "The agents and groups that can read this resource and its children.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -974,7 +984,7 @@
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/description": "The agents that can edit this resource and its children.",
+    "https://atomicdata.dev/properties/description": "The agents and groups that can edit this resource and its children.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -1044,6 +1054,7 @@
     ],
     "https://atomicdata.dev/properties/recommends": [
       "https://atomicdata.dev/properties/destroy",
+      "https://atomicdata.dev/properties/purge",
       "https://atomicdata.dev/properties/isGenesis",
       "https://atomicdata.dev/properties/previousCommit",
       "https://atomicdata.dev/properties/loroUpdate"
@@ -1088,6 +1099,34 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
     "https://atomicdata.dev/properties/shortname": "drive"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Group",
+    "https://atomicdata.dev/properties/description": "A Group is a set of Agents (and other Groups). Put a Group's subject in the `read`, `write` or `append` list of a resource instead of listing every Agent: all members, direct or through nested Groups, get that right, and changing the Group's `members` changes access everywhere it is used. Groups must live on the same server as the resources that grant them. Membership cycles are harmless: they grant nothing by themselves.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/group/members"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/read",
+      "https://atomicdata.dev/properties/write"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "group"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/group/members",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/description": "The Agents and Groups that belong to this Group. A Group listed here makes all of its own members members too.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "members"
   },
   {
     "@id": "https://atomicdata.dev/classes/elements/Paragraph",

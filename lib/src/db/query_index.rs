@@ -168,7 +168,7 @@ pub fn query_id_from_filter_bytes(encoded_filter: &[u8]) -> [u8; QUERY_ID_LEN] {
 // numeric encodings (strings escape it), so the 0x00 0x00 terminator that
 // precedes the subject is unambiguous given the tag.
 
-const TAG_NONE: u8 = 0x05;
+pub(crate) const TAG_NONE: u8 = 0x05;
 const TAG_BOOL: u8 = 0x10;
 const TAG_NUMBER: u8 = 0x20;
 const TAG_STRING: u8 = 0x30;
@@ -291,47 +291,44 @@ pub async fn query_sorted_indexed(
             continue;
         }
         let index = seen.len() - 1;
-        // The user's maximum amount of results has not yet been reached
-        // and
-        // The users minimum starting distance (offset) has been reached.
-        // Denied members do not grow `subjects`, so we keep resolving until
-        // the page is full of *authorized* hits — a private streak must not
-        // hide a later readable row.
+        // A row is in the page when the user's offset is reached and the page
+        // is not yet full. Denied members do not grow `subjects`, so we keep
+        // resolving until the page is full of *authorized* hits — a private
+        // streak must not hide a later readable row.
         let in_selection = subjects.len() < limit && index >= q.offset;
-        // Tracks whether this iter step should bump the visible count.
-        // Defaults to true so entries past the page limit still count
-        // (preserving the cheap-pagination behavior). Flipped to false
-        // for in-page entries that don't survive include_external /
-        // auth filtering, so count stays consistent with subjects.len()
-        // for the page the client just received — eliminates the
-        // `totalMembers: N, members: []` drift (issue #286).
-        let mut should_count = true;
-        if in_selection {
-            if !q.include_external && !subject.is_local() {
-                should_count = false;
-            } else if q.for_agent != crate::agents::ForAgent::Sudo || q.include_nested {
-                match store.resolve_query_member(&subject, q, &rights_cache).await {
-                    Some(body) => {
-                        subjects.push(subject);
-                        if let Some(resource) = body {
-                            resources.push(resource);
-                        }
-                    }
-                    None => {
-                        // Index hit that doesn't resolve for this agent
-                        // (auth-filtered or destroyed-with-stale-index).
-                        should_count = false;
-                    }
-                }
-            } else {
+        // `count` (and with it `totalPages`) only ever counts rows this agent
+        // can see, for rows outside the page as well: counting them blindly
+        // would let a reader learn how many rows they cannot read (issue
+        // #286). Rows outside the page are tested without building a body.
+        let counted = if !q.include_external && !subject.is_local() {
+            false
+        } else if q.for_agent == crate::agents::ForAgent::Sudo && !q.include_nested {
+            if in_selection {
                 subjects.push(subject);
             }
-        }
+            true
+        } else if in_selection {
+            match store.resolve_query_member(&subject, q, &rights_cache).await {
+                Some(body) => {
+                    subjects.push(subject);
+                    if let Some(resource) = body {
+                        resources.push(resource);
+                    }
+                    true
+                }
+                // Index hit that doesn't resolve for this agent
+                // (auth-filtered or destroyed-with-stale-index).
+                None => false,
+            }
+        } else {
+            store
+                .member_visible(&subject, &q.for_agent, &rights_cache)
+                .await
+        };
 
         // We iterate over every single resource, even if we don't perform any computation on the items.
         // This helps with pagination, but it comes at a serious performance cost. We might need to change how this works later on.
-        // Also, this count does not take into account the `include_external` filter.
-        if should_count {
+        if counted {
             count += 1;
         }
         // https://github.com/atomicdata-dev/atomic-server/issues/290
@@ -354,7 +351,7 @@ fn compare_values(actual: &Value, query: &Value) -> std::cmp::Ordering {
 }
 
 /// Whether a single resource value satisfies the constraint's value + operator.
-fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
+pub(crate) fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
     use std::cmp::Ordering;
     use FilterOperator::*;
 
@@ -381,7 +378,7 @@ fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> boo
 }
 
 /// Whether a single `(property, value)` constraint matches a resource.
-fn constraint_matches(resource: &Resource, c: &PropVal) -> bool {
+pub(crate) fn constraint_matches(resource: &Resource, c: &PropVal) -> bool {
     match (&c.property, &c.value) {
         (Some(property), Some(value)) => {
             matches!(resource.get(property), Ok(v) if value_matches(v, value, c.operator))
