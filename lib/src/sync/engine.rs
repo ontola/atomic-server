@@ -877,7 +877,14 @@ pub async fn ingest_commit(
         let is_internal = incoming_commit.subject.is_internal();
         let is_did = incoming_commit.subject.is_did();
         let matches_base = if let Some(base) = store.get_base_domain() {
-            incoming_commit.subject.as_str().contains(&base)
+            // The base domain is the origin this store was booted with, scheme
+            // included. Behind a TLS-terminating proxy that is `http://host`
+            // while clients name the resource `https://host/…`: same server,
+            // so compare the host, not the scheme.
+            let host = base
+                .trim_start_matches("http://")
+                .trim_start_matches("https://");
+            incoming_commit.subject.as_str().contains(host)
         } else {
             false
         };
