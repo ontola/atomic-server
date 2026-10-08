@@ -77,6 +77,11 @@ export * from './presence.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
 export {
+  getIndexMigration,
+  subscribeIndexMigration,
+  type IndexMigrationProgress,
+} from './client-db-migration.js';
+export {
   attributionForVersion,
   mergeHistoryAttributions,
   parseHistoryAttribution,

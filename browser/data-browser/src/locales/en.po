@@ -5607,9 +5607,13 @@ msgstr "Email recovery"
 msgid "{0} resources"
 msgstr "{0} resources"
 
+#. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
+
+#: src/components/DatabaseUpgradeNotice.tsx
+
 #: src/routes/SyncRoute.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
@@ -12361,7 +12365,6 @@ msgstr "Available."
 msgid "Imported."
 msgstr "Imported."
 
-=======
 #: src/routes/AppSettings.tsx
 msgid "Show Messages panel"
 msgstr "Show Messages panel"
@@ -12399,4 +12402,13 @@ d it under their account. Only the two of you can read what you send."
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Loading"
->>>>>>> refs/remotes/pr/2132
+
+=======
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "Updating your local data"
+msgstr "Updating your local data"
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "This is needed once after an update and takes a moment. Keep this tab open."
+msgstr "This is needed once after an update and takes a moment. Keep this tab open."
+>>>>>>> refs/remotes/pr/2117
