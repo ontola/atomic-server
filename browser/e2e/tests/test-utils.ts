@@ -1053,7 +1053,6 @@ export async function editProfileAndCommit(page: Page) {
   const username = `Test user edited at ${new Date().toLocaleDateString()}`;
   await nameInput.fill(username);
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.locator('text=Resource saved')).toBeVisible();
   await page.waitForURL(/\/app\/show/);
   await page.reload();
   await expect(page.locator(`text=${username}`).first()).toBeVisible({

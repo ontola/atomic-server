@@ -525,14 +525,6 @@ msgid "No results"
 msgstr "No results"
 
 #: src/helpers/AppSettings.tsx
-msgid "Signed in!"
-msgstr "Signed in!"
-
-#: src/helpers/AppSettings.tsx
-msgid "Signed out."
-msgstr "Signed out."
-
-#: src/helpers/AppSettings.tsx
 msgid "Agent setting failed: "
 msgstr "Agent setting failed: "
 
@@ -1090,10 +1082,6 @@ msgid "to"
 msgstr "to"
 
 #: src/views/ImporterPage.tsx
-msgid "Imported!"
-msgstr "Imported!"
-
-#: src/views/ImporterPage.tsx
 msgid "Import to"
 msgstr "Import to"
 
@@ -1304,10 +1292,6 @@ msgstr "Plugin Description"
 msgid "Uninstall"
 msgstr "Uninstall"
 
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin uninstalled"
-msgstr "Plugin uninstalled"
-
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Folder"
 msgstr "Folder"
@@ -1404,11 +1388,6 @@ msgstr "Alt text"
 #: src/views/OntologyPage/NewPropertyButton.tsx
 msgid "Save"
 msgstr "Save"
-
-#. 0: files.length
-#: src/routes/NewResource/NewRoute.tsx
-msgid "Uploaded {0} files."
-msgstr "Uploaded {0} files."
 
 #: src/routes/NewResource/NewRoute.tsx
 msgid "Templates"
@@ -1630,10 +1609,6 @@ msgid "History"
 msgstr "History"
 
 #: src/routes/Share/ShareRoute.tsx
-msgid "Share settings saved"
-msgstr "Share settings saved"
-
-#: src/routes/Share/ShareRoute.tsx
 msgid "Permissions for"
 msgstr "Permissions for"
 
@@ -1664,10 +1639,6 @@ msgstr "Unavailable"
 #: src/routes/InviteRoute.tsx
 msgid "No invite token provided."
 msgstr "No invite token provided."
-
-#: src/routes/History/HistoryRoute.tsx
-msgid "Resource version updated"
-msgstr "Resource version updated"
 
 #. 0: e instanceof Error ? e.message \\: String(e)
 #: src/routes/History/HistoryRoute.tsx
@@ -1744,7 +1715,6 @@ msgstr "Load anyway ({0})"
 #: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/components/Share/useClassLabel.ts
 #: src/components/forms/NewForm/NewFormTitle.tsx
-#: src/hooks/useCreateAndNavigate.ts
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/Installation/AssignRights.tsx
@@ -1869,11 +1839,6 @@ msgstr "Copied error to clipboard"
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
 msgstr "Clear"
-
-#: src/actions/resourceActions.tsx
-#: src/hooks/useAfterResourceDelete.ts
-msgid "Resource deleted!"
-msgstr "Resource deleted!"
 
 #: src/actions/resourceActions.tsx
 msgid "Normal View"
@@ -2478,10 +2443,6 @@ msgstr "none"
 msgid "Recommends"
 msgstr "Recommends"
 
-#: src/views/Article/ArticleDescription.tsx
-msgid "Content saved"
-msgstr "Content saved"
-
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/views/Article/ArticleDescription.tsx
 msgid "Could not save resource..."
@@ -2594,11 +2555,6 @@ msgstr "Generative features"
 msgid "{0} original value: {1}"
 msgstr "{0} original value: {1}"
 
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
-#: src/components/forms/hooks/useSaveResource.ts
-msgid "Resource saved"
-msgstr "Resource saved"
-
 #: src/components/NewIdentitySection.tsx
 msgid "The secret is invalid. Make sure you copied it correctly."
 msgstr "The secret is invalid. Make sure you copied it correctly."
@@ -2694,10 +2650,6 @@ msgstr "No User set - sign in first"
 #: src/components/ParentPicker/ParentPicker.tsx
 msgid "Enter a subject"
 msgstr "Enter a subject"
-
-#: src/components/Template/ApplyTemplateDialog.tsx
-msgid "Template applied!"
-msgstr "Template applied!"
 
 #. 0: template.title
 #: src/components/Template/ApplyTemplateDialog.tsx
@@ -3635,11 +3587,6 @@ msgstr "Each row is a"
 msgid "Names the class of the rows — e.g. every row of an Employees table is an Employee."
 msgstr "Names the class of the rows — e.g. every row of an Employees table is an Employee."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-#: src/routes/NewDriveRoute.tsx
-msgid "Drive created"
-msgstr "Drive created"
-
 #: src/components/CommentsPanel/CommentsPanelContainer.tsx
 msgid "Open a resource to see its comments."
 msgstr "Open a resource to see its comments."
@@ -3752,11 +3699,6 @@ msgstr "Are you sure you've stored this secret somewhere safe? You cannot recove
 #: src/components/NewIdentitySection.tsx
 msgid "You have been signed out to verify that you saved your secret. Enter it below to sign in."
 msgstr "You have been signed out to verify that you saved your secret. Enter it below to sign in."
-
-#. 0: classTitle
-#: src/hooks/useCreateAndNavigate.ts
-msgid "{0} created"
-msgstr "{0} created"
 
 #. 0: DEV_DRIVE_PRUNE_MARKER
 #: src/hooks/useDevDrive.ts
@@ -4395,21 +4337,12 @@ msgid "Fork this resource. The original is untouched until you merge the fork ba
 msgstr "Fork this resource. The original is untouched until you merge the fork back."
 
 #: src/actions/resourceActions.tsx
-msgid "Fork created"
-msgstr "Fork created"
-
-#: src/actions/resourceActions.tsx
 msgid "Merge fork"
 msgstr "Merge fork"
 
 #: src/actions/resourceActions.tsx
 msgid "Write this fork onto the resource it was forked from, as a single commit."
 msgstr "Write this fork onto the resource it was forked from, as a single commit."
-
-#: src/actions/resourceActions.tsx
-#: src/components/ForkBar.tsx
-msgid "Fork merged"
-msgstr "Fork merged"
 
 #: src/actions/resourceActions.tsx
 msgid "Open the resource this fork was forked from."
@@ -4419,10 +4352,6 @@ msgstr "Open the resource this fork was forked from."
 #: src/components/ForkBar.tsx
 msgid "{0} propert{1} also changed on the original since this fork was made ({2}). Merging will overwrite {3} with this fork's version. Continue?"
 msgstr "{0} propert{1} also changed on the original since this fork was made ({2}). Merging will overwrite {3} with this fork's version. Continue?"
-
-#: src/components/ForkBar.tsx
-msgid "Fork discarded"
-msgstr "Fork discarded"
 
 #: src/components/ForkBar.tsx
 msgid "Fork of"
@@ -4473,11 +4402,6 @@ msgstr "<0/> Open"
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 
-#. 0: serverLabel(server)
-#: src/routes/SyncRoute.tsx
-msgid "Switching to {0}…"
-msgstr "Switching to {0}…"
-
 #: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr "Node ID copied"
@@ -4491,12 +4415,15 @@ msgstr "Copy {0}"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Your data lives on the device you’re connected to."
 
+<<<<<<< HEAD
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing this workspace…"
 msgstr "Syncing this workspace…"
 
 #: src/components/ConnectDevice.tsx
+=======
+>>>>>>> refs/remotes/pr/2149
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
@@ -6901,11 +6828,6 @@ msgstr "Could not apply: {0}"
 msgid "Applied {0}, {1} failed"
 msgstr "Applied {0}, {1} failed"
 
-#. 0: report.applied
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "Applied {0} changes"
-msgstr "Applied {0} changes"
-
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "Applying…"
 msgstr "Applying…"
@@ -6940,11 +6862,6 @@ msgstr "{0} applied"
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "{0} failed"
 msgstr "{0} failed"
-
-#. 0: secret.name
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Stored {0}"
-msgstr "Stored {0}"
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "<0/> Secrets"
@@ -8019,10 +7936,6 @@ msgid "The response was interrupted."
 msgstr "The response was interrupted."
 
 #: src/views/File/ConvertToDocumentButton.tsx
-msgid "Converted to document"
-msgstr "Converted to document"
-
-#: src/views/File/ConvertToDocumentButton.tsx
 msgid "Could not convert the file."
 msgstr "Could not convert the file."
 
@@ -8300,15 +8213,6 @@ msgstr "No matches. Try another search."
 #: src/routes/NewResource/NewRoute.tsx
 msgid "What the assistant can build"
 msgstr "What the assistant can build"
-
-#. 0: next
-#: src/views/Installation/InstallationPage.tsx
-msgid "Installation {0}"
-msgstr "Installation {0}"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin updated"
-msgstr "Plugin updated"
 
 #. 0: currentStatus
 #: src/views/Installation/InstallationPage.tsx
@@ -9025,11 +8929,6 @@ msgstr "People with access"
 
 #. 0: name
 #: src/components/Share/PeopleWithAccess.tsx
-msgid "Removed {0}"
-msgstr "Removed {0}"
-
-#. 0: name
-#: src/components/Share/PeopleWithAccess.tsx
 msgid "Access for {0}"
 msgstr "Access for {0}"
 
@@ -9126,11 +9025,6 @@ msgstr "Finishing the connection…"
 #: src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Sign in to finish connecting this account."
 msgstr "Sign in to finish connecting this account."
-
-#. 0: app.name; 1: app.version
-#: src/chunks/PluginRuns/CatalogApps.tsx
-msgid "{0} updated to {1}"
-msgstr "{0} updated to {1}"
 
 #. 0: mine.version ?? '(unknown version)'
 #: src/chunks/PluginRuns/CatalogApps.tsx
@@ -11210,10 +11104,6 @@ msgstr "Reload resource"
 msgid "Fetch this resource from the server again, replacing the local copy."
 msgstr "Fetch this resource from the server again, replacing the local copy."
 
-#: src/actions/resourceActions.tsx
-msgid "Resource reloaded"
-msgstr "Resource reloaded"
-
 #: src/actions/appMenuItems.tsx
 msgid "Restart app"
 msgstr "Restart app"
@@ -12261,6 +12151,7 @@ msgstr "Sign in to {0} to see whether this workspace is hosted."
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 
+<<<<<<< HEAD
 #: src/components/Share/UsageLimit.tsx
 msgid "Maximum number of people"
 msgstr "Maximum number of people"
@@ -12479,3 +12370,8 @@ msgstr "Claim"
 msgid "Available."
 msgstr "Available."
 
+=======
+#: src/views/ImporterPage.tsx
+msgid "Imported."
+msgstr "Imported."
+>>>>>>> refs/remotes/pr/2149

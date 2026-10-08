@@ -695,7 +695,9 @@ test.describe('data-browser', async () => {
     await page.keyboard.type('This is a test class');
     await page.click('button:has-text("Save")');
 
-    await expect(page.locator('text=Resource Saved')).toBeVisible();
+    // Saving leaves the form and shows the new class.
+    await expect(page.getByRole('button', { name: 'Save' })).toBeHidden();
+    await expect(page.getByText('This is a test class').first()).toBeVisible();
   });
 
   test('delete resource', smoke, async ({ page }) => {
@@ -740,7 +742,7 @@ test.describe('data-browser', async () => {
     // some renders before it unmounts, leading to flaky no-ops.
     await page.locator('dialog[open] button:has-text("Delete")').click();
 
-    // A success toast proves the command completed, not that the UI updated.
+    // Completing the command does not mean the UI updated.
     // Require removal from the mounted sidebar before any reload.
     await expect(sidebarParent).toHaveCount(0);
 
@@ -857,7 +859,9 @@ test.describe('data-browser', async () => {
       .getByPlaceholder('Paste your JSON-AD...')
       .pressSequentially(JSON.stringify(importStr));
     await page.getByRole('button', { name: 'Import' }).click();
-    await expect(page.locator('text=Imported!')).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Imported.' }),
+    ).toBeVisible();
 
     // DID-parent imports get fresh DIDs (signed genesis commits), not a
     // path-derived subject. Navigate to the parent and click through to the
@@ -996,7 +1000,7 @@ test.describe('data-browser', async () => {
     await expect(restore).toBeEnabled({ timeout: 15_000 });
     await restore.click();
 
-    await expect(page.locator('text=Resource version updated')).toBeVisible();
+    await expect(restore).toBeHidden();
     // After restore the page navigates back to the resource. EditableTitle
     // may render either an `<h1>First Title</h1>` or an
     // `<input value="First Title">` depending on whether the resource is in

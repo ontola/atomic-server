@@ -106,7 +106,7 @@ test.describe('offline chatroom', () => {
     for (const text of MESSAGES) {
       await chatInput.fill(text);
       // Pressing Enter submits via the chatroom's keyboard handler. Avoids
-      // the Send button being intercepted by the "chatroom created" toast.
+      // the Send button being intercepted by an overlapping toast.
       await chatInput.press('Enter');
       await expect(chatInput).toHaveValue('');
       await expect(page.locator(`text=${text}`).first()).toBeVisible({
