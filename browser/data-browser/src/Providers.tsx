@@ -1,5 +1,4 @@
 import { StyleSheetManager, type ShouldForwardProp } from 'styled-components';
-import { DatabaseUpgradeNotice } from './components/DatabaseUpgradeNotice';
 import { DialogGlobalContextProvider } from './components/Dialog/DialogGlobalContextProvider';
 import { DropdownContainer } from './components/Dropdown/DropdownContainer';
 import { FormValidationContextProvider } from './components/forms/formValidation/FormValidationContextProvider';
@@ -83,7 +82,6 @@ export const Providers: React.FC<React.PropsWithChildren> = ({ children }) => {
                             onValidationChange={() => undefined}
                           >
                             <Toaster />
-                            <DatabaseUpgradeNotice />
                             <CustomViewProvider>
                               <MetaSetter />
                               <DropdownContainer>

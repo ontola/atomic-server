@@ -704,25 +704,6 @@ impl ClientDb {
         Ok(done as u32)
     }
 
-    /// Whether the atom indexes still have to be rebuilt for the current key
-    /// layout (`Db::index_migration_pending`). The worker runs
-    /// `migrateIndexKeysStep` until it is done before it serves anything.
-    #[wasm_bindgen(js_name = "indexMigrationPending")]
-    pub fn index_migration_pending(&self) -> Result<bool, JsError> {
-        self.db().index_migration_pending().map_err(to_js_err)
-    }
-
-    /// Rebuild the indexes for up to `limit` more resources. Returns
-    /// `{ "done": n, "total": n, "finished": bool }` as JSON.
-    #[wasm_bindgen(js_name = "migrateIndexKeysStep")]
-    pub fn migrate_index_keys_step(&self, limit: u32) -> Result<String, JsError> {
-        let step = self
-            .db()
-            .migrate_index_keys_step(limit as usize)
-            .map_err(to_js_err)?;
-        serde_json::to_string(&step).map_err(to_js_err)
-    }
-
     /// The retained signed envelopes of each subject, as
     /// `{ "<subject>": ["<commit JSON-AD>", ...] }`, to ride along a
     /// `SYNC_PUSH` (`atomic_lib::envelopes::for_subjects`). `subjects_json`

@@ -671,7 +671,6 @@ async function doInit(
     discardUndecryptable: discardUndecryptable ?? false,
   });
   db = opened.db;
-  await migrateIndexKeys(db);
   const t3 = performance.now();
 
   return {
@@ -680,35 +679,6 @@ async function doInit(
     dbOpenMs: round2(t3 - t2),
     totalMs: round2(t3 - t0),
   };
-}
-
-/** Resources the index rebuild handles per slice: small enough to report
- *  often, large enough that the round trips cost nothing. */
-const INDEX_MIGRATION_SLICE = 100;
-
-/**
- * Rebuilds the atom indexes of a database written with an older key layout,
- * before anything is served from it (a query would miss rows). Progress goes to
- * the page as `migration-progress` messages. Runs inside `init`, so the page
- * only sees the database as ready once this is done.
- */
-async function migrateIndexKeys(opened: WasmModule): Promise<void> {
-  if (!opened.indexMigrationPending?.()) return;
-
-  const report = (done: number, total: number, finished: boolean) =>
-    self.postMessage({ type: 'migration-progress', done, total, finished });
-
-  report(0, 0, false);
-
-  for (;;) {
-    const step = JSON.parse(opened.migrateIndexKeysStep(INDEX_MIGRATION_SLICE));
-    report(step.done, step.total, step.finished);
-
-    if (step.finished) return;
-
-    // Let the worker answer other messages (they queue behind `init`).
-    await new Promise(resolve => setTimeout(resolve, 0));
-  }
 }
 
 async function ensureInit(): Promise<void> {

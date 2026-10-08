@@ -9,7 +9,6 @@ pub mod compaction;
 mod compressed_kv;
 mod encoding;
 pub mod encrypted_backend;
-mod index_keys;
 pub mod kv_store;
 #[cfg(feature = "db-sled")]
 mod migrations;
@@ -547,14 +546,6 @@ impl Db {
         // before bootstrap, so any filter-matching commits during bootstrap
         // see the right state.
         self.migrate_canonical_scheme_if_needed()?;
-        // The browser runs this in slices it can show progress for
-        // (`ClientDb.migrateIndexKeysStep`); everywhere else it is done here.
-        #[cfg(not(target_arch = "wasm32"))]
-        self.migrate_index_keys()?;
-        #[cfg(target_arch = "wasm32")]
-        if self.kv.iter_tree(Tree::Resources).next().is_none() {
-            self.migrate_index_keys_step(1)?;
-        }
         self.populate_watched_queries_cache()?;
 
         // Runs on every open, but only writes when the embedded defaults
