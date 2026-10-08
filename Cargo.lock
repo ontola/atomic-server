@@ -1210,6 +1210,7 @@ dependencies = [
  "edit",
  "promptly",
  "regex",
+ "serde_json",
  "tokio",
 ]
 

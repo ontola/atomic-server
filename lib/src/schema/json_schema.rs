@@ -967,8 +967,8 @@ struct CheckedClass {
     constraints: Option<BTreeMap<String, Map<String, Json>>>,
 }
 
-struct CheckedPlan {
-    properties: Vec<PropertyPlan>,
+pub(super) struct CheckedPlan {
+    pub(super) properties: Vec<PropertyPlan>,
     classes: Vec<CheckedClass>,
 }
 
@@ -985,7 +985,7 @@ fn unique(names: &[String]) -> Vec<String> {
 /// Checks a plan and fills in what it leaves out: one entry per property
 /// (identified by shortname), names and descriptions, and every class's
 /// `requires` and `recommends` complete. Errors before anything is written.
-fn check_plan(plan: &OntologyPlan) -> AtomicResult<CheckedPlan> {
+pub(super) fn check_plan(plan: &OntologyPlan) -> AtomicResult<CheckedPlan> {
     let slug = regex::Regex::new(SLUG_REGEX).map_err(|e| e.to_string())?;
     let mut properties: Vec<PropertyPlan> = Vec::new();
 
@@ -1138,6 +1138,20 @@ fn commit_opts(agent: &Agent) -> CommitOpts {
     }
 }
 
+/// Applies a signed commit. When `remote`, it is posted to the server first
+/// (as `resource.save` does), then applied to the local store as a cache.
+async fn apply(
+    store: &impl Storelike,
+    agent: &Agent,
+    commit: Commit,
+    remote: bool,
+) -> AtomicResult<crate::commit::CommitResponse> {
+    if remote {
+        crate::client::post_commit(&commit, store).await?;
+    }
+    store.apply_commit(commit, &commit_opts(agent)).await
+}
+
 fn subjects_value(subjects: &[String]) -> Value {
     Value::ResourceArray(subjects.iter().map(|s| s.as_str().into()).collect())
 }
@@ -1146,6 +1160,7 @@ fn subjects_value(subjects: &[String]) -> Value {
 async fn create_did(
     store: &impl Storelike,
     agent: &Agent,
+    remote: bool,
     set: Vec<(&str, Value)>,
 ) -> AtomicResult<String> {
     let mut builder = CommitBuilder::new("placeholder".into());
@@ -1153,7 +1168,7 @@ async fn create_did(
         builder.set(property.into(), value);
     }
     let commit = Commit::create_did(builder, agent, store).await?;
-    let response = store.apply_commit(commit, &commit_opts(agent)).await?;
+    let response = apply(store, agent, commit, remote).await?;
     Ok(response
         .resource_new
         .ok_or("The commit created no resource")?
@@ -1165,6 +1180,7 @@ async fn create_did(
 async fn edit(
     store: &impl Storelike,
     agent: &Agent,
+    remote: bool,
     subject: &str,
     set: Vec<(&str, Value)>,
 ) -> AtomicResult<()> {
@@ -1174,7 +1190,7 @@ async fn edit(
     }
     let existing = store.get_resource(&subject.into()).await?;
     let commit = builder.sign(agent, store, &existing).await?;
-    store.apply_commit(commit, &commit_opts(agent)).await?;
+    apply(store, agent, commit, remote).await?;
     Ok(())
 }
 
@@ -1238,17 +1254,47 @@ pub async fn ensure_ontology(
     plan: &OntologyPlan,
     agent: &Agent,
 ) -> AtomicResult<EnsuredOntology> {
+    ensure_ontology_with(store, parent, plan, agent, &EnsureTarget::default()).await
+}
+
+/// Where [`ensure_ontology_with`] writes, and how it finds the ontology again.
+#[derive(Clone, Debug, Default)]
+pub struct EnsureTarget {
+    /// Post every commit to the server of `store` (as well as applying it to
+    /// `store`), the way the CLI saves resources. `store` is then a client
+    /// cache: reads fall through to the server.
+    pub remote: bool,
+    /// The ontology made by an earlier run, usually from a lockfile. A remote
+    /// `store` cannot query the server for the ontology's `localId`, so this
+    /// is how a re-run finds it again. `None` looks it up under `parent`.
+    pub ontology: Option<String>,
+}
+
+/// [`ensure_ontology`] with a choice of where the commits go, see [`EnsureTarget`].
+pub async fn ensure_ontology_with(
+    store: &impl Storelike,
+    parent: &Subject,
+    plan: &OntologyPlan,
+    agent: &Agent,
+    target: &EnsureTarget,
+) -> AtomicResult<EnsuredOntology> {
     let checked = check_plan(plan)?;
+    let remote = target.remote;
 
     // The ontology.
     let local_id = format!("schema:ontology:{}", plan.shortname);
-    let ontology = match crate::import_identity::find_existing(store, parent, &local_id).await? {
+    let found = match &target.ontology {
+        Some(subject) => Some(subject.clone()),
+        None => crate::import_identity::find_existing(store, parent, &local_id).await?,
+    };
+    let ontology = match found {
         Some(subject) => subject,
         None => {
             let name = plan.name.clone().unwrap_or_else(|| plan.shortname.clone());
             create_did(
                 store,
                 agent,
+                remote,
                 vec![
                     (
                         urls::IS_A,
@@ -1317,7 +1363,7 @@ pub async fn ensure_ontology(
             let commit = builder
                 .sign(agent, store, &crate::Resource::new(id.clone()))
                 .await?;
-            if let Err(error) = store.apply_commit(commit, &commit_opts(agent)).await {
+            if let Err(error) = apply(store, agent, commit, remote).await {
                 // Another device may have made the same property meanwhile.
                 if store.get_resource(&id.as_str().into()).await.is_err() {
                     return Err(error);
@@ -1352,7 +1398,7 @@ pub async fn ensure_ontology(
                     set.push((urls::RECOMMENDS, subjects_value(&recommends)));
                 }
                 if !set.is_empty() {
-                    edit(store, agent, &subject, set).await?;
+                    edit(store, agent, remote, &subject, set).await?;
                 }
                 subject
             }
@@ -1360,6 +1406,7 @@ pub async fn ensure_ontology(
                 create_did(
                     store,
                     agent,
+                    remote,
                     vec![
                         (urls::IS_A, Value::ResourceArray(vec![urls::CLASS.into()])),
                         (urls::PARENT, Value::AtomicUrl(ontology.as_str().into())),
@@ -1421,6 +1468,7 @@ pub async fn ensure_ontology(
             edit(
                 store,
                 agent,
+                remote,
                 subject,
                 vec![(urls::CONSTRAINTS, Value::Json(desired))],
             )
@@ -1463,7 +1511,7 @@ pub async fn ensure_ontology(
         }
     }
     if !set.is_empty() {
-        edit(store, agent, &ontology, set).await?;
+        edit(store, agent, remote, &ontology, set).await?;
     }
 
     Ok(EnsuredOntology {

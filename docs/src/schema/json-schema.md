@@ -125,3 +125,46 @@ Import followed by `ensureOntology` followed by export gives the input back, wit
 - A property shared by two classes has one `title` and `description`: those of the first class that declared it.
 
 An export is a fixed point: importing it and exporting again changes nothing.
+
+## Schemas from the command line
+
+Write the schema in your own language, run one command, get a real ontology and a lockfile that pins its property IDs, then generate types.
+The file is either a JSON Schema (it has `$schema` or `$defs`, or is `type: object`) or an `OntologyInput` JSON (`{ "shortname": ..., "classes": [...] }`).
+Both command line tools do the same; the lockfile they write is byte for byte the same.
+
+```sh
+# Rust CLI (atomic-cli), uses the server and agent in its config
+atomic-cli schema push shop.schema.json --parent <drive subject>
+atomic-cli schema lock shop.schema.json --ontology <ontology subject>   # offline
+atomic-cli schema check shop.schema.json                                # offline
+
+# @tomic/cli, uses atomic.config.json (serverUrl, agentSecret)
+npx ad-generate ontology push shop.schema.json --parent <drive subject> --types
+npx ad-generate ontology lock shop.schema.json --ontology <ontology subject>
+npx ad-generate ontology check shop.schema.json
+```
+
+- `push` runs `ensureOntology`: it creates the ontology under `--parent`, or finds it again, and brings classes in line. It then writes the lockfile. `atomic-cli` takes the parent from the config's initial drive when `--parent` is left out. `--types` (`@tomic/cli` only) adds the ontology to `atomic.config.json` and generates the TypeScript types.
+- `lock` needs no server. Property IDs follow from the ontology subject, the shortname and the datatype, so the lockfile can be made as soon as you know the ontology's subject. Class subjects are minted by the server, so they stay empty until a `push`. Locking again keeps the class subjects of an earlier push of the same ontology.
+- `check` fails when the lockfile no longer matches the schema. Changing a property's shortname or datatype makes a new property with a new ID, and `check` says so. Commit the lockfile and run `check` in CI.
+- `push` refuses to run when the existing lockfile fails `check`, so a changed datatype cannot quietly create a second property. `--accept-changes` pushes anyway.
+- `--shortname` overrides the ontology's shortname, `--lockfile <path>` the lockfile's location.
+
+The lockfile is `<file>.lock.json` next to the schema file (`shop.schema.json.lock.json`). Its keys are sorted, it is indented with two spaces and ends with a newline:
+
+```json
+{
+  "classes": {
+    "customer": "did:ad:..."
+  },
+  "ontology": "did:ad:...",
+  "properties": {
+    "email": "atomic:prop:b4152651d32b39d8d89901323c9673775d2e43bb2ea452db01c8ad5d52432bc1",
+    "name": "atomic:prop:f04459be53adc3c4904126504db01a55e68a0932d3fd054fa8a5eb4b5bdd5d16"
+  }
+}
+```
+
+`atomic-cli` finds the ontology of a re-run through the `ontology` in the lockfile, because it cannot query the server for it. Keep the lockfile, or the next `push` makes a second ontology. `@tomic/cli` finds it by shortname under `--parent`.
+
+In code: `lockfileFromInput`, `serializeLockfile`, `checkLockfile` in `@tomic/lib`, and `Lockfile` in `atomic_lib::schema::lockfile`.

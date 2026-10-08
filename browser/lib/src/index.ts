@@ -71,6 +71,16 @@ export {
   ontologyToJsonSchema,
   type JsonSchemaImportOptions,
 } from './schema-json-schema.js';
+export { isJsonSchema, ontologyFromSchemaFile } from './schema-file.js';
+export {
+  assertLockfileMatches,
+  checkLockfile,
+  lockfileFromEnsured,
+  lockfileFromInput,
+  parseLockfile,
+  serializeLockfile,
+  type Lockfile,
+} from './schema-lockfile.js';
 export * from './safeHref.js';
 export { EventManager } from './EventManager.js';
 export * from './parse.js';
