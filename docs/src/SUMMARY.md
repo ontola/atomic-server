@@ -87,6 +87,7 @@
   - [Schema](schema/intro.md)
     - [Classes](schema/classes.md)
     - [Datatypes](schema/datatypes.md)
+    - [Property identity](schema/property-identity.md)
     - [Translations & Localization](schema/translations.md)
     - [Forms](schema/forms.md)
     - [FAQ](schema/faq.md)
