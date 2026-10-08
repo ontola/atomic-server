@@ -458,6 +458,10 @@ async function main() {
         result = await a.script(args[0], args[1]);
         break;
       case 'run': {
+        if (a.config.credentialEnv)
+          throw new Error(
+            'Registry scripts require a credential command; environment credentials are not forwarded.',
+          );
         const entry = await a.script(args[0], args[1]);
         const cache = resolve(dirname(CONFIG_PATH), 'script-cache');
         await mkdir(cache, { recursive: true, mode: 0o700 });
@@ -468,10 +472,6 @@ async function main() {
           ATOMIC_BOOTSTRAP_CLI: SELF,
           ATOMIC_BOOTSTRAP_CONFIG: CONFIG_PATH,
         };
-        if (a.config.credentialEnv)
-          throw new Error(
-            'Registry scripts require a credential command; environment credentials are not forwarded.',
-          );
         delete env.ATOMIC_AGENT_SECRET;
         const child = spawnSync(process.execPath, [path, ...args.slice(2)], {
           stdio: 'inherit',

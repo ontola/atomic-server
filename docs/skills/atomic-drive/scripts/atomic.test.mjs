@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -212,4 +212,28 @@ test('registry scope prevents loading a document from another drive', async t =>
   const a = await openAtomic(configPath);
   t.after(() => a.store.disconnect());
   await assert.rejects(a.registry(), /Registry content must belong/);
+});
+
+test('environment-mode run refuses before fetching or caching registry code', async t => {
+  const { dir, configPath } = await fixture(t, {
+    credentialCommand: undefined,
+    credentialEnv: 'ATOMIC_DRIVE_TEST_SECRET',
+  });
+  await fakeRuntime(dir);
+  const result = spawnSync(
+    process.execPath,
+    [script, 'run', 'invented', 'script.mjs'],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ATOMIC_BOOTSTRAP_CONFIG: configPath,
+        ATOMIC_DRIVE_TEST_SECRET: 'fixture-secret',
+      },
+    },
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /environment credentials are not forwarded/);
+  assert.ok(!result.stderr.includes('fixture-secret'));
+  assert.ok(!(await readdir(dir)).includes('script-cache'));
 });
