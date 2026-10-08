@@ -572,6 +572,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 |---|---|
 | Drive reconciles across a real OS process boundary | `lib/tests/cross_process_sync.rs` |
 | Iroh NodeID survives an unclean kill (`abort()`, no flush) | `lib/tests/identity_durability.rs` |
+| Query `count` / collection totals never include rows the agent cannot read | `lib/tests/query_count_leak.rs` |
 | Paired peer + its relay/direct addresses survive a kill | `lib/tests/identity_durability.rs` |
 | Two whole servers pair via `POST /iroh-sync` and reconcile | `server/tests/it/iroh_pairing.rs` |
 | `/iroh-sync` refuses malformed node ids with a UI-showable error | `server/tests/it/iroh_pairing.rs` |

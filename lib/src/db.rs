@@ -3537,16 +3537,42 @@ impl Db {
         q: &Query,
         rights_cache: &std::sync::Mutex<RightsCache>,
     ) -> Option<Option<Resource>> {
+        self.resolve_member(subject, &q.for_agent, q.include_nested, rights_cache)
+            .await
+    }
+
+    /// Whether `for_agent` may see this index hit at all. Used for the rows
+    /// outside the returned page: they never get a body, but they must still be
+    /// tested before they are counted, or `count` / `totalPages` reveal how many
+    /// rows the agent cannot read (issue #286).
+    pub(crate) async fn member_visible(
+        &self,
+        subject: &Subject,
+        for_agent: &ForAgent,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> bool {
+        if *for_agent == ForAgent::Sudo {
+            return true;
+        }
+        self.resolve_member(subject, for_agent, false, rights_cache)
+            .await
+            .is_some()
+    }
+
+    async fn resolve_member(
+        &self,
+        subject: &Subject,
+        for_agent: &ForAgent,
+        include_nested: bool,
+        rights_cache: &std::sync::Mutex<RightsCache>,
+    ) -> Option<Option<Resource>> {
         let mut resource = match self.get_resource_shallow(subject) {
             Ok(resource) => resource,
             Err(_) => {
                 // No materialized row — take the slow, complete path.
-                return match self
-                    .get_resource_extended(subject, true, &q.for_agent)
-                    .await
-                {
+                return match self.get_resource_extended(subject, true, for_agent).await {
                     Ok(response) => {
-                        if q.include_nested {
+                        if include_nested {
                             Some(Some(response.to_single()))
                         } else {
                             Some(None)
@@ -3557,11 +3583,11 @@ impl Db {
             }
         };
 
-        if q.for_agent != ForAgent::Sudo
+        if *for_agent != ForAgent::Sudo
             && crate::hierarchy::check_rights_cached(
                 self,
                 &resource,
-                &q.for_agent,
+                for_agent,
                 crate::hierarchy::Right::Read,
                 Some(rights_cache),
             )
@@ -3571,7 +3597,7 @@ impl Db {
             return None;
         }
 
-        if !q.include_nested {
+        if !include_nested {
             return Some(None);
         }
 
@@ -3658,40 +3684,35 @@ impl Db {
             let subject = Subject::from_raw(&identity, base_domain.as_deref());
             let index = seen.len() - 1;
 
-            total_count += 1;
+            // Sudo without nested bodies needs no per-member work at all.
+            let free = q.for_agent == ForAgent::Sudo && !q.include_nested;
+            let in_page = index >= q.offset && q.limit.is_none_or(|l| subjects.len() < l);
 
-            if q.offset > index {
+            // Denied members neither fill the page nor count. That holds for
+            // rows outside the page too: counting them blindly would let any
+            // reader learn how many rows they cannot see (issue #286), so
+            // they are tested for visibility (without a body) before they
+            // are counted.
+            if !in_page {
+                if free
+                    || self
+                        .member_visible(&subject, &q.for_agent, &rights_cache)
+                        .await
+                {
+                    total_count += 1;
+                }
                 continue;
             }
-
-            // Denied members do not grow `subjects`, so we keep resolving
-            // until the page is full of *authorized* hits — a private streak
-            // must not hide a later readable row.
-            if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
-                // Sudo without nested bodies needs no per-member work at all.
-                if q.for_agent == ForAgent::Sudo && !q.include_nested {
-                    subjects.push(subject);
-                    continue;
-                }
-
-                match self.resolve_query_member(&subject, q, &rights_cache).await {
-                    Some(body) => {
-                        subjects.push(subject);
-                        if let Some(resource) = body {
-                            resources.push(resource);
-                        }
-                    }
-                    None => {
-                        // The index has an entry for this subject but the
-                        // requesting agent can't resolve it — auth-filtered,
-                        // destroyed-with-stale-index, or otherwise invisible.
-                        // Roll back the count bump so it doesn't outrun the
-                        // returned subjects and produce a
-                        // `totalMembers: N, members: []` drift. We only do
-                        // this for in-page hits; entries past the limit stay
-                        // counted blindly (issue #286).
-                        total_count -= 1;
-                    }
+            if free {
+                total_count += 1;
+                subjects.push(subject);
+                continue;
+            }
+            if let Some(body) = self.resolve_query_member(&subject, q, &rights_cache).await {
+                total_count += 1;
+                subjects.push(subject);
+                if let Some(resource) = body {
+                    resources.push(resource);
                 }
             }
         }
@@ -3714,11 +3735,9 @@ impl Db {
     /// Every row the query matches, unpaged and in order.
     ///
     /// Subjects, not a count: these are the rows that actually resolved for this
-    /// agent. `QueryResult::count` deliberately counts raw index hits (including
-    /// unauthorized and stale-index entries, see issue #286), so a `count`
-    /// aggregate can legitimately come out lower than `totalMembers` — it counts
-    /// what the reader can see, which is the only number a sum over the same rows
-    /// can agree with.
+    /// agent. `QueryResult::count` counts the same rows (denied and stale-index
+    /// entries are excluded everywhere, see issue #286), so `totalMembers`, a
+    /// `count` aggregate and a sum over these rows all agree.
     ///
     /// Shared by the paging path and the aggregation pass, so a total can never
     /// summarize a different set than the rows on screen.
@@ -4195,22 +4214,28 @@ impl Db {
         let mut total_count = 0;
         let limit = q.limit.unwrap_or(usize::MAX);
         for (index, (_, _, subject)) in matched.into_iter().enumerate() {
-            total_count += 1;
+            let free = q.for_agent == ForAgent::Sudo && !q.include_nested;
             if q.offset > index || subjects.len() >= limit {
+                if free
+                    || self
+                        .member_visible(&subject, &q.for_agent, &rights_cache)
+                        .await
+                {
+                    total_count += 1;
+                }
                 continue;
             }
-            if q.for_agent == ForAgent::Sudo && !q.include_nested {
+            if free {
+                total_count += 1;
                 subjects.push(subject);
                 continue;
             }
-            match self.resolve_query_member(&subject, q, &rights_cache).await {
-                Some(body) => {
-                    subjects.push(subject);
-                    if let Some(resource) = body {
-                        resources.push(resource);
-                    }
+            if let Some(body) = self.resolve_query_member(&subject, q, &rights_cache).await {
+                total_count += 1;
+                subjects.push(subject);
+                if let Some(resource) = body {
+                    resources.push(resource);
                 }
-                None => total_count -= 1,
             }
         }
 
