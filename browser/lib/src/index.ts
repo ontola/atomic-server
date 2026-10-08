@@ -62,6 +62,7 @@ export * from './search.js';
 export * from './resource.js';
 export * from './forks.js';
 export * from './store.js';
+export * from './property-identity.js';
 export * from './subject.js';
 export * from './value.js';
 export * from './urls.js';

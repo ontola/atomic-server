@@ -20,6 +20,7 @@ import {
   isAtomicIdentifier,
   commitSubject,
   currentAgentSubject,
+  canonicalizeScheme,
 } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
@@ -69,6 +70,15 @@ import {
   type JSONObject,
   type AtomicValue,
 } from './value.js';
+
+/**
+ * Loro property-map keys are raw strings, so a legacy `did:ad:prop:` key would
+ * be a different key from its `atomic:prop:` twin. Always key by the canonical
+ * form. Other property URLs pass through untouched.
+ */
+function canonicalPropKey(prop: string): string {
+  return prop.startsWith('did:ad:prop:') ? canonicalizeScheme(prop) : prop;
+}
 
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
@@ -874,8 +884,9 @@ export class Resource<C extends OptionalClass = any> {
     let wroteAnything = false;
 
     for (const [prop, loroValue] of Object.entries(props)) {
+      // Keys are canonical on write (`canonicalPropKey`); lookup also canonicalizes legacy docs.
       const datatype = this.store?.resources
-        .get(prop)
+        .get(canonicalizeScheme(prop))
         ?.get(core.properties.datatype)
         ?.toString();
 
@@ -1863,6 +1874,7 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
+    propUrl = canonicalPropKey(propUrl) as Prop;
     this.materializeBufferedSnapshot();
 
     if (this.#cacheDirty && this._loroDoc) {
@@ -2733,6 +2745,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Appends a Resource to a ResourceArray */
   public push(propUrl: string, values: JSONArray, unique?: boolean): void {
+    propUrl = canonicalPropKey(propUrl);
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
 
     if (unique) {
@@ -2774,6 +2787,7 @@ export class Resource<C extends OptionalClass = any> {
    * Used for canvas strokes and other list fields that merge per element across peers.
    */
   public pushListItem(propUrl: string, item: JSONValue): void {
+    propUrl = canonicalPropKey(propUrl);
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
     this.#cache[propUrl] = [...propVal, item];
     this.#cacheDirty = true;
@@ -2844,6 +2858,7 @@ export class Resource<C extends OptionalClass = any> {
    * `pushListItem`, just batched.
    */
   public replaceListItems(propUrl: string, items: JSONArray): void {
+    propUrl = canonicalPropKey(propUrl);
     this.#cache[propUrl] = [...items];
     this.#cacheDirty = true;
     this._dirty = true;
@@ -3104,6 +3119,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
+    propertyUrl = canonicalPropKey(propertyUrl);
     this.removeUnsafe(propertyUrl);
     this._dirty = true;
     this.eventManager.emit(ResourceEvents.LocalChange, propertyUrl, undefined);
@@ -3894,6 +3910,8 @@ export class Resource<C extends OptionalClass = any> {
     /** A trusted built-in datatype: validate and tag without fetching Property metadata. */
     knownDatatype?: Datatype,
   ): Promise<void> {
+    prop = canonicalPropKey(prop) as Prop;
+
     if (value instanceof Uint8Array) {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
@@ -3967,6 +3985,8 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   public removeUnsafe(prop: string): void {
+    prop = canonicalPropKey(prop);
+
     if (prop === commits.properties.loroUpdate) {
       this._loroSnapshotBytes = undefined;
       this.resetLoroState();

@@ -83,6 +83,7 @@ import {
   commitSubject,
   blobSubject,
 } from './subject.js';
+import { propertyId } from './property-identity.js';
 import {
   encodeGenesisCert,
   GENESIS_VERSION_V1,
@@ -171,6 +172,18 @@ type CreateResourceOptions = {
   genesisCert?: GenesisCert;
   /** Seed a body or other state before the first save signs its genesis. */
   deferGenesis?: boolean;
+  /**
+   * Create a Property under its content-addressed ID, `atomic:prop:{blake3}`,
+   * derived from `parent`, `propVals[shortname]` and `propVals[datatype]`
+   * (see docs/src/schema/property-identity.md). No genesis cert is minted; the
+   * resource is still signed as a genesis commit. Returns the existing Property
+   * when the store already has it.
+   *
+   * This is an explicit opt-in rather than inferred from `isA`: the ID is
+   * immutable and the three inputs must be known up front, so a caller that
+   * builds a Property draft in steps must not silently get a hashed subject.
+   */
+  contentAddressedProperty?: boolean;
 };
 
 export interface StoreOpts {
@@ -3013,6 +3026,7 @@ export class Store {
     did,
     genesisCert,
     deferGenesis,
+    contentAddressedProperty,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const agentSubject = this.getAgent()?.subject;
     const shouldUseDid =
@@ -3044,7 +3058,30 @@ export class Store {
     let newSubject: string;
     let genesisCertB64: string | undefined;
 
-    if (genesisCert) {
+    if (contentAddressedProperty) {
+      const shortname = propVals?.[core.properties.shortname];
+      const datatype = propVals?.[core.properties.datatype];
+
+      if (
+        noParent ||
+        !parent ||
+        typeof shortname !== 'string' ||
+        typeof datatype !== 'string'
+      ) {
+        throw new Error(
+          'contentAddressedProperty needs parent, shortname and datatype',
+        );
+      }
+
+      newSubject = propertyId(normalizedParent, shortname, datatype);
+
+      // Two devices can mint the same Property. Reuse it instead of failing.
+      const existing = this.resources.get(newSubject);
+
+      if (existing && !existing.new) {
+        return existing as Resource<C>;
+      }
+    } else if (genesisCert) {
       const minted = await this.mintFromCert(genesisCert);
       newSubject = subject ?? minted.did;
       genesisCertB64 = minted.certB64;
@@ -3101,7 +3138,10 @@ export class Store {
     // only `save()` does (it moves the stash into the outbox). So a
     // created-but-never-saved resource (e.g. an unfilled `TableNewRow`) is never
     // POSTed. This is the only remaining `signChanges` call site.
-    if (!deferGenesis && ((shouldUseDid && !subject) || genesisCert)) {
+    if (
+      !deferGenesis &&
+      ((shouldUseDid && !subject) || genesisCert || contentAddressedProperty)
+    ) {
       const genesisCommit = await resource.signChanges(this.getAgent()!);
       resource.stashGenesis(genesisCommit);
     }
