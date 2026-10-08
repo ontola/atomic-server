@@ -115,12 +115,13 @@ export function SideBar(): JSX.Element {
             onIsRearangingChange={setIsRearanging}
           />
           <MenuWrapper>
-            <Column gap='0.5rem' align='stretch'>
+            <Column gap='0.125rem' align='stretch'>
               <SideBarHomePanels onItemClick={closeSideBar} />
               {enabledPanels.has(Panel.AIChats) && <AIChatsPanel key={drive} />}
               {enabledPanels.has(Panel.Ontologies) && (
                 <SideBarPanel
                   title='Ontologies'
+                  panel={Panel.Ontologies}
                   heightStorageKey='ontologiesPanelHeight'
                   initialHeight={160}
                   key={drive}

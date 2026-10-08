@@ -29,6 +29,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
 import { consumePendingFirstMessage } from './pendingFirstMessage';
 import { userTiming } from '@helpers/userTiming';
+import { Spinner } from '@components/Spinner';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
@@ -226,7 +227,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   }, []);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <Spinner centered />;
   }
 
   return (

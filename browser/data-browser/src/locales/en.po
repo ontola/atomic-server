@@ -643,15 +643,9 @@ msgstr "Unable to connect to Ollama server. Check if the server is running and y
 
 #: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
-#: src/components/HighlightedCodeBlock.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
-#: src/views/Card/ResourceCard.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
-#: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
-#: src/views/ResourcePage.tsx
 #: src/views/ResourceRow.tsx
 msgid "Loading..."
 msgstr "Loading..."
@@ -4415,15 +4409,13 @@ msgstr "Copy {0}"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Your data lives on the device you’re connected to."
 
-<<<<<<< HEAD
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing this workspace…"
 msgstr "Syncing this workspace…"
 
 #: src/components/ConnectDevice.tsx
-=======
->>>>>>> refs/remotes/pr/2149
+
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
@@ -11166,10 +11158,6 @@ msgid "Who"
 msgstr "Who"
 
 #: src/views/Conversation/NewMessageDialog.tsx
-msgid "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
-msgstr "Paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
-
-#: src/views/Conversation/NewMessageDialog.tsx
 msgid "Starting…"
 msgstr "Starting…"
 
@@ -12151,7 +12139,6 @@ msgstr "Sign in to {0} to see whether this workspace is hosted."
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 
-<<<<<<< HEAD
 #: src/components/Share/UsageLimit.tsx
 msgid "Maximum number of people"
 msgstr "Maximum number of people"
@@ -12370,8 +12357,46 @@ msgstr "Claim"
 msgid "Available."
 msgstr "Available."
 
-=======
 #: src/views/ImporterPage.tsx
 msgid "Imported."
 msgstr "Imported."
->>>>>>> refs/remotes/pr/2149
+
+=======
+#: src/routes/AppSettings.tsx
+msgid "Show Messages panel"
+msgstr "Show Messages panel"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Favorites panel"
+msgstr "Show Favorites panel"
+
+#: src/routes/AppSettings.tsx
+msgid "Show Shared with me panel"
+msgstr "Show Shared with me panel"
+
+#. 0: title
+#: src/components/SideBar/SideBarPanel.tsx
+msgid "Hide {0}"
+msgstr "Hide {0}"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Name or did:ad:agent:…"
+msgstr "Name or did:ad:agent:…"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "People in this drive"
+msgstr "People in this drive"
+
+#: src/views/Conversation/NewMessageDialog.tsx
+msgid "Search people in this drive by name, or paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+msgstr "Search people in this drive by name, or paste their Atomic ID. They find it under their account. Only the two of you can read what you send."
+
+#: src/components/Spinner.tsx
+msgid "Loading"
+msgstr "Loading"
+d it under their account. Only the two of you can read what you send."
+
+#: src/components/Spinner.tsx
+msgid "Loading"
+msgstr "Loading"
+>>>>>>> refs/remotes/pr/2132

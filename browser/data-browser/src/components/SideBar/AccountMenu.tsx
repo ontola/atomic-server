@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import { styled } from 'styled-components';
+import { SIDEBAR_BAR_HEIGHT, SIDEBAR_BAR_HEIGHT_TOUCH } from './SidebarCSSVars';
 import {
   FaBell,
   FaCirclePlus,
@@ -346,6 +347,7 @@ function useInstallPrompt(): [install: () => void, available: boolean] {
 
 const Row = styled.div`
   display: flex;
+  min-height: ${SIDEBAR_BAR_HEIGHT};
   align-items: center;
   gap: 0.25rem;
   box-sizing: border-box;
@@ -376,6 +378,11 @@ const TriggerButton = styled(SideBarMenuRow)`
   cursor: pointer;
   gap: 0.25rem;
   padding-inline-end: 0.5rem;
+  min-height: ${SIDEBAR_BAR_HEIGHT};
+
+  @media (pointer: coarse) {
+    min-height: ${SIDEBAR_BAR_HEIGHT_TOUCH};
+  }
 
   &:focus-visible {
     outline: 2px solid ${p => p.theme.colors.main};
