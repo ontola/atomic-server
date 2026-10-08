@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Sentry from '@sentry/react';
 import { StoreEvents } from '@tomic/react';
-import { initSentry, reportRepeatedCommitFailures } from './sentry';
+import {
+  initSentry,
+  reportRepeatedCommitFailures,
+  reportSyncProblem,
+} from './sentry';
 vi.mock('@sentry/react', () => ({
   init: vi.fn(),
   isEnabled: vi.fn(() => true),
@@ -106,6 +110,18 @@ describe('Sentry configuration', () => {
           'https://node1.example',
           'Parent of <id> (<id>) not found',
         ],
+      }),
+    );
+  });
+  it('reports a sync problem once, however often the page asks', () => {
+    const problem = { key: 'drive-sync', server: 'https://n.example' };
+    reportSyncProblem(problem);
+    reportSyncProblem(problem);
+    expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      'Sync problem',
+      expect.objectContaining({
+        fingerprint: ['sync-problem', 'drive-sync', 'https://n.example', ''],
       }),
     );
   });

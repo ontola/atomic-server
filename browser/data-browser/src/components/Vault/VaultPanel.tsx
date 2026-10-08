@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
 import { Button } from '../Button';
 import { ServiceRow, type ServiceStanding } from '../Cloud/ServiceRow';
+import { UsageMeter } from '../Cloud/UsageMeter';
 import { VaultStorage } from './VaultStorage';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
@@ -29,6 +31,7 @@ export function VaultPanel({
   included?: boolean;
 }) {
   const { status, busy, error, restoreProgress } = vault;
+  const [storageOpen, setStorageOpen] = useState(false);
   // What Cloud Vault is: the same sentence in every state. Declared in here,
   // not at module level, so the translation extractor sees it.
   const tagline = 'Encrypted backup of your data. Only you can read it.';
@@ -103,23 +106,17 @@ export function VaultPanel({
   const { enrollment, details } = status;
   const suspended = enrollment.status !== 'active';
 
-  // One line answers "is my data safe": when it last went up, how much is
-  // there, and how full the vault is once that is worth mentioning. An error
-  // or a pause replaces it rather than stacking under it.
+  // The status line is the state: when it last went up. How much is stored
+  // is the meter line, in the same place as Cloud Server's.
   const summary =
     details.confirmed_objects === 0
       ? `Nothing backed up to ${PRODUCT_NAME} yet`
-      : [
-          enrollment.last_backup_at
-            ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
-            : `Backed up to ${PRODUCT_NAME}`,
-          `${details.confirmed_objects} object${
-            details.confirmed_objects === 1 ? '' : 's'
-          }`,
-          formatShareUsed(enrollment.used_bytes, enrollment.quota_bytes),
-        ]
-          .filter(Boolean)
-          .join(' · ');
+      : enrollment.last_backup_at
+        ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
+        : `Backed up to ${PRODUCT_NAME}`;
+  const objects = `${details.confirmed_objects} object${
+    details.confirmed_objects === 1 ? '' : 's'
+  }`;
 
   return (
     <>
@@ -168,6 +165,25 @@ export function VaultPanel({
                     ),
                   }
         }
+        details={
+          <>
+            <UsageMeter
+              data-testid='vault-usage'
+              usedBytes={enrollment.used_bytes}
+              quotaBytes={
+                enrollment.quota_bytes > 0 ? enrollment.quota_bytes : null
+              }
+              facts={[objects]}
+            />
+            {storageOpen && (
+              <VaultStorage
+                drivePseudonym={enrollment.drive_pseudonym}
+                onChanged={() => void vault.refresh()}
+                onClose={() => setStorageOpen(false)}
+              />
+            )}
+          </>
+        }
         actions={
           <>
             <Button
@@ -187,6 +203,14 @@ export function VaultPanel({
               <FaRotateLeft /> <span>Restore</span>
             </Button>
             <Button
+              data-testid='vault-manage-storage'
+              subtle
+              onClick={() => setStorageOpen(open => !open)}
+              disabled={busy}
+            >
+              Manage storage
+            </Button>
+            <Button
               data-testid='vault-disable'
               subtle
               onClick={vault.disable}
@@ -197,31 +221,12 @@ export function VaultPanel({
           </>
         }
       />
-      <VaultStorage
-        drivePseudonym={enrollment.drive_pseudonym}
-        onChanged={() => void vault.refresh()}
-      />
     </>
   );
 }
 
 function ErrorText({ children }: { children: string }) {
   return <span data-testid='vault-error'>{children}</span>;
-}
-
-/**
- * How full the vault is, as a whole percentage, or nothing below one percent.
- * The byte numbers are deliberately not shown: the free quota is a limit
- * people grow towards, not a figure to advertise.
- */
-function formatShareUsed(usedBytes: number, quotaBytes: number): string {
-  if (!quotaBytes || !usedBytes || usedBytes <= 0) return '';
-
-  const percent = (usedBytes / quotaBytes) * 100;
-
-  if (percent < 1) return '';
-
-  return `${Math.min(100, Math.round(percent))}% used`;
 }
 
 /** Unix seconds → a phrase, because an ISO timestamp answers a question nobody asked. */
