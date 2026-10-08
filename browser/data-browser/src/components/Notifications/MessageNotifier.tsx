@@ -120,8 +120,8 @@ export function MessageNotifier(): null {
       .catch(e => console.error('Could not mark notifications read:', e));
   });
 
-  const open = useEffectEvent((n: MessageNotification) => {
-    navigate(constructOpenURL(n.target));
+  const open = useEffectEvent(async (n: MessageNotification) => {
+    await navigate(constructOpenURL(n.target));
     if (n.openComments) setPanelOpen('comments', true);
     readAbout(n.target);
   });
@@ -294,7 +294,7 @@ export function MessageNotifier(): null {
           <ToastCard
             type='button'
             onClick={() => {
-              open(n);
+              void open(n);
               toast.dismiss(t.id);
             }}
           >
@@ -313,7 +313,12 @@ export function MessageNotifier(): null {
 
     if (shouldOfferOsNotifications()) missed.current += 1;
 
-    showOsNotification({ title, body, tag: subject, onClick: () => open(n) });
+    showOsNotification({
+      title,
+      body,
+      tag: subject,
+      onClick: () => void open(n),
+    });
   });
 
   // Things shared with you out of drives you can't open are only delivered to
