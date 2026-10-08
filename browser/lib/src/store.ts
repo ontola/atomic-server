@@ -4693,6 +4693,8 @@ export class Store {
     }
   }
 
+  private warnedSchemeMismatch = new Set<string>();
+
   /** Opens a Websocket for some subject URL, or returns the existing one. */
   public getWebSocketForSubject(subject: string): WSClient | undefined {
     try {
@@ -4708,7 +4710,34 @@ export class Store {
         origin = new URL(this.serverUrl).origin;
       }
 
-      return this.webSockets.get(origin);
+      const ws = this.webSockets.get(origin);
+
+      if (ws) return ws;
+
+      // The same host under another scheme (`http://` subject, `https://`
+      // server) is this server, not a missing one: a proxy-terminated
+      // deployment whose server still names itself `http://`. Returning
+      // undefined here silently turns off subscriptions and live sync.
+      const serverOrigin = this.serverUrl
+        ? new URL(this.serverUrl).origin
+        : undefined;
+
+      if (
+        serverOrigin &&
+        origin !== serverOrigin &&
+        new URL(origin).host === new URL(serverOrigin).host
+      ) {
+        if (!this.warnedSchemeMismatch.has(origin)) {
+          this.warnedSchemeMismatch.add(origin);
+          console.warn(
+            `Subject origin ${origin} differs from the server URL ${serverOrigin} only by scheme; using the server's WebSocket. Set ATOMIC_SERVER_URL on the server to its public https URL.`,
+          );
+        }
+
+        return this.webSockets.get(serverOrigin) ?? this.getDefaultWebSocket();
+      }
+
+      return undefined;
     } catch (e) {
       throw new Error(
         `Could not open websocket for subject ${subject}: ${e.message}`,
