@@ -14,6 +14,10 @@ import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { PrivateDriveBadge } from '@components/Drives/PrivateDriveBadge';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { Column, Row } from '@components/Row';
+import {
+  DriveSwitcher,
+  DriveSwitcherChevronTrigger,
+} from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
 import { FaGear } from 'react-icons/fa6';
@@ -67,6 +71,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                       : undefined
                   }
                 />
+                <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
                 {isPrivateDrive && <PrivateDriveBadge />}
                 {vectorIndexing && <VectorIndexingIndicator />}
               </Row>
