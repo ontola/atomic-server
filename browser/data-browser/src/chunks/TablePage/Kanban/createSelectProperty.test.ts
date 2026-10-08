@@ -226,3 +226,50 @@ describe('table column creation dedupes ontology shortnames', () => {
     expect(second).not.toBe(first);
   });
 });
+
+describe('column properties are content-addressed', () => {
+  it('creates plain and select properties with contentAddressedProperty', async () => {
+    const store = fakeStore();
+    const spy = vi.spyOn(store, 'newResource');
+    const { rowClassA } = await twoTablesOnOneOntology(store);
+    spy.mockClear();
+
+    await createPropertyOnClass(store, rowClassA, {
+      name: 'Title',
+      datatype: Datatype.STRING,
+    });
+    await createSelectPropertyOnClass(store, rowClassA, {
+      name: 'Status',
+      tags: STATUS_TAGS,
+    });
+
+    const propertyCalls = spy.mock.calls.filter(([opts]) =>
+      [opts?.isA].flat().includes(core.classes.property),
+    );
+
+    expect(propertyCalls).toHaveLength(2);
+    expect(
+      propertyCalls.every(([opts]) => opts?.contentAddressedProperty === true),
+    ).toBe(true);
+  });
+
+  it('mints a new column under a disambiguated shortname when asked not to reuse', async () => {
+    const store = fakeStore();
+    const { rowClassA } = await twoTablesOnOneOntology(store);
+
+    const first = await createPropertyOnClass(store, rowClassA, {
+      name: 'Price',
+      datatype: Datatype.STRING,
+    });
+    const second = await createPropertyOnClass(store, rowClassA, {
+      name: 'Price',
+      datatype: Datatype.STRING,
+      reuse: false,
+    });
+
+    expect(second).not.toBe(first);
+    expect(
+      (await store.getResource(second)).get(core.properties.shortname),
+    ).toBe('price-2');
+  });
+});

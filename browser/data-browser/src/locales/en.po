@@ -2915,6 +2915,8 @@ msgstr "This resource has <0/> children"
 msgid "Edit {0}"
 msgstr "Edit {0}"
 
+#: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
 #: src/views/OntologyPage/PropertyDatatypePicker.tsx
 msgid "Property datatype"
 msgstr "Property datatype"
@@ -12310,3 +12312,21 @@ msgstr "Sign in to {0} to see whether this workspace is hosted."
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+
+#: src/hooks/useAddToOntology.ts
+msgid "A property can't be moved to another ontology."
+msgstr "A property can't be moved to another ontology."
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "A property can't be moved to another parent."
+msgstr "A property can't be moved to another parent."
+
+#. 0: (err as Error).message
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
+msgid "Could not change datatype: {0}"
+msgstr "Could not change datatype: {0}"
+
+#. 0: (err as Error).message
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Failed to save column: {0}"
+msgstr "Failed to save column: {0}"

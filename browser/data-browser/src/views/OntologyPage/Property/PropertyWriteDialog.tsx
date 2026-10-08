@@ -9,6 +9,7 @@ import {
 import { styled } from 'styled-components';
 import InputSwitcher from '../../../components/forms/InputSwitcher';
 import { PropertyFormCommon } from './PropertyFormCommon';
+import { isContentAddressed } from '../../../helpers/propertyIdentity';
 
 import type { JSX } from 'react';
 
@@ -34,7 +35,8 @@ export function PropertyWriteDialog({
           <DialogTitle>
             <InputSwitcher
               commit
-              disabled={!canEdit}
+              // The shortname is part of a content-addressed property's ID.
+              disabled={!canEdit || isContentAddressed(resource.subject)}
               resource={resource}
               property={shortnameProp}
             />

@@ -1,4 +1,5 @@
-import { Resource } from '@tomic/react';
+import { Resource, core, useStore } from '@tomic/react';
+import toast from 'react-hot-toast';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { PropertyForm } from './PropertyForm';
 import { FormValidationContextProvider } from '@components/forms/formValidation/FormValidationContextProvider';
@@ -11,6 +12,12 @@ import {
 } from '@components/Dialog';
 import { Button } from '@components/Button';
 import { getCategoryFromResource } from './categories';
+import {
+  applyDraftFields,
+  createPropertyDraft,
+  isContentAddressed,
+  recreatePropertyWithDatatype,
+} from '@helpers/propertyIdentity';
 
 interface EditPropertyDialogProps {
   resource: Resource;
@@ -23,24 +30,78 @@ export function EditPropertyDialog({
   showDialog,
   bindShow,
 }: EditPropertyDialogProps): JSX.Element {
+  const store = useStore();
   const [valid, setValid] = useState(true);
+  // Edits go to a draft copy so a datatype change (which needs a new property)
+  // never touches the saved one. A select's tags are children of the property
+  // itself and its datatype is fixed, so it edits the property directly.
+  const [draft, setDraft] = useState<Resource | null>(null);
 
   const category = getCategoryFromResource(resource);
+  const usesDraft = category !== 'select';
 
-  const onSuccess = useCallback(() => {
-    resource.save().catch(err => {
+  const onSuccess = useCallback(async () => {
+    try {
+      if (!draft) {
+        await resource.save();
+
+        return;
+      }
+
+      const datatypeChanged =
+        draft.get(core.properties.datatype) !==
+        resource.get(core.properties.datatype);
+
+      if (datatypeChanged && isContentAddressed(resource.subject)) {
+        // The datatype is part of the property's ID: make a new property and
+        // swap it in. Legacy properties still change in place below.
+        // TODO(lenses): values stored under the old property are not migrated.
+        await recreatePropertyWithDatatype(store, resource, draft);
+
+        return;
+      }
+
+      await applyDraftFields(resource, draft);
+      await resource.save();
+    } catch (err) {
       console.error('Failed to save property', err);
-    });
-  }, [resource]);
+      toast.error(`Failed to save column: ${(err as Error).message}`);
+    }
+  }, [store, resource, draft]);
 
   const [dialogProps, show, hide, visible] = useDialog({ bindShow, onSuccess });
 
   useEffect(() => {
-    if (showDialog) {
-      show();
-    } else {
+    if (!showDialog) {
       hide();
+      setDraft(null);
+
+      return;
     }
+
+    let cancelled = false;
+
+    (async () => {
+      if (usesDraft) {
+        const created = await createPropertyDraft(
+          store,
+          resource.get(core.properties.parent) as string,
+          { source: resource },
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setDraft(created);
+      }
+
+      show();
+    })().catch(console.error);
+
+    return () => {
+      cancelled = true;
+    };
   }, [showDialog]);
 
   const handleSaveClick = useCallback(() => {
@@ -54,10 +115,10 @@ export function EditPropertyDialog({
           <h1>Edit Column</h1>
         </DialogTitle>
         <DialogContent>
-          {visible && (
+          {visible && (draft || !usesDraft) && (
             <PropertyForm
               existingProperty
-              resource={resource}
+              resource={draft ?? resource}
               category={category}
               onSubmit={handleSaveClick}
             />

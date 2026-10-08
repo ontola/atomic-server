@@ -251,15 +251,16 @@ test.describe('forms', async () => {
     await waitForSync(page);
 
     // --- 3. Property-sync spot checks ---
-    // Rename the short-text field's label; the mapped Property's shortname
-    // (and thus the Table column header) must follow.
+    // Rename the short-text field's label; the mapped Property's shortname is
+    // part of its content-addressed ID, so it must NOT follow.
     await page.getByTestId('field-row-short-text').click();
     const shortTextSubject = await getFieldSubjectByType(page, 'short-text');
-    const shortTextProperty = (await getMappedProperty(
+    let shortTextProperty = (await getMappedProperty(
       page,
       shortTextSubject as string,
     )) as string;
     expect(shortTextProperty).toBeTruthy();
+    const originalProperty = shortTextProperty;
     const labelInput = page.getByTestId('field-label-input');
     // The Data name is read-only text until the pencil turns it into an input.
     const shortnameValue = page.getByTestId('field-shortname-value');
@@ -272,11 +273,11 @@ test.describe('forms', async () => {
       NAME,
       'Full name',
     );
-    await waitForPropertyValue(page, shortTextProperty, SHORTNAME, 'full-name');
-    await expect(shortnameValue).toHaveText('full-name');
+    await expect(shortnameValue).toHaveText('short-text');
 
-    // An edited Data name is pinned: it is the identifier the answers are
-    // stored under, so a later Label edit must not silently re-slug it.
+    // Choosing another Data name creates a new Property (the shortname is part
+    // of the ID) and points the field at it. A later Label edit must not
+    // re-slug it.
     await page.getByTestId('field-shortname-edit').click();
     const shortnameInput = page.getByTestId('field-shortname-input');
     await expect(shortnameInput).toBeFocused();
@@ -284,6 +285,16 @@ test.describe('forms', async () => {
     // Enter commits and drops back to the read-only row (so does blur).
     await shortnameInput.press('Enter');
     await expect(shortnameInput).not.toBeVisible();
+    await expect
+      .poll(async () => {
+        shortTextProperty = (await getMappedProperty(
+          page,
+          shortTextSubject as string,
+        )) as string;
+
+        return shortTextProperty;
+      })
+      .not.toBe(originalProperty);
     await waitForPropertyValue(
       page,
       shortTextProperty,

@@ -2915,6 +2915,8 @@ msgstr "Cette ressource a <0/> enfants"
 msgid "Edit {0}"
 msgstr "Modifier {0}"
 
+#: src/views/OntologyPage/NewPropertyButton.tsx
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
 #: src/views/OntologyPage/PropertyDatatypePicker.tsx
 msgid "Property datatype"
 msgstr "Type de données de la propriété"
@@ -12279,6 +12281,7 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
 msgid "See Cloud Server plans"
@@ -12295,4 +12298,22 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+msgstr ""
+
+#: src/hooks/useAddToOntology.ts
+msgid "A property can't be moved to another ontology."
+msgstr ""
+
+#: src/components/SideBar/useSidebarDnd.ts
+msgid "A property can't be moved to another parent."
+msgstr ""
+
+#. 0: (err as Error).message
+#: src/views/OntologyPage/PropertyDatatypePicker.tsx
+msgid "Could not change datatype: {0}"
+msgstr ""
+
+#. 0: (err as Error).message
+#: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
+msgid "Failed to save column: {0}"
 msgstr ""

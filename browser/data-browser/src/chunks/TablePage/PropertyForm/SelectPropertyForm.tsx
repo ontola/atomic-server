@@ -35,19 +35,25 @@ export function SelectPropertyForm({
     async (tag: Resource) => {
       await setAllowOnly([...allowOnly, tag.subject]);
 
-      await tag.save();
+      // On a draft (new column) the tags are only seeds: the property does not
+      // exist yet, and its tags are created under its final ID on confirm.
+      if (!resource.new) {
+        await tag.save();
+      }
     },
-    [allowOnly, setAllowOnly],
+    [allowOnly, setAllowOnly, resource],
   );
 
   const handleDeleteTag = useCallback(
     async (subject: string) => {
-      const tag = store.getResourceLoading(subject);
-      tag.destroy();
+      if (!resource.new) {
+        const tag = store.getResourceLoading(subject);
+        tag.destroy();
+      }
 
       await setAllowOnly(removeFromArray(allowOnly, subject));
     },
-    [store, setAllowOnly, allowOnly],
+    [store, resource, setAllowOnly, allowOnly],
   );
 
   useEffect(() => {

@@ -37,6 +37,16 @@ export function AddPropertyButton({
       type === 'required'
         ? core.properties.requires
         : core.properties.recommends;
+    // A content-addressed property can already be listed.
+    const listed = [
+      ...((creator.get(core.properties.requires) ?? []) as string[]),
+      ...((creator.get(core.properties.recommends) ?? []) as string[]),
+    ];
+
+    if (listed.includes(newValue)) {
+      return;
+    }
+
     creator.push(creatorProp, [newValue]);
     await creator.save();
   };

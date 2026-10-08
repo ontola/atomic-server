@@ -13,6 +13,12 @@ import {
   createSelectPropertyOnClass,
 } from '../TablePage/Kanban/createSelectProperty';
 import { stringToSlug } from '@helpers/stringToSlug';
+import {
+  createContentAddressedFromDraft,
+  createPropertyDraft,
+  isContentAddressed,
+  replacePropertyReferences,
+} from '@helpers/propertyIdentity';
 import { DEFAULT_INFO_BOX_STYLE } from '@tomic/form-renderer';
 import {
   DEFAULT_CHOICE_TAGS,
@@ -95,21 +101,6 @@ function uniqueShortname(base: string, taken: Set<string>): string {
   }
 
   return `${root}-${suffix}`;
-}
-
-/**
- * Whether `shortname` still looks like it was derived from `label` — i.e. the
- * user has not overridden it in the field settings panel, so a rename may
- * re-derive it.
- *
- * The `-<n>` arm is what keeps a de-duplicated slug (`radio-group-2`) counting
- * as auto-derived. `base` is already a slug (`[a-z0-9-]`), so it carries no
- * regex metacharacters and needs no escaping.
- */
-export function isDerivedShortname(shortname: string, label: string): boolean {
-  const base = stringToSlug(label) || FALLBACK_SHORTNAME;
-
-  return shortname === base || new RegExp(`^${base}-\\d+$`).test(shortname);
 }
 
 /** Shared resource creation for the builder and AI tool. */
@@ -201,8 +192,7 @@ export async function createFormField(
 /**
  * Keeps a Form's questions in sync with the generated data class: adding an
  * input field creates the mapped Property (via the same primitive Tables use
- * for columns), renaming a field re-derives the Property's shortname unless
- * the user pinned one, and deleting a field only unlinks it — the Property
+ * for columns), renaming a field changes the FormField's label only, and deleting a field only unlinks it — the Property
  * (and any data already collected for it) is left untouched.
  *
  * Form-generated Properties carry no `name`: the Label is the FormField's, and
@@ -224,50 +214,24 @@ export function useFormFieldPropertySync(
     [store, dataClass, ownsSchema],
   );
 
-  const renameField = useCallback(
-    async (field: Resource, newLabel: string) => {
-      const previousLabel =
-        (field.get(core.properties.name) as string | undefined) ?? '';
-
-      await field.set(core.properties.name, newLabel);
-      await field.save();
-
-      const propertySubject = field.get(forms.properties.formMapsTo) as
-        | string
-        | undefined;
-
-      if (!ownsSchema || !propertySubject) {
-        return;
-      }
-
-      const property = await store.getResource(propertySubject);
-      const shortname = property.get(core.properties.shortname) as
-        | string
-        | undefined;
-
-      // A shortname the user typed themselves is pinned — only one still
-      // derived from the old label follows the rename.
-      if (shortname && !isDerivedShortname(shortname, previousLabel)) {
-        return;
-      }
-
-      const next = uniqueShortname(
-        stringToSlug(newLabel),
-        await takenShortnames(store, dataClass, propertySubject),
-      );
-
-      if (next !== shortname) {
-        await property.set(core.properties.shortname, next);
-        await property.save();
-      }
-    },
-    [store, dataClass, ownsSchema],
-  );
+  /**
+   * Renames a question. Only the FormField's label changes: the mapped
+   * Property's shortname is part of its content-addressed ID and never
+   * follows a rename. Use {@link setFieldShortname} to pick another one.
+   */
+  const renameField = useCallback(async (field: Resource, newLabel: string) => {
+    await field.set(core.properties.name, newLabel);
+    await field.save();
+  }, []);
 
   /**
    * Overrides the mapped Property's shortname. Returns an error message when
    * the slug is empty or already used by another column of the data class, in
    * which case nothing is written.
+   *
+   * A content-addressed Property cannot be renamed, so this creates a sibling
+   * with the new shortname, points the field and the data class at it and
+   * leaves the old one behind. Legacy Properties are renamed in place.
    */
   const setFieldShortname = useCallback(
     async (field: Resource, shortname: string): Promise<string | undefined> => {
@@ -290,8 +254,33 @@ export function useFormFieldPropertySync(
       }
 
       const property = await store.getResource(propertySubject);
-      await property.set(core.properties.shortname, shortname);
-      await property.save();
+
+      if (!isContentAddressed(propertySubject)) {
+        await property.set(core.properties.shortname, shortname);
+        await property.save();
+
+        return undefined;
+      }
+
+      // TODO(lenses): answers already stored under the old Property are not
+      // moved to the new one. Until lenses can migrate them, they stay
+      // readable only through the old Property.
+      const draft = await createPropertyDraft(
+        store,
+        property.get(core.properties.parent) as string,
+        { source: property },
+      );
+      await draft.set(core.properties.shortname, shortname);
+      const created = await createContentAddressedFromDraft(
+        store,
+        property.get(core.properties.parent) as string,
+        draft,
+      );
+      await replacePropertyReferences(store, propertySubject, created.subject, [
+        dataClass,
+      ]);
+      await field.set(forms.properties.formMapsTo, created.subject);
+      await field.save();
 
       return undefined;
     },

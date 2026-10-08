@@ -66,6 +66,8 @@ export interface SchemaStore {
     parent: string;
     isA: string[];
     propVals: Record<string, JSONValue>;
+    /** Derive the subject from parent, shortname and datatype. */
+    contentAddressedProperty?: boolean;
   }): Promise<SchemaResource>;
 }
 
@@ -310,6 +312,8 @@ type Binding =
   /** A term that does not exist yet. */
   | {
       kind: 'create';
+      /** A Property: created under its content-addressed ID. */
+      contentAddressed: boolean;
       localId: string;
       isA: string[];
       propVals: Record<string, JSONValue>;
@@ -365,7 +369,14 @@ async function bindOne<T extends { shortname: string; subject?: string }>(
     return { kind: 'recovered', subject: hit, propVals: desired.propVals };
   }
 
-  return { kind: 'create', localId, ...desired };
+  return {
+    kind: 'create',
+    // New properties get content-addressed IDs; lookup above still finds the
+    // legacy ones by shortname / localId.
+    contentAddressed: listProperty === core.properties.properties,
+    localId,
+    ...desired,
+  };
 }
 
 /** Carries out a {@link Binding}, returning the term's subject. */
@@ -383,11 +394,12 @@ async function writeOne(
     return binding.subject;
   }
 
-  const { localId, isA, propVals } = binding;
+  const { localId, isA, propVals, contentAddressed } = binding;
   const created = await store.newResource({
     parent: ontology.subject,
     isA,
     propVals: { ...propVals, [core.properties.localId]: localId },
+    ...(contentAddressed ? { contentAddressedProperty: true } : {}),
   });
 
   try {

@@ -12,6 +12,7 @@ import { PropertyWriteDialog } from './PropertyWriteDialog';
 import { useOntologyContext } from '../OntologyContext';
 import { ErrorLook } from '../../../components/ErrorLook';
 import { Button } from '../../../components/Button';
+import { isContentAddressed } from '../../../helpers/propertyIdentity';
 
 import type { JSX } from 'react';
 
@@ -56,7 +57,8 @@ export function PropertyLineWrite({
           aria-label='Property shortname'
           commit
           required
-          disabled={disabled}
+          // The shortname is part of a content-addressed property's ID.
+          disabled={disabled || isContentAddressed(subject)}
           resource={resource}
           property={shortnameProp}
         />
