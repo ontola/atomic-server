@@ -7,6 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Commits are now durable when acknowledged (#2156). The store used to fsync every 100 ms, so `kill -9` or a power cut could lose commits a client had been told succeeded. The default `--durability group` / `ATOMIC_DURABILITY=group` acknowledges a commit only after the fsync that covers it, and concurrent commits share one fsync (group commit). `immediate` pays one fsync per commit; `none` restores the old 100 ms window for maximum speed.
 - Query `count`, collection `totalItems` and `totalPages` no longer include rows the requesting agent cannot read (#286). Before, rows outside the returned page were counted without a rights check, so a count revealed how many hidden rows matched.
 - `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX` takes a comma-separated list (`atomicserver.eu,atomic.place`), so a node can answer under two domains while it moves from one to the other.
 - Forms (beta): guests can fill in a form without an account, and each answer

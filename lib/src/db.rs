@@ -913,6 +913,28 @@ impl Db {
         uploads_path: &std::path::Path,
         policy: &compaction::CompactionPolicy,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_options(
+            path,
+            base_domain,
+            uploads_path,
+            policy,
+            redb_store::Durability::default(),
+        )
+        .await
+    }
+
+    /// `init_redb_file_with_policy` with an explicit write [`redb_store::Durability`]:
+    /// when a commit is acknowledged relative to the fsync that protects it.
+    /// The default (`Group`) acknowledges only after an fsync, shared between
+    /// concurrent writers.
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_options(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
+        durability: redb_store::Durability,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -971,8 +993,10 @@ impl Db {
         #[cfg(not(feature = "db-sled"))]
         let _ = uploads_path;
 
-        let (redb_store, compaction) =
-            redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
+        let (redb_store, compaction) = redb_store::RedbStore::new_file_with_policy_and_durability(
+            &redb_path, policy, durability,
+        )?;
+        tracing::info!("Write durability: {durability}");
 
         let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 
