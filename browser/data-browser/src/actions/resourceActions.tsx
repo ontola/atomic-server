@@ -205,7 +205,6 @@ export const resourceActions: ActionDefinition[] = [
       try {
         const forksFolder = await getOrCreateForksFolder(ctx.store, ctx.drive!);
         const fork = await ctx.resource.fork(forksFolder);
-        toast.success('Fork created');
         ctx.navigate(constructOpenURL(fork.subject));
       } catch (error) {
         toast.error((error as Error).message);
@@ -225,7 +224,6 @@ export const resourceActions: ActionDefinition[] = [
     run: async ctx => {
       try {
         const original = await ctx.resource.mergeIntoOriginal();
-        toast.success('Fork merged');
         ctx.navigate(constructOpenURL(original.subject));
       } catch (error) {
         toast.error((error as Error).message);
@@ -415,7 +413,6 @@ export const resourceActions: ActionDefinition[] = [
       try {
         await ctx.resource.destroy();
         ctx.onAfterDelete?.();
-        toast.success('Resource deleted!');
 
         if (ctx.currentSubject === ctx.subject) {
           ctx.navigate(parent ? constructOpenURL(parent) : '/');
@@ -462,7 +459,6 @@ export const resourceActions: ActionDefinition[] = [
         forceOverride: true,
         noWebSocket: true,
       });
-      toast.success('Resource reloaded');
     },
   },
 ];

@@ -389,7 +389,6 @@ function ServerCard({
     try {
       if (next) {
         await store.promoteLocalDrive(drive);
-        toast.success('Syncing this workspace…');
       } else {
         await store.makeDriveLocal(drive);
         resumePeerLinks(store);
@@ -1406,7 +1405,6 @@ function SyncPage() {
 
     try {
       await store.promoteLocalDrive(status.drive);
-      toast.success('Syncing this workspace…');
     } catch (e) {
       store.notifyError(e as Error);
     } finally {
@@ -1493,11 +1491,16 @@ function SyncPage() {
       });
       if (result.replicated)
         setHostedCopy({ drive, origin: result.httpOrigin });
-      toast.success(
-        result.replicated
-          ? 'Cloud Server received this workspace. Your source server is still connected.'
-          : 'Connected to Cloud Server. Syncing this workspace…',
-      );
+
+      // A manual run shows its result in the connection card. The automatic
+      // run nobody clicked is announced.
+      if (auto) {
+        toast.success(
+          result.replicated
+            ? 'Cloud Server received this workspace. Your source server is still connected.'
+            : 'Connected to Cloud Server. Syncing this workspace…',
+        );
+      }
     } catch (e) {
       if (auto) {
         setAutoEnrollError(
@@ -1585,8 +1588,7 @@ function SyncPage() {
 
   /** Point the app at `server` and reconnect. `setServer` runs through
    * `store.setServerUrl`, which reopens the WebSocket — the connection card
-   * then reflects the new server's status. The toast is the immediate feedback
-   * (the reconnect itself is async). */
+   * then reflects the new server's status. */
   function switchToServer(server: string) {
     if (server === baseURL) {
       return;
@@ -1594,7 +1596,6 @@ function SyncPage() {
 
     try {
       setServer(server);
-      toast.success(`Switching to ${serverLabel(server)}…`);
     } catch (e) {
       store.notifyError(e as Error);
     }

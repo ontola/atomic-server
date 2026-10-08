@@ -76,7 +76,6 @@ function SharePage(): JSX.Element {
     try {
       await resource.save();
       setHasLocalChanges(false);
-      toast.success('Share settings saved');
       navigate(constructOpenURL(subject!));
     } catch (e) {
       toast.error(e.message);

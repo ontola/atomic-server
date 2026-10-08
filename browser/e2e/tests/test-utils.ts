@@ -704,7 +704,8 @@ export async function makeDrivePublic(page: Page) {
     .getByRole('button', { name: 'Save', exact: true });
   await expect(saveBtn).toBeEnabled({ timeout: 15000 });
   await saveBtn.click();
-  await expect(page.locator('text="Share settings saved"')).toBeVisible();
+  // Saving navigates back to the resource, leaving the share page.
+  await expect(saveBtn).toBeHidden();
 }
 
 export async function openSubject(page: Page, subject: string) {
@@ -1047,7 +1048,6 @@ export async function editProfileAndCommit(page: Page) {
   const username = `Test user edited at ${new Date().toLocaleDateString()}`;
   await nameInput.fill(username);
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.locator('text=Resource saved')).toBeVisible();
   await page.waitForURL(/\/app\/show/);
   await page.reload();
   await expect(page.locator(`text=${username}`).first()).toBeVisible({
