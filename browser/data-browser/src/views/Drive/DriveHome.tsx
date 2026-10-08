@@ -1,10 +1,8 @@
 import {
-  core,
   dataBrowser,
   useDrivePresence,
   useResource,
   useTitle,
-  useArray,
   useValue,
   type Resource,
 } from '@tomic/react';
@@ -155,9 +153,6 @@ export function ResourceTiles({
 function ResourceTile({ subject }: { subject: string }): JSX.Element {
   const resource = useResource(subject, { allowIncomplete: true });
   const [title] = useTitle(resource);
-  const [isA] = useArray(resource, core.properties.isA);
-  const classResource = useResource(isA[0]);
-  const [className] = useTitle(classResource);
 
   return (
     <Tile subject={subject} clean>
@@ -166,7 +161,6 @@ function ResourceTile({ subject }: { subject: string }): JSX.Element {
       </TileGlyph>
       <TileText>
         <TileTitle>{title}</TileTitle>
-        {isA[0] && <TileClass>{className}</TileClass>}
       </TileText>
     </Tile>
   );
@@ -385,14 +379,6 @@ const TileText = styled.span`
 
 const TileTitle = styled.span`
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TileClass = styled.span`
-  font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

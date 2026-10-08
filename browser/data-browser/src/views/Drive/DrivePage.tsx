@@ -90,9 +90,9 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               buttonLabel='Add description'
             />
 
-            {canEdit && <QuickCreateCards parent={resource.subject} />}
-
             <RecentlyOpened drive={resource.subject} />
+
+            <ActivityFeed drive={resource} />
 
             <section>
               <SectionTitle>Resources</SectionTitle>
@@ -107,7 +107,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
               )}
             </section>
 
-            <ActivityFeed drive={resource} />
+            {canEdit && <QuickCreateCards parent={resource.subject} />}
           </Column>
         </ContainerNarrow>
       </FileDropZone>
