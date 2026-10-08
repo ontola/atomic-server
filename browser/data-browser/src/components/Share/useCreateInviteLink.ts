@@ -22,7 +22,7 @@ export interface InviteLinkOptions {
 /**
  * Returns a function that signs an invite token for `target` and builds the
  * `/app/invite` URL for it. Shared by the Share dialog (link and email
- * invites) and the Permissions & Invites page.
+ * invites).
  */
 export function useCreateInviteLink(
   target: Resource,

@@ -8,14 +8,12 @@ import {
 import { ContainerNarrow } from '../../components/Containers';
 import { Card, CardInsideFull } from '../../components/Card';
 import { Button } from '../../components/Button';
-import { InviteForm } from '../../components/InviteForm';
 import toast from 'react-hot-toast';
 import { Title } from '../../components/Title';
 import { constructOpenURL } from '../../helpers/navigation';
 import { ErrorLook } from '../../components/ErrorLook';
 import { Column } from '../../components/Row';
 import { Main } from '../../components/Main';
-import { FaShare } from 'react-icons/fa6';
 import { useRights } from './useRights';
 import { AgentRights } from './AgentRights';
 import { useInheritedRights } from './useInheritedRights';
@@ -44,7 +42,6 @@ function SharePage(): JSX.Element {
   const { subject } = ShareRoute.useSearch();
   const { resource, ready } = useResourceSnapshot(subject);
   const canWrite = useCanWrite(resource);
-  const [showInviteForm, setShowInviteForm] = useState(false);
   const [err, setErr] = useState<Error | undefined>(undefined);
   const navigate = useNavigateWithTransition();
   const inheritedRights = useInheritedRights(resource);
@@ -88,15 +85,6 @@ function SharePage(): JSX.Element {
       <ContainerNarrow>
         <Column>
           <Title resource={resource} prefix='Permissions for' link />
-          {canWrite && !showInviteForm && (
-            <span>
-              <Button onClick={() => setShowInviteForm(true)}>
-                <FaShare />
-                <span>Create Invite</span>
-              </Button>
-            </span>
-          )}
-          {showInviteForm && <InviteForm target={resource} />}
           <Card>
             <Column>
               <RightsHeader>Permissions set here:</RightsHeader>
