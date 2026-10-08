@@ -34,7 +34,9 @@ export function DriveAddress({ drive }: { drive: string }) {
   // The fixed part of the address (`.atomic.place`). The portal renders it, so
   // this is the only place the namespace is known; remembered because the
   // check result is gone while someone is editing their name.
-  const [suffix, setSuffix] = useState('');
+  // Until the portal answers, assume the hosted namespace, so the field reads
+  // as the address it will become.
+  const [suffix, setSuffix] = useState('.atomic.place');
   const inputId = 'drive-address-input';
 
   useEffect(() => {
@@ -161,10 +163,10 @@ export function DriveAddress({ drive }: { drive: string }) {
   const canSubmit = !busy && !!label.trim() && (current?.available ?? false);
   const url = alias ? `https://${alias.host}` : '';
   const hint = !label.trim()
-    ? 'Letters, digits and hyphens.'
+    ? ''
     : current
       ? current.available
-        ? `${current.host} is available.`
+        ? 'Available.'
         : (current.reason ?? 'Not available.')
       : 'Checking…';
 
@@ -205,41 +207,43 @@ export function DriveAddress({ drive }: { drive: string }) {
             {alias ? 'New web address' : 'Web address'}
           </Label>
           <InputRow>
-            <Input
-              id={inputId}
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-              autoCapitalize='none'
-              autoCorrect='off'
-              spellCheck={false}
-              placeholder='your-name'
-              aria-describedby={`${inputId}-status`}
-              disabled={busy}
-            />
-            {suffix && <Suffix aria-hidden>{suffix}</Suffix>}
+            <Field>
+              <Input
+                id={inputId}
+                value={label}
+                onChange={e => setLabel(e.target.value)}
+                autoCapitalize='none'
+                autoCorrect='off'
+                spellCheck={false}
+                placeholder='name'
+                aria-describedby={`${inputId}-status`}
+                disabled={busy}
+              />
+              <Suffix aria-hidden>{suffix}</Suffix>
+            </Field>
+            <Button type='submit' disabled={!canSubmit}>
+              {busy ? 'Saving…' : alias ? 'Change' : 'Claim'}
+            </Button>
+            {alias && (
+              <Button subtle onClick={stopEditing} disabled={busy}>
+                Cancel
+              </Button>
+            )}
           </InputRow>
-          <Hint
-            id={`${inputId}-status`}
-            role='status'
-            $bad={!!current && !current.available}
-          >
-            {hint}
-          </Hint>
+          {hint && (
+            <Hint
+              id={`${inputId}-status`}
+              role='status'
+              $bad={!!current && !current.available}
+            >
+              {hint}
+            </Hint>
+          )}
           {error && (
             <Hint role='alert' $bad>
               {error}
             </Hint>
           )}
-          <Actions>
-            <Button type='submit' disabled={!canSubmit}>
-              {busy ? 'Saving…' : alias ? 'Change address' : 'Claim address'}
-            </Button>
-            {alias && (
-              <Button subtle onClick={stopEditing} disabled={busy}>
-                Keep current
-              </Button>
-            )}
-          </Actions>
         </form>
       )}
     </Wrapper>
@@ -286,21 +290,40 @@ const Muted = styled.span`
 
 const InputRow = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: ${CARD_ACTIONS_GAP};
   min-width: 0;
-  max-width: 22rem;
+`;
+
+// One box reading as the whole address: the name is typed, the namespace is
+// fixed text after it.
+const Field = styled.div`
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 20rem;
+  flex: 1 1 12rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  padding-right: 0.6rem;
+
+  &:focus-within {
+    border-color: ${p => p.theme.colors.main};
+  }
 `;
 
 const Input = styled.input`
   flex: 1;
-  min-width: 0;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: 0.4rem 0.6rem;
+  min-width: 3rem;
+  border: none;
+  outline: none;
+  padding: 0.4rem 0 0.4rem 0.6rem;
   font-size: ${CARD_SUB_FONT};
-  background: ${p => p.theme.colors.bg};
+  background: transparent;
   color: ${p => p.theme.colors.text};
+  text-align: right;
 `;
 
 const Suffix = styled.span`
@@ -312,11 +335,4 @@ const Hint = styled.p<{ $bad?: boolean }>`
   margin: 0;
   color: ${p => (p.$bad ? p.theme.colors.alert : p.theme.colors.textLight)};
   font-size: ${CARD_SUB_FONT};
-`;
-
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: ${CARD_ACTIONS_GAP};
 `;

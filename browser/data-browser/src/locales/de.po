@@ -117,8 +117,8 @@ msgstr ""
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
-#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/CellSelectionMenu.tsx
+#: src/chunks/TablePage/CreateTableFormDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
@@ -127,6 +127,7 @@ msgstr ""
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
+#: src/components/Cloud/DriveAddress.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/HostUI/hostUIDialogs.tsx
@@ -12399,15 +12400,6 @@ msgid "Could not release that address."
 msgstr ""
 
 #: src/components/Cloud/DriveAddress.tsx
-msgid "Letters, digits and hyphens."
-msgstr ""
-
-#. 0: current.host
-#: src/components/Cloud/DriveAddress.tsx
-msgid "{0} is available."
-msgstr ""
-
-#: src/components/Cloud/DriveAddress.tsx
 msgid "Not available."
 msgstr ""
 
@@ -12425,20 +12417,11 @@ msgid "Web address"
 msgstr ""
 
 #: src/components/Cloud/DriveAddress.tsx
-#: src/components/Cloud/DriveAddress.tsx
 msgid "Change address"
 msgstr ""
 
 #: src/components/Cloud/DriveAddress.tsx
 msgid "New web address"
-msgstr ""
-
-#: src/components/Cloud/DriveAddress.tsx
-msgid "Claim address"
-msgstr ""
-
-#: src/components/Cloud/DriveAddress.tsx
-msgid "Keep current"
 msgstr ""
 
 #: src/helpers/managed/aliases.ts
@@ -12463,4 +12446,16 @@ msgstr ""
 
 #: src/components/ConnectDevice.tsx
 msgid "Code or server address"
+msgstr ""
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Change"
+msgstr ""
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Claim"
+msgstr ""
+
+#: src/components/Cloud/DriveAddress.tsx
+msgid "Available."
 msgstr ""
