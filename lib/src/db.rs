@@ -2086,6 +2086,11 @@ impl Db {
             else {
                 continue;
             };
+            // `RedbStore::flush` parks its sentinel in this tree, so any open
+            // that ran a flush (the index-key migration does) holds one.
+            if host == "__flush_sentinel__" {
+                continue;
+            }
             out.push((host.to_string(), did.to_string()));
         }
 
