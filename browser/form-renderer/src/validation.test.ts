@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   isOverLength,
@@ -360,5 +361,19 @@ describe('number fields backed by integer columns', () => {
     expect(validateFieldValue(integer, 36)).toBeNull();
     expect(validateFieldValue(integer, 3.6)).toBe('Expected a whole number');
     expect(validateFieldValue(field('number', 'Weight'), 3.6)).toBeNull();
+  });
+});
+
+/** The same answers are checked against the server in `server/src/forms.rs`. */
+describe('verdicts shared with the server', () => {
+  const { cases } = JSON.parse(
+    readFileSync(
+      new URL('../shared/validation-cases.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { cases: { type: FieldBlock['type']; value: string; valid: boolean }[] };
+
+  it.each(cases)('$type $value is valid: $valid', ({ type, value, valid }) => {
+    expect(validateFieldValue(field(type, type), value) === null).toBe(valid);
   });
 });

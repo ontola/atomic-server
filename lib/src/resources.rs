@@ -576,6 +576,79 @@ impl Resource {
         self.loro.as_ref().map(|doc| doc.export_snapshot())
     }
 
+    /// The live Loro doc, loaded if needed. For edits no property setter
+    /// covers, such as a document's rich-text body. Follow with
+    /// [`Self::sign_pending`] or [`Self::sign_genesis_pending`].
+    pub fn live_doc(&mut self) -> AtomicResult<&crate::loro::AtomicLoroDoc> {
+        self.ensure_materialized()?;
+        Ok(self.loro())
+    }
+
+    /// Signs everything changed so far as `agent` and returns the commit
+    /// without applying it. For a caller that sends the commit through the
+    /// normal pipeline (signature, rights, subject ownership, broadcast)
+    /// instead of [`Self::save_as`], which skips the rights check. `None`
+    /// when nothing changed.
+    pub async fn sign_pending(
+        &mut self,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<Option<crate::Commit>> {
+        self.sync_loro_changes_to_commit_builder()?;
+        if !self.get_commit_builder().has_changes() {
+            self.reset_commit_builder();
+            return Ok(None);
+        }
+        let commit = self
+            .get_commit_builder()
+            .clone()
+            .sign(agent, store, self)
+            .await?;
+
+        Ok(Some(commit))
+    }
+
+    /// Like [`Self::sign_pending`], for a commit that destroys this resource
+    /// and, on the node, everything inside it.
+    pub async fn sign_destroy_pending(
+        &mut self,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::Commit> {
+        self.commit.destroy(true);
+
+        self.get_commit_builder()
+            .clone()
+            .sign(agent, store, self)
+            .await
+    }
+
+    /// Like [`Self::sign_pending`], for a new DID resource: signs a genesis
+    /// commit and sets this resource's subject to the `did:ad:` it derives.
+    pub async fn sign_genesis_pending(
+        &mut self,
+        agent: &crate::agents::Agent,
+        store: &impl Storelike,
+    ) -> AtomicResult<crate::Commit> {
+        self.subject = Subject::from_raw("did:ad:placeholder", None);
+        self.commit.set_subject(self.subject.clone());
+        self.sync_loro_changes_to_commit_builder()?;
+
+        let mut builder = self.get_commit_builder().clone();
+        builder.is_genesis = true;
+        let mut commit = builder.sign(agent, store, self).await?;
+        let signature = commit
+            .signature
+            .as_ref()
+            .ok_or("No signature generated for genesis commit")?;
+        let did = Subject::from_raw(&crate::identifiers::resource_subject(signature), None);
+
+        self.subject = did.clone();
+        commit.subject = did;
+
+        Ok(commit)
+    }
+
     /// Load versioned state before history reads (`get_history`, `view_at`).
     pub fn warm_history(&mut self) -> AtomicResult<()> {
         self.ensure_materialized()

@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
-import { core, dataBrowser, server } from '@tomic/lib';
-import { standardClassAlias } from './standardClassAlias';
+import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
+import { server } from './ontologies/server.js';
+import { standardClassAlias } from './standard-class-alias.js';
 it('resolves standard class names using canonical ontology identifiers', () => {
   expect(standardClassAlias('File')).toBe(server.classes.file);
   expect(standardClassAlias('file')).toBe(server.classes.file);

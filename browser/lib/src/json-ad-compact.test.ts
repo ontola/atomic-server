@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Datatype } from '@tomic/react';
+import { Datatype } from './datatypes.js';
 import {
   addPropertyToContext,
   coerceValueIn,
@@ -9,7 +9,7 @@ import {
   resolveKey,
   type ClassContext,
   type CompactPropertyInfo,
-} from './jsonAdCompact';
+} from './json-ad-compact.js';
 
 const statusProperty: CompactPropertyInfo = {
   subject: 'https://example.com/props/status',
