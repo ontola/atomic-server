@@ -132,12 +132,6 @@ export const topBarShareButton = (page: Page) =>
 export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
-export const publicReadRightLocator = (page: Page) =>
-  page
-    .locator(
-      '[data-test="right-public"] input[type="checkbox"]:not([disabled])',
-    )
-    .first();
 export const contextMenu = '[data-test="context-menu"]';
 /**
  * The search input inside the search overlay (modal). Only visible after the
@@ -690,21 +684,33 @@ export async function newDrive(page: Page) {
 export async function makeDrivePublic(page: Page) {
   await currentDriveTitle(page).click();
   await page.click(contextMenu);
-  await page.getByRole('menuitem', { name: 'Permissions & Invites' }).click();
+  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+
+  const dialog = page.locator('dialog[open]');
+  const publicAccess = dialog.locator('[data-test="share-public"]');
+  const profileStep = dialog.getByRole('button', {
+    name: 'Save and continue',
+    exact: true,
+  });
+
+  // A first Share starts with the optional profile step.
+  await expect(publicAccess.or(profileStep)).toBeVisible({ timeout: 15000 });
+
+  if (await profileStep.isVisible()) {
+    await dialog.getByLabel('Full name', { exact: true }).fill('Drive Owner');
+    await profileStep.click();
+  }
+
+  const read = publicAccess.getByRole('radio', { name: 'Read', exact: true });
   await expect(
-    publicReadRightLocator(page),
+    publicAccess.getByRole('radio', { name: 'Off', exact: true }),
     'The drive was public from the start',
-  ).not.toBeChecked();
-  await publicReadRightLocator(page).click();
-  // The permission toggle dirties the resource asynchronously (validation
-  // fetch + LocalChange event), so wait for Save to enable instead of
-  // racing the default 5s click timeout.
-  const saveBtn = page
-    .locator('main')
-    .getByRole('button', { name: 'Save', exact: true });
-  await expect(saveBtn).toBeEnabled({ timeout: 15000 });
-  await saveBtn.click();
-  await expect(page.locator('text="Share settings saved"')).toBeVisible();
+  ).toBeChecked();
+  // The dialog saves each change at once: no Save button.
+  await read.check();
+  await expect(read).toBeChecked({ timeout: 15000 });
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 }
 
 export async function openSubject(page: Page, subject: string) {

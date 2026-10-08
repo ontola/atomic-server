@@ -32,12 +32,12 @@ import {
   editURL,
   historyURL,
   importerURL,
-  shareURL,
 } from '../helpers/navigation';
 import { paths } from '../routes/paths';
 import { shortcuts } from './shortcuts';
 import type { ActionContext, ActionDefinition } from './types';
 import { openSearchOverlay } from '../components/overlayState';
+import { openShareDialog } from '../components/Share/shareDialogState';
 
 /** Asks the resource bar to open its tag picker for `detail` (a subject). */
 export const OPEN_TAGS_EVENT = 'atomic-open-tags';
@@ -316,13 +316,13 @@ export const resourceActions: ActionDefinition[] = [
     id: 'share',
     scope: 'resource',
     section: 'action',
-    label: () => 'Permissions & Invites',
-    helper: () => 'Edit permissions and create invites.',
+    label: () => 'Share',
+    helper: () => 'Invite people and manage who has access.',
     keywords: ['share', 'access', 'rights', 'invite'],
     icon: () => <FaShare />,
     asTool: true,
     toolName: 'open_share_settings',
-    run: ctx => ctx.navigate(shareURL(ctx.subject)),
+    run: ctx => openShareDialog(ctx.subject),
   },
   {
     id: 'history',
