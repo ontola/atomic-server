@@ -228,6 +228,21 @@ describe('resource.ts', () => {
     expect(reloaded.getCreatedBy()).toBe(genesisSignerDid(cert));
   });
 
+  it('names a pre-DID creator by the agent profile that is live today', async ({
+    expect,
+  }) => {
+    const resource = new Resource('https://example.com/old-message');
+    await resource.set(
+      'https://atomicdata.dev/properties/createdBy',
+      'https://atomicdata.dev/agents/QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=',
+      false,
+    );
+
+    expect(resource.getCreatedBy()).toBe(
+      'atomic:agent:QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=',
+    );
+  });
+
   it('merges remote state without dropping local unsaved loro edits', async ({
     expect,
   }) => {

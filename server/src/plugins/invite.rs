@@ -190,3 +190,39 @@ pub async fn add_rights(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atomic_lib::agents::Agent;
+
+    #[tokio::test]
+    async fn accepting_twice_adds_rights_once() {
+        let store = atomic_lib::test_utils::init_store().await;
+        let drive = atomic_lib::test_utils::create_test_drive(&store)
+            .await
+            .unwrap();
+        let agent = Agent::new(None).unwrap().subject.to_string();
+
+        for _ in 0..3 {
+            add_rights(&agent, drive.as_str(), true, &store)
+                .await
+                .unwrap();
+            add_rights(&agent, drive.as_str(), false, &store)
+                .await
+                .unwrap();
+        }
+
+        let drive = store.get_resource(&drive).await.unwrap();
+        for prop in [urls::READ, urls::WRITE] {
+            let count = drive
+                .get(prop)
+                .map(|v| match v {
+                    Value::ResourceArray(a) => a.iter().filter(|s| s.to_string() == agent).count(),
+                    _ => 0,
+                })
+                .unwrap_or(0);
+            assert_eq!(count, 1, "{prop} should list the agent once");
+        }
+    }
+}

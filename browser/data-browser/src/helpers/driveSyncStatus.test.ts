@@ -4,6 +4,7 @@ import {
   deriveNodeStatuses,
   currentDriveSync,
   currentDriveValue,
+  driveHostedByNode,
   hasHostedDriveConnection,
 } from './driveSyncStatus';
 
@@ -48,5 +49,53 @@ describe('Cloud Server requires evidence for the selected drive', () => {
     } as StoreSyncStatus;
     expect(currentDriveSync(status)).toBeUndefined();
     expect(currentDriveSync({ ...status, drive: 'work' })?.timestamp).toBe(100);
+  });
+});
+
+describe('driveHostedByNode', () => {
+  const synced = {
+    drive: 'did:ad:ontola',
+    serverConnected: true,
+    pendingDirtyCount: 0,
+    syncInProgress: false,
+    lastDriveSync: { drive: 'did:ad:ontola', count: 12, timestamp: 100 },
+  } as StoreSyncStatus;
+  const hosted = {
+    managed: true,
+    liveSyncedDrive: true,
+    refusedByServer: false,
+    status: synced,
+    resourceCount: 12,
+  };
+
+  it('sees a drive synced with a managed node as hosted, with no account', () => {
+    expect(driveHostedByNode(hosted)).toBe(true);
+  });
+
+  it('does not count a self-hosted node', () => {
+    expect(driveHostedByNode({ ...hosted, managed: false })).toBe(false);
+  });
+
+  it('waits for this drive to finish syncing', () => {
+    expect(
+      driveHostedByNode({
+        ...hosted,
+        status: {
+          ...synced,
+          lastDriveSync: { drive: 'did:ad:other', count: 3, timestamp: 1 },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('does not count a refused, offline or empty drive', () => {
+    expect(driveHostedByNode({ ...hosted, refusedByServer: true })).toBe(false);
+    expect(
+      driveHostedByNode({
+        ...hosted,
+        status: { ...synced, serverConnected: false },
+      }),
+    ).toBe(false);
+    expect(driveHostedByNode({ ...hosted, resourceCount: 0 })).toBe(false);
   });
 });

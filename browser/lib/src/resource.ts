@@ -19,6 +19,7 @@ import {
   isAgentSubject,
   isAtomicIdentifier,
   commitSubject,
+  currentAgentSubject,
 } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
@@ -792,9 +793,11 @@ export class Resource<C extends OptionalClass = any> {
           datatypesJson?.[key] ?? this.untaggedDatatypeTag(key, value),
           value,
         );
-        nextCache[key] = origin
+        const localized = origin
           ? localizeInternalSubjects(normalized, origin)
           : normalized;
+
+        nextCache[key] = dedupeRights(key, localized);
       }
     }
 
@@ -998,7 +1001,17 @@ export class Resource<C extends OptionalClass = any> {
       // original list (OPFS cold-load, WS GET) merges two concurrent lists
       // and the array order flashes — table columns (`requires`/`recommends`)
       // and sidebar `isA` were the visible cases.
-      this.writeLoroListInPlace(map, prop, value);
+      //
+      // Lists of plain strings (subjects, rights) are patched instead of
+      // drained: rewriting every element on each `set()` meant two
+      // concurrent writers each deleted and re-inserted the same agents,
+      // and the merge kept both copies (the drive's read/write lists
+      // filled with repeats after invites were accepted).
+      if (value.every(item => typeof item === 'string')) {
+        this.patchLoroListInPlace(map, prop, value);
+      } else {
+        this.writeLoroListInPlace(map, prop, value);
+      }
     } else {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
@@ -2122,6 +2135,12 @@ export class Resource<C extends OptionalClass = any> {
    * propvals and the founding Loro change message remain legacy fallbacks.
    */
   public getCreatedBy(): string | undefined {
+    const creator = this.getCreatedByRaw();
+
+    return creator === undefined ? undefined : currentAgentSubject(creator);
+  }
+
+  private getCreatedByRaw(): string | undefined {
     const cert = this.getGenesisCertificate();
 
     if (cert) {
@@ -4251,6 +4270,21 @@ function parseJsonPropval(value: string): JSONValue {
         return unwrapped;
       }
     }
+  }
+
+  return value;
+}
+
+/**
+ * Rights are a set. Concurrent writers can merge a rights list into repeats of
+ * every agent; collapse them (first occurrence wins) when reading.
+ */
+function dedupeRights(property: string, value: JSONValue): JSONValue {
+  if (
+    (property === core.properties.read || property === core.properties.write) &&
+    Array.isArray(value)
+  ) {
+    return [...new Set(value as JSONValue[])];
   }
 
   return value;

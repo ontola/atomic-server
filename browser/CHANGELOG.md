@@ -4,7 +4,15 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Share dialog: the role for new invites (email field and Copy invite link) is a single-click Read / Write switch in the same style as the Public switch, instead of a Can write dropdown.
+- Calendar: changing only the start or end time of a multi-day timed event keeps its end date (#2089).
+- Tables: a JSON filter value is normalized (keys sorted, no whitespace) when you leave the field, so the exact text of a saved value matches its row (#2093).
 - Invites: opening an invite link uses the server in the link instead of whichever server the browser had saved, so an invitee with a stale saved server no longer gets "Unrecognized token '<'". When the link points at a host that runs no server, a plain message says so. Creating a link for a drive whose server runs no node fails up front.
+- Tables: a computed duration reads a date-only start as local midnight, like a local date-and-time, so it no longer differs by the timezone offset (#2083).
+- Tables: clearing a Localized Text cell removes that language, so the fallback and the missing-translation marker come back (#2084).
+- Calendar: the date filter explains that a repeating entry is matched on its first date (#2087).
+- Cards: a record embedded in a document shows property names instead of slugs, hides created-at, drive and sort-order, and no longer shows an empty description line (#2081).
+- Tables: hiding a column no longer hides its active filter chip, so a filter that still excludes rows stays visible and removable.
 - Forms (beta): build a form or survey and share a link; guests fill it in
   without an account and each answer becomes a table row. Create one with
   New > Form, or from a table with "Create form from this table" (pick its

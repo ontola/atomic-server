@@ -32,6 +32,9 @@ patchedDependencies:
   '@reactflow/core':
     hash: 935d9637d2c27d9e60fa127023cedd926c1aa26549a352ac28662c5f5f9bca8e
     path: patches/@reactflow__core.patch
+  '@wuchale/jsx@0.12.5':
+    hash: c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6
+    path: patches/@wuchale__jsx@0.12.5.patch
   loro-prosemirror@0.4.3:
     hash: cfeb56b4474c59fdd4a3feb56f010825ca89494fca7a5bb422aef1a84e626bf8
     path: patches/loro-prosemirror@0.4.3.patch
@@ -283,7 +286,7 @@ importers:
         version: 4.25.10(@babel/runtime@7.29.2)(@codemirror/autocomplete@6.20.2)(@codemirror/language@6.12.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.5.11)(@codemirror/state@6.7.4)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.43.0)(codemirror@6.0.2)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@wuchale/jsx':
         specifier: ^0.12.5
-        version: 0.12.5(react@19.2.6)
+        version: 0.12.5(patch_hash=c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6)(react@19.2.6)
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
@@ -293,6 +296,9 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
+      best-effort-json-parser:
+        specifier: 1.4.0
+        version: 1.4.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -14673,7 +14679,7 @@ snapshots:
       '@whatwg-node/promise-helpers': 1.3.2
       tslib: 2.8.1
 
-  '@wuchale/jsx@0.12.5(react@19.2.6)':
+  '@wuchale/jsx@0.12.5(patch_hash=c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6)(react@19.2.6)':
     dependencies:
       '@sveltejs/acorn-typescript': 1.0.10(acorn@8.18.0)
       acorn: 8.18.0

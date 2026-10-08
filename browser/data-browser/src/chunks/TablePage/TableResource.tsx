@@ -1313,6 +1313,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       removeDerivedColumn,
       addItemsToHistoryStack,
       rowSource,
+      viewKind,
     }),
     [
       selectedRows,
@@ -1347,6 +1348,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       removeDerivedColumn,
       addItemsToHistoryStack,
       rowSource,
+      viewKind,
     ],
   );
 
@@ -1549,6 +1551,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
           {!embedded && (
             <TableFilterBar
               columns={uniqueColumnProperties}
+              allColumns={allColumns}
               derivedColumns={derivedSpecs}
             />
           )}

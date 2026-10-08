@@ -4260,7 +4260,10 @@ async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
     let store = Db::init_temp("legacy_atom_rows").await.unwrap();
     let atom = crate::atoms::IndexAtom {
         subject: Subject::from("did:ad:legacy-subject"),
-        property: urls::NAME.to_string(),
+        // Not a core property: its key part is the same in old and new stores, so
+        // the reader finds the old row. A core property's old row has the full URL
+        // in its key and is rebuilt by `migrate_index_keys` instead.
+        property: "https://example.com/properties/legacy".to_string(),
         ref_value: "Legacy Title".to_string(),
         sort_value: "Legacy Title".to_string(),
     };
@@ -4282,7 +4285,7 @@ async fn removing_an_atom_also_removes_rows_an_older_store_wrote() {
     // An old row is still read back as the same atom.
     let found: Vec<_> = crate::db::prop_val_sub_index::find_in_prop_val_sub_index(
         &store,
-        urls::NAME,
+        "https://example.com/properties/legacy",
         Some(&Value::String("Legacy Title".into())),
     )
     .map(|a| a.unwrap())

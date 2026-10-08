@@ -7,6 +7,7 @@ import { driveBillingUrl } from '../helpers/driveBillingUrl';
 import {
   deriveNodeStatuses,
   currentDriveSync,
+  driveHostedByNode,
   currentDriveValue,
   hasHostedDriveConnection,
   type ScopedDriveValue,
@@ -82,6 +83,7 @@ import {
 import {
   envelopeWrapperKinds,
   getRecoverySecret,
+  isAssistedRecoveryAvailable,
   readCachedBackups,
   sameAgent,
 } from '../helpers/managed/recovery';
@@ -730,7 +732,10 @@ function SyncPage() {
   // `true` = already enrolled (hide it).
   const [cloudEnrollment, setCloudEnrollment] =
     useState<ScopedDriveValue<boolean> | null>(null);
-  const cloudEnrolled = currentDriveValue(
+  // Only what THIS account has enrolled. Hosting belongs to the drive, so a
+  // member who isn't the subscriber (or isn't signed in) can't learn it here;
+  // `cloudEnrolled` below folds in what the node itself says about the drive.
+  const accountEnrolled = currentDriveValue(
     cloudEnrollment,
     status.drive,
     status.serverUrl,
@@ -801,6 +806,7 @@ function SyncPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(
     null,
   );
+  const [serverAccessGranted, setServerAccessGranted] = useState(false);
   /**
    * Who made this drive's plan: `stripe` when the account paid for it, `grant`
    * when an operator added it by hand. Unknown from a control plane that does
@@ -814,6 +820,7 @@ function SyncPage() {
   useEffect(() => {
     setSubscriptionStatus(null);
     setSubscriptionSource(null);
+    setServerAccessGranted(false);
     if (!managedAccount || !status.drive) return;
     const drive = status.drive;
     const controller = new AbortController();
@@ -826,6 +833,10 @@ function SyncPage() {
         const subscription = await response.json();
 
         if (!controller.signal.aborted) {
+          setServerAccessGranted(
+            typeof subscription.server_access?.quota_bytes === 'number' &&
+              subscription.server_access.quota_bytes > 0,
+          );
           setSubscriptionStatus(
             subscription.plan === 'server' ? subscription.status : 'free',
           );
@@ -867,7 +878,13 @@ function SyncPage() {
    */
   const [recoveryState, setRecoveryState] = useState<{
     account: ManagedAccount;
-    value: 'stored' | 'passkey-only' | 'device-only' | 'none' | null;
+    value:
+      | 'stored'
+      | 'sign-in-not-on'
+      | 'passkey-only'
+      | 'device-only'
+      | 'none'
+      | null;
   } | null>(null);
   const recoveryBackup =
     recoveryState?.account === managedAccount
@@ -890,9 +907,31 @@ function SyncPage() {
         if (cancelled) return;
 
         if (stored) {
-          const { hasPasskey, hasCode } = envelopeWrapperKinds(stored);
+          const { hasPasskey, hasCode, hasAccount } =
+            envelopeWrapperKinds(stored);
 
-          setRecoveryBackup(hasPasskey && !hasCode ? 'passkey-only' : 'stored');
+          if (hasAccount) {
+            setRecoveryBackup('stored');
+
+            return;
+          }
+
+          // A backup from before assisted recovery: signing in does not open
+          // it yet, which is the whole promise of this row. Settings adds the
+          // key with one passkey prompt or the code.
+          const assisted =
+            !managedAccount.assisted_recovery_off &&
+            (await isAssistedRecoveryAvailable().catch(() => false));
+
+          if (cancelled) return;
+
+          setRecoveryBackup(
+            assisted
+              ? 'sign-in-not-on'
+              : hasPasskey && !hasCode
+                ? 'passkey-only'
+                : 'stored',
+          );
 
           return;
         }
@@ -1007,6 +1046,17 @@ function SyncPage() {
     status.serverUrl,
   );
 
+  // Hosting belongs to the drive: a member sees it whether or not their own
+  // account pays for it, or is signed in at all.
+  const hostedByNode = driveHostedByNode({
+    managed: managedInfo.managed,
+    liveSyncedDrive: !!status.drive && store.isLiveSyncedDrive(status.drive),
+    refusedByServer: store.isDriveRefusedByServer(status.drive),
+    status,
+    resourceCount: nodeUsage?.resourceCount,
+  });
+  const cloudEnrolled = hostedByNode ? true : accountEnrolled;
+
   // Sign in with a secret on a fresh device and you get the identity but none
   // of the data. Detect that so the page can lead with "pair a device".
   useEffect(() => {
@@ -1037,7 +1087,13 @@ function SyncPage() {
     const agent = store.getAgent();
 
     // A local-only drive isn't on the server — asking for its usage 500s.
-    if (!drive || !serverUrl || !agent || store.isLocalOnlyDrive(drive)) {
+    if (
+      !drive ||
+      !serverUrl ||
+      !agent ||
+      cloudBusy ||
+      store.isLocalOnlyDrive(drive)
+    ) {
       setNodeUsageState(null);
 
       return;
@@ -1058,7 +1114,13 @@ function SyncPage() {
     return () => {
       cancelled = true;
     };
-  }, [status.drive, status.serverUrl, status.lastDriveSync?.timestamp, store]);
+  }, [
+    status.drive,
+    status.serverUrl,
+    status.lastDriveSync?.timestamp,
+    cloudBusy,
+    store,
+  ]);
 
   // Plan quota — managed nodes only, from the control plane. Billing stays a
   // managed concern; the usage numbers above are generic to every node.
@@ -1254,7 +1316,11 @@ function SyncPage() {
     }
 
     if (cloudEnrolled === null) {
-      return 'Checking whether this workspace is hosted…';
+      // The enrollment list needs a portal session. Without one the answer
+      // never arrives, so say what would get it instead of waiting forever.
+      return managedAccount
+        ? 'Checking whether this workspace is hosted…'
+        : `Sign in to ${PRODUCT_NAME} to see whether this workspace is hosted.`;
     }
 
     if (!isAtomicIdentifier(status.drive)) {
@@ -1487,8 +1553,10 @@ function SyncPage() {
     !hostedCopyOrigin &&
     !cloudServerBlocked &&
     !!managedAccount &&
-    (cloudEnrolled === true ||
-      (cloudEnrolled === false &&
+    // The account's own enrollment: a member of someone else's hosted drive
+    // has nothing to start.
+    (accountEnrolled === true ||
+      (accountEnrolled === false &&
         planActive &&
         subscriptionSource === 'stripe'));
   /**
@@ -1501,8 +1569,7 @@ function SyncPage() {
     !hostedCopyOrigin &&
     !cloudServerBlocked &&
     cloudEnrolled === false &&
-    planActive &&
-    subscriptionSource !== 'stripe';
+    (serverAccessGranted || (planActive && subscriptionSource !== 'stripe'));
 
   useEffect(() => {
     const drive = status.drive;
@@ -1636,7 +1703,7 @@ function SyncPage() {
         status: {
           tone: 'waiting',
           text:
-            subscriptionSource === 'grant'
+            serverAccessGranted || subscriptionSource === 'grant'
               ? `${PRODUCT_NAME} added Cloud Server to this workspace. It waits for your consent.`
               : 'This workspace’s plan includes Cloud Server. It waits for your consent.',
         },
@@ -1883,6 +1950,7 @@ function SyncPage() {
             {(!managedAccount ||
               recoveryBackup === 'none' ||
               recoveryBackup === 'device-only' ||
+              recoveryBackup === 'sign-in-not-on' ||
               recoveryBackup === 'passkey-only') && (
               <ProviderService data-testid='recovery-row'>
                 <CardIcon
@@ -1903,11 +1971,13 @@ function SyncPage() {
                         ? `Signed in as ${managedAccount.email}.`
                         : recoveryBackup === 'stored'
                           ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
-                          : recoveryBackup === 'passkey-only'
-                            ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
-                            : recoveryBackup === 'device-only'
-                              ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                              : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
+                          : recoveryBackup === 'sign-in-not-on'
+                            ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
+                            : recoveryBackup === 'passkey-only'
+                              ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                              : recoveryBackup === 'device-only'
+                                ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                                : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
                   </ConnSub>
                   {/* Signed out, the account itself is the missing piece, and it
                       is made in the portal: on a device that cannot hold our
@@ -1933,6 +2003,7 @@ function SyncPage() {
                     </ConnActions>
                   ) : recoveryBackup === 'none' ||
                     recoveryBackup === 'device-only' ||
+                    recoveryBackup === 'sign-in-not-on' ||
                     recoveryBackup === 'passkey-only' ? (
                     <ConnActions>
                       <LearnMoreLink
@@ -1941,9 +2012,11 @@ function SyncPage() {
                       >
                         {recoveryBackup === 'device-only'
                           ? 'Store it with ' + PRODUCT_NAME
-                          : recoveryBackup === 'passkey-only'
-                            ? 'Add a recovery code'
-                            : 'Set up email recovery'}
+                          : recoveryBackup === 'sign-in-not-on'
+                            ? 'Turn it on'
+                            : recoveryBackup === 'passkey-only'
+                              ? 'Add a recovery code'
+                              : 'Set up email recovery'}
                       </LearnMoreLink>
                     </ConnActions>
                   ) : null}
@@ -1976,7 +2049,7 @@ function SyncPage() {
                 kind='server'
                 title='Cloud Server'
                 standing={serverRow.standing}
-                tagline='Everything in Cloud Vault, plus a hosted workspace on AtomicServer.eu, always online. Our servers process what you put here.'
+                tagline='Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here.'
                 points={[
                   'Shareable links and API access',
                   'Search across everything',
