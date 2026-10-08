@@ -9,6 +9,7 @@
 //! form from reaching outside its own drive.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use lightningcss::rules::CssRule;
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, PrinterOptions, StyleSheet};
@@ -122,7 +123,9 @@ async fn restrict_to_scope(
             };
 
             // Row options all come from one table: judge the table once.
-            if let Some(table) = source_str(options, "table").map(str::to_string) {
+            let table = source_str(options, "table").map(str::to_string);
+            let table_sourced = table.is_some();
+            if let Some(table) = table {
                 if !scope.may_show_subject(store, &table).await {
                     if let Some(obj) = options.as_object_mut() {
                         obj.insert(OPTIONS_KEY.into(), json!([]));
@@ -131,7 +134,6 @@ async fn restrict_to_scope(
                 }
             }
 
-            let table_sourced = source_str(options, "table").is_some();
             let Some(list) = options.get_mut(OPTIONS_KEY).and_then(|v| v.as_array_mut()) else {
                 continue;
             };
@@ -374,18 +376,21 @@ fn json_as_number(value: &JsonValue) -> Option<f64> {
 fn json_as_str(value: &JsonValue) -> String {
     match value {
         JsonValue::String(s) => s.clone(),
-        JsonValue::Number(n) => n.to_string(),
-        JsonValue::Bool(b) => b.to_string(),
         other => other.to_string(),
     }
 }
 
+/// Both sides as numbers, when both look like one.
+fn number_pair(a: &JsonValue, b: &JsonValue) -> Option<(f64, f64)> {
+    Some((json_as_number(a)?, json_as_number(b)?))
+}
+
 /// Numeric equality when both sides look like numbers; otherwise JSON Eq.
 pub fn json_equal(a: &JsonValue, b: &JsonValue) -> bool {
-    if let (Some(na), Some(nb)) = (json_as_number(a), json_as_number(b)) {
-        return na == nb;
+    match number_pair(a, b) {
+        Some((na, nb)) => na == nb,
+        None => a == b,
     }
-    a == b
 }
 
 fn json_contains(answer: &JsonValue, expected: &JsonValue) -> bool {
@@ -399,7 +404,7 @@ fn json_contains(answer: &JsonValue, expected: &JsonValue) -> bool {
 }
 
 fn json_compare(answer: &JsonValue, expected: &JsonValue) -> Option<std::cmp::Ordering> {
-    if let (Some(na), Some(nb)) = (json_as_number(answer), json_as_number(expected)) {
+    if let Some((na, nb)) = number_pair(answer, expected) {
         return na.partial_cmp(&nb);
     }
     if let (JsonValue::String(a), JsonValue::String(b)) = (answer, expected) {
@@ -1310,17 +1315,28 @@ fn coerce_value(
 ) -> Result<Value, String> {
     match field_type {
         "short-text" | "long-text" => {
-            let s = raw.as_str().ok_or("Expected a string")?.to_string();
-            check_length(&s, options)?;
-            Ok(Value::String(s))
+            let s = expect_str(raw)?;
+            check_length(s, options)?;
+            Ok(Value::String(s.to_string()))
         }
-        "email" => {
-            let s = raw.as_str().ok_or("Expected a string")?.to_string();
-            if !is_valid_email(&s) {
-                return Err("Not a valid email address".into());
+        "email" => text_matching(raw, is_valid_email, "Not a valid email address"),
+        "phone" => text_matching(
+            raw,
+            |s| is_valid_phone(s.trim()),
+            "Not a valid phone number",
+        ),
+        "country" => {
+            let c = expect_str(raw)?.trim();
+            if !is_valid_country(c) {
+                return Err("Not a valid country".into());
             }
-            Ok(Value::String(s))
+            Ok(Value::String(c.to_string()))
         }
+        "url" => text_matching(
+            raw,
+            |s| is_valid_url(s.trim()),
+            "Not a valid URL (must start with http:// or https://)",
+        ),
         "number" => {
             let f = raw.as_f64().ok_or("Expected a number")?;
             check_bounds(f, options)?;
@@ -1330,6 +1346,11 @@ fn coerce_value(
                     .map(Value::Integer)
                     .ok_or_else(|| "Expected a whole number".into());
             }
+            Ok(Value::Float(f))
+        }
+        "currency" => {
+            let f = raw.as_f64().ok_or("Expected a number")?;
+            check_bounds(f, options)?;
             Ok(Value::Float(f))
         }
         "date" => {
@@ -1357,37 +1378,11 @@ fn coerce_value(
             check_selection_count(items.len(), options)?;
             Ok(items.into())
         }
-        "phone" => {
-            let s = raw.as_str().ok_or("Expected a string")?.to_string();
-            if !is_valid_phone(s.trim()) {
-                return Err("Not a valid phone number".into());
-            }
-            Ok(Value::String(s))
-        }
-        "country" => {
-            let c = raw.as_str().ok_or("Expected a string")?.trim().to_string();
-            if !is_valid_country(&c) {
-                return Err("Not a valid country".into());
-            }
-            Ok(Value::String(c))
-        }
-        "url" => {
-            let s = raw.as_str().ok_or("Expected a string")?.to_string();
-            if !is_valid_url(s.trim()) {
-                return Err("Not a valid URL (must start with http:// or https://)".into());
-            }
-            Ok(Value::String(s))
-        }
-        "currency" => {
-            let f = raw.as_f64().ok_or("Expected a number")?;
-            check_bounds(f, options)?;
-            Ok(Value::Float(f))
-        }
         // Single-pick choice questions. The answer travels as one subject
         // string and is stored as a one-element resourceArray, so the mapped
         // column is an ordinary SelectProperty like any other.
         t if SINGLE_CHOICE_FIELD_TYPES.contains(&t) => {
-            let s = raw.as_str().ok_or("Expected a string")?.to_string();
+            let s = expect_str(raw)?.to_string();
             check_membership(std::slice::from_ref(&s), options)?;
             Ok(vec![s].into())
         }
@@ -1401,100 +1396,127 @@ fn coerce_value(
             rating_max(options),
             "Rating",
         )?)),
-        "choice-matrix" => {
-            let answers = raw.as_object().ok_or("Expected an object of row answers")?;
-            let rows = string_list(options, "rows");
-            let columns = matrix_columns(options);
-
-            for (row, answer) in answers {
-                if !rows.contains(row) {
-                    return Err(format!("'{row}' is not one of the rows"));
-                }
-                if json_is_empty(Some(answer)) {
-                    continue;
-                }
-                let picked = answer.as_str().unwrap_or_default();
-                if !columns.iter().any(|c| c == picked) {
-                    return Err(format!(
-                        "'{}' is not one of the allowed options",
-                        json_as_str(answer)
-                    ));
-                }
-            }
-
-            if required && rows.iter().any(|row| json_is_empty(answers.get(row))) {
-                return Err("Please answer every row".into());
-            }
-
-            Ok(Value::Json(raw.clone()))
-        }
-        "table-input" => {
-            let rows = raw.as_array().ok_or("Expected a list of rows")?;
-            let columns = table_columns(options);
-
-            for row in rows {
-                let cells = row.as_object().ok_or("Expected a list of rows")?;
-                for (key, cell) in cells {
-                    let Some((_, column_type)) = columns.iter().find(|(label, _)| label == key)
-                    else {
-                        return Err(format!("'{key}' is not one of the columns"));
-                    };
-                    if json_is_empty(Some(cell)) {
-                        continue;
-                    }
-                    if column_type == "number" {
-                        if cell.as_f64().is_none() {
-                            return Err(format!("'{key}' must be a number"));
-                        }
-                    } else if !cell.is_string() {
-                        return Err(format!("'{key}' must be text"));
-                    }
-                }
-            }
-
-            let filled = rows.iter().filter(|row| !json_is_empty(Some(row))).count();
-            if let Some(min) = options.get("minRows").and_then(|v| v.as_u64()) {
-                if (filled as u64) < min {
-                    return Err(format!("Please fill in at least {min} row(s)"));
-                }
-            }
-            if let Some(max) = options.get("maxRows").and_then(|v| v.as_u64()) {
-                if (filled as u64) > max {
-                    return Err(format!("At most {max} row(s) allowed"));
-                }
-            }
-
-            Ok(Value::Json(raw.clone()))
-        }
-        "address" => {
-            let address = raw.as_object().ok_or("Expected an address object")?;
-
-            for (key, value) in address {
-                let Some((_, label)) = ADDRESS_FIELDS.iter().find(|(k, _)| k == key) else {
-                    return Err(format!("'{key}' is not part of an address"));
-                };
-                if !json_is_empty(Some(value)) && !value.is_string() {
-                    return Err(format!("'{label}' must be text"));
-                }
-            }
-
-            if required {
-                for key in ADDRESS_REQUIRED_FIELDS {
-                    if json_is_empty(address.get(*key)) {
-                        let label = ADDRESS_FIELDS
-                            .iter()
-                            .find(|(k, _)| k == key)
-                            .map(|(_, label)| *label)
-                            .unwrap_or(key);
-                        return Err(format!("{label} is required"));
-                    }
-                }
-            }
-
-            Ok(Value::Json(raw.clone()))
-        }
+        "choice-matrix" => check_choice_matrix(raw, options, required),
+        "table-input" => check_table_input(raw, options),
+        "address" => check_address(raw, required),
         other => Err(format!("Unknown field type: {other}")),
     }
+}
+
+fn expect_str(raw: &JsonValue) -> Result<&str, String> {
+    raw.as_str().ok_or_else(|| "Expected a string".to_string())
+}
+
+/// A text answer stored as given, valid when `is_valid` accepts it.
+fn text_matching(
+    raw: &JsonValue,
+    is_valid: fn(&str) -> bool,
+    message: &str,
+) -> Result<Value, String> {
+    let s = expect_str(raw)?;
+    if !is_valid(s) {
+        return Err(message.to_string());
+    }
+    Ok(Value::String(s.to_string()))
+}
+
+fn check_choice_matrix(
+    raw: &JsonValue,
+    options: &JsonValue,
+    required: bool,
+) -> Result<Value, String> {
+    let answers = raw.as_object().ok_or("Expected an object of row answers")?;
+    let rows = string_list(options, "rows");
+    let columns = matrix_columns(options);
+
+    for (row, answer) in answers {
+        if !rows.contains(row) {
+            return Err(format!("'{row}' is not one of the rows"));
+        }
+        if json_is_empty(Some(answer)) {
+            continue;
+        }
+        let picked = answer.as_str().unwrap_or_default();
+        if !columns.iter().any(|c| c == picked) {
+            return Err(format!(
+                "'{}' is not one of the allowed options",
+                json_as_str(answer)
+            ));
+        }
+    }
+
+    if required && rows.iter().any(|row| json_is_empty(answers.get(row))) {
+        return Err("Please answer every row".into());
+    }
+
+    Ok(Value::Json(raw.clone()))
+}
+
+fn check_table_input(raw: &JsonValue, options: &JsonValue) -> Result<Value, String> {
+    let rows = raw.as_array().ok_or("Expected a list of rows")?;
+    let columns = table_columns(options);
+
+    for row in rows {
+        let cells = row.as_object().ok_or("Expected a list of rows")?;
+        for (key, cell) in cells {
+            let Some((_, column_type)) = columns.iter().find(|(label, _)| label == key) else {
+                return Err(format!("'{key}' is not one of the columns"));
+            };
+            if json_is_empty(Some(cell)) {
+                continue;
+            }
+            if column_type == "number" {
+                if cell.as_f64().is_none() {
+                    return Err(format!("'{key}' must be a number"));
+                }
+            } else if !cell.is_string() {
+                return Err(format!("'{key}' must be text"));
+            }
+        }
+    }
+
+    let filled = rows.iter().filter(|row| !json_is_empty(Some(row))).count() as u64;
+    if let Some(min) = options.get("minRows").and_then(|v| v.as_u64()) {
+        if filled < min {
+            return Err(format!("Please fill in at least {min} row(s)"));
+        }
+    }
+    if let Some(max) = options.get("maxRows").and_then(|v| v.as_u64()) {
+        if filled > max {
+            return Err(format!("At most {max} row(s) allowed"));
+        }
+    }
+
+    Ok(Value::Json(raw.clone()))
+}
+
+fn check_address(raw: &JsonValue, required: bool) -> Result<Value, String> {
+    let address = raw.as_object().ok_or("Expected an address object")?;
+    let label_of = |key: &str| {
+        ADDRESS_FIELDS
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, label)| *label)
+    };
+
+    for (key, value) in address {
+        let Some(label) = label_of(key) else {
+            return Err(format!("'{key}' is not part of an address"));
+        };
+        if !json_is_empty(Some(value)) && !value.is_string() {
+            return Err(format!("'{label}' must be text"));
+        }
+    }
+
+    if required {
+        for key in ADDRESS_REQUIRED_FIELDS {
+            if json_is_empty(address.get(*key)) {
+                return Err(format!("{} is required", label_of(key).unwrap_or(key)));
+            }
+        }
+    }
+
+    Ok(Value::Json(raw.clone()))
 }
 
 /// The `address` subfields, in render order. Mirrors `ADDRESS_FIELDS` in
@@ -1716,16 +1738,18 @@ fn check_membership(items: &[String], options: &JsonValue) -> Result<(), String>
 }
 
 fn is_valid_email(s: &str) -> bool {
-    let re = regex::Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$").expect("valid regex");
-    re.is_match(s)
+    static RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$").expect("valid regex"));
+    RE.is_match(s)
 }
 
 /// Deliberately permissive: digits with the usual separators, optional
 /// country prefix. Mirrors `PHONE_RE` in
 /// `browser/form-renderer/src/validation.ts`.
 fn is_valid_phone(s: &str) -> bool {
-    let re = regex::Regex::new(r"^\+?[0-9(][0-9\s\-().]{4,24}$").expect("valid regex");
-    re.is_match(s)
+    static RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"^\+?[0-9(][0-9\s\-().]{4,24}$").expect("valid regex"));
+    RE.is_match(s)
 }
 
 /// A country answer is an ISO 3166-1 alpha-2 code. Only the shape is checked
@@ -1738,8 +1762,10 @@ fn is_valid_country(s: &str) -> bool {
 
 /// Mirrors `URL_RE` in `browser/form-renderer/src/validation.ts`.
 fn is_valid_url(s: &str) -> bool {
-    let re = regex::Regex::new(r"(?i)^https?://[^\s/$.?#][^\s]*$").expect("valid regex");
-    re.is_match(s)
+    static RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?i)^https?://[^\s/$.?#][^\s]*$").expect("valid regex")
+    });
+    RE.is_match(s)
 }
 
 // ── Submission summary (server-computed, ephemeral) ─────────────────────────
@@ -3554,6 +3580,26 @@ mod tests {
 
     fn err_message(result: Result<Value, String>) -> String {
         result.expect_err("expected a validation error")
+    }
+
+    /// Browser and server must give the same verdict on these answers; the
+    /// renderer's own test reads the same file.
+    #[test]
+    fn shared_validation_cases_agree_with_the_renderer() {
+        let file: JsonValue = serde_json::from_str(include_str!(
+            "../../browser/form-renderer/shared/validation-cases.json"
+        ))
+        .unwrap();
+
+        for case in file["cases"].as_array().unwrap() {
+            let (field_type, value) = (case["type"].as_str().unwrap(), &case["value"]);
+            let verdict = coerce_value(field_type, &json!({}), false, value).is_ok();
+            assert_eq!(
+                verdict, case["valid"],
+                "{field_type} answer {value} should be valid: {}",
+                case["valid"]
+            );
+        }
     }
 
     #[test]
