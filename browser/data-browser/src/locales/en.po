@@ -12403,7 +12403,6 @@ d it under their account. Only the two of you can read what you send."
 msgid "Loading"
 msgstr "Loading"
 
-=======
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Updating your local data"
 msgstr "Updating your local data"
@@ -12411,4 +12410,13 @@ msgstr "Updating your local data"
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "This is needed once after an update and takes a moment. Keep this tab open."
 msgstr "This is needed once after an update and takes a moment. Keep this tab open."
->>>>>>> refs/remotes/pr/2117
+
+=======
+#: src/views/getting-started/chrome.tsx
+msgid "The server could not be reached"
+msgstr "The server could not be reached"
+
+#: src/views/getting-started/chrome.tsx
+msgid "Check your connection and that your server is running, then try again."
+msgstr "Check your connection and that your server is running, then try again."
+>>>>>>> refs/remotes/pr/2130

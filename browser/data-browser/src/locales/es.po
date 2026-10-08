@@ -12386,12 +12386,19 @@ msgstr ""
 #: src/components/Spinner.tsx
 msgid "Loading"
 
-=======
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "Updating your local data"
 msgstr ""
 
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "This is needed once after an update and takes a moment. Keep this tab open."
->>>>>>> refs/remotes/pr/2117
+
+=======
+#: src/views/getting-started/chrome.tsx
+msgid "The server could not be reached"
+msgstr ""
+
+#: src/views/getting-started/chrome.tsx
+msgid "Check your connection and that your server is running, then try again."
+>>>>>>> refs/remotes/pr/2130
 msgstr ""

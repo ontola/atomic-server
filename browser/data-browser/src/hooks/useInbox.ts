@@ -1,11 +1,15 @@
 import {
   core,
+  StoreEvents,
   notifications,
   useCollection,
-  useCollectionPage,
   useResources,
+  useResource,
+  useStore,
   type Resource,
+  type Collection,
 } from '@tomic/react';
+import { useEffect, useState } from 'react';
 import { usePrivateDrive } from './usePrivateDrive';
 import { dedupeBySource, isUnread } from '../helpers/notifications/inbox';
 
@@ -25,7 +29,17 @@ export function useInbox(): {
   privateDrive: string | undefined;
 } {
   const { privateDrive } = usePrivateDrive();
-  const { collection, ready } = useCollection(
+  const store = useStore();
+  const home = useResource(privateDrive);
+  const homeReady = !home.loading && !home.error && !home.new;
+  // The active workspace's subscription does not cover the personal Inbox.
+  // Hold its drive even when another project is open, including new children.
+  useEffect(() => {
+    // A restored/new identity can resolve its home before that drive exists
+    // on this server. Wait for a successful read/save before subscribing.
+    if (privateDrive && homeReady) return store.subscribeLive(privateDrive);
+  }, [store, privateDrive, homeReady]);
+  const { collection, ready, invalidateCollection } = useCollection(
     {
       property: core.properties.isA,
       value: notifications.classes.notification,
@@ -35,8 +49,57 @@ export function useInbox(): {
     },
     { pageSize: PAGE_SIZE },
   );
-  const members = useCollectionPage(collection, 0);
-  const resources = useResources(privateDrive ? members : []);
+  useEffect(() => {
+    if (!ready || !privateDrive) return;
+    let cancelled = false;
+    const unsubscribe = store.on(StoreEvents.ConnectionChanged, connected => {
+      const db = store.getClientDb();
+      if (!connected || (db && !db.initError)) return;
+      // Without OPFS there are no version vectors to reconcile. Re-query the
+      // inbox and re-fetch cached members: membership alone misses read changes.
+      void invalidateCollection()
+        .then(async () => {
+          const subjects = await collection.getAllMembers();
+          if (cancelled) return;
+          await Promise.all(
+            subjects.map(subject => store.fetchResourceFromServer(subject)),
+          );
+        })
+        .catch(error =>
+          console.error('Could not refresh notifications:', error),
+        );
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [store, privateDrive, ready, collection, invalidateCollection]);
+  const [allMembers, setAllMembers] = useState<{
+    collection: Collection;
+    drive: string;
+    subjects: string[];
+  }>();
+
+  useEffect(() => {
+    if (!ready || !privateDrive) return;
+    let cancelled = false;
+    void collection.getAllMembers().then(subjects => {
+      if (!cancelled)
+        setAllMembers({ collection, drive: privateDrive, subjects });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [collection, ready, privateDrive]);
+
+  const membersReady =
+    ready &&
+    !!privateDrive &&
+    allMembers?.collection === collection &&
+    allMembers.drive === privateDrive;
+  const resources = useResources(membersReady ? allMembers.subjects : []);
 
   const loaded = [...resources.values()].filter(
     r =>
@@ -51,7 +114,7 @@ export function useInbox(): {
     items,
     unread: items.filter(isUnread).length,
     ready: isReady,
-    loading: !isReady || [...resources.values()].some(r => r.loading),
+    loading: !membersReady || [...resources.values()].some(r => r.loading),
     privateDrive,
   };
 }
