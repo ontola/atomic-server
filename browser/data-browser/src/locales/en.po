@@ -5612,10 +5612,8 @@ msgid "{0} resources"
 msgstr "{0} resources"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
-#. 0: progress.done; 1: progress.total
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
-#: src/components/DatabaseUpgradeNotice.tsx
 #: src/routes/SyncRoute.tsx
 msgid "{0} of {1}"
 msgstr "{0} of {1}"
@@ -12516,16 +12514,14 @@ msgstr "Search people in this drive by name, or paste their Atomic ID. They find
 msgid "Loading"
 msgstr "Loading"
 
-#: src/components/DatabaseUpgradeNotice.tsx
-msgid "Updating your local data"
-msgstr "Updating your local data"
+#~ msgid "Updating your local data"
+#~ msgstr "Updating your local data"
 
 #~ msgid "The server could not be reached"
 #~ msgstr "The server could not be reached"
 
-#: src/components/DatabaseUpgradeNotice.tsx
-msgid "This is needed once after an update and takes a moment. Keep this tab open."
-msgstr "This is needed once after an update and takes a moment. Keep this tab open."
+#~ msgid "This is needed once after an update and takes a moment. Keep this tab open."
+#~ msgstr "This is needed once after an update and takes a moment. Keep this tab open."
 
 #. 0: count
 #: src/helpers/sentry.ts
