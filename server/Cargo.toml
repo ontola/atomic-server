@@ -196,7 +196,7 @@ features = ["derive"]
 version = "1"
 
 [dependencies.tokio]
-features = ["time"]
+features = ["rt", "sync", "time"]
 version = "1.52.3"
 
 [dependencies.image]
