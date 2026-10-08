@@ -162,6 +162,206 @@ pub fn constraints_of(class: &Resource) -> AtomicResult<Option<Constraints>> {
     Ok(Some(parse_constraints(&json)?))
 }
 
+const LEGACY_MIN: &str = "https://atomicdata.dev/properties/min";
+const LEGACY_MAX: &str = "https://atomicdata.dev/properties/max";
+
+impl Constraint {
+    /// A value has to satisfy both: lower bounds take the larger value, upper
+    /// bounds the smaller, `enum`s intersect. A pattern or linked class cannot
+    /// be combined, so `self` wins. Twin of `tighten` in
+    /// `browser/lib/src/effective-constraint.ts`.
+    pub fn tighten(&self, other: &Constraint) -> Constraint {
+        fn lower<T: PartialOrd + Copy>(a: Option<T>, b: Option<T>) -> Option<T> {
+            match (a, b) {
+                (Some(x), Some(y)) => Some(if y > x { y } else { x }),
+                (x, None) => x,
+                (None, y) => y,
+            }
+        }
+        fn upper<T: PartialOrd + Copy>(a: Option<T>, b: Option<T>) -> Option<T> {
+            match (a, b) {
+                (Some(x), Some(y)) => Some(if y < x { y } else { x }),
+                (x, None) => x,
+                (None, y) => y,
+            }
+        }
+        let enum_values = match (&self.enum_values, &other.enum_values) {
+            (Some(a), Some(b)) => Some(
+                a.iter()
+                    .filter(|x| b.iter().any(|y| json_eq(x, y)))
+                    .cloned()
+                    .collect(),
+            ),
+            (Some(a), None) => Some(a.clone()),
+            (None, b) => b.clone(),
+        };
+        Constraint {
+            enum_values,
+            minimum: lower(self.minimum, other.minimum),
+            maximum: upper(self.maximum, other.maximum),
+            exclusive_minimum: lower(self.exclusive_minimum, other.exclusive_minimum),
+            exclusive_maximum: upper(self.exclusive_maximum, other.exclusive_maximum),
+            min_length: lower(self.min_length, other.min_length),
+            max_length: upper(self.max_length, other.max_length),
+            min_items: lower(self.min_items, other.min_items),
+            max_items: upper(self.max_items, other.max_items),
+            pattern: self.pattern.clone().or_else(|| other.pattern.clone()),
+            class: self.class.clone().or_else(|| other.class.clone()),
+        }
+    }
+
+    /// `self` with every keyword `top` sets replacing the one in `self`.
+    pub fn overlay(&self, top: &Constraint) -> Constraint {
+        Constraint {
+            enum_values: top.enum_values.clone().or_else(|| self.enum_values.clone()),
+            minimum: top.minimum.or(self.minimum),
+            maximum: top.maximum.or(self.maximum),
+            exclusive_minimum: top.exclusive_minimum.or(self.exclusive_minimum),
+            exclusive_maximum: top.exclusive_maximum.or(self.exclusive_maximum),
+            min_length: top.min_length.or(self.min_length),
+            max_length: top.max_length.or(self.max_length),
+            min_items: top.min_items.or(self.min_items),
+            max_items: top.max_items.or(self.max_items),
+            pattern: top.pattern.clone().or_else(|| self.pattern.clone()),
+            class: top.class.clone().or_else(|| self.class.clone()),
+        }
+    }
+
+    /// The constraint as JSON Schema keywords, the inverse of
+    /// [`parse_constraint`].
+    pub fn to_json(&self) -> Json {
+        let mut o = serde_json::Map::new();
+        if let Some(v) = &self.enum_values {
+            o.insert("enum".into(), Json::Array(v.clone()));
+        }
+        let num = |v: f64| {
+            if v.fract() == 0.0 && v.abs() < 9e15 {
+                Json::from(v as i64)
+            } else {
+                serde_json::Number::from_f64(v).map_or(Json::Null, Json::Number)
+            }
+        };
+        for (k, v) in [
+            ("minimum", self.minimum),
+            ("maximum", self.maximum),
+            ("exclusiveMinimum", self.exclusive_minimum),
+            ("exclusiveMaximum", self.exclusive_maximum),
+        ] {
+            if let Some(v) = v {
+                o.insert(k.into(), num(v));
+            }
+        }
+        for (k, v) in [
+            ("minLength", self.min_length),
+            ("maxLength", self.max_length),
+            ("minItems", self.min_items),
+            ("maxItems", self.max_items),
+        ] {
+            if let Some(v) = v {
+                o.insert(k.into(), Json::from(v));
+            }
+        }
+        if let Some(re) = &self.pattern {
+            o.insert("pattern".into(), Json::String(re.as_str().to_string()));
+        }
+        if let Some(c) = &self.class {
+            o.insert("class".into(), Json::String(c.clone()));
+        }
+        Json::Object(o)
+    }
+}
+
+/// What the legacy Property fields (`allowsOnly`, `classtype`, `min`, `max`)
+/// say, in class-constraint vocabulary. The fallback for data that predates
+/// the class map.
+pub fn legacy_constraint(property: &Resource) -> Constraint {
+    let mut c = Constraint::default();
+
+    if let Some(subjects) = property
+        .get(urls::ALLOWS_ONLY)
+        .ok()
+        .and_then(|v| v.to_subjects(None).ok())
+        .filter(|s| !s.is_empty())
+    {
+        c.enum_values = Some(subjects.into_iter().map(Json::String).collect());
+    }
+    if let Some(class) = property
+        .get(urls::CLASSTYPE_PROP)
+        .ok()
+        .map(|v| v.to_string())
+        .filter(|s| !s.is_empty())
+    {
+        c.class = Some(canonicalize_scheme(&class));
+    }
+
+    let datatype = property
+        .get(urls::DATATYPE_PROP)
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let read = |prop: &str| {
+        property
+            .get(prop)
+            .ok()
+            .and_then(|v| v.to_string().parse::<f64>().ok())
+            .filter(|n| n.is_finite())
+    };
+    let (min, max) = (read(LEGACY_MIN), read(LEGACY_MAX));
+    let count = |n: Option<f64>| n.filter(|n| *n >= 0.0).map(|n| n.trunc() as u64);
+
+    if datatype == urls::RESOURCE_ARRAY {
+        c.min_items = count(min);
+        c.max_items = count(max);
+    } else if [urls::INTEGER, urls::FLOAT, urls::TIMESTAMP].contains(&datatype.as_str()) {
+        c.minimum = min;
+        c.maximum = max;
+    } else if [urls::STRING, urls::MARKDOWN, urls::SLUG, urls::URI].contains(&datatype.as_str()) {
+        c.min_length = count(min);
+        c.max_length = count(max);
+    }
+
+    c
+}
+
+/// The constraint that applies to `property` for a row that is an instance of
+/// all of `class_subjects`: the class maps are tightened together, then laid
+/// over the Property's legacy fields per keyword (a keyword no class sets
+/// falls back to the Property). Classes that are missing or whose map does not
+/// parse are skipped. Twin of `getEffectiveConstraint` in
+/// `browser/lib/src/effective-constraint.ts`.
+pub async fn effective_constraint(
+    store: &impl Storelike,
+    class_subjects: &[String],
+    property: &str,
+) -> Constraint {
+    let key = canonicalize_scheme(property);
+    let mut from_classes: Option<Constraint> = None;
+
+    for class_subject in class_subjects {
+        let Ok(class) = store.get_resource(&class_subject.as_str().into()).await else {
+            continue;
+        };
+        let Ok(Some(mut map)) = constraints_of(&class) else {
+            continue;
+        };
+        if let Some(entry) = map.remove(&key) {
+            from_classes = Some(match from_classes {
+                Some(prev) => prev.tighten(&entry),
+                None => entry,
+            });
+        }
+    }
+
+    let legacy = match store.get_resource(&property.into()).await {
+        Ok(p) => legacy_constraint(&p),
+        Err(_) => Constraint::default(),
+    };
+
+    match from_classes {
+        Some(top) => legacy.overlay(&top),
+        None => legacy,
+    }
+}
+
 /// Rejects a Class resource whose `constraints` map would not parse.
 /// A no-op for resources without one.
 pub fn validate_constraints_prop(resource: &Resource) -> AtomicResult<()> {
@@ -477,6 +677,109 @@ mod test {
         assert!(
             err.starts_with("Value for name breaks maxLength on class task:"),
             "{err}"
+        );
+    }
+    async fn class_with(store: &crate::Db, subject: &str, constraints: Json) {
+        let mut class = Resource::new_instance(urls::CLASS, store).await.unwrap();
+        class.set_subject(subject.into());
+        class
+            .set_string(urls::SHORTNAME.into(), "thing", store)
+            .await
+            .unwrap();
+        class
+            .set_string(urls::DESCRIPTION.into(), "A thing", store)
+            .await
+            .unwrap();
+        class
+            .set_unsafe(urls::CONSTRAINTS.into(), Value::Json(constraints))
+            .unwrap();
+        class.save_locally(store).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn effective_constraint_lays_the_class_map_over_the_legacy_property() {
+        let store = crate::Db::init_temp("class_constraints_effective")
+            .await
+            .unwrap();
+        store.populate().await.unwrap();
+
+        let prop = "https://example.com/properties/pick";
+        let mut property = Resource::new(prop.into());
+        property
+            .set_unsafe(
+                urls::DATATYPE_PROP.into(),
+                Value::AtomicUrl(urls::RESOURCE_ARRAY.into()),
+            )
+            .unwrap();
+        property
+            .set_unsafe(
+                urls::ALLOWS_ONLY.into(),
+                Value::ResourceArray(vec![SubResource::Subject(
+                    "https://example.com/t/old".into(),
+                )]),
+            )
+            .unwrap();
+        property
+            .set_unsafe(
+                "https://atomicdata.dev/properties/max".into(),
+                Value::Integer(5),
+            )
+            .unwrap();
+        property.save_locally(&store).await.unwrap();
+
+        // No class map: the Property's legacy fields speak.
+        let none = vec!["https://example.com/NoMap".to_string()];
+        let c = effective_constraint(&store, &none, prop).await;
+        assert_eq!(
+            c.enum_values,
+            Some(vec![json!("https://example.com/t/old")])
+        );
+        assert_eq!(c.max_items, Some(5));
+
+        // A class map wins per keyword; what it leaves unset still falls back.
+        class_with(
+            &store,
+            "https://example.com/A",
+            json!({ prop: { "enum": ["https://example.com/t/new"], "maxItems": 1 } }),
+        )
+        .await;
+        class_with(
+            &store,
+            "https://example.com/B",
+            json!({ prop: { "maxItems": 3, "minItems": 1 } }),
+        )
+        .await;
+        let a = vec!["https://example.com/A".to_string()];
+        let c = effective_constraint(&store, &a, prop).await;
+        assert_eq!(
+            c.enum_values,
+            Some(vec![json!("https://example.com/t/new")])
+        );
+        assert_eq!(c.max_items, Some(1));
+
+        // Several classes tighten each other.
+        let both = vec![
+            "https://example.com/A".to_string(),
+            "https://example.com/B".to_string(),
+        ];
+        let c = effective_constraint(&store, &both, prop).await;
+        assert_eq!(c.max_items, Some(1));
+        assert_eq!(c.min_items, Some(1));
+        assert_eq!(c.to_json()["maxItems"], json!(1));
+    }
+
+    #[test]
+    fn tightening_keeps_the_stricter_keyword() {
+        let a =
+            parse_constraint(&json!({ "minimum": 0, "maximum": 10, "enum": [1, 2, 3] })).unwrap();
+        let b = parse_constraint(&json!({ "minimum": 2, "maximum": 20, "enum": [3, 2] })).unwrap();
+        let t = a.tighten(&b);
+        assert_eq!((t.minimum, t.maximum), (Some(2.0), Some(10.0)));
+        assert_eq!(t.enum_values, Some(vec![json!(2), json!(3)]));
+        assert_eq!(
+            parse_constraint(&t.to_json()).unwrap().maximum,
+            Some(10.0),
+            "to_json is the inverse of parse_constraint"
         );
     }
 }

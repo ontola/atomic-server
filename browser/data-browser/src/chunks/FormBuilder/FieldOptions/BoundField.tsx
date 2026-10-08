@@ -13,6 +13,9 @@ interface BoundFieldProps {
    * has none. */
   min?: number;
   max?: number;
+  /** A limit the data class already demands: the question can only tighten it,
+   * so a value below it is raised to it. */
+  floor?: number;
   helper?: string;
 }
 
@@ -32,6 +35,7 @@ export function BoundField({
   setOptions,
   min,
   max,
+  floor,
   helper,
 }: BoundFieldProps): JSX.Element {
   const stored = options[optionKey] as number | undefined;
@@ -41,7 +45,7 @@ export function BoundField({
       <InputWrapper>
         <InputStyled
           type='number'
-          min={min}
+          min={floor ?? min}
           max={max}
           data-testid={`field-option-${optionKey}`}
           value={stored ?? ''}
@@ -53,7 +57,7 @@ export function BoundField({
             } else {
               next[optionKey] = Math.min(
                 max ?? Infinity,
-                Number(e.target.value),
+                Math.max(floor ?? -Infinity, Number(e.target.value)),
               );
             }
 

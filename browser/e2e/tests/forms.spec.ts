@@ -6,6 +6,9 @@ const FORM_FIELD_TYPE = 'https://atomicdata.dev/properties/form-field-type';
 const FORM_MAPS_TO = 'https://atomicdata.dev/properties/form-maps-to';
 const ALLOWS_ONLY = 'https://atomicdata.dev/properties/allowsOnly';
 const NAME = 'https://atomicdata.dev/properties/name';
+const PARENT = 'https://atomicdata.dev/properties/parent';
+const FORM_DATA_CLASS = 'https://atomicdata.dev/properties/form-data-class';
+const CONSTRAINTS = 'https://atomicdata.dev/properties/constraints';
 const SHORTNAME = 'https://atomicdata.dev/properties/shortname';
 const FORM_PUBLISHED_AT = 'https://atomicdata.dev/properties/form-published-at';
 
@@ -89,27 +92,44 @@ const fieldRowDeleteButton = (page: Page, key: string) =>
 
 /**
  * The option labels of a choice question. Options are not stored on the field:
- * they are the Tags on its mapped Property's `allowsOnly`, so this walks
- * field -> property -> tags the way the definition builder does.
+ * they are the Tags in the `enum` of the form's data class for the column
+ * (the Property's legacy `allowsOnly` as the fallback), so this walks
+ * field -> page -> form -> data class -> tags the way the definition builder
+ * does.
  */
 const getOptionLabels = (page: Page, fieldSubject: string) =>
   page.evaluate(
-    ({ subject, mapsToProp, allowsOnlyProp, nameProp }) => {
-      const field = window.store.resources.get(subject);
-      const property = window.store.resources.get(
-        field?.get(mapsToProp) as string,
-      );
-      const tags = (property?.get(allowsOnlyProp) as string[]) ?? [];
+    ({ subject, props }) => {
+      const get = (s: string | undefined) =>
+        s ? window.store.resources.get(s) : undefined;
+      const canonical = (s: string) => s.replace(/^did:ad:/, 'atomic:');
+      const field = get(subject);
+      const mapsTo = field?.get(props.mapsTo) as string;
+      const formPage = get(field?.get(props.parent) as string);
+      const form = get(formPage?.get(props.parent) as string);
+      const dataClass = get(form?.get(props.dataClass) as string);
+      const raw = dataClass?.get(props.constraints);
+      const map = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
+        | Record<string, { enum?: string[] }>
+        | undefined;
+      const entry = Object.entries(map ?? {}).find(
+        ([key]) => canonical(key) === canonical(mapsTo),
+      )?.[1];
+      const tags =
+        entry?.enum ?? (get(mapsTo)?.get(props.allowsOnly) as string[]) ?? [];
 
-      return tags.map(
-        t => window.store.resources.get(t)?.get(nameProp) as string,
-      );
+      return tags.map(t => get(t)?.get(props.name) as string);
     },
     {
       subject: fieldSubject,
-      mapsToProp: FORM_MAPS_TO,
-      allowsOnlyProp: ALLOWS_ONLY,
-      nameProp: NAME,
+      props: {
+        mapsTo: FORM_MAPS_TO,
+        allowsOnly: ALLOWS_ONLY,
+        name: NAME,
+        parent: PARENT,
+        dataClass: FORM_DATA_CLASS,
+        constraints: CONSTRAINTS,
+      },
     },
   );
 
@@ -452,7 +472,7 @@ test.describe('forms', async () => {
       await choiceInputs.nth(index).fill(label);
     }
 
-    await page.getByTestId('field-option-maxSelected').fill('2');
+    await page.getByTestId('field-option-maxItems').fill('2');
 
     // The option names are debounced; the preview reads the store, so wait
     // for the Tags themselves rather than for a commit to land.

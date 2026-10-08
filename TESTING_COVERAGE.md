@@ -2407,8 +2407,26 @@ existing select column's options in `EditPropertyDialog` (class save, legacy
 dual-write), the number / text range and relation class going from the dialog
 to the class map, `useTableColumns` re-reading columns when the class map
 changes, `TagPropertyCard`'s class usage rows, and forms bound to a table column
-whose options now live only in the class map (they read the Property until the
-forms step).
+whose options now live only in the class map (see the forms entry below).
+
+Class constraints in forms (`planning/class-constraints-and-forms.md`, step 3):
+`formFieldSettings.test.ts` and `formConstraints.test.ts` pin the limit
+keywords, that old names read and are rewritten on edit, that a question can only
+tighten its column's constraint (rejected before any write), and the
+`describe_form` JSON Schema (class narrowed by the question, `enum` of Tags).
+`createFormFromSpec.test.ts` / `formOps.test.ts` pin that a new choice question's
+options and single pick land in the data class's constraints and that choice
+edits write the class, not the Property. `server/src/forms.rs` tests cover
+options from the class `enum` over legacy `allowsOnly`, legacy key renaming,
+narrowing, exclusive bounds, `pattern` and row counts in `validate_submission`;
+`class_constraints.rs` covers `effective_constraint` / `tighten`. The renderer
+checks the same keywords in `validation.test.ts`. `forms.spec.ts` reads option
+labels from the class map. Not covered: linking options to another table in the
+builder writes the class (no unit test; the e2e links a table), the Rust and TS
+narrowing are separate implementations without a shared fixture, a `pattern`
+the Rust regex and the JS `RegExp` read differently, and legacy forms whose
+Property keeps `allowsOnly` after a row link (the class `enum` is removed but the
+Property fallback still lists the old tags in the builder).
 
 Not covered (drafts): the debounce/flush wiring in `useFormDraft` — the
 `pagehide` and `visibilitychange` flushes in particular — is only exercised

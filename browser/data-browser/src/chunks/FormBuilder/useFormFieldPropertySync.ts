@@ -146,7 +146,8 @@ export async function createFormField(
     );
 
     // A choice question's column is an ordinary enum column: a
-    // SelectProperty whose `allowsOnly` Tags *are* the question's options.
+    // SelectProperty whose Tags, listed in the `enum` of the data class's
+    // constraint for it, *are* the question's options.
     // That is what gives form answers tag pills, colors and kanban
     // grouping, and what lets renaming an option leave past submissions
     // reading correctly.
@@ -155,10 +156,9 @@ export async function createFormField(
           await createSelectPropertyOnClass(store, dataClass, {
             shortname,
             tags: (opts.choices ?? DEFAULT_CHOICE_TAGS).map(name => ({ name })),
+            // Options and the pick limit go to the data class's constraints
+            // for the column (`enum`, `maxItems: 1`), not onto the Property.
             max: SINGLE_CHOICE_FIELD_TYPES.includes(opts.type) ? 1 : undefined,
-            // Forms still read options and the pick limit off the Property;
-            // they move to the class map in a later step.
-            constraintsOn: 'property',
           })
         ).subject
       : await createPropertyOnClass(store, dataClass, {

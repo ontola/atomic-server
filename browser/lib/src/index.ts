@@ -70,6 +70,7 @@ export {
   JSON_SCHEMA_DIALECT,
   ontologyFromJsonSchema,
   ontologyToJsonSchema,
+  propertyJsonSchema,
   type JsonSchemaImportOptions,
 } from './schema-json-schema.js';
 export { isJsonSchema, ontologyFromSchemaFile } from './schema-file.js';

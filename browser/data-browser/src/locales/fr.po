@@ -10453,7 +10453,7 @@ msgstr ""
 msgid "Max rows"
 msgstr ""
 
-#. 0: allowsOnly.length + 1
+#. 0: tags.length + 1
 #: src/chunks/FormBuilder/FieldOptions/TagListEditor.tsx
 msgid "Option {0}"
 msgstr ""

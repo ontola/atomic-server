@@ -3,6 +3,7 @@ import { AtomicLink } from '@components/AtomicLink';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { Checkbox } from '@components/forms/Checkbox';
 import { compatibleFieldTypes } from './tableColumns';
+import { useFieldConstraint } from './formDataClass';
 import { useTableFormColumns } from './useTableFormColumns';
 import {
   core,
@@ -76,7 +77,7 @@ export function FieldSettingsPanel({
   const property = useResource(mapsTo ?? unknownSubject);
   const { requires } = useTableFormColumns(dataClassSubject);
   const forcedRequired = !!mapsTo && requires.includes(mapsTo);
-  const compatible = compatibleFieldTypes(property);
+  const compatible = compatibleFieldTypes(property, useFieldConstraint(field));
 
   useEffect(() => {
     if (forcedRequired && field.get(forms.properties.required) !== true) {

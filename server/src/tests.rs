@@ -1699,7 +1699,7 @@ async fn form_submission_flow() {
         .unwrap();
     picture_prop.save_locally(store).await.unwrap();
 
-    // Options are Tags on the property's `allowsOnly`; a picture-choice
+    // Options are Tags in the data class's constraints; a picture-choice
     // option's image is the Tag's `cover-image`.
     // A real File in the form's drive: the definition only keeps images it
     // can see the form may show (`forms::FormScope`).
@@ -1755,15 +1755,26 @@ async fn form_submission_flow() {
         tag.save_locally(store).await.unwrap();
         tag_subjects.push(tag.get_subject().to_string());
     }
-    picture_prop
+    // The options are the `enum` of the data class's constraint for the
+    // column, and a single pick is `maxItems: 1`.
+    let mut data_class = store
+        .get_resource(&class.get_subject().to_string().into())
+        .await
+        .unwrap();
+    data_class
         .set(
-            urls::ALLOWS_ONLY.into(),
-            Value::ResourceArray(tag_subjects.iter().cloned().map(Into::into).collect()),
+            urls::CONSTRAINTS.into(),
+            Value::Json(serde_json::json!({
+                picture_prop.get_subject().to_string(): {
+                    "enum": tag_subjects,
+                    "maxItems": 1,
+                },
+            })),
             store,
         )
         .await
         .unwrap();
-    picture_prop.save_locally(store).await.unwrap();
+    data_class.save_locally(store).await.unwrap();
     let mut picture_field = Resource::new_instance(urls::FORM_FIELD, store)
         .await
         .unwrap();

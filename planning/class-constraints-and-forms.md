@@ -104,6 +104,17 @@ spec and before forms or kanban grow more users:
    with the Property as per-keyword fallback; tables, kanban, the ontology
    class card and `InputSwitcher` use them. Forms still read the Property.
 3. Forms read and write the class map; form options become tightenings.
+   **Done**: the builder writes choice options (`enum`), the single pick
+   (`maxItems: 1`) and a row link (`class`) to the form's data class and reads
+   them through `getEffectiveConstraint` (Property fallback stays). A form's
+   own limits use the keywords (`minimum`, `maximum`, `minLength`, `maxLength`,
+   `minItems`, `maxItems`; old names still read) and may only tighten the class
+   (`FormBuilder/formConstraints.ts`). `server/src/forms.rs` resolves options
+   and narrows the limits with `atomic_lib::class_constraints::effective_constraint`
+   when it builds the definition, so the renderer and the submit path validate
+   the same keywords. `describe_form` returns the form's JSON Schema as
+   `schema`. The renderer mirrors the keyword checks instead of importing
+   `@tomic/lib` or WASM (it has no dependencies by design).
 4. Drop the Property fallback once existing drives are converted.
 
 Forms are not in production yet (`form-choice-options-as-resources.md`), so

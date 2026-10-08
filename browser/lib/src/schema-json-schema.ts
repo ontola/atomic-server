@@ -915,3 +915,45 @@ export async function ontologyToJsonSchema(
     $defs: defs,
   };
 }
+
+/**
+ * The JSON Schema of one property as one class sees it: the datatype's schema
+ * with the class's constraint written as keywords (`enum` on the items of an
+ * array, `class` as the linked class). The same shape
+ * {@link ontologyToJsonSchema} writes for a class member, for callers that
+ * hold one resolved constraint instead of an ontology (a form's JSON Schema is
+ * the class's, narrowed by the form's own options).
+ */
+export function propertyJsonSchema(
+  property: {
+    subject: string;
+    shortname: string;
+    datatype: string;
+    name?: string;
+    description?: string;
+    classtype?: string;
+  },
+  constraint: Record<string, JSONValue>,
+): JSONObject {
+  const schema = propertySchema(
+    { ...property, subject: canonicalizeScheme(property.subject) },
+    constraint,
+    target => (target ? { external: canonicalizeScheme(target) } : {}),
+  );
+
+  if (property.name && property.name !== property.shortname) {
+    schema.title = property.name;
+  }
+
+  if (
+    property.description &&
+    property.description !== property.name &&
+    property.description !== property.shortname
+  ) {
+    schema.description = property.description;
+  }
+
+  schema['x-atomic-property'] = canonicalizeScheme(property.subject);
+
+  return schema;
+}
