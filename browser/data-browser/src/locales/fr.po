@@ -12279,6 +12279,7 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
 msgid "See Cloud Server plans"
@@ -12295,4 +12296,12 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+msgstr ""
+
+#: src/views/getting-started/chrome.tsx
+msgid "The server could not be reached"
+msgstr ""
+
+#: src/views/getting-started/chrome.tsx
+msgid "Check your connection and that your server is running, then try again."
 msgstr ""

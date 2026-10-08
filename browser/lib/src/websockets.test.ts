@@ -112,6 +112,10 @@ async function connectedClient() {
   // these frame-level tests.
   vi.spyOn(store, 'syncDirtyResources').mockResolvedValue(undefined);
   vi.spyOn(store, 'getDrive').mockReturnValue(undefined);
+  // These frame tests supply version vectors through computeDriveSyncState
+  // spies. Model an attached database at that boundary; server-only tests
+  // override it to false.
+  vi.spyOn(store, 'waitForClientDb').mockResolvedValue(true);
   const client = new WSClient('wss://example.com/ws', store);
   const socket = socketOf(client);
   socket.open();
@@ -694,6 +698,24 @@ describe('WSClient drive subscription', () => {
   afterEach(() => {
     globalThis.WebSocket = original;
     vi.restoreAllMocks();
+  });
+
+  it('does not reconcile a browser with Local DB disabled', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(store, 'getClientDb').mockReturnValue(undefined);
+    vi.spyOn(store, 'waitForClientDb').mockResolvedValue(false);
+    vi.spyOn(store, 'getDrive').mockReturnValue('atomic:personal');
+    const compute = vi
+      .spyOn(store, 'computeDriveSyncState')
+      .mockRejectedValue(new Error('No database'));
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await client.resyncDrive('atomic:personal');
+    expect(compute).not.toHaveBeenCalled();
+    expect(warning).not.toHaveBeenCalled();
+    expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+    client.close();
   });
 
   it('reconciles a live drive outside the active workspace, including after reconnect', async ({

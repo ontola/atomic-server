@@ -2709,9 +2709,54 @@ change. `browser/lib/src/websockets.test.ts` covers overlapping active/live
 drive subscriptions and reconciliation of a live drive outside the selected
 workspace, including subscription replay. These tests failed before the fixes.
 
-Remaining notification acceptance gaps: simultaneous duplicate recording by
-two recipient instances; read-state changes missed while disconnected; more
-than 100 inbox items (the page/read-about cap); comments/replies across instances;
-account-switch isolation; OPFS-disabled browsers; and delivery while every app
-instance is closed. Notification recording currently depends on an open app.
-This Chromium journey does not prove native OS permission or delivery behavior.
+## Notification pagination, identity and server-only mode (October 8, 2026)
+
+`browser/e2e/tests/notification-inbox.spec.ts` signs the same recipient into two
+isolated contexts with unrelated projects selected. It concurrently saves two
+independent Notification genesis resources for the same source and checks that
+both inboxes show one unread item. It then adds 101 distinct sources and checks
+102 unread, grouping, remote Mark all as read, and reload persistence. It signs
+out and into a different real identity in the existing browser and checks an
+empty inbox. Seeded notifications use the real Store, server, OPFS and WebSocket;
+this does not simulate the MessageNotifier check/create race itself.
+
+`notification-comments.spec.ts` invites a writer to a project, posts a comment
+and a reply to the owner's comment, and checks both owner inboxes. Opening the
+reply in the second instance must open the comments panel and sync read state
+back to the first. This caught a navigation/panel race in addition to reply
+notifications failing to open the comment panel.
+
+`notifications.spec.ts` now runs with Local DB both enabled and deliberately
+disabled in the second recipient. It also disconnects that instance while the
+first reads a cached unread item and checks read-state catch-up without reload.
+The disabled path caught onboarding waiting for a database that will never
+attach, spurious VV sync failures, and missed inbox updates after reconnect.
+Every permanent journey uses the strict diagnostic fixture across all contexts.
+OS permission/delivery remain stubbed in the original chat journey.
+
+Cheaper regressions cover all-page counts and read-about operations (including
+preserving arrivals newer than the read cutoff), personal-drive query replacement,
+scoped local/optimistic membership, account isolation on the first render,
+server-only reconnect membership and cached read state, and waiting for navigation
+before opening a reply's comment panel. See `hooks/useInbox.test.tsx`,
+`hooks/usePrivateDrive.test.tsx`, `helpers/notifications/inbox.test.ts`,
+`helpers/onboardingStorage.test.ts`, `components/Notifications/NotificationList.test.tsx`,
+`browser/lib/src/collection-explicit-drive.test.ts`, and `websockets.test.ts`.
+
+### Still open
+
+A separate local diagnostic closed both recipient windows, sent a message,
+restored the recipient into a fresh context and confirmed the message was visible
+in its chat but absent from the Inbox. This is evidence of the existing gap, not
+passing delivery acceptance. It is not a permanent test that asserts missing
+notifications as correct behavior. `MessageNotifier` records only while an app
+is open and ignores messages created before startup. The durable notifier and
+push work remain in [`planning/notifications.md`](./planning/notifications.md).
+
+Real macOS/Android notification permission, display and activation remain
+unverified. The pinned Tauri plugin's Notification constructor submits to the
+native plugin but does not connect the assigned `onclick` callback. The browser
+service-worker fallback also lacks a notification click handler and target data.
+Neither native activation nor all-apps-closed delivery is established by these
+Chromium inbox tests. Failed browser database initialization is distinct from the
+explicit Local DB off mode tested here and needs its own notification journey.

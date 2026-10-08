@@ -2108,9 +2108,13 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) return;
     // Server-only mode (no OPFS / Web Locks): there is no local state to
     // reconcile, and computing it would only fail, once per call.
-    if (this.store.getClientDb()?.initError) return;
-
     const current = this.connectionGuard();
+    if (
+      !(await this.store.waitForClientDb()) ||
+      this.store.getClientDb()?.initError ||
+      !current()
+    )
+      return;
 
     // Reading every version vector of a large drive keeps the local database
     // worker busy for a second or more, and everything the screen is waiting
