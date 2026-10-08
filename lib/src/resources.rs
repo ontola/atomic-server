@@ -1146,7 +1146,7 @@ impl Resource {
         store: &impl Storelike,
     ) -> AtomicResult<Property> {
         // If it's a URL, were done quickly!
-        if is_url(shortname) {
+        if is_url(shortname) || crate::identifiers::is_prop_id(shortname) {
             return store.get_property(shortname).await;
         }
         // First, iterate over all existing properties, see if any of these work.
