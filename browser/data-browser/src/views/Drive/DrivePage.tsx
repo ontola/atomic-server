@@ -1,15 +1,10 @@
-import {
-  Datatype,
-  core,
-  useCanWrite,
-  type Server,
-  useChildren,
-} from '@tomic/react';
+import { Datatype, core, useCanWrite, type Server } from '@tomic/react';
 import { ContainerNarrow } from '@components/Containers';
 import { Button } from '@components/Button';
 import { useSettings } from '@helpers/AppSettings';
 import { ResourcePageProps } from '../ResourcePage';
 import { EditableTitle } from '@components/EditableTitle';
+import { useVisibleDriveChildren } from '@hooks/useVisibleDriveChildren';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { PrivateDriveBadge } from '@components/Drives/PrivateDriveBadge';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
@@ -39,7 +34,7 @@ import {
 /** A View for Drives, which function similar to a homepage or dashboard. */
 function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   const { drive: baseURL, setDrive: setBaseURL } = useSettings();
-  const { subjects: subResources } = useChildren(resource.subject);
+  const { subjects: subResources } = useVisibleDriveChildren(resource.subject);
   const [dialogProps, showSettings, , settingsOpen] = useDialog();
 
   const vectorIndexing = useVectorIndexStatus();

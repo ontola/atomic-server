@@ -16,7 +16,6 @@ vi.mock('@tomic/react', () => ({
   Datatype: { MARKDOWN: 'markdown' },
   core: { properties: { description: 'description' } },
   useCanWrite: () => false,
-  useChildren: () => ({ subjects: [] }),
   useStore: () => state.store,
 }));
 
@@ -47,6 +46,14 @@ vi.mock('@components/SideBar/DriveSwitcher', () => ({
 }));
 vi.mock('@components/EditableTitle', () => ({
   EditableTitle: () => <h1>Drive title</h1>,
+}));
+vi.mock('@hooks/useVisibleDriveChildren', () => ({
+  useVisibleDriveChildren: () => ({
+    subjects: [],
+    allSubjects: [],
+    loading: false,
+    total: 0,
+  }),
 }));
 vi.mock('@hooks/useIsPrivateDrive', () => ({ useIsPrivateDrive: () => false }));
 vi.mock('@components/Drives/PrivateDriveBadge', () => ({
