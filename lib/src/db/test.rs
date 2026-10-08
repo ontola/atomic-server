@@ -4712,3 +4712,100 @@ async fn snapshot_is_stored_as_a_delta_on_the_genesis_commit() {
         snapshot
     );
 }
+
+/// Groups work through the same check as agents in collection queries
+/// (`for_agent` filtering with the per-request `RightsCache`): adding an agent
+/// to a Group makes every child that grants the group listable, and removing
+/// it hides them again at once.
+#[tokio::test]
+async fn query_filters_by_group_membership() {
+    let store = Db::init_temp("query_filters_by_group_membership")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let alice = "did:ad:agent:+/UHiCrMCWr7O5waaKRPJ5Pq90T8ncocNkH0kYihCFM=";
+
+    let mut group = Resource::new_instance(urls::GROUP, &store).await.unwrap();
+    group
+        .set(urls::NAME.into(), Value::String("team".into()), &store)
+        .await
+        .unwrap();
+    group
+        .set(
+            urls::GROUP_MEMBERS.into(),
+            Value::ResourceArray(vec![]),
+            &store,
+        )
+        .await
+        .unwrap();
+    group.save_locally(&store).await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let folder = genesis_child(&store, &drive).await;
+
+    let mut visible = Vec::new();
+    for _ in 0..3 {
+        let mut child = Resource::new("did:ad:placeholder".into());
+        child
+            .set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(folder.clone()),
+                &store,
+            )
+            .await
+            .unwrap();
+        child
+            .set(
+                urls::READ.into(),
+                Value::ResourceArray(vec![group.get_subject().to_string().into()]),
+                &store,
+            )
+            .await
+            .unwrap();
+        visible.push(
+            child
+                .save_as_genesis(&store)
+                .await
+                .unwrap()
+                .resource_new
+                .unwrap()
+                .get_subject()
+                .clone(),
+        );
+    }
+    // A sibling nobody granted.
+    genesis_child(&store, &folder).await;
+
+    let q = parent_query(&folder, None, ForAgent::AgentSubject(alice.into()));
+    assert!(store.query(&q).await.unwrap().subjects.is_empty());
+
+    group
+        .set(
+            urls::GROUP_MEMBERS.into(),
+            Value::ResourceArray(vec![alice.into()]),
+            &store,
+        )
+        .await
+        .unwrap();
+    group.save_locally(&store).await.unwrap();
+    let res = store.query(&q).await.unwrap();
+    let mut got = res.subjects.clone();
+    got.sort_by_key(|s| s.to_string());
+    visible.sort_by_key(|s| s.to_string());
+    assert_eq!(got, visible, "group members see exactly the granted rows");
+    assert_eq!(res.count, 3);
+
+    group
+        .set(
+            urls::GROUP_MEMBERS.into(),
+            Value::ResourceArray(vec![]),
+            &store,
+        )
+        .await
+        .unwrap();
+    group.save_locally(&store).await.unwrap();
+    let res = store.query(&q).await.unwrap();
+    assert!(res.subjects.is_empty(), "removal hides the rows at once");
+    assert_eq!(res.count, 0);
+}

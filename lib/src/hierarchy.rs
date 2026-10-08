@@ -58,6 +58,9 @@ pub struct AuthImpact {
     pub append: bool,
     /// Re-parents the resource, changing the rights it inherits.
     pub parent: bool,
+    /// Mutates a Group's `members`, changing who a `read` / `write` / `append`
+    /// entry naming that group grants rights to.
+    pub members: bool,
     /// Destroys the resource; the tombstone is authorization-relevant.
     pub destroy: bool,
 }
@@ -67,7 +70,13 @@ impl AuthImpact {
     /// proof depends on — and so must survive any future content-commit pruning.
     /// A commit that changes only ordinary content is not critical.
     pub fn is_critical(&self) -> bool {
-        self.genesis || self.read || self.write || self.append || self.parent || self.destroy
+        self.genesis
+            || self.read
+            || self.write
+            || self.append
+            || self.parent
+            || self.members
+            || self.destroy
     }
 }
 
@@ -84,6 +93,7 @@ pub fn classify_auth_impact(
         write: changed_props.contains(urls::WRITE),
         append: changed_props.contains(urls::APPEND),
         parent: changed_props.contains(urls::PARENT),
+        members: changed_props.contains(urls::GROUP_MEMBERS),
         destroy: is_destroy,
     }
 }
@@ -124,6 +134,9 @@ pub fn check_read<'a>(
 #[derive(Default)]
 pub struct RightsCache {
     outcomes: std::collections::HashMap<(u8, String), bool>,
+    /// Whether the (single) agent this cache serves is a member of a group,
+    /// keyed by the group's `pure_id`. Only fully resolved verdicts go in.
+    groups: std::collections::HashMap<String, bool>,
 }
 
 impl RightsCache {
@@ -131,6 +144,12 @@ impl RightsCache {
         self.outcomes
             .get(&(right_discriminant(right), subject.pure_id()))
             .copied()
+    }
+}
+
+impl RightsCache {
+    fn group(&self, group: &crate::Subject) -> Option<bool> {
+        self.groups.get(&group.pure_id()).copied()
     }
 }
 
@@ -341,6 +360,107 @@ fn check_agent_self_creation(
     )))
 }
 
+const AGENT_PREFIX: &str = "did:ad:agent:";
+
+/// Upper bound on the groups visited resolving one membership. Fails closed.
+const MAX_GROUPS_VISITED: usize = 256;
+
+/// Whether `agent` is a member of `group`, directly or through nested groups.
+///
+/// Walks `members` breadth-first with a visited set, so a membership cycle
+/// terminates (and grants nothing by itself). Only local, existing resources
+/// of class [`urls::GROUP`] count: a deleted group, a non-group, or an
+/// unfetchable entry has no members, so rights fail closed.
+///
+/// Groups are read straight from the store on every call (no cross-request
+/// cache), so a membership commit takes effect on the very next check. With a
+/// per-request [`RightsCache`] each group is resolved at most once per query.
+/// A completed negative walk marks every visited group negative, which is
+/// sound: the visited set is closed under membership.
+async fn is_group_member<S: Storelike>(
+    store: &S,
+    group: &crate::Subject,
+    agent: &crate::Subject,
+    cache: Option<&std::sync::Mutex<RightsCache>>,
+) -> bool {
+    let lookup = |g: &crate::Subject| cache.and_then(|c| c.lock().ok().and_then(|c| c.group(g)));
+    if let Some(known) = lookup(group) {
+        return known;
+    }
+    let mut visited = std::collections::HashSet::new();
+    visited.insert(group.pure_id());
+    let mut queue = vec![group.clone()];
+    let mut explored: Vec<String> = Vec::new();
+    let mut complete = true;
+
+    while let Some(current) = queue.pop() {
+        match lookup(&current) {
+            Some(true) => {
+                remember_group(cache, group, true);
+                return true;
+            }
+            Some(false) => continue,
+            None => {}
+        }
+        if explored.len() >= MAX_GROUPS_VISITED {
+            complete = false;
+            break;
+        }
+        explored.push(current.pure_id());
+        let Ok(resource) = store.get_resource_shallow(&current).await else {
+            continue;
+        };
+        let is_group = resource
+            .get(urls::IS_A)
+            .and_then(|v| v.to_subjects(None))
+            .map(|classes| classes.iter().any(|c| c == urls::GROUP))
+            .unwrap_or(false);
+        if !is_group {
+            continue;
+        }
+        let Ok(members) = resource
+            .get(urls::GROUP_MEMBERS)
+            .and_then(|v| v.to_subjects(None))
+        else {
+            continue;
+        };
+        for member in members {
+            let migrated = crate::agents::migrate_legacy_agent_subject(&member);
+            let member = store.normalize_subject(&migrated.as_str().into());
+            if &member == agent {
+                remember_group(cache, group, true);
+                return true;
+            }
+            if !member.as_str().starts_with(AGENT_PREFIX) && visited.insert(member.pure_id()) {
+                queue.push(member);
+            }
+        }
+    }
+
+    if complete {
+        if let Some(cache) = cache {
+            if let Ok(mut guard) = cache.lock() {
+                for g in explored {
+                    guard.groups.insert(g, false);
+                }
+            }
+        }
+    }
+    false
+}
+
+fn remember_group(
+    cache: Option<&std::sync::Mutex<RightsCache>>,
+    group: &crate::Subject,
+    verdict: bool,
+) {
+    if let Some(cache) = cache {
+        if let Ok(mut guard) = cache.lock() {
+            guard.groups.insert(group.pure_id(), verdict);
+        }
+    }
+}
+
 /// Recursively checks a Resource and its Parents for rights.
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.
@@ -424,6 +544,13 @@ fn check_rights_impl<'a, S: Storelike>(
             properties_to_check.push(urls::WRITE.to_string());
         }
 
+        // Entries that are neither the public agent nor an agent are groups.
+        // They are collected here and resolved only after every plain agent
+        // entry (in all checked properties) has had its chance to match, so a
+        // resource that grants plain agents pays nothing for group support
+        // beyond one prefix comparison per non-matching entry.
+        let mut group_entries: Vec<crate::Subject> = Vec::new();
+
         for prop in properties_to_check {
             if let Ok(arr_val) = resource.get(&prop) {
                 for s in arr_val.to_subjects(None)? {
@@ -451,9 +578,22 @@ fn check_rights_impl<'a, S: Storelike>(
                                     resource.get_subject()
                                 ));
                             }
+                            if !normalized_agent.as_str().starts_with(AGENT_PREFIX) {
+                                group_entries.push(normalized_agent);
+                            }
                         }
                     };
                 }
+            }
+        }
+
+        for group in &group_entries {
+            if is_group_member(store, group, &normalized_for_agent, cache).await {
+                return Ok(format!(
+                    "Right has been granted to group {} in {}",
+                    group,
+                    resource.get_subject()
+                ));
             }
         }
 
@@ -672,6 +812,218 @@ mod test {
                 .is_err(),
             "reading an agent must not imply editing it",
         );
+    }
+
+    #[cfg(feature = "db")]
+    mod groups {
+        use crate::agents::ForAgent;
+        use crate::hierarchy::{check_rights, check_rights_cached, Right, RightsCache};
+        use crate::{db::Db, urls, Resource, Value};
+
+        const ALICE: &str = "did:ad:agent:+/UHiCrMCWr7O5waaKRPJ5Pq90T8ncocNkH0kYihCFM=";
+        const BOB: &str = "did:ad:agent:9Bx1xRXvB1jVHYqYcSCbnR3T9pMGHYnvXQFmJ4wMPBw=";
+
+        fn agent(s: &str) -> ForAgent {
+            ForAgent::AgentSubject(s.into())
+        }
+
+        async fn group(store: &Db, members: &[&str]) -> Resource {
+            let mut g = Resource::new_instance(urls::GROUP, store).await.unwrap();
+            g.set(urls::NAME.into(), Value::String("g".into()), store)
+                .await
+                .unwrap();
+            set_members(store, &mut g, members).await;
+            g
+        }
+
+        async fn set_members(store: &Db, g: &mut Resource, members: &[&str]) {
+            g.set(
+                urls::GROUP_MEMBERS.into(),
+                Value::ResourceArray(members.iter().map(|m| (*m).into()).collect()),
+                store,
+            )
+            .await
+            .unwrap();
+            g.save_locally(store).await.unwrap();
+        }
+
+        /// A parentless resource that grants `right_prop` to `grantee` only.
+        async fn guarded(store: &Db, right_prop: &str, grantee: &str) -> Resource {
+            let mut r = Resource::new_instance(urls::TAG, store).await.unwrap();
+            r.set(urls::SHORTNAME.into(), Value::Slug("guarded".into()), store)
+                .await
+                .unwrap();
+            r.set(
+                right_prop.into(),
+                Value::ResourceArray(vec![grantee.into()]),
+                store,
+            )
+            .await
+            .unwrap();
+            r.save_locally(store).await.unwrap();
+            r
+        }
+
+        async fn store(name: &str) -> Db {
+            let store = Db::init_temp(name).await.unwrap();
+            crate::test_utils::setup_test_env(&store).await.unwrap();
+            store
+        }
+
+        #[tokio::test]
+        async fn direct_member_gets_the_right_and_removal_revokes_it_at_once() {
+            let store = store("group_direct").await;
+            let mut g = group(&store, &[ALICE]).await;
+            let r = guarded(&store, urls::READ, g.get_subject().as_str()).await;
+
+            check_rights(&store, &r, &agent(ALICE), Right::Read)
+                .await
+                .expect("member reads");
+            assert!(
+                check_rights(&store, &r, &agent(BOB), Right::Read)
+                    .await
+                    .is_err(),
+                "non-member must not read"
+            );
+            assert!(
+                check_rights(&store, &r, &agent(ALICE), Right::Write)
+                    .await
+                    .is_err(),
+                "a read grant is not a write grant"
+            );
+
+            set_members(&store, &mut g, &[BOB]).await;
+            assert!(check_rights(&store, &r, &agent(ALICE), Right::Read)
+                .await
+                .is_err());
+            check_rights(&store, &r, &agent(BOB), Right::Read)
+                .await
+                .expect("added member reads immediately");
+
+            set_members(&store, &mut g, &[]).await;
+            assert!(check_rights(&store, &r, &agent(BOB), Right::Read)
+                .await
+                .is_err());
+        }
+
+        #[tokio::test]
+        async fn write_and_append_grants_work_through_groups() {
+            let store = store("group_write_append").await;
+            let g = group(&store, &[ALICE]).await;
+            let w = guarded(&store, urls::WRITE, g.get_subject().as_str()).await;
+            let a = guarded(&store, urls::APPEND, g.get_subject().as_str()).await;
+            check_rights(&store, &w, &agent(ALICE), Right::Write)
+                .await
+                .unwrap();
+            check_rights(&store, &w, &agent(ALICE), Right::Read)
+                .await
+                .unwrap();
+            check_rights(&store, &a, &agent(ALICE), Right::Append)
+                .await
+                .unwrap();
+            assert!(check_rights(&store, &a, &agent(ALICE), Right::Write)
+                .await
+                .is_err());
+        }
+
+        #[tokio::test]
+        async fn nested_groups_resolve_and_removal_propagates() {
+            let store = store("group_nested").await;
+            let inner = group(&store, &[ALICE]).await;
+            let mut mid = group(&store, &[inner.get_subject().as_str()]).await;
+            let outer = group(&store, &[mid.get_subject().as_str()]).await;
+            let r = guarded(&store, urls::READ, outer.get_subject().as_str()).await;
+
+            check_rights(&store, &r, &agent(ALICE), Right::Read)
+                .await
+                .expect("member of a group nested two deep");
+            assert!(check_rights(&store, &r, &agent(BOB), Right::Read)
+                .await
+                .is_err());
+
+            set_members(&store, &mut mid, &[]).await;
+            assert!(
+                check_rights(&store, &r, &agent(ALICE), Right::Read)
+                    .await
+                    .is_err(),
+                "unlinking the inner group revokes its members"
+            );
+        }
+
+        #[tokio::test]
+        async fn cyclic_groups_terminate_and_grant_nothing_extra() {
+            let store = store("group_cycle").await;
+            let mut a = group(&store, &[]).await;
+            let mut b = group(&store, &[a.get_subject().as_str()]).await;
+            // a -> b -> a, and a group containing itself.
+            let b_subject = b.get_subject().to_string();
+            let a_subject = a.get_subject().to_string();
+            set_members(&store, &mut a, &[&b_subject, &a_subject]).await;
+            let r = guarded(&store, urls::READ, &a_subject).await;
+
+            assert!(
+                check_rights(&store, &r, &agent(ALICE), Right::Read)
+                    .await
+                    .is_err(),
+                "a cycle with no agent in it grants nothing (and must terminate)"
+            );
+
+            set_members(&store, &mut b, &[&a_subject, ALICE]).await;
+            check_rights(&store, &r, &agent(ALICE), Right::Read)
+                .await
+                .expect("an agent reachable around the cycle is a member");
+            assert!(check_rights(&store, &r, &agent(BOB), Right::Read)
+                .await
+                .is_err());
+        }
+
+        #[tokio::test]
+        async fn non_groups_deleted_groups_and_cache() {
+            let store = store("group_misc").await;
+            // A resource that is not a Group never grants, whatever it lists.
+            let mut not_group = Resource::new_instance(urls::TAG, &store).await.unwrap();
+            not_group
+                .set(urls::SHORTNAME.into(), Value::Slug("x".into()), &store)
+                .await
+                .unwrap();
+            not_group
+                .set(
+                    urls::GROUP_MEMBERS.into(),
+                    Value::ResourceArray(vec![ALICE.into()]),
+                    &store,
+                )
+                .await
+                .unwrap();
+            not_group.save_locally(&store).await.unwrap();
+            let r = guarded(&store, urls::READ, not_group.get_subject().as_str()).await;
+            assert!(check_rights(&store, &r, &agent(ALICE), Right::Read)
+                .await
+                .is_err());
+
+            // Per-request cache: same verdicts, group resolved once.
+            let mut g = group(&store, &[ALICE]).await;
+            let r = guarded(&store, urls::READ, g.get_subject().as_str()).await;
+            let cache = std::sync::Mutex::new(RightsCache::default());
+            for _ in 0..3 {
+                check_rights_cached(&store, &r, &agent(ALICE), Right::Read, Some(&cache))
+                    .await
+                    .unwrap();
+            }
+            assert_eq!(cache.lock().unwrap().group(g.get_subject()), Some(true));
+
+            // Deleting the group fails closed.
+            g.destroy(&store).await.unwrap();
+            assert!(check_rights(&store, &r, &agent(ALICE), Right::Read)
+                .await
+                .is_err());
+        }
+
+        #[test]
+        fn group_member_commits_are_authorization_critical() {
+            let props: std::collections::HashSet<String> = [urls::GROUP_MEMBERS.to_string()].into();
+            let impact = crate::hierarchy::classify_auth_impact(&props, false, false);
+            assert!(impact.members && impact.is_critical());
+        }
     }
 
     // The end-to-end checks for a malicious genesis (granting itself `write`
