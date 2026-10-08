@@ -19,6 +19,7 @@ export function timesheetSource(terms: TimesheetTerms): string {
   return `// Timesheet: a table view for time entries. No sync, no platform.
 const T = ${JSON.stringify(terms)};
 const PARENT = 'https://atomicdata.dev/properties/parent';
+const IS_A = 'https://atomicdata.dev/properties/isA';
 
 const css = \`
   :host, body { font-family: var(--t-font-family, system-ui, sans-serif); color: var(--t-color-text, #1b1b1f); background: var(--t-color-bg, #fff); margin: 0; }
@@ -53,7 +54,9 @@ export async function view({ root, store }) {
     const subjects = await store.query({ property: PARENT, value: table, sortBy: T.start });
     const rows = await Promise.all(subjects.map(s => store.getResource(s)));
     const entries = rows
-      .filter(r => r.getClasses().includes(rowClass))
+      // getClasses() exists in develop's view-client, not in older hosts'
+      // (the pinned candidates), so fall back to reading isA.
+      .filter(r => (typeof r.getClasses === 'function' ? r.getClasses() : (r.get(IS_A) || [])).includes(rowClass))
       .map(r => ({ name: r.get(T.name) ?? 'Untitled', start: r.get(T.start), end: r.get(T.end), billable: r.get(T.billable) === true }))
       .filter(e => typeof e.start === 'number')
       .sort((a, b) => a.start - b.start);
