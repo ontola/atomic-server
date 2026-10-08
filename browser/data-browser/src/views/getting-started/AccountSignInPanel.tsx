@@ -68,13 +68,10 @@ export function AccountSignInPanel({
   portalUrl,
   disabled,
   onSignedIn,
-  onSecret,
 }: {
   portalUrl: string;
   disabled?: boolean;
   onSignedIn: () => void;
-  /** Signing in with the agent secret, the same option the portal offers. */
-  onSecret?: (secret: string) => void;
 }) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
@@ -174,7 +171,6 @@ export function AccountSignInPanel({
         githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
         passkeySupported={passkeys === true}
-        onSecret={onSecret}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => void handleEmail(e)}
@@ -226,13 +222,10 @@ export function AccountSignInViaBrowser({
   portalUrl,
   disabled,
   onSignedIn,
-  onSecret,
 }: {
   portalUrl: string;
   disabled?: boolean;
   onSignedIn: () => void;
-  /** Signing in with the agent secret, the same option the portal offers. */
-  onSecret?: (secret: string) => void;
 }) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
@@ -368,7 +361,6 @@ export function AccountSignInViaBrowser({
         githubHref={null}
         onGitHub={providers.github ? () => void open('github') : undefined}
         onPasskey={() => void open('passkey')}
-        onSecret={onSecret}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => {
