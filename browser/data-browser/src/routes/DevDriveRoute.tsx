@@ -8,7 +8,7 @@ import { useDevDrive } from '../hooks/useDevDrive';
 // `createDevDrive()` and we end up with 2-4 fresh agents + drives stacked
 // in the local store on a single visit. The ref short-circuits anything
 // past the first invocation in this page's lifetime.
-let inFlight: Promise<void> | null = null;
+let inFlight: Promise<unknown> | null = null;
 
 const DevDriveRoute: React.FC = () => {
   const { createDevDrive } = useDevDrive();

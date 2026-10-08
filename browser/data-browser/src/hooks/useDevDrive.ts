@@ -50,82 +50,92 @@ export function useDevDrive() {
   const navigate = useNavigateWithTransition();
   const [loading, setLoading] = useState(false);
 
-  const createDevDrive = useCallback(async () => {
-    setLoading(true);
-
-    try {
-      setServer(resolveDevServer());
-
-      const agentKeys = await Agent.generateKeyPair();
-      const agentDID = agentSubject(agentKeys.publicKey);
-      const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
-      const newAgent = new Agent(agentProvider, agentDID);
-
-      store.setAgent(newAgent);
-      await store.waitForClientDb(10_000);
-
-      // `agentName` pipes `DEV_DRIVE_AGENT_NAME` into the same
-      // agent-resource save that `createDrive` already does (to wire up
-      // `privateDrive` + `drives`). The agent shows up as "Dev User"
-      // wherever its resource is rendered (commit author lines, chat
-      // messages, etc.). E2E tests assert against this constant.
-      const driveResource = await store.createDrive(DEV_DRIVE_DISPLAY_NAME, {
-        description: `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
-        agentName: DEV_DRIVE_AGENT_NAME,
-      });
-
-      const finalSecret = Agent.buildSecret(
-        agentKeys.privateKey,
-        agentDID,
-        driveResource.subject,
-      );
-
-      // Expose for E2E tests so they can sign in as the same agent on other pages.
-      localStorage.setItem('atomic-test.dev-drive-secret', finalSecret);
-
-      // Copy the agent secret to the clipboard so the dev can paste it
-      // into another browser, tab, or device to sign in as the same
-      // agent — handy for testing live cursor / collab without manually
-      // shuttling the secret out of localStorage. Clipboard access can
-      // throw on insecure origins or when the document is hidden;
-      // failure is non-fatal — the secret is still in localStorage and
-      // surfaced via the toast either way.
-      let copied = false;
+  /**
+   * `stay: true` keeps the current page instead of opening the new drive, for
+   * a caller that continues on its own (the split-pieces tester entry).
+   * Resolves to the new drive's subject.
+   */
+  const createDevDrive = useCallback(
+    async ({ stay = false }: { stay?: boolean } = {}) => {
+      setLoading(true);
 
       try {
-        if (document.hasFocus() && navigator.userActivation?.isActive) {
-          await navigator.clipboard.writeText(finalSecret);
-          copied = true;
+        setServer(resolveDevServer());
+
+        const agentKeys = await Agent.generateKeyPair();
+        const agentDID = agentSubject(agentKeys.publicKey);
+        const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
+        const newAgent = new Agent(agentProvider, agentDID);
+
+        store.setAgent(newAgent);
+        await store.waitForClientDb(10_000);
+
+        // `agentName` pipes `DEV_DRIVE_AGENT_NAME` into the same
+        // agent-resource save that `createDrive` already does (to wire up
+        // `privateDrive` + `drives`). The agent shows up as "Dev User"
+        // wherever its resource is rendered (commit author lines, chat
+        // messages, etc.). E2E tests assert against this constant.
+        const driveResource = await store.createDrive(DEV_DRIVE_DISPLAY_NAME, {
+          description: `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
+          agentName: DEV_DRIVE_AGENT_NAME,
+        });
+
+        const finalSecret = Agent.buildSecret(
+          agentKeys.privateKey,
+          agentDID,
+          driveResource.subject,
+        );
+
+        // Expose for E2E tests so they can sign in as the same agent on other pages.
+        localStorage.setItem('atomic-test.dev-drive-secret', finalSecret);
+
+        // Copy the agent secret to the clipboard so the dev can paste it
+        // into another browser, tab, or device to sign in as the same
+        // agent — handy for testing live cursor / collab without manually
+        // shuttling the secret out of localStorage. Clipboard access can
+        // throw on insecure origins or when the document is hidden;
+        // failure is non-fatal — the secret is still in localStorage and
+        // surfaced via the toast either way.
+        let copied = false;
+
+        try {
+          if (document.hasFocus() && navigator.userActivation?.isActive) {
+            await navigator.clipboard.writeText(finalSecret);
+            copied = true;
+          }
+        } catch (e) {
+          if (
+            !(
+              e &&
+              typeof e === 'object' &&
+              'name' in e &&
+              e.name === CLIPBOARD_DENIED
+            )
+          ) {
+            console.error('[DevDrive] clipboard.writeText failed:', e);
+          }
         }
-      } catch (e) {
-        if (
-          !(
-            e &&
-            typeof e === 'object' &&
-            'name' in e &&
-            e.name === CLIPBOARD_DENIED
-          )
-        ) {
-          console.error('[DevDrive] clipboard.writeText failed:', e);
-        }
+
+        toast.success(
+          copied
+            ? 'Dev agent created — secret copied to clipboard'
+            : 'Dev agent created — secret available in localStorage (clipboard write blocked)',
+        );
+
+        await saveAgentToIDB(finalSecret);
+        const updatedAgent = await Agent.fromSecret(finalSecret);
+        store.setAgent(updatedAgent);
+        setAgent(updatedAgent);
+        setDrive(driveResource.subject);
+        if (!stay) navigate(constructOpenURL(driveResource.subject));
+
+        return driveResource.subject;
+      } finally {
+        setLoading(false);
       }
-
-      toast.success(
-        copied
-          ? 'Dev agent created — secret copied to clipboard'
-          : 'Dev agent created — secret available in localStorage (clipboard write blocked)',
-      );
-
-      await saveAgentToIDB(finalSecret);
-      const updatedAgent = await Agent.fromSecret(finalSecret);
-      store.setAgent(updatedAgent);
-      setAgent(updatedAgent);
-      setDrive(driveResource.subject);
-      navigate(constructOpenURL(driveResource.subject));
-    } finally {
-      setLoading(false);
-    }
-  }, [store, setAgent, setDrive, setServer, navigate]);
+    },
+    [store, setAgent, setDrive, setServer, navigate],
+  );
 
   return { createDevDrive, loading };
 }

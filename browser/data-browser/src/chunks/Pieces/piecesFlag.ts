@@ -1,7 +1,9 @@
 // @wc-ignore-file
 /**
  * The split-pieces exploration is off unless this browser opted in. The demo
- * route (`/app/pieces-demo`, dev builds only) turns it on. With it off, tables
+ * route (`/app/pieces-demo`, or `?tester` for user tests) turns it on. It
+ * exists where the dev routes do: dev builds and VITE_E2E builds such as the
+ * e2e image that usertest runs. With it off, tables
  * offer apps exactly as before (`appsForClass`).
  */
 export const PIECES_FLAG_KEY = 'atomic.experimental.split-pieces';
