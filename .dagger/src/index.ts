@@ -1746,6 +1746,13 @@ export class AtomicServer {
           '/code/browser/lib/src/authentication_v2_vectors.json',
           source.file('browser/lib/src/authentication_v2_vectors.json'),
         )
+        // server/src/forms.rs `include_str!`s the shared form validation
+        // cases (also read by the TypeScript form-renderer tests). Mount only
+        // that file, for the same reason as the plugin zip above.
+        .withFile(
+          '/code/browser/form-renderer/shared/validation-cases.json',
+          source.file('browser/form-renderer/shared/validation-cases.json'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
