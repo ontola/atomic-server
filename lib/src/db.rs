@@ -126,6 +126,45 @@ struct RemovedSubject {
     drive: Option<Subject>,
 }
 
+/// `Tree::PluginMeta` key prefix of a blob a purge still has to delete.
+const PURGE_BLOB_PREFIX: &str = "purge-blob:";
+
+fn purge_blob_key(hash_hex: &str) -> Vec<u8> {
+    format!("{PURGE_BLOB_PREFIX}{hash_hex}").into_bytes()
+}
+
+/// The blobs (hex BLAKE3 hashes) a stored resource references: the same three
+/// shapes [`Db::readable_blob_referrers`] looks up (a File's whole-file
+/// `internalId`, a `blob` reference, and the `chunks` of a chunked File).
+fn blob_hashes(propvals: &PropVals) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |candidate: &str| {
+        let hex = candidate
+            .strip_prefix(crate::identifiers::ATOMIC_BLOB_PREFIX)
+            .or_else(|| candidate.strip_prefix("did:ad:blob:"))
+            .unwrap_or(candidate);
+        if hex.len() == 64
+            && hex.bytes().all(|b| b.is_ascii_hexdigit())
+            && !out.iter().any(|h| h == hex)
+        {
+            out.push(hex.to_ascii_lowercase());
+        }
+    };
+    for prop in [urls::INTERNAL_ID, urls::BLOB] {
+        if let Some(value) = propvals.get(prop) {
+            push(&value.to_string());
+        }
+    }
+    if let Some(chunks) = propvals.get(urls::CHUNKS) {
+        if let Ok(list) = chunks.to_subjects(None) {
+            for chunk in list {
+                push(&chunk);
+            }
+        }
+    }
+    out
+}
+
 /// Event emitted when a resource is created, updated, or deleted.
 #[derive(Debug, Clone)]
 pub enum DbEvent {
@@ -971,6 +1010,27 @@ impl Db {
         #[cfg(not(feature = "db-sled"))]
         let _ = uploads_path;
 
+        // A purge leaves a marker: its bytes sit in freed pages that redb
+        // never zeroes, and compaction does not reach them either. Rewrite
+        // the file with live rows only and zero the old one before serving.
+        if compaction::pending_after_purge(path) && redb_path.exists() {
+            match redb_store::scrub_file(&redb_path) {
+                Ok((before, after)) => {
+                    tracing::info!(
+                        "Scrubbed {} after a purge: {} -> {} bytes",
+                        redb_path.display(),
+                        before,
+                        after
+                    );
+                    compaction::clear_after_purge(path);
+                }
+                Err(e) => tracing::error!(
+                    "Could not scrub {} after a purge, deleted data may remain in free pages; \
+                     will retry on the next start: {e}",
+                    redb_path.display()
+                ),
+            }
+        }
         let (redb_store, compaction) =
             redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
 
@@ -1530,7 +1590,7 @@ impl Db {
         self.get_loro_snapshot_bytes(&self.normalize_subject(subject).pure_id())
     }
 
-    pub(crate) fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
+    pub fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
         let key = crate::identifiers::canonicalize_scheme(subject);
         self.kv
             .get(Tree::LoroSnapshots, key.as_bytes())
@@ -4420,6 +4480,145 @@ impl Db {
         Ok(())
     }
 
+    /// Queues, into the transaction that destroys `removed`, everything a
+    /// purge erases beyond what a destroy does (`planning/purge.md`):
+    ///
+    /// - every envelope of each removed subject (`Tree::Envelopes`), except
+    ///   `keep_envelope`, the purge commit's own value-free one;
+    /// - every stored commit row about a removed subject (the genesis row
+    ///   keeps the creation `loroUpdate`; rights/parent commits keep deltas),
+    ///   with their index rows, except `keep_commit`, the purge commit;
+    /// - outbox entries for them (a queued genesis holds the values);
+    /// - a `purge-blob:` marker per blob they referenced, so a crash before
+    ///   the blob is deleted is finished by [`Db::resume_pending_blob_purges`].
+    ///
+    /// Returns those blob hashes (hex). Scans the commit rows once, which is
+    /// linear in their number: purge is rare and nothing on the normal
+    /// commit or read path calls this.
+    fn queue_purge(
+        &self,
+        removed: &[RemovedSubject],
+        keep_commit: &str,
+        keep_envelope: &[u8],
+        transaction: &mut Transaction,
+    ) -> AtomicResult<Vec<String>> {
+        // Every spelling a row about these subjects might use.
+        let mut names: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for r in removed {
+            let pure = r.subject.pure_id();
+            names.insert(crate::identifiers::canonicalize_scheme(&pure));
+            names.insert(pure);
+        }
+
+        let mut blobs: Vec<String> = Vec::new();
+        for name in &names {
+            if let Ok(propvals) = self.get_propvals(name) {
+                for hash in blob_hashes(&propvals) {
+                    if !blobs.contains(&hash) {
+                        blobs.push(hash);
+                    }
+                }
+            }
+            for key in crate::envelopes::envelope_keys(self, name) {
+                if key != keep_envelope {
+                    transaction.push(Operation {
+                        tree: Tree::Envelopes,
+                        method: trees::Method::Delete,
+                        key,
+                        val: None,
+                    });
+                }
+            }
+        }
+
+        // Words the resources once held also survive in the shared trigram
+        // dictionary; see `purge_orphan_trigrams`.
+        let removed_subjects: Vec<String> = removed.iter().map(|r| r.subject.pure_id()).collect();
+        crate::search::purge_orphan_trigrams(self, &removed_subjects, transaction)?;
+
+        let keep_commit = crate::identifiers::canonicalize_scheme(keep_commit);
+        for prefix in [crate::identifiers::ATOMIC_COMMIT_PREFIX, "did:ad:commit:"] {
+            for entry in self.kv.scan_prefix(Tree::Resources, prefix.as_bytes()) {
+                let (key, bytes) = entry?;
+                let Ok(key_str) = String::from_utf8(key) else {
+                    continue;
+                };
+                if crate::identifiers::canonicalize_scheme(&key_str) == keep_commit {
+                    continue;
+                }
+                let Ok(propvals) = decode_propvals(&bytes) else {
+                    continue;
+                };
+                let about = propvals
+                    .get(urls::SUBJECT)
+                    .map(|v| Subject::from(v.to_string()).pure_id())
+                    .map(|s| crate::identifiers::canonicalize_scheme(&s));
+                if !about.is_some_and(|a| names.contains(&a)) {
+                    continue;
+                }
+                let commit = Resource::from_propvals(propvals, Subject::from(key_str.as_str()));
+                // Index rows first: they are derived from the stored atoms.
+                for atom in commit.to_atoms() {
+                    self.remove_atom_from_index(&atom, &commit, transaction)?;
+                }
+                transaction.push(Operation::remove_resource(&key_str));
+                transaction.push(Operation::remove_loro_snapshot(&key_str));
+            }
+        }
+
+        for entry in self.kv.iter_tree(Tree::Outbox) {
+            let (key, bytes) = entry?;
+            let about = serde_json::from_slice::<crate::sync::outbox::OutboxEntry>(&bytes)
+                .map(|e| crate::identifiers::canonicalize_scheme(&e.subject));
+            if about.is_ok_and(|a| names.contains(&a)) {
+                transaction.push(Operation {
+                    tree: Tree::Outbox,
+                    method: trees::Method::Delete,
+                    key,
+                    val: None,
+                });
+            }
+        }
+
+        for hash in &blobs {
+            transaction.push(Operation {
+                tree: Tree::PluginMeta,
+                method: trees::Method::Insert,
+                key: purge_blob_key(hash),
+                val: Some(vec![1]),
+            });
+        }
+        Ok(blobs)
+    }
+
+    /// Deletes the blobs a purge found that nothing references any more,
+    /// and clears their pending markers. A blob another resource still
+    /// references keeps its bytes (the marker goes either way).
+    async fn finish_blob_purge(&self, hashes: &[String]) -> AtomicResult<()> {
+        let result = self.purge_unreferenced_blobs(hashes).await;
+        if result.is_ok() {
+            for hash in hashes {
+                self.kv.remove(Tree::PluginMeta, &purge_blob_key(hash))?;
+            }
+        }
+        result.map(|_| ())
+    }
+
+    /// Finishes blob deletions a purge started and a crash or a storage
+    /// error interrupted. Safe to run at any time; run it at startup.
+    /// Returns how many pending hashes were processed.
+    pub async fn resume_pending_blob_purges(&self) -> AtomicResult<usize> {
+        let prefix = PURGE_BLOB_PREFIX.as_bytes();
+        let hashes: Vec<String> = self
+            .kv
+            .scan_prefix(Tree::PluginMeta, prefix)
+            .flatten()
+            .filter_map(|(k, _)| String::from_utf8(k[prefix.len()..].to_vec()).ok())
+            .collect();
+        self.finish_blob_purge(&hashes).await?;
+        Ok(hashes.len())
+    }
+
     /// Announces subjects `recursive_remove` collected, once the transaction
     /// holding their removal has been applied. Any earlier and a listener
     /// (the WS fan-out in `atomic-server`'s `CommitMonitor`, a peer
@@ -4821,6 +5020,8 @@ impl Storelike for Db {
         // cascade-deleted children). Tombstoned and announced once the
         // transaction has landed; empty for anything but a destroy.
         let mut removed: Vec<RemovedSubject> = Vec::new();
+        // Blobs a purge may delete once the removal has landed.
+        let mut purge_blobs: Vec<String> = Vec::new();
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
@@ -4854,6 +5055,21 @@ impl Storelike for Db {
                 // the children's `Destroyed` events follow the apply below.
                 self.recursive_remove(&subject, &mut transaction, &mut removed, None)
                     .await?;
+                if commit_response.commit.purge == Some(true) {
+                    // The purge commit is the one row that stays: it holds no
+                    // values, and carries the proof peers need to forget too.
+                    let keep_envelope = crate::envelopes::envelope_key(
+                        commit_response.commit.subject.as_str(),
+                        commit_response.commit.created_at,
+                        commit_response.commit.signature.as_deref().unwrap_or(""),
+                    );
+                    purge_blobs = self.queue_purge(
+                        &removed,
+                        commit_response.commit_resource.get_subject().as_str(),
+                        &keep_envelope,
+                        &mut transaction,
+                    )?;
+                }
             }
             _ => {}
         };
@@ -4945,6 +5161,23 @@ impl Storelike for Db {
         // for a resource that is still present would suppress it forever.
         for r in &removed {
             crate::sync::tombstones::record_tombstone(store, &r.subject.pure_id());
+        }
+
+        if commit_response.commit.purge == Some(true) {
+            compaction::request_after_purge(&store.path);
+        }
+
+        // File bytes are not part of the transaction: delete the ones nothing
+        // references now that the referrers are gone. A failure leaves the
+        // `purge-blob:` marker queued above, and the next start retries.
+        if !purge_blobs.is_empty() {
+            if let Err(e) = store.finish_blob_purge(&purge_blobs).await {
+                tracing::error!(
+                    "Purge of {} could not delete {} blob(s), will retry: {e}",
+                    commit_response.commit.subject,
+                    purge_blobs.len()
+                );
+            }
         }
 
         // Announce the cascade-deleted children now that the removal has

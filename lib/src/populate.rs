@@ -211,6 +211,7 @@ fn base_models() -> (Vec<Property>, Vec<Class>) {
             ],
             recommends: vec![
                 urls::DESTROY.into(),
+                urls::PURGE.into(),
                 urls::IS_GENESIS.into(),
                 urls::PREVIOUS_COMMIT.into(),
                 urls::LORO_UPDATE.into(),

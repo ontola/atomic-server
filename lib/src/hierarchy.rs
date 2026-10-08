@@ -98,6 +98,83 @@ pub fn check_write<'a>(
     Box::pin(check_rights(store, resource, for_agent, Right::Write))
 }
 
+/// May `for_agent` purge `resource` (erase every trace of it, see
+/// `planning/purge.md`)? Purge is irreversible and is replayed on every
+/// replica, so it needs more than the `write` right that destroy needs:
+///
+/// - `Sudo` and the server's own agent, as for every right;
+/// - an agent purging its own Agent resource (erasure of one's own identity);
+/// - an agent explicitly listed in the `write` of the resource's drive root
+///   (the drive owner). A grant on an intermediate parent, `PublicAgent` and
+///   a plain collaborator with write access to the resource do not count.
+///
+/// Throws if not allowed. Returns a string with the explanation if allowed.
+pub async fn check_purge(
+    store: &impl Storelike,
+    resource: &Resource,
+    for_agent_enum: &ForAgent,
+) -> AtomicResult<String> {
+    if for_agent_enum == &ForAgent::Sudo {
+        return Ok("Sudo has root access, and can purge anything.".into());
+    }
+    let normalize = |agent: &str| {
+        store.normalize_subject(
+            &crate::agents::migrate_legacy_agent_subject(agent)
+                .as_str()
+                .into(),
+        )
+    };
+    let agent = normalize(&for_agent_enum.to_string());
+    if resource.get_subject() == &agent {
+        return Ok("Agents can always purge themselves.".into());
+    }
+    if let Ok(server_agent) = store.get_default_agent() {
+        if normalize(server_agent.subject.as_str()) == agent {
+            return Ok("Server agent has root access, and can purge anything.".into());
+        }
+    }
+
+    // The drive root: the `drive` stamp when there is one, else the top of the
+    // parent chain (a drive has no parent). Bounded: a parent cycle must not
+    // hang a commit.
+    let mut root = resource.clone();
+    if let Ok(drive) = resource.get(urls::DRIVE_PROP) {
+        let drive = crate::Subject::from(drive.to_string());
+        if &drive != resource.get_subject() {
+            root = fetch_for_rights(store, &drive).await?;
+        }
+    } else {
+        for _ in 0..64 {
+            let Ok(parent) = root.get(urls::PARENT) else {
+                break;
+            };
+            let parent = crate::Subject::from(parent.to_string());
+            if &parent == root.get_subject() {
+                break;
+            }
+            root = fetch_for_rights(store, &parent).await?;
+        }
+    }
+
+    if let Ok(writers) = root.get(urls::WRITE) {
+        for grant in writers.to_subjects(None)? {
+            if grant != urls::PUBLIC_AGENT && normalize(&grant) == agent {
+                return Ok(format!(
+                    "{} is an owner (write grant) of the drive {}",
+                    for_agent_enum,
+                    root.get_subject()
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "Only the owner of the drive may purge a resource. {} has no write grant on {}.",
+        for_agent_enum,
+        root.get_subject()
+    )
+    .into())
+}
+
 /// Does the Agent have the right to read / view the properties of the selected resource, or any of its parents?
 /// Throws if not allowed.
 /// Returns string with explanation if allowed.

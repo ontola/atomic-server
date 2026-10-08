@@ -122,6 +122,10 @@ attribution, tampering, two writers under both retentions, destroy fold),
    place a `sessionCert` chain is checked, with `notAfter` bounds and
    fall-back to Unattributed.
 4. **Header-only envelopes** as a size win once bodies dominate storage.
+5. **Erasure.** Envelopes (and the genesis rows) are the audit floor, and a
+   `destroy` keeps them. A signed `destroy` + `purge` deletes every envelope
+   and commit row of the subject and keeps one value-free tombstone envelope;
+   see [`purge.md`](./purge.md).
 
 ## Resolved open questions
 
