@@ -331,7 +331,6 @@ export class Collection {
   private static completedByServer = new WeakMap<Store, Set<string>>();
   private legacyQuery = false;
   private readonly preferServer: boolean;
-  private readonly explicitDrive: boolean;
   private legacyMembers?: Promise<string[]>;
 
   public constructor(
@@ -339,13 +338,12 @@ export class Collection {
     server: string,
     params: CollectionParams,
     noFetch = false,
-    options: { preferServer?: boolean; explicitDrive?: boolean } = {},
+    options: { preferServer?: boolean } = {},
   ) {
     this.store = store;
     this.server = server;
     this.params = params;
     this.preferServer = !!options.preferServer;
-    this.explicitDrive = !!options.explicitDrive;
 
     if (!noFetch) {
       store.registerBulkRefreshable(this);
@@ -665,13 +663,6 @@ export class Collection {
       // matches the filter.
       !this.isDestroyed(subject) &&
       constraintMatches(resource, fp, fv) &&
-      // Genesis resources carry their owning drive. A live push from another
-      // account must respect the same explicit scope as the indexed query.
-      (!this.explicitDrive ||
-        !resource.get('https://atomicdata.dev/properties/drive') ||
-        this.store.normalizeSubject(
-          resource.get('https://atomicdata.dev/properties/drive') as string,
-        ) === this.store.normalizeSubject(this.params.drive ?? '')) &&
       // Every extra AND constraint must also hold (multi-property filtering).
       (this.params.filters ?? []).every(
         f =>
@@ -824,16 +815,7 @@ export class Collection {
   }
 
   public clone() {
-    const collection = new Collection(
-      this.store,
-      this.server,
-      this.params,
-      true,
-      {
-        preferServer: this.preferServer,
-        explicitDrive: this.explicitDrive,
-      },
-    );
+    const collection = new Collection(this.store, this.server, this.params);
     collection._totalMembers = this._totalMembers;
     collection._waitForReady = this._waitForReady;
     collection.pages = this.pages;
@@ -1222,7 +1204,7 @@ export class Collection {
     // "Indexed queries require a drive scope", so don't ask — fall back to
     // the server `/query` instead of burning a worker round-trip on a
     // guaranteed error.
-    if ((hasExtraFilters || this.explicitDrive) && !drive) {
+    if (hasExtraFilters && !drive) {
       return 'no-db';
     }
 
@@ -1230,9 +1212,11 @@ export class Collection {
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
-      // Explicit scopes apply even to a single class/property constraint.
-      // Leave the legacy unscoped basic query available for other callers.
-      drive: hasExtraFilters || this.explicitDrive ? drive : undefined,
+      // Single property/value queries use the basic path and intentionally
+      // omit `drive` (see the sort note above). We still don't pass
+      // `sort_by`, so the indexed query stays drive-scoped without the
+      // DID-sort issue.
+      drive: hasExtraFilters ? drive : undefined,
       includeResources: true,
       // Aggregated in WASM over the whole matching set, exactly as the server
       // would — the local DB is not a lesser source here.

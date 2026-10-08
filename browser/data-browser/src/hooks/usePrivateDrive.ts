@@ -13,26 +13,27 @@ export function usePrivateDrive(): {
 } {
   const store = useStore();
   const { agent } = useSettings();
-  const [resolvedHome, setResolvedHome] = useState(() => ({
-    agent,
-    store,
-    privateDrive: agent?.initialDrive,
-    loading: !!agent,
-  }));
+  const [privateDrive, setPrivateDrive] = useState<string | undefined>(
+    () => agent?.initialDrive,
+  );
+  const [loading, setLoading] = useState(!!agent);
 
   useEffect(() => {
-    if (!agent) return;
+    if (!agent) {
+      setPrivateDrive(undefined);
+      setLoading(false);
+
+      return;
+    }
 
     let cancelled = false;
+    setLoading(true);
+    setPrivateDrive(agent.initialDrive);
 
     void fetchPrivateDriveSubject(store, agent).then(resolved => {
       if (!cancelled) {
-        setResolvedHome({
-          agent,
-          store,
-          privateDrive: resolved,
-          loading: false,
-        });
+        setPrivateDrive(resolved);
+        setLoading(false);
       }
     });
 
@@ -41,9 +42,5 @@ export function usePrivateDrive(): {
     };
   }, [store, agent]);
 
-  // Effects run after render. Never lend the previous identity's resolved
-  // home to consumers (Inbox, subscriptions) while the new one is loading.
-  return resolvedHome.agent === agent && resolvedHome.store === store
-    ? resolvedHome
-    : { privateDrive: agent?.initialDrive, loading: !!agent };
+  return { privateDrive, loading };
 }

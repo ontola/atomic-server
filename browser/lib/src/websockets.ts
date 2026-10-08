@@ -17,7 +17,6 @@ import {
   emitSubjectForCaps,
 } from './subject.js';
 import { Resource } from './resource.js';
-import { server } from './ontologies/server.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store } from './store.js';
 import type { DriveItem } from './local-drive-copy.js';
@@ -788,10 +787,6 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) {
       return;
     }
-
-    // A mounted Inbox (or another live reader) still owns this subscription
-    // after navigation. The server has one SUB per subject, not one per caller.
-    if (this.store.liveSubjects.has(this.store.normalizeSubject(drive))) return;
 
     this.sendBinary(encodeUnsub(this.wireSubject(drive)));
   }
@@ -1783,27 +1778,10 @@ export class WSClient {
     )
       return;
     this.sendBinary(encodeSub(this.wireSubject(subject)));
-
-    // SUB only delivers future commits. Live drives outside the selected
-    // workspace (the personal Inbox) also need their missed changes on boot
-    // and reconnect. Ordinary shared resources are not whole-drive syncs.
-    if (
-      this.hydratedResource(subject)?.hasClasses(server.classes.drive) &&
-      this.store.normalizeSubject(subject) !==
-        this.store.normalizeSubject(this.store.getDrive() ?? '')
-    ) {
-      void this.startVVSync(subject).catch(() => undefined);
-    }
   }
 
   public unsubscribeResource(subject: string): void {
     if (this.readyState !== WebSocket.OPEN) return;
-    if (
-      this._subscribedDrive &&
-      this.store.normalizeSubject(this._subscribedDrive) ===
-        this.store.normalizeSubject(subject)
-    )
-      return;
     this.sendBinary(encodeUnsub(this.wireSubject(subject)));
   }
 
@@ -2108,13 +2086,9 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) return;
     // Server-only mode (no OPFS / Web Locks): there is no local state to
     // reconcile, and computing it would only fail, once per call.
+    if (this.store.getClientDb()?.initError) return;
+
     const current = this.connectionGuard();
-    if (
-      !(await this.store.waitForClientDb()) ||
-      this.store.getClientDb()?.initError ||
-      !current()
-    )
-      return;
 
     // Reading every version vector of a large drive keeps the local database
     // worker busy for a second or more, and everything the screen is waiting
