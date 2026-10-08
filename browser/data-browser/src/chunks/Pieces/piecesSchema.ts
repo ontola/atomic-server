@@ -54,6 +54,13 @@ export function piecesSchema(): SchemaSpec {
         datatype: Datatype.STRING,
       },
       {
+        shortname: 'lens-review-digest',
+        name: 'Reviewed content',
+        description:
+          'The digest ("sha256:…") of the source, target and mapping that were approved. The lens is trusted only while its current content has this digest, so any edit needs a new review.',
+        datatype: Datatype.STRING,
+      },
+      {
         shortname: 'synced-table',
         name: 'Synced table',
         description: 'The table an integration binding syncs.',
@@ -74,7 +81,7 @@ export function piecesSchema(): SchemaSpec {
         description:
           'A drive-local, declarative, two-way translation between two row classes. Once approved, an integration written for one class can be offered on tables of the other. Shared lenses live in the catalog next to the ontology instead.',
         requires: ['lens-source', 'lens-target', 'lens-mapping'],
-        recommends: ['lens-review'],
+        recommends: ['lens-review', 'lens-review-digest'],
       },
       {
         shortname: 'sync-binding',

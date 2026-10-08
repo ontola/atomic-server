@@ -1,9 +1,8 @@
 // @wc-ignore-file
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type JSX } from 'react';
-import { findSchema } from '@tomic/lib';
 import { useStore } from '@tomic/react';
-import { piecesSchema } from '@chunks/Pieces/piecesSchema';
+import { approveLens } from '@chunks/Pieces/lensReview';
 import { ContainerFull } from '../components/Containers';
 import { Button } from '../components/Button';
 import { constructOpenURL } from '../helpers/navigation';
@@ -32,13 +31,7 @@ function PiecesDemo(): JSX.Element {
   const approveTogglLens = async () => {
     if (!drive || !seeded) return;
 
-    const schema = await findSchema(store, drive, piecesSchema());
-    const review = schema.properties?.['lens-review'];
-    if (!review) return;
-
-    const lens = await store.getResource(seeded.togglLens);
-    await lens.set(review, 'approved');
-    await lens.save();
+    await approveLens(store, drive, seeded.togglLens);
     setTogglApproved(true);
   };
 

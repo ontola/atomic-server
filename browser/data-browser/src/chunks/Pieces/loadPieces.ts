@@ -8,8 +8,9 @@ import {
 } from '@tomic/lib';
 import type { DriveApp } from '@chunks/AppPage/useDriveApps';
 import { piecesSchema } from './piecesSchema';
-import { parseLensMapping, type LensMapping } from './lens';
+import { parseMapping, storedMapping, type LensMapping } from './lens';
 import { loadLensCatalog } from './lensCatalog';
+import { reviewApproves } from './lensReview';
 import {
   offersForTable,
   type LensInfo,
@@ -26,6 +27,24 @@ export interface StoredLens extends LensInfo {
 export interface DrivePieces {
   pieces: PieceInfo[];
   lenses: StoredLens[];
+}
+
+/**
+ * The pinned catalog's lenses as offers see them. Catalog lenses were
+ * reviewed where they were published, so they are trusted on every drive.
+ * None while the split-pieces flag is off, and none (with a warning) when the
+ * release cannot be read.
+ */
+export async function loadCatalogLenses(): Promise<StoredLens[]> {
+  return (await loadLensCatalog()).map(lens => ({
+    subject: lens.subject,
+    name: lens.name,
+    source: lens.source,
+    target: lens.target,
+    mapping: lens.mapping,
+    trusted: true,
+    origin: 'catalog',
+  }));
 }
 
 /**
@@ -53,13 +72,7 @@ export async function loadPieces(
     }),
   );
 
-  // Catalog lenses were reviewed where they were published, so they are
-  // trusted everywhere.
-  const catalog: StoredLens[] = (await loadLensCatalog()).map(lens => ({
-    ...lens,
-    trusted: true,
-    origin: 'catalog',
-  }));
+  const catalog = await loadCatalogLenses();
 
   const lensClass = schema.classes?.lens;
   const props = schema.properties ?? {};
@@ -86,16 +99,29 @@ export async function loadPieces(
     const resource = await store.getResource(subject);
 
     try {
+      const source = resource.get(props['lens-source']) as string;
+      const target = resource.get(props['lens-target']) as string;
+      const stored = resource.get(props['lens-mapping']);
+      // Plain data (not the parsed form, which holds functions), so it can
+      // be handed to a frame in `lensPath`.
+      const mapping = storedMapping(parseMapping(stored));
+
       lenses.push({
         subject,
         name: resource.title,
-        source: resource.get(props['lens-source']) as string,
-        target: resource.get(props['lens-target']) as string,
-        mapping: parseLensMapping(resource.get(props['lens-mapping'])),
-        // A drive-local lens offers nothing until someone approves it.
+        source,
+        target,
+        mapping,
+        // A drive-local lens offers nothing until someone approves it, and
+        // stays approved only while its content is what was approved.
         trusted:
           !!props['lens-review'] &&
-          resource.get(props['lens-review']) === 'approved',
+          !!props['lens-review-digest'] &&
+          (await reviewApproves(
+            resource.get(props['lens-review']),
+            resource.get(props['lens-review-digest']),
+            { source, target, mapping: stored },
+          )),
         origin: 'drive',
       });
     } catch (e) {

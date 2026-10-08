@@ -1,4 +1,5 @@
 // @wc-ignore-file
+import { LENS_INTERPRETER_SOURCE } from '../lens';
 
 export interface IntegrationTerms {
   /** Display name of the platform, e.g. "Clockify". */
@@ -38,24 +39,13 @@ const T = ${JSON.stringify(terms)};
 const PARENT = 'https://atomicdata.dev/properties/parent';
 const LABELS = { [T.description]: 'description', [T.start]: 'start', [T.end]: 'end', [T.billable]: 'billable' };
 
-// --- Lens interpreter (the same format as chunks/Pieces/lens.ts). ---------
-const CONVERTERS = {
-  identity: { get: v => v, put: v => v },
-  'ms-to-iso': {
-    get: v => (typeof v === 'number' ? new Date(v).toISOString() : v),
-    put: v => (typeof v === 'string' ? Date.parse(v) : v),
-  },
-};
-function lensGet(mapping, row, direction) {
-  const out = {};
-  for (const f of mapping.fields) {
-    const c = CONVERTERS[f.convert || 'identity'];
-    const [from, to, get] = direction === 'forward' ? [f.source, f.target, c.get] : [f.target, f.source, c.put];
-    if (row[from] !== undefined) out[to] = get(row[from]);
-  }
-  return out;
-}
-const along = (path, row) => path.reduce((r, step) => lensGet(step.mapping, r, step.direction), row);
+// --- Lens interpreter: the host's own (chunks/Pieces/lens.ts, vendored from
+// atomic-plugins ontology-kit/lens.mjs), inlined so frame and offer search run
+// the same code. It declares lensGet, getAlongPath, LensError and the rest.
+${LENS_INTERPRETER_SOURCE}
+// --- End of the lens interpreter. ---------------------------------------------
+const along = (path, row) => getAlongPath(path, row);
+// Back from the provider's shape to this table's: each step walked the other way.
 const back = (path, view) => [...path].reverse().reduce((r, step) => lensGet(step.mapping, r, step.direction === 'forward' ? 'backward' : 'forward'), view);
 
 // --- The fixture platform. No network: a few rules standing in for the provider.
@@ -155,7 +145,16 @@ export async function view({ root, store }) {
       const r = await store.getResource(s);
       // A table's children include its saved views; only rows are synced.
       if (!r.getClasses().includes(rowClass)) continue;
-      out.push({ subject: s, title: r.title, props: r.props, payload: along(lensPath, r.props) });
+      let payload;
+      try {
+        payload = along(lensPath, r.props);
+      } catch (e) {
+        // The lens refuses this row (a value outside a converter's domain):
+        // leave it out rather than failing the whole sync.
+        console.warn('Not syncing ' + s + ': ' + e.message);
+        continue;
+      }
+      out.push({ subject: s, title: r.title, props: r.props, payload });
     }
     return out;
   }
@@ -221,7 +220,13 @@ export async function view({ root, store }) {
     if (action === 'take-remote') {
       const remoteView = { ...write.payload };
       for (const c of write.conflicts) remoteView[c.field] = c.remote;
-      const writeBack = back(lensPath, remoteView);
+      let writeBack;
+      try {
+        writeBack = back(lensPath, remoteView);
+      } catch (e) {
+        await store.ui.toast(T.provider + "'s value does not translate back through the lens: " + e.message, { kind: 'error' });
+        return;
+      }
       try {
         const row = await store.getResource(write.row);
         for (const [p, v] of Object.entries(writeBack)) row.set(p, v);
