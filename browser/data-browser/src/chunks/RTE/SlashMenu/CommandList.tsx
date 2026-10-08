@@ -18,6 +18,8 @@ export type CommandListRefType = {
 
 export interface CommandListProps {
   items: SuggestionItem[];
+  /** Results are still being fetched: show a pending state instead of "No results". */
+  loading?: boolean;
   ownerDocument?: Document;
   command: (item: SuggestionItem) => void;
 }
@@ -35,7 +37,7 @@ const scrollToSelectedItem = (
     ?.scrollIntoView({ block: 'nearest' });
 
 export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
-  ({ items, command, ownerDocument = document }, ref) => {
+  ({ items, command, loading = false, ownerDocument = document }, ref) => {
     const compId = useId();
 
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -90,7 +92,8 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
     return (
       <ScrollingList type='hover' data-testid='rte-command-list'>
         <ContainedColumn gap='0'>
-          {items.length === 0 && <div>No results found</div>}
+          {items.length === 0 && loading && <div>Searching...</div>}
+          {items.length === 0 && !loading && <div>No results found</div>}
           {items.map((item, index) => {
             const Icon = item.icon;
 
