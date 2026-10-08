@@ -4,6 +4,7 @@ import type { Store } from '@tomic/react';
 import type { SuggestionItem } from '../types';
 import { getIconForClass } from '@helpers/iconMap';
 import { PluginKey } from '@tiptap/pm/state';
+import { placeCaretAfterSelectedNode } from './placeCaretAfterSelectedNode';
 import { dismissableRenderer } from '../SlashMenu/CommandsExtension';
 import { findMentionSubjects } from '@helpers/mentionSearch';
 
@@ -60,7 +61,14 @@ export const buildResourceSuggestion = (
         const command = editor.chain().focus().deleteRange(range);
 
         if (isBlockContext) {
-          command.setResource({ subject }).run();
+          command
+            .setResource({ subject })
+            .command(({ tr }) => {
+              placeCaretAfterSelectedNode(tr);
+
+              return true;
+            })
+            .run();
         } else {
           command.setResourceInline({ subject }).insertContent(' ').run();
         }
