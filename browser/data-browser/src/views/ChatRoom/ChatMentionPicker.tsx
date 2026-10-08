@@ -1,5 +1,6 @@
 import { useStore } from '@tomic/react';
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { FaUser } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import {
   CommandList,
@@ -8,7 +9,10 @@ import {
 import type { SuggestionItem } from '../../chunks/RTE/types';
 import type { MentionTrigger } from '../../helpers/chatMention';
 import { getIconForClass } from '../../helpers/iconMap';
-import { findMentionSubjects } from '../../helpers/mentionSearch';
+import {
+  findMemberSubjects,
+  findMentionSubjects,
+} from '../../helpers/mentionSearch';
 import { useSettings } from '../../helpers/AppSettings';
 
 export interface ChatMentionPickerHandle {
@@ -45,18 +49,26 @@ export const ChatMentionPicker = ({
   useEffect(() => {
     let cancelled = false;
 
-    findMentionSubjects(store, drive, query)
-      .then(subjects =>
-        Promise.all(subjects.map(subject => store.getResource(subject))),
+    Promise.all([
+      findMemberSubjects(store, drive, query).catch(() => [] as string[]),
+      findMentionSubjects(store, drive, query),
+    ])
+      .then(([members, found]) =>
+        Promise.all(
+          [...new Set([...members, ...found])].map(async subject => ({
+            isMember: members.includes(subject),
+            resource: await store.getResource(subject),
+          })),
+        ),
       )
-      .then(resources => {
+      .then(entries => {
         if (cancelled) return;
         setResults({
           query,
-          items: resources.map(r => ({
+          items: entries.map(({ isMember, resource: r }) => ({
             id: r.subject,
             title: r.title,
-            icon: getIconForClass(r.getClasses()[0]),
+            icon: isMember ? FaUser : getIconForClass(r.getClasses()[0]),
             command: noop,
           })),
         });

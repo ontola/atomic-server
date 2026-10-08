@@ -39,5 +39,13 @@ test.describe('chat mentions', () => {
     await expect(
       page.getByRole('main').getByText('Mention Target'),
     ).toBeVisible({ timeout: 10000 });
+
+    // Drive members are found by name too (the dev user is the drive owner).
+    await input.pressSequentially('and @Dev');
+    await expect(
+      page.getByTestId('chat-mention-picker').getByRole('button', {
+        name: 'Dev User',
+      }),
+    ).toBeVisible({ timeout: 15000 });
   });
 });

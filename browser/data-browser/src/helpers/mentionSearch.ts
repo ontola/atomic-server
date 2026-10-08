@@ -1,4 +1,4 @@
-import type { Store } from '@tomic/react';
+import { core, type Resource, type Store } from '@tomic/react';
 import { getRecentResources } from './recentResources';
 
 export const MAX_MENTION_SUGGESTIONS = 10;
@@ -58,3 +58,42 @@ export const findMentionSubjects = async (
         parents: [drive],
       })
     : getSubjectsWithoutQuery(store, drive, exclude);
+
+/** Whether an agent matches a (lowercased, trimmed) typed query by subject,
+ * name or shortname. Shared with the table cell resource search. */
+export const agentMatchesQuery = (
+  subject: string,
+  resource: Resource | undefined,
+  needle: string,
+): boolean => {
+  const name = String(resource?.get(core.properties.name) ?? '');
+  const shortname = String(resource?.get(core.properties.shortname) ?? '');
+
+  return (
+    subject.toLowerCase().includes(needle) ||
+    name.toLowerCase().includes(needle) ||
+    shortname.toLowerCase().includes(needle)
+  );
+};
+
+/** Agents with direct read or write rights on the drive whose name matches
+ * `query`. Agents live outside the drive, so search never finds them. */
+export const findMemberSubjects = async (
+  store: Store,
+  drive: string,
+  query: string,
+): Promise<string[]> => {
+  const needle = query.trim().toLowerCase();
+
+  if (!needle) return [];
+
+  const driveResource = await store.getResource(drive);
+  const writers = (driveResource.get(core.properties.write) ?? []) as string[];
+  const readers = (driveResource.get(core.properties.read) ?? []) as string[];
+  const members = [...new Set([...writers, ...readers])];
+  const resources = await Promise.all(members.map(m => store.getResource(m)));
+
+  return members
+    .filter((m, i) => agentMatchesQuery(m, resources[i], needle))
+    .slice(0, MAX_MENTION_SUGGESTIONS);
+};
