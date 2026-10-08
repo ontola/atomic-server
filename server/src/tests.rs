@@ -620,6 +620,56 @@ async fn self_signed_agent_commit_keeps_name() {
     );
 }
 
+/// `POST /commit` refuses a commit whose value has the wrong datatype for its
+/// Property, and the error names the property. Incoming Loro updates bypass
+/// `Resource::set`, so the check happens when the commit is applied.
+#[actix_rt::test]
+async fn post_commit_rejects_wrong_datatype() {
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let agent = atomic_lib::agents::Agent::new(None).unwrap();
+    let agent_did = agent.subject.pure_id();
+    let empty = atomic_lib::Resource::new(agent_did.clone());
+    let mut builder = atomic_lib::commit::CommitBuilder::new(agent_did.clone().into());
+    builder.is_genesis = true;
+    builder.set(
+        urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![urls::AGENT.to_string().into()]),
+    );
+    // `name` is a string; send an integer.
+    builder.set(urls::NAME.into(), atomic_lib::Value::Integer(5));
+    let commit = builder.sign(&agent, &appstate.store, &empty).await.unwrap();
+    let body = commit
+        .into_resource(&appstate.store)
+        .await
+        .unwrap()
+        .to_json_ad(Some(&appstate.config.get_origin()))
+        .unwrap();
+
+    let req = TestRequest::post()
+        .uri("/commit")
+        .insert_header(("Content-Type", "application/ad+json"))
+        .set_payload(body)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_client_error(),
+        "a wrong datatype is a client error, got {:?}",
+        resp.status()
+    );
+    let body = get_body(resp);
+    assert!(
+        body.contains(urls::NAME) && body.contains("datatype"),
+        "the error should name the property and the datatype: {body}"
+    );
+}
+
 /// A fresh, initialized `AppState` on its own temporary directories, with
 /// `extra_args` appended to the command line (`["--domain", "x"]`).
 pub(crate) async fn init_test_appstate(extra_args: &[&str]) -> AppState {

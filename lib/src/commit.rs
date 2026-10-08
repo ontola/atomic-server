@@ -1096,6 +1096,12 @@ impl Commit {
         // Check if all required props are there
         if opts.validate_schema {
             applied.resource_new.check_required_props(store).await?;
+            if !commit.destroy.unwrap_or(false) {
+                applied
+                    .resource_new
+                    .check_props_conform(&applied.changed_props, store)
+                    .await?;
+            }
         }
 
         let commit_resource: Resource = commit.into_resource(store).await?;

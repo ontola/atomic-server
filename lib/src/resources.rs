@@ -6,7 +6,10 @@ use crate::storelike::Query;
 use crate::urls;
 use crate::utils::random_string;
 use crate::values::{SubResource, Value};
-use crate::{commit::CommitBuilder, errors::AtomicResult};
+use crate::{
+    commit::CommitBuilder,
+    errors::{AtomicError, AtomicResult},
+};
 use crate::{
     mapping::is_url,
     schema::{Class, Property},
@@ -48,6 +51,39 @@ impl Clone for Resource {
             commit: self.commit.clone(),
             loro,
         }
+    }
+}
+
+/// Whether a materialized value is acceptable for a Property's datatype.
+///
+/// Loro stores bare primitives, so the datatype of an untagged value is a
+/// heuristic: strings may come back as `String`, `Markdown`, `Slug`, `Uri` or
+/// `Date` (or `AtomicUrl` when URL-shaped), and integers as `Integer` or `Timestamp`. Those families are
+/// interchangeable here. Structured datatypes (`Json`, `LocalizedText`,
+/// `LoroDoc`) and unknown datatypes are not checked.
+fn value_fits_datatype(value: &Value, wanted: &crate::datatype::DataType) -> bool {
+    use crate::datatype::DataType as D;
+    let text = matches!(
+        value,
+        Value::String(_)
+            | Value::Markdown(_)
+            | Value::Slug(_)
+            | Value::Uri(_)
+            | Value::Date(_)
+            // URL-shaped strings are materialized as `AtomicUrl`.
+            | Value::AtomicUrl(_)
+    );
+    match wanted {
+        D::String | D::Markdown | D::Slug | D::Uri | D::Date => text,
+        D::Integer | D::Timestamp => matches!(value, Value::Integer(_) | Value::Timestamp(_)),
+        D::Float => matches!(
+            value,
+            Value::Float(_) | Value::Integer(_) | Value::Timestamp(_)
+        ),
+        D::Boolean => matches!(value, Value::Boolean(_)),
+        D::AtomicUrl => matches!(value, Value::AtomicUrl(_) | Value::NestedResource(_)),
+        D::ResourceArray => matches!(value, Value::ResourceArray(_)),
+        D::Json | D::LoroDoc | D::LocalizedText | D::Unsupported(_) => true,
     }
 }
 
@@ -386,6 +422,72 @@ impl Resource {
                         required_prop, class.subject
                     )
                     .into());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks that the current values of `properties` conform to their Property
+    /// definitions: the datatype and `allowsOnly`. Used on incoming commits,
+    /// where values arrive through Loro and bypass [`Self::set`].
+    ///
+    /// Lenient on purpose: a property that cannot be resolved here (unknown,
+    /// legacy, or not fetchable) is skipped with a warning. Untagged Loro values
+    /// are materialized heuristically, so text-like and number-like datatypes
+    /// are treated as interchangeable (see [`value_fits_datatype`]).
+    pub async fn check_props_conform<'a>(
+        &self,
+        properties: impl IntoIterator<Item = &'a String>,
+        store: &impl Storelike,
+    ) -> AtomicResult<()> {
+        for property in properties {
+            let Ok(value) = self.get(property) else {
+                continue;
+            };
+            let full_prop = match store.get_property(property).await {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(
+                        "Property {} is not available here, so its value on {} is not validated: {}",
+                        property,
+                        self.get_subject(),
+                        e
+                    );
+                    continue;
+                }
+            };
+            if !value_fits_datatype(value, &full_prop.data_type) {
+                return Err(AtomicError::parse_error(
+                    &format!(
+                    "Property '{}' on '{}' has the wrong datatype. Wanted '{}', got '{}' (value: '{}')",
+                    property,
+                    self.get_subject(),
+                    full_prop.data_type,
+                    value.datatype(),
+                    value
+                ),
+                    Some(&self.get_subject().to_string()),
+                    Some(property),
+                ));
+            }
+            if let Some(allowed) = &full_prop.allows_only {
+                let items: Vec<String> = match value {
+                    Value::ResourceArray(arr) => arr.iter().map(|i| i.to_string()).collect(),
+                    other => vec![other.to_string()],
+                };
+                if let Some(bad) = items.iter().find(|i| !allowed.contains(i)) {
+                    return Err(AtomicError::parse_error(
+                        &format!(
+                            "Property '{}' on '{}' does not allow value '{}'. Allowed: {:?}",
+                            property,
+                            self.get_subject(),
+                            bad,
+                            allowed
+                        ),
+                        Some(&self.get_subject().to_string()),
+                        Some(property),
+                    ));
                 }
             }
         }

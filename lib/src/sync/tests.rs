@@ -2050,6 +2050,156 @@ mod peer_sync_tests {
         commit_to_wire_json(&commit, db).await.unwrap()
     }
 
+    /// A signed commit by `agent` that sets one `property` on `subject`.
+    async fn signed_value_commit_json(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        subject: &str,
+        property: &str,
+        value: crate::Value,
+    ) -> String {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::CommitBuilder;
+
+        let current = db.get_resource(&subject.into()).await.unwrap();
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set(property.into(), value);
+        let commit = builder.sign(agent, db, &current).await.unwrap();
+        commit_to_wire_json(&commit, db).await.unwrap()
+    }
+
+    /// Incoming Loro updates bypass `Resource::set`, so the datatype and
+    /// `allowsOnly` of the Property must be enforced when the commit is
+    /// applied. `ingest_commit_json` is what `/commit`, the websocket COMMIT
+    /// frame and the Iroh peer path all call, so this covers every transport
+    /// under both policies.
+    #[tokio::test]
+    async fn ingest_commit_enforces_datatype_and_allows_only() {
+        use crate::sync::engine::ingest_commit_json;
+        use crate::Value;
+
+        let db = Db::init_temp("ingest_commit_datatype").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let doc = db
+            .create_resource(crate::urls::FOLDER, &drive, "Doc", None)
+            .await
+            .unwrap();
+
+        let status = "https://example.com/properties/status";
+        let mut prop = crate::Resource::new(status.to_string());
+        prop.set_unsafe(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::PROPERTY.into()]),
+        )
+        .unwrap();
+        prop.set_unsafe(crate::urls::SHORTNAME.into(), Value::Slug("status".into()))
+            .unwrap();
+        prop.set_unsafe(
+            crate::urls::DESCRIPTION.into(),
+            Value::Markdown("Test status".into()),
+        )
+        .unwrap();
+        prop.set_unsafe(
+            crate::urls::DATATYPE_PROP.into(),
+            Value::AtomicUrl(crate::urls::ATOMIC_URL.into()),
+        )
+        .unwrap();
+        prop.set_unsafe(
+            crate::urls::ALLOWS_ONLY.into(),
+            Value::ResourceArray(vec![
+                "https://example.com/status/open".into(),
+                "https://example.com/status/closed".into(),
+            ]),
+        )
+        .unwrap();
+        db.add_resource(&prop).await.unwrap();
+
+        for opts in legacy_field_policies() {
+            let name_before = db
+                .get_resource(&doc.as_str().into())
+                .await
+                .unwrap()
+                .get(crate::urls::NAME)
+                .unwrap()
+                .to_string();
+            // Wrong datatype: an integer where `name` wants a string.
+            let json =
+                signed_value_commit_json(&db, &alice, &doc, crate::urls::NAME, Value::Integer(5))
+                    .await;
+            let err = ingest_commit_json(&db, &json, &opts)
+                .await
+                .expect_err("a wrong datatype must be rejected")
+                .to_string();
+            assert!(
+                err.contains(crate::urls::NAME) && err.contains("datatype"),
+                "error should name the property and the datatype: {err}"
+            );
+
+            // Outside allowsOnly.
+            let json = signed_value_commit_json(
+                &db,
+                &alice,
+                &doc,
+                status,
+                Value::AtomicUrl("https://example.com/status/bogus".into()),
+            )
+            .await;
+            let err = ingest_commit_json(&db, &json, &opts)
+                .await
+                .expect_err("a value outside allowsOnly must be rejected")
+                .to_string();
+            assert!(
+                err.contains(status) && err.contains("does not allow"),
+                "error should name the property: {err}"
+            );
+
+            // Rejected commits leave the stored resource alone.
+            let stored = db.get_resource(&doc.as_str().into()).await.unwrap();
+            assert_eq!(
+                stored.get(crate::urls::NAME).unwrap().to_string(),
+                name_before,
+                "a rejected commit must not change the stored name"
+            );
+
+            // Valid values pass.
+            let json = signed_value_commit_json(
+                &db,
+                &alice,
+                &doc,
+                status,
+                Value::AtomicUrl("https://example.com/status/open".into()),
+            )
+            .await;
+            ingest_commit_json(&db, &json, &opts)
+                .await
+                .expect("a value inside allowsOnly is accepted");
+            let json = signed_value_commit_json(
+                &db,
+                &alice,
+                &doc,
+                crate::urls::NAME,
+                Value::String("Renamed".into()),
+            )
+            .await;
+            ingest_commit_json(&db, &json, &opts)
+                .await
+                .expect("a correctly typed value is accepted");
+
+            // An unknown property is not validated (legacy data).
+            let json = signed_value_commit_json(
+                &db,
+                &alice,
+                &doc,
+                "https://example.com/properties/unknown-here",
+                Value::Integer(1),
+            )
+            .await;
+            ingest_commit_json(&db, &json, &opts)
+                .await
+                .expect("unknown properties must not fail hard");
+        }
+    }
+
     const LEGACY_FIELDS_ERR: &str = "no longer accepted";
 
     /// A commit resource that actually carries the deprecated `set` property
