@@ -12310,3 +12310,11 @@ msgstr "Sign in to {0} to see whether this workspace is hosted."
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+
+#: src/components/InviteForm.tsx
+msgid "Limit how many people can use this link"
+msgstr "Limit how many people can use this link"
+
+#: src/components/InviteForm.tsx
+msgid "Maximum number of people"
+msgstr "Maximum number of people"

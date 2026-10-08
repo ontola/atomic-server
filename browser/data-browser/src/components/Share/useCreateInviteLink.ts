@@ -15,6 +15,8 @@ export interface InviteLinkOptions {
   write: boolean;
   /** Unix ms timestamp after which the invite no longer works */
   expiresAt?: number;
+  /** How many people may use the link. The server enforces it. */
+  maxUsages?: number;
 }
 
 /**
@@ -29,7 +31,7 @@ export function useCreateInviteLink(
   const [agent] = useCurrentAgent();
   const isSaas = !!getManagedPortalUrl();
 
-  return async ({ write, expiresAt }) => {
+  return async ({ write, expiresAt, maxUsages }) => {
     if (!agent) {
       throw new Error('No agent found');
     }
@@ -72,6 +74,7 @@ export function useCreateInviteLink(
       expiresAt,
       undefined,
       browserPeer,
+      maxUsages,
     );
 
     if (browserPeer) {

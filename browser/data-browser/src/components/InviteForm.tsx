@@ -19,6 +19,7 @@ import { Button } from './Button';
 import { Column, Row } from './Row';
 import { CodeBlock } from './CodeBlock';
 import { Checkbox, CheckboxLabel } from './forms/Checkbox';
+import { InputStyled } from './forms/InputStyles';
 
 interface InviteFormProps {
   /** The resource that becomes accessible on opening the invite */
@@ -75,6 +76,8 @@ function InviteFormContent({
 }: InviteFormProps & { skipProfile: boolean }) {
   const store = useStore();
   const [write, setWrite] = useState(false);
+  const [limitUsages, setLimitUsages] = useState(false);
+  const [maxUsages, setMaxUsages] = useState('1');
   const isSaas = !!getManagedPortalUrl();
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [agent] = useCurrentAgent();
@@ -132,7 +135,16 @@ function InviteFormContent({
     setErr(undefined);
 
     try {
-      const finalUrl = await createInviteLink({ write });
+      const limit = Number(maxUsages);
+
+      if (limitUsages && (!Number.isSafeInteger(limit) || limit < 1)) {
+        throw new Error('Enter a whole number of at least 1 as the limit.');
+      }
+
+      const finalUrl = await createInviteLink({
+        write,
+        maxUsages: limitUsages ? limit : undefined,
+      });
 
       setInviteUrl(finalUrl);
       setSaved(true);
@@ -180,6 +192,21 @@ function InviteFormContent({
             <Checkbox checked={write} onChange={setWrite} />
             <span>Allow edits</span>
           </CheckboxLabel>
+          <CheckboxLabel>
+            <Checkbox checked={limitUsages} onChange={setLimitUsages} />
+            <span>Limit how many people can use this link</span>
+          </CheckboxLabel>
+          {limitUsages && (
+            <InputStyled
+              type='number'
+              min={1}
+              step={1}
+              value={maxUsages}
+              aria-label='Maximum number of people'
+              data-test='invite-max-usages'
+              onChange={e => setMaxUsages(e.target.value)}
+            />
+          )}
           {seats &&
             seats.drive ===
               (target.hasClasses(server.classes.drive)
