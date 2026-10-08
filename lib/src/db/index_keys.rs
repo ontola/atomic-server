@@ -119,7 +119,11 @@ impl Db {
     fn finish_index_migration(&self, total: u64) -> AtomicResult<IndexMigration> {
         self.kv.insert(Tree::PluginMeta, DONE_KEY, b"1")?;
         self.kv.remove(Tree::PluginMeta, STATE_KEY)?;
-        self.kv.flush()?;
+        // Only a rebuild has anything worth an fsync; a store with nothing in
+        // it must not pay one (the flush also touches a sentinel row).
+        if total > 0 {
+            self.kv.flush()?;
+        }
         Ok(IndexMigration {
             done: total,
             total,
