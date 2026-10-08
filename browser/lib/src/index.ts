@@ -94,6 +94,7 @@ export {
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
+  isNotEnrolledMessage,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';

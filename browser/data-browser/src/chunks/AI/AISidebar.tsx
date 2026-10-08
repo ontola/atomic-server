@@ -41,11 +41,12 @@ import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import toast from 'react-hot-toast';
 import { userTiming } from '@helpers/userTiming';
+import { handleChatSaveError } from './saveErrors';
 
-const handleSidebarMessageSaveError = (error: unknown) => {
-  console.error(error);
-  toast.error('Failed to save AI chat message', { id: 'ai-chat-save' });
-};
+const handleSidebarMessageSaveError = (error: unknown) =>
+  handleChatSaveError(error, opts =>
+    toast.error('Failed to save AI chat message', opts),
+  );
 
 const AISidebar: React.FC = () => {
   const store = useStore();
