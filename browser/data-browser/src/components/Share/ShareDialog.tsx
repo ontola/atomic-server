@@ -144,6 +144,7 @@ function ShareDialogBody({
     agent?.subject,
   );
   const [icon] = useString(profile, dataBrowser.properties.icon);
+  const [agentName] = useString(profile, core.properties.name);
   const [profileReviewed, setProfileReviewed] = useState(() =>
     profileReviewedBefore(agent?.subject),
   );
@@ -151,8 +152,11 @@ function ShareDialogBody({
   const [title] = useTitle(resource);
 
   // Inviting shows who you are to the people you invite, so the first time
-  // someone shares they get to check their name and picture.
-  if (canWrite && agent?.subject && !icon && !profileReviewed) {
+  // someone without a name shares they get to set it. Anyone who already has a
+  // name skips the step.
+  const hasName = !!agentName?.trim();
+
+  if (canWrite && agent?.subject && !hasName && !icon && !profileReviewed) {
     if (!profileReady) return null;
     const agentSubject = agent.subject;
 
