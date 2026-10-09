@@ -290,7 +290,14 @@ export default defineConfig(({ mode }) => {
       // is released (vitejs/vite-plugin-react#1419). The compiler transform is
       // skipped under Vitest — unit tests call `transformSync` directly — but
       // the oxc styled-components options still apply so displayName works.
-      ...oxcReactCompiler({ compile: !isVitest }),
+      // The app compiles `@tomic/react` too: it is linked from outside
+      // `node_modules`, so the compiler sees its hooks. Tests compile just
+      // that package, so a hook the compiler would cache wrongly fails here.
+      ...oxcReactCompiler(
+        isVitest
+          ? { only: /\/browser\/react\/src\// }
+          : { compile: true },
+      ),
       react(),
       !isVitest &&
         !isTauri &&

@@ -107,7 +107,7 @@ export async function resolveClass(
   }
 
   throw new Error(
-    `Unknown class "${nameOrSubject}". Use get_user_classes to list available classes, or pass a full class URL.`,
+    `Unknown class "${nameOrSubject}". Use find_schema to list available classes, or pass a full class URL.`,
   );
 }
 

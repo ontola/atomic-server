@@ -778,6 +778,7 @@ mod test {
         let commit = commitbuilder.sign(&agent, &store, &resource).await.unwrap();
         let opts = crate::commit::CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: false,
             validate_timestamp: true,
             validate_rights: true,
@@ -802,6 +803,7 @@ mod test {
 
         let opts = crate::commit::CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: false,
             validate_timestamp: true,
             validate_rights: true,
@@ -861,6 +863,7 @@ mod test {
 
         let opts = crate::commit::CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: false,
             validate_timestamp: true,
             validate_rights: true,
@@ -967,6 +970,7 @@ mod test {
 
         let opts = crate::commit::CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: false,
             validate_timestamp: true,
             validate_rights: true,

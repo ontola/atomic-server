@@ -21,7 +21,9 @@ import {
   isNewPlaceholderSubject,
   commitSubject,
   currentAgentSubject,
+  canonicalizeScheme,
 } from './subject.js';
+import { checkResourceConstraints } from './class-constraints.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized, RequestCancelledError } from './error.js';
@@ -70,6 +72,15 @@ import {
   type JSONObject,
   type AtomicValue,
 } from './value.js';
+
+/**
+ * Loro property-map keys are raw strings, so a legacy `did:ad:prop:` key would
+ * be a different key from its `atomic:prop:` twin. Always key by the canonical
+ * form. Other property URLs pass through untouched.
+ */
+function canonicalPropKey(prop: string): string {
+  return prop.startsWith('did:ad:prop:') ? canonicalizeScheme(prop) : prop;
+}
 
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
@@ -813,7 +824,38 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
+    // Lenses derive values for the properties the doc does not really hold.
+    // The doc is never changed; only this cache gets them.
+    const lenses = this._store?.lenses;
+
+    if (lenses && lenses.size > 0) {
+      lenses.apply(nextCache);
+    }
+
     this.#cache = nextCache;
+  }
+
+  /**
+   * Re-derive lens values after the store learned of a lens that touches one of
+   * `props`. True when this resource holds one of them and was rebuilt.
+   *
+   * @internal
+   */
+  public refreshDerivedValues(props: string[]): boolean {
+    if (!this._loroDoc || this._loading) {
+      return false;
+    }
+
+    const holds = props.some(prop => this.#cache[prop] !== undefined);
+
+    if (!holds) {
+      return false;
+    }
+
+    this.rebuildCacheFromLoro();
+    this.#cacheDirty = false;
+
+    return true;
   }
 
   /**
@@ -875,8 +917,9 @@ export class Resource<C extends OptionalClass = any> {
     let wroteAnything = false;
 
     for (const [prop, loroValue] of Object.entries(props)) {
+      // Keys are canonical on write (`canonicalPropKey`); lookup also canonicalizes legacy docs.
       const datatype = this.store?.resources
-        .get(prop)
+        .get(canonicalizeScheme(prop))
         ?.get(core.properties.datatype)
         ?.toString();
 
@@ -1864,6 +1907,7 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
+    propUrl = canonicalPropKey(propUrl) as Prop;
     this.materializeBufferedSnapshot();
 
     if (this.#cacheDirty && this._loroDoc) {
@@ -2738,6 +2782,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Appends a Resource to a ResourceArray */
   public push(propUrl: string, values: JSONArray, unique?: boolean): void {
+    propUrl = canonicalPropKey(propUrl);
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
 
     if (unique) {
@@ -2779,6 +2824,7 @@ export class Resource<C extends OptionalClass = any> {
    * Used for canvas strokes and other list fields that merge per element across peers.
    */
   public pushListItem(propUrl: string, item: JSONValue): void {
+    propUrl = canonicalPropKey(propUrl);
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
     this.#cache[propUrl] = [...propVal, item];
     this.#cacheDirty = true;
@@ -2849,6 +2895,7 @@ export class Resource<C extends OptionalClass = any> {
    * `pushListItem`, just batched.
    */
   public replaceListItems(propUrl: string, items: JSONArray): void {
+    propUrl = canonicalPropKey(propUrl);
     this.#cache[propUrl] = [...items];
     this.#cacheDirty = true;
     this._dirty = true;
@@ -3109,6 +3156,7 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Removes a property value combination from the resource */
   public remove(propertyUrl: string): void {
+    propertyUrl = canonicalPropKey(propertyUrl);
     this.removeUnsafe(propertyUrl);
     this._dirty = true;
     this.eventManager.emit(ResourceEvents.LocalChange, propertyUrl, undefined);
@@ -3530,6 +3578,18 @@ export class Resource<C extends OptionalClass = any> {
       );
     }
 
+    // Class `constraints`, for classes already in the local store. Never
+    // fetches: an unloaded class is skipped and the server is the authority.
+    if (hasChanges) {
+      checkResourceConstraints(this, subject => {
+        const local =
+          this.store.resources.get(subject) ??
+          this.store.resources.get(canonicalizeScheme(subject));
+
+        return local?.isReady() ? local : undefined;
+      });
+    }
+
     if (!this._lastCommit) {
       this._lastCommit = this.get(properties.commit.lastCommit)?.toString();
     }
@@ -3899,6 +3959,8 @@ export class Resource<C extends OptionalClass = any> {
     /** A trusted built-in datatype: validate and tag without fetching Property metadata. */
     knownDatatype?: Datatype,
   ): Promise<void> {
+    prop = canonicalPropKey(prop) as Prop;
+
     if (value instanceof Uint8Array) {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
@@ -3972,6 +4034,8 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   public removeUnsafe(prop: string): void {
+    prop = canonicalPropKey(prop);
+
     if (prop === commits.properties.loroUpdate) {
       this._loroSnapshotBytes = undefined;
       this.resetLoroState();

@@ -1,3 +1,4 @@
+import { ensureOntologyFromJsonSchema, findSchemas } from './schemaTools';
 import { updateTableRows } from './updateTableRows';
 // @wc-ignore-file
 import { websiteTools } from '@chunks/Website/websiteTools';
@@ -8,7 +9,7 @@ import {
   core,
   createResourceFromCompact,
   expandSubject,
-  listDriveClasses,
+  getClassesOnDrive,
   queryResources,
   readResourceCompact,
   semanticSearch,
@@ -86,7 +87,8 @@ export const TOOL_NAMES = {
   GET_ATOMIC_RESOURCE: 'get_atomic_resource',
   READ_FILE_RESOURCE: 'read_file_resource',
   GET_SCHEMA: 'get_schema',
-  GET_USER_CLASSES: 'get_user_classes',
+  FIND_SCHEMA: 'find_schema',
+  ENSURE_ONTOLOGY: 'ensure_ontology',
   EDIT_ATOMIC_RESOURCE: 'edit_atomic_resource',
   EDIT_DOCUMENT_RESOURCE: 'edit_document_resource',
   CHANGE_THEME: 'change_theme',
@@ -699,12 +701,35 @@ export function useAtomicMCPTools({
         },
         strict: true,
       }),
-      [TOOL_NAMES.GET_USER_CLASSES]: tool({
+      [TOOL_NAMES.FIND_SCHEMA]: tool({
         description:
-          'List all classes defined on the current drive. Returns each class as `<shortname>: <subject>`. Use this to discover available classes, then call `get_schema` for details on a specific class.',
-        inputSchema: z.object({}),
-        execute: async () =>
-          shortenRefsDeep(await listDriveClasses(store, drive)),
+          'Search the classes (schemas) on the current drive, including its default ontology, by words. Returns for each match the class subject, its ontology and the class as a JSON Schema (properties, required, constraints like enum and minimum). ALWAYS call this before making a new schema and reuse a class that fits instead of creating a duplicate. An empty query lists every class. Use `get_schema` for the full property details of one class.',
+        inputSchema: z.object({
+          query: z
+            .string()
+            .describe(
+              'Words to look for in class and ontology names and descriptions, e.g. "invoice customer". Empty lists all classes.',
+            ),
+          limit: z
+            .number()
+            .optional()
+            .describe('Maximum number of matches (default 10).'),
+        }),
+        execute: async ({ query, limit }) => {
+          try {
+            const classSubjects = await getClassesOnDrive(drive, store);
+            const { matches, total } = await findSchemas(
+              store,
+              classSubjects,
+              query,
+              limit,
+            );
+
+            return shortenRefsDeep({ total, matches });
+          } catch (error) {
+            return `Error finding schema: ${error}`;
+          }
+        },
         strict: true,
       }),
       [TOOL_NAMES.NAVIGATE_TO_RESOURCE]: tool({
@@ -1516,7 +1541,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         description:
           "Create or update a plugin: JavaScript that proposes changes for the user to review. Use this for imports from an external service, or any repeatable transformation of the user's data. " +
           'For a new automation, pass its workspace and explicit connections (an empty array when none). Workspace association does not change permissions or start any job. For an attached automation draft, read it and the referenced integration first, then update that draft by passing its plugin subject. Preserve its event filters and automation-integrations references; do not replace the integration source or duplicate the draft. Use run_plugin to test, and leave change approval and automatic enablement to the user. Integrations can sync without automations; do not modify their sync schedule as part of automation authoring. ' +
-          "A plugin returns proposed Atomic changes. Manual preview runs do not execute integration writes, even when the automation has an automatic-action grant. It must `export function run(ctx)` returning `{ intents: [...], problems: [...] }`. Intents are the only way to change data: `{op:'create', localId, parent, isA:[classSubject], set:{[propertySubject]: value}}`, `{op:'set', subject, set:{...}}`, `{op:'remove', subject, properties:[...]}`, `{op:'destroy', subject}`. Refer to something the same run creates as `'local:<localId>'` — links resolve in any order. Default to nested app data: create app-owned tables and supporting resources beneath the plugin (`ctx.trigger.subject`), and rows beneath their table. The drive is an authorization scope, not the default parent for every imported record. Preserve explicitly selected existing destinations and shared resources; do not move them or populate the drive root unless the user asks. Property and class keys are full subjects; use get_user_classes or create a table first if you need them. Problems are `{severity:'error'|'warning', message}`; an error blocks the whole run. \n\nWhat ctx gives you: `ctx.trigger.at` (the ONLY clock — Date.now() is frozen to it and Math.random is seeded, so runs are reproducible), `ctx.http({method,url,headers,body})` returning `{status, body}`, `ctx.read(subject)`, `ctx.query(property, value)`. Server-side automations can also call `ctx.integration({connection, release, call:{action, arguments, id}})` for an explicitly referenced integration. Discover its named actions and pinned release first with list_integration_actions. Use a stable event-derived id for retries. Reads return provider data. In manual previews, writes return needs_review and require review on the integration connection. Scheduled and event runs can execute writes under an existing automatic-action grant. Never claim a prepared write was sent. App-scoped callers need an explicit connection/action grant. Grants are tied to the actual code and connection, expire after 30 days, and may require each write to be reviewed or allow automatic writes. The host suspends runs waiting for integration approval and resumes the same queued event after approval; completed calls reuse their receipts. Never enable a grant through an assistant tool. There is no fetch, no process, no filesystem. \n\nCredentials: put `'Bearer secret:<name>'` in a HEADER VALUE and the host substitutes the real value; the plugin never sees it. A `secret:` handle in a URL or body is refused. DECLARE every secret you use, or the user has to work out what to enter: `export const manifest = { secrets: [{ name: 'google', origin: 'https://www.googleapis.com', description: 'Google Calendar token' }] };` — the plugin page then shows one labelled field per declared secret, and the origin allowlist comes from this. `manifest` and `run` are the only exports that mean anything; anything else you export is ignored. You cannot store a secret yourself, so write the plugin, then tell the user to open it and fill in the fields. If the user wants this to happen regularly rather than on a button press, call schedule_plugin afterwards; `ctx.trigger.kind` is then `'cron'` instead of `'manual'`, and a scheduled run's changes wait for the user to review rather than being written.",
+          "A plugin returns proposed Atomic changes. Manual preview runs do not execute integration writes, even when the automation has an automatic-action grant. It must `export function run(ctx)` returning `{ intents: [...], problems: [...] }`. Intents are the only way to change data: `{op:'create', localId, parent, isA:[classSubject], set:{[propertySubject]: value}}`, `{op:'set', subject, set:{...}}`, `{op:'remove', subject, properties:[...]}`, `{op:'destroy', subject}`. Refer to something the same run creates as `'local:<localId>'` — links resolve in any order. Default to nested app data: create app-owned tables and supporting resources beneath the plugin (`ctx.trigger.subject`), and rows beneath their table. The drive is an authorization scope, not the default parent for every imported record. Preserve explicitly selected existing destinations and shared resources; do not move them or populate the drive root unless the user asks. Property and class keys are full subjects; use find_schema or create a table first if you need them. Problems are `{severity:'error'|'warning', message}`; an error blocks the whole run. \n\nWhat ctx gives you: `ctx.trigger.at` (the ONLY clock — Date.now() is frozen to it and Math.random is seeded, so runs are reproducible), `ctx.http({method,url,headers,body})` returning `{status, body}`, `ctx.read(subject)`, `ctx.query(property, value)`. Server-side automations can also call `ctx.integration({connection, release, call:{action, arguments, id}})` for an explicitly referenced integration. Discover its named actions and pinned release first with list_integration_actions. Use a stable event-derived id for retries. Reads return provider data. In manual previews, writes return needs_review and require review on the integration connection. Scheduled and event runs can execute writes under an existing automatic-action grant. Never claim a prepared write was sent. App-scoped callers need an explicit connection/action grant. Grants are tied to the actual code and connection, expire after 30 days, and may require each write to be reviewed or allow automatic writes. The host suspends runs waiting for integration approval and resumes the same queued event after approval; completed calls reuse their receipts. Never enable a grant through an assistant tool. There is no fetch, no process, no filesystem. \n\nCredentials: put `'Bearer secret:<name>'` in a HEADER VALUE and the host substitutes the real value; the plugin never sees it. A `secret:` handle in a URL or body is refused. DECLARE every secret you use, or the user has to work out what to enter: `export const manifest = { secrets: [{ name: 'google', origin: 'https://www.googleapis.com', description: 'Google Calendar token' }] };` — the plugin page then shows one labelled field per declared secret, and the origin allowlist comes from this. `manifest` and `run` are the only exports that mean anything; anything else you export is ignored. You cannot store a secret yourself, so write the plugin, then tell the user to open it and fill in the fields. If the user wants this to happen regularly rather than on a button press, call schedule_plugin afterwards; `ctx.trigger.kind` is then `'cron'` instead of `'manual'`, and a scheduled run's changes wait for the user to review rather than being written.",
         inputSchema: z.object({
           name: z.string().describe('Display name of the plugin.'),
           source: z
@@ -1817,6 +1842,30 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             return { error: err instanceof Error ? err.message : String(err) };
           }
         },
+      }),
+      [TOOL_NAMES.ENSURE_ONTOLOGY]: tool({
+        description:
+          'Create or update a schema from a JSON Schema (draft 2020-12): every object schema in `$defs` becomes a class, every property a property, `required` becomes required properties, and keywords like enum, minimum, maxLength and pattern become constraints on the class. A `$ref` to "#/$defs/Name" links to another class. Run find_schema first and reuse existing classes. Idempotent: calling it again with the same schema changes nothing. Changing a property\'s shortname or type makes a NEW property. Returns the shortname to subject map of the classes and properties, or an `error` naming the JSON pointer to fix in your schema (unsupported: oneOf/anyOf/allOf, nullable types, nested object schemas; move those to `$defs`).',
+        inputSchema: z.object({
+          schema: z
+            .record(z.string(), z.any())
+            .describe(
+              'The JSON Schema object. Example: {"title":"Shop","$defs":{"customer":{"type":"object","properties":{"name":{"type":"string","minLength":1}},"required":["name"]}}}',
+            ),
+          shortname: z
+            .string()
+            .optional()
+            .describe(
+              "Shortname (lowercase slug) of the ontology. Defaults to the schema's `x-atomic-ontology`, then its `title`, then the drive's default ontology.",
+            ),
+        }),
+        execute: async ({ schema, shortname }) =>
+          shortenRefsDeep(
+            await ensureOntologyFromJsonSchema(store, drive, {
+              schema,
+              shortname,
+            }),
+          ),
       }),
       [TOOL_NAMES.CREATE_TABLE]: tool({
         description:

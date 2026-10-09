@@ -1719,6 +1719,7 @@ async fn did_loro_only_commit_sled() {
         validate_loro_causality: false,
         validate_rights: true,
         validate_schema: true,
+        validate_constraints: true,
         update_index: true,
         validate_for_agent: Some(agent.subject.to_string()),
         source_id: None,
@@ -1772,6 +1773,7 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
         validate_loro_causality: true,
         validate_rights: true,
         validate_schema: true,
+        validate_constraints: true,
         update_index: true,
         validate_for_agent: Some(agent.subject.to_string()),
         source_id: None,
@@ -2273,6 +2275,7 @@ async fn a_cascade_deleted_child_names_its_drive() {
 
             let opts = crate::commit::CommitOpts {
                 validate_schema: true,
+                validate_constraints: true,
                 validate_signature: true,
                 validate_timestamp: false,
                 validate_rights: true,
@@ -2462,6 +2465,7 @@ async fn find_resource_scoped_to_its_drive() {
 
     let opts = crate::commit::CommitOpts {
         validate_schema: true,
+        validate_constraints: true,
         validate_signature: true,
         validate_timestamp: false,
         validate_rights: true,
@@ -4714,6 +4718,250 @@ async fn snapshot_is_stored_as_a_delta_on_the_genesis_commit() {
             .unwrap(),
         snapshot
     );
+}
+
+// --- Lenses: derived values at materialization ---
+
+mod lenses {
+    use super::*;
+    use crate::commit::{Commit, CommitBuilder, CommitOpts};
+    use crate::datatype::DataType;
+    use crate::lens::lens_id;
+    use crate::property_identity::property_id;
+    use crate::Resource;
+
+    const PARENT: &str = "atomic:ontologylens0";
+
+    fn opts() -> CommitOpts {
+        CommitOpts {
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        }
+    }
+
+    async fn make_property(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        parent: &str,
+        shortname: &str,
+    ) -> String {
+        let id = property_id(parent, shortname, urls::STRING).unwrap();
+        let mut b = CommitBuilder::new(id.as_str().into());
+        b.is_genesis = true;
+        b.set(urls::PARENT.into(), Value::AtomicUrl(parent.into()));
+        b.set(urls::SHORTNAME.into(), Value::Slug(shortname.into()));
+        b.set(
+            urls::DATATYPE_PROP.into(),
+            Value::AtomicUrl(urls::STRING.into()),
+        );
+        b.set(urls::DESCRIPTION.into(), Value::Markdown(shortname.into()));
+        let commit = b.sign(agent, db, &Resource::new(id.clone())).await.unwrap();
+        db.apply_commit(commit, &opts()).await.unwrap();
+        id
+    }
+
+    async fn lens_commit(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        parent: &str,
+        from: &str,
+        to: &str,
+    ) -> AtomicResult<crate::commit::CommitResponse> {
+        let transform = serde_json::json!({"op": "rename"});
+        let id = lens_id(from, to, &transform).unwrap();
+        let mut b = CommitBuilder::new(id.as_str().into());
+        b.is_genesis = true;
+        b.set(urls::IS_A.into(), Value::from(vec![urls::LENS.to_string()]));
+        b.set(urls::PARENT.into(), Value::AtomicUrl(parent.into()));
+        b.set(urls::LENS_FROM.into(), Value::AtomicUrl(from.into()));
+        b.set(urls::LENS_TO.into(), Value::AtomicUrl(to.into()));
+        b.set(urls::LENS_TRANSFORM.into(), Value::Json(transform));
+        let commit = b.sign(agent, db, &Resource::new(id.clone())).await?;
+        db.apply_commit(commit, &opts()).await
+    }
+
+    async fn indexed(db: &Db, prop: &str, value: &str) -> Vec<String> {
+        crate::db::prop_val_sub_index::find_in_prop_val_sub_index(
+            db,
+            prop,
+            Some(&Value::String(value.into())),
+        )
+        .flatten()
+        .map(|a| a.subject.to_string())
+        .collect()
+    }
+
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn lens_derives_values_on_read_and_in_the_index() {
+        let db = Db::init_temp("lens_derives").await.unwrap();
+        let agent = db.get_default_agent().unwrap();
+        let title = make_property(&db, &agent, PARENT, "title").await;
+        let name = make_property(&db, &agent, PARENT, "name").await;
+
+        // A resource written before the lens exists.
+        let mut b = CommitBuilder::new("placeholder".into());
+        b.set(title.clone(), Value::String("Hello".into()));
+        let created = db
+            .apply_commit(Commit::create_did(b, &agent, &db).await.unwrap(), &opts())
+            .await
+            .unwrap();
+        let subject = created.resource_new.unwrap().get_subject().clone();
+        assert!(db.get_resource(&subject).await.unwrap().get(&name).is_err());
+        assert!(indexed(&db, &name, "Hello").await.is_empty());
+
+        // The lens arrives: reads and the index follow, without a new commit.
+        lens_commit(&db, &agent, PARENT, &title, &name)
+            .await
+            .unwrap();
+        assert_eq!(db.lenses().len(), 1);
+        let read = db.get_resource(&subject).await.unwrap();
+        assert_eq!(read.get(&name).unwrap().to_string(), "Hello");
+        assert_eq!(
+            indexed(&db, &name, "Hello").await,
+            vec![subject.to_string()]
+        );
+
+        // An edit of the old property moves the derived value and its index row.
+        let mut edit = db.get_resource(&subject).await.unwrap();
+        edit.set(title.clone(), Value::String("Hi".into()), &db)
+            .await
+            .unwrap();
+        edit.save_locally(&db).await.unwrap();
+        let read = db.get_resource(&subject).await.unwrap();
+        assert_eq!(read.get(&name).unwrap().to_string(), "Hi");
+        assert!(indexed(&db, &name, "Hello").await.is_empty());
+        assert_eq!(indexed(&db, &name, "Hi").await, vec![subject.to_string()]);
+
+        // A real value of the new property wins and stays when the old changes.
+        let mut edit = db.get_resource(&subject).await.unwrap();
+        edit.set(name.clone(), Value::String("Real".into()), &db)
+            .await
+            .unwrap();
+        edit.save_locally(&db).await.unwrap();
+        let mut edit = db.get_resource(&subject).await.unwrap();
+        edit.set(title.clone(), Value::String("Again".into()), &db)
+            .await
+            .unwrap();
+        edit.save_locally(&db).await.unwrap();
+        let read = db.get_resource(&subject).await.unwrap();
+        assert_eq!(read.get(&name).unwrap().to_string(), "Real");
+        assert_eq!(read.get(&title).unwrap().to_string(), "Again");
+        assert!(indexed(&db, &name, "Hi").await.is_empty());
+        assert_eq!(indexed(&db, &name, "Real").await, vec![subject.to_string()]);
+
+        // The signed doc never held a derived value.
+        let doc = read.build_state_doc().unwrap();
+        assert!(doc.get_all_properties().contains_key(&title));
+
+        // The index is rebuilt from the stored Lens resources.
+        db.update_lenses(|index| *index = Default::default());
+        assert!(db.lenses().is_empty());
+        db.load_lenses().await;
+        assert_eq!(db.lenses().len(), 1);
+    }
+
+    /// A resource that arrives by sync is materialized from its doc without
+    /// derived values; persisting it files the derived ones like real ones.
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn lens_values_are_indexed_for_synced_resources() {
+        let db = Db::init_temp("lens_sync").await.unwrap();
+        let agent = db.get_default_agent().unwrap();
+        let title = make_property(&db, &agent, PARENT, "title").await;
+        let name = make_property(&db, &agent, PARENT, "name").await;
+        lens_commit(&db, &agent, PARENT, &title, &name)
+            .await
+            .unwrap();
+        assert_eq!(db.lenses().len(), 1);
+
+        let doc = crate::loro::AtomicLoroDoc::new();
+        doc.set_property(&title, &Value::String("Synced".into()))
+            .unwrap();
+        let mut replica = Resource::new("atomic:syncedresource0".into());
+        replica.apply_state_doc(doc).unwrap();
+        assert!(replica.get(&name).is_err(), "no lens on a bare apply");
+
+        db.persist_replicated_resource(&replica).await.unwrap();
+        assert_eq!(
+            indexed(&db, &name, "Synced").await,
+            vec!["atomic:syncedresource0".to_string()]
+        );
+        let read = db
+            .get_resource(&replica.get_subject().clone())
+            .await
+            .unwrap();
+        assert_eq!(read.get(&name).unwrap().to_string(), "Synced");
+    }
+
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn lens_only_applies_within_the_ontology_that_owns_its_target() {
+        let db = Db::init_temp("lens_authority").await.unwrap();
+        let agent = db.get_default_agent().unwrap();
+        let title = make_property(&db, &agent, PARENT, "title").await;
+        let name = make_property(&db, &agent, PARENT, "name").await;
+
+        // Claims another ontology owns `name`: stored, never applied.
+        lens_commit(&db, &agent, "atomic:someoneelse", &title, &name)
+            .await
+            .unwrap();
+        assert!(db.lenses().is_empty());
+        assert_eq!(db.pending_lenses.read().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    #[timeout(120000)]
+    async fn lens_identity_is_checked_and_immutable() {
+        let db = Db::init_temp("lens_identity").await.unwrap();
+        let agent = db.get_default_agent().unwrap();
+        let title = make_property(&db, &agent, PARENT, "title").await;
+        let name = make_property(&db, &agent, PARENT, "name").await;
+
+        // A subject that is not the hash of its fields.
+        let wrong = lens_id(&name, &title, &serde_json::json!({"op": "rename"})).unwrap();
+        let mut b = CommitBuilder::new(wrong.as_str().into());
+        b.is_genesis = true;
+        b.set(urls::PARENT.into(), Value::AtomicUrl(PARENT.into()));
+        b.set(
+            urls::LENS_FROM.into(),
+            Value::AtomicUrl(title.as_str().into()),
+        );
+        b.set(urls::LENS_TO.into(), Value::AtomicUrl(name.as_str().into()));
+        b.set(
+            urls::LENS_TRANSFORM.into(),
+            Value::Json(serde_json::json!({"op": "rename"})),
+        );
+        let commit = b
+            .sign(&agent, &db, &Resource::new(wrong.clone()))
+            .await
+            .unwrap();
+        let err = db.apply_commit(commit, &opts()).await.unwrap_err();
+        assert!(err.to_string().contains("Lens ID mismatch"), "{err}");
+
+        // A real lens cannot be pointed somewhere else later.
+        lens_commit(&db, &agent, PARENT, &title, &name)
+            .await
+            .unwrap();
+        let id = lens_id(&title, &name, &serde_json::json!({"op": "rename"})).unwrap();
+        let mut edit = db.get_resource(&id.as_str().into()).await.unwrap();
+        let err = match edit
+            .set(
+                urls::LENS_TO.into(),
+                Value::AtomicUrl(title.as_str().into()),
+                &db,
+            )
+            .await
+        {
+            Err(e) => e,
+            Ok(_) => edit.save_locally(&db).await.unwrap_err(),
+        };
+        assert!(
+            err.to_string().contains("Cannot change the lensTo"),
+            "{err}"
+        );
+        let _ = DataType::String;
+    }
 }
 
 #[tokio::test]

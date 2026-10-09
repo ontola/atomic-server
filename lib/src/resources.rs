@@ -331,11 +331,32 @@ impl Resource {
         doc: crate::loro::AtomicLoroDoc,
         snapshot: Vec<u8>,
     ) -> AtomicResult<()> {
+        self.apply_state_doc_with_lenses(doc, snapshot, None)
+    }
+
+    /// [`Self::apply_state_doc`] that also derives values through `lenses`
+    /// (see [`crate::lens`]). The doc is never changed; only the propvals
+    /// cache gets the derived values.
+    pub fn apply_state_doc_with_lenses(
+        &mut self,
+        doc: crate::loro::AtomicLoroDoc,
+        snapshot: Vec<u8>,
+        lenses: Option<&crate::lens::LensIndex>,
+    ) -> AtomicResult<()> {
         let mut propvals = Self::materialize_propvals_from_loro_doc(&doc);
+        if let Some(lenses) = lenses {
+            lenses.apply_propvals(&mut propvals);
+        }
         propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
         self.propvals = propvals;
         self.loro = Some(doc);
         Ok(())
+    }
+
+    /// Add the values `lenses` derive to the propvals, keeping real values.
+    /// Returns the properties that were derived.
+    pub fn apply_lenses(&mut self, lenses: &crate::lens::LensIndex) -> Vec<String> {
+        lenses.apply_propvals(&mut self.propvals)
     }
 
     fn set_loro_snapshot_state(&mut self, snapshot: Vec<u8>) -> AtomicResult<()> {
@@ -1219,7 +1240,7 @@ impl Resource {
         store: &impl Storelike,
     ) -> AtomicResult<Property> {
         // If it's a URL, were done quickly!
-        if is_url(shortname) {
+        if is_url(shortname) || crate::identifiers::is_prop_id(shortname) {
             return store.get_property(shortname).await;
         }
         // First, iterate over all existing properties, see if any of these work.
@@ -1295,6 +1316,7 @@ impl Resource {
         let agent = store.get_default_agent()?;
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: false,
             validate_timestamp: false,
             validate_rights: false,
@@ -1444,6 +1466,7 @@ impl Resource {
 
         let opts = CommitOpts {
             validate_schema: true,
+            validate_constraints: true,
             validate_signature: true,
             validate_timestamp: false,
             validate_rights: false,
@@ -1563,7 +1586,9 @@ impl Resource {
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
         let full_prop = store.get_property(&property).await?;
-        if let Some(allowed) = full_prop.allows_only {
+        // An empty `allowsOnly` is a SelectProperty whose options live in the
+        // class constraint map; it restricts nothing here.
+        if let Some(allowed) = full_prop.allows_only.filter(|a| !a.is_empty()) {
             let error = Err(format!(
                 "Property '{}' does not allow value '{}'. Allowed: {:?}",
                 property, value, allowed
@@ -1842,6 +1867,7 @@ mod test {
             let subject = commit.subject.to_string();
             let opts = crate::commit::CommitOpts {
                 validate_schema: false,
+                validate_constraints: false,
                 validate_signature: true,
                 validate_timestamp: false,
                 validate_rights: false,
@@ -2059,6 +2085,7 @@ mod test {
                 commit,
                 &CommitOpts {
                     validate_schema: true,
+                    validate_constraints: true,
                     validate_signature: true,
                     validate_timestamp: true,
                     validate_rights: false,

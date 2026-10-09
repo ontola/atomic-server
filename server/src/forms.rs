@@ -19,6 +19,7 @@ use serde_json::{json, Map, Value as JsonValue};
 
 use atomic_lib::{
     agents::ForAgent,
+    class_constraints::{effective_constraint, Constraint},
     datatype::DataType,
     db::{drive_prefix_from_subject, trees::Tree},
     errors::AtomicResult,
@@ -509,10 +510,15 @@ pub async fn build_form_definition(
         .and_then(|v| v.to_subjects(None))
         .unwrap_or_default();
 
+    // The class every submitted row is an instance of. Its `constraints` map
+    // decides the options and limits of each question; the form's own options
+    // may only tighten them.
+    let class_subjects = form_class_subjects(form);
+
     let mut pages = Vec::with_capacity(page_subjects.len());
     for page_subject in page_subjects {
         let page = store.get_resource(&page_subject.into()).await?;
-        pages.push(build_page_definition(store, &page).await?);
+        pages.push(build_page_definition(store, &page, &class_subjects).await?);
     }
 
     // The table remains authoritative even when its schema changes after a
@@ -559,11 +565,22 @@ pub async fn build_form_definition(
     Ok(definition)
 }
 
+/// The data class of a form, as a list for [effective_constraint].
+pub fn form_class_subjects(form: &Resource) -> Vec<String> {
+    form.get(atomic_lib::urls::FORM_DATA_CLASS)
+        .ok()
+        .map(|v| v.to_string())
+        .filter(|s| !s.is_empty())
+        .into_iter()
+        .collect()
+}
+
 /// `form-field-options` key holding a choice question's resolved options.
 pub const OPTIONS_KEY: &str = "options";
 
-/// The question types whose options are Tag resources listed on the mapped
-/// Property's `allowsOnly`. Mirrored by `CHOICE_FIELD_TYPES` in
+/// The question types whose options are Tag resources listed in the `enum` of
+/// the mapped property's constraint on the form's data class (the Property's
+/// legacy `allowsOnly` for data that predates the class map). Mirrored by `CHOICE_FIELD_TYPES` in
 /// `chunks/FormBuilder/fieldTypes.ts`.
 pub const CHOICE_FIELD_TYPES: [&str; 5] = [
     "radio",
@@ -575,8 +592,9 @@ pub const CHOICE_FIELD_TYPES: [&str; 5] = [
 
 /// The choice types that accept exactly one option. The mapped Property is a
 /// SelectProperty either way (always a `resourceArray`, as everywhere else in
-/// the app); single-pick is expressed as `max: 1` and stores a one-element
-/// array.
+/// the app); single-pick is expressed as `maxItems: 1` in the data class's
+/// constraints and stores a one-element array. These types always submit one
+/// subject, whatever the column's own limit says.
 const SINGLE_CHOICE_FIELD_TYPES: [&str; 3] = ["radio", "dropdown", "picture-choice"];
 
 pub fn is_choice_field(field_type: &str) -> bool {
@@ -651,13 +669,14 @@ fn source_str<'a>(options: &'a JsonValue, key: &str) -> Option<&'a str> {
 /// [rewrite_option_images] does for Files.
 ///
 /// Where the list comes from is [OPTIONS_SOURCE_KEY]'s business; by default it
-/// is the Tags on the field's own mapped Property's `allowsOnly`.
+/// is the Tags in the `enum` the data class puts on the field's mapped column.
 ///
 /// A non-choice field, an unreadable Property/Table, or an empty list all
 /// leave an empty list, which [check_membership] treats as "nothing is
 /// allowed" rather than "everything is".
 async fn resolve_choice_options(
     store: &impl Storelike,
+    class_subjects: &[String],
     field_type: &str,
     maps_to: &str,
     options: &mut JsonValue,
@@ -667,11 +686,22 @@ async fn resolve_choice_options(
     }
 
     let resolved = if let Some(property) = source_str(options, "property") {
-        tag_options(store, property).await
+        // Another column's options live in the class of the table it belongs
+        // to (the builder stores that table next to the column).
+        let source_classes = match source_str(options, "table") {
+            Some(table) => match store.get_resource(&table.to_string().into()).await {
+                Ok(table) => option_prop(&table, atomic_lib::urls::CLASSTYPE_PROP)
+                    .into_iter()
+                    .collect(),
+                Err(_) => Vec::new(),
+            },
+            None => class_subjects.to_vec(),
+        };
+        tag_options(store, &source_classes, property).await
     } else if let Some(table) = source_str(options, "table") {
         row_options(store, table, source_str(options, "labelProperty")).await
     } else {
-        tag_options(store, maps_to).await
+        tag_options(store, class_subjects, maps_to).await
     };
 
     match options.as_object_mut() {
@@ -691,22 +721,17 @@ fn option_prop(resource: &Resource, prop: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-/// The Tags on `property_subject`'s `allowsOnly`, as options. An unreadable
-/// Property or an empty `allowsOnly` yields an empty list.
-async fn tag_options(store: &impl Storelike, property_subject: &str) -> Vec<FieldOption> {
+/// The Tags in the `enum` the data class puts on `property_subject` (its
+/// effective constraint, so a Property that still carries `allowsOnly` works
+/// too), as options. An empty `enum` yields an empty list.
+async fn tag_options(
+    store: &impl Storelike,
+    class_subjects: &[String],
+    property_subject: &str,
+) -> Vec<FieldOption> {
     let mut resolved: Vec<FieldOption> = Vec::new();
 
-    let Ok(property) = store
-        .get_resource(&property_subject.to_string().into())
-        .await
-    else {
-        return resolved;
-    };
-
-    let tag_subjects = property
-        .get(atomic_lib::urls::ALLOWS_ONLY)
-        .and_then(|v| v.to_subjects(None))
-        .unwrap_or_default();
+    let tag_subjects = enum_subjects(store, class_subjects, property_subject).await;
 
     for subject in tag_subjects {
         let Ok(tag) = store.get_resource(&subject.clone().into()).await else {
@@ -726,6 +751,21 @@ async fn tag_options(store: &impl Storelike, property_subject: &str) -> Vec<Fiel
     }
 
     resolved
+}
+
+/// The Tag subjects in the effective `enum` of `property_subject`.
+async fn enum_subjects(
+    store: &impl Storelike,
+    class_subjects: &[String],
+    property_subject: &str,
+) -> Vec<String> {
+    effective_constraint(store, class_subjects, property_subject)
+        .await
+        .enum_values
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .collect()
 }
 
 /// The rows of `table_subject`, as options: `value` is the row's subject, so
@@ -858,6 +898,7 @@ pub async fn collect_option_image_subjects(
     form: &Resource,
 ) -> AtomicResult<HashSet<String>> {
     let mut subjects = HashSet::new();
+    let class_subjects = form_class_subjects(form);
 
     let page_subjects = form
         .get(atomic_lib::urls::FORM_PAGES)
@@ -878,17 +919,11 @@ pub async fn collect_option_image_subjects(
                 continue;
             };
             // Option images live on the Tags, so the walk goes through the
-            // mapped Property's `allowsOnly` rather than the options bag.
+            // mapped column's `enum` rather than the options bag.
             let Ok(maps_to) = field.get(atomic_lib::urls::FORM_MAPS_TO) else {
                 continue;
             };
-            let Ok(property) = store.get_resource(&maps_to.to_string().into()).await else {
-                continue;
-            };
-            let tag_subjects = property
-                .get(atomic_lib::urls::ALLOWS_ONLY)
-                .and_then(|v| v.to_subjects(None))
-                .unwrap_or_default();
+            let tag_subjects = enum_subjects(store, &class_subjects, &maps_to.to_string()).await;
 
             for tag_subject in tag_subjects {
                 let Ok(tag) = store.get_resource(&tag_subject.into()).await else {
@@ -1031,6 +1066,7 @@ pub fn sanitize_custom_css(css: &str) -> Option<String> {
 async fn build_page_definition(
     store: &impl Storelike,
     page: &Resource,
+    class_subjects: &[String],
 ) -> AtomicResult<FormPageDefinition> {
     let name = page.get(atomic_lib::urls::NAME).ok().map(|v| v.to_string());
     let cover_image = page
@@ -1050,7 +1086,7 @@ async fn build_page_definition(
     let mut blocks = Vec::with_capacity(field_subjects.len());
     for field_subject in field_subjects {
         let field = store.get_resource(&field_subject.into()).await?;
-        blocks.push(build_block(store, &field).await?);
+        blocks.push(build_block(store, &field, class_subjects).await?);
     }
 
     Ok(FormPageDefinition {
@@ -1109,7 +1145,11 @@ async fn build_conditions(store: &impl Storelike, resource: &Resource) -> Vec<Fo
     out
 }
 
-async fn build_block(store: &impl Storelike, field: &Resource) -> AtomicResult<FormBlock> {
+async fn build_block(
+    store: &impl Storelike,
+    field: &Resource,
+    class_subjects: &[String],
+) -> AtomicResult<FormBlock> {
     let conditions = build_conditions(store, field).await;
     let classes = field
         .get(atomic_lib::urls::IS_A)
@@ -1168,10 +1208,13 @@ async fn build_block(store: &impl Storelike, field: &Resource) -> AtomicResult<F
             Ok(Value::String(s)) => serde_json::from_str(s).unwrap_or_else(|_| json!({})),
             _ => json!({}),
         };
+        if !options.is_object() {
+            options = json!({});
+        }
+        // Forms stored before the options were renamed to JSON Schema keywords
+        // (`minSelected`, `minRows`, `min`, ...) read the same.
+        normalize_option_keys(&field_type, &mut options);
         if let Ok(property) = store.get_resource(&maps_to.clone().into()).await {
-            if !options.is_object() {
-                options = json!({});
-            }
             // `number` is shared by float and integer columns. This hint is
             // resolved from the Property, never trusted from form settings.
             if field_type == "number" {
@@ -1180,24 +1223,12 @@ async fn build_block(store: &impl Storelike, field: &Resource) -> AtomicResult<F
                     .map(|v| v.to_string() == atomic_lib::urls::INTEGER)
                     .unwrap_or(false));
             }
-            if matches!(field_type.as_str(), "multi-select" | "dropdown-multi") {
-                if let Some(max) = property
-                    .get("https://atomicdata.dev/properties/max")
-                    .ok()
-                    .and_then(|v| v.to_string().parse::<u64>().ok())
-                {
-                    let own_max = options
-                        .get("maxSelected")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(max);
-                    options["maxSelected"] = json!(own_max.min(max));
-                    if let Some(min) = options.get("minSelected").and_then(|v| v.as_u64()) {
-                        options["minSelected"] = json!(min.min(max));
-                    }
-                }
-            }
         }
-        resolve_choice_options(store, &field_type, &maps_to, &mut options).await;
+        // The class decides what the column accepts; the form's own options
+        // may only tighten that. The result is what both validators read.
+        let constraint = effective_constraint(store, class_subjects, &maps_to).await;
+        narrow_options(&field_type, &mut options, &constraint);
+        resolve_choice_options(store, class_subjects, &field_type, &maps_to, &mut options).await;
         return Ok(FormBlock::Field {
             maps_to,
             label,
@@ -1214,6 +1245,107 @@ async fn build_block(store: &impl Storelike, field: &Resource) -> AtomicResult<F
         field.get_subject()
     )
     .into())
+}
+
+/// The question types whose limits are numeric values.
+const NUMBER_FIELD_TYPES: [&str; 2] = ["number", "currency"];
+/// The question types whose limits are a text length and a pattern.
+const TEXT_FIELD_TYPES: [&str; 2] = ["short-text", "long-text"];
+/// The question types whose limits are an item count.
+const ITEM_FIELD_TYPES: [&str; 3] = ["multi-select", "dropdown-multi", "table-input"];
+
+/// Option names used before the form's limits were renamed to the JSON Schema
+/// keywords of class constraints, per question type. `max` stays on `rating`
+/// (its number of steps, not a limit).
+fn legacy_option_keys(field_type: &str) -> &'static [(&'static str, &'static str)] {
+    match field_type {
+        "number" | "currency" => &[("min", "minimum"), ("max", "maximum")],
+        "multi-select" | "dropdown-multi" => {
+            &[("minSelected", "minItems"), ("maxSelected", "maxItems")]
+        }
+        "table-input" => &[("minRows", "minItems"), ("maxRows", "maxItems")],
+        _ => &[],
+    }
+}
+
+/// Renames legacy option keys to their JSON Schema names. A key under its new
+/// name wins over the legacy one.
+pub fn normalize_option_keys(field_type: &str, options: &mut JsonValue) {
+    let Some(obj) = options.as_object_mut() else {
+        return;
+    };
+    for (old, new) in legacy_option_keys(field_type) {
+        if let Some(value) = obj.remove(*old) {
+            obj.entry(new.to_string()).or_insert(value);
+        }
+    }
+}
+
+/// Lays the data class's constraint for the mapped column under the form's own
+/// limits: a form option may only tighten the class (lower bounds take the
+/// larger value, upper bounds the smaller). The narrowed limits are written
+/// back into the options bag under the keyword names, so the definition
+/// carries exactly what a submission has to satisfy.
+fn narrow_options(field_type: &str, options: &mut JsonValue, class: &Constraint) {
+    let Some(obj) = options.as_object_mut() else {
+        return;
+    };
+    // Keeps the form's own limit unless the class is stricter.
+    fn put(obj: &mut Map<String, JsonValue>, key: &str, class: Option<JsonValue>, upper: bool) {
+        let Some(class) = class else { return };
+        let Some(class_number) = class.as_f64() else {
+            return;
+        };
+        let class_wins = match obj.get(key).and_then(|v| v.as_f64()) {
+            Some(own) if upper => class_number <= own,
+            Some(own) => class_number >= own,
+            None => true,
+        };
+        if class_wins {
+            obj.insert(key.into(), class);
+        }
+    }
+    // Whole numbers stay integers, so `10` does not turn into `10.0` on the
+    // wire.
+    let num = |v: Option<f64>| {
+        v.and_then(|v| {
+            if v.fract() == 0.0 && v.abs() < 9e15 {
+                Some(JsonValue::from(v as i64))
+            } else {
+                serde_json::Number::from_f64(v).map(JsonValue::Number)
+            }
+        })
+    };
+    let count = |v: Option<u64>| v.map(JsonValue::from);
+
+    if NUMBER_FIELD_TYPES.contains(&field_type) {
+        put(obj, "minimum", num(class.minimum), false);
+        put(obj, "maximum", num(class.maximum), true);
+        for (key, value, upper) in [
+            ("exclusiveMinimum", class.exclusive_minimum, false),
+            ("exclusiveMaximum", class.exclusive_maximum, true),
+        ] {
+            put(obj, key, num(value), upper);
+        }
+    } else if TEXT_FIELD_TYPES.contains(&field_type) {
+        put(obj, "minLength", count(class.min_length), false);
+        put(obj, "maxLength", count(class.max_length), true);
+        if let Some(re) = &class.pattern {
+            obj.insert("pattern".into(), json!(re.as_str()));
+        }
+    } else if ITEM_FIELD_TYPES.contains(&field_type) {
+        put(obj, "minItems", count(class.min_items), false);
+        put(obj, "maxItems", count(class.max_items), true);
+        // A minimum above the maximum could never be met.
+        if let (Some(min), Some(max)) = (
+            obj.get("minItems").and_then(|v| v.as_u64()),
+            obj.get("maxItems").and_then(|v| v.as_u64()),
+        ) {
+            if min > max {
+                obj.insert("minItems".into(), json!(max));
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1317,6 +1449,7 @@ fn coerce_value(
         "short-text" | "long-text" => {
             let s = expect_str(raw)?;
             check_length(s, options)?;
+            check_pattern(s, options)?;
             Ok(Value::String(s.to_string()))
         }
         "email" => text_matching(raw, is_valid_email, "Not a valid email address"),
@@ -1476,12 +1609,12 @@ fn check_table_input(raw: &JsonValue, options: &JsonValue) -> Result<Value, Stri
     }
 
     let filled = rows.iter().filter(|row| !json_is_empty(Some(row))).count() as u64;
-    if let Some(min) = options.get("minRows").and_then(|v| v.as_u64()) {
+    if let Some(min) = options.get("minItems").and_then(|v| v.as_u64()) {
         if filled < min {
             return Err(format!("Please fill in at least {min} row(s)"));
         }
     }
-    if let Some(max) = options.get("maxRows").and_then(|v| v.as_u64()) {
+    if let Some(max) = options.get("maxItems").and_then(|v| v.as_u64()) {
         if filled > max {
             return Err(format!("At most {max} row(s) allowed"));
         }
@@ -1617,18 +1750,46 @@ fn check_step(raw: &JsonValue, max: i64, what: &str) -> Result<i64, String> {
     Ok(n)
 }
 
+/// Value limits of a `number` / `currency` answer, under the JSON Schema
+/// keyword names (`minimum`, `maximum`, `exclusiveMinimum`,
+/// `exclusiveMaximum`) — the class constraint narrowed by the form's options,
+/// see [narrow_options].
 fn check_bounds(value: f64, options: &JsonValue) -> Result<(), String> {
-    if let Some(min) = options.get("min").and_then(|v| v.as_f64()) {
+    let get = |key: &str| options.get(key).and_then(|v| v.as_f64());
+    if let Some(min) = get("minimum") {
         if value < min {
             return Err(format!("Must be at least {min}"));
         }
     }
-    if let Some(max) = options.get("max").and_then(|v| v.as_f64()) {
+    if let Some(max) = get("maximum") {
         if value > max {
             return Err(format!("Must be at most {max}"));
         }
     }
+    if let Some(min) = get("exclusiveMinimum") {
+        if value <= min {
+            return Err(format!("Must be more than {min}"));
+        }
+    }
+    if let Some(max) = get("exclusiveMaximum") {
+        if value >= max {
+            return Err(format!("Must be less than {max}"));
+        }
+    }
     Ok(())
+}
+
+/// The `pattern` a text answer has to match, when the data class sets one.
+fn check_pattern(value: &str, options: &JsonValue) -> Result<(), String> {
+    let Some(source) = options.get("pattern").and_then(|v| v.as_str()) else {
+        return Ok(());
+    };
+    // An invalid pattern is rejected when the class is written; if one slips
+    // through, it does not block every answer.
+    match regex::Regex::new(source) {
+        Ok(re) if !re.is_match(value) => Err("Does not match the required format".into()),
+        _ => Ok(()),
+    }
 }
 
 /// How long a text answer may be, in characters. Read the same way as
@@ -1698,7 +1859,7 @@ fn selection_bounds(options: &JsonValue) -> (Option<u64>, Option<u64>) {
             .filter(|n| *n >= 1)
     };
 
-    (bound("minSelected"), bound("maxSelected"))
+    (bound("minItems"), bound("maxItems"))
 }
 
 /// Bounds on how many options a `multi-select` / `dropdown-multi` answer may
@@ -1722,7 +1883,7 @@ fn check_selection_count(picked: usize, options: &JsonValue) -> Result<(), Strin
 
 /// Checks picked option subjects against the question's resolved options.
 /// Unlike the other validators this fails closed on an empty list: options
-/// are resolved from `allowsOnly`, so "no options" means the question has
+/// are resolved from the column's `enum`, so "no options" means the question has
 /// none to pick, not that anything goes.
 fn check_membership(items: &[String], options: &JsonValue) -> Result<(), String> {
     let allowed: Vec<&str> = options_list(options)
@@ -2824,7 +2985,7 @@ mod tests {
         property.save_locally(&store).await.unwrap();
 
         let mut options = json!({});
-        resolve_choice_options(&store, "dropdown", &prop, &mut options).await;
+        resolve_choice_options(&store, &[], "dropdown", &prop, &mut options).await;
 
         assert_eq!(
             options[OPTIONS_KEY],
@@ -2849,7 +3010,7 @@ mod tests {
             make_class_and_property(&store, "c2", "pick2", urls::RESOURCE_ARRAY).await;
 
         let mut options = json!({ "placeholder": "Pick one" });
-        resolve_choice_options(&store, "dropdown", &prop, &mut options).await;
+        resolve_choice_options(&store, &[], "dropdown", &prop, &mut options).await;
 
         assert_eq!(options[OPTIONS_KEY], json!([]));
         assert_eq!(
@@ -2944,7 +3105,7 @@ mod tests {
         // The question's own Property allows nothing — the source is what
         // counts, so this must not shadow it.
         let mut options = json!({ OPTIONS_SOURCE_KEY: { "property": source_prop } });
-        resolve_choice_options(&store, "dropdown", &own_prop, &mut options).await;
+        resolve_choice_options(&store, &[], "dropdown", &own_prop, &mut options).await;
 
         assert_eq!(
             options[OPTIONS_KEY],
@@ -3078,7 +3239,7 @@ mod tests {
         let mut options = json!({
             OPTIONS_SOURCE_KEY: { "table": table, "labelProperty": name_prop },
         });
-        resolve_choice_options(&store, "dropdown", &own_prop, &mut options).await;
+        resolve_choice_options(&store, &[], "dropdown", &own_prop, &mut options).await;
 
         let resolved = options[OPTIONS_KEY].as_array().unwrap().clone();
         let mut labels: Vec<&str> = resolved
@@ -3111,7 +3272,7 @@ mod tests {
         let mut options = json!({
             OPTIONS_SOURCE_KEY: { "table": table, "labelProperty": notes_prop },
         });
-        resolve_choice_options(&store, "dropdown", &own_prop, &mut options).await;
+        resolve_choice_options(&store, &[], "dropdown", &own_prop, &mut options).await;
 
         let mut labels: Vec<&str> = options[OPTIONS_KEY]
             .as_array()
@@ -3143,7 +3304,7 @@ mod tests {
             json!({ "table": "did:ad:table:gone" }),
         ] {
             let mut options = json!({ OPTIONS_SOURCE_KEY: source });
-            resolve_choice_options(&store, "dropdown", &own_prop, &mut options).await;
+            resolve_choice_options(&store, &[], "dropdown", &own_prop, &mut options).await;
 
             assert_eq!(options[OPTIONS_KEY], json!([]));
             assert!(check_membership(&["anything".to_string()], &options).is_err());
@@ -3156,7 +3317,7 @@ mod tests {
         let (_class, prop) = make_class_and_property(&store, "c3", "txt", urls::STRING).await;
 
         let mut options = json!({ "placeholder": "Your name" });
-        resolve_choice_options(&store, "short-text", &prop, &mut options).await;
+        resolve_choice_options(&store, &[], "short-text", &prop, &mut options).await;
 
         assert_eq!(options, json!({ "placeholder": "Your name" }));
     }
@@ -3428,7 +3589,7 @@ mod tests {
                     description: None,
                     field_type: "number".into(),
                     required: true,
-                    options: json!({"min": 1, "max": 10}),
+                    options: json!({"minimum": 1, "maximum": 10}),
                     conditions: vec![],
                 }],
             }],
@@ -3664,7 +3825,12 @@ mod tests {
             12.5
         );
         assert_eq!(
-            err_message(submit_one("currency", false, json!({"min": 10}), json!(5))),
+            err_message(submit_one(
+                "currency",
+                false,
+                json!({"minimum": 10}),
+                json!(5)
+            )),
             "Must be at least 10"
         );
     }
@@ -3704,8 +3870,8 @@ mod tests {
     #[test]
     fn multi_picks_enforce_selection_bounds() {
         let mut options = choice_options(&["A", "B", "C"]);
-        options["minSelected"] = json!(2);
-        options["maxSelected"] = json!(3);
+        options["minItems"] = json!(2);
+        options["maxItems"] = json!(3);
 
         assert_eq!(
             ok_choice(submit_one(
@@ -3727,7 +3893,7 @@ mod tests {
         );
 
         let mut capped = choice_options(&["A", "B", "C"]);
-        capped["maxSelected"] = json!(2);
+        capped["maxItems"] = json!(2);
         assert_eq!(
             err_message(submit_one(
                 "dropdown-multi",
@@ -3758,8 +3924,8 @@ mod tests {
 
         // Junk bounds from a hand-edited bag are no bounds at all.
         let mut junk = choice_options(&["A", "B"]);
-        junk["minSelected"] = json!("two");
-        junk["maxSelected"] = json!(0);
+        junk["minItems"] = json!("two");
+        junk["maxItems"] = json!(0);
         assert!(submit_one("multi-select", false, junk, json!([tag("A")])).is_ok());
     }
 
@@ -3937,7 +4103,7 @@ mod tests {
     fn table_input_checks_columns_types_and_row_bounds() {
         let options = json!({
             "columns": [{"label": "Item", "type": "text"}, {"label": "Qty", "type": "number"}],
-            "maxRows": 2,
+            "maxItems": 2,
         });
 
         assert!(submit_one(
@@ -4812,5 +4978,278 @@ mod tests {
                 "output must be brace-balanced, got: {code}"
             );
         }
+    }
+    // ---- limits and options come from the data class's constraints --------
+
+    /// Writes `constraints` onto a class, as the builder does.
+    async fn set_class_constraints(store: &Db, class_subject: &str, constraints: JsonValue) {
+        let mut class = store
+            .get_resource(&class_subject.to_string().into())
+            .await
+            .unwrap();
+        class
+            .set(urls::CONSTRAINTS.into(), Value::Json(constraints), store)
+            .await
+            .unwrap();
+        class.save_locally(store).await.unwrap();
+    }
+
+    /// The form's first question, re-typed and given `options`.
+    async fn retype_first_field(store: &Db, form: &Resource, field_type: &str, options: JsonValue) {
+        let page_subject = form
+            .get(urls::FORM_PAGES)
+            .and_then(|v| v.to_subjects(None))
+            .unwrap()
+            .remove(0);
+        let page = store.get_resource(&page_subject.into()).await.unwrap();
+        let field_subject = page
+            .get(urls::FORM_FIELDS)
+            .and_then(|v| v.to_subjects(None))
+            .unwrap()
+            .remove(0);
+        let mut field = store.get_resource(&field_subject.into()).await.unwrap();
+        field
+            .set(
+                urls::FORM_FIELD_TYPE.into(),
+                Value::String(field_type.into()),
+                store,
+            )
+            .await
+            .unwrap();
+        field
+            .set(urls::FORM_FIELD_OPTIONS.into(), Value::Json(options), store)
+            .await
+            .unwrap();
+        field.save_locally(store).await.unwrap();
+    }
+
+    fn only_field_options(definition: &FormDefinition) -> JsonValue {
+        let FormBlock::Field { options, .. } = &definition.pages[0].blocks[0] else {
+            panic!("expected a question");
+        };
+        options.clone()
+    }
+
+    #[tokio::test]
+    async fn choice_options_come_from_the_data_classs_enum() {
+        let store = init_store().await;
+        let (class, prop) =
+            make_class_and_property(&store, "c", "pick", urls::RESOURCE_ARRAY).await;
+        let yes = make_tag(&store, &prop, "Yes", None).await;
+        let no = make_tag(&store, &prop, "No", None).await;
+        let old = make_tag(&store, &prop, "Old", None).await;
+
+        // The Property still carries the legacy list...
+        let mut property = store.get_resource(&prop.clone().into()).await.unwrap();
+        property
+            .set(
+                urls::ALLOWS_ONLY.into(),
+                Value::ResourceArray(vec![old.clone().into()]),
+                &store,
+            )
+            .await
+            .unwrap();
+        property.save_locally(&store).await.unwrap();
+
+        // ...which the class falls back to until it says otherwise.
+        let mut options = json!({});
+        resolve_choice_options(
+            &store,
+            std::slice::from_ref(&class),
+            "dropdown",
+            &prop,
+            &mut options,
+        )
+        .await;
+        assert_eq!(options[OPTIONS_KEY][0]["value"], json!(old));
+
+        set_class_constraints(
+            &store,
+            &class,
+            json!({ prop.clone(): { "enum": [no.clone(), yes.clone()], "maxItems": 1 } }),
+        )
+        .await;
+        let mut options = json!({});
+        resolve_choice_options(
+            &store,
+            std::slice::from_ref(&class),
+            "dropdown",
+            &prop,
+            &mut options,
+        )
+        .await;
+        let values: Vec<&str> = options[OPTIONS_KEY]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|o| o["value"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            values,
+            [no.as_str(), yes.as_str()],
+            "the class's enum wins, in order"
+        );
+        assert!(check_membership(&[old], &options).is_err());
+
+        let images = {
+            let (form, _) = build_test_form(&store).await;
+            collect_option_image_subjects(&store, &form).await.unwrap()
+        };
+        assert!(images.is_empty());
+    }
+
+    #[test]
+    fn legacy_limit_names_are_renamed_to_json_schema_keywords() {
+        let mut options = json!({"minSelected": 1, "maxSelected": 3, "maxItems": 2});
+        normalize_option_keys("multi-select", &mut options);
+        assert_eq!(
+            options,
+            json!({"minItems": 1, "maxItems": 2}),
+            "a new name wins"
+        );
+
+        let mut options = json!({"min": 1, "max": 5});
+        normalize_option_keys("number", &mut options);
+        assert_eq!(options, json!({"minimum": 1, "maximum": 5}));
+
+        let mut options = json!({"minRows": 1, "maxRows": 5});
+        normalize_option_keys("table-input", &mut options);
+        assert_eq!(options, json!({"minItems": 1, "maxItems": 5}));
+
+        // A rating's `max` is its number of steps, not a limit.
+        let mut options = json!({"max": 7});
+        normalize_option_keys("rating", &mut options);
+        assert_eq!(options, json!({"max": 7}));
+    }
+
+    #[test]
+    fn a_question_can_only_tighten_the_class_constraint() {
+        let class = atomic_lib::class_constraints::parse_constraint(
+            &json!({"minimum": 0, "maximum": 10, "exclusiveMinimum": -1}),
+        )
+        .unwrap();
+        let mut options = json!({"minimum": 2, "maximum": 20});
+        narrow_options("number", &mut options, &class);
+        assert_eq!(options["minimum"], json!(2), "tighter than the class");
+        assert_eq!(options["maximum"], json!(10), "looser than the class");
+        assert_eq!(options["exclusiveMinimum"], json!(-1));
+
+        let class =
+            atomic_lib::class_constraints::parse_constraint(&json!({"minItems": 1, "maxItems": 2}))
+                .unwrap();
+        let mut options = json!({"minItems": 3, "maxItems": 5});
+        narrow_options("multi-select", &mut options, &class);
+        assert_eq!(options["maxItems"], json!(2));
+        assert_eq!(
+            options["minItems"],
+            json!(2),
+            "a minimum above the maximum is clamped"
+        );
+
+        let class = atomic_lib::class_constraints::parse_constraint(
+            &json!({"maxLength": 5, "pattern": "^[a-z]+$"}),
+        )
+        .unwrap();
+        let mut options = json!({"minLength": 2});
+        narrow_options("short-text", &mut options, &class);
+        assert_eq!(
+            options,
+            json!({"minLength": 2, "maxLength": 5, "pattern": "^[a-z]+$"})
+        );
+
+        // Types without limits keep their options.
+        let mut options = json!({"placeholder": "x"});
+        narrow_options("email", &mut options, &class);
+        assert_eq!(options, json!({"placeholder": "x"}));
+    }
+
+    #[tokio::test]
+    async fn the_definition_carries_the_narrowed_limits() {
+        let store = init_store().await;
+        let (form, prop) = build_test_form(&store).await;
+        let class = form.get(urls::FORM_DATA_CLASS).unwrap().to_string();
+        set_class_constraints(
+            &store,
+            &class,
+            json!({ prop.clone(): { "minimum": 0, "maximum": 10 } }),
+        )
+        .await;
+        // A form stored with the old names reads the same.
+        retype_first_field(&store, &form, "number", json!({"min": 2, "max": 20})).await;
+
+        let definition = build_form_definition(&store, &form).await.unwrap();
+        let options = only_field_options(&definition);
+        assert_eq!(options["minimum"], json!(2));
+        assert_eq!(options["maximum"], json!(10));
+        assert!(options.get("min").is_none() && options.get("max").is_none());
+
+        let key = prop.clone();
+        let submit = |value: JsonValue| {
+            let mut values = Map::new();
+            values.insert(key.clone(), value);
+            validate_submission(&definition, &values)
+        };
+        assert!(submit(json!(5)).is_ok());
+        assert!(submit(json!(1)).is_err(), "below the form's minimum");
+        let errors = submit(json!(11)).unwrap_err();
+        assert_eq!(
+            errors[0].message, "Must be at most 10",
+            "the class caps the form"
+        );
+    }
+
+    #[tokio::test]
+    async fn choice_limits_and_patterns_reach_the_submission_check() {
+        let store = init_store().await;
+        let (form, prop) = build_test_form(&store).await;
+        let class = form.get(urls::FORM_DATA_CLASS).unwrap().to_string();
+        set_class_constraints(
+            &store,
+            &class,
+            json!({ prop.clone(): { "pattern": "^[A-Z]{3}$", "maxLength": 3 } }),
+        )
+        .await;
+        retype_first_field(&store, &form, "short-text", json!({})).await;
+
+        let definition = build_form_definition(&store, &form).await.unwrap();
+        let mut values = Map::new();
+        values.insert(prop.clone(), json!("ABC"));
+        assert!(validate_submission(&definition, &values).is_ok());
+        values.insert(prop.clone(), json!("abc"));
+        assert_eq!(
+            validate_submission(&definition, &values).unwrap_err()[0].message,
+            "Does not match the required format"
+        );
+        values.insert(prop, json!("ABCD"));
+        assert_eq!(
+            validate_submission(&definition, &values).unwrap_err()[0].message,
+            "At most 3 characters allowed"
+        );
+    }
+
+    #[test]
+    fn exclusive_bounds_and_row_counts_are_validated() {
+        assert_eq!(
+            err_message(submit_one(
+                "number",
+                false,
+                json!({"exclusiveMinimum": 1, "exclusiveMaximum": 9}),
+                json!(1)
+            )),
+            "Must be more than 1"
+        );
+        assert_eq!(
+            err_message(submit_one(
+                "number",
+                false,
+                json!({"exclusiveMaximum": 9}),
+                json!(9)
+            )),
+            "Must be less than 9"
+        );
+        let rows =
+            json!({"columns": [{"label": "A", "type": "text"}], "minItems": 2, "maxItems": 2});
+        assert!(submit_one("table-input", false, rows.clone(), json!([{"A": "x"}])).is_err());
+        assert!(submit_one("table-input", false, rows, json!([{"A": "x"}, {"A": "y"}])).is_ok());
     }
 }

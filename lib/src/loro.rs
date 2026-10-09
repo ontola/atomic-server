@@ -2070,6 +2070,7 @@ mod test {
         // Apply the commit
         let opts = crate::commit::CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: true,
             validate_timestamp: true,
             validate_rights: false,
@@ -2114,6 +2115,7 @@ mod test {
 
         let opts = crate::commit::CommitOpts {
             validate_schema: false,
+            validate_constraints: false,
             validate_signature: true,
             validate_timestamp: true,
             validate_rights: false,
