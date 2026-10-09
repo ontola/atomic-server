@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 3,
+  "secrets": [
+    {
+      "name": "pds",
+      "origin": "https://bsky.social"
+    }
+  ],
+  "operations": [],
+  "http": {
+    "sidecars": [
+      {
+        "name": "pds",
+        "reason": "Talks to the operator's atproto PDS"
+      }
+    ]
+  }
+}

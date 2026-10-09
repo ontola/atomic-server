@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "http": {
+    "sidecars": [
+      {
+        "name": "PDS"
+      }
+    ]
+  }
+}

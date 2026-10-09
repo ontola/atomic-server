@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 3,
+  "secrets": [],
+  "operations": [],
+  "runtime": "wasip2/1",
+  "world": "server-extension",
+  "entrypoints": {
+    "run": true
+  },
+  "http": {
+    "listeners": [
+      {
+        "name": "willow-wgps",
+        "reason": "Willow live sync over QUIC"
+      }
+    ]
+  }
+}
