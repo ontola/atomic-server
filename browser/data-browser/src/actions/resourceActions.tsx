@@ -16,6 +16,7 @@ import {
   FaPlay,
   FaPlus,
   FaRotateRight,
+  FaTrashCanArrowUp,
   FaRegStar,
   FaShare,
   FaStar,
@@ -36,6 +37,7 @@ import {
 import { paths } from '../routes/paths';
 import { shortcuts } from './shortcuts';
 import type { ActionContext, ActionDefinition } from './types';
+import { isInTrash, restoreFromTrash } from '../helpers/trash';
 import { openSearchOverlay } from '../components/overlayState';
 import { openShareDialog } from '../components/Share/shareDialogState';
 
@@ -44,6 +46,9 @@ export const OPEN_TAGS_EVENT = 'atomic-open-tags';
 
 const getParent = (ctx: ActionContext): string | undefined =>
   ctx.resource.get(core.properties.parent) as string | undefined;
+
+const inTrash = (ctx: ActionContext): boolean =>
+  isInTrash(ctx.store, ctx.drive, ctx.resource);
 
 /**
  * All actions on a resource, in menu order. Ids keep the historical
@@ -386,10 +391,25 @@ export const resourceActions: ActionDefinition[] = [
     run: ctx => ctx.navigate(importerURL(ctx.subject)),
   },
   {
+    id: 'restore',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Restore',
+    helper: () => 'Move this resource out of the Trash, back to where it was.',
+    keywords: ['trash', 'undelete', 'recover'],
+    icon: () => <FaTrashCanArrowUp />,
+    available: ctx => ctx.canWrite && inTrash(ctx),
+    run: async ctx => {
+      if (ctx.drive) {
+        await restoreFromTrash(ctx.store, ctx.subject, ctx.drive);
+      }
+    },
+  },
+  {
     id: 'delete',
     scope: 'resource',
     section: 'action',
-    label: () => 'Delete',
+    label: ctx => (inTrash(ctx) ? 'Delete permanently' : 'Delete'),
     helper: () => 'Delete this resource.',
     keywords: ['remove', 'destroy', 'trash'],
     icon: () => <FaTrash />,

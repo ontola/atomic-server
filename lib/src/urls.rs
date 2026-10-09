@@ -232,6 +232,8 @@ pub const MESSAGES: &str = "https://atomicdata.dev/properties/messages";
 pub const NEXT_PAGE: &str = "https://atomicdata.dev/properties/nextPage";
 pub const ABOUT: &str = "https://atomicdata.dev/properties/about";
 pub const COMMENTS_FOLDER: &str = "https://atomicdata.dev/properties/commentsFolder";
+pub const TRASH_FOLDER: &str = "https://atomicdata.dev/properties/trashFolder";
+pub const TRASHED_FROM: &str = "https://atomicdata.dev/properties/trashedFrom";
 pub const MEETINGS_FOLDER: &str = "https://atomicdata.dev/properties/meetingsFolder";
 pub const FOLLOW_SESSIONS_CHATROOM: &str =
     "https://atomicdata.dev/properties/followSessionsChatroom";
