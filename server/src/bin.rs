@@ -23,6 +23,7 @@ mod jsonerrors;
 mod mcp;
 mod metrics;
 mod node_key;
+mod plugin_routes;
 pub mod plugins;
 mod rate_limit;
 mod routes;
