@@ -1,6 +1,7 @@
-import { dataBrowser, core, classes, ai, canvas } from '@tomic/react';
+import { dataBrowser, core, classes, ai, canvas, urls } from '@tomic/react';
 import { registerBasicInstanceHandler } from '../useNewResourceUI';
 import { DEFAULT_AICHAT_NAME } from '../../../AI/aiContstants';
+import { GROUP_MEMBERS } from '../../../Group/groups';
 import { getOrCreateMeetingsFolder } from '../../../../helpers/standardLocations';
 
 /**
@@ -107,6 +108,26 @@ export const registerBasicInstanceHandlers = () => {
         ai.classes.aiChat,
         {
           [core.properties.name]: DEFAULT_AICHAT_NAME,
+        },
+        {
+          parent,
+        },
+      );
+    },
+  );
+
+  // A group starts with its creator in it, so it is never saved empty. The
+  // group page is where the rest of the members are added.
+  registerBasicInstanceHandler(
+    urls.classes.group,
+    async (parent, createAndNavigate, { store }) => {
+      const creator = store.getAgent()?.subject;
+
+      await createAndNavigate(
+        urls.classes.group,
+        {
+          [core.properties.name]: 'Group',
+          [GROUP_MEMBERS]: creator ? [creator] : [],
         },
         {
           parent,

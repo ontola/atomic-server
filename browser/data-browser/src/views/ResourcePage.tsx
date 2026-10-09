@@ -14,6 +14,7 @@ import {
   notifications,
   conversations,
   useArray,
+  urls,
 } from '@tomic/react';
 
 import { ContainerNarrow } from '../components/Containers';
@@ -40,6 +41,7 @@ import { PendingForks } from '../components/PendingForks';
 import { Main } from '../components/Main';
 import { OntologyPage } from './OntologyPage';
 import { TagPage } from './TagPage/TagPage';
+import { GroupPage } from './GroupPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
 import { CanvasPage } from './Canvas/CanvasPage';
@@ -65,7 +67,9 @@ const WebsiteExportPage = lazy(() =>
   })),
 );
 const WebsitePage = lazy(() =>
-  import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
+  import('@chunks/Website/WebsitePage').then(m => ({
+    default: m.WebsitePage,
+  })),
 );
 
 const AtomicPluginPage = lazy(() =>
@@ -329,6 +333,8 @@ function selectComponent(klass: string | undefined) {
       return OntologyPage;
     case dataBrowser.classes.tag:
       return TagPage;
+    case urls.classes.group:
+      return GroupPage;
     case ai.classes.aiChat:
       return AIChatPage;
     case dataBrowser.classes.documentV2:

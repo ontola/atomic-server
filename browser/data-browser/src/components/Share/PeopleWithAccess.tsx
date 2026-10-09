@@ -1,13 +1,23 @@
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { urls, useResource, useTitle } from '@tomic/react';
+import {
+  urls,
+  useArray,
+  useResource,
+  useTitle,
+  type Resource,
+} from '@tomic/react';
 import { AgentAvatar } from '../Presence/AgentAvatar';
 import { RoleSelect, roleLabel, type ShareRole } from './RoleSelect';
 import type { DirectRight } from './useShareRights';
 import type { MergedRight } from '../../routes/Share/useRights';
 import { useClassLabel } from './useClassLabel';
 import { AtomicLink } from '../AtomicLink';
+import { GroupAvatar } from '../Group/GroupAvatar';
+import { GROUP_MEMBERS, isGroup } from '../Group/groups';
+import { useEffectiveMembers } from '../Group/useEffectiveMembers';
+import { plural } from '../../helpers/plural';
 
 interface PeopleWithAccessProps {
   rights: DirectRight[];
@@ -126,21 +136,67 @@ function PersonRow({
 }: PersonRowProps): JSX.Element {
   const agent = useResource(agentSubject);
   const [name] = useTitle(agent);
+  const [members] = useArray(agent, GROUP_MEMBERS);
+  const [showCovered, setShowCovered] = useState(false);
+  const group = isGroup(agent);
+  const shownDetail = group
+    ? plural(members.length, ['Group, # member', 'Group, # members'])
+    : detail;
 
   return (
-    <Row data-test='share-person'>
-      <AgentAvatar agentSubject={agentSubject} size='2.6rem' />
-      <Who>
-        <Name>
-          <ProfileLink subject={agentSubject} clean>
-            {name}
-          </ProfileLink>
-          {isYou && ' (you)'}
-        </Name>
-        {detail && <Detail>{detail}</Detail>}
-      </Who>
-      {control}
-    </Row>
+    <>
+      <Row
+        data-test={group ? undefined : 'share-person'}
+        data-testid={group ? 'share-group' : undefined}
+      >
+        {group ? (
+          <GroupAvatar />
+        ) : (
+          <AgentAvatar agentSubject={agentSubject} size='2.6rem' />
+        )}
+        <Who>
+          <Name $wrap={group}>
+            <ProfileLink subject={agentSubject} clean>
+              {name}
+            </ProfileLink>
+            {isYou && ' (you)'}
+          </Name>
+          {shownDetail && (
+            <Detail $wrap={group}>
+              {shownDetail}
+              {group && members.length > 0 && (
+                <>
+                  {' · '}
+                  <CoveredToggle
+                    type='button'
+                    aria-expanded={showCovered}
+                    onClick={() => setShowCovered(!showCovered)}
+                  >
+                    {showCovered ? 'Hide' : 'Show'}
+                  </CoveredToggle>
+                </>
+              )}
+            </Detail>
+          )}
+        </Who>
+        {control}
+      </Row>
+      {group && showCovered && <CoveredPeople group={agent} />}
+    </>
+  );
+}
+
+/** Who a group in the list actually lets in, nested groups included. */
+function CoveredPeople({ group }: { group: Resource }): JSX.Element {
+  const { agents, loading } = useEffectiveMembers(group);
+
+  return (
+    <Covered data-testid='share-group-covered'>
+      {loading && <Detail>Loading...</Detail>}
+      {agents.map(subject => (
+        <PersonRow key={subject} agentSubject={subject} />
+      ))}
+    </Covered>
   );
 }
 
@@ -263,11 +319,12 @@ const Who = styled.div`
   min-width: 0;
 `;
 
-const Name = styled.span`
+const Name = styled.span<{ $wrap?: boolean }>`
   font-size: 1.05rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: ${p => (p.$wrap ? 'normal' : 'nowrap')};
+  overflow-wrap: anywhere;
 `;
 
 const ProfileLink = styled(AtomicLink)`
@@ -280,12 +337,34 @@ const ProfileLink = styled(AtomicLink)`
   }
 `;
 
-const Detail = styled.span`
+const CoveredToggle = styled.button`
+  border: none;
+  background: none;
+  padding: 0;
+  color: ${p => p.theme.colors.main};
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const Covered = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-left: 1.3rem;
+  padding-left: 1.3rem;
+  border-left: 2px solid ${p => p.theme.colors.bg2};
+`;
+
+const Detail = styled.span<{ $wrap?: boolean }>`
   color: ${p => p.theme.colors.textLight};
   font-size: 0.95rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: ${p => (p.$wrap ? 'normal' : 'nowrap')};
 `;
 
 const StaticRole = styled.span`

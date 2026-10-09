@@ -43,6 +43,7 @@ import { PeopleWithAccess, effectiveRole } from './PeopleWithAccess';
 import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext';
 import { PublicAccess } from './PublicAccess';
 import { RoleSwitch, type ShareRole } from './RoleSelect';
+import { GroupPicker } from './GroupPicker';
 import { useShareRights } from './useShareRights';
 import { useClassLabel } from './useClassLabel';
 import { inviteLinkPrefix, useCreateInviteLink } from './useCreateInviteLink';
@@ -313,6 +314,12 @@ function ShareOverview({
                   onSetRole={canWrite ? setRole : undefined}
                 />
               </ResourceLinkNavigationContext.Provider>
+              {canWrite && (
+                <GroupPicker
+                  rights={rights}
+                  onAdd={(group, role) => setRole(group, role)}
+                />
+              )}
               <PublicAccess
                 level={publicRight?.role ?? 'off'}
                 inherited={

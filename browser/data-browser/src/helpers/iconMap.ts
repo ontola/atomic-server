@@ -8,6 +8,7 @@ import {
   Datatype,
   forms,
   server,
+  urls,
 } from '@tomic/react';
 import { IconType } from 'react-icons';
 import {
@@ -44,6 +45,7 @@ import {
   FaCode,
   FaPuzzlePiece,
   FaVideo,
+  FaUserGroup,
   FaWpforms,
 } from 'react-icons/fa6';
 import { AIIcon } from '../components/AI/AIIcon';
@@ -73,6 +75,7 @@ const iconMap = new Map<string, IconType>([
   [ai.classes.aiChat, AIIcon],
   [canvas.classes.canvas, FaPaintbrush],
   [forms.classes.form, FaWpforms],
+  [urls.classes.group, FaUserGroup],
 ]);
 
 /**

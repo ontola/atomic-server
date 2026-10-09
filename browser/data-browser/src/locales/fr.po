@@ -653,6 +653,7 @@ msgstr "Impossible de se connecter au serveur Ollama. Vérifiez si le serveur es
 #: src/chunks/AI/ModelSelect/OllamaModelSelector.tsx
 #: src/components/HighlightedCodeBlock.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
+#: src/components/Share/PeopleWithAccess.tsx
 #: src/views/Card/ResourceCard.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
@@ -2881,6 +2882,7 @@ msgstr "Vide"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
+#: src/components/Share/PeopleWithAccess.tsx
 #: src/components/Vault/VaultStorage.tsx
 msgid "Hide"
 msgstr "Masquer"
@@ -4641,8 +4643,10 @@ msgid "Languages"
 msgstr ""
 
 #. 0: tag
+#. 0: name
 #. 0: email
 #: src/components/EditLanguagesDialog.tsx
+#: src/components/Group/GroupMemberRow.tsx
 #: src/components/Share/EmailInviteInput.tsx
 msgid "Remove {0}"
 msgstr ""
@@ -9068,7 +9072,9 @@ msgid "People with access"
 msgstr ""
 
 #. 0: name
+#. 0: name
 #: src/components/Share/PeopleWithAccess.tsx
+#: src/views/GroupPage.tsx
 msgid "Removed {0}"
 msgstr ""
 
@@ -9082,6 +9088,7 @@ msgstr ""
 msgid "{0} more through {1} <0/>"
 msgstr ""
 
+#: src/components/Share/PeopleWithAccess.tsx
 #: src/components/Share/PeopleWithAccess.tsx
 msgid "Show"
 msgstr ""
@@ -12279,6 +12286,7 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
+msgstr ""
 
 #: src/components/BrowserPeerPanel.tsx
 msgid "See Cloud Server plans"
@@ -12295,4 +12303,80 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "Already a member."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "A group cannot contain itself."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "Only people and groups can be members."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "# member"
+msgid_plural "# members"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/views/GroupPage.tsx
+msgid "This group has no members yet."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "Search for a person or paste their agent URL..."
+msgstr ""
+
+#: src/components/Share/GroupPicker.tsx
+#: src/views/GroupPage.tsx
+msgid "Search for a group..."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "Add members"
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "Counting everyone covered..."
+msgstr ""
+
+#: src/views/GroupPage.tsx
+msgid "# person is covered when this group is given access, including through other groups."
+msgid_plural "# people are covered when this group is given access, including through other groups."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/Group/GroupMemberRow.tsx
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Group, # member"
+msgid_plural "Group, # members"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/components/Group/GroupMemberRow.tsx
+msgid "Person"
+msgstr ""
+
+#: src/components/Share/GroupPicker.tsx
+msgid "That group already has access."
+msgstr ""
+
+#: src/components/Share/GroupPicker.tsx
+msgid "Role for the group"
+msgstr ""
+
+#: src/components/Share/GroupPicker.tsx
+msgid "Add a group"
+msgstr ""
+
+#: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
+msgid "Group"
+msgstr ""
+
+#: src/components/Share/GroupPicker.tsx
+msgid "That is not a group."
 msgstr ""

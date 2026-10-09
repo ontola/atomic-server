@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Groups: create a group from New > Group, name it and add or remove members (people and other groups) on its page. In the Share dialog, "Add a group" gives a group read or write access next to individual people; each group shows its member count, "Show" lists everyone it covers, and the role menu removes it. Everyone in the group gets access, and changes to the group apply on the next request (#2158).
 - Share dialog: the role for new invites (email field and Copy invite link) is a single-click Read / Write switch in the same style as the Public switch, instead of a Can write dropdown.
 - Calendar: changing only the start or end time of a multi-day timed event keeps its end date (#2089).
 - Tables: a JSON filter value is normalized (keys sorted, no whitespace) when you leave the field, so the exact text of a saved value matches its row (#2093).
