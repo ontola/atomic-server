@@ -5212,6 +5212,8 @@ impl Storelike for Db {
             crate::sync::tombstones::record_tombstone(store, &r.subject.pure_id());
         }
 
+        // Compaction rewrites the redb file, which the wasm build does not have.
+        #[cfg(not(target_arch = "wasm32"))]
         if commit_response.commit.purge == Some(true) {
             compaction::request_after_purge(&store.path);
         }
