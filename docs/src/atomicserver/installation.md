@@ -182,12 +182,26 @@ With such a build, pass **`--enable-vector-index`** (or set **`ATOMIC_ENABLE_VEC
 
 ## Running using a tunneling service (easy mode)
 
-If you want to make your -server available on the web, but don't want (or cannot) deal with setting up port-forwarding and DNS, you can use a tunneling service.
-It's the easiest way to get your server to run on the web, yet still have full control over your server.
+If you want to make your server available on the web, but don't want (or cannot) deal with setting up port-forwarding and DNS, you can use a tunneling service.
+It's the easiest way to get a public HTTPS address, yet you keep full control over your data.
 
-- Create an account on some tunneling service, such as [tunnelto.dev](https://tunnelto.dev/) (which we will use here). Make sure to reserve a subdomain, you want it to remain stable.
-- `tunnelto --port 9883 --subdomain joepio --key YOUR_API_KEY`
-- `atomic-server --domain joepio.tunnelto.dev --server-url 'https://joepio.tunnelto.dev' --initialize`
+We recommend a [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) quick tunnel. It needs no account, and it handles WebSockets, which AtomicServer needs for real-time sync. Other tunnels such as tunnelto are known to drop the WebSocket connection, which leaves the app stuck on "Loading".
+
+```sh
+# 1. Start the tunnel. It prints a public address like https://random-words.trycloudflare.com
+cloudflared tunnel --url http://localhost:9883
+
+# 2. In a second terminal, start the server with that host as its domain
+ATOMIC_DOMAIN=random-words.trycloudflare.com \
+ATOMIC_SERVER_URL=https://random-words.trycloudflare.com \
+atomic-server --initialize
+```
+
+- `ATOMIC_DOMAIN` must be the **public host** (no scheme, no port). The server uses it to decide which origin it accepts logins for. Leave it at `localhost` and sign-in over the WebSocket fails with `does not name this server`.
+- `ATOMIC_SERVER_URL` (or `--server-url`) is the public URL including `https://`. The tunnel terminates TLS, so the server needs to be told its public address, see [Behind a reverse proxy](#behind-a-reverse-proxy-nginx-caddy-traefik-ferron-cloudflare-tunnel).
+- Keep the server on plain HTTP (no `--https`); cloudflared forwards to it.
+- A quick tunnel is **public while it runs**, and its address changes on every start, so use it for testing and demos. For a stable address, use a named Cloudflare Tunnel, or a reverse proxy on your own domain.
+- Before you share the address, read [Putting your server on the internet](#putting-your-server-on-the-internet).
 
 ## Behind a reverse proxy (nginx, Caddy, Traefik, Ferron, Cloudflare Tunnel)
 
@@ -217,7 +231,7 @@ You can also set these things using a `.env` or by setting them some other way.
 
 Make sure the server is accessible at `ATOMIC_DOMAIN` at port 80, because Let's Encrypt will send an HTTP request to this server's `/.well-known` directory to check the keys.
 The default Ports are `9883` for HTTP, and `9884` for HTTPS.
-If you're running the server publicly, set these to `80` and `433`: `atomic-server --https --port 80 --port-https 433`.
+If you're running the server publicly, set these to `80` and `443`: `atomic-server --https --port 80 --port-https 443`.
 It will now initialize the certificate.
 Read the logs, watch for errors.
 
