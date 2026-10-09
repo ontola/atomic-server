@@ -148,6 +148,9 @@ function listenForCode(timeoutMs: number) {
     resolveCallback = resolve;
     rejectCallback = reject;
   });
+  // The timer can fire while connect() is still registering, before anything
+  // awaits `done`. Without a handler that is an unhandled rejection.
+  done.catch(() => undefined);
   const http = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
 
@@ -173,11 +176,16 @@ function listenForCode(timeoutMs: number) {
     done: Promise<URLSearchParams>;
     close: () => void;
   }>((resolve, reject) => {
-    http.once('error', reject);
+    http.once('error', error => {
+      clearTimeout(timer);
+      reject(error);
+    });
     http.listen(0, '127.0.0.1', () => {
       const address = http.address();
 
       if (!address || typeof address === 'string') {
+        clearTimeout(timer);
+        http.close();
         reject(new Error('Could not listen on this machine.'));
 
         return;
