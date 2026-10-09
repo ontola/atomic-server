@@ -5,6 +5,7 @@ import {
   Store,
   Transform,
   core,
+  dataBrowser,
   ensureLens,
   isPropertySubject,
 } from '@tomic/react';
@@ -172,6 +173,23 @@ export async function replacePropertyReferences(
     if (changed) {
       await cls.save();
     }
+  }
+
+  // A view that lists its columns explicitly would otherwise hide the new
+  // property (the old one is no longer a column) and show nothing for it.
+  for (const view of store.clientSideQuery(res =>
+    listed(res, dataBrowser.properties.viewColumns),
+  )) {
+    await view.set(
+      dataBrowser.properties.viewColumns,
+      replaceIn(
+        (view.get(dataBrowser.properties.viewColumns) ?? []) as string[],
+        oldSubject,
+        newSubject,
+      ),
+      false,
+    );
+    await view.save();
   }
 
   const old = await store.getResource(oldSubject);

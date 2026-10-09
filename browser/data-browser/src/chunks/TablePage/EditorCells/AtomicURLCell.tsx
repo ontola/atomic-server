@@ -6,7 +6,6 @@ import {
   server,
   unknownSubject,
   useArray,
-  useEffectiveConstraint,
   useResource,
   useString,
   useTitle,
@@ -36,13 +35,14 @@ import {
   SearchResultWrapper,
 } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
+import { useRowConstraint } from '../useColumnConstraint';
 import { usePopover } from '@components/CustomPopover';
 import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 
 // The linked class comes from the row's class constraints, falling back to the
 // Property's legacy `classtype`.
 const useClassType = (subject: string, rowClasses: string[]) => {
-  const { class: linkedClass } = useEffectiveConstraint(rowClasses, subject);
+  const { class: linkedClass } = useRowConstraint(rowClasses, subject);
 
   const classType = useResource<Core.Class>(linkedClass);
   const hasClassType = classType?.subject !== unknownSubject;

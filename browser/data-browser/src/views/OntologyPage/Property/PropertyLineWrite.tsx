@@ -106,6 +106,7 @@ export function PropertyLineWrite({
       )}
       <PropertyWriteDialog
         resource={resource}
+        classResource={classResource}
         {...dialogProps}
         close={hide}
         isOpen={isOpen}

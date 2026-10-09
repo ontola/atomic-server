@@ -130,7 +130,7 @@ export function PropertyForm({
         </InputWrapper>
         {nameError && <ErrorChip>{nameError}</ErrorChip>}
       </div>
-      <CategoryForm resource={resource} />
+      <CategoryForm resource={resource} existingProperty={existingProperty} />
       {/* Needed for inputs to submit on enter */}
       <HiddenSubmitButton type='submit' />
     </Form>

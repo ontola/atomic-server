@@ -17,12 +17,15 @@ interface PropertyWriteDialogProps {
   resource: Resource;
   close: () => void;
   isOpen: boolean;
+  /** The class whose line opened the dialog: where a link's class is stored. */
+  classResource?: Resource;
 }
 
 export function PropertyWriteDialog({
   resource,
   close,
   isOpen,
+  classResource,
   ...dialogProps
 }: PropertyWriteDialogProps & InternalDialogProps): JSX.Element {
   const canEdit = useCanWrite(resource);
@@ -47,6 +50,7 @@ export function PropertyWriteDialog({
             <PropertyFormCommon
               resource={resource}
               canEdit={canEdit}
+              classResource={classResource}
               onClassCreated={close}
             />
           </DialogContent>

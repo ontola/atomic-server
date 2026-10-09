@@ -1,11 +1,5 @@
-import {
-  core,
-  JSONValue,
-  Store,
-  useEffectiveConstraint,
-  useStore,
-} from '@tomic/react';
-import { useRef, useState, type JSX } from 'react';
+import { core, JSONValue, Store, useResources, useStore } from '@tomic/react';
+import { useMemo, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { IconButton } from '@components/IconButton/IconButton';
 import { TagButton, Tag } from '@components/Tag';
@@ -18,7 +12,7 @@ import { KeyboardInteraction, useCellOptions } from '@chunks/TableEditor';
 import { AbsoluteCell } from './CellComponents';
 import { FaXmark, FaPlus } from 'react-icons/fa6';
 import { CustomPopover, usePopover } from '@components/CustomPopover';
-import { optionSubjects } from '../useColumnConstraint';
+import { optionSubjects, useRowConstraint } from '../useColumnConstraint';
 
 const TAG_SPACING = '0.5rem';
 
@@ -54,8 +48,14 @@ function SelectCellEdit({
   const store = useStore();
   // Options and the pick limit come from the row's class `constraints`,
   // falling back to the Property's legacy `allowsOnly` and `max`.
-  const constraint = useEffectiveConstraint(row.getClasses(), property);
+  const constraint = useRowConstraint(row.getClasses(), property);
   const allowsOnly = optionSubjects(constraint);
+  // The titles below are read from the store: wake up when an option's Tag
+  // finishes loading or syncing, or a pick made right after the column was
+  // created finds a Tag with no title yet and matches nothing.
+  const optionKey = allowsOnly.join('\n');
+  const optionList = useMemo(() => allowsOnly, [optionKey]);
+  useResources(optionList);
   const [query, setQuery] = useState('');
 
   // `maxItems` caps how many tags may be picked at once. It is how
@@ -97,6 +97,25 @@ function SelectCellEdit({
     onChange(max !== undefined && next.length > max ? next.slice(-max) : next);
   };
 
+  // Enter right after the column was created can find its Tags still loading,
+  // with no title to match the typed text against. Wait for them, then pick,
+  // instead of picking from a list that is empty only for now.
+  const pickSelected = async () => {
+    if (allowsOnly.some(o => store.getResourceLoading(o).loading)) {
+      await Promise.all(
+        allowsOnly.map(o => store.getResource(o).catch(() => undefined)),
+      );
+    }
+
+    const subject = buildListWithTitles(store, allowsOnly, val)
+      .filter(v => v.title.toLowerCase().includes(query.toLowerCase()))
+      .map(ft => ft.subject)[selectedIndex];
+
+    if (subject) {
+      handleAddTag(subject);
+    }
+  };
+
   const handleRemoveTag = (subject: string) => {
     onChange(val.filter(tagSubject => tagSubject !== subject));
   };
@@ -117,7 +136,7 @@ function SelectCellEdit({
         break;
       case 'Enter':
         e.preventDefault();
-        handleAddTag(filteredTags[selectedIndex]);
+        void pickSelected();
         break;
     }
   };

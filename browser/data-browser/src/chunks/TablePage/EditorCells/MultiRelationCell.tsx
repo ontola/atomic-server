@@ -5,7 +5,6 @@ import {
   unknownSubject,
   urls,
   useArray,
-  useEffectiveConstraint,
   useResource,
   useTitle,
 } from '@tomic/react';
@@ -32,13 +31,14 @@ import { Row } from '@components/Row';
 import { Checkbox } from '@components/forms/Checkbox';
 import { ResourceCell } from './ResourceCells/ResourceCell';
 import { AtomicLink } from '@components/AtomicLink';
+import { useRowConstraint } from '../useColumnConstraint';
 import { usePopover } from '@components/CustomPopover';
 import { CELL_WIDTH } from '@chunks/TableEditor/Cell';
 
 // The linked class comes from the row's class constraints, falling back to the
 // Property's legacy `classtype`.
 const useClassType = (subject: string, rowClasses: string[]) => {
-  const { class: linkedClass } = useEffectiveConstraint(rowClasses, subject);
+  const { class: linkedClass } = useRowConstraint(rowClasses, subject);
 
   const classType = useResource<Core.Class>(linkedClass);
   const hasClassType = classType?.subject !== unknownSubject;

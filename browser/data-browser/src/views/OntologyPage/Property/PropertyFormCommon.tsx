@@ -3,6 +3,8 @@ import {
   core,
   urls,
   useArray,
+  useCanWrite,
+  useEffectiveConstraint,
   useProperty,
   useResource,
   useStore,
@@ -23,10 +25,13 @@ import { filterAllowsOnly } from './filterAllowsOnly';
 import { isContentAddressed } from '../../../helpers/propertyIdentity';
 import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
 import { ResourceInline } from '../../ResourceInline';
+import { LinkedClassField } from '../Class/ClassConstraintEditor';
 
 interface PropertyFormCommonProps {
   resource: Resource;
   canEdit: boolean;
+  /** The class that uses this property, when opened from one of its lines. */
+  classResource?: Resource;
   onClassCreated?: () => void;
 }
 
@@ -38,6 +43,7 @@ const datatypesWithExtraControls = new Set([
 export function PropertyFormCommon({
   resource,
   canEdit,
+  classResource,
   onClassCreated,
 }: PropertyFormCommonProps): JSX.Element {
   const store = useStore();
@@ -98,6 +104,11 @@ export function PropertyFormCommon({
   // A content-addressed property is immutable: the linked class and the
   // options are set per class, in the class card.
   const contentAddressed = isContentAddressed(resource.subject);
+  const effective = useEffectiveConstraint(
+    classResource ? [classResource.subject] : [],
+    resource.subject,
+  );
+  const canEditClass = useCanWrite(classResource ?? resource);
   const disableExtras = !datatypesWithExtraControls.has(datatype ?? '');
   const showEnumForm =
     !classType && datatypesWithExtraControls.has(datatype ?? '');
@@ -110,10 +121,20 @@ export function PropertyFormCommon({
           <LabelText>Datatype</LabelText>
           <PropertyDatatypePicker disabled={!canEdit} resource={resource} />
         </Column>
-        <p>
-          The linked class, options and limits of this property are set per
-          class. Open a class that uses it to edit them.
-        </p>
+        {classResource && datatypesWithExtraControls.has(datatype ?? '') ? (
+          <LinkedClassField
+            classResource={classResource}
+            propertySubject={resource.subject}
+            value={effective.class}
+            disabled={!canEditClass}
+            label='Linked class'
+          />
+        ) : (
+          <p>
+            The linked class, options and limits of this property are set per
+            class. Open a class that uses it to edit them.
+          </p>
+        )}
         <LegacyConstraints classType={classType} allowsOnly={allowsOnly} />
       </Column>
     );

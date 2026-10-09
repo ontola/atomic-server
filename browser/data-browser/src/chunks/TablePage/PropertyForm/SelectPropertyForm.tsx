@@ -3,6 +3,7 @@ import {
   Resource,
   core,
   dataBrowser,
+  getEffectiveConstraint,
   setClassConstraint,
   useArray,
   useEffectiveConstraint,
@@ -34,7 +35,9 @@ function removeFromArray<T>(array: T[], item: T) {
  */
 export function SelectPropertyForm({
   resource,
+  existingProperty,
 }: PropertyCategoryFormProps): JSX.Element {
+  const isDraft = !existingProperty;
   const store = useStore();
   const { tableClassSubject } = useContext(TablePageContext);
   const tableClass = useResource(tableClassSubject);
@@ -46,13 +49,29 @@ export function SelectPropertyForm({
   );
   const constraint = useEffectiveConstraint(
     [tableClassSubject],
-    resource.new ? undefined : resource.subject,
+    isDraft ? undefined : resource.subject,
   );
-  const options = resource.new ? draftOptions : optionSubjects(constraint);
+  const options = isDraft ? draftOptions : optionSubjects(constraint);
+
+  // The list as it is when a handler runs. A closure over the rendered list
+  // makes several tags added in a row each start from the same stale one.
+  const readOptions = useCallback(
+    (): string[] =>
+      isDraft
+        ? ((resource.get(core.properties.allowsOnly) ?? []) as string[])
+        : optionSubjects(
+            getEffectiveConstraint(
+              store,
+              [tableClassSubject],
+              resource.subject,
+            ),
+          ),
+    [isDraft, resource, store, tableClassSubject],
+  );
 
   const setOptions = useCallback(
     async (next: string[]) => {
-      if (resource.new) {
+      if (isDraft) {
         await setDraftOptions(next);
 
         return;
@@ -70,37 +89,37 @@ export function SelectPropertyForm({
         await resource.save();
       }
     },
-    [resource, tableClass, setDraftOptions],
+    [resource, isDraft, tableClass, setDraftOptions],
   );
 
   const handleNewTag = useCallback(
     async (tag: Resource) => {
       // On a draft (new column) the tags are only seeds: the property does not
       // exist yet, and its tags are created under its final ID on confirm.
-      if (!resource.new) {
+      if (!isDraft) {
         await tag.save();
       }
 
-      await setOptions([...options, tag.subject]);
+      await setOptions([...readOptions(), tag.subject]);
     },
-    [options, setOptions, resource],
+    [readOptions, setOptions, isDraft],
   );
 
   const handleDeleteTag = useCallback(
     async (subject: string) => {
-      await setOptions(removeFromArray(options, subject));
+      await setOptions(removeFromArray(readOptions(), subject));
 
-      if (!resource.new) {
+      if (!isDraft) {
         const tag = store.getResourceLoading(subject);
         tag.destroy();
       }
     },
-    [store, resource, setOptions, options],
+    [store, isDraft, setOptions, readOptions],
   );
 
   useEffect(() => {
     // An existing select column already is one, and its Property is immutable.
-    if (!resource.new) {
+    if (!isDraft) {
       return;
     }
 

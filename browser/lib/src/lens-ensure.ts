@@ -56,9 +56,11 @@ export async function ensureLens(
     throw new Error(`Lens ID mismatch: expected ${id}, got ${lens.subject}`);
   }
 
-  if (lens.new) {
-    await lens.save();
-  }
+  // Not `if (lens.new)`: signing the genesis commit already clears `new`
+  // while the commit stays parked on the resource until `save()`. Gating on it
+  // left the lens unsaved, so it only worked until the next reload. `save()`
+  // is a no-op for a lens that is already known and clean.
+  await lens.save();
 
   // It applies in this session from now on, and to what is already loaded.
   await store.activateLens(lens);

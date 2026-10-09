@@ -16,7 +16,7 @@ vi.mock('@components/Tag/tagColours', () => ({
   tagColours: ['blue', 'red', 'green'],
 }));
 
-const { createPropertyOnClass, createSelectPropertyOnClass } =
+const { createOptionTags, createPropertyOnClass, createSelectPropertyOnClass } =
   await import('./createSelectProperty');
 
 /**
@@ -62,6 +62,7 @@ function fakeStore() {
   }
 
   const store = {
+    getServerUrl: () => 'https://localhost',
     getResource: async (subject: string) => makeResource(subject),
     getResourceLoading: (subject: string) =>
       resources.has(subject)
@@ -135,7 +136,8 @@ describe('table column creation dedupes ontology shortnames', () => {
     });
 
     expect(second.subject).toBe(first.subject);
-    expect(second.tags).toEqual(first.tags);
+    // Each table gets Tags of its own for the shared property.
+    expect(Object.keys(second.tags)).toEqual(Object.keys(first.tags));
 
     const refreshedOntology = await store.getResource(ontology.subject);
     const properties = (refreshedOntology.get(core.properties.properties) ??
@@ -342,5 +344,35 @@ describe('column properties are content-addressed', () => {
     expect(
       (await store.getResource(second)).get(core.properties.shortname),
     ).toBe('price-2');
+  });
+});
+
+describe('option tags of a hosted property', () => {
+  it('are not parented to a property this server does not host', async () => {
+    const store = fakeStore();
+    const parents: (string | undefined)[] = [];
+    const subjects: (string | undefined)[] = [];
+    const original = store.newResource;
+    store.newResource = (async (opts: {
+      subject?: string;
+      parent?: string;
+    }) => {
+      parents.push(opts.parent);
+      subjects.push(opts.subject);
+
+      return original(opts as Parameters<typeof original>[0]);
+    }) as typeof original;
+
+    await createOptionTags(
+      store as unknown as Store,
+      'https://atomicdata.dev/task/v1/status',
+      [{ name: 'Todo' }],
+      'atomic:row-class',
+    );
+
+    // The server refuses a subject under a domain it does not own, and a child
+    // of a resource the agent cannot append to.
+    expect(parents).toEqual(['atomic:row-class']);
+    expect(subjects).toEqual([undefined]);
   });
 });

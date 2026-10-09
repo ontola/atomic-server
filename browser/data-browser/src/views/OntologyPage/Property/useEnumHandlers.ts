@@ -10,6 +10,7 @@ import {
   DataBrowser,
 } from '@tomic/react';
 import { useCallback } from 'react';
+import { optionSubjects } from '../../../helpers/withConstraint';
 
 export function useEnumHandlers(
   property: Resource<Core.Property>,
@@ -116,14 +117,26 @@ const isTagUsed = async (
 export function useClassEnumHandlers(
   classResource: Resource,
   propertySubject: string,
-  options: string[],
   ontology: Resource<Core.Ontology>,
 ) {
   const store = useStore();
-  const [instances, setInstances] = useArray(
-    ontology,
-    core.properties.instances,
-    { commit: true },
+  const [, setInstances] = useArray(ontology, core.properties.instances, {
+    commit: true,
+  });
+
+  // Read the list when the handler runs, not from the render that built it:
+  // several tags added in a row would otherwise each start from the same
+  // stale list and keep only the last one.
+  const currentOptions = useCallback(
+    () =>
+      optionSubjects(
+        getEffectiveConstraint(store, [classResource.subject], propertySubject),
+      ),
+    [store, classResource, propertySubject],
+  );
+  const currentInstances = useCallback(
+    () => (ontology.get(core.properties.instances) ?? []) as string[],
+    [ontology],
   );
 
   const saveOptions = useCallback(
@@ -139,22 +152,31 @@ export function useClassEnumHandlers(
   const addTag = useCallback(
     async (tag: Resource) => {
       await tag.save();
-      await setInstances([...(instances ?? []), tag.subject]);
-      await saveOptions([...options, tag.subject]);
+      await setInstances([...currentInstances(), tag.subject]);
+      await saveOptions([...currentOptions(), tag.subject]);
     },
-    [instances, options, setInstances, saveOptions],
+    [currentInstances, currentOptions, setInstances, saveOptions],
   );
 
   const removeTag = useCallback(
     async (subject: string) => {
-      await saveOptions(options.filter(tag => tag !== subject));
+      await saveOptions(currentOptions().filter(tag => tag !== subject));
 
       if (!(await isTagUsed(subject, ontology, store))) {
-        await setInstances(instances?.filter(instance => instance !== subject));
+        await setInstances(
+          currentInstances().filter(instance => instance !== subject),
+        );
         await store.getResourceLoading(subject).destroy();
       }
     },
-    [options, saveOptions, instances, setInstances, store, ontology],
+    [
+      currentOptions,
+      currentInstances,
+      saveOptions,
+      setInstances,
+      store,
+      ontology,
+    ],
   );
 
   return { addTag, removeTag };

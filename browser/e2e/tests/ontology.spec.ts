@@ -51,6 +51,14 @@ test.describe('Ontology', async () => {
         .locator('li')
         .filter({ has: page.locator(`input[value="${shortname}"]`) });
 
+    // Changing the datatype swaps in a new property (the datatype is part of
+    // its ID), which replaces the line. Wait for the replacement before using
+    // the line, or what was opened on the old one closes again.
+    const setDatatype = async (line: Locator, datatype: string) => {
+      await line.getByLabel('Property datatype').selectOption(datatype);
+      await expect(line.getByLabel('Property datatype')).toHaveValue(datatype);
+    };
+
     // Sets the class a property links to, in the class's constraints.
     const setLinkedClass = async (line: Locator, className: string) => {
       await line.getByText('Constraints').click();
@@ -114,6 +122,11 @@ test.describe('Ontology', async () => {
     await arrowsLine
       .getByLabel('Property datatype')
       .selectOption('https://atomicdata.dev/datatypes/resourceArray');
+    // The datatype is part of the property's ID: the line is replaced by one
+    // for the new property. Opening Constraints before that remounts it shut.
+    await expect(arrowsLine.getByLabel('Property datatype')).toHaveValue(
+      'https://atomicdata.dev/datatypes/resourceArray',
+    );
     await setLinkedClass(arrowsLine, 'arrow');
 
     // Arrow class
@@ -150,9 +163,10 @@ test.describe('Ontology', async () => {
     await page.keyboard.press('Enter');
 
     const arrowKindLine = propertyLine(classCard('thumbnail'), 'arrow-kind');
-    await arrowKindLine
-      .getByLabel('Property datatype')
-      .selectOption('https://atomicdata.dev/datatypes/atomicURL');
+    await setDatatype(
+      arrowKindLine,
+      'https://atomicdata.dev/datatypes/atomicURL',
+    );
     await setLinkedClass(arrowKindLine, 'arrow-kind');
 
     // arrow-kind class
@@ -183,9 +197,10 @@ test.describe('Ontology', async () => {
 
     // The options of a property are a constraint of the class that uses it.
     const lineTypeLine = propertyLine(arrowKindCard, 'line-type');
-    await lineTypeLine
-      .getByLabel('Property datatype')
-      .selectOption('https://atomicdata.dev/datatypes/resourceArray');
+    await setDatatype(
+      lineTypeLine,
+      'https://atomicdata.dev/datatypes/resourceArray',
+    );
     await lineTypeLine.getByText('Constraints').click();
 
     // Create two tags: dashed and solid

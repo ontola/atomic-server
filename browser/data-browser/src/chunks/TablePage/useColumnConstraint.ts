@@ -20,4 +20,22 @@ export function useColumnConstraint(
   );
 }
 
+/**
+ * The constraint of a column for one row: the row's own classes, plus the
+ * table's row class. A row that is not yet saved (the first row of a table)
+ * may not list its class yet, and would otherwise lose every option and
+ * linked class its column has.
+ */
+export function useRowConstraint(
+  rowClasses: string[],
+  propertySubject: string | undefined,
+): Constraint {
+  const { tableClassSubject } = useContext(TablePageContext);
+  const classes = tableClassSubject
+    ? Array.from(new Set([...rowClasses, tableClassSubject]))
+    : rowClasses;
+
+  return useEffectiveConstraint(classes, propertySubject);
+}
+
 export { optionSubjects, withConstraint } from '@helpers/withConstraint';

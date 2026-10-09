@@ -349,6 +349,7 @@ export async function createColumnOnClass(
           store,
           property.subject,
           (column.options ?? []).map(name => ({ name })),
+          tableClass.subject,
         );
         Object.assign(tags, created.byName);
         await setClassConstraint(

@@ -325,39 +325,24 @@ function LinkConstraints({
   constraint,
   disabled,
 }: FieldProps & { constraint: Constraint }): JSX.Element {
-  const store = useStore();
   const { ontology } = useOntologyContext();
   const write = useConstraintWriter(classResource, propertySubject);
   const options = optionSubjects(constraint);
   const { addTag, removeTag } = useClassEnumHandlers(
     classResource,
     propertySubject,
-    options,
     ontology,
-  );
-
-  const createClass = useCallback(
-    async (shortname: string) => {
-      const created = await newClass(shortname, ontology, store);
-      await write({ class: created });
-    },
-    [ontology, store, write],
   );
 
   return (
     <>
-      <Column as='label' gap='0.25rem'>
-        <LabelText>Linked class</LabelText>
-        <SearchBox
-          // Creating a class does not close the picker, so start a fresh one.
-          key={constraint.class ?? 'none'}
-          disabled={disabled}
-          value={constraint.class}
-          onChange={value => write({ class: value })}
-          isA={core.classes.class}
-          onCreateItem={createClass}
-        />
-      </Column>
+      <LinkedClassField
+        classResource={classResource}
+        propertySubject={propertySubject}
+        value={constraint.class}
+        disabled={disabled}
+        label='Linked class'
+      />
       {constraint.class ? (
         <InstanceOptions
           linkedClass={constraint.class}
@@ -375,6 +360,46 @@ function LinkConstraints({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Picks the class a link points at, as the `class` constraint of one class for
+ * one property. Shared by the constraints section under a property line and
+ * the property's own dialog.
+ */
+export function LinkedClassField({
+  classResource,
+  propertySubject,
+  value,
+  disabled,
+  label,
+}: FieldProps & { value: string | undefined; label: string }): JSX.Element {
+  const store = useStore();
+  const { ontology } = useOntologyContext();
+  const write = useConstraintWriter(classResource, propertySubject);
+
+  const createClass = useCallback(
+    async (shortname: string) => {
+      const created = await newClass(shortname, ontology, store);
+      await write({ class: created });
+    },
+    [ontology, store, write],
+  );
+
+  return (
+    <Column as='label' gap='0.25rem'>
+      <LabelText>{label}</LabelText>
+      <SearchBox
+        // Creating a class does not close the picker, so start a fresh one.
+        key={value ?? 'none'}
+        disabled={disabled}
+        value={value}
+        onChange={next => write({ class: next })}
+        isA={core.classes.class}
+        onCreateItem={createClass}
+      />
+    </Column>
   );
 }
 

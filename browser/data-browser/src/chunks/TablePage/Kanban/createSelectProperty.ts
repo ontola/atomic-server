@@ -7,6 +7,7 @@ import {
   dataBrowser,
   perfSpan,
   isAtomicIdentifier,
+  isOwnServerUrl,
   setClassConstraint,
   getEffectiveConstraint,
   type ConstraintPatch,
@@ -458,6 +459,12 @@ export async function createOptionTags(
   store: Store,
   propertySubject: string,
   seeds: TagSeed[],
+  /**
+   * Where the Tags go when the property is a hosted one (an ontology on
+   * another server, such as the Tasks ontology): nobody here may add children
+   * to it, so they sit under this resource instead (the table's row class).
+   */
+  fallbackParent?: string,
 ): Promise<{ subjects: string[]; byName: Record<string, string> }> {
   const subjects: string[] = [];
   const byName: Record<string, string> = {};
@@ -465,17 +472,25 @@ export async function createOptionTags(
   for (const seed of seeds) {
     const closeTag = perfSpan('table.tag');
     const closeSubject = perfSpan('table.tagUniqueSubject');
-    const subject = isAtomicIdentifier(propertySubject)
-      ? undefined
-      : await store.buildUniqueSubjectFromParts(
-          ['tag', seed.name],
-          propertySubject,
-        );
+    // Only a property of our own may have Tags under it. A reused one from a
+    // hosted ontology (`https://atomicdata.dev/task/v1/status`) is not ours:
+    // the server refuses subjects there and children of it.
+    const ownProperty =
+      isAtomicIdentifier(propertySubject) ||
+      isOwnServerUrl(propertySubject, store.getServerUrl());
+    const parent = ownProperty
+      ? propertySubject
+      : (fallbackParent ?? propertySubject);
+    const subject =
+      isAtomicIdentifier(parent) ||
+      !isOwnServerUrl(parent, store.getServerUrl())
+        ? undefined
+        : await store.buildUniqueSubjectFromParts(['tag', seed.name], parent);
     closeSubject();
 
     const tag = await store.newResource({
       subject,
-      parent: propertySubject,
+      parent,
       isA: dataBrowser.classes.tag,
       propVals: {
         // `shortname` is the slug the class requires; `name` carries the
@@ -591,6 +606,7 @@ export async function createSelectPropertyOnClass(
           store,
           existing.subject,
           opts.tags,
+          tableClass.subject,
         );
         await setClassConstraint(
           tableClass,
@@ -632,6 +648,14 @@ export async function createSelectPropertyOnClass(
     },
   });
 
+  // Saved before its tags: a child saved under a parent the server has not
+  // seen yet is refused, and the Tag then reads as an empty placeholder until
+  // the parent lands, so a cell opened right after the column was created
+  // lists options without titles.
+  if (!legacy) {
+    await property.save();
+  }
+
   // Create the tags, parented to the property (same as SelectPropertyForm).
   const { subjects: tagSubjects, byName: tagsByName } = await createOptionTags(
     store,
@@ -641,6 +665,7 @@ export async function createSelectPropertyOnClass(
 
   if (legacy) {
     await property.set(core.properties.allowsOnly, tagSubjects);
+    await property.save();
   } else {
     await setClassConstraint(
       tableClass,
@@ -648,8 +673,6 @@ export async function createSelectPropertyOnClass(
       selectConstraintPatch(tagSubjects, opts.max),
     );
   }
-
-  await property.save();
 
   if (!opts.deferAttach) {
     await attachPropertiesToClass(store, tableClass, [property.subject]);

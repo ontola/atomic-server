@@ -1,4 +1,5 @@
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
+import { ErrorChip } from '@components/forms/ErrorChip';
 import Field from '@components/forms/Field';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import type { FieldOptionsBag } from './useFieldOptions';
@@ -39,6 +40,9 @@ export function BoundField({
   helper,
 }: BoundFieldProps): JSX.Element {
   const stored = options[optionKey] as number | undefined;
+  // What the last edit was held to, so the user is told rather than left
+  // wondering why the typed number changed.
+  const [held, setHeld] = useState<'max' | 'floor'>();
 
   return (
     <Field label={label} helper={helper}>
@@ -55,16 +59,37 @@ export function BoundField({
             if (e.target.value.trim() === '') {
               delete next[optionKey];
             } else {
-              next[optionKey] = Math.min(
+              const typed = Number(e.target.value);
+              const clamped = Math.min(
                 max ?? Infinity,
-                Math.max(floor ?? -Infinity, Number(e.target.value)),
+                Math.max(floor ?? -Infinity, typed),
               );
+              next[optionKey] = clamped;
+              setHeld(
+                clamped === typed
+                  ? undefined
+                  : typed > clamped
+                    ? 'max'
+                    : 'floor',
+              );
+            }
+
+            if (e.target.value.trim() === '') {
+              setHeld(undefined);
             }
 
             setOptions(next);
           }}
         />
       </InputWrapper>
+      {held === 'max' && (
+        <ErrorChip>Cannot exceed the table column limit ({max}).</ErrorChip>
+      )}
+      {held === 'floor' && (
+        <ErrorChip>
+          Cannot go below the table column minimum ({floor}).
+        </ErrorChip>
+      )}
     </Field>
   );
 }

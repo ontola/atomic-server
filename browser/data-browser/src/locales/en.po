@@ -12369,6 +12369,7 @@ msgid "Pattern (regular expression)"
 msgstr "Pattern (regular expression)"
 
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
+#: src/views/OntologyPage/Property/PropertyFormCommon.tsx
 msgid "Linked class"
 msgstr "Linked class"
 
@@ -12430,3 +12431,13 @@ msgstr "Searching schemas"
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Saving schema"
 msgstr "Saving schema"
+
+#. 0: max
+#: src/chunks/FormBuilder/FieldOptions/BoundField.tsx
+msgid "Cannot exceed the table column limit ({0})."
+msgstr "Cannot exceed the table column limit ({0})."
+
+#. 0: floor
+#: src/chunks/FormBuilder/FieldOptions/BoundField.tsx
+msgid "Cannot go below the table column minimum ({0})."
+msgstr "Cannot go below the table column minimum ({0})."
