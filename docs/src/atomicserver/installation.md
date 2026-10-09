@@ -262,6 +262,19 @@ the connection arrives from the proxy, on the local interface. It will not warn
 you. See [Putting your server on the internet](#putting-your-server-on-the-internet)
 for what to set so strangers cannot store their data on your disk.
 
+## Make your server shareable
+
+Invite links and sync QR codes only work from a **public HTTPS address**. Browsers only allow the local storage the app needs on a secure origin (`https://`, or `http://localhost`), and a link that says `localhost` means something different on every device. So before you invite anyone or pair a phone:
+
+1. **Give the server a public name.** Set `ATOMIC_DOMAIN` to the name people type in their browser, for example `ATOMIC_DOMAIN=atomic.example.com`, with a DNS record pointing at your server.
+2. **Serve it over HTTPS.** Either let the server do it with `--https` (and `--email`, see [HTTPS Setup on a VPS](#https-setup-on-a-vps-static-ip-required)), or put a reverse proxy in front and set `ATOMIC_SERVER_URL=https://atomic.example.com` (see [Behind a reverse proxy](#behind-a-reverse-proxy-nginx-caddy-traefik-ferron-cloudflare-tunnel)). For a quick test, a [tunnel](#running-using-a-tunneling-service-easy-mode) gives you a public HTTPS address without any DNS.
+3. **Say who owns it**, so strangers cannot use your disk. Order matters, because the ID comes from an account:
+   1. Start the server and create your account (the first-run page, see [Initial setup](#initial-setup-and-configuration)).
+   2. Open **Settings** and copy your **Agent ID** (it starts with `atomic:agent:`). Use the ID, never the secret.
+   3. Restart the server with `ATOMIC_OWNER_AGENT=atomic:agent:AbCd...`. This selects owner mode (`ATOMIC_HOST_MODE=owner`) by itself. Setting `ATOMIC_HOST_MODE=owner` without an `ATOMIC_OWNER_AGENT` makes the server refuse to start, and `ATOMIC_HOST_MODE=open` deliberately keeps sign-up open.
+
+   Details are in [Putting your server on the internet](#putting-your-server-on-the-internet).
+
 ## Putting your server on the internet
 
 By default, **anyone who can reach your server can create an account on it and
