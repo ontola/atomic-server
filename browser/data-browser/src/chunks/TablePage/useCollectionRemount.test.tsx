@@ -4,7 +4,11 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Collection, Store } from '@tomic/lib';
-import { StoreContext, useCollection } from '@tomic/react';
+// The hook under test comes from source, not from the package's built `dist`:
+// a `dist` built before this change (a cached build, a stale link) would make
+// the test fail for a reason that is not in the code it names.
+import { StoreContext } from '../../../../react/src/hooks';
+import { useCollection } from '../../../../react/src/useCollection';
 
 afterEach(() => {
   cleanup();
