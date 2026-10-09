@@ -12710,3 +12710,8 @@ msgstr ""
 #: src/components/UnreachableOriginNotice.tsx
 msgid "Other people and devices cannot reach this address. Give the server a public HTTPS address to share or sync. <0>Read the docs</0>"
 msgstr ""
+
+#. 0: serverHost
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your server: {0}"
+msgstr ""

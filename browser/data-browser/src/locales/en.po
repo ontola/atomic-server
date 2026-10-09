@@ -12723,3 +12723,8 @@ msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
 #: src/components/UnreachableOriginNotice.tsx
 msgid "Other people and devices cannot reach this address. Give the server a public HTTPS address to share or sync. <0>Read the docs</0>"
 msgstr "Other people and devices cannot reach this address. Give the server a public HTTPS address to share or sync. <0>Read the docs</0>"
+
+#. 0: serverHost
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your server: {0}"
+msgstr "Your server: {0}"

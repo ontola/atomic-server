@@ -1005,6 +1005,8 @@ export function GettingStartedFlow({
     await trySecret(secretValue, true);
   }
 
+  const serverHost = hostOf(store.getServerUrl());
+
   return (
     <Shell>
       {step === 'welcome' && !createTarget ? (
@@ -1024,7 +1026,16 @@ export function GettingStartedFlow({
           <WelcomeStack>
             <VisuallyHiddenH1 key='heading'>{PRODUCT_NAME}</VisuallyHiddenH1>
             {/* alt='' because the heading above already names the app. */}
-            <AtomicServerLogo key='logo' alt='' />
+            <LogoBlock key='logo'>
+              <AtomicServerLogo alt='' />
+              {/* A self-hosted server shows the same lockup as the hosted
+                  product, so name the server itself. */}
+              {!isHostedDistribution() && serverHost && (
+                <ServerHost data-testid='welcome-server-host'>
+                  Your server: {serverHost}
+                </ServerHost>
+              )}
+            </LogoBlock>
             <ButtonStack key='buttons'>
               {/* A node with an owner has nowhere to put a new account, so
                   offering one would be offering a dead end. Sign in and invites
@@ -1753,6 +1764,21 @@ const WelcomeStack = styled.div`
   text-align: center;
 `;
 
+const LogoBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: ${p => p.theme.size(3)};
+  width: 100%;
+`;
+
+const ServerHost = styled.p`
+  margin: 0;
+  font-size: 0.95rem;
+  color: ${p => p.theme.colors.textLight};
+  overflow-wrap: anywhere;
+`;
+
 const ButtonStack = styled.div`
   display: flex;
   flex-direction: column;
@@ -1919,6 +1945,17 @@ function takeSecretFragment():
     const { privateKey, subject } = decodeSecret(secret);
 
     return subject ? { privateKey, agentSubject: subject } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The `host[:port]` of a URL, or undefined when it does not parse. */
+function hostOf(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+
+  try {
+    return new URL(url).host || undefined;
   } catch {
     return undefined;
   }
