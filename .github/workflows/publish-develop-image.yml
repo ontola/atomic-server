@@ -27,10 +27,11 @@ on:
         type: string
       tags:
         description: >-
-          Comma-separated image references. Bare names are prefixed with
-          `joepmeneer/atomic-server:` by the Dagger function.
+          Comma-separated image references. Bare names are published to
+          `ghcr.io/ontola/atomic-server:` (primary) and then
+          `joepmeneer/atomic-server:` (Docker Hub mirror) by the Dagger function.
         required: false
-        default: joepmeneer/atomic-server:develop,ghcr.io/ontola/atomic-server:develop
+        default: ghcr.io/ontola/atomic-server:develop,joepmeneer/atomic-server:develop
         type: string
 
 # Mancave, for the same reason the pipeline prefers it: three musl targets
@@ -77,18 +78,18 @@ jobs:
           docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: joepmeneer
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: joepmeneer
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Dagger docker images (build images & publish)
         uses: dagger/dagger-for-github@8.0.0

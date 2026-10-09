@@ -147,7 +147,7 @@ jobs:
   images:
     name: Docker images
     needs: ci
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 120
     steps:
@@ -157,29 +157,36 @@ jobs:
         run: |
           docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
-      # Transition period: images publish to BOTH registries. GHCR
-      # (org-owned, GITHUB_TOKEN-authenticated, no pull rate limits) is the
-      # long-term home; the Docker Hub image stays until users and docs have
-      # moved over. Dagger's publish reads the host docker config, so these
+      # Images publish to BOTH registries. GHCR (org-owned,
+      # GITHUB_TOKEN-authenticated, no pull rate limits) is the primary
+      # image, `ghcr.io/ontola/atomic-server`; Docker Hub stays as a mirror. Dagger's publish reads the host docker config, so these
       # login steps are what authenticate it.
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: joepmeneer
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: joepmeneer
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
         with:
           images: |
-            joepmeneer/atomic-server
             ghcr.io/ontola/atomic-server
+            joepmeneer/atomic-server
+          # `develop` on the develop branch; on a `v*` tag the version
+          # without the `v` (0.41.0, 0.41.0-beta.1) plus `latest`, which
+          # metadata-action adds for stable (non-prerelease) semver tags only.
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+          flavor: |
+            latest=auto
           # The tags land in a dagger `--tags` list argument, which is
           # comma-separated — the default newline separator would split the
           # shell command instead.

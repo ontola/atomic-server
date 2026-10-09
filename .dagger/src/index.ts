@@ -2681,14 +2681,20 @@ VOLUME /atomic-storage
     // Publish the multi-platform image with all variants.
     //
     // `docker/metadata-action` (the CI caller) outputs FULL references —
-    // `joepmeneer/atomic-server:develop` — and prefixing those again produced
-    // `joepmeneer/atomic-server:joepmeneer/atomic-server:develop`, which the
-    // registry rejects as "invalid reference format". Every develop publish
-    // since the tags became a list failed on it. Bare tag names (manual
-    // `dagger call create-docker-images --tags latest`) keep working via the
-    // prefix.
-    for (const tag of tags) {
-      const ref = tag.includes('/') ? tag : `joepmeneer/atomic-server:${tag}`;
+    // `ghcr.io/ontola/atomic-server:develop` — and prefixing those again
+    // produced `<repo>:<repo>:develop`, which the registry rejects as
+    // "invalid reference format". Full references are published as given.
+    // Bare tag names (manual `dagger call create-docker-images --tags latest`)
+    // are published to GHCR (primary) first and then to Docker Hub (mirror).
+    const refs = tags.flatMap(tag =>
+      tag.includes('/')
+        ? [tag]
+        : [
+            `ghcr.io/ontola/atomic-server:${tag}`,
+            `joepmeneer/atomic-server:${tag}`,
+          ],
+    );
+    for (const ref of refs) {
       await firstImage.publish(ref, {
         platformVariants: otherVariants,
       });
