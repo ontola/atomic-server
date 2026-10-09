@@ -4,13 +4,16 @@
  * (pieces.md L4).
  *
  * `vendor/lens.mjs` is ontola/atomic-plugins `ontology-kit/lens.mjs`, copied
- * byte for byte from main at 72be98006446d7b855ad62e8e756ecda01bb656b. The
+ * byte for byte from main at 67baf939a97bbc0381397c3d64cf1dfe1aa4b167. The
  * same file runs the offer search's lenses here, the shared catalog's checks
  * in atomic-plugins, and (as script text, `LENS_INTERPRETER_SOURCE`) an
  * integration frame's `lensPath`. It reads mapping versions 1 (this
- * prototype's original format) and 2 (the catalog's: JSON Pointers, more
- * converters, read-only fields). To update it, copy the file again and
- * change the commit above; `lens.d.mts` has one local edit, named in it.
+ * prototype's original format), 2 (catalog release 1: JSON Pointers, more
+ * converters, read-only fields) and 3 (catalog release 2: `guards`, which
+ * refuse a record outside the lens's domain with `out-of-domain`, and
+ * per-field `absent`, which lets a put remove a field). To update it, copy
+ * the file again and change the commit above; `lens.d.mts` has one local
+ * edit, named in it.
  *
  * Differences from the prototype's own v1 interpreter it replaces
  * (atomic-plugins LENSES.md lists them): `put` writes only fields whose value

@@ -68,6 +68,11 @@ export interface FetchedLensCatalog {
 export async function fetchLensCatalog(
   releaseUrl: string,
   fetchImpl: Fetch,
+  /**
+   * The mapping versions this host runs: the vendored interpreter's. A lens
+   * at any other version is skipped and named, never run.
+   */
+  mappingVersions: readonly number[] = LENS_MAPPING_VERSIONS,
 ): Promise<FetchedLensCatalog> {
   const release = await fetchJson(fetchImpl, releaseUrl);
 
@@ -98,7 +103,7 @@ export async function fetchLensCatalog(
           return { subject, reason: String(e), transient: true };
         }
 
-        return toCatalogLens(subject, file);
+        return toCatalogLens(subject, file, mappingVersions);
       },
     ),
   );
@@ -114,7 +119,11 @@ export async function fetchLensCatalog(
   return { lenses, skipped };
 }
 
-function toCatalogLens(subject: string, file: unknown): CatalogLens | Skipped {
+function toCatalogLens(
+  subject: string,
+  file: unknown,
+  mappingVersions: readonly number[],
+): CatalogLens | Skipped {
   const skip = (reason: string): Skipped => ({
     subject,
     reason,
@@ -133,11 +142,7 @@ function toCatalogLens(subject: string, file: unknown): CatalogLens | Skipped {
   try {
     const info = catalogLensInfo(file as unknown as CatalogLensFile);
 
-    if (
-      !(LENS_MAPPING_VERSIONS as readonly unknown[]).includes(
-        info.mappingVersion,
-      )
-    )
+    if (!(mappingVersions as readonly unknown[]).includes(info.mappingVersion))
       return skip(`mapping version ${String(info.mappingVersion)}`);
 
     return {

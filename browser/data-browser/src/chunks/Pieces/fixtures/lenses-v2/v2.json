@@ -1,0 +1,12 @@
+{
+  "@id": "https://ontola.github.io/atomic-plugins/ontology/lenses/v2",
+  "lensFormat": 1,
+  "name": "Shared lens catalog, release 2",
+  "description": "Release 2 moves Clockify, Todoist and Raindrop to mapping version 3 (guards and explicit removal), which closes some of their release 1 limits; the Solid lens is unchanged. Declared, not verified: no host loads this catalog yet.",
+  "lenses": [
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/clockify-time-entry-v2",
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/todoist-task-issue-v2",
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/raindrop-bookmark-v2",
+    "https://ontola.github.io/atomic-plugins/ontology/lenses/solid-bookmark-v1"
+  ]
+}
