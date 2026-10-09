@@ -13,9 +13,14 @@ import { useStore } from './hooks.js';
  * See {@link getEffectiveConstraint}.
  *
  * Re-renders when any of the classes or the property changes, including edits
- * that have not been saved yet. The returned object is rebuilt on every render
- * because the underlying resources mutate in place; do not use it as an effect
- * dependency, use its fields.
+ * that have not been saved yet. The object is the `useSyncExternalStore`
+ * snapshot: it is rebuilt after each of those changes and stays the same
+ * between them. It must come out of the store hook rather than be computed
+ * from the hook's arguments: the React Compiler (data-browser compiles this
+ * package, which is linked from outside `node_modules`) caches anything that
+ * only depends on `store`, the class subjects and the property subject, and
+ * the resources behind them mutate in place, so the editor would keep showing
+ * the first value it read.
  */
 export function useEffectiveConstraint(
   classSubjects: string[] | undefined,
@@ -30,8 +35,18 @@ export function useEffectiveConstraint(
     [stableSubjects, propertySubject],
   );
 
-  // The resources mutate in place, so a counter stands in for their snapshot.
+  // The resources mutate in place, so a counter stands in for their state.
   const version = useRef(0);
+  const cache = useRef<
+    | {
+        version: number;
+        key: string;
+        propertySubject: string | undefined;
+        store: unknown;
+        value: Constraint;
+      }
+    | undefined
+  >(undefined);
   const subscribe = useCallback(
     (callback: () => void) => {
       const bump = () => {
@@ -52,11 +67,32 @@ export function useEffectiveConstraint(
     },
     [store, watched],
   );
-  const getVersion = () => version.current;
+  const getSnapshot = useCallback((): Constraint => {
+    const hit = cache.current;
 
-  useSyncExternalStore(subscribe, getVersion, getVersion);
+    if (
+      hit &&
+      hit.version === version.current &&
+      hit.key === key &&
+      hit.propertySubject === propertySubject &&
+      hit.store === store
+    ) {
+      return hit.value;
+    }
 
-  if (!propertySubject) return {};
+    const value = propertySubject
+      ? getEffectiveConstraint(store, stableSubjects, propertySubject)
+      : {};
+    cache.current = {
+      version: version.current,
+      key,
+      propertySubject,
+      store,
+      value,
+    };
 
-  return getEffectiveConstraint(store, stableSubjects, propertySubject);
+    return value;
+  }, [store, key, stableSubjects, propertySubject]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
