@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { styled } from 'styled-components';
 import { FaRotateLeft, FaCloudArrowUp } from 'react-icons/fa6';
 import { Button } from '../Button';
 import { ServiceRow, type ServiceStanding } from '../Cloud/ServiceRow';
@@ -118,6 +119,13 @@ export function VaultPanel({
     details.confirmed_objects === 1 ? '' : 's'
   }`;
 
+  // Included in Cloud Server, the vault's allowance is part of that plan, whose
+  // own meter carries the limit. Quoting it here reads as the vault's limit.
+  // Close to full it comes back, so a near-full vault is never hidden.
+  const quota = enrollment.quota_bytes > 0 ? enrollment.quota_bytes : null;
+  const nearlyFull = quota !== null && enrollment.used_bytes >= quota * 0.9;
+  const showQuota = !included || nearlyFull;
+
   return (
     <>
       <ServiceRow
@@ -170,11 +178,15 @@ export function VaultPanel({
             <UsageMeter
               data-testid='vault-usage'
               usedBytes={enrollment.used_bytes}
-              quotaBytes={
-                enrollment.quota_bytes > 0 ? enrollment.quota_bytes : null
-              }
+              quotaBytes={showQuota ? quota : null}
+              backedUp
               facts={[objects]}
             />
+            {!showQuota && (
+              <IncludedNote data-testid='vault-included-note'>
+                This backup is part of your Cloud Server plan.
+              </IncludedNote>
+            )}
             {storageOpen && (
               <VaultStorage
                 drivePseudonym={enrollment.drive_pseudonym}
@@ -224,6 +236,11 @@ export function VaultPanel({
     </>
   );
 }
+
+const IncludedNote = styled.span`
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85em;
+`;
 
 function ErrorText({ children }: { children: string }) {
   return <span data-testid='vault-error'>{children}</span>;

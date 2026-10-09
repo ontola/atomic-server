@@ -12706,3 +12706,12 @@ msgstr ""
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr ""
+
+#. 0: formatBytes(usedBytes)
+#: src/components/Cloud/UsageMeter.tsx
+msgid "{0} backed up"
+msgstr ""
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "This backup is part of your Cloud Server plan."
+msgstr ""

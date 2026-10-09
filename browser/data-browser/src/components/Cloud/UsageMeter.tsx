@@ -15,6 +15,7 @@ export function UsageMeter({
   quotaBytes,
   facts,
   note,
+  backedUp = false,
   ...props
 }: {
   usedBytes: number;
@@ -23,6 +24,8 @@ export function UsageMeter({
   facts?: string[];
   /** Sits right behind the amount, such as a link to where the space goes. */
   note?: ReactNode;
+  /** Say "backed up" instead of "used" when there is no quota to compare with. */
+  backedUp?: boolean;
   [data: `data-${string}`]: string | number | undefined;
 }) {
   const percent =
@@ -31,7 +34,9 @@ export function UsageMeter({
       : null;
   const amount = quotaBytes
     ? `${formatBytes(usedBytes)} of ${formatBytes(quotaBytes)}`
-    : `${formatBytes(usedBytes)} used`;
+    : backedUp
+      ? `${formatBytes(usedBytes)} backed up`
+      : `${formatBytes(usedBytes)} used`;
   // One line for every service: size facts, then the amount, then a link.
   const text = [...(facts ?? []), amount].join(' · ');
 
