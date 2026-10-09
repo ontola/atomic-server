@@ -1357,14 +1357,21 @@ impl Commit {
 
         // Stamp `lastCommit` with this envelope's id. The id is a receipt,
         // not a refetchable resource — ordinary content commits are not stored.
-        applied
-            .resource_new
-            .set(
-                urls::LAST_COMMIT.to_string(),
-                Value::AtomicUrl(commit_resource.get_subject().clone()),
-                store,
-            )
-            .await?;
+        //
+        // Not on later commits to a chat log page: the stamp is a ~100 byte
+        // incompressible string written as its own Loro change per commit,
+        // which would triple the cost of a chat message (planning/chat-log.md).
+        // The page keeps its genesis value.
+        if is_new || !crate::hierarchy::is_chat_log(&applied.resource_new) {
+            applied
+                .resource_new
+                .set(
+                    urls::LAST_COMMIT.to_string(),
+                    Value::AtomicUrl(commit_resource.get_subject().clone()),
+                    store,
+                )
+                .await?;
+        }
 
         let destroyed = commit.destroy.unwrap_or(false);
 

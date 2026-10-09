@@ -388,3 +388,29 @@ async fn entries_survive_a_property_edit_by_a_writer() {
         "Renamed"
     );
 }
+
+#[tokio::test]
+async fn entry_commits_leave_last_commit_at_the_genesis_value() {
+    let w = world("chat_log_last_commit").await;
+    let (page, _) = create_page(&w, &w.bob, &[entry(&w.bob, "first")])
+        .await
+        .unwrap();
+    let genesis = w.db.get_resource(&page).await.unwrap();
+    let stamp = genesis.get(urls::LAST_COMMIT).unwrap().to_string();
+
+    edit(&w, &w.bob, &page, |d| {
+        d.add_entry(&entry(&w.bob, "second")).unwrap();
+    })
+    .await
+    .unwrap();
+    // Another member, whose doc does not match any previousCommit.
+    edit(&w, &w.eve, &page, |d| {
+        d.add_entry(&entry(&w.eve, "third")).unwrap();
+    })
+    .await
+    .unwrap();
+
+    let now = w.db.get_resource(&page).await.unwrap();
+    assert_eq!(now.get(urls::LAST_COMMIT).unwrap().to_string(), stamp);
+    assert_eq!(now.build_state_doc().unwrap().list_entries().len(), 3);
+}

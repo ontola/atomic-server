@@ -2,7 +2,7 @@
 
 > **Status:** Design (2026-10-09). Joep chose this route ("Chatlog (D)") after
 > the measurements in [`chat-message-storage.md`](./chat-message-storage.md).
-> Nothing is built yet.
+> Step 1 (class, entries, server rule, tests) is built.
 
 ## Why
 
@@ -65,6 +65,28 @@ it per commit:
    (`lib/src/loro.rs`), and rejects before anything is stored.
 4. `c` is client time. The server rejects entries whose `c` is more than ten
    minutes ahead of its clock; older times are allowed (offline sending).
+
+Rules added while building step 1:
+
+- A member commit also needs `append` on the page (inherited from the chat),
+  and cannot destroy a page.
+- Changes to `lastCommit` and `createdAt` are ignored in the "properties
+  unchanged" check: clients can carry stale ops for them and changing them
+  gives a non-writer nothing.
+- At genesis, a creator without `write` on the chat cannot set `write` on the
+  page; otherwise a member could mint a page only they can rewrite.
+- The ten-minute future check applies to writers and to genesis as well.
+- The server does not restamp `lastCommit` on later commits to a page (genesis
+  keeps its value). The stamp is a ~100 byte incompressible string written as
+  its own Loro change; it tripled the cost of a message.
+
+## Measured (step 1)
+
+500 entries, one signed commit each, pages of 256, stable client peer,
+42-character text (`measure_chat_log_entry_bytes`): 64 B per message in total,
+of which 46 B snapshot, 9 B resource row, 3 B envelope, 5 B index keys, no
+search rows. Existing `Message` resources: 3285 B. With the `lastCommit`
+restamp it was 201 B.
 
 ## The chats
 

@@ -265,4 +265,29 @@ mod tests {
             .any(|ch| ch.key == b && ch.before.is_some() && ch.after.is_some()));
         assert!(changes.iter().any(|ch| ch.key == c && ch.before.is_none()));
     }
+
+    /// Snapshot written by `@tomic/lib`'s `putChatLogEntry` (loro-crdt JS):
+    /// `c` is a JS number. Generated once; see browser/lib/src/chat-log.ts.
+    const JS_SNAPSHOT_HEX: &str = "6c6f726f000000000000000000000000c4134a640003b50000004c4f524f0000010001011001010000000000000001010000000000050100000100060104010000081b0c3365382d303030303030303101630174016107656e7472696573000e010402010002010002010b02010100200803010380d095ffbc31020502686903050e6469643a61643a6167656e743a78000200667201010000020076760101020000710079000300bad2fd7801000000050000000c0000000000000000010000000000020076769628d58792000000740000004c4f524f00000100010c3365382d3030303030303031060301630380a0abfef9620174040268690161040e6469643a61643a6167656e743a7800010100000000000000000000000100afb22e5e010000000500000009008007656e74726965730009008007656e747269657392b4c4714d00000000000000";
+
+    #[test]
+    fn created_at_written_by_the_js_helper_decodes() {
+        let bytes: Vec<u8> = (0..JS_SNAPSHOT_HEX.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&JS_SNAPSHOT_HEX[i..i + 2], 16).unwrap())
+            .collect();
+        let doc = AtomicLoroDoc::from_snapshot(&bytes).unwrap();
+        let entry = doc.get_entry("3e8-00000001").unwrap();
+        assert_eq!(entry_created_at(&entry), Some(1_700_000_000_000));
+        assert_eq!(entry_author(&entry), Some("did:ad:agent:x"));
+    }
+
+    #[test]
+    fn created_at_decodes_as_integer_or_float() {
+        for c in [LoroValue::I64(42), LoroValue::Double(42.0)] {
+            let mut m: HashMap<String, LoroValue> = HashMap::new();
+            m.insert(FIELD_CREATED_AT.into(), c);
+            assert_eq!(entry_created_at(&LoroValue::from(m)), Some(42));
+        }
+    }
 }
