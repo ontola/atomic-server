@@ -27,7 +27,7 @@ The [identifier specification](identifiers.md) has the full derivation rules and
 | `atomic:{genesis}` | A Resource inside a Drive (documents, tables, folders, the Drive itself) | The signature over its genesis certificate | Local store, a paired device, an always-on device, or peer discovery |
 | `atomic:agent:{publicKey}` | An [Agent](agents.md): a person, device or program that can sign | Generating an Ed25519 keypair | No network needed: the key is inside the identifier |
 | `atomic:commit:{signature}` | A signed write envelope, see [Commits](commits/intro.md) | The signature over the commit | Usually kept only as a receipt; not something you fetch |
-| `atomic:blob:{blake3}` | The raw bytes behind a [File](files.md) | The BLAKE3 hash of the bytes | Any device that holds the bytes; knowing the hash is the capability |
+| `atomic:blob:{blake3}` | The raw bytes behind a [File](files.md) | The BLAKE3 hash of the bytes | Any device that holds the bytes; served only to readers of a File whose drive proved it holds them (the hash is not a capability) |
 | `atomic:node:{nodeId}` | A device or server as a network endpoint | The device's transport keypair (Iroh) | Not a Resource; used for pairing and routing only |
 | `https://example.com/…` | Properties, Classes, Ontologies, external linked data, Resources on HTTP-era servers | The domain owner | An HTTP `GET` with an `application/ad+json` accept header |
 | `internal:/path` | A Resource on *this* server, in config files and server logs | The server | Rewritten to the server's own origin before it leaves the server |

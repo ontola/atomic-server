@@ -415,10 +415,10 @@ Everything else is open to an anonymous socket and gated per subject by
   certificate: its signature, its signer's rights and its schema are all
   validated on application, so the connection's own identity is not the
   authority.
-- `BLOB_REQUEST (0x34)` is **not** gated, on either transport, and runs no
-  rights check. Knowing the 32-byte content hash is the capability. A
-  deliberate, accepted decision: the hash is only learnable from a resource
-  the requester was already served.
+- `BLOB_REQUEST (0x34)` is gated by the requester's identity, on either
+  transport: the bytes are answered only when the requester can read a
+  resource referencing the hash and that resource's drive has proven it holds
+  the bytes (see "Blobs"). The 32-byte hash is not a capability.
 - Unsubscribing (`UNSUB`, `LORO_SYNC_UNSUBSCRIBE`, `PRESENCE_UNSUBSCRIBE`,
   `UNSUBSCRIBE_INDEX_STATUS`) is never gated.
 
@@ -776,11 +776,17 @@ destroy-only evidence on the existing tombstone key.
 <- BLOB_RESPONSE (0x35) [blake3_hash: 32 bytes] [bytes...]
 ```
 
-`BLOB_REQUEST` is ungated on both transports and runs no rights check: the
-hash is the capability. A miss answers `ERROR` `UNKNOWN` `Blob not found`.
+`BLOB_REQUEST` is answered only for a requester who can read a resource that
+references the hash (`internalId`, `blob` or `chunks`) **and** whose drive has
+a proof-of-possession claim for it: those properties are writable by anyone, so
+a reference alone proves nothing. A claim `(hash, drive)` is recorded when the
+bytes arrive for that drive (an authenticated upload, a signed `PUT /blob`, or
+the `BLOB_RESPONSE` below). The hash is not a capability. A missing blob and a
+refused one answer the same `ERROR` `UNKNOWN` `Blob not found`.
 `BLOB_RESPONSE` is accepted **only for a hash this node actually requested**.
 Importing a `SYNC_PUSH` entry whose `File` resource names a blob the node
-lacks records the hash against the (already admitted) drive and emits the
+lacks, or one it holds but whose drive has not yet proven it holds (a pushed
+File naming a stored hash does not unlock it), records the hash against the (already admitted) drive and emits the
 request. The response handler consumes that record and re-checks the drive
 against the sync policy, since enrollment or quota can change in between. A
 response with no matching record answers `ERROR` `UNKNOWN`

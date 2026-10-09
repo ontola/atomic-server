@@ -53,6 +53,50 @@ async fn resolve_blob_write_admission(store: &Db, hash_hex: &str) -> Result<(), 
     Ok(())
 }
 
+/// Record who the pushed bytes of `hash_hex` prove possession for, among the
+/// resources that reference them in drives that admit writes.
+///
+/// A signed push proves it for the signer: every such drive in which the
+/// signer may write the referencing resource is claimed. An anonymous push
+/// (a client that does not sign it) cannot say who holds the bytes, so it is
+/// only accepted as proof when exactly one drive is waiting for them; when
+/// several drives reference the hash, none is claimed and each must push
+/// signed. Claiming for every referrer would let anyone who creates a File
+/// for a known hash piggyback on the real owner's push.
+async fn claim_pushed_blob(
+    store: &Db,
+    hash_hex: &str,
+    agent: &atomic_lib::agents::ForAgent,
+) -> AtomicServerResult<()> {
+    use atomic_lib::agents::ForAgent;
+    let mut drives = std::collections::BTreeSet::new();
+    for referrer in store.all_blob_referrers(hash_hex).await? {
+        let raw_drive = referrer
+            .get(urls::DRIVE_PROP)
+            .map(|v| v.to_string())
+            .unwrap_or_else(|_| referrer.get_subject().to_string());
+        if !store.sync_policy().admit_drive_write(&raw_drive) {
+            continue;
+        }
+        let may = match agent {
+            ForAgent::Public => true,
+            _ => atomic_lib::hierarchy::check_write(store, &referrer, agent)
+                .await
+                .is_ok(),
+        };
+        if may {
+            drives.insert(store.claim_drive_of(&referrer));
+        }
+    }
+    if matches!(agent, ForAgent::Public) && drives.len() != 1 {
+        return Ok(());
+    }
+    for drive in drives {
+        store.claim_blob(hash_hex, &drive)?;
+    }
+    Ok(())
+}
+
 /// HTTP fallback for pushing blob bytes to the server. Used by clients when
 /// the WebSocket BLOB_RESPONSE path isn't available (WS not open, restricted
 /// network, etc.). The hash is verified server-side: a body whose BLAKE3
@@ -74,6 +118,7 @@ pub async fn put_blob(
     appstate: web::Data<AppState>,
     req: actix_web::HttpRequest,
     body: web::Bytes,
+    context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     // A blob put carries no signature (admission is the referencing commit),
     // so the peer address stands in for the agent, on the agent-sized budget:
@@ -115,6 +160,26 @@ pub async fn put_blob(
     }
 
     store.put_blob(&hash_bytes, &body).await?;
+
+    // The bytes are proof of possession. Who they prove it for is the signer
+    // when the request is signed; see `claim_pushed_blob`.
+    let path_and_query = req
+        .head()
+        .uri
+        .path_and_query()
+        .map(|p| p.to_string())
+        .unwrap_or_default();
+    let signed_subject =
+        atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
+    // A signature that does not verify is as good as none: the push is then
+    // anonymous, not refused (admission above is what gates the write).
+    let agent =
+        crate::helpers::get_client_agent_for_request(&req, &body, &appstate, &signed_subject)
+            .await
+            .unwrap_or(atomic_lib::agents::ForAgent::Public);
+    claim_pushed_blob(store, &hash_hex, &agent)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -302,5 +367,64 @@ mod admission_tests {
             "a hash referenced from one admitted drive, among several referencing drives, \
              must be allowed",
         );
+    }
+
+    /// A File in `drive` that references `hash_hex`, as a client commit leaves it.
+    async fn reference(db: &Db, drive: &str, hash_hex: &str) {
+        let subject = db
+            .create_resource("https://atomicdata.dev/classes/Folder", drive, "f", None)
+            .await
+            .unwrap();
+        let mut resource = db.get_resource(&subject.as_str().into()).await.unwrap();
+        resource
+            .set_unsafe(
+                urls::BLOB.into(),
+                atomic_lib::Value::AtomicUrl(
+                    atomic_lib::identifiers::blob_subject(hash_hex).into(),
+                ),
+            )
+            .unwrap();
+        db.add_resource(&resource).await.unwrap();
+    }
+
+    /// Whose proof of possession a pushed blob is (ontola/atomic-server#2157): a
+    /// signed push claims the signer's drives only, and an unsigned one is only
+    /// believed when exactly one drive is waiting for the bytes, so creating a
+    /// File for a hash cannot piggyback on the real owner's push.
+    #[tokio::test]
+    async fn a_push_proves_possession_for_the_pusher_only() {
+        use atomic_lib::agents::ForAgent;
+        let db = Db::init_temp("blob_push_claims").await.unwrap();
+        let (alice, alice_drive) = db.setup("Alice").await.unwrap();
+        let (_mallory, mallory_drive) = db.setup("Mallory").await.unwrap();
+        let hash_hex = blake3::hash(b"alice's bytes").to_hex().to_string();
+        reference(&db, &alice_drive, &hash_hex).await;
+        reference(&db, &mallory_drive, &hash_hex).await;
+        let held = |drive: &str| db.drive_holds_blob(&hash_hex, &db.claim_drive_id(drive));
+
+        // Anonymous, two drives waiting: nobody is claimed.
+        claim_pushed_blob(&db, &hash_hex, &ForAgent::Public)
+            .await
+            .unwrap();
+        assert!(!held(&alice_drive) && !held(&mallory_drive));
+
+        // Alice signs her push: her drive, and only hers.
+        claim_pushed_blob(
+            &db,
+            &hash_hex,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+        )
+        .await
+        .unwrap();
+        assert!(held(&alice_drive));
+        assert!(!held(&mallory_drive));
+
+        // One drive waiting and an anonymous push: believed.
+        let lonely = blake3::hash(b"only one reference").to_hex().to_string();
+        reference(&db, &alice_drive, &lonely).await;
+        claim_pushed_blob(&db, &lonely, &ForAgent::Public)
+            .await
+            .unwrap();
+        assert!(db.drive_holds_blob(&lonely, &db.claim_drive_id(&alice_drive)));
     }
 }

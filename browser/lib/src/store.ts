@@ -6991,12 +6991,32 @@ export class Store {
     // here meant tests/embedders overriding the store's fetch couldn't
     // observe or intercept blob pushes at all.
     const fetchImpl = this.injectedFetch ?? fetch;
+    // Sign the push: the bytes prove that the signer holds them, and the server
+    // only lets a drive read a blob its own agent proved possession of. An
+    // unsigned push is accepted for compatibility, but only counts as proof
+    // while a single drive references the hash.
+    const agent = this.getAgent();
+    let headers: Record<string, string> = {
+      'Content-Type': 'application/octet-stream',
+    };
+
+    if (agent) {
+      try {
+        headers = await signRequest(url, agent, headers, {
+          method: 'PUT',
+          body: bytes,
+        });
+      } catch {
+        // Fall back to the unsigned push.
+      }
+    }
+
     await fetchImpl(url, {
       method: 'PUT',
       // Cast: TS lib.dom marks Uint8Array<SharedArrayBuffer> incompatible with
       // BodyInit/BlobPart; at runtime our bytes are ArrayBuffer-backed.
       body: bytes as unknown as BodyInit,
-      headers: { 'Content-Type': 'application/octet-stream' },
+      headers,
     });
   }
 

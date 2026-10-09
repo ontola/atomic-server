@@ -71,25 +71,28 @@ This separates the file's *metadata* (the File resource — filename, mimetype, 
 
 The HTTP form `<origin>/download/files/{blake3}` is a deployment-specific alias for the underlying identifier and remains the URL clients use over plain HTTP.
 
-## Authorization model: hashes are bearer capabilities
+## Authorization model: the hash is not a capability
 
-The blob store has no permission system of its own. Knowing a `atomic:blob:` identifier is the capability to retrieve the bytes — there is no second authorization check inside the blob store, and there does not need to be. The reasoning:
+A blob hash is an *identity*, never a credential. A server only hands out the bytes behind a hash to a requester who passes both of these checks:
 
-- A 256-bit BLAKE3 hash is unforgeable. You cannot guess one.
-- The only ways to obtain a blob DID are: you already had the bytes (and computed the hash yourself), or you read the File resource that referenced it.
-- Reading a File resource passes through the normal resource-level [hierarchy](hierarchy.md) authorization. That check is where access control happens — the bytes simply follow.
+1. **Read access.** The requester can read at least one resource that references the blob: a File whose `internalId` or `blob` is the hash, or a chunked File listing it in `chunks`. Reading goes through the normal [hierarchy](hierarchy.md) authorization.
+2. **Proof of possession.** That referencing resource's drive has *proven it holds the bytes*. A server records a claim `(hash, drive)` only when the bytes were handed to it on behalf of that drive: an authenticated upload into the drive, a `PUT /blob/{hash}` signed by an agent that may write the referencing File, or a sync pull of the bytes for that drive from an admitted peer. A claim is never part of a resource, cannot be written by a commit and is not visible over the API.
 
-In other words, **the auth boundary is the File resource, not the blob.** Once a client legitimately holds a blob DID, they can fetch the corresponding bytes from any peer that happens to have them. This is the same model used by Git objects, IPFS CIDs, S3 presigned URLs, and Iroh tickets.
+Without the second check the first would be worthless: `internalId`, `blob` and `chunks` are ordinary properties, so anyone who knows (or guesses) a hash could create a File of their own that names it and download somebody else's private bytes. Such a File exists, is readable by its creator, and still unlocks nothing, because its drive never supplied the bytes. A second user who uploads identical bytes supplies them for their own drive, gets their own claim, and reads their own File; nothing is shared with the first user.
 
-Three properties follow from this and should not be tangled up later:
+Every refusal is the same "not found" as for a hash the server does not hold, so a hash cannot be used to probe for existence or to confirm that someone stores a particular file. The checks are the same for the HTTP routes (`/download/files/{blake3}`, `/download/atomic:blob:{blake3}`, `/download/{file}`) and for the `BLOB_REQUEST` frame of the sync protocols.
+
+Consequences:
 
 1. **Blobs are facts, not resources.** They have no subject metadata, no parent, no ACL, no class. They are addressed only by content hash.
-2. **The File resource is where read permission is enforced.** Any client that can read the File resource can read its bytes.
-3. **Blob identifiers are bearer tokens.** Treat a leaked `atomic:blob:` the same as a leaked file — equivalent to leaking an S3 presigned URL.
+2. **The File resource, together with the claim of its drive, is where read permission is enforced.**
+3. **Knowing a blob identifier grants nothing**, in contrast to a presigned URL. People who can write in a drive can still reference any blob that drive holds, so write access to a drive is read access to the files stored for it.
+
+Stores created before claims existed are migrated once on start: every File already in the store claims its blob for its drive, so no existing file becomes unreadable.
 
 ### A note on existence side-channels
 
-A consequence of content-addressed storage is that an attacker who already knows the BLAKE3 hash of some specific byte-string (for example, by hashing a publicly-leaked document) can ask a server "do you have this blob?" and learn the answer from the response. This is intrinsic to any CAS system and is generally accepted; mitigations like rate-limiting unauthenticated blob fetches are orthogonal to the capability model and can be applied at the deployment layer if needed.
+Because a refusal looks like a missing blob and requires proof the requester cannot forge, an attacker who knows the hash of some byte-string cannot learn whether a server stores it, nor read it. Uploading the bytes yourself only ever claims them for your own drive.
 
 ## Discussion
 

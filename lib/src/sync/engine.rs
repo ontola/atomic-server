@@ -627,7 +627,15 @@ pub async fn handle_frame_full_for_caps(
                         vec![]
                     }
                     Some(drive) if store.sync_policy().admit_drive_write(&drive) => {
-                        match store.put_blob(&resp.hash, &resp.bytes).await {
+                        // The bytes arrived for `drive`: its proof of
+                        // possession. Bytes already stored are not rewritten.
+                        let stored = if store.has_blob(&resp.hash).await.unwrap_or(false) {
+                            Ok(())
+                        } else {
+                            store.put_blob(&resp.hash, &resp.bytes).await
+                        }
+                        .and_then(|()| store.claim_blob(&hex::encode(resp.hash), &drive));
+                        match stored {
                             Ok(()) => vec![],
                             Err(error) => {
                                 tracing::warn!("BLOB_RESPONSE: storage failed: {error}");
@@ -2040,7 +2048,13 @@ pub async fn import_sync_push(
                     if hash_bytes.len() == 32 {
                         let mut hash = [0u8; 32];
                         hash.copy_from_slice(&hash_bytes);
-                        if !store.has_blob(&hash).await.unwrap_or(false) {
+                        // Also when the bytes are here but this drive never
+                        // proved it holds them: a pushed File naming a hash
+                        // the node already stores must not unlock it. The
+                        // peer has to send the bytes (a claim needs proof).
+                        if !store.has_blob(&hash).await.unwrap_or(false)
+                            || !store.drive_holds_blob(hash_hex, &store.claim_drive_id(&push.drive))
+                        {
                             // Record which (already-admitted, see the top of
                             // this fn) drive this hash belongs to so the
                             // BLOB_RESPONSE handler can gate the write

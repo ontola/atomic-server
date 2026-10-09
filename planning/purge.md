@@ -42,7 +42,9 @@ everywhere: `POST /commit`, WS `COMMIT`, `DbEvent::Destroyed.commit_json`,
   `readable_blob_referrers`) is empty. `BlobBackend::delete` is new (S3 too).
   A `purge-blob:<hash>` marker in `Tree::PluginMeta`, written in the same
   transaction, makes this crash safe; `resume_pending_blob_purges` runs at
-  server start.
+  server start. `purge_unreferenced_blobs` also drops the blob's proof-of-possession
+  claims (`blob-claim:<hash>:<drive>` in `Tree::PluginMeta`, see
+  `planning/blob-possession.md`).
 - **Peers**: a replica that holds the resource applies the tombstone like a
   destroy and purges its copy. A replica that does not hold the resource
   refuses it (nobody to authorize), which is fine: it has nothing to erase.

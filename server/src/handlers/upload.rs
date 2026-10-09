@@ -58,6 +58,11 @@ pub async fn upload_handler(
     })? {
         let mut resource =
             save_file_and_create_resource(field, &appstate, &query.parent, store, &origin).await?;
+        // The bytes came from an agent allowed to write here: proof of
+        // possession for this drive, and only this one.
+        if let Ok(hash) = resource.get(urls::INTERNAL_ID) {
+            store.claim_blob(&hash.to_string(), &store.claim_drive_of(&parent))?;
+        }
         resource.save(store).await?;
         created_resources.push(resource);
     }
