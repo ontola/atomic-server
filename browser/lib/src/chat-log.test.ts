@@ -89,6 +89,18 @@ describe('chat log entries', () => {
     ]);
   });
 
+  it('reads and counts single entries', async ({ expect }) => {
+    const { page } = await chatLogPage();
+    const key = page.addChatLogEntry({ a: alice, t: 'one', c: 1000 })!;
+    page.addChatLogEntry({ a: alice, t: 'two', c: 2000 });
+    expect(page.countChatLogEntries()).toBe(2);
+    expect(page.getChatLogEntry(key)).toEqual({ a: alice, t: 'one', c: 1000 });
+    expect(page.getChatLogEntry('missing')).toBeUndefined();
+    page.removeChatLogEntry(key);
+    expect(page.getChatLogEntry(key)).toBeUndefined();
+    expect(page.countChatLogEntries()).toBe(1);
+  });
+
   it('defaults author and time, and is not a property', async ({ expect }) => {
     const { page, agentDID } = await chatLogPage();
     const before = Date.now();

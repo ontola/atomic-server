@@ -8,6 +8,8 @@ import type {
 import { ulid } from 'ulidx';
 import {
   addChatLogEntry,
+  countChatLogEntries,
+  getChatLogEntry,
   listChatLogEntries,
   putChatLogEntry,
   removeChatLogEntry,
@@ -2118,6 +2120,20 @@ export class Resource<C extends OptionalClass = any> {
     this.armStagedCommitToken();
     removeChatLogEntry(doc, key);
     this.markDirty();
+  }
+
+  /** The chat log entry under `key`, if the page holds it. */
+  public getChatLogEntry(key: string): ChatLogEntry | undefined {
+    const doc = this.getLoroDoc();
+
+    return doc ? getChatLogEntry(doc, key) : undefined;
+  }
+
+  /** How many entries the chat log page holds. */
+  public countChatLogEntries(): number {
+    const doc = this.getLoroDoc();
+
+    return doc ? countChatLogEntries(doc) : 0;
   }
 
   /** The chat log entries, oldest first. */

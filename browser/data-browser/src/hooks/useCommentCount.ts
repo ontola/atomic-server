@@ -1,4 +1,5 @@
 import { commits, core, dataBrowser, useCollection } from '@tomic/react';
+import { useChatLogCount, useChatLogPages } from './useChatLog';
 import { useLastSeenComments } from './useLastSeenComments';
 
 // `about` is also used by AI chats; only Messages are comments.
@@ -7,10 +8,10 @@ const ONLY_MESSAGES = [
 ];
 
 /**
- * Live number of comments on a resource (Messages whose `about` points at it)
- * plus whether some of them are unseen on this device. Comments are
- * client-signed commits, so drive sync keeps the collection membership up to
- * date without refetching.
+ * Live number of comments on a resource (Messages whose `about` points at it,
+ * and entries in the ChatLog pages whose `about` points at it) plus whether
+ * some of them are unseen on this device. Comments are client-signed commits,
+ * so drive sync keeps the collection membership up to date without refetching.
  */
 export function useCommentCount(subject: string): {
   count: number;
@@ -28,9 +29,11 @@ export function useCommentCount(subject: string): {
     },
     { pageSize: 100 },
   );
+  const { pages } = useChatLogPages(dataBrowser.properties.about, subject);
+  const logged = useChatLogCount(pages);
   const [lastSeen] = useLastSeenComments(subject);
 
-  const count = ready ? collection.totalMembers : 0;
+  const count = (ready ? collection.totalMembers : 0) + logged;
   const hasUnseen = count > 0 && (lastSeen === undefined || count > lastSeen);
 
   return { count, hasUnseen };

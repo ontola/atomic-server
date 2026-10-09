@@ -2,7 +2,8 @@
 
 > **Status:** Design (2026-10-09). Joep chose this route ("Chatlog (D)") after
 > the measurements in [`chat-message-storage.md`](./chat-message-storage.md).
-> Step 1 (class, entries, server rule, tests) is built.
+> Steps 1 (class, entries, server rule, tests) and 2 (group chat and comments)
+> are built.
 
 ## Why
 
@@ -129,6 +130,56 @@ messages show up through the same merge.
 3. AI chat.
 4. DMs.
 5. Follow events and meeting toasts.
+
+## Step 2: group chat and comments (as built)
+
+- **Writing.** `appendToChatLog` (`helpers/chatLog.ts`) finds the pages of a chat
+  (collection query on `parent` of the ChatRoom, or `about` of the commented
+  item, `isA ChatLog`), adds the entry to the newest page when it holds fewer
+  than 256 entries, and otherwise creates the next page (with the first entry in
+  it, in one commit). Sends to one chat run one after another, and pages this
+  client made are remembered, so a quick second message or an offline one does
+  not start a second page. Comments: page `parent` is the drive's comments
+  folder, `about` the item, one log per item.
+- **Reading.** `useChatMessages` keeps the same shape (a list of ids, "show
+  older", the `chat-tail:` cache) but an id is either an old `Message` subject
+  or an entry id `<page subject>#<entry key>`, the same string the copy-link
+  button copies. The list is the newest `visible` of both merged by time
+  (`windowChat`): old messages by their creation time, entries by `c`. Pages are
+  loaded newest first until the window is full.
+- **Live.** Entries are not properties, so `useChatLogRevision` subscribes to
+  the loaded pages (`store.subscribe`, plus the resource's `LocalChange` for
+  entries added in this tab) and re-reads on every change.
+- **Edit/delete.** Own entries only, in the UI. Edit replaces the value and sets
+  `e`; the reply stays. Old `Message` resources keep the generic edit form.
+- **Reply.** `r` holds the entry id (`<page>#<key>`) rather than the bare key,
+  because the quoted entry can be on another page. An old message is its
+  subject. The composer clears its reply state when the message is submitted,
+  not when the server answers: the message shows at once now.
+- **Counts and unseen.** `useCommentCount` is old `Message`s plus the entries of
+  the item's pages. Unseen compares that total with the number marked seen.
+- **Notifications.** `MessageNotifier` also listens to updated ChatLog pages and
+  treats each entry that is new since the app started and not the viewer's as a
+  message (`entryFacts`); one handled set keyed by entry id keeps edits and
+  repeated updates from announcing twice. Reply authors are looked up on the
+  entry's page.
+- **Opening a page.** A ChatLog page has no view of its own: opening it (the
+  parent of a copied link) redirects to the chat, or to the item with the
+  comments open.
+- **Not in the log yet.** FollowEvents, meeting toasts, AI chat and DMs are
+  untouched. Meeting chat messages typed by people are entries (it is a
+  ChatRoom); the meeting toaster reads both.
+
+Choices to revisit:
+
+- The "show older" count is exact for loaded pages. Pages that are not loaded
+  yet count as one message each (a page is never empty), so the number is a
+  lower bound until they load.
+- Scrolling to the linked entry is not built: the app's URL has no place for
+  the `#<key>` of a link, so opening one lands on the chat.
+- Comments (log or not) live in the drive's comments folder, so only people
+  with access to the drive see them; a guest invited to a single item sees no
+  comments. Unchanged from `Message`s.
 
 ## Open questions
 

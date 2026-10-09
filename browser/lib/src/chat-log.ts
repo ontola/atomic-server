@@ -22,7 +22,10 @@ export interface ChatLogEntry {
   t: string;
   /** createdAt, ms. */
   c: number;
-  /** Entry key being replied to. */
+  /**
+   * What is replied to: an entry id (`<page subject>#<entry key>`, so it can
+   * be found on another page) or the subject of an old `Message` resource.
+   */
   r?: string;
   /** Edited-at, ms. */
   e?: number;
@@ -66,6 +69,23 @@ export function addChatLogEntry(doc: LoroDoc, entry: ChatLogEntry): string {
 /** Remove the entry under `key`. */
 export function removeChatLogEntry(doc: LoroDoc, key: string): void {
   doc.getMap(CHAT_LOG_ENTRIES).delete(key);
+}
+
+/** The entry under `key`, if there is one. */
+export function getChatLogEntry(
+  doc: LoroDoc,
+  key: string,
+): ChatLogEntry | undefined {
+  const value = doc.getMap(CHAT_LOG_ENTRIES).get(key);
+
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as unknown as ChatLogEntry)
+    : undefined;
+}
+
+/** How many entries the page holds. */
+export function countChatLogEntries(doc: LoroDoc): number {
+  return doc.getMap(CHAT_LOG_ENTRIES).size;
 }
 
 /** Every entry, oldest first (keys sort by time). */
