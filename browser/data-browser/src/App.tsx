@@ -5,6 +5,7 @@ import { registerHandlers } from './handlers';
 import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
 import { shouldLock } from './helpers/deviceLock';
 import { registerCustomCreateActions } from './components/forms/NewForm/CustomCreateActions';
+import { registerPiecesValidation } from '@chunks/Pieces/piecesFlag';
 import { serverURLStorage } from './helpers/serverURLStorage';
 import { driveStorage } from './helpers/driveStorage';
 import { isRunningInTauri } from './helpers/tauri';
@@ -232,6 +233,7 @@ declare global {
 // store.preloadPropsAndClasses();
 
 registerCustomCreateActions();
+registerPiecesValidation();
 // Register global event handlers.
 registerHandlers(store);
 

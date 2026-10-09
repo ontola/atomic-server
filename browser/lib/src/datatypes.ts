@@ -3,6 +3,7 @@
 import { Client } from './client.js';
 import type { AtomicValue } from './value.js';
 import { isSafeHref } from './safeHref.js';
+import { isLensEndpointKey } from './lens-endpoint-key.js';
 
 // TODO: use strings from `./urls`, requires TS fix: https://github.com/microsoft/TypeScript/issues/40793
 export enum Datatype {
@@ -106,9 +107,19 @@ export interface ArrayError extends Error {
 }
 
 /** Validates a JSON Value using a Datatype. Throws an error if things are wrong. */
+export interface ValidateDatatypeOptions {
+  /**
+   * A ResourceArray may also hold lens endpoint keys (`record:…`, `rdf:…`),
+   * as an App's `renders` does in the split-pieces exploration. See
+   * `lens-endpoint-key.ts`; the keys are provisional.
+   */
+  allowLensEndpointKeys?: boolean;
+}
+
 export const validateDatatype = (
   value: AtomicValue,
   datatype: Datatype,
+  { allowLensEndpointKeys = false }: ValidateDatatypeOptions = {},
 ): void => {
   let err: null | string = null;
 
@@ -166,6 +177,8 @@ export const validateDatatype = (
       }
 
       value.map((item, index) => {
+        if (allowLensEndpointKeys && isLensEndpointKey(item)) return;
+
         try {
           Client.tryValidSubject(item as string);
         } catch (e) {

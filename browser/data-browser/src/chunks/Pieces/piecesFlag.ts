@@ -1,4 +1,6 @@
 // @wc-ignore-file
+import { allowLensEndpointKeysInRenders } from '@tomic/lib';
+
 /**
  * The split-pieces exploration is off unless this browser opted in. The demo
  * route (`/app/pieces-demo`, dev builds only) turns it on. With it off, tables
@@ -21,4 +23,16 @@ export function setPiecesEnabled(enabled: boolean): void {
   } catch {
     // Storage blocked: the flag simply stays off.
   }
+}
+
+/**
+ * While the flag is on, an App's `renders` may hold lens endpoint keys
+ * (`record:…`, `rdf:…`), so an integration can declare the provider-shaped
+ * endpoint a catalog lens reaches. The keys are provisional until the
+ * produced-class declaration exists (atomic-plugins #409, `x-produces`;
+ * pieces.md I1, O8). Called once at startup; the flag is read on every
+ * validation, so switching it needs no reload.
+ */
+export function registerPiecesValidation(): void {
+  allowLensEndpointKeysInRenders(piecesEnabled);
 }

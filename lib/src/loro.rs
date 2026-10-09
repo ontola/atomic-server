@@ -1502,6 +1502,42 @@ mod test {
     }
 
     #[test]
+    fn lens_endpoint_keys_in_a_resource_array_are_kept_verbatim() {
+        // The split-pieces exploration (#2069) lets an App's `renders` hold
+        // lens endpoint keys besides class subjects: `record:<path>#<resource>`
+        // and `rdf:<IRI>` (atomic-plugins `ontology-kit/LENSES.md`). They are
+        // provisional until the produced-class declaration exists
+        // (atomic-plugins #409; pieces.md I1, O8). The client accepts them in
+        // `renders` only behind the flag (`browser/lib/src/lens-endpoint-key.ts`);
+        // the server stores them as they are, and never reads `renders`
+        // entries as subjects.
+        let keys = [
+            "https://ontola.github.io/atomic-plugins/ontology/classes/issue-v1",
+            "record:APIs/todoist.com/1#task",
+            "rdf:http://www.w3.org/2002/01/bookmark#Bookmark",
+        ];
+        let doc = AtomicLoroDoc::new();
+        let prop = "https://example.com/properties/renders";
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(keys.iter().map(|k| (*k).into()).collect()),
+        )
+        .unwrap();
+
+        let value = get_doc_property(&doc, prop).expect("renders must materialize");
+        assert!(matches!(value, Value::ResourceArray(_)), "got {value:?}");
+        assert_eq!(value.to_subjects(None).unwrap(), keys);
+
+        // The JSON form the server parses from a request takes them too.
+        let parsed = Value::new(
+            &serde_json::to_string(&keys).unwrap(),
+            &crate::datatype::DataType::ResourceArray,
+        )
+        .unwrap();
+        assert_eq!(parsed.to_subjects(None).unwrap(), keys);
+    }
+
+    #[test]
     fn empty_resource_array_round_trips_through_loro() {
         // An empty ResourceArray must materialize back as an empty
         // ResourceArray (not be dropped). Required-but-empty array properties
