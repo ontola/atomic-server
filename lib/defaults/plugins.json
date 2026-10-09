@@ -245,6 +245,46 @@
     "https://atomicdata.dev/properties/shortname": "installation-status"
   },
   {
+    "@id": "https://atomicdata.dev/properties/connectionPlatform",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The integration platform a ConnectionRequest asks for, as the proxy names it, such as `google-calendar`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-platform"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/connectionReason",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Why a ConnectionRequest was made: `never-connected`, `revoked` or `expired`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-reason"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/connectionRequestedBy",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A label for the runtime that asked, such as the node's name. Never a credential.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-requested-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/connectionSince",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the node first needed the connection, in milliseconds since the epoch.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "connection-since"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/domains",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
     "https://atomicdata.dev/properties/description": "Domains a Listing applies to, as a JSON array of strings.",
@@ -334,6 +374,24 @@
       "https://atomicdata.dev/properties/installationStatus"
     ],
     "https://atomicdata.dev/properties/shortname": "installation",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/ConnectionRequest",
+    "https://atomicdata.dev/properties/description": "A node's request that someone connects a platform to an Installation. A child of the Installation, so it syncs with the drive. Holds nothing secret. While one exists the node does not run that Installation's scheduled runs; destroying it clears the request.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/connectionPlatform",
+      "https://atomicdata.dev/properties/connectionReason",
+      "https://atomicdata.dev/properties/connectionSince"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/connectionRequestedBy"
+    ],
+    "https://atomicdata.dev/properties/shortname": "connection-request",
     "https://atomicdata.dev/properties/subresources": []
   },
   {

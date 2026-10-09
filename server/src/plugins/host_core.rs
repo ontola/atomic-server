@@ -776,6 +776,7 @@ impl HostCore {
             .build()
             .map_err(|e| format!("could not build an HTTP client: {e}"))?;
 
+        let authorized_url = authorized.url.to_string();
         let mut outgoing = client.request(authorized.method, authorized.url);
         for (name, value) in headers {
             outgoing = outgoing.header(name, value);
@@ -809,10 +810,21 @@ impl HostCore {
         )
         .await?;
 
+        let body = String::from_utf8_lossy(&bytes).into_owned();
+
+        // A missing or revoked delegation is not something the plugin can
+        // handle: the run ends as "needs a connection" (see
+        // `connection_request`), not as an error to retry.
+        if let Some(need) =
+            super::connection_request::from_proxy_answer(&authorized_url, status, &body)
+        {
+            return Err(need.to_error());
+        }
+
         Ok(FetchResponse {
             status,
             headers,
-            body: String::from_utf8_lossy(&bytes).into_owned(),
+            body,
         })
     }
 

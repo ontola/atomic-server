@@ -44,6 +44,7 @@ import {
 } from '@chunks/Plugins/CapabilityList';
 import { ConfigReference } from './ConfigReference';
 import { AssignRights } from './AssignRights';
+import { ConnectionRequests } from './ConnectionRequests';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
@@ -209,6 +210,11 @@ export const InstallationPage: React.FC<
           </Row>
           {author && <PluginAuthor>by {author}</PluginAuthor>}
         </div>
+        <ConnectionRequests
+          installation={resource.subject}
+          drive={String(resource.get(core.properties.parent) ?? '')}
+          title={title}
+        />
         <Column>
           {canWrite && (
             <Row justify='flex-end' wrapItems>

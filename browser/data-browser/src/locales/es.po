@@ -4017,6 +4017,7 @@ msgstr ""
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
+#: src/views/Installation/ConnectionRequests.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Connect"
 msgstr ""
@@ -4409,9 +4410,6 @@ msgstr ""
 #: src/helpers/syncPresentation.ts
 msgid "Your data lives on the device you’re connected to."
 msgstr ""
-
-#~ msgid "Syncing this workspace…"
-#~ msgstr ""
 
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
@@ -12507,9 +12505,6 @@ msgstr ""
 msgid "Updating your local data"
 msgstr ""
 
-#~ msgid "The server could not be reached"
-#~ msgstr ""
-
 #: src/components/DatabaseUpgradeNotice.tsx
 msgid "This is needed once after an update and takes a moment. Keep this tab open."
 msgstr ""
@@ -12531,9 +12526,6 @@ msgstr ""
 msgid "Cloud Server setup failed on its own"
 msgstr ""
 
-#~ msgid "Check your connection and that your server is running, then try again."
-#~ msgstr ""
-
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "Summaries are made by a server, and this workspace has none. Host it on a Cloud Server to collect answers and see them summarized here."
 msgstr ""
@@ -12541,4 +12533,35 @@ msgstr ""
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr ""
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "The connection was revoked."
+msgstr ""
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "The connection expired."
+msgstr ""
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "It was never connected."
+msgstr ""
+
+#. 0: title; 1: node; 2: name
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "{0} on {1} needs {2}"
+msgstr ""
+
+#. 0: title; 1: name
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "{0} needs {1}"
+msgstr ""
+
+#. 0: toRelativeDateTime(new Date(since), true)
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "Asked {0}."
+msgstr ""
+
+#: src/views/Installation/ConnectionRequests.tsx
+msgid "Its scheduled runs are paused until you connect it."
 msgstr ""
