@@ -112,6 +112,6 @@ messages show up through the same merge.
 
 - Page size 256: small enough that loading the newest page is instant, large
   enough that the page overhead stays near 12 B per message.
-- Reactions do not exist yet; when they come they fit as a map inside the entry
-  owned by... nobody single, so they would need their own rule (one key per
-  reacting agent).
+- Reactions do not exist yet. They cannot live inside the entry, which only its
+  author may change; they would be entries of their own (`k` reaction, `r` the
+  target), so the same rule covers them.
