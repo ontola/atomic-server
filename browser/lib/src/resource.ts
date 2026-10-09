@@ -22,6 +22,10 @@ import {
 } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
+import {
+  lensEndpointKeysAllowedInRenders,
+  RENDERS_SHORTNAME,
+} from './lens-endpoint-key.js';
 import { isUnauthorized, RequestCancelledError } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
@@ -3722,7 +3726,11 @@ export class Resource<C extends OptionalClass = any> {
 
       if (fullProp) {
         try {
-          validateDatatype(value, fullProp.datatype);
+          validateDatatype(value, fullProp.datatype, {
+            allowLensEndpointKeys:
+              fullProp.shortname === RENDERS_SHORTNAME &&
+              lensEndpointKeysAllowedInRenders(),
+          });
         } catch (e) {
           if (e instanceof Error) {
             e.message = `Error validating ${fullProp.shortname} with value ${value} for ${this.subject}: ${e.message}`;
