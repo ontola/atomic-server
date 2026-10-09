@@ -4,7 +4,7 @@
 [![Released API docs](https://docs.rs/atomic_lib/badge.svg)](https://docs.rs/atomic_lib)
 [![Discord chat](https://img.shields.io/discord/723588174747533393.svg?logo=discord)](https://discord.gg/a72Rv2P)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/joepipo/atomic)
+[![github](https://img.shields.io/github/stars/ontola/atomic-server?style=social)](https://github.com/ontola/atomic-server)
 
 _Status: Beta. [Breaking changes](../CHANGELOG.md) are expected until 1.0._
 
@@ -18,7 +18,7 @@ For code examples, see [`examples/basic.rs`](examples/basic.rs) and the many tes
 
 - Two stores for Atomic Data:
   - In-memory store for getting / setting data (`Store`). Useful for clients.
-  - On disk database (`Db`, uses Sled), which powers `atomic-server`.
+  - On disk database (`Db`, uses redb), which powers `atomic-server`.
 - [JSON-AD Parser & Serializer](https://docs.atomicdata.dev/core/json-ad.html)
 - Serialization of atomic data to JSON-AD, plain JSON, RDF, Turtle, N-Triples and JSON-LD.
 - [Path](https://docs.atomicdata.dev/core/paths.html) traversal
@@ -40,7 +40,7 @@ Some features of this library are optional, to minimize bundle size and compile 
 **db**
 
 The db features adds persistence, which means that you can store stuff on an HDD / SSD.
-It uses [Sled], a performant, embedded key-value store.
+It uses [redb](https://www.redb.org/), a performant, embedded key-value store.
 
 **rdf**
 

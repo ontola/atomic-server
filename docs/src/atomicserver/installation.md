@@ -109,7 +109,7 @@ atomic-server
 ```sh
 # make sure pnpm is installed and available in path! https://pnpm.io/
 pnpm --version
-git clone git@github.com:atomicdata-dev/atomic-server.git
+git clone git@github.com:ontola/atomic-server.git
 cd atomic-server/server
 cargo run
 ```
