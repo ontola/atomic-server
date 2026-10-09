@@ -97,6 +97,13 @@ pub struct CommitApplied {
     /// nothing to state, so without an explicit check they masquerade as
     /// an idempotent replay while the client's writes silently vanish.
     pub imported_pending_ops: bool,
+    /// Raw `properties` keys the update changed (a superset of
+    /// `changed_props`: includes values that do not materialize into atoms).
+    pub changed_property_keys: Vec<String>,
+    /// True when the update changed the `datatypes` map.
+    pub datatypes_changed: bool,
+    /// Chat log `entries` the update added, changed or removed.
+    pub entry_changes: Vec<crate::chat_log::EntryChange>,
 }
 
 #[derive(Clone, Debug)]
@@ -1132,10 +1139,39 @@ impl Commit {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
 
+                // A chat log page: the creator gets no `write` (below), so
+                // the page cannot be rewritten by whoever happened to create
+                // it, and it may not hand itself or anyone else `write` at
+                // genesis either unless the creator may write to the chat.
+                // Every entry in it must be the creator's own.
+                if crate::hierarchy::is_chat_log(&applied.resource_new) {
+                    let for_agent: crate::agents::ForAgent = validate_for.into();
+                    if applied.resource_new.get(urls::WRITE).is_ok() {
+                        let parent = applied.resource_new.get_parent(store).await?;
+                        crate::hierarchy::check_write(store, &parent, &for_agent)
+                            .await
+                            .map_err(|_| {
+                                crate::errors::AtomicError::unauthorized(
+                                    "Only a writer of the chat may set `write` on a chat log page"
+                                        .to_string(),
+                                )
+                            })?;
+                    }
+                    crate::hierarchy::check_chat_log_member_commit(
+                        store,
+                        &for_agent,
+                        &[],
+                        false,
+                        &applied.entry_changes,
+                    )?;
+                }
+
                 // For new DID resources, grant the signer explicit write access so future
                 // commits don't need drive-level rights. Agents are excluded because they
                 // already have self-write via their subject matching the agent check.
-                if matches!(applied.resource_new.get_subject(), Subject::Did { .. }) {
+                if matches!(applied.resource_new.get_subject(), Subject::Did { .. })
+                    && !crate::hierarchy::is_chat_log(&applied.resource_new)
+                {
                     let is_agent = applied
                         .resource_new
                         .get(urls::IS_A)
@@ -1161,7 +1197,45 @@ impl Commit {
                 }
             } else {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
-                crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
+                let write_check =
+                    crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await;
+                match write_check {
+                    Ok(_) => {}
+                    // A chat log page takes entry changes from anyone with
+                    // `append` on it, as long as each is their own.
+                    Err(write_err) if crate::hierarchy::is_chat_log(&resource_old) => {
+                        let for_agent: crate::agents::ForAgent = validate_for.into();
+                        if commit.destroy.unwrap_or(false) {
+                            return Err(write_err);
+                        }
+                        crate::hierarchy::check_rights(
+                            store,
+                            &resource_old,
+                            &for_agent,
+                            crate::hierarchy::Right::Append,
+                        )
+                        .await?;
+                        crate::hierarchy::check_chat_log_member_commit(
+                            store,
+                            &for_agent,
+                            &applied.changed_property_keys,
+                            applied.datatypes_changed,
+                            &applied.entry_changes,
+                        )?;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+
+            // Entries are client time; refuse ones from the far future.
+            if !commit.destroy.unwrap_or(false)
+                && (if is_new {
+                    crate::hierarchy::is_chat_log(&applied.resource_new)
+                } else {
+                    crate::hierarchy::is_chat_log(&resource_old)
+                })
+            {
+                crate::hierarchy::check_chat_log_entry_times(&applied.entry_changes)?;
             }
 
             if commit.destroy.unwrap_or(false) && !is_new {
@@ -1375,6 +1449,9 @@ impl Commit {
         let mut imported_new_ops = false;
         let mut vv_before: Option<loro::VersionVector> = None;
         let mut imported_pending_ops = false;
+        let mut changed_property_keys: Vec<String> = Vec::new();
+        let mut datatypes_changed = false;
+        let mut entry_changes: Vec<crate::chat_log::EntryChange> = Vec::new();
 
         if let Some(loro_update_bytes) = &self.loro_update {
             // Seed from the current resource state when no snapshot exists yet so
@@ -1392,6 +1469,9 @@ impl Commit {
                 .import_update_with_diff(loro_update_bytes, &resource.get_subject().to_string())?;
             imported_new_ops = loro_doc.oplog_vv_map() != vv_map_before;
             imported_pending_ops = diff.imported_pending_ops;
+            changed_property_keys = diff.changed_property_keys;
+            datatypes_changed = diff.datatypes_changed;
+            entry_changes = diff.entry_changes;
 
             // Validate the author's state as well as the merged state. Concurrent
             // LWW decisions may retain our baseline while accepting a stale value.
@@ -1460,6 +1540,9 @@ impl Commit {
             imported_new_ops,
             vv_before,
             imported_pending_ops,
+            changed_property_keys,
+            datatypes_changed,
+            entry_changes,
         })
     }
 

@@ -114,6 +114,14 @@ pub struct LoroDiff {
     /// nothing to state, so accepting a commit in that condition silently
     /// discards the client's writes.
     pub imported_pending_ops: bool,
+    /// Every `properties` key whose raw Loro value was added, changed or
+    /// removed (also those that do not materialize into an atom).
+    pub changed_property_keys: Vec<String>,
+    /// True when the `datatypes` map changed.
+    pub datatypes_changed: bool,
+    /// The `entries` keys (chat log) added, changed or removed. Entries are
+    /// not properties: they produce no atoms.
+    pub entry_changes: Vec<crate::chat_log::EntryChange>,
 }
 
 impl AtomicLoroDoc {
@@ -825,12 +833,27 @@ impl AtomicLoroDoc {
     /// Compares the properties map before and after the import.
     pub fn import_update_with_diff(&self, update: &[u8], subject: &str) -> AtomicResult<LoroDiff> {
         let before = self.get_all_properties();
+        let datatypes_before = self.get_all_datatypes();
+        let entries_before = self.entries();
         let imported_pending_ops = self.import_update_status(update)?;
         let after = self.get_all_properties();
+        let entry_changes = crate::chat_log::diff_entries(&entries_before, &self.entries());
         // Tags are per-property and stable; one read after the import covers
         // both the before and after value of every property.
         let datatypes = self.get_all_datatypes();
         let tag_of = |key: &str| datatypes.get(key).map(String::as_str);
+        let datatypes_changed = datatypes != datatypes_before;
+        let mut changed_property_keys: Vec<String> = after
+            .iter()
+            .filter(|(key, val)| before.get(*key) != Some(*val))
+            .map(|(key, _)| key.clone())
+            .collect();
+        changed_property_keys.extend(
+            before
+                .keys()
+                .filter(|key| !after.contains_key(*key))
+                .cloned(),
+        );
 
         let mut add_atoms = Vec::new();
         let mut remove_atoms = Vec::new();
@@ -870,6 +893,9 @@ impl AtomicLoroDoc {
             add_atoms,
             remove_atoms,
             imported_pending_ops,
+            changed_property_keys,
+            datatypes_changed,
+            entry_changes,
         })
     }
 }

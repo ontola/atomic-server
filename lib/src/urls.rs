@@ -16,6 +16,7 @@ pub const FILE: &str = "https://atomicdata.dev/classes/File";
 pub const CHATROOM: &str = "https://atomicdata.dev/classes/ChatRoom";
 pub const FOLDER: &str = "https://atomicdata.dev/classes/Folder";
 pub const PARAGRAPH: &str = "https://atomicdata.dev/classes/elements/Paragraph";
+pub const CHAT_LOG: &str = "https://atomicdata.dev/classes/ChatLog";
 pub const MESSAGE: &str = "https://atomicdata.dev/classes/Message";
 pub const IMPORTER: &str = "https://atomicdata.dev/classes/Importer";
 pub const LENS: &str = "https://atomicdata.dev/classes/Lens";
