@@ -227,8 +227,8 @@ export function DropdownMenu({
     setIsActive(false);
   }, [setIsActive]);
 
-  // Back closes the menu. Items that navigate pop the entry first (`release`).
-  const release = useBackToClose(isActive, handleClose);
+  // Back closes the menu.
+  useBackToClose(isActive, handleClose);
 
   useClickAwayListener([triggerRef, dropdownRef], handleClose, isActive, [
     'click',
@@ -506,16 +506,11 @@ export function DropdownMenu({
       const item = normalizedItems[effectiveSelectedIndex];
 
       if (isItem(item) && !item.disabled) {
-        if (item.keepOpen) {
-          item.onClick();
+        item.onClick();
 
+        if (item.keepOpen) {
           return;
         }
-
-        handleClose();
-        release(() => item.onClick());
-
-        return;
       }
 
       handleClose();
@@ -630,14 +625,11 @@ export function DropdownMenu({
               return (
                 <MenuItem
                   onClick={() => {
-                    if (keepOpen) {
-                      onClick();
-
-                      return;
+                    if (!keepOpen) {
+                      handleClose();
                     }
 
-                    handleClose();
-                    release(() => onClick());
+                    onClick();
                   }}
                   id={id}
                   data-testid={`menu-item-${id}`}

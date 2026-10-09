@@ -45,16 +45,13 @@ it('closing by other means removes only its own entry', () => {
   expect(history.location.href).toBe('/previous');
 });
 
-it('release pops the entry before running the follow-up navigation', () => {
-  const { result, rerender } = renderHook(
-    ({ open }) => useBackToClose(open, vi.fn()),
-    { initialProps: { open: true } },
-  );
-  act(() => {
-    result.current(() => history.push('/next'));
+it('an item that navigates keeps its destination and does not pop', () => {
+  const close = vi.fn();
+  const { rerender } = renderHook(({ open }) => useBackToClose(open, close), {
+    initialProps: { open: true },
   });
+  act(() => history.push('/next'));
+  expect(close).toHaveBeenCalledOnce();
   rerender({ open: false });
   expect(history.location.href).toBe('/next');
-  act(() => history.back());
-  expect(history.location.href).toBe('/page');
 });

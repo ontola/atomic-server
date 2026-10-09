@@ -10,17 +10,18 @@ import { useRouter } from '@tanstack/react-router';
  * (Escape, click away) the entry is popped again, so Back doesn't land on a
  * dead step.
  *
- * Returns `release(after?)` for closes that are followed by navigation: it
- * pops the entry first and runs `after` once that settled, so the navigation
- * doesn't leave the entry stranded underneath it. Without a router (tests,
- * isolated stories) the hook does nothing and `after` runs at once.
+ * An item that navigates (or opens something by navigating) changes the
+ * location first. The entry then no longer belongs to the page on top, so it
+ * is left alone instead of popped: popping would undo the navigation. That
+ * leaves one extra step underneath, which is the price of not deferring the
+ * item's own action. Without a router (tests, isolated stories) the hook
+ * does nothing.
  */
 export function useBackToClose(open: boolean, onClose: () => void) {
   const router = useRouter({ warn: false });
   const history = router?.history;
   const entry = useRef<string | undefined>(undefined);
   const entryHref = useRef<string | undefined>(undefined);
-  const afterBack = useRef<(() => void) | undefined>(undefined);
   const close = useEffectEvent(onClose);
 
   const ownsEntry = useCallback(
@@ -36,14 +37,6 @@ export function useBackToClose(open: boolean, onClose: () => void) {
     if (!history) return;
 
     return history.subscribe(() => {
-      if (afterBack.current) {
-        const after = afterBack.current;
-        afterBack.current = undefined;
-        after();
-
-        return;
-      }
-
       if (entry.current && !ownsEntry()) {
         entry.current = undefined;
         close();
@@ -68,21 +61,6 @@ export function useBackToClose(open: boolean, onClose: () => void) {
       if (owned) history.back();
     }
   }, [open, history, ownsEntry]);
-
-  return useCallback(
-    (after?: () => void) => {
-      if (history && ownsEntry()) {
-        entry.current = undefined;
-        afterBack.current = after;
-        history.back();
-
-        return;
-      }
-
-      after?.();
-    },
-    [history, ownsEntry],
-  );
 }
 
 declare module '@tanstack/react-router' {
