@@ -58,9 +58,24 @@ const B = `atomic:prop:${'b'.repeat(64)}`;
 
 describe('lens identity', () => {
   it.each([
-    [A, B, { op: 'rename' }, 'ba1b06696c9786de8f0b78189d69c3aa84d59181b8eba91b7678de5959d07fcb'],
-    [A.replace('atomic:', 'did:ad:'), B, { op: 'rename' }, 'ba1b06696c9786de8f0b78189d69c3aa84d59181b8eba91b7678de5959d07fcb'],
-    [A, B, { op: 'wrap' }, '0e8670cccd962e1352793444a88fb841c27c39b7e74bce6b58fafbaea1056825'],
+    [
+      A,
+      B,
+      { op: 'rename' },
+      'ba1b06696c9786de8f0b78189d69c3aa84d59181b8eba91b7678de5959d07fcb',
+    ],
+    [
+      A.replace('atomic:', 'did:ad:'),
+      B,
+      { op: 'rename' },
+      'ba1b06696c9786de8f0b78189d69c3aa84d59181b8eba91b7678de5959d07fcb',
+    ],
+    [
+      A,
+      B,
+      { op: 'wrap' },
+      '0e8670cccd962e1352793444a88fb841c27c39b7e74bce6b58fafbaea1056825',
+    ],
     [
       A,
       B,
@@ -104,7 +119,9 @@ describe('lenses in a store', () => {
   const STRING = Datatype.STRING;
   const ONTOLOGY = 'atomic:ontologyGenesis';
 
-  async function twoProperties(store: Awaited<ReturnType<typeof testStore>>['store']) {
+  async function twoProperties(
+    store: Awaited<ReturnType<typeof testStore>>['store'],
+  ) {
     const make = (shortname: string) =>
       store.newResource({
         isA: core.classes.property,
