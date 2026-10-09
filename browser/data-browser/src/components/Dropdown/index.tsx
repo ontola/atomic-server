@@ -25,6 +25,7 @@ import { loopingIndex } from '../../helpers/loopingIndex';
 import { useControlLock } from '../../hooks/useControlLock';
 import { useDialogTreeInfo } from '../Dialog/dialogContext';
 import { floatingSurface } from '../floatingSurface';
+import { useBackToClose } from '../../hooks/useBackToClose';
 import { isTouchPrimary } from '../../helpers/pointer';
 
 export const DIVIDER = 'divider' as const;
@@ -225,6 +226,9 @@ export function DropdownMenu({
     triggerRef.current?.focus();
     setIsActive(false);
   }, [setIsActive]);
+
+  // Back closes the menu. Items that navigate pop the entry first (`release`).
+  const release = useBackToClose(isActive, handleClose);
 
   useClickAwayListener([triggerRef, dropdownRef], handleClose, isActive, [
     'click',
@@ -502,11 +506,16 @@ export function DropdownMenu({
       const item = normalizedItems[effectiveSelectedIndex];
 
       if (isItem(item) && !item.disabled) {
-        item.onClick();
-
         if (item.keepOpen) {
+          item.onClick();
+
           return;
         }
+
+        handleClose();
+        release(() => item.onClick());
+
+        return;
       }
 
       handleClose();
@@ -621,11 +630,14 @@ export function DropdownMenu({
               return (
                 <MenuItem
                   onClick={() => {
-                    if (!keepOpen) {
-                      handleClose();
+                    if (keepOpen) {
+                      onClick();
+
+                      return;
                     }
 
-                    onClick();
+                    handleClose();
+                    release(() => onClick());
                   }}
                   id={id}
                   data-testid={`menu-item-${id}`}
