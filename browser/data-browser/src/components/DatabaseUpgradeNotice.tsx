@@ -10,8 +10,8 @@ import { ProgressBar } from './ProgressBar';
 const subscribe = (onChange: () => void) => subscribeIndexMigration(onChange);
 
 /**
- * Covers the app while the local database rebuilds its indexes after an
- * update. Nothing can be read from the database until that is done, so the
+ * Covers the app while the local database rebuilds its indexes, or packs old
+ * chat messages into logs, after an update. Nothing can be read from the database until that is done, so the
  * person waits here instead of at a blank page.
  */
 export function DatabaseUpgradeNotice(): JSX.Element | null {
@@ -28,10 +28,18 @@ export function DatabaseUpgradeNotice(): JSX.Element | null {
     <Cover role='alertdialog' aria-modal='true' aria-labelledby='db-upgrade'>
       <Card>
         <Title id='db-upgrade'>Updating your local data</Title>
-        <p>
-          This is needed once after an update and takes a moment. Keep this tab
-          open.
-        </p>
+        {progress.phase === 'messages' ? (
+          <p>
+            Chat messages are being packed into compact logs. This is needed
+            once after an update and can take a while for a big chat. Keep this
+            tab open.
+          </p>
+        ) : (
+          <p>
+            This is needed once after an update and takes a moment. Keep this
+            tab open.
+          </p>
+        )}
         <Bar>
           <ProgressBar
             value={

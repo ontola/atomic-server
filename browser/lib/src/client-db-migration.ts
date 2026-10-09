@@ -1,7 +1,8 @@
 /**
- * Progress of the one-off rebuild of a local database's indexes, which runs
- * when the database was written with an older key layout. The database is not
- * usable until it is done, so the app shows this while it runs.
+ * Progress of a one-off migration of the local database: the rebuild of its
+ * indexes when it was written with an older key layout, then the move of old
+ * chat messages into chat log pages. The database is not usable until they are
+ * done, so the app shows this while they run.
  */
 export interface IndexMigrationProgress {
   /** Resources handled so far. */
@@ -9,6 +10,8 @@ export interface IndexMigrationProgress {
   /** Resources to handle; 0 until the worker has counted them. */
   total: number;
   finished: boolean;
+  /** What is being done; the index rebuild when absent. */
+  phase?: 'messages';
 }
 
 type Listener = (progress: IndexMigrationProgress | undefined) => void;

@@ -42,6 +42,12 @@ export type WorkerRequest =
       migrateLegacy?: boolean;
       /** Allow discarding an undecryptable `dbName`; see `client-db-open.ts`. */
       discardUndecryptable?: boolean;
+      /**
+       * Drives that exist only in this browser (`Store.registerLocalOnlyDrive`).
+       * Chat messages are moved into chat log pages for these alone; a drive a
+       * server hosts gets its pages from the server.
+       */
+      localOnlyDrives?: string[];
     }
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
@@ -211,6 +217,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.dbKey,
         msg.migrateLegacy,
         msg.discardUndecryptable,
+        msg.localOnlyDrives,
       );
 
       return await initPromise;
@@ -627,6 +634,7 @@ async function doInit(
   dbKey?: Uint8Array,
   migrateLegacy?: boolean,
   discardUndecryptable?: boolean,
+  localOnlyDrives?: string[],
 ): Promise<ClientDbInitTimings> {
   // Dynamic import of the WASM glue code.
   // The URL should point to the directory containing atomic_wasm.js and atomic_wasm_bg.wasm
@@ -672,6 +680,7 @@ async function doInit(
   });
   db = opened.db;
   await migrateIndexKeys(db);
+  await migrateMessages(db, localOnlyDrives ?? []);
   const t3 = performance.now();
 
   return {
@@ -707,6 +716,47 @@ async function migrateIndexKeys(opened: WasmModule): Promise<void> {
     if (step.finished) return;
 
     // Let the worker answer other messages (they queue behind `init`).
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+}
+
+/** Messages the chat migration handles per slice (whole chats at a time). */
+const MESSAGE_MIGRATION_SLICE = 500;
+
+/**
+ * Moves old chat `Message` resources into chat log pages
+ * (`planning/chat-log.md`). Pages are written for the drives that exist only in
+ * this browser; for a drive a server hosts the server makes them and this only
+ * drops cached messages that already have their entry. Progress goes to the page
+ * as `migration-progress` messages, like the index rebuild. Runs inside
+ * `init`.
+ */
+async function migrateMessages(
+  opened: WasmModule,
+  localOnlyDrives: string[],
+): Promise<void> {
+  if (!opened.messageMigrationPending?.()) return;
+
+  const report = (done: number, total: number, finished: boolean) =>
+    self.postMessage({
+      type: 'migration-progress',
+      phase: 'messages',
+      done,
+      total,
+      finished,
+    });
+  const drives = JSON.stringify(localOnlyDrives);
+
+  report(0, 0, false);
+
+  for (;;) {
+    const step = JSON.parse(
+      await opened.migrateMessagesStep(MESSAGE_MIGRATION_SLICE, drives),
+    );
+    report(step.done, step.total, step.finished);
+
+    if (step.finished) return;
+
     await new Promise(resolve => setTimeout(resolve, 0));
   }
 }

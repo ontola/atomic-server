@@ -3,7 +3,8 @@
 > **Status:** Design (2026-10-09). Joep chose this route ("Chatlog (D)") after
 > the measurements in [`chat-message-storage.md`](./chat-message-storage.md).
 > Steps 1 (class, entries, server rule, tests) and 2 (group chat and comments)
-> are built.
+> are built, and so is the migration of existing messages and the follow events
+> (see "Existing messages").
 
 ## Why
 
@@ -112,12 +113,60 @@ one-resource-per-event data; they can become an inbox log later, same design.
 
 ## Existing messages
 
-Old `Message`, `ai-message` and `SealedMessage` resources stay as they are and
-stay readable: views read both the old resources and the log and merge them by
-time. They cannot be moved into a log, because every entry must carry its
-author's signature and only the author can make that. New messages go to the
-log. Released clients that still write `Message` resources keep working; their
-messages show up through the same merge.
+Old `Message` resources are moved into the log, and the old resources are then
+removed. Decisions (Joep, 2026-10-09):
+
+1. **Scope.** Every `Message` resource: group chat, comments, meeting chat and
+   FollowEvents. Not `SealedMessage` (DMs) and not AI chat yet.
+2. **Grouping.** By `(parent, about)`. Inside a group the messages sort by
+   `createdAt` and fill pages of 256, the same page shape the app writes
+   (`ChatLog`, `parent`, `about` for comments, entries in `entries`). Entry `a`
+   is the message's original author (`createdBy`), `t` the description, `c` the
+   `createdAt`, `k` FollowEvent when the class is there, `e` when it was edited
+   (a retained commit more than a second newer than the creation). `r` is the
+   new `<page>#<key>` id when the replied-to message is migrated too, else the
+   old subject.
+3. **Deterministic key.** `<createdAt hex>-<first 8 hex chars of SHA-256 of the
+   old subject's id>` (the part after `did:ad:` / `atomic:`, no query or
+   fragment: `migrated_entry_key` in Rust, `migratedEntryKey` in TS, one shared
+   test vector). A re-run, a second migrating peer or a stale cached copy can
+   recognise a migrated message by it. The reader hides an old `Message`
+   resource whose key exists in a loaded page of the same chat, and lists one
+   entry key that sits on two pages once.
+4. **Authority.** The pages are signed by an agent that belongs to the store
+   (made on first use, kept in `Tree::PluginMeta`) and written with rights
+   checks off, like a server-internal write. The author of an entry is
+   attested by the host; the original per-message signature is not carried
+   over. The page creator gets no `write`, so the normal rule for later commits
+   holds: members only change their own entries, writers of the chat all.
+5. **Removal.** After a group's pages are written, the old resources go:
+   resource row, Loro snapshot, envelopes, genesis commit row, index and search
+   rows (`remove_resource`, which also leaves a tombstone so a stale peer cannot
+   bring them back). Old message URLs then 404. Order matters for a crash: pages
+   first, removal second; a restart finds the entries by key and only removes.
+6. **Where it runs.** Resumable, marker `chat-log-migration-v1` (and a
+   `-state` row with `done`, `total` and the list of groups) in
+   `Tree::PluginMeta`, in slices of whole groups, progress `done/total`:
+   - Server and other native stores: `Db::open` after the index migration and
+     the bootstrap, logged (`Db::migrate_messages`).
+   - Browser worker: `ClientDb` init, after the index rebuild, with progress on
+     the existing upgrade notice (`phase: 'messages'`). The page passes the
+     drives that exist only in this browser (`atomic.localOnlyDrives`, the
+     registry `Store.registerLocalOnlyDrive` keeps); only for those the worker
+     writes pages. For every other drive (hosted by a server) the server makes
+     the pages and the worker only deletes cached `Message` rows whose key is
+     in a local ChatLog page. Nothing in the registry (empty, unreadable,
+     private window) means cleanup only: the safe side. A cache that gets its
+     pages after the migration ran is cleaned when the next version opens the
+     store; until then the reader's hiding rule (3) covers it.
+7. **New follow events and meeting messages** are entries (`k` FollowEvent),
+   written by `sendChatMessage` through `sendLogEntry`. No `Message` resource is
+   created by the app any more (the demo workspace's persona messages still are:
+   they cannot be signed as a persona).
+
+Known leftovers: an edited old message whose genesis commit row cannot be reached
+(no `lastCommit` or retained envelope pointing at it) keeps that row, about 1 KB;
+a tombstone costs about 100 B per migrated message in `PluginMeta`.
 
 ## Build order (one PR each)
 
@@ -129,7 +178,8 @@ messages show up through the same merge.
 2. Group chat and comments, with the merged reader and pagination per page.
 3. AI chat.
 4. DMs.
-5. Follow events and meeting toasts.
+5. Follow events and meeting toasts (built with the migration of existing
+   messages).
 
 ## Step 2: group chat and comments (as built)
 
@@ -166,9 +216,9 @@ messages show up through the same merge.
 - **Opening a page.** A ChatLog page has no view of its own: opening it (the
   parent of a copied link) redirects to the chat, or to the item with the
   comments open.
-- **Not in the log yet.** FollowEvents, meeting toasts, AI chat and DMs are
-  untouched. Meeting chat messages typed by people are entries (it is a
-  ChatRoom); the meeting toaster reads both.
+- **Not in the log yet.** AI chat and DMs are untouched. Meeting chat messages
+  typed by people are entries (it is a ChatRoom); the meeting toaster reads both.
+  Follow events became entries with the migration of existing messages.
 
 Choices to revisit:
 

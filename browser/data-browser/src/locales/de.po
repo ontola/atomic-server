@@ -12727,3 +12727,7 @@ msgstr ""
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Edit message text"
 msgstr ""
+
+#: src/components/DatabaseUpgradeNotice.tsx
+msgid "Chat messages are being packed into compact logs. This is needed once after an update and can take a while for a big chat. Keep this tab open."
+msgstr "Chat-Nachrichten werden in kompakte Protokolle verpackt. Das ist nach einem Update einmal nötig und kann bei einem großen Chat eine Weile dauern. Lassen Sie diesen Tab geöffnet."
