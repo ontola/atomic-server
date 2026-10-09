@@ -59,6 +59,12 @@ export function SecretCodeBlock({
 const Styled = styled(CodeBlock)`
   word-break: break-word;
 
+  /* The copy button is absolutely positioned over the right edge; reserve its
+     width so the (wrapped) secret can never run underneath it. */
+  && {
+    padding-right: 3rem;
+  }
+
   [data-code-text-rest] {
     filter: blur(6px);
     user-select: none;
