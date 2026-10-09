@@ -21,6 +21,7 @@ import type { DemoSetupStep } from '../chunks/Demo/startDemo';
 import {
   lateFinishContext,
   stallContext,
+  stallWaitMs,
   type StepStarts,
 } from '../chunks/Demo/demoSetupReport';
 import { localAgentIsDisposable } from '../helpers/managed/reconcile';
@@ -240,15 +241,30 @@ const DemoRoute: React.FC = () => {
     listeners.add(sync);
     sync();
 
-    const timer = setTimeout(
-      () => {
+    // The deadline is checked against the wall clock when the timer fires. A
+    // timer that fires early (a bot with virtual time, a throttled or
+    // suspended tab) is not a stall: reschedule for what is left instead.
+    let timer: ReturnType<typeof setTimeout>;
+
+    const arm = (delay: number) => {
+      timer = setTimeout(() => {
         if (!run || run.done || run.error) return;
+
+        const elapsed = Date.now() - run.startedAt;
+        const wait = stallWaitMs(elapsed, STALLED_AFTER_MS);
+
+        if (wait > 0) {
+          arm(wait);
+
+          return;
+        }
+
         setStalled(true);
         if (run.reported) return;
         run.reported = true;
         const { tags, extra } = stallContext(
           run.stepStarts,
-          Date.now() - run.startedAt,
+          elapsed,
           document.visibilityState,
         );
 
@@ -257,9 +273,10 @@ const DemoRoute: React.FC = () => {
           tags: { demo_step: run.step ?? 'loading', ...tags },
           extra,
         });
-      },
-      Math.max(0, STALLED_AFTER_MS - (Date.now() - run!.startedAt)),
-    );
+      }, delay);
+    };
+
+    arm(Math.max(0, STALLED_AFTER_MS - (Date.now() - run!.startedAt)));
 
     return () => {
       listeners.delete(sync);
