@@ -81,3 +81,51 @@ it('does not borrow rows from a different query', async () => {
   );
   expect(other.result.current.ready).toBe(false);
 });
+
+it('refreshes the collection that is loading, not the remembered one on screen', async () => {
+  const store = newStore();
+  const refreshed: Collection[] = [];
+  vi.spyOn(Collection.prototype, 'refresh').mockImplementation(
+    function (this: Collection) {
+      refreshed.push(this);
+      const self = this as unknown as { _totalMembers: number };
+
+      return new Promise<void>(resolve =>
+        setTimeout(() => {
+          self._totalMembers = 4;
+          resolve();
+        }, 20),
+      );
+    },
+  );
+  // Every change looks like a new member whose arrival needs a re-query.
+  vi.spyOn(Collection.prototype, 'applyResourceChange').mockReturnValue(
+    'membership-stale',
+  );
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StoreContext.Provider, { value: store }, children);
+
+  const first = renderHook(() => useCollection(filter), { wrapper });
+  await waitFor(() => expect(first.result.current.ready).toBe(true));
+  first.unmount();
+
+  // The remount shows the remembered rows while a fresh collection loads.
+  const second = renderHook(() => useCollection(filter), { wrapper });
+  expect(second.result.current.ready).toBe(true);
+  const remembered = refreshed[0];
+  const loading = refreshed[refreshed.length - 1];
+  expect(loading).not.toBe(remembered);
+  const before = refreshed.length;
+
+  // Something is created in the meantime (a duplicated view, say).
+  await act(async () => {
+    store.notifyResourceUpdated(store.getResourceLoading('x:1'));
+    await new Promise(r => setTimeout(r, 5));
+  });
+
+  const afterChange = refreshed.slice(before);
+  expect(afterChange).toContain(loading);
+  expect(afterChange).not.toContain(remembered);
+  await wait(40);
+  second.unmount();
+});

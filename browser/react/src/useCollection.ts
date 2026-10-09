@@ -266,7 +266,13 @@ export function useCollection(
   ]);
 
   const invalidateCollection = useCallback(async () => {
-    const target = collection.__internalObject;
+    // Refresh the collection that is being loaded, not the one on screen. They
+    // differ while a remembered result is shown during the background reload;
+    // refreshing the remembered one would drop the change on the floor and the
+    // fresh collection would settle on a snapshot from before it.
+    const target = collectionRef.current;
+    if (!target) return;
+
     await target.refresh();
 
     // Stale-write guard: a filter swap between when we kicked the
@@ -278,7 +284,7 @@ export function useCollection(
     if (collectionRef.current === target) {
       setCollection(proxyCollection(target));
     }
-  }, [collection.__internalObject]);
+  }, []);
 
   // Live-membership bridge. Each store-level resource change runs through
   // `applyResourceChange`, which either:
