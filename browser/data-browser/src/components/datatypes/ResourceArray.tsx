@@ -1,5 +1,9 @@
 import { useState, Fragment, type JSX } from 'react';
-import { JSONValue } from '@tomic/react';
+import {
+  isLensEndpointKey,
+  JSONValue,
+  lensEndpointKeysAllowedInRenders,
+} from '@tomic/react';
 import { styled } from 'styled-components';
 import { ResourceInline } from '../../views/ResourceInline';
 
@@ -29,9 +33,19 @@ function ResourceArray({ subjects: subjectsIn }: Props): JSX.Element {
           return null;
         }
 
+        // A lens endpoint key in an App's `renders` (`record:…`, `rdf:…`,
+        // split-pieces flag only) is not a subject, so it is shown as text
+        // rather than fetched.
+        const endpointKey =
+          lensEndpointKeysAllowedInRenders() && isLensEndpointKey(url);
+
         return (
           <Fragment key={url}>
-            <ResourceInline subject={url} />
+            {endpointKey ? (
+              <code>{url}</code>
+            ) : (
+              <ResourceInline subject={url} />
+            )}
             {index !== subjects.length - 1 && ', '}
           </Fragment>
         );
