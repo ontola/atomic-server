@@ -1867,6 +1867,22 @@ window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
+App frame `store.getMany(subjects)` (#1737): `hostStore.test.ts` checks it
+answers in order through the same store read as `get` (same state after a
+local change), reports an unreadable subject in its place without failing the
+rest, and refuses more than 100 subjects or a non-array before reading any.
+`viewProtocol.test.ts` checks the generated client makes one request for the
+batch, hands back resources like `getResource`'s, asks nothing for an empty
+list and refuses 101 without asking.
+
+App frame theme (#1738): `views/PluginView/useCreateThemeVars.test.ts` checks
+the frame stylesheet carries `--t-color-success` and `color-scheme` from the
+built theme's `darkMode`. `FrameBridge.test.ts` checks the theme message
+carries `colorScheme` and keeps it across a ready message and a reload.
+`viewProtocol.test.ts` checks `store.getTheme()` reads the scheme from the
+applied stylesheet before any message, then from messages (only the parent's,
+only `light`/`dark`), and `onThemeChange` fires once per change until stopped.
+
 `apps.spec.ts` runs the first write scenario with both the served SDK and this
 checkout's v1 JS asset. The latter explicitly intercepts only `format=client`;
 resource creation and signing still use the real local backend. This verifies the
