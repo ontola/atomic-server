@@ -10,8 +10,8 @@ interface SpinnerProps {
 
 /**
  * The orbiting mark from the boot splash (see `index.html`), at any size, so
- * loading looks the same wherever it happens: a dot circling the orb, with a
- * fading trail behind it.
+ * loading looks the same wherever it happens: the logo's round-capped sweep
+ * circling the orb.
  */
 export const Spinner = ({
   size,
@@ -25,8 +25,16 @@ export const Spinner = ({
       aria-hidden
     >
       <System>
-        <Trail />
-        <Dot />
+        <Sweep viewBox='0 0 100 100' fill='none'>
+          {/* The logo's sweep (brand/src/place-mark.svg): 270 degrees,
+              centred on the orb. */}
+          <path
+            d='M74 50 A 24 24 0 1 1 50 26'
+            stroke='currentColor'
+            strokeWidth='14'
+            strokeLinecap='round'
+          />
+        </Sweep>
       </System>
       <Orb />
     </Mark>
@@ -87,29 +95,11 @@ const System = styled.span`
   }
 `;
 
-/** A ring that fades out behind the dot. */
-const Trail = styled.span`
+const Sweep = styled.svg`
   position: absolute;
   inset: 0;
-  opacity: 0.26;
-  background: conic-gradient(from 0deg, transparent, currentColor);
-  mask: radial-gradient(
-    circle closest-side,
-    transparent 33%,
-    #000 34%,
-    #000 62%,
-    transparent 63%
-  );
-`;
-
-const Dot = styled.span`
-  position: absolute;
-  left: 43%;
-  top: 19%;
-  width: 14%;
-  height: 14%;
-  border-radius: 50%;
-  background: currentColor;
+  width: 100%;
+  height: 100%;
 `;
 
 const Orb = styled.span`
