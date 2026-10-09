@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Schemas (#2151): `ensureOntology` creates or updates an ontology with content-addressed properties, classes and class constraints, and running it twice writes nothing; `ensureSchema` is now a deprecated alias. `ontologyFromJsonSchema` and `ontologyToJsonSchema` convert JSON Schema draft 2020-12 to and from that input. New: `propertyId`, `getEffectiveConstraint`, `setClassConstraint`, `useEffectiveConstraint`, `ensureLens`, `loadLenses`, and `store.newResource({ contentAddressedProperty: true })`.
+- `ad-generate ontology push | lock | check` writes the same lockfile as `atomic-cli schema` (#2151).
+- Tables, kanban, the ontology editor and forms store select options, single pick, limits and linked classes on the class instead of on the Property; each property in a class card has a Constraints section. Renaming a property's shortname or changing its datatype creates a new property and a lens that keeps old values visible (#2151).
+- AI assistant: `find_schema` returns matching classes as JSON Schema (replaces `get_user_classes`), and `ensure_ontology` creates an ontology from a JSON Schema (#2151).
+
 - Calendar: the repeat "Last day" date keeps focus while you type and is saved when you leave the field or press Enter, instead of after every keystroke (#2137).
 - Documents: after mentioning a resource with `@` or the toolbar button, the caret sits in a paragraph after the card (one is added if needed), so typing no longer replaces the card (#2139).
 
