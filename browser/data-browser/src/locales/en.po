@@ -1012,10 +1012,6 @@ msgstr "Plugins"
 msgid "Remove tag"
 msgstr "Remove tag"
 
-#: src/views/ChatRoom/ChatRoomView.tsx
-msgid "Loading messages..."
-msgstr "Loading messages..."
-
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
@@ -2008,10 +2004,6 @@ msgstr "folder"
 #: src/views/Card/BookmarkCard.tsx
 msgid "Open site"
 msgstr "Open site"
-
-#: src/components/AI/ChatLoadingIndicator.tsx
-msgid "Loading AI"
-msgstr "Loading AI"
 
 #: src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -4319,11 +4311,6 @@ msgstr "Meeting"
 #: src/views/Meeting/MeetingPage.tsx
 msgid "Open chat"
 msgstr "Open chat"
-
-#: src/views/Meeting/MeetingPage.tsx
-#: src/views/Meeting/MeetingPage.tsx
-msgid "Loading meeting notes…"
-msgstr "Loading meeting notes…"
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "Notes"
@@ -8271,10 +8258,6 @@ msgstr "No"
 #: src/chunks/TablePage/Dashboard/DashboardView.tsx
 msgid "This view has no dashboard yet."
 msgstr "This view has no dashboard yet."
-
-#: src/chunks/TablePage/Dashboard/DashboardView.tsx
-msgid "Loading dashboard…"
-msgstr "Loading dashboard…"
 
 #: src/views/PeerInvitePage.tsx
 msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
@@ -12714,6 +12697,7 @@ msgstr "linked class"
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "options"
 msgstr "options"
+
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."

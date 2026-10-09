@@ -166,9 +166,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   if (resource.loading && !loadingExceeded && !hasLoadedThisSubject) {
     return (
       <Main subject={subject}>
-        <ContainerNarrow>
-          <Spinner centered />
-        </ContainerNarrow>
+        <Spinner centered />
       </Main>
     );
   }

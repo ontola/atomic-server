@@ -1012,10 +1012,6 @@ msgstr ""
 msgid "Remove tag"
 msgstr ""
 
-#: src/views/ChatRoom/ChatRoomView.tsx
-msgid "Loading messages..."
-msgstr ""
-
 #: src/components/SideBar/MessagesPanel.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "No messages yet"
@@ -2007,10 +2003,6 @@ msgstr ""
 
 #: src/views/Card/BookmarkCard.tsx
 msgid "Open site"
-msgstr ""
-
-#: src/components/AI/ChatLoadingIndicator.tsx
-msgid "Loading AI"
 msgstr ""
 
 #: src/views/Installation/AssignRights.tsx
@@ -4312,11 +4304,6 @@ msgstr ""
 
 #: src/views/Meeting/MeetingPage.tsx
 msgid "Open chat"
-msgstr ""
-
-#: src/views/Meeting/MeetingPage.tsx
-#: src/views/Meeting/MeetingPage.tsx
-msgid "Loading meeting notes…"
 msgstr ""
 
 #: src/components/Presence/FollowSessionPanelContainer.tsx
@@ -8264,10 +8251,6 @@ msgstr ""
 
 #: src/chunks/TablePage/Dashboard/DashboardView.tsx
 msgid "This view has no dashboard yet."
-msgstr ""
-
-#: src/chunks/TablePage/Dashboard/DashboardView.tsx
-msgid "Loading dashboard…"
 msgstr ""
 
 #: src/views/PeerInvitePage.tsx

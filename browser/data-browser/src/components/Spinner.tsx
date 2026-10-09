@@ -45,9 +45,15 @@ const Centered = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   width: 100%;
+  /* Percentage heights only resolve when the parent's height is definite
+     (e.g. <Main>). In a flex column the spinner instead grows to fill what is
+     left, and anywhere else the minimum keeps it from collapsing to a strip. */
   height: 100%;
   min-height: 12rem;
+  flex: 1 1 auto;
+  align-self: stretch;
 `;
 
 const Mark = styled.span<{ $size?: string; $inheritColor: boolean }>`
