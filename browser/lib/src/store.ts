@@ -108,6 +108,7 @@ import {
   isBenignTerminalCommitError,
   isMissingParentMessage,
   isNotEnrolledMessage,
+  isHostRefusedMessage,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -5163,6 +5164,9 @@ export class Store {
   /** Drives whose "not enrolled" refusal was already reported this session. */
   private _notifiedRefusedDrives = new Set<string>();
 
+  /** Whether an owner-only node's refusal of our drives was already reported. */
+  private _notifiedHostRefused = false;
+
   /** Drives whose "server lacks the parent" refusal was already reported. */
   private _notifiedMissingParentDrives = new Set<string>();
 
@@ -5177,6 +5181,25 @@ export class Store {
    * and say what happens to their edits.
    */
   private notifyBlockedSync(subject: string, message: string): void {
+    if (isHostRefusedMessage(message)) {
+      // An owner-only node does not take a guest's own drive, so this is said
+      // once per session whatever the drive, and in terms of what the person
+      // can do: nothing is lost, and nothing is wrong.
+      if (this._notifiedHostRefused) return;
+
+      this._notifiedHostRefused = true;
+      this.notifyError(
+        new Error(
+          `This server only hosts its owner's drives, so your own drive stays ` +
+            `on this device and is not synced here. You can keep using it ` +
+            `offline; turn off sync for it on the Sync page to stop the ` +
+            `retries, or connect a server of your own to sync it.`,
+        ),
+      );
+
+      return;
+    }
+
     if (isNotEnrolledMessage(message)) {
       // The refusal names the drive it refuses; that is the same for every
       // resource in it, where a resource's own drive may not be known yet.

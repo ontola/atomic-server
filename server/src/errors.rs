@@ -231,6 +231,20 @@ mod admission_error_tests {
     }
 
     #[test]
+    fn an_owner_node_refusing_a_guest_drive_is_forbidden_not_a_server_error() {
+        use atomic_lib::sync::policy::{OwnerPolicy, SyncPolicy};
+
+        let message =
+            OwnerPolicy::new("did:ad:agent:ownerkey").not_enrolled_message("did:ad:drive:x");
+        let error: AtomicServerError = message.as_str().into();
+        assert_eq!(error.status_code(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            atomic_lib::sync::protocol::classify_commit_error(&error.message),
+            atomic_lib::sync::protocol::error_code::SYNC_REJECTED
+        );
+    }
+
+    #[test]
     fn causality_refusal_is_a_conflict() {
         let error: AtomicServerError = "Commit's Loro update produced no state changes".into();
         assert_eq!(error.status_code(), StatusCode::CONFLICT);

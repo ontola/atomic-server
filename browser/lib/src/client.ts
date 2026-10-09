@@ -420,8 +420,19 @@ export class Client {
     const body = await response.text();
 
     if (response.status !== 200) {
-      console.error('[postCommit] Server error body:', body);
-      console.error('[postCommit] Commit sent:', serialized);
+      // A node declining a drive is an answer the store reports once, in words
+      // (`notifyBlockedSync`). Dumping the body and the whole signed commit as
+      // errors for each attempt only buried that.
+      if (
+        body.includes('does not host new Drives') ||
+        body.includes('is not enrolled for sync on this node')
+      ) {
+        console.warn('[postCommit] Refused by the server:', response.status);
+      } else {
+        console.error('[postCommit] Server error body:', body);
+        console.error('[postCommit] Commit sent:', serialized);
+      }
+
       learnServerClock(body);
       throw new AtomicError(body, ErrorType.Server);
     }

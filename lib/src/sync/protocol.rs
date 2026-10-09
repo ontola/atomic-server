@@ -324,6 +324,7 @@ pub fn classify_commit_error(message: &str) -> u16 {
     // enrollment/quota changes, so keep the write but stop unlimited retries.
     if message.contains("is not enrolled for sync on this node")
         || message.contains("has reached its storage quota on this node")
+        || message.contains(super::policy::HOST_REFUSAL_MARKER)
     {
         return error_code::SYNC_REJECTED;
     }
@@ -1909,6 +1910,19 @@ mod tests {
         ] {
             assert_eq!(classify_commit_error(message), error_code::SYNC_REJECTED);
         }
+    }
+
+    /// An owner-only node refusing a guest's new drive is the same kind of
+    /// answer as a managed node's "not enrolled": a decision about the drive,
+    /// not a transport failure. Unclassified, it came back as HTTP 500 and the
+    /// client retried it forever.
+    #[test]
+    fn an_owner_node_refusing_a_guest_drive_is_a_blocking_refusal() {
+        use crate::sync::policy::{OwnerPolicy, SyncPolicy};
+
+        let message =
+            OwnerPolicy::new("did:ad:agent:ownerkey").not_enrolled_message("did:ad:drive:x");
+        assert_eq!(classify_commit_error(&message), error_code::SYNC_REJECTED);
     }
 
     #[test]

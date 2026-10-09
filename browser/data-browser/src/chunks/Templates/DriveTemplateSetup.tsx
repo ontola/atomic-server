@@ -8,7 +8,13 @@ import {
   type ReactNode,
 } from 'react';
 import { styled } from 'styled-components';
-import { dataBrowser, useStore, type Resource, type Store } from '@tomic/react';
+import {
+  dataBrowser,
+  isHostRefusedMessage,
+  useStore,
+  type Resource,
+  type Store,
+} from '@tomic/react';
 import { SIDEBAR_TOGGLE_WIDTH } from '../../components/SideBar';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -34,6 +40,17 @@ import { readTemplateDemo, TEMPLATE_DEMO_KEY } from './demoSession';
 import { keepTemplateDemo } from './keepTemplateDemo';
 import { prepareTemplateDrive } from './prepareTemplateDrive';
 import { clearPendingTemplate, savePendingTemplate } from './pendingTemplate';
+const HostRefusal = styled.div`
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size(3)};
+
+  p {
+    margin: ${p => p.theme.size(2)} 0 0;
+  }
+`;
+
 const TemplateChat = lazy(() => import('./TemplateChat'));
 
 export interface TemplateSetupStep {
@@ -224,7 +241,18 @@ export function DriveTemplateSetup({
           label: createLabel,
         },
       })}
-      {error && (
+      {error && isHostRefusedMessage(error.message) && (
+        <HostRefusal role='status'>
+          <strong>This server only hosts its owner&apos;s drives.</strong>
+          <p>
+            You can open any drive you were invited to, but you cannot create a
+            new one here. To make a drive of your own, run your own server or
+            use a hosted one. If you are the owner, sign in with the owner
+            agent.
+          </p>
+        </HostRefusal>
+      )}
+      {error && !isHostRefusedMessage(error.message) && (
         <>
           <ErrorBlock error={error} />
           {partial && (

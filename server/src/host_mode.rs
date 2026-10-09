@@ -392,24 +392,37 @@ pub fn exposure_warning(reachability: Reachability) -> String {
 /// this change a no-op for every existing deployment.
 pub async fn install_policy(store: &atomic_lib::Db, host_mode: &HostModeConfig) {
     let Some(owner_agent) = host_mode.owner_agent.as_deref() else {
+        tracing::info!("{}", boot_summary(host_mode, 0));
         return;
     };
 
     if !host_mode.is_owner_mode() {
+        tracing::info!("{}", boot_summary(host_mode, 0));
         return;
     }
 
     let policy = atomic_lib::sync::policy::OwnerPolicy::new(owner_agent);
     let existing = store.drive_subjects().await;
 
-    tracing::info!(
-        "Host mode: owner ({}). Hosting {} existing Drive(s); new Drives here are the owner's alone.",
-        owner_agent,
-        existing.len()
-    );
+    tracing::info!("{}", boot_summary(host_mode, existing.len()));
 
     policy.enroll_existing(existing);
     store.set_sync_policy(std::sync::Arc::new(policy));
+}
+
+/// The one boot line that says who may do what on this node. An operator whose
+/// guest reports "this server does not host new Drives" reads this to learn
+/// whether the node is gated, for whom, and that the refusal is by design.
+pub fn boot_summary(host_mode: &HostModeConfig, existing_drives: usize) -> String {
+    match (host_mode.mode, host_mode.owner_agent.as_deref()) {
+        (HostMode::Owner, Some(owner)) => format!(
+            "Host mode: owner. Owner agent: {owner}. Only the owner can create Drives here; \
+             guests (any other agent) can use Drives they were invited to but cannot create \
+             their own, and a guest's personal Drive is not stored on this server. \
+             Sign in with the owner agent to create Drives. Hosting {existing_drives} existing Drive(s)."
+        ),
+        _ => "Host mode: open. Anyone who can reach this node can create a Drive on it.".to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -417,6 +430,20 @@ mod tests {
     use super::*;
 
     const OWNER: &str = "did:ad:agent:RqPwpgHv+PK7Pnz/dVab8hmHjYnvTL1YrlVa6L9G9Zg=";
+
+    #[test]
+    fn the_boot_summary_names_the_mode_the_owner_and_that_guests_cannot_create_drives() {
+        let owner = resolve(None, Some(OWNER)).unwrap();
+        let line = boot_summary(&owner, 3);
+        assert!(line.contains("Host mode: owner"), "{line}");
+        assert!(line.contains(OWNER), "{line}");
+        assert!(line.contains("guests"), "{line}");
+        assert!(line.contains("cannot create"), "{line}");
+        assert!(line.contains("3 existing"), "{line}");
+
+        let open = resolve(None, None).unwrap();
+        assert!(boot_summary(&open, 0).contains("Host mode: open"));
+    }
 
     #[test]
     fn a_public_domain_without_https_or_server_url_warns_about_the_origin() {

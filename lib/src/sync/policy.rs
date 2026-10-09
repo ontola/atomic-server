@@ -329,6 +329,12 @@ impl SyncPolicy for AllowlistPolicy {
     }
 }
 
+/// The words in [`OwnerPolicy`]'s refusal that every consumer matches on: the
+/// wire classifier ([`crate::sync::protocol::classify_commit_error`]) and, by
+/// copy, the browser client (`isHostRefusedMessage` in `local-outbox.ts`).
+/// Change the message's wording and this together.
+pub const HOST_REFUSAL_MARKER: &str = "does not host new Drives";
+
 /// Only one agent may put new drives on this node.
 ///
 /// The self-hosted counterpart to [`AllowlistPolicy`]: same allowlist, but
@@ -418,12 +424,13 @@ impl SyncPolicy for OwnerPolicy {
     }
 
     fn not_enrolled_message(&self, _drive_subject: &str) -> String {
-        "This server does not host new Drives. Its owner runs it for their own \
-         data, so you cannot create a workspace here.\n\n\
-         You can still read anything they published, and open any Drive you were \
-         invited to. To keep your own data, run your own server or use a hosted \
-         one."
-            .to_string()
+        format!(
+            "This server {HOST_REFUSAL_MARKER}. Its owner runs it for their own \
+             data, so you cannot create a workspace here.\n\n\
+             You can still read anything they published, and open any Drive you were \
+             invited to. To keep your own data, run your own server or use a hosted \
+             one."
+        )
     }
 }
 

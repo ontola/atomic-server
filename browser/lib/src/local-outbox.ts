@@ -263,9 +263,24 @@ export function isPendingDepsCommitErrorMessage(message: string): boolean {
   return message.includes('parked as pending');
 }
 
-/** A managed node's refusal of a drive it does not host ("not enrolled"). */
+/**
+ * An owner-only node's refusal of a drive that is not the owner's
+ * (`ATOMIC_OWNER_AGENT`; `OwnerPolicy` in `lib/src/sync/policy.rs`, which keeps
+ * this wording in `HOST_REFUSAL_MARKER`). Unlike a managed node's "not
+ * enrolled", nothing here will change by waiting: a guest's own drive is
+ * refused on every attempt, for as long as the node has an owner.
+ */
+export function isHostRefusedMessage(message: string | undefined): boolean {
+  return !!message?.includes('does not host new Drives');
+}
+
+/** A node's refusal of a drive it does not host: a managed node's "not
+ *  enrolled", or an owner-only node's refusal of a guest's drive. */
 export function isNotEnrolledMessage(message: string | undefined): boolean {
-  return !!message?.includes('is not enrolled for sync on this node');
+  return (
+    !!message?.includes('is not enrolled for sync on this node') ||
+    isHostRefusedMessage(message)
+  );
 }
 
 /** The server refused a commit because it does not hold the commit's parent. */
@@ -1157,8 +1172,12 @@ export class LocalOutbox {
             ctx.onRepeatedFailure?.(live, e);
           }
 
+          // An owner-only node refusing a guest's drive is a decision, not an
+          // ordering race: retrying it eight times only adds eight errors.
+          // Park it on the first answer; an edit re-arms it as usual.
           if (
-            live.failures >= BLOCK_AFTER_FAILURES &&
+            (live.failures >= BLOCK_AFTER_FAILURES ||
+              isHostRefusedMessage(live.lastAttemptError)) &&
             ctx.isBlockingError?.(live, e)
           ) {
             console.warn(

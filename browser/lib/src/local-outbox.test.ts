@@ -3,6 +3,8 @@ import { describe, it, beforeEach, vi, expect as assert } from 'vitest';
 import {
   LocalOutbox,
   isTerminalCommitErrorMessage,
+  isHostRefusedMessage,
+  isNotEnrolledMessage,
   isUnrecoverableCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
@@ -672,6 +674,52 @@ describe('LocalOutbox blocking', () => {
       }
     },
   );
+
+  // An owner-only node (`ATOMIC_OWNER_AGENT`) answers a guest's personal drive
+  // with a decision, not a hiccup. Eight backoff retries of the same genesis,
+  // each a 500 and a console error pair, was the field report.
+  describe('an owner-only node refusing a guest drive', () => {
+    const REFUSAL =
+      'This server does not host new Drives. Its owner runs it for their own data, so you cannot create a workspace here.';
+
+    it('is recognised as a host refusal and as unrecoverable', () => {
+      assert(isHostRefusedMessage(REFUSAL)).toBe(true);
+      assert(isHostRefusedMessage('Unauthorized')).toBe(false);
+      assert(isNotEnrolledMessage(REFUSAL)).toBe(true);
+      assert(isUnrecoverableCommitErrorMessage(REFUSAL)).toBe(true);
+      assert(isTerminalCommitError(REFUSAL)).toBe(false);
+    });
+
+    it('parks the write after ONE attempt, keeps it, and re-arms on an edit', async () => {
+      vi.useFakeTimers();
+
+      try {
+        const outbox = new LocalOutbox();
+        outbox.markDirty(SUBJECT);
+        const drainSubject = vi.fn(async () => {
+          throw new Error(REFUSAL);
+        });
+        const onBlocked = vi.fn();
+        const ctx = blockingCtx(drainSubject, onBlocked);
+
+        vi.setSystemTime(0);
+        await outbox.drain(ctx);
+        assert(outbox.getEntry(SUBJECT)?.blocked).toBe(true);
+        assert(onBlocked).toHaveBeenCalledTimes(1);
+        assert(outbox.size).toBe(1);
+        assert(outbox.nextDueAt()).toBeUndefined();
+
+        vi.setSystemTime(1_000_000);
+        await outbox.drain(ctx);
+        assert(drainSubject).toHaveBeenCalledTimes(1);
+
+        outbox.markDirty(SUBJECT);
+        assert(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 
   it('retries a blocking error first, then parks after sustained failures', async ({
     expect,

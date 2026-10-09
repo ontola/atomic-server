@@ -12310,3 +12310,11 @@ msgstr "Sign in to {0} to see whether this workspace is hosted."
 #: src/routes/SyncRoute.tsx
 msgid "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
 msgstr "Everything in Cloud Vault, plus a hosted workspace on atomic.place, always online. Our servers process what you put here."
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "This server only hosts its owner's drives."
+msgstr "This server only hosts its owner's drives."
+
+#: src/chunks/Templates/DriveTemplateSetup.tsx
+msgid "You can open any drive you were invited to, but you cannot create a new one here. To make a drive of your own, run your own server or use a hosted one. If you are the owner, sign in with the owner agent."
+msgstr "You can open any drive you were invited to, but you cannot create a new one here. To make a drive of your own, run your own server or use a hosted one. If you are the owner, sign in with the owner agent."
