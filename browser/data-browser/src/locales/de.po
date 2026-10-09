@@ -1040,6 +1040,7 @@ msgid "Send message [enter]"
 msgstr ""
 
 #: src/views/ChatRoom/ChatRoomView.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message URL to clipboard"
 msgstr ""
 
@@ -12705,4 +12706,24 @@ msgstr ""
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
+msgstr ""
+
+#: src/views/ChatLogPage.tsx
+msgid "Opening the chat..."
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "(edited)"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete message"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete this message?"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Edit message text"
 msgstr ""

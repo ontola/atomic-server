@@ -1040,6 +1040,7 @@ msgid "Send message [enter]"
 msgstr "Send message [enter]"
 
 #: src/views/ChatRoom/ChatRoomView.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message URL to clipboard"
 msgstr "Copied message URL to clipboard"
 
@@ -12714,7 +12715,28 @@ msgstr "linked class"
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "options"
 msgstr "options"
+
 #. 0: names.length
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Set up creates {0} tables for this importer. Nothing is imported yet."
 msgstr "Set up creates {0} tables for this importer. Nothing is imported yet."
+
+#: src/views/ChatLogPage.tsx
+msgid "Opening the chat..."
+msgstr "Opening the chat..."
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "(edited)"
+msgstr "(edited)"
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete message"
+msgstr "Delete message"
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete this message?"
+msgstr "Delete this message?"
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Edit message text"
+msgstr "Edit message text"
