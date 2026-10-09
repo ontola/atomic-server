@@ -348,6 +348,10 @@ test.describe('data-browser', async () => {
     await expect(messageLocator).toBeVisible();
     await expect(
       messageLocator,
+      'A new chat message should be an entry in a chat log page',
+    ).toHaveAttribute('data-entry-key', /^[0-9a-f]+-[0-9a-f]{8}$/);
+    await expect(
+      messageLocator,
       'Message author "Dev User" missing — genesis createdBy not retrievable',
     ).toContainText('Dev User');
     // The visible label is intentionally relative ("now", "1 minute ago").

@@ -1041,6 +1041,7 @@ msgid "Send message [enter]"
 msgstr "Enviar mensaje [enter]"
 
 #: src/views/ChatRoom/ChatRoomView.tsx
+#: src/views/ChatRoom/ChatRoomView.tsx
 msgid "Copied message URL to clipboard"
 msgstr "URL del mensaje copiada al portapapeles"
 
@@ -11108,9 +11109,8 @@ msgstr ""
 msgid "Next, create your account with your email address and a way to sign in. Then you come back here to create your drive."
 msgstr ""
 
-#: src/helpers/sentry.ts
-msgid "Commit keeps failing"
-msgstr ""
+#~ msgid "Commit keeps failing"
+#~ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
@@ -12758,4 +12758,29 @@ msgstr ""
 
 #: src/components/SideBar/SidebarDropZones.tsx
 msgid "Delete"
+msgstr ""
+
+#. 0: message.slice(0, 160)
+#: src/helpers/sentry.ts
+msgid "Commit keeps failing: {0}"
+msgstr ""
+
+#: src/views/ChatLogPage.tsx
+msgid "Opening the chat..."
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "(edited)"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete message"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Delete this message?"
+msgstr ""
+
+#: src/views/ChatRoom/ChatRoomView.tsx
+msgid "Edit message text"
 msgstr ""

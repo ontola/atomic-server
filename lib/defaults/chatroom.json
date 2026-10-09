@@ -119,6 +119,21 @@
     "https://atomicdata.dev/properties/shortname": "message"
   },
   {
+    "@id": "https://atomicdata.dev/classes/ChatLog",
+    "https://atomicdata.dev/properties/description": "One page of a chat log: up to 256 entries (messages) kept in the `entries` map of the page's own Loro document instead of as one resource per message. The page is a child (`parent`) of the chat. Entries are not properties: they are not indexed and not materialized. Each entry records its author, and the server only accepts entry changes from that author, unless the signer has `write` on the page (inherited from the chat). Creating a page needs `append` on the parent but does not grant the creator `write`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/about"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/parent"
+    ],
+    "https://atomicdata.dev/properties/shortname": "chat-log"
+  },
+  {
     "@id": "https://atomicdata.dev/classes/FollowEvent",
     "https://atomicdata.dev/properties/description": "A system Message in a follow-session ChatRoom documenting the followed agent's activity: which resource they viewed, or a session starting / ending. Clients render these more compactly than regular chat messages. FollowEvents are also Messages (both classes are set).",
     "https://atomicdata.dev/properties/isA": [
