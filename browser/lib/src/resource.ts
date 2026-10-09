@@ -44,6 +44,7 @@ import {
   type MergeForkOptions,
 } from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
+import { isGroupCandidate, isGroupMember } from './group-membership.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a save the server already acknowledged waits on the local mirror. */
@@ -1592,6 +1593,20 @@ export class Resource<C extends OptionalClass = any> {
 
     if (writeArray && valToArray(writeArray).includes(instances.publicAgent)) {
       return [true, undefined];
+    }
+
+    // A write right granted to a Group applies to its (nested) members, like
+    // on the server. Only the groups the list actually names are fetched.
+    if (writeArray) {
+      for (const entry of valToArray(writeArray) as string[]) {
+        if (
+          entry !== instances.publicAgent &&
+          isGroupCandidate(entry) &&
+          (await isGroupMember(this.store, entry, agent))
+        ) {
+          return [true, undefined];
+        }
+      }
     }
 
     const parentSubject = this.get(properties.parent) as string;
