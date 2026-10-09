@@ -32,6 +32,7 @@ export const ATOMIC_COMMIT_PREFIX = 'atomic:commit:';
 export const ATOMIC_BLOB_PREFIX = 'atomic:blob:';
 export const ATOMIC_NODE_PREFIX = 'atomic:node:';
 export const ATOMIC_PROPERTY_PREFIX = 'atomic:prop:';
+export const ATOMIC_LENS_PREFIX = 'atomic:lens:';
 
 /** Legacy scheme, accepted forever. New code emits {@link ATOMIC_PREFIX}. */
 export const DID_AD_PREFIX = 'did:ad:';
@@ -40,6 +41,7 @@ export const DID_AD_COMMIT_PREFIX = 'did:ad:commit:';
 export const DID_AD_BLOB_PREFIX = 'did:ad:blob:';
 export const DID_AD_NODE_PREFIX = 'did:ad:node:';
 export const DID_AD_PROPERTY_PREFIX = 'did:ad:prop:';
+export const DID_AD_LENS_PREFIX = 'did:ad:lens:';
 
 const HTTP_RE = /^https?:\/\//;
 
@@ -50,6 +52,7 @@ export type IdentifierKind =
   | 'blob'
   | 'node'
   | 'property'
+  | 'lens'
   | 'other';
 
 export function isLegacyAtomicLink(raw: string): boolean {
@@ -174,6 +177,10 @@ export function identifierKind(raw: string): IdentifierKind | undefined {
     return body.length > 'prop:'.length ? 'property' : 'other';
   }
 
+  if (body.startsWith('lens:')) {
+    return body.length > 'lens:'.length ? 'lens' : 'other';
+  }
+
   if (body.length > 0 && !body.includes(':')) {
     return 'resource';
   }
@@ -195,6 +202,10 @@ export function isNodeSubject(raw: string): boolean {
 
 export function isPropertySubject(raw: string): boolean {
   return identifierKind(raw) === 'property';
+}
+
+export function isLensSubject(raw: string): boolean {
+  return identifierKind(raw) === 'lens';
 }
 
 export function isResourceSubject(raw: string): boolean {
@@ -235,6 +246,10 @@ export function nodeId(raw: string): string | undefined {
 
 export function propertySubject(hashHex: string): string {
   return ATOMIC_PROPERTY_PREFIX + hashHex;
+}
+
+export function lensSubject(hashHex: string): string {
+  return ATOMIC_LENS_PREFIX + hashHex;
 }
 
 export function agentSubject(pubkey: string): string {

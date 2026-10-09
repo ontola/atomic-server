@@ -91,6 +91,8 @@ export * from './resource.js';
 export * from './forks.js';
 export * from './store.js';
 export * from './property-identity.js';
+export * from './lens.js';
+export * from './lens-ensure.js';
 export * from './subject.js';
 export * from './value.js';
 export * from './urls.js';

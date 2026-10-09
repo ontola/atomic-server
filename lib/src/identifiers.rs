@@ -24,6 +24,9 @@ pub const ATOMIC_BLOB_PREFIX: &str = "atomic:blob:";
 /// Prefix for Property identifiers: `atomic:prop:`.
 pub const ATOMIC_PROP_PREFIX: &str = "atomic:prop:";
 
+/// Prefix for Lens identifiers: `atomic:lens:`.
+pub const ATOMIC_LENS_PREFIX: &str = "atomic:lens:";
+
 /// Prefix for Node identifiers: `atomic:node:`.
 pub const ATOMIC_NODE_PREFIX: &str = "atomic:node:";
 
@@ -171,6 +174,13 @@ pub fn identifier_kind(raw: &str) -> Option<DidKind> {
             DidKind::Property
         });
     }
+    if let Some(rest) = body.strip_prefix("lens:") {
+        return Some(if rest.is_empty() {
+            DidKind::Other
+        } else {
+            DidKind::Lens
+        });
+    }
     if let Some(rest) = body.strip_prefix("node:") {
         return Some(if rest.is_empty() {
             DidKind::Other
@@ -199,6 +209,10 @@ pub fn is_blob_id(raw: &str) -> bool {
 
 pub fn is_prop_id(raw: &str) -> bool {
     identifier_kind(raw) == Some(DidKind::Property)
+}
+
+pub fn is_lens_id(raw: &str) -> bool {
+    identifier_kind(raw) == Some(DidKind::Lens)
 }
 
 pub fn is_node_id(raw: &str) -> bool {
@@ -234,6 +248,13 @@ pub fn blob_hash_hex(raw: &str) -> Option<&str> {
 pub fn prop_hash_hex(raw: &str) -> Option<&str> {
     identifier_body(raw)?
         .strip_prefix("prop:")
+        .filter(|s| !s.is_empty())
+}
+
+/// Hex BLAKE3 of an `atomic:lens:` / `did:ad:lens:` identifier.
+pub fn lens_hash_hex(raw: &str) -> Option<&str> {
+    identifier_body(raw)?
+        .strip_prefix("lens:")
         .filter(|s| !s.is_empty())
 }
 
@@ -287,6 +308,10 @@ pub fn blob_subject(hash_hex: &str) -> String {
 
 pub fn prop_subject(hash_hex: &str) -> String {
     format!("{ATOMIC_PROP_PREFIX}{hash_hex}")
+}
+
+pub fn lens_subject(hash_hex: &str) -> String {
+    format!("{ATOMIC_LENS_PREFIX}{hash_hex}")
 }
 
 pub fn node_subject(node_id: &str) -> String {

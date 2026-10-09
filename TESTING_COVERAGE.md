@@ -2652,3 +2652,22 @@ tamper rejection, and closing during a pending request. Atomic Audio additionall
 checks isolated native identity installation and actual bidirectional iroh/Loro
 with BLAKE3 files introduced after pairing. Production account approval, Vault
 transport and recovery on a physical device are not covered by these tests.
+
+## Lenses (`docs/src/schema/lenses.md`)
+
+Both implementations run the cases in `lib/tests/fixtures/lenses.json`
+(rename, wrap and head, enum map, string to integer with an unparseable value,
+both properties present, no chaining): `lens::tests::shared_fixture` (JSON and
+propvals paths) in `lib/src/lens.rs`, and `browser/lib/src/lens.test.ts`. Lens
+ID vectors are asserted on both sides. Store level: `db::test::lenses` covers
+derived values on read and in the value index (backfill when the Lens arrives,
+an edit of the old property, a real value winning, index rebuild from stored Lens
+resources), the `parent` authority check, ID mismatch and identity
+immutability; `lens.test.ts` covers `ensureLens`, activation, and
+re-materializing a loaded resource when a Lens arrives.
+
+Not covered: lens application on the Iroh and WebSocket sync import paths (they
+share `persist_replicated_*`, which is covered through `build_projection_tx`
+only by reasoning, not a test), a browser reload with lenses loaded through
+`loadLenses`, and the data-browser flows that mint a lens (datatype change,
+form question shortname) end to end.

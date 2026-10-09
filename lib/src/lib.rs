@@ -101,6 +101,7 @@ pub mod parse;
 pub mod plugins;
 pub mod website;
 
+pub mod lens;
 pub mod populate;
 pub mod property_identity;
 pub mod resources;

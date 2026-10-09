@@ -10,6 +10,8 @@ The namespace is the resource the Property belongs to: its `parent`. This is usu
 
 Two Properties with the same namespace, shortname and datatype are the same Property. Change any of the three and you get a new Property with a new ID. So `parent`, `shortname` and `datatype` can never change after creation.
 
+Values stored under the old Property stay where they are. A [Lens](lenses.md) maps them onto the new one.
+
 ## Identifier form
 
 ```

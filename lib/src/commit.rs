@@ -222,6 +222,64 @@ fn verify_property_genesis(
     crate::property_identity::verify_property_id(subject, &parent, &shortname, &datatype)
 }
 
+/// True for the content-addressed kinds: Property and Lens IDs name no
+/// signature and carry no genesis certificate.
+fn is_content_addressed_id(subject: &str) -> bool {
+    crate::identifiers::is_prop_id(subject) || crate::identifiers::is_lens_id(subject)
+}
+
+/// Check a content-addressed ID (`atomic:prop:` or `atomic:lens:`) against the
+/// fields in the propvals it names.
+fn verify_content_addressed_genesis(
+    subject: &str,
+    propvals: &crate::resources::PropVals,
+) -> AtomicResult<()> {
+    if crate::identifiers::is_lens_id(subject) {
+        crate::lens::verify_lens_genesis(subject, propvals)
+    } else {
+        verify_property_genesis(subject, propvals)
+    }
+}
+
+/// Derive lens values into `new` and bring the index atoms in line.
+///
+/// The doc diff knows only what the doc really holds. For every property a
+/// lens touches, the index must instead follow what the resource shows: the
+/// real value, or the derived one. So drop the diff's atoms for that property
+/// and file the change between what `old` showed and what `new` shows.
+fn reconcile_lens_atoms(
+    lenses: &crate::lens::LensIndex,
+    old: Option<&Resource>,
+    new: &mut Resource,
+    add_atoms: &mut Vec<Atom>,
+    remove_atoms: &mut Vec<Atom>,
+) {
+    new.apply_lenses(lenses);
+    let subject = new.get_subject().clone();
+    for prop in lenses.properties() {
+        let is_prop =
+            |atom: &Atom| crate::identifiers::canonicalize_scheme(&atom.property) == *prop;
+        add_atoms.retain(|atom| !is_prop(atom));
+        remove_atoms.retain(|atom| !is_prop(atom));
+        let before = old.and_then(|r| r.get(prop).ok()).cloned();
+        let after = new.get(prop).ok().cloned();
+        let same = match (&before, &after) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a.datatype() == b.datatype() && a.to_string() == b.to_string(),
+            _ => false,
+        };
+        if same {
+            continue;
+        }
+        if let Some(value) = before {
+            remove_atoms.push(Atom::new(subject.clone(), prop.clone(), value));
+        }
+        if let Some(value) = after {
+            add_atoms.push(Atom::new(subject.clone(), prop.clone(), value));
+        }
+    }
+}
+
 /// A Property's identity is hashed into its ID, so `parent`, `shortname` and
 /// `datatype` can never change after creation.
 fn check_property_identity_unchanged(old: &Resource, new: &Resource) -> AtomicResult<()> {
@@ -506,13 +564,13 @@ impl Commit {
         {
             // A Property ID names no signature and has no cert: its hash must
             // match the namespace, shortname and datatype in the doc.
-            if crate::identifiers::is_prop_id(commit.subject.as_str()) {
+            if is_content_addressed_id(commit.subject.as_str()) {
                 let propvals = commit
                     .loro_update
                     .as_ref()
                     .and_then(|u| crate::Resource::propvals_from_loro_update(u))
-                    .ok_or("A property genesis commit must carry the property's fields")?;
-                return verify_property_genesis(commit.subject.as_str(), &propvals);
+                    .ok_or("A property or lens genesis commit must carry its fields")?;
+                return verify_content_addressed_genesis(commit.subject.as_str(), &propvals);
             }
             let subject_val = crate::identifiers::identifier_body(commit.subject.as_str())
                 .filter(|body| !body.contains(':'))
@@ -586,14 +644,16 @@ impl Commit {
         if !self.subject.is_did() || self.subject.is_agent_did() {
             return Ok(false);
         }
-        if crate::identifiers::is_prop_id(self.subject.as_str()) {
-            // Two devices mint the same Property ID independently. No cert:
-            // the hash of the incoming doc's fields is the proof.
+        if is_content_addressed_id(self.subject.as_str()) {
+            // Two devices mint the same Property or Lens ID independently. No
+            // cert: the hash of the incoming doc's fields is the proof.
             return Ok(self
                 .loro_update
                 .as_ref()
                 .and_then(|u| crate::Resource::propvals_from_loro_update(u))
-                .is_some_and(|p| verify_property_genesis(self.subject.as_str(), &p).is_ok()));
+                .is_some_and(|p| {
+                    verify_content_addressed_genesis(self.subject.as_str(), &p).is_ok()
+                }));
         }
         let subject_val = crate::identifiers::identifier_body(self.subject.as_str())
             .filter(|body| !body.contains(':'))
@@ -639,6 +699,10 @@ impl Commit {
             if crate::identifiers::is_prop_id(&pure_id) {
                 if !crate::property_identity::is_property_id(&pure_id) {
                     return Err("Invalid property ID: expected 64 lowercase hex characters".into());
+                }
+            } else if crate::identifiers::is_lens_id(&pure_id) {
+                if !crate::lens::is_lens_id(&pure_id) {
+                    return Err("Invalid lens ID: expected 64 lowercase hex characters".into());
                 }
             } else {
                 let b64_part = if subject.is_agent_did() {
@@ -765,11 +829,16 @@ impl Commit {
                 )
             })?;
 
-        if crate::identifiers::is_prop_id(commit.subject.as_str()) && !is_destroy {
+        if is_content_addressed_id(commit.subject.as_str()) && !is_destroy {
             if is_new {
-                verify_property_genesis(
+                verify_content_addressed_genesis(
                     commit.subject.as_str(),
                     applied.resource_new.get_propvals(),
+                )?;
+            } else if crate::identifiers::is_lens_id(commit.subject.as_str()) {
+                crate::lens::check_lens_identity_unchanged(
+                    &applied.resource_old,
+                    &applied.resource_new,
                 )?;
             } else {
                 check_property_identity_unchanged(&applied.resource_old, &applied.resource_new)?;
@@ -1042,7 +1111,7 @@ impl Commit {
             // does not extend to another agent.
             let repeat_property_genesis = !is_new
                 && commit.is_genesis == Some(true)
-                && crate::identifiers::is_prop_id(commit.subject.as_str());
+                && is_content_addressed_id(commit.subject.as_str());
             if repeat_property_genesis {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
@@ -1211,6 +1280,21 @@ impl Commit {
             .await?;
 
         let destroyed = commit.destroy.unwrap_or(false);
+
+        // Lenses derive values for the properties the doc does not really
+        // hold. Done last: setting `lastCommit` above rebuilds the propvals
+        // from the doc. The index follows the derived values like real ones.
+        if !destroyed {
+            if let Some(lenses) = store.lens_index() {
+                reconcile_lens_atoms(
+                    &lenses,
+                    (!is_new).then_some(&applied.resource_old),
+                    &mut applied.resource_new,
+                    &mut applied.add_atoms,
+                    &mut applied.remove_atoms,
+                );
+            }
+        }
 
         // Export what the doc gained during this apply — the author's ops and
         // the stamp above — for the live fan-out (`CommitResponse::fanout_delta`).

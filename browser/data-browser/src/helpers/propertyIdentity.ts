@@ -1,8 +1,11 @@
 import {
+  Datatype,
   JSONValue,
   Resource,
   Store,
+  Transform,
   core,
+  ensureLens,
   isPropertySubject,
 } from '@tomic/react';
 
@@ -127,7 +130,8 @@ const replaceIn = (list: string[], oldSubject: string, newSubject: string) =>
  * loaded class that lists it (plus `knownClasses`) and in the `properties` of
  * the old Property's ontology.
  *
- * Values stored under the old property are NOT moved.
+ * Values stored under the old property are not moved here; a lens does that
+ * ({@link carryValuesOver}).
  */
 export async function replacePropertyReferences(
   store: Store,
@@ -195,12 +199,93 @@ export async function replacePropertyReferences(
   }
 }
 
+const NUMERIC_OR_BOOLEAN: string[] = [
+  Datatype.INTEGER,
+  Datatype.FLOAT,
+  Datatype.BOOLEAN,
+];
+
+const TEXTUAL: string[] = [
+  Datatype.STRING,
+  Datatype.MARKDOWN,
+  Datatype.SLUG,
+  Datatype.DATE,
+  Datatype.URI,
+  Datatype.ATOMIC_URL,
+];
+
+/**
+ * How a value stored under a property of datatype `from` becomes a value under
+ * a property of datatype `to` (see `docs/src/schema/lenses.md`). `undefined`
+ * when no lens can say: the old values then stay readable only through the old
+ * property.
+ */
+export function lensTransformForDatatypes(
+  from: string,
+  to: string,
+): Transform | undefined {
+  if (from === to) {
+    return { op: 'rename' };
+  }
+
+  if (from === Datatype.ATOMIC_URL && to === Datatype.RESOURCEARRAY) {
+    return { op: 'wrap' };
+  }
+
+  if (from === Datatype.RESOURCEARRAY && to === Datatype.ATOMIC_URL) {
+    return { op: 'head' };
+  }
+
+  const isText = (d: string) => TEXTUAL.includes(d);
+  const isScalar = (d: string) => NUMERIC_OR_BOOLEAN.includes(d);
+
+  if ((isText(from) && isScalar(to)) || (isScalar(from) && isText(to))) {
+    return { op: 'convert', to, from };
+  }
+
+  if (isText(from) && isText(to)) {
+    return { op: 'convert', to, from };
+  }
+
+  return undefined;
+}
+
+/**
+ * Make `to` the new home of the values stored under `from`, by saving a lens
+ * between them. Never throws: a property change must not fail because its
+ * values could not be carried over; they just stay under the old property.
+ */
+export async function carryValuesOver(
+  store: Store,
+  from: Resource,
+  to: Resource,
+): Promise<void> {
+  if (from.subject === to.subject) {
+    return;
+  }
+
+  const transform = lensTransformForDatatypes(
+    String(from.get(core.properties.datatype)),
+    String(to.get(core.properties.datatype)),
+  );
+
+  if (!transform) {
+    return;
+  }
+
+  try {
+    await ensureLens(store, { from: from.subject, to: to.subject, transform });
+  } catch (error) {
+    console.error('Could not save a lens for the changed property', error);
+  }
+}
+
 /**
  * Changing the datatype of an existing Property: creates a sibling Property
  * (same parent and shortname, new datatype, everything else copied), and
- * replaces the old one in the classes that list it.
- *
- * TODO(lenses): values stored under the old property are not migrated yet.
+ * replaces the old one in the classes that list it. A lens from the old
+ * property to the new one carries the stored values over, where the two
+ * datatypes allow it.
  */
 export async function recreatePropertyWithDatatype(
   store: Store,
@@ -218,6 +303,7 @@ export async function recreatePropertyWithDatatype(
   );
 
   if (created.subject !== original.subject) {
+    await carryValuesOver(store, original, created);
     await replacePropertyReferences(
       store,
       original.subject,

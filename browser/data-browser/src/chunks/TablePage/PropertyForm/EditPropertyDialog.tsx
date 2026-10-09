@@ -77,8 +77,8 @@ export function EditPropertyDialog({
 
       if (datatypeChanged && contentAddressed) {
         // The datatype is part of the property's ID: make a new property and
-        // swap it in. Legacy properties still change in place below.
-        // TODO(lenses): values stored under the old property are not migrated.
+        // swap it in; a lens carries the stored values over. Legacy
+        // properties still change in place below.
         const created = await recreatePropertyWithDatatype(
           store,
           resource,

@@ -17,6 +17,7 @@ import {
 } from '../TablePage/Kanban/createSelectProperty';
 import { stringToSlug } from '@helpers/stringToSlug';
 import {
+  carryValuesOver,
   createContentAddressedFromDraft,
   createPropertyDraft,
   isContentAddressed,
@@ -295,9 +296,6 @@ export function useFormFieldPropertySync(
         return undefined;
       }
 
-      // TODO(lenses): answers already stored under the old Property are not
-      // moved to the new one. Until lenses can migrate them, they stay
-      // readable only through the old Property.
       const draft = await createPropertyDraft(
         store,
         property.get(core.properties.parent) as string,
@@ -309,6 +307,9 @@ export function useFormFieldPropertySync(
         property.get(core.properties.parent) as string,
         draft,
       );
+      // Answers already stored under the old Property show up under the new
+      // one through a lens.
+      await carryValuesOver(store, property, created);
       // The class's constraints (a choice question's options, its pick limit)
       // are keyed by Property, so they follow the question to the new one.
       await moveClassConstraint(dataClass, propertySubject, created.subject);

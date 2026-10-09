@@ -331,11 +331,32 @@ impl Resource {
         doc: crate::loro::AtomicLoroDoc,
         snapshot: Vec<u8>,
     ) -> AtomicResult<()> {
+        self.apply_state_doc_with_lenses(doc, snapshot, None)
+    }
+
+    /// [`Self::apply_state_doc`] that also derives values through `lenses`
+    /// (see [`crate::lens`]). The doc is never changed; only the propvals
+    /// cache gets the derived values.
+    pub fn apply_state_doc_with_lenses(
+        &mut self,
+        doc: crate::loro::AtomicLoroDoc,
+        snapshot: Vec<u8>,
+        lenses: Option<&crate::lens::LensIndex>,
+    ) -> AtomicResult<()> {
         let mut propvals = Self::materialize_propvals_from_loro_doc(&doc);
+        if let Some(lenses) = lenses {
+            lenses.apply_propvals(&mut propvals);
+        }
         propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
         self.propvals = propvals;
         self.loro = Some(doc);
         Ok(())
+    }
+
+    /// Add the values `lenses` derive to the propvals, keeping real values.
+    /// Returns the properties that were derived.
+    pub fn apply_lenses(&mut self, lenses: &crate::lens::LensIndex) -> Vec<String> {
+        lenses.apply_propvals(&mut self.propvals)
     }
 
     fn set_loro_snapshot_state(&mut self, snapshot: Vec<u8>) -> AtomicResult<()> {

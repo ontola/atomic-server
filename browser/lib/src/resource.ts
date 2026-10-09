@@ -823,7 +823,38 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
+    // Lenses derive values for the properties the doc does not really hold.
+    // The doc is never changed; only this cache gets them.
+    const lenses = this._store?.lenses;
+
+    if (lenses && lenses.size > 0) {
+      lenses.apply(nextCache);
+    }
+
     this.#cache = nextCache;
+  }
+
+  /**
+   * Re-derive lens values after the store learned of a lens that touches one of
+   * `props`. True when this resource holds one of them and was rebuilt.
+   *
+   * @internal
+   */
+  public refreshDerivedValues(props: string[]): boolean {
+    if (!this._loroDoc || this._loading) {
+      return false;
+    }
+
+    const holds = props.some(prop => this.#cache[prop] !== undefined);
+
+    if (!holds) {
+      return false;
+    }
+
+    this.rebuildCacheFromLoro();
+    this.#cacheDirty = false;
+
+    return true;
   }
 
   /**

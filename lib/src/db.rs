@@ -487,6 +487,13 @@ pub struct Db {
     /// rather than wall clock (snapshots in a fresh store are too small
     /// to show the difference). See `planning/slow-collection-queries.md`.
     fetch_counters: Arc<FetchCounters>,
+    /// Lenses by the properties they touch (see [`crate::lens`]). Rebuilt from
+    /// the stored Lens resources when the Db opens, swapped for a new index
+    /// when a Lens commit applies. Readers clone the inner `Arc`.
+    lenses: Arc<RwLock<Arc<crate::lens::LensIndex>>>,
+    /// Lens subjects that are stored but not active yet, because the property
+    /// they write is not in this store (it may sync later).
+    pending_lenses: Arc<RwLock<Vec<String>>>,
 }
 
 #[derive(Default)]
@@ -535,6 +542,8 @@ impl Db {
             envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
             fetch_counters: default_fetch_counters(),
+            lenses: Default::default(),
+            pending_lenses: Default::default(),
         }
     }
 
@@ -556,7 +565,143 @@ impl Db {
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         crate::search::maybe_rebuild_search_index(&self)?;
+        self.load_lenses().await;
         Ok(self)
+    }
+
+    /// The active lenses. Cheap: clones an `Arc`.
+    pub fn lenses(&self) -> Arc<crate::lens::LensIndex> {
+        self.lenses
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
+    fn update_lenses(&self, change: impl FnOnce(&mut crate::lens::LensIndex)) {
+        if let Ok(mut guard) = self.lenses.write() {
+            let mut next = (**guard).clone();
+            change(&mut next);
+            *guard = Arc::new(next);
+        }
+    }
+
+    /// Rebuild the lens index from the stored Lens resources.
+    async fn load_lenses(&self) {
+        let class = Value::AtomicUrl(urls::LENS.into());
+        let subjects: Vec<Subject> = find_in_prop_val_sub_index(self, urls::IS_A, Some(&class))
+            .flatten()
+            .map(|atom| atom.subject)
+            .collect();
+        for subject in subjects {
+            if let Ok(lens) = Storelike::get_resource(self, &subject).await {
+                self.register_lens(&lens).await;
+            }
+        }
+    }
+
+    /// Make a stored Lens active. Returns the entry when it is. A lens whose
+    /// target property is not in the store yet is remembered and retried when
+    /// a Property is created ([`Self::retry_pending_lenses`]). Never fails a
+    /// commit: an inactive lens is just not applied.
+    pub async fn register_lens(&self, lens: &Resource) -> Option<crate::lens::LensEntry> {
+        let subject = crate::identifiers::canonicalize_scheme(&lens.get_subject().pure_id());
+        match crate::lens::build_entry(self, lens).await {
+            Ok(entry) => {
+                if let Ok(mut pending) = self.pending_lenses.write() {
+                    pending.retain(|p| p != &subject);
+                }
+                self.update_lenses(|index| index.insert(entry.clone()));
+                Some(entry)
+            }
+            Err(e) => {
+                tracing::debug!(lens = %subject, error = %e, "Lens is not active");
+                if let Ok(mut pending) = self.pending_lenses.write() {
+                    if !pending.contains(&subject) {
+                        pending.push(subject);
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    /// Call after a resource landed in the store. A Lens becomes active (and
+    /// its resources are backfilled); a new Property may let a waiting Lens
+    /// become active.
+    pub(crate) async fn note_lens_related(&self, resource: &Resource) {
+        let subject = resource.get_subject().pure_id();
+        if crate::identifiers::is_lens_id(&subject) {
+            if let Some(entry) = self.register_lens(resource).await {
+                self.backfill_lens(&entry).await;
+            }
+        } else if crate::identifiers::is_prop_id(&subject)
+            && self
+                .pending_lenses
+                .read()
+                .map(|p| !p.is_empty())
+                .unwrap_or(false)
+        {
+            self.retry_pending_lenses().await;
+        }
+    }
+
+    /// Stop applying a lens (it was destroyed).
+    pub fn unregister_lens(&self, subject: &str) {
+        let subject = crate::identifiers::canonicalize_scheme(subject);
+        if let Ok(mut pending) = self.pending_lenses.write() {
+            pending.retain(|p| p != &subject);
+        }
+        self.update_lenses(|index| index.remove(&subject));
+    }
+
+    /// Try the lenses that were waiting for a property, now that one arrived.
+    async fn retry_pending_lenses(&self) {
+        let pending: Vec<String> = self
+            .pending_lenses
+            .read()
+            .map(|p| p.clone())
+            .unwrap_or_default();
+        for subject in pending {
+            let Ok(lens) = Storelike::get_resource(self, &subject.as_str().into()).await else {
+                continue;
+            };
+            if let Some(entry) = self.register_lens(&lens).await {
+                self.backfill_lens(&entry).await;
+            }
+        }
+    }
+
+    /// Re-materialize the stored resources that hold a property of this lens,
+    /// so the value index and search see the derived values. Reads already
+    /// apply lenses; this only brings the stored projection and the indexes
+    /// in line. Derived values are not commits: nothing is broadcast.
+    pub async fn backfill_lens(&self, entry: &crate::lens::LensEntry) {
+        let mut subjects: Vec<Subject> = Vec::new();
+        let mut seen = HashSet::new();
+        for prop in [&entry.from, &entry.to] {
+            for atom in find_in_prop_val_sub_index(self, prop, None).flatten() {
+                if seen.insert(atom.subject.to_string()) {
+                    subjects.push(atom.subject);
+                }
+            }
+        }
+        for subject in subjects {
+            let _guard = self.subject_locks.lock(&subject.pure_id()).await;
+            let Ok(resource) = Storelike::get_resource(self, &subject).await else {
+                continue;
+            };
+            let snapshot = self.get_loro_snapshot_bytes(&subject.pure_id());
+            let mut transaction = Transaction::new();
+            let built = self
+                .build_projection_tx(&resource, false, true, true, snapshot, &mut transaction)
+                .await;
+            match built.and_then(|()| self.apply_transaction(&mut transaction)) {
+                Ok(()) => {}
+                Err(e) => {
+                    tracing::warn!(%subject, error = %e, "Could not backfill lens");
+                }
+            }
+        }
     }
 
     /// Persist already-admitted replica state, including independently created
@@ -641,6 +786,7 @@ impl Db {
         }
         self.apply_transaction(&mut transaction)?;
         for resource in batched {
+            self.note_lens_related(resource).await;
             let _ = self.db_events.send(DbEvent::Changed {
                 subject: resource.get_subject().without_params(),
                 delta: None,
@@ -698,6 +844,7 @@ impl Db {
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
         }
+        self.note_lens_related(resource).await;
         let _ = self.db_events.send(DbEvent::Changed {
             subject: resource.get_subject().without_params(),
             delta: None,
@@ -727,6 +874,24 @@ impl Db {
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
+        // Lenses derive values the doc does not hold; the stored row and the
+        // indexes carry them like real ones. Only a resource that holds a lens
+        // property is copied.
+        let lenses = self.lenses();
+        let derived_resource;
+        let resource = if !lenses.is_empty()
+            && resource
+                .get_propvals()
+                .keys()
+                .any(|prop| lenses.touches(prop))
+        {
+            let mut copy = resource.clone();
+            copy.apply_lenses(&lenses);
+            derived_resource = copy;
+            &derived_resource
+        } else {
+            resource
+        };
         let existing = self
             .get_propvals_canonical(&subject_str)
             .ok()
@@ -4709,6 +4874,16 @@ impl Storelike for Db {
         drop(import_guard);
         drop(subject_guard);
 
+        // A Lens starts (or, destroyed, stops) applying. Not part of the
+        // commit: it cannot fail it.
+        if is_destroy {
+            if crate::identifiers::is_lens_id(&top_level) {
+                store.unregister_lens(&top_level);
+            }
+        } else if let Some(new) = &commit_response.resource_new {
+            store.note_lens_related(new).await;
+        }
+
         // AFTER APPLY COMMIT HANDLERS
         // Commit has been checked and saved.
         // Here you can add side-effects, such as creating new Commits.
@@ -4806,7 +4981,10 @@ impl Storelike for Db {
                     // a collection query), so the saved export is per-read,
                     // not one-off.
                     Ok(doc) => {
-                        if let Err(e) = resource.apply_state_doc_with_snapshot(doc, snapshot) {
+                        let lenses = self.lenses();
+                        let lenses = (!lenses.is_empty()).then_some(&*lenses);
+                        if let Err(e) = resource.apply_state_doc_with_lenses(doc, snapshot, lenses)
+                        {
                             tracing::warn!(
                                 subject = %subject_str,
                                 error = %e,
@@ -4997,6 +5175,11 @@ impl Storelike for Db {
     fn has_stored_resource(&self, subject: &Subject) -> bool {
         let normalized = self.normalize_subject(subject);
         self.get_propvals(&normalized.pure_id()).is_ok()
+    }
+
+    fn lens_index(&self) -> Option<Arc<crate::lens::LensIndex>> {
+        let lenses = self.lenses();
+        (!lenses.is_empty()).then_some(lenses)
     }
 
     fn get_defaults_fingerprint(&self) -> AtomicResult<Option<String>> {

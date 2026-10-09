@@ -77,7 +77,6 @@ function ContentAddressedDatatypePicker({
         draft.remove(core.properties.allowsOnly);
       }
 
-      // TODO(lenses): values stored under the old property are not migrated.
       await recreatePropertyWithDatatype(store, resource, draft);
     } catch (err) {
       toast.error(`Could not change datatype: ${(err as Error).message}`);
