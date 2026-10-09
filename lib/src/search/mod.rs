@@ -390,11 +390,11 @@ pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec
 #[derive(Debug, Clone, Copy, Default)]
 pub struct QueryTimings {
     /// Walking the postings and BM25-scoring them, scope checks excluded.
-    pub score: std::time::Duration,
+    pub score: web_time::Duration,
     /// Loading candidate docs and checking scope / existence.
-    pub scope: std::time::Duration,
+    pub scope: web_time::Duration,
     /// Combining tokens, sorting and truncating.
-    pub rank: std::time::Duration,
+    pub rank: web_time::Duration,
     /// Distinct documents that matched a token (before scoping).
     pub candidates: usize,
     /// Documents that were in scope.
@@ -446,14 +446,14 @@ pub fn query_timed(
     // that pass the scope filter are scored (and have their length read); a
     // term's document frequency still counts every posting, so the scores of
     // surviving documents are exactly what an unscoped run would give them.
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     let mut per_token: Vec<HashMap<DocId, f32>> = Vec::with_capacity(tokens.len());
     for token in &tokens {
         per_token.push(score_token(store, token, n_docs, &mut candidates)?);
     }
 
     // AND: a doc must score on every query token.
-    let ranking = std::time::Instant::now();
+    let ranking = web_time::Instant::now();
     let mut ids: Vec<DocId> = per_token[0].keys().copied().collect();
     for map in per_token.iter().skip(1) {
         ids.retain(|id| map.contains_key(id));
@@ -512,7 +512,7 @@ struct Candidates<'a> {
     doc_cache: HashMap<DocId, SearchDoc>,
     /// Outcome of the fallback resource walk, per (drive, parent).
     walk_cache: HashMap<(DocId, DocId), bool>,
-    spent: std::time::Duration,
+    spent: web_time::Duration,
 }
 
 impl<'a> Candidates<'a> {
@@ -526,7 +526,7 @@ impl<'a> Candidates<'a> {
             seen: HashMap::new(),
             doc_cache: HashMap::new(),
             walk_cache: HashMap::new(),
-            spent: std::time::Duration::ZERO,
+            spent: web_time::Duration::ZERO,
         }
     }
 
@@ -535,7 +535,7 @@ impl<'a> Candidates<'a> {
         if let Some(known) = self.seen.get(&id) {
             return Ok(known.as_ref().map(|c| c.len));
         }
-        let started = std::time::Instant::now();
+        let started = web_time::Instant::now();
         let verdict = self.judge(id)?;
         self.spent += started.elapsed();
         let len = verdict.as_ref().map(|c| c.len);

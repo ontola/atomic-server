@@ -655,7 +655,7 @@ async fn bench_short_query_scoped_to_one_drive() {
             resources.push(r);
         }
     }
-    let t = std::time::Instant::now();
+    let t = web_time::Instant::now();
     super::index_resources(&store, &resources, 500).unwrap();
     println!("indexed {} docs in {:?}", resources.len(), t.elapsed());
 
@@ -666,7 +666,7 @@ async fn bench_short_query_scoped_to_one_drive() {
             ..Default::default()
         };
         let _ = query(&store, q, &opts).unwrap();
-        let t = std::time::Instant::now();
+        let t = web_time::Instant::now();
         let mut n = 0;
         for _ in 0..3 {
             n = query(&store, q, &opts).unwrap().len();
