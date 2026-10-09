@@ -4,6 +4,9 @@
 pub mod app_agent;
 pub mod blob_backend;
 mod canonical_scheme;
+mod chat_migration;
+#[cfg(test)]
+mod chat_migration_test;
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod compaction;
 mod compressed_kv;
@@ -24,6 +27,11 @@ pub(crate) mod prop_val_sub_index;
 mod query_index;
 pub mod redb_store;
 pub mod website;
+/// The set of drives [`Db::migrate_messages_step`] may write chat log pages
+/// for, from the drives' subjects in any spelling.
+pub fn chat_migration_drive_set(drives: Vec<String>) -> std::collections::HashSet<String> {
+    drives.iter().map(|d| chat_migration::id_body(d)).collect()
+}
 // `PropVal` is half of `QueryFilter`'s public surface: without it a caller
 // outside this crate can read `filters` but cannot build one.
 pub use query_index::{drive_prefix_from_subject, query_id, PropVal, QueryFilter};
@@ -556,6 +564,8 @@ impl Db {
         // before bootstrap, so any filter-matching commits during bootstrap
         // see the right state.
         self.migrate_canonical_scheme_if_needed()?;
+        // A store with nothing in it has no old messages to move.
+        let fresh_store = self.kv.iter_tree(Tree::Resources).next().is_none();
         // The browser runs this in slices it can show progress for
         // (`ClientDb.migrateIndexKeysStep`); everywhere else it is done here.
         #[cfg(not(target_arch = "wasm32"))]
@@ -573,6 +583,15 @@ impl Db {
         crate::populate::bootstrap(&self)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        // Old chat messages become entries in chat log pages. The browser runs
+        // this in slices it can show progress for
+        // (`ClientDb.migrateMessagesStep`); everywhere else it is done here,
+        // after the watched queries are loaded so the new pages are indexed.
+        if fresh_store {
+            self.skip_message_migration()?;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.migrate_messages().await?;
         crate::search::maybe_rebuild_search_index(&self)?;
         self.load_lenses().await;
         Ok(self)

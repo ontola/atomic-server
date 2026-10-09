@@ -36,6 +36,22 @@ pub fn new_entry_key(created_at: i64) -> String {
     format!("{created_at:x}-{random:08x}")
 }
 
+/// The entry key of a migrated `Message` resource:
+/// `<createdAt hex>-<first 8 hex chars of SHA-256 of the old subject's id>`.
+///
+/// Deterministic, so a re-run, a second migrating peer or a stale cached copy
+/// of the old resource recognises an entry that already exists. The id is the
+/// part after the `did:ad:` / `atomic:` scheme, without query or fragment, so
+/// both spellings of one subject give one key. Mirrored in
+/// `browser/lib/src/chat-log.ts` (`migratedEntryKey`).
+pub fn migrated_entry_key(created_at: i64, old_subject: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let body = crate::identifiers::identifier_body(old_subject)
+        .unwrap_or_else(|| old_subject.split(['?', '#']).next().unwrap_or(old_subject));
+    let digest = Sha256::digest(body.as_bytes());
+    format!("{:x}-{}", created_at.max(0), hex::encode(&digest[..4]))
+}
+
 /// A chat entry as the application writes it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Entry {
@@ -211,6 +227,25 @@ impl AtomicLoroDoc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The same vectors are in `browser/lib/src/chat-log.test.ts`.
+    #[test]
+    fn migrated_key_is_the_same_in_both_spellings_and_ignores_query() {
+        let want = "1a122ad6665-ba7816bf";
+        for subject in [
+            "did:ad:abc",
+            "atomic:abc",
+            "did:ad:abc?drive=did:ad:xyz",
+            "atomic:abc#frag",
+        ] {
+            assert_eq!(
+                migrated_entry_key(0x1a122ad6665, subject),
+                want,
+                "{subject}"
+            );
+        }
+        assert_ne!(migrated_entry_key(0x1a122ad6665, "did:ad:abd"), want);
+    }
 
     #[test]
     fn key_sorts_by_time_and_is_hex() {
