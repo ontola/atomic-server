@@ -7,6 +7,21 @@ pub use crate::identifiers::{
     DID_AD_NODE_PREFIX, DID_AD_PREFIX,
 };
 
+/// The first path segment of plugin routes on the API origin: the
+/// `drive-prefix` mount serves `/_routes/<installation-slug>/...`. No resource
+/// may be created under it, in every build, so turning plugin routes on later
+/// never collides with existing resources.
+pub const PLUGIN_ROUTES_SEGMENT: &str = "_routes";
+
+/// Whether `path` is `/_routes` or lies under `/_routes/`.
+pub fn is_plugin_routes_path(path: &str) -> bool {
+    let path = path.trim_start_matches('/');
+    path == PLUGIN_ROUTES_SEGMENT
+        || path
+            .strip_prefix(PLUGIN_ROUTES_SEGMENT)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
 /// The semantic form of a parsed Atomic identifier (`atomic:` or `did:ad:`).
 ///
 /// This keeps callers from repeating string-prefix checks while the broader

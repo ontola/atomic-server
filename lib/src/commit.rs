@@ -199,6 +199,25 @@ impl std::fmt::Debug for Commit {
     }
 }
 
+/// Whether `subject` is a path on this server under `/_routes/`, which is
+/// reserved for plugin routes (see [`crate::subject::PLUGIN_ROUTES_SEGMENT`]).
+/// A DID has no path, and another server's `/_routes/` is not ours.
+fn is_plugin_routes_subject(subject: &Subject, store: &impl Storelike) -> bool {
+    if subject.is_did() {
+        return false;
+    }
+    let normalized = store.normalize_subject(subject);
+    let on_this_server = normalized.is_internal()
+        || match (
+            url::Url::parse(subject.as_str()),
+            url::Url::parse(&store.get_server_url()),
+        ) {
+            (Ok(url), Ok(server)) => url.origin() == server.origin(),
+            _ => false,
+        };
+    on_this_server && crate::subject::is_plugin_routes_path(&normalized.path())
+}
+
 impl Commit {
     /// Throws an error if the parent is set to itself
     pub fn check_for_circular_parents(&self) -> AtomicResult<()> {
@@ -646,6 +665,15 @@ impl Commit {
             return Err(format!(
                 "Destroy commit for {} has no such resource to destroy on this node",
                 commit.subject
+            )
+            .into());
+        }
+
+        if is_new && is_plugin_routes_subject(&commit.subject, store) {
+            return Err(format!(
+                "Cannot create {}: paths under /{}/ are reserved for plugin routes.",
+                commit.subject,
+                crate::subject::PLUGIN_ROUTES_SEGMENT
             )
             .into());
         }
@@ -1729,6 +1757,61 @@ mod test {
 
         let resource = store.get_resource(&subject.into()).await.unwrap();
         assert!(resource.get(property1).unwrap().to_string() == value1.to_string());
+    }
+
+    /// `/_routes/` belongs to plugin routes (the `drive-prefix` mount), in
+    /// every build: no resource may be created there, so enabling plugin
+    /// routes later never collides with data.
+    #[tokio::test]
+    async fn no_resource_can_be_created_under_the_plugin_routes_prefix() {
+        let store = Store::init().await.unwrap();
+        store.set_base_url("http://localhost:9883");
+        store.populate().await.unwrap();
+        let agent = store.create_agent(Some("test_actor")).await.unwrap();
+        let create = |subject: &'static str| {
+            let store = store.clone();
+            let agent = agent.clone();
+            async move {
+                let resource = Resource::new(subject.into());
+                let mut builder = crate::commit::CommitBuilder::new(subject.into());
+                builder.set(
+                    crate::urls::DESCRIPTION.into(),
+                    Value::new("x", &DataType::Markdown).unwrap(),
+                );
+                let commit = builder.sign(&agent, &store, &resource).await.unwrap();
+                store.apply_commit(commit, &OPTS).await.map(|_| ())
+            }
+        };
+        for reserved in [
+            "http://localhost:9883/_routes",
+            "http://localhost:9883/_routes/abc",
+            "http://localhost:9883/_routes/abc/users/alice",
+        ] {
+            let err = create(reserved).await.unwrap_err().to_string();
+            assert!(
+                err.contains("reserved for plugin routes"),
+                "{reserved}: {err}"
+            );
+        }
+        for allowed in [
+            "http://localhost:9883/_routesx",
+            "http://localhost:9883/things/_routes/x",
+        ] {
+            create(allowed)
+                .await
+                .unwrap_or_else(|e| panic!("{allowed}: {e}"));
+        }
+    }
+
+    #[test]
+    fn plugin_routes_paths() {
+        use crate::subject::is_plugin_routes_path;
+        assert!(is_plugin_routes_path("/_routes"));
+        assert!(is_plugin_routes_path("/_routes/"));
+        assert!(is_plugin_routes_path("/_routes/a/b"));
+        assert!(!is_plugin_routes_path("/_routesx"));
+        assert!(!is_plugin_routes_path("/a/_routes"));
+        assert!(!is_plugin_routes_path("/"));
     }
 
     #[tokio::test]

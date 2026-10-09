@@ -1,0 +1,141 @@
+//! Integration test: a real server built with `--features plugin-routes`,
+//! started with `--plugin-routes read-only` and a routes origin. A client
+//! installs version-three plugins over HTTP, and their mounts answer:
+//! `drive-prefix` at `/_routes/<slug>/...`, `installation-origin` on
+//! `<slug>.<routes origin>`. A matched route answers `501` until route
+//! execution lands (AS-05).
+//!
+//! Run: cargo test -p atomic-server --features plugin-routes --test it plugin_routes
+
+use atomic_lib::{
+    client::connected::Client,
+    db::plugin_release::{PluginRelease, WORLD_EXTENSION},
+    errors::AtomicResult,
+    urls, Value,
+};
+use atomic_server_lib::plugins::route_registry::slug;
+use serde_json::json;
+
+use crate::common::{start_server_with_args, wait_for_server};
+
+/// `testdata/plugin-routes/hello-route/`, shared with the unit tests.
+const HELLO_ROUTE_SOURCE: &str =
+    include_str!("../../../testdata/plugin-routes/hello-route/plugin.js");
+const HELLO_ROUTE_MANIFEST: &str =
+    include_str!("../../../testdata/plugin-routes/hello-route/manifest.json");
+
+/// A manifest for plugin `acme/<name>` with this `http` block.
+fn manifest(name: &str, http: serde_json::Value) -> serde_json::Value {
+    json!({
+        "schemaVersion": 3,
+        "name": name,
+        "namespace": "acme",
+        "capabilities": [{"name": "storage", "reason": "keeps a cursor"}],
+        "http": http,
+    })
+}
+
+/// Publishes a JS release as a `Release` resource in `drive` and installs it
+/// as an active Installation. Returns the Installation's subject.
+async fn install(
+    client: &Client,
+    drive: &str,
+    manifest: serde_json::Value,
+) -> AtomicResult<String> {
+    let mut release = PluginRelease::js(HELLO_ROUTE_SOURCE.into(), manifest, Default::default());
+    release.world = WORLD_EXTENSION.into();
+    let mut release_resource = client.new_resource(drive)?;
+    release.write_to_resource(&mut release_resource, None)?;
+    release_resource.save_remote(client.store()).await?;
+
+    let mut installation = client.new_resource(drive)?;
+    for (property, value) in [
+        (
+            urls::IS_A,
+            Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+        ),
+        (
+            urls::RELEASE_PROP,
+            Value::String(release_resource.get_subject().to_string()),
+        ),
+        (urls::RELEASE_ID, Value::String(release.id()?)),
+        (urls::INSTALLATION_STATUS, Value::String("active".into())),
+        (urls::GRANTS, Value::Json(json!(["storage"]))),
+    ] {
+        installation.set_unsafe(property.into(), value)?;
+    }
+    installation.save_remote(client.store()).await?;
+    Ok(installation.get_subject().to_string())
+}
+
+#[tokio::test]
+async fn an_installed_v3_plugin_answers_on_its_mounts() -> AtomicResult<()> {
+    // Hosts are matched without their port.
+    let port = start_server_with_args(
+        "plugin_routes",
+        &[
+            "--plugin-routes",
+            "read-only",
+            "--routes-origin",
+            "http://routes.localhost",
+        ],
+    );
+    wait_for_server(port).await;
+    let server = format!("http://localhost:{port}");
+    let client = Client::new(&server).await?;
+    let agent = client.new_agent("Alice").await?;
+    let drive = client.new_public_drive(&agent, "Routes Drive").await?;
+    let http = reqwest::Client::new();
+
+    // drive-prefix: /_routes/<slug>/... on the API origin. The hello-route
+    // fixture.
+    let hello: serde_json::Value = serde_json::from_str(HELLO_ROUTE_MANIFEST)?;
+    let prefixed = install(&client, &drive, hello).await?;
+    let resp = http
+        .get(format!("{server}/_routes/{}/hello/alice", slug(&prefixed)))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 501);
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    assert_eq!(body["type"], "route-execution-unavailable", "{body}");
+    let resp = http
+        .get(format!("{server}/_routes/{}/nothing-here", slug(&prefixed)))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 404);
+
+    // installation-origin: its own host on the routes origin.
+    let own = install(
+        &client,
+        &drive,
+        manifest(
+            "own-origin",
+            json!({"routes": [{"id": "actor", "path": "/users/{name}", "methods": ["GET"]}]}),
+        ),
+    )
+    .await?;
+    let resp = http
+        .get(format!("{server}/users/alice"))
+        .header("host", format!("{}.routes.localhost:{port}", slug(&own)))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status(), 501);
+
+    // A reserved path refuses the install.
+    let err = install(
+        &client,
+        &drive,
+        manifest(
+            "reserved",
+            json!({"routes": [{"id": "acme", "path": "/.well-known/acme-challenge/{token}", "methods": ["GET"]}]}),
+        ),
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("acme-challenge"), "{err}");
+    Ok(())
+}
