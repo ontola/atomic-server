@@ -971,7 +971,7 @@ impl Db {
 
     /// `init_redb_file_with_policy` with an explicit write [`redb_store::Durability`]:
     /// when a commit is acknowledged relative to the fsync that protects it.
-    /// The default (`Group`) acknowledges only after an fsync, shared between
+    /// The default (`None`) acknowledges at once; `Always` acknowledges only after an fsync, shared between
     /// concurrent writers.
     #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
     pub async fn init_redb_file_with_options(
@@ -2745,6 +2745,14 @@ impl Db {
     /// Flushes the current state to disk.
     pub fn flush(&self) -> AtomicResult<()> {
         self.kv.flush()
+    }
+
+    /// Returns once everything written before this call (every commit applied
+    /// so far) is fsynced. Concurrent callers share one fsync. A commit a
+    /// client asked to be durable is acknowledged only after this returns.
+    /// Blocks on the disk: call it from `spawn_blocking` in async code.
+    pub fn flush_durable(&self) -> AtomicResult<()> {
+        self.kv.flush_durable()
     }
 
     /// Removes the DB and all content from disk.

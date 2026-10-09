@@ -62,6 +62,20 @@ A commit should be sent (using an HTTPS POST request) to a `/commit` endpoint of
 The server then checks the signature and the author rights, and responds with a `2xx` status code if it succeeded, or an `5xx` error if something went wrong.
 The error will be a JSON object.
 
+### Durable commits
+
+By default the server acknowledges a commit once it is applied and flushes it
+to disk a moment later (every 100 ms), so a crash or power cut can lose the last
+fraction of a second of acknowledged commits. A client that needs an
+acknowledgement to mean "on disk" asks for it per request, not per commit:
+`POST /commit?durable=true` over HTTP, or a `COMMIT_DURABLE` frame over
+WebSocket (see [WebSockets](../websockets.md)). The commit itself, its signature
+and its hash are identical either way. The server answers only after an fsync
+that covers the commit and everything applied before it, and concurrent durable
+commits share one fsync. In `@tomic/lib`: `resource.save({ durable: true })` or
+`store.setDefaultDurable(true)`. An operator can make every commit durable with
+`--durability always` (see [installation](../atomicserver/installation.md)).
+
 ### Serialization with JSON-AD
 
 Here is an example Commit with a Loro update:

@@ -439,10 +439,10 @@ Options:
           [default: latest]
 
       --durability <DURABILITY>
-          When a commit is acknowledged relative to the fsync that protects it. `group` (default): acknowledged only after an fsync, shared by all commits in flight (group commit), so an acknowledged commit survives `kill -9` and power loss. `immediate`: one fsync per commit. `none`: acknowledged at once, flushed every 100 ms; fastest, but a crash can lose the last 100 ms of acknowledged commits
+          The durability floor for commits. `none` (default): a commit is acknowledged at once and fsynced by a 100 ms tick, so a crash can lose the last 100 ms of commits, except those a client asked to be durable (`COMMIT_DURABLE` over WebSocket, `POST /commit?durable=true`): those are acknowledged only after an fsync that covers them. `always`: every commit is durable, acknowledged after an fsync shared by all commits in flight (group commit). (`immediate`, one fsync per commit, exists for tests; `group` is the old name of `always`.)
 
           [env: ATOMIC_DURABILITY=]
-          [default: group]
+          [default: none]
 
       --auto-compact <AUTO_COMPACT>
           Compact the store file at startup when it is at least `--auto-compact-min-mb` and at least `--auto-compact-min-reclaimable-percent` of it is dead space (pages freed by overwrites and deletes that redb never returns to the filesystem). The server listens only when the compaction is done: expect seconds per GB. `false` skips the check; `atomic-server compact` does the same by hand while the server is stopped

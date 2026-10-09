@@ -958,6 +958,57 @@ describe('WSClient.postCommit', () => {
     client.close();
   });
 
+  it('sends COMMIT_DURABLE only when asked and the server advertises it', async ({
+    expect,
+  }) => {
+    const { client, socket } = await postingClient();
+    const caps = vi.spyOn(client, 'serverCapabilities', 'get');
+
+    // The server lists the capability: durable goes out as COMMIT_DURABLE,
+    // with the same payload a COMMIT would carry.
+    caps.mockReturnValue(['commit-durable']);
+    const commit = signedCommit();
+    const durable = client.postCommit(commit, { durable: true });
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.COMMIT_DURABLE)).toHaveLength(1),
+    );
+    const frame = framesWithTag(socket, Tag.COMMIT_DURABLE)[0];
+    const wire = decodeCommit(frame.subarray(1))!;
+    expect(wire.commitJson).toBe(
+      serializeDeterministically({ ...commit }, true),
+    );
+    expect(framesWithTag(socket, Tag.COMMIT)).toHaveLength(0);
+    socket.receive(encodeCommitOkSlim(wire.requestId, 'did:ad:commit:sig-abc'));
+    await expect(durable).resolves.toMatchObject({ signature: 'sig-abc' });
+
+    // Not asked: a plain COMMIT even though the server could do better.
+    const plain = client.postCommit(signedCommit());
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.COMMIT)).toHaveLength(1),
+    );
+    expect(framesWithTag(socket, Tag.COMMIT_DURABLE)).toHaveLength(1);
+    const plainId = decodeCommit(
+      framesWithTag(socket, Tag.COMMIT)[0].subarray(1),
+    )!.requestId;
+    socket.receive(encodeCommitOkSlim(plainId, 'did:ad:commit:sig-abc'));
+    await plain;
+
+    // Asked, but the server predates the capability: plain COMMIT, same retry
+    // semantics.
+    caps.mockReturnValue([]);
+    const fallback = client.postCommit(signedCommit(), { durable: true });
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.COMMIT)).toHaveLength(2),
+    );
+    expect(framesWithTag(socket, Tag.COMMIT_DURABLE)).toHaveLength(1);
+    const fallbackId = decodeCommit(
+      framesWithTag(socket, Tag.COMMIT)[1].subarray(1),
+    )!.requestId;
+    socket.receive(encodeCommitOkSlim(fallbackId, 'did:ad:commit:sig-abc'));
+    await fallback;
+    client.close();
+  });
+
   it('still accepts the legacy full-JSON COMMIT_OK', async ({ expect }) => {
     const { client, socket } = await postingClient();
 

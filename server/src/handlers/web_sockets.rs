@@ -528,7 +528,8 @@ impl WebSocketConnection {
                 );
             }
 
-            ws_v2::tag::COMMIT => {
+            ws_v2::tag::COMMIT | ws_v2::tag::COMMIT_DURABLE => {
+                let durable = bin[0] == ws_v2::tag::COMMIT_DURABLE;
                 let Some(decoded) = ws_v2::decode_commit(&bin[1..]) else {
                     return;
                 };
@@ -564,6 +565,7 @@ impl WebSocketConnection {
                             &origin,
                             &body,
                             Some(source_id),
+                            durable,
                         )
                         .await;
                         (request_id, result)

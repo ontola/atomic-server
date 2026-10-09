@@ -37,13 +37,15 @@ pub struct Opts {
     #[clap(long, default_value = "latest", env = "ATOMIC_ENVELOPE_RETENTION")]
     pub envelope_retention: String,
 
-    /// When a commit is acknowledged relative to the fsync that protects it.
-    /// `group` (default): acknowledged only after an fsync, shared by all
-    /// commits in flight (group commit), so an acknowledged commit survives
-    /// `kill -9` and power loss. `immediate`: one fsync per commit. `none`:
-    /// acknowledged at once, flushed every 100 ms; fastest, but a crash can
-    /// lose the last 100 ms of acknowledged commits.
-    #[clap(long, default_value = "group", env = "ATOMIC_DURABILITY")]
+    /// The durability floor for commits. `none` (default): a commit is
+    /// acknowledged at once and fsynced by a 100 ms tick, so a crash can lose
+    /// the last 100 ms of commits, except those a client asked to be durable
+    /// (`COMMIT_DURABLE` over WebSocket, `POST /commit?durable=true`): those
+    /// are acknowledged only after an fsync that covers them. `always`: every
+    /// commit is durable, acknowledged after an fsync shared by all commits in
+    /// flight (group commit). (`immediate`, one fsync per commit, exists for
+    /// tests; `group` is the old name of `always`.)
+    #[clap(long, default_value = "none", env = "ATOMIC_DURABILITY")]
     pub durability: atomic_lib::db::redb_store::Durability,
 
     /// Compact the store file at startup when it is at least
@@ -698,12 +700,13 @@ mod tests {
     }
 
     #[test]
-    fn durability_defaults_to_group_and_is_configurable() {
+    fn durability_defaults_to_none_and_is_configurable() {
         use atomic_lib::db::redb_store::Durability;
-        assert_eq!(config_from(&[]).unwrap().opts.durability, Durability::Group);
+        assert_eq!(config_from(&[]).unwrap().opts.durability, Durability::None);
         for (flag, want) in [
             ("immediate", Durability::Immediate),
-            ("group", Durability::Group),
+            ("group", Durability::Always),
+            ("always", Durability::Always),
             ("none", Durability::None),
         ] {
             let config = config_from(&["--durability", flag]).unwrap();

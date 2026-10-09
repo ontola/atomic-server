@@ -66,6 +66,15 @@ pub trait KvStore: Send + Sync {
     /// Flush all pending writes to durable storage. No-op for in-memory backends.
     fn flush(&self) -> AtomicResult<()>;
 
+    /// Returns once every write that returned before this call survives a
+    /// crash. Unlike [`KvStore::flush`] it never skips, and concurrent callers
+    /// share one fsync (group commit), so it is cheap to call per request.
+    /// Backends without a distinction between acknowledged and durable just
+    /// flush.
+    fn flush_durable(&self) -> AtomicResult<()> {
+        self.flush()
+    }
+
     /// Start buffering writes. All `insert`, `remove`, and `apply_batch` calls
     /// will be accumulated until `commit_batch()` is called.
     fn begin_batch(&self) {}

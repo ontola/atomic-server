@@ -484,9 +484,39 @@ impl WsClient {
     /// an unrelated refusal (a rejected `SUB`, another commit's error) does
     /// not fail this one.
     pub async fn post_commit(&self, request_id: u16, commit_json: &str) -> AtomicResult<String> {
+        self.post_commit_with(request_id, commit_json, false).await
+    }
+
+    /// [`WsClient::post_commit`] as a `COMMIT_DURABLE` frame when the server
+    /// lists `commit-durable`: the `COMMIT_OK` arrives only after the commit is
+    /// fsynced. Against a server without the capability it sends a plain
+    /// `COMMIT`, which is all that server understands.
+    pub async fn post_commit_durable(
+        &self,
+        request_id: u16,
+        commit_json: &str,
+    ) -> AtomicResult<String> {
+        self.post_commit_with(request_id, commit_json, true).await
+    }
+
+    async fn post_commit_with(
+        &self,
+        request_id: u16,
+        commit_json: &str,
+        durable: bool,
+    ) -> AtomicResult<String> {
+        let durable = durable
+            && self
+                .server_capabilities()
+                .iter()
+                .any(|c| c == protocol::CAP_COMMIT_DURABLE);
         let mut rx = self.subscribe();
-        self.send_binary(protocol::encode_commit(request_id, commit_json))
-            .await?;
+        let frame = if durable {
+            protocol::encode_commit_durable(request_id, commit_json)
+        } else {
+            protocol::encode_commit(request_id, commit_json)
+        };
+        self.send_binary(frame).await?;
 
         let timeout = tokio::time::timeout(std::time::Duration::from_secs(30), async {
             while let Ok(msg) = rx.recv().await {

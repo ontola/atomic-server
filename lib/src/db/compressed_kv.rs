@@ -328,6 +328,10 @@ impl KvStore for CompressedKv {
         self.inner.flush()
     }
 
+    fn flush_durable(&self) -> AtomicResult<()> {
+        self.inner.flush_durable()
+    }
+
     fn begin_batch(&self) {
         self.inner.begin_batch()
     }

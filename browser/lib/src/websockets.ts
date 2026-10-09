@@ -1059,7 +1059,10 @@ export class WSClient {
    * client never receives its own commit as a subscription push.
    * HTTP `/commit` remains the fallback when the WS isn't usable.
    */
-  public async postCommit(commit: Commit): Promise<Commit> {
+  public async postCommit(
+    commit: Commit,
+    opts: { durable?: boolean } = {},
+  ): Promise<Commit> {
     await this.authenticate();
 
     if (this.readyState !== WebSocket.OPEN) {
@@ -1103,7 +1106,11 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeCommit(requestId, serialized));
+      // Durability is a property of this request, not of the signed commit. A
+      // server that does not list `commit-durable` gets a plain COMMIT.
+      const durable =
+        !!opts.durable && this.serverCapabilities.includes('commit-durable');
+      this.sendBinary(encodeCommit(requestId, serialized, durable));
     });
   }
 

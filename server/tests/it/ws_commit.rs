@@ -101,3 +101,109 @@ async fn ws_commit_syncs_to_subscriber() -> AtomicResult<()> {
 
     Ok(())
 }
+
+/// A signed update of `resource`, as the wire JSON a client posts.
+async fn signed_update(
+    client: &Client,
+    agent: &atomic_lib::agents::Agent,
+    resource: &mut atomic_lib::Resource,
+    name: &str,
+) -> AtomicResult<String> {
+    resource.set_name(name)?;
+    let snapshot = resource.build_state_doc()?.export_snapshot();
+    let mut builder = resource.get_commit_builder().clone();
+    builder.set_loro_update(snapshot);
+    let commit = builder.sign(agent, client.store(), resource).await?;
+    atomic_lib::client::commit_to_wire_json(&commit, client.store()).await
+}
+
+/// Durability is chosen per request. The server floor is `none` (the default),
+/// so a plain commit is acknowledged without an fsync, and a commit sent as
+/// `COMMIT_DURABLE` over WebSocket or `POST /commit?durable=true` is
+/// acknowledged only after one (`DURABLE_TRANSACTIONS` counts the fsynced
+/// transactions; the server runs in this process).
+#[tokio::test]
+async fn durable_commit_is_acknowledged_after_an_fsync() -> AtomicResult<()> {
+    use atomic_lib::db::redb_store::DURABLE_TRANSACTIONS;
+    let fsyncs = || DURABLE_TRANSACTIONS.load(Ordering::SeqCst);
+
+    let port = start_server("ws_commit_durable");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{}", port);
+    let ws_url = format!("ws://localhost:{}/ws", port);
+
+    let client = Client::new(&server_url).await?;
+    let agent = client.new_agent("Dora").await?;
+    let drive = client.new_public_drive(&agent, "Durable Drive").await?;
+    let mut resource = client.new_resource(&drive)?;
+    resource.set_name("Durable Target")?;
+    resource.set_unsafe(
+        atomic_lib::urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![atomic_lib::urls::CLASS.into()]),
+    )?;
+    resource.set_unsafe(
+        atomic_lib::urls::SHORTNAME.into(),
+        atomic_lib::Value::Slug("durable-target".into()),
+    )?;
+    resource.set_unsafe(
+        atomic_lib::urls::DESCRIPTION.into(),
+        atomic_lib::Value::String("A test resource for durable commits".into()),
+    )?;
+    let subject = resource.save_remote(client.store()).await?;
+    let mut resource = client.get_resource(&subject).await?;
+
+    let ws = WsClient::connect(&ws_url).await?;
+    ws.authenticate(&agent).await?;
+    assert!(
+        ws.server_capabilities()
+            .iter()
+            .any(|c| c == "commit-durable"),
+        "{:?}",
+        ws.server_capabilities()
+    );
+
+    // A plain commit: acknowledged, no fsynced transaction of its own.
+    // Settle first: `save_remote` above was plain too, so nothing is pending.
+    let before = fsyncs();
+    let json = signed_update(&client, &agent, &mut resource, "plain").await?;
+    ws.post_commit(REQ_ID.fetch_add(1, Ordering::Relaxed), &json)
+        .await?;
+    assert_eq!(
+        fsyncs(),
+        before,
+        "a plain commit must not wait for an fsync"
+    );
+
+    // The same over WebSocket as COMMIT_DURABLE: at least one fsynced
+    // transaction has happened by the time the acknowledgement arrives.
+    let mut resource = client.get_resource(&subject).await?;
+    let json = signed_update(&client, &agent, &mut resource, "durable over ws").await?;
+    let before = fsyncs();
+    let commit_id = ws
+        .post_commit_durable(REQ_ID.fetch_add(1, Ordering::Relaxed), &json)
+        .await?;
+    assert!(commit_id.contains("commit"), "{commit_id}");
+    assert!(
+        fsyncs() > before,
+        "COMMIT_OK for a COMMIT_DURABLE came without an fsync"
+    );
+
+    // And over HTTP.
+    let mut resource = client.get_resource(&subject).await?;
+    let json = signed_update(&client, &agent, &mut resource, "durable over http").await?;
+    let before = fsyncs();
+    let resp = reqwest::Client::new()
+        .post(format!("{server_url}/commit?durable=true"))
+        .header("Content-Type", "application/ad+json")
+        .body(json)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    assert_eq!(resp.status().as_u16(), 200, "{:?}", resp.text().await);
+    assert!(
+        fsyncs() > before,
+        "a durable HTTP commit was acknowledged without an fsync"
+    );
+
+    Ok(())
+}

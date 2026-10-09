@@ -86,6 +86,11 @@ export interface OutboxEntry {
    *  cursor to THIS version before the first post-reload export makes the
    *  drain emit the offline delta. Cleared once that delta is acked. */
   baseVersion?: string;
+  /** The save that queued this entry asked for durability
+   *  (`resource.save({ durable: true })`): the drain sends the commit as
+   *  durable, so it is acknowledged only after the server's fsync. Persisted,
+   *  so a retry after a reload keeps the request. Dropped with the entry. */
+  durable?: boolean;
   lastAttemptAt?: number;
   lastAttemptError?: string;
   /** In-memory cause, retained on this entry even if a terminal failure drops
@@ -480,6 +485,7 @@ interface PersistedEntry {
   signedGenesis?: unknown;
   signedDestroy?: unknown;
   baseVersion?: string;
+  durable?: boolean;
 }
 
 export class LocalOutbox {
@@ -773,6 +779,18 @@ export class LocalOutbox {
     if (wrote && value !== undefined && this.database === db) {
       this.written.set(subject, value);
     }
+  }
+
+  /** Ask that the entry for `subject` be sent as a durable commit. Sticky until
+   *  the entry is acked and dropped. No-op when nothing is queued: there is
+   *  nothing to send. */
+  markDurable(subject: string): void {
+    const entry = this.entries.get(subject);
+
+    if (!entry || entry.durable) return;
+
+    entry.durable = true;
+    this.changed(subject);
   }
 
   /** Mark a subject as having local Loro edits that need to drain.
@@ -1404,6 +1422,7 @@ function toPersisted(e: OutboxEntry): PersistedEntry {
       ? commitToJsonADObject(e.signedDestroy)
       : undefined,
     baseVersion: e.baseVersion,
+    durable: e.durable ? true : undefined,
   };
 }
 
@@ -1459,6 +1478,7 @@ function parseEntry(p: unknown): OutboxEntry | undefined {
     signedDestroy,
     baseVersion:
       typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
+    durable: obj.durable === true ? true : undefined,
   };
 }
 

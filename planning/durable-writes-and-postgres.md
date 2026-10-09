@@ -1,20 +1,45 @@
 # Durable writes, incremental backup and a Postgres KvStore
 
-Status: durable writes shipped (issue #2156, group commit); backup and Postgres
-are design only.
+Status: durable writes shipped (issue #2156, group commit), now chosen per
+commit by the client; backup and Postgres are design only.
 
 ## 1. Durable writes (done)
 
 An acknowledged commit used to be written with `redb::Durability::None` and made
 durable by a 100 ms flush tick, so `kill -9` or power loss could drop commits the
-client had been told succeeded. `RedbStore` now takes a `Durability`
-(`lib/src/db/redb_store.rs`), configured with `--durability` / `ATOMIC_DURABILITY`:
+client had been told succeeded. First attempt: make every commit durable by
+default (group commit). That cost throughput for everyone, so the choice moved to
+the client: durability is a property of the REQUEST, not of the signed commit
+(signature, hash and sync are unchanged).
 
-| mode | acknowledged when | notes |
+`RedbStore` takes a `Durability` (`lib/src/db/redb_store.rs`), the server-side
+floor, configured with `--durability` / `ATOMIC_DURABILITY`:
+
+| floor | acknowledged when | notes |
 | --- | --- | --- |
-| `group` (default) | an fsync covering the write finished | concurrent writers share that fsync |
-| `immediate` | the write's own fsync finished | 2-phase commit (quick-repair) per write |
-| `none` | the write committed in memory | old behaviour; flushed every 100 ms |
+| `none` (default) | the write committed in memory | flushed every 100 ms; a request that asks for durability is still honoured |
+| `always` (was `group`) | an fsync covering the write finished | concurrent writers share that fsync |
+| `immediate` | the write's own fsync finished | tests only; 2-phase commit per write |
+
+Per commit: `KvStore::flush_durable()` (`Db::flush_durable()`) returns once
+everything written before the call is fsynced. On `RedbStore` under floor `none`
+it queues a sentinel write through the same group commit, so concurrent durable
+requests share one fsync and the fsync covers all earlier plain writes. Under
+`always`/`immediate` it is a no-op (nothing pending). Request plumbing:
+
+- WebSocket: capability `commit-durable`, frame `COMMIT_DURABLE (0x17)` with the
+  `COMMIT` payload; the handler applies the commit, awaits `flush_durable` on
+  `spawn_blocking`, then sends `COMMIT_OK`. Plain `COMMIT`s are answered at once.
+- HTTP: `POST /commit?durable=true`.
+- Iroh engine (`sync/engine.rs`): same, after `apply_peer_commit`. The
+  browser-peer (OPFS) responder does not (nothing to fsync).
+- `@tomic/lib`: `resource.save({ durable: true })`, `Store` option
+  `defaultDurable` / `setDefaultDurable`; the flag lives on the outbox entry
+  (persisted), falls back to a plain `COMMIT` when the server lacks the
+  capability.
+
+Mixed use is the point: durable commits join the shared fsync, plain ones return
+immediately and ride the tick.
 
 Group commit (`RedbStore::group_write`): a writer queues its operations; the
 first writer that finds no leader running becomes the leader, takes everything
@@ -34,11 +59,11 @@ write transaction, and the commit path clears a tombstone that way before every
 commit, so each commit cost two durable transactions. It now returns without
 writing when the key is not there.
 
-Measured (release, 1000 commits, ext4 on a virtio disk shared with other
+Measured (before the per-commit flag; the `group` rows are what floor `always` and a durable request cost; release, 1000 commits, ext4 on a virtio disk shared with other
 builds, so absolute numbers move by 2-10x between runs; compare within a run).
 Commits per second:
 
-| level | mode | 1 writer | 8 writers |
+| level | mode (`group` = today's `always`) | 1 writer | 8 writers |
 | --- | --- | --- | --- |
 | raw store | none (old) | 29051 | 12339 |
 | raw store | group | 1350 | 3367 |
@@ -50,12 +75,14 @@ Commits per second:
 8-way group commit needed about 240-290 fsynced transactions for 1000 commits.
 A full commit costs ~3.6 ms of CPU, so durable group commit is 1.8x slower for a
 single sequential writer (one 2-fsync transaction, ~2.8 ms here) and within 15%
-under concurrency. The default is `group`; `none` stays available. Dropping redb's
+under concurrency. The default is now `none` (fast); `always` and per-commit durable requests pay this price only when asked for. Dropping redb's
 two-phase commit (one fsync instead of two) doubled raw throughput but moved the
 full `Db` numbers by less than noise, and it brings back the slow full-scan
 repair after a crash, so it was not taken.
 
-- [x] `Durability` enum, `FromStr`, config flag and env var
+- [x] `Durability` enum (`none` default, `always`, `immediate`; `group` parses as `always`), config flag and env var
+- [x] per-commit durability: `flush_durable`, `COMMIT_DURABLE`, `?durable=true`, `@tomic/lib` option
+- [ ] re-measure the numbers above for `none` + a durable request ratio
 - [x] group commit leader/follower in `RedbStore::write_ops`
 - [x] `commit_batch` (import path) acknowledged at the same level
 - [x] crash test: child process, kill -9 after an acknowledged write (`lib/tests/durable_writes.rs`)
@@ -63,8 +90,8 @@ repair after a crash, so it was not taken.
 - [ ] Open: callers that block a tokio worker in `apply_batch` now also block while
       waiting for the fsync. If a profile shows reader starvation under write load,
       move the commit pipeline onto `spawn_blocking` rather than lowering durability.
-- [ ] Open: mobile/Flutter embeds default to `group`; measure on a real phone and
-      decide whether the app opts into `none` for bulk import only.
+- [ ] Open: callers that need durability on embeds (Flutter, desktop) call
+      `Db::flush_durable` themselves after a commit; no UI option yet.
 
 ## 2. Online incremental backup (design)
 

@@ -76,6 +76,7 @@ The current list (`protocol::CAPABILITIES`):
 | `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
 | `auth-nonce` | Sends `CHALLENGE (0x42)` as its first frame on a WebSocket and verifies an `AUTH.requestedSubject` of the form `{origin}#{nonce}` against it. |
 | `commit-ok-slim` | Answers `COMMIT` with the slim `COMMIT_OK` (`[request_id] [commit_id]`) for a client whose `HELLO` lists `commit-ok-slim`. |
+| `commit-durable` | Understands `COMMIT_DURABLE (0x17)`: same payload as `COMMIT`, but `COMMIT_OK` is sent only after an fsync that covers the commit and everything applied before it. |
 | `client-hello` | Reads a `HELLO (0x37)` from a WebSocket client and records the capabilities it lists. |
 | `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 | `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
@@ -112,6 +113,7 @@ logged and dropped, not answered.
 | `0x12` | `DESTROY` | responder | client. **No WS server arm.** The Iroh live loop explicitly ignores it (see [Deletes](#deletes)). |
 | `0x13` | `COMMIT` | client; Iroh live push loop, for destroys | WS handler (hub semantics), engine (peer semantics) |
 | `0x14` | `COMMIT_OK` | responder | client / initiator only. Payload is the full commit JSON-AD, or the bare commit id for a client whose `HELLO` listed `commit-ok-slim`. |
+| `0x17` | `COMMIT_DURABLE` | client | WS handler and engine. Same payload as `COMMIT`; `COMMIT_OK` follows only after an fsync. Sent only to a responder advertising `commit-durable`. Not understood by the browser-peer (OPFS) responder. |
 | `0x15` | `GET_MANY` | client | engine (both transports). Sent only to a responder advertising `get-many`. |
 | `0x16` | `GET_MANY_RESULT` | responder | client only. |
 | `0x20` | `SUB` | client | WS handler only. **No engine arm**, so an Iroh peer cannot subscribe. |
@@ -502,6 +504,21 @@ the `request_id` the client chose, and clients match on it (the browser's
 uses this: subjects of one ordering tier (agents, then the drive, then
 children by depth) are drained up to eight at a time, with a barrier between
 tiers so a child's genesis never races ahead of its parent's.
+
+**Durable commits.** Whether a commit must be on disk before it is
+acknowledged is a property of the *request*, not of the signed commit: the
+commit's bytes, hash and signature are the same either way, and so is what
+syncs to other peers. A client that wants an fsync-backed acknowledgement
+sends the commit as `COMMIT_DURABLE (0x17)` instead of `COMMIT`, with the same
+payload, to a server whose `AUTH_OK` lists `commit-durable`. The server applies
+the commit as usual and then waits for one fsync covering it (and everything
+applied before it) before answering `COMMIT_OK`. Concurrent durable commits
+share that fsync (group commit), and plain `COMMIT`s on the same connection are
+answered at once, so mixing is free. A server that does not list the capability
+gets a plain `COMMIT`. Over HTTP the same request is `POST /commit?durable=true`.
+The server's `--durability` setting is a floor under this: with `always`
+every commit is durable whatever the client asks. On an Iroh peer stream the
+shared engine honours `COMMIT_DURABLE` the same way.
 
 **Slim acknowledgement.** The full form returns the created commit's JSON-AD,
 which since 2026-09 no client in this tree reads beyond its `@id`. A client

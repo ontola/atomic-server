@@ -411,7 +411,7 @@ pub async fn handle_frame_full_for_caps(
             }
         }
 
-        protocol::tag::COMMIT => {
+        protocol::tag::COMMIT | protocol::tag::COMMIT_DURABLE => {
             // A signed commit is the unit of authority on every transport: it
             // carries its own signature and the signer's rights are checked
             // here, so a peer relaying it can only ever apply a change its
@@ -428,7 +428,17 @@ pub async fn handle_frame_full_for_caps(
             match protocol::decode_commit(payload) {
                 Some(decoded) => {
                     let request_id = decoded.request_id;
-                    match apply_peer_commit(store, decoded.commit_json).await {
+                    let applied = apply_peer_commit(store, decoded.commit_json).await;
+                    // `COMMIT_DURABLE`: acknowledge only after the fsync that
+                    // covers the commit (a no-op when the store already
+                    // fsyncs every write).
+                    let applied = match applied {
+                        Ok(json) if tag == protocol::tag::COMMIT_DURABLE => {
+                            store.flush_durable().map(|()| json)
+                        }
+                        other => other,
+                    };
+                    match applied {
                         Ok(commit_json) => {
                             vec![protocol::encode_commit_ok(request_id, &commit_json)]
                         }

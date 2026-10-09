@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- `@tomic/lib`: durable commits. `resource.save({ durable: true })` resolves only after the server fsynced the commit; `new Store({ defaultDurable: true })` or `store.setDefaultDurable(true)` does it for every save. The request travels as a `COMMIT_DURABLE` WebSocket frame (`Tag.COMMIT_DURABLE`, `encodeCommit(id, json, true)`) when the server advertises `commit-durable`, otherwise as a plain `COMMIT`, and as `POST /commit?durable=true` over HTTP (`Client.postCommit`, `Store.postCommit` take `{ durable }`). The signed commit is unchanged. The flag is kept on the outbox entry (`OutboxEntry.durable`, `LocalOutbox.markDurable`) and persisted, so a retry after a failure or reload is still durable; retry and backoff are as before.
+
 - Groups: create a group from New > Group, name it and add or remove members (people and other groups) on its page. In the Share dialog, "Add a group" gives a group read or write access next to individual people; each group shows its member count, "Show" lists everyone it covers, and the role menu removes it. Everyone in the group gets access, and changes to the group apply on the next request (#2158).
 - Share dialog: the role for new invites (email field and Copy invite link) is a single-click Read / Write switch in the same style as the Public switch, instead of a Can write dropdown.
 - Calendar: changing only the start or end time of a multi-day timed event keeps its end date (#2089).

@@ -33,6 +33,15 @@ pub mod tag {
     /// ([frame_len: u32] [frame])*`, one complete `UPDATE` or `ERROR` frame
     /// per requested subject, in request order.
     pub const GET_MANY_RESULT: u8 = 0x16;
+    /// A `COMMIT` that must be on disk before it is acknowledged: same
+    /// payload as `COMMIT`, `[0x17] [request_id: u16] [commit_json_utf8]`.
+    /// The durability request belongs to this frame, not to the signed
+    /// commit, so the commit's bytes, hash and signature are the same either
+    /// way. The responder answers `COMMIT_OK` only after an fsync that covers
+    /// the commit and everything applied before it. Advertised by the
+    /// `commit-durable` capability; a client never sends it to a server that
+    /// does not list it.
+    pub const COMMIT_DURABLE: u8 = 0x17;
     pub const SUB: u8 = 0x20;
     pub const UNSUB: u8 = 0x21;
     pub const SYNC: u8 = 0x30;
@@ -111,6 +120,8 @@ pub mod tag {
 ///   frames `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE`.
 /// - `get-many`: answers `GET_MANY` (0x15) with one `GET_MANY_RESULT` (0x16),
 ///   so a client can fetch a whole list of subjects in one round trip.
+/// - `commit-durable`: understands `COMMIT_DURABLE` (0x17) and answers it
+///   with `COMMIT_OK` only after the commit is fsynced.
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
@@ -126,6 +137,7 @@ pub const CAPABILITIES: &[&str] = &[
     "get-many",
     "canonical-scheme",
     "sparse-sync",
+    "commit-durable",
 ];
 
 /// Server capability: understands a `SYNC` whose JSON carries `hv: 2` and, in
@@ -133,6 +145,9 @@ pub const CAPABILITIES: &[&str] = &[
 /// dense encoding needs one counter per resource per peer in the drive, which
 /// is quadratic once every resource has its own peer.
 pub const CAP_SPARSE_SYNC: &str = "sparse-sync";
+
+/// Server capability: understands `COMMIT_DURABLE` (0x17).
+pub const CAP_COMMIT_DURABLE: &str = "commit-durable";
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
 /// (WebSocket clients since 2026-09; peers always sent one). The only one a
@@ -518,6 +533,15 @@ pub fn encode_commit(request_id: u16, commit_json: &str) -> Vec<u8> {
     buf.push(tag::COMMIT);
     buf.extend_from_slice(&request_id.to_be_bytes());
     buf.extend_from_slice(commit_json.as_bytes());
+    buf
+}
+
+/// Encode a COMMIT_DURABLE message: a [`encode_commit`] frame the responder
+/// acknowledges only after an fsync. Format: `[0x17] [request_id: u16]
+/// [commit_json_utf8]`.
+pub fn encode_commit_durable(request_id: u16, commit_json: &str) -> Vec<u8> {
+    let mut buf = encode_commit(request_id, commit_json);
+    buf[0] = tag::COMMIT_DURABLE;
     buf
 }
 

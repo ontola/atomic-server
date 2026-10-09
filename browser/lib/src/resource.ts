@@ -100,6 +100,11 @@ export const unknownSubject = 'unknown-subject';
  */
 export type SaveResult = 'persisted' | 'offline' | 'noop';
 
+export interface SaveOptions {
+  /** Resolve only after the server has fsynced the commit. */
+  durable?: boolean;
+}
+
 /**
  * Origin tag attached to Loro commits the runtime writes for housekeeping
  * (datatype-tag mirroring, post-save bookkeeping, etc.). Commits with this
@@ -3465,7 +3470,13 @@ export class Resource<C extends OptionalClass = any> {
   /** The save currently running, so a concurrent `save()` waits for it. */
   private _inflightSave?: Promise<SaveResult>;
 
-  public async save(): Promise<SaveResult> {
+  /**
+   * Save the pending changes. With `{ durable: true }` the returned promise
+   * resolves only after the server fsynced the commit (a server that does not
+   * support durable commits acknowledges as usual). `Store.setDefaultDurable`
+   * makes it the default for every save.
+   */
+  public async save(opts: SaveOptions = {}): Promise<SaveResult> {
     // Two saves running at once each sign their own commit from the same
     // state. For a draft that is two genesis certificates, so two subjects
     // for one resource: the second rename evicts the first, and every alias
@@ -3474,10 +3485,10 @@ export class Resource<C extends OptionalClass = any> {
     if (this._inflightSave) {
       await this._inflightSave.catch(() => undefined);
 
-      return this.save();
+      return this.save(opts);
     }
 
-    this._inflightSave = this.saveOnce();
+    this._inflightSave = this.saveOnce(opts.durable === true);
 
     try {
       return await this._inflightSave;
@@ -3486,7 +3497,7 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  private async saveOnce(): Promise<SaveResult> {
+  private async saveOnce(durable: boolean): Promise<SaveResult> {
     const hasChanges = this.hasUnsavedChanges();
 
     if (
@@ -3504,7 +3515,7 @@ export class Resource<C extends OptionalClass = any> {
     const closeSave = perfSpan('resource.save');
 
     try {
-      return await this._saveInner(hasChanges);
+      return await this._saveInner(hasChanges, durable);
     } finally {
       closeSave();
       this._saveDepth--;
@@ -3512,7 +3523,10 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
-  private async _saveInner(hasChanges: boolean): Promise<SaveResult> {
+  private async _saveInner(
+    hasChanges: boolean,
+    durable: boolean,
+  ): Promise<SaveResult> {
     const agent = this.store.getAgent();
 
     if (!agent) {
@@ -3591,6 +3605,8 @@ export class Resource<C extends OptionalClass = any> {
         // Offline: the snapshot and the outbox entry are written together.
         await this.saveOffline(hasChanges);
 
+        if (durable) this.store.outbox.markDurable(this.subject);
+
         return 'offline';
       }
 
@@ -3599,6 +3615,8 @@ export class Resource<C extends OptionalClass = any> {
         // exports the accumulated Loro delta, signs ONE commit, sends.
         this.store.outbox.markDirty(this.subject);
       }
+
+      if (durable) this.store.outbox.markDurable(this.subject);
 
       // Await the drain so `save()` resolves only once the server has
       // acked. The keystroke path is unaffected — `useValue` debounces

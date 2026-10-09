@@ -576,7 +576,9 @@ Both matter because `iroh_transport` holds the router and node identity in
 |---|---|
 | Drive reconciles across a real OS process boundary | `lib/tests/cross_process_sync.rs` |
 | Iroh NodeID survives an unclean kill (`abort()`, no flush) | `lib/tests/identity_durability.rs` |
-| Acknowledged commits (raw store and full `Db`) survive `kill -9` under group/immediate durability | `lib/tests/durable_writes.rs` |
+| Acknowledged commits (raw store and full `Db`) survive `kill -9` under floor `always`/`immediate`, and under floor `none` when the writer asked for durability (`flush_durable`); plain `none` writes may be lost (ignored test shows it) | `lib/tests/durable_writes.rs` |
+| `COMMIT_DURABLE` over WebSocket and `POST /commit?durable=true` are acknowledged only after an fsync (counter `DURABLE_TRANSACTIONS`); a plain commit under floor `none` is not | `server/tests/it/ws_commit.rs` (`durable_commit_is_acknowledged_after_an_fsync`) |
+| `@tomic/lib` sends `COMMIT_DURABLE` only when asked and advertised, falls back to `COMMIT`; `save({ durable })`, `setDefaultDurable` and a durable retry from the outbox reach `postCommit` | `browser/lib/src/websockets.test.ts`, `browser/lib/src/durable-commits.test.ts` |
 | Query `count` / collection totals never include rows the agent cannot read | `lib/tests/query_count_leak.rs` |
 | Paired peer + its relay/direct addresses survive a kill | `lib/tests/identity_durability.rs` |
 | Two whole servers pair via `POST /iroh-sync` and reconcile | `server/tests/it/iroh_pairing.rs` |

@@ -48,21 +48,25 @@ fn create_all_tables(tx: &redb::WriteTransaction) {
     }
 }
 
-/// When a write is acknowledged relative to the fsync that makes it survive a
-/// crash (`kill -9`, power loss).
+/// The server-side floor for when a write is acknowledged relative to the
+/// fsync that makes it survive a crash (`kill -9`, power loss).
 ///
-/// * [`Durability::Group`] (default): a write returns only after the fsync of
-///   the transaction that holds it, and concurrent writers share one
-///   transaction and one fsync (group commit).
-/// * [`Durability::Immediate`]: every write pays its own fsync.
-/// * [`Durability::None`]: a write returns at once and becomes durable on the
-///   next periodic [`KvStore::flush`] (100 ms in the server), so an
-///   acknowledged write can be lost in a crash. Fastest.
+/// * [`Durability::None`] (default): a write returns at once and becomes
+///   durable on the next periodic [`KvStore::flush`] (100 ms in the server), so
+///   an acknowledged write can be lost in a crash. A caller that needs more
+///   asks per write with [`KvStore::flush_durable`], which joins a shared
+///   group-commit fsync and returns once everything written so far is on disk.
+/// * [`Durability::Always`]: every write returns only after the fsync of the
+///   transaction that holds it, and concurrent writers share one transaction
+///   and one fsync (group commit). Spelled `group` in releases before the
+///   per-commit flag; still accepted.
+/// * [`Durability::Immediate`]: every write pays its own fsync, without group
+///   commit. Kept for tests and benchmarks; there is no reason to run it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Durability {
     Immediate,
+    Always,
     #[default]
-    Group,
     None,
 }
 
@@ -72,10 +76,10 @@ impl std::str::FromStr for Durability {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "immediate" => Ok(Durability::Immediate),
-            "group" => Ok(Durability::Group),
+            "always" | "group" => Ok(Durability::Always),
             "none" => Ok(Durability::None),
             other => Err(format!(
-                "unknown durability '{other}', expected immediate, group or none"
+                "unknown durability '{other}', expected none or always (or immediate)"
             )),
         }
     }
@@ -85,7 +89,7 @@ impl std::fmt::Display for Durability {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Durability::Immediate => "immediate",
-            Durability::Group => "group",
+            Durability::Always => "always",
             Durability::None => "none",
         })
     }
@@ -452,7 +456,7 @@ impl RedbStore {
     /// `self.durability` promises.
     fn write_ops(&self, ops: &[Operation]) -> AtomicResult<()> {
         match self.durability {
-            Durability::Group => self.group_write(ops),
+            Durability::Always => self.group_write(ops),
             Durability::Immediate => self.write_batches(&[ops], true),
             Durability::None => {
                 self.write_batches(&[ops], false)?;
@@ -854,6 +858,28 @@ impl KvStore for RedbStore {
         }
     }
 
+    fn flush_durable(&self) -> AtomicResult<()> {
+        // `Always` and `Immediate` already fsynced every write before it
+        // returned: nothing is pending.
+        if self.durability != Durability::None {
+            return Ok(());
+        }
+        // Everything written so far, by any thread, is covered by the next
+        // durable commit. Run it through group commit so concurrent durable
+        // requests share one fsync. The sentinel makes the transaction
+        // non-empty, so redb really writes and fsyncs a commit point.
+        self.dirty.store(false, Ordering::SeqCst);
+        let sentinel = Operation {
+            tree: Tree::DriveMapping,
+            method: Method::Insert,
+            key: b"__flush_sentinel__".to_vec(),
+            val: Some(Vec::new()),
+        };
+        self.group_write(&[sentinel]).inspect_err(|_| {
+            self.dirty.store(true, Ordering::SeqCst);
+        })
+    }
+
     fn len(&self, tree: Tree) -> AtomicResult<usize> {
         let tx = self
             .db
@@ -1022,19 +1048,22 @@ mod tests {
 
     #[test]
     fn parse_durability() {
-        assert_eq!("group".parse(), Ok(Durability::Group));
+        assert_eq!("group".parse(), Ok(Durability::Always));
+        assert_eq!("always".parse(), Ok(Durability::Always));
         assert_eq!("Immediate".parse(), Ok(Durability::Immediate));
         assert_eq!(" none ".parse(), Ok(Durability::None));
         assert!("maybe".parse::<Durability>().is_err());
-        assert_eq!(Durability::default(), Durability::Group);
+        assert_eq!(Durability::default(), Durability::None);
     }
 
     /// Every concurrent group write is applied exactly once and acknowledged,
     /// whichever writer ended up leading.
     #[test]
     fn group_commit_applies_every_concurrent_write() {
-        let store = Arc::new(RedbStore::new_file(&temp_path("group")).unwrap());
-        assert_eq!(store.durability(), Durability::Group);
+        let store = Arc::new(
+            RedbStore::new_file_with_durability(&temp_path("group"), Durability::Always).unwrap(),
+        );
+        assert_eq!(store.durability(), Durability::Always);
         let handles: Vec<_> = (0..8)
             .map(|w| {
                 let store = store.clone();

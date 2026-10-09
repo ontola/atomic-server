@@ -45,7 +45,12 @@ pub async fn post_commit(
         }
     };
     crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
-    let message = apply_commit_json(store, &context.origin, &body, None).await?;
+    // `?durable=true`: a property of this request, not of the signed commit.
+    let durable = req
+        .query_string()
+        .split('&')
+        .any(|pair| matches!(pair, "durable" | "durable=true" | "durable=1"));
+    let message = apply_commit_json(store, &context.origin, &body, None, durable).await?;
 
     Ok(HttpResponse::Ok()
         .content_type("application/ad+json")
@@ -63,6 +68,7 @@ pub async fn apply_commit_json(
     origin: &str,
     body: &str,
     source_id: Option<String>,
+    durable: bool,
 ) -> AtomicServerResult<String> {
     let message = ingest_commit_json(
         store,
@@ -70,6 +76,17 @@ pub async fn apply_commit_json(
         &CommitIngestOpts::hub(source_id, Some(origin.to_string())),
     )
     .await?;
+
+    if durable {
+        // The commit is applied; do not acknowledge it before an fsync covers
+        // it (and everything applied before it). Concurrent durable requests
+        // share that fsync inside the store. Off the async workers: it waits
+        // on the disk.
+        let store = store.clone();
+        tokio::task::spawn_blocking(move || store.flush_durable())
+            .await
+            .map_err(|e| format!("durable flush task failed: {e}"))??;
+    }
 
     crate::metrics::commit_applied();
 

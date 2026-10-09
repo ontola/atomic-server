@@ -25,6 +25,9 @@ export const Tag = {
   GET_MANY: 0x15,
   /** One complete UPDATE or ERROR frame per requested subject, in order. */
   GET_MANY_RESULT: 0x16,
+  /** A COMMIT the server acknowledges only after an fsync. Same payload as
+   *  COMMIT. Only sent to a server whose AUTH_OK lists `commit-durable`. */
+  COMMIT_DURABLE: 0x17,
   SUB: 0x20,
   UNSUB: 0x21,
   SYNC: 0x30,
@@ -168,7 +171,9 @@ export type ServerCapability =
    *  it receives `did:ad:` subjects. */
   | 'canonical-scheme'
   | 'ephemeral'
-  | 'get-many';
+  | 'get-many'
+  /** Understands `COMMIT_DURABLE` (0x17): `COMMIT_OK` only after an fsync. */
+  | 'commit-durable';
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
@@ -362,10 +367,11 @@ export function decodeGetManyResult(
 export function encodeCommit(
   requestId: number,
   commitJson: string,
+  durable = false,
 ): Uint8Array {
   const payload = encoder.encode(commitJson);
   const buf = new Uint8Array(3 + payload.length);
-  buf[0] = Tag.COMMIT;
+  buf[0] = durable ? Tag.COMMIT_DURABLE : Tag.COMMIT;
   writeU16(buf, 1, requestId);
   buf.set(payload, 3);
 
@@ -927,6 +933,7 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.DESTROY]: 'DESTROY',
   [Tag.COMMIT]: 'COMMIT',
   [Tag.COMMIT_OK]: 'COMMIT_OK',
+  [Tag.COMMIT_DURABLE]: 'COMMIT_DURABLE',
   [Tag.GET_MANY]: 'GET_MANY',
   [Tag.GET_MANY_RESULT]: 'GET_MANY_RESULT',
   [Tag.SUB]: 'SUB',

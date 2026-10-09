@@ -399,6 +399,7 @@ export class Client {
     commit: Commit,
     /** URL to post to, e.g. https://atomicdata.dev/commit */
     endpoint: string,
+    opts: { durable?: boolean } = {},
   ): Promise<Commit> {
     // `true`: keep the genesis subject in the network body so the server uses
     // the real (cert-minted) DID instead of re-deriving it from the signature.
@@ -408,7 +409,10 @@ export class Client {
     let response: Response;
 
     try {
-      response = await this.fetch(endpoint, {
+      // `?durable=true`: acknowledge only after an fsync. A server that
+      // predates the flag ignores the query string.
+      const url = opts.durable ? withDurableParam(endpoint) : endpoint;
+      response = await this.fetch(url, {
         headers: requestHeaders,
         method: 'POST',
         body: serialized,
@@ -557,4 +561,12 @@ function didResolutionBaseUrl(
   }
 
   return undefined;
+}
+
+/** `endpoint` with `durable=true` in its query string. */
+export function withDurableParam(endpoint: string): string {
+  const url = new URL(endpoint);
+  url.searchParams.set('durable', 'true');
+
+  return url.toString();
 }

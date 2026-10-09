@@ -191,6 +191,14 @@ export interface StoreOpts {
   connect?: boolean;
   /** Native shells have no ClientDb, so a disconnected node cannot save edits. */
   requireOnlineWrites?: boolean;
+  /**
+   * Send every commit as a durable commit: the server acknowledges it only
+   * after an fsync, so an acknowledged save survives a server crash. Slower
+   * than the default (the server's floor, usually 100 ms flush ticks).
+   * Per save: `resource.save({ durable: true })`. Can be changed later with
+   * {@link Store.setDefaultDurable}.
+   */
+  defaultDurable?: boolean;
 }
 
 export interface StoreSyncStatus {
@@ -825,8 +833,21 @@ export class Store {
   private client: Client;
   public readonly requireOnlineWrites: boolean;
 
+  /** Whether commits are sent as durable unless a save says otherwise. */
+  private _defaultDurable = false;
+
+  /** Make every commit durable (or not) by default. See `StoreOpts.defaultDurable`. */
+  public setDefaultDurable(durable: boolean): void {
+    this._defaultDurable = durable;
+  }
+
+  public get defaultDurable(): boolean {
+    return this._defaultDurable;
+  }
+
   public constructor(opts: StoreOpts = {}) {
     this.requireOnlineWrites = opts.requireOnlineWrites ?? false;
+    this._defaultDurable = opts.defaultDurable ?? false;
     initOntologies();
     this._resources = new Map();
     this.webSockets = new Map();
@@ -1705,6 +1726,8 @@ export class Store {
     }
 
     const endpoint = new URL('/commit', this.serverUrl).toString();
+    // Asked for by the save that queued the entry, or the store's default.
+    const durable = entry.durable ? true : undefined;
 
     // Step 0: a queued destroy supersedes everything else for this subject.
     // Handled BEFORE the cold-drain `getResource` below, which would refetch
@@ -1712,6 +1735,7 @@ export class Store {
     if (entry.signedDestroy) {
       await this.drainDestroy(subject, entry.signedDestroy, endpoint, {
         neverSynced: !!entry.signedGenesis,
+        durable,
       });
 
       return;
@@ -1738,7 +1762,7 @@ export class Store {
           ?.appliedCommitSignatures.add(genesis.signature);
       }
 
-      const created = await this.postCommit(genesis, endpoint);
+      const created = await this.postCommit(genesis, endpoint, { durable });
       // Publish the acknowledgement before ResourceSaved listeners decide
       // whether this new resource can be subscribed on the server.
       this.outbox.clearGenesis(subject);
@@ -1950,7 +1974,7 @@ export class Store {
     let created: Commit;
 
     try {
-      created = await this.postCommit(commit, endpoint);
+      created = await this.postCommit(commit, endpoint, { durable });
     } catch (e) {
       // Pending-deps rejection: the delta we just sent starts past ops the
       // server never received (an earlier commit was lost after the save
@@ -2037,7 +2061,7 @@ export class Store {
     subject: string,
     destroy: Commit,
     endpoint: string,
-    opts: { neverSynced: boolean },
+    opts: { neverSynced: boolean; durable?: boolean },
   ): Promise<void> {
     if (!opts.neverSynced) {
       // Registered before the POST like every own commit: should the server
@@ -2049,7 +2073,9 @@ export class Store {
       }
 
       try {
-        await this.postCommit(destroy, endpoint);
+        await this.postCommit(destroy, endpoint, {
+          durable: opts.durable,
+        });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
 
@@ -7148,13 +7174,21 @@ export class Store {
   }
 
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
-  public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
+  public async postCommit(
+    commit: Commit,
+    endpoint: string,
+    opts: { durable?: boolean } = {},
+  ): Promise<Commit> {
     const close = perfSpan('store.postCommit', {
       genesis: !!commit.isGenesis,
     });
 
     try {
-      const created = await this.sendCommit(commit, endpoint);
+      const created = await this.sendCommit(
+        commit,
+        endpoint,
+        opts.durable ?? this._defaultDurable,
+      );
       close('ok');
       this.pushCommitLog(
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
@@ -7188,12 +7222,16 @@ export class Store {
    * the "client gets its own commit as a subscription push" echo. HTTP
    * commits still work; they just always reach every subscriber.
    */
-  private async sendCommit(commit: Commit, endpoint: string): Promise<Commit> {
+  private async sendCommit(
+    commit: Commit,
+    endpoint: string,
+    durable: boolean,
+  ): Promise<Commit> {
     const ws = this.getWebSocketForEndpoint(endpoint);
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
-        return await ws.postCommit(commit);
+        return await ws.postCommit(commit, { durable });
       } catch (e) {
         if (e instanceof RequestCancelledError) throw e;
         // A server refusal is an answer, not a broken transport. Retrying the
@@ -7215,7 +7253,7 @@ export class Store {
       }
     }
 
-    return this.client.postCommit(commit, endpoint);
+    return this.client.postCommit(commit, endpoint, { durable });
   }
 
   private getWebSocketForEndpoint(endpoint: string): WSClient | undefined {
