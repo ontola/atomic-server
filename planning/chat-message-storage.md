@@ -83,3 +83,70 @@ Two layers, the safe one first.
 
 Layer 1 first: measure per tree, build in its own PR. Layer 2 needs Joep's go on
 the versioning approach before code.
+
+## Short property keys in the signed document: measured (2026-10-09)
+
+Joep approved a protocol version for short property keys. Before building,
+measured on the real rows of one "hallo" message (genesis commit row 1837 B raw,
+1067 B deflated; message row 540 B raw, 350 B deflated):
+
+| Change to the commit row | Deflated | Gain |
+| --- | --- | --- |
+| Replace `https://atomicdata.dev/properties/` and `/classes/` by one byte | 1032 B | 35 B (3%) |
+| Drop one copy of the signature text (subject is derived from it) | 991 B | 76 B (7%) |
+| Store `loroUpdate` as msgpack `bin`, not an int array | about 0 after deflate | on raw rows only |
+
+Deflate already folds the repeated URLs, so a fixed dictionary of short keys
+inside the Loro document saves about 35 B of 3.3 KB per message, and it costs a
+protocol version, a second signing form and a dictionary that must never change.
+**Recommendation: do not build it.**
+
+What is left in the commit row is mostly incompressible identifiers written as
+base64 text: the subject/signature (87 B, twice), the agent id (57 B), the parent
+subject (88 B, twice, once in `properties` and once in the update) and the Loro
+peer id. The real floor is raw bytes for these, which are protocol-neutral
+storage changes:
+
+1. Do not store the signature twice (subject is derived from it): about 75 B.
+2. Store ids as raw bytes in the row (base64 to 32/64 B): about 25% of the id bytes.
+3. Chat log / frozen resource (31 to 44 B per message, measured earlier) remains
+   the only change that is an order of magnitude, and does not touch the signed
+   document format.
+
+## On disk, not just in rows (2026-10-09)
+
+`measure_chat_message_bytes` counts key and value bytes. The redb file grows
+about twice that: 2000 messages, `redb::DatabaseStats` on the file.
+
+| per message | bytes |
+| --- | --- |
+| keys and values (`stored_bytes`) | 3.3 KB |
+| branch keys (`metadata_bytes`) | 0.3 KB |
+| slack in half-full pages (`fragmented_bytes`) | 1.7 to 2.6 KB |
+| free pages not yet reused | 0.5 to 1.6 KB |
+| **file growth** | **6 to 7.4 KB** |
+
+A redb B-tree page holds 4 KB and splits in half, so pages sit 50 to 65% full
+(a plain redb test: 150 B index rows cost 250 to 350 B allocated, 1.4 KB values
+2.9 KB). Sequential keys are worse than random ones, so key order is no fix.
+Every byte cut from a row saves about two on disk, and fewer, larger rows save
+more than shorter ones.
+
+Where the 3.3 KB sits now: genesis commit row 1.2 KB, message row 0.45 KB,
+snapshot delta 0.35 KB, `PropValSub` 0.6 KB (4 rows), `ValPropSub` 0.33 KB
+(2 rows), search 0.32 KB. Each index row is about 160 B, of which 93 B is the
+subject.
+
+### Ranked options
+
+| step | data | disk | format change |
+| --- | --- | --- | --- |
+| A. Subject ids: a subject dictionary (subject to a 4 to 8 byte id) used in index keys and search postings | -0.7 KB | about -1.3 KB | storage only, migration as in #2117 |
+| B. One record per created resource: `lastCommit` of a genesis-only resource is derived from its subject (same signature), so no snapshot delta; the message row is materialized from the commit row on read | -0.8 KB | about -1.4 KB | storage only |
+| C. Index less: no `PropValSub` row for text values (full-text search covers them) | -0.15 KB | about -0.3 KB | none |
+| D. Chat log: messages are entries in one Loro document per chat, stored in chunks | to about 0.1 KB | to about 0.2 KB | model change |
+
+A to C together: from about 3.3 KB data and 6.5 KB disk to about 1.6 KB and
+3 KB per message. D is the only order of magnitude, but a message then is no
+longer a resource of its own (no own URL, rights or commits; edits and
+reactions live in the chat document).
