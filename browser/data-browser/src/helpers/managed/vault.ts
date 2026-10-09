@@ -274,6 +274,41 @@ export class VaultSessionEndedError extends Error {
   }
 }
 
+/** The control plane does not offer this route (yet): a 404 or a non-JSON page. */
+export class VaultNotAvailableError extends Error {
+  constructor() {
+    super(vaultNotAvailableMessage());
+    this.name = /* @wc-ignore */ 'VaultNotAvailableError';
+  }
+}
+
+function vaultNotAvailableMessage(): string {
+  return 'This is not available on your account yet.';
+}
+
+function storageNotAvailableMessage(): string {
+  return 'Storage details are not available on your account yet.';
+}
+
+/** Turn "the route is missing" into a plain sentence about storage. */
+async function storageApi<T>(
+  path: string,
+  init?: RequestInit & { body?: string },
+): Promise<T> {
+  try {
+    return await api<T>(path, init);
+  } catch (e) {
+    if (
+      e instanceof VaultNotAvailableError ||
+      (e instanceof Error && /\(404\)$/.test(e.message))
+    ) {
+      throw new Error(storageNotAvailableMessage());
+    }
+
+    throw e;
+  }
+}
+
 async function api<T>(
   path: string,
   init?: RequestInit & { body?: string },
@@ -298,7 +333,13 @@ async function api<T>(
     );
   }
 
-  return (await response.json()) as T;
+  // A control plane that does not have this route yet can answer with its
+  // HTML app shell and a 200. Never let a parse error reach a person.
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new VaultNotAvailableError();
+  }
 }
 
 export async function enrollVault(
@@ -515,7 +556,9 @@ export async function getVaultUsage(
   drivePseudonym: string,
   signal?: AbortSignal,
 ): Promise<VaultUsage> {
-  return api<VaultUsage>(`/cloud-vault/${drivePseudonym}/usage`, { signal });
+  return storageApi<VaultUsage>(`/cloud-vault/${drivePseudonym}/usage`, {
+    signal,
+  });
 }
 
 /**
@@ -527,10 +570,13 @@ export async function freeUpVaultStorage(
   drivePseudonym: string,
   includeUndoWindow: boolean,
 ): Promise<VaultFreeUpResult> {
-  return api<VaultFreeUpResult>(`/cloud-vault/${drivePseudonym}/free-up`, {
-    method: 'POST',
-    body: JSON.stringify({ include_undo_window: includeUndoWindow }),
-  });
+  return storageApi<VaultFreeUpResult>(
+    `/cloud-vault/${drivePseudonym}/free-up`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ include_undo_window: includeUndoWindow }),
+    },
+  );
 }
 
 /**

@@ -1009,7 +1009,7 @@ export function GettingStartedFlow({
     <Shell>
       {step === 'welcome' && !createTarget ? (
         <div role='status' aria-label='Loading account'>
-          <Spinner />
+          <Spinner size='4rem' />
         </div>
       ) : step === 'opening-workspace' ? (
         <Swap key='opening-workspace'>

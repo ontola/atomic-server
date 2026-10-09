@@ -20,6 +20,12 @@ commands.set('ontology', () =>
   ),
 );
 
+commands.set('connect', () =>
+  import('./commands/connect.js').then(m =>
+    m.connectCommand(process.argv.slice(3)),
+  ),
+);
+
 commands.set('init', () =>
   import('./commands/init.js').then(m => m.initCommand(process.argv.slice(3))),
 );

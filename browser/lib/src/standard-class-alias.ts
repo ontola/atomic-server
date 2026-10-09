@@ -1,5 +1,7 @@
-// @wc-ignore-file
-import { core, dataBrowser, server } from '@tomic/lib';
+import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
+import { server } from './ontologies/server.js';
+
 const aliases: Record<string, string> = {
   file: server.classes.file,
   folder: dataBrowser.classes.folder,

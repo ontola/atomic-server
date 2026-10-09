@@ -86,6 +86,16 @@ export function startsWithAtomicScheme(raw: string): boolean {
   return raw.startsWith(ATOMIC_PREFIX) && !isLegacyAtomicLink(raw);
 }
 
+/**
+ * True for the client's `_new:…` placeholder subject, however the store or
+ * server has since spelled it (`_new:x`, `internal:/_new:x`,
+ * `https://host/_new:x`). A placeholder names something that never reached a
+ * server, so there is nothing to delete there.
+ */
+export function isNewPlaceholderSubject(raw: string): boolean {
+  return /^(?:[a-z][a-z0-9+.-]*:\/\/[^/]+\/|internal:\/|\/)?_new:/i.test(raw);
+}
+
 export function isAtomicIdentifier(raw: string): boolean {
   return startsWithAtomicScheme(raw) || raw.startsWith(DID_AD_PREFIX);
 }

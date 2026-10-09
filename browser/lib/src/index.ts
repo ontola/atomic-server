@@ -105,8 +105,18 @@ export * from './pairing.js';
 export * from './loro-loader.js';
 export * from './page-request-signal.js';
 export * from './presence.js';
+export * from './json-ad-compact.js';
+export * from './subject-refs.js';
+export * from './standard-class-alias.js';
+export * from './class-schema.js';
+export * from './assistant-tools.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker, STORAGE_BLOCKED_ERROR_NAME } from './client-db.js';
+export {
+  getIndexMigration,
+  subscribeIndexMigration,
+  type IndexMigrationProgress,
+} from './client-db-migration.js';
 export {
   attributionForVersion,
   mergeHistoryAttributions,
@@ -125,6 +135,7 @@ export {
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
+  isNotEnrolledMessage,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';
@@ -224,6 +235,7 @@ export {
   type RecordRunOptions,
   type RunStatus,
 } from './plugin-log.js';
+export * from './agent-grants.js';
 export * from './issue-access-agent.js';
 export {
   createApp,

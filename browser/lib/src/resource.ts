@@ -18,6 +18,7 @@ import { CommitBuilder, isCommitSubject, Commit } from './commit.js';
 import {
   isAgentSubject,
   isAtomicIdentifier,
+  isNewPlaceholderSubject,
   commitSubject,
   currentAgentSubject,
   canonicalizeScheme,
@@ -2696,7 +2697,11 @@ export class Resource<C extends OptionalClass = any> {
    *  - a local-only drive materializes the commit locally, as before.
    */
   public async destroy(agent?: Agent): Promise<void> {
-    if (this.new || this._pendingGenesis) {
+    if (
+      this.new ||
+      this._pendingGenesis ||
+      isNewPlaceholderSubject(this.subject)
+    ) {
       // Never synced (a `_new:` placeholder, or a `store.newResource` whose
       // genesis is still parked on the resource because `save()` never
       // ran): no server-side tombstone needed. Also forget any queued

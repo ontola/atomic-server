@@ -167,8 +167,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
     return (
       <Main subject={subject}>
         <ContainerNarrow>
-          <p>Loading...</p>
-          <Spinner />
+          <Spinner centered />
         </ContainerNarrow>
       </Main>
     );
@@ -209,7 +208,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
-            <Suspense fallback={<Spinner />}>
+            <Suspense fallback={<Spinner centered />}>
               {websiteExportClass ? (
                 <WebsiteExportPage resource={resource} />
               ) : (
@@ -236,7 +235,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
-            <Suspense fallback={<Spinner />}>
+            <Suspense fallback={<Spinner centered />}>
               <AppPage resource={resource} />
             </Suspense>
           </ErrorBoundary>
@@ -250,7 +249,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
-            <Suspense fallback={<Spinner />}>
+            <Suspense fallback={<Spinner centered />}>
               <AtomicPluginPage resource={resource} drive={drive!} />
             </Suspense>
           </ErrorBoundary>
@@ -264,7 +263,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
-            <Suspense fallback={<Spinner />}>
+            <Suspense fallback={<Spinner centered />}>
               <PluginView resource={resource} plugin={plugin} />
             </Suspense>
           </ErrorBoundary>
@@ -276,7 +275,7 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   return (
     <Main subject={subject}>
       <ErrorBoundary>
-        <Suspense fallback={<Spinner />}>
+        <Suspense fallback={<Spinner centered />}>
           {/* A fork renders through its content class's own view, so the bar is
               the only thing telling you this is not the original. */}
           <ForkBar resource={resource} />

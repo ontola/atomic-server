@@ -1,5 +1,4 @@
 import { ensureOntologyFromJsonSchema, findSchemas } from './schemaTools';
-import { standardClassAlias } from './standardClassAlias';
 import { updateTableRows } from './updateTableRows';
 // @wc-ignore-file
 import { websiteTools } from '@chunks/Website/websiteTools';
@@ -7,15 +6,20 @@ import { useAppSetup } from '../../components/AppSetup/AppSetupProvider';
 import { listAppSetups } from '../../components/AppSetup/registry';
 import { previewEventSchema, previewTrigger } from './previewTrigger';
 import {
-  Client,
-  commits,
   core,
-  dataBrowser,
-  server,
+  createResourceFromCompact,
+  expandSubject,
+  getClassesOnDrive,
+  queryResources,
+  readResourceCompact,
+  semanticSearch,
+  setResourceProperty,
+  shortenRefsDeep,
+  shortenSubject,
+  toClassObject,
   useStore,
   type JSONValue,
   type Resource,
-  type Store,
 } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
 import { discoverIntegrations } from './discoverIntegrations';
@@ -59,23 +63,8 @@ import {
   resolveView,
 } from '@chunks/TablePage/tableOps';
 import { TABLE_TEMPLATES } from '@chunks/TablePage/tableTemplates';
-import {
-  expandSubject,
-  shortenRefsDeep,
-  shortenSubject,
-} from '@helpers/subjectRefs';
-import { getClassesOnDrive, toClassObject } from './atomicSchemaHelpers';
 import { useDocumentEditAgent } from './documentEditAgent';
 import { getClassContextForAgent } from './resourceContextProviders';
-import {
-  buildClassContext,
-  coerceValueIn,
-  compactValueOut,
-  describeClassCompact,
-  fromCompact,
-  resolveKey,
-  toCompact,
-} from './jsonAdCompact';
 import type { AIModelIdentifier } from './types';
 import {
   buildDashboardFromSpec,
@@ -460,21 +449,6 @@ const viewConfigShape = {
     ),
 };
 
-const getClassesString = async (
-  resource: Resource,
-  store: Store,
-): Promise<string> => {
-  const classes = [];
-
-  for await (const cls of resource
-    .getClasses()
-    .map(async x => store.getResource(x))) {
-    classes.push(cls.title);
-  }
-
-  return classes.join(', ');
-};
-
 interface UseAtomicMCPToolsProps {
   onResourceEdited?: (originalResource: Resource) => void;
   editModel: AIModelIdentifier;
@@ -538,51 +512,6 @@ export function useAtomicMCPTools({
   };
   const { verifyApp } = useAppVerifier();
 
-  /** Resolves a `@class` shortname (or title) to a class subject on the
-   *  current drive. Full URLs and `#refs` pass through/expand. */
-  const resolveClass = async (nameOrRef: string): Promise<string> => {
-    const nameOrSubject = expandSubject(nameOrRef);
-
-    if (Client.isValidSubject(nameOrSubject)) {
-      return nameOrSubject;
-    }
-
-    const standard = standardClassAlias(nameOrSubject);
-    if (standard) return standard;
-
-    const classSubjects = await getClassesOnDrive(drive, store);
-    const wanted = nameOrSubject.toLowerCase();
-    const matches: string[] = [];
-
-    for (const subject of classSubjects) {
-      const resource = await store.getResource(subject);
-      const shortname = resource.get(core.properties.shortname) as
-        | string
-        | undefined;
-
-      if (
-        shortname?.toLowerCase() === wanted ||
-        resource.title.toLowerCase() === wanted
-      ) {
-        matches.push(subject);
-      }
-    }
-
-    if (matches.length === 1) {
-      return matches[0];
-    }
-
-    if (matches.length > 1) {
-      throw new Error(
-        `Ambiguous class "${nameOrSubject}": ${matches.join(', ')}. Use the full class URL.`,
-      );
-    }
-
-    throw new Error(
-      `Unknown class "${nameOrSubject}". Use find_schema to list available classes, or pass a full class URL.`,
-    );
-  };
-
   /** Resolves a table reference and checks it really is a table. */
   const resolveTable = async (reference: string) => {
     const table = await store.getResource(expandSubject(reference));
@@ -636,33 +565,14 @@ export function useAtomicMCPTools({
             )
             .optional(),
         }),
-        execute: async ({ query, limit, parents, text_query }) => {
-          if (limit < 1 || limit > 50) {
-            throw new Error('Limit must be between 1 and 50');
-          }
-
-          const results = await store.semanticSearch(query, {
-            limit,
-            parents:
-              parents && parents.length !== 0
-                ? parents.map(expandSubject)
-                : [drive],
-            text_query,
-          });
-
-          return await Promise.all(
-            results.map(async res => {
-              const r = await store.getResource(res.subject);
-
-              return {
-                subject: shortenSubject(res.subject),
-                title: r.title,
-                classes: await getClassesString(r, store),
-                chunk: res.chunk,
-              };
+        execute: async ({ query, limit, parents, text_query }) =>
+          shortenRefsDeep(
+            await semanticSearch(store, query, {
+              limit,
+              parents: parents && parents.length !== 0 ? parents : [drive],
+              textQuery: text_query,
             }),
-          );
-        },
+          ),
         strict: true,
       }),
       [TOOL_NAMES.QUERY]: tool({
@@ -696,82 +606,14 @@ export function useAtomicMCPTools({
             .describe('The max number of results to return. Default is 30.')
             .default(30),
         }),
-        execute: async ({
-          select = [
-            core.properties.name,
-            core.properties.shortname,
-            server.properties.filename,
-          ],
-          where,
-          limit,
-          class: classRef,
-        }) => {
+        execute: async ({ select, where, limit, class: classRef }) => {
           try {
-            const classSubject = classRef
-              ? await resolveClass(classRef)
-              : undefined;
-            const ctx = classSubject
-              ? await buildClassContext(store, [classSubject])
-              : undefined;
-
-            const whereObj: Record<string, string | number | string[]> = {};
-            const filterProps: string[] = [];
-
-            for (const { property, value } of where) {
-              if (!ctx && !Client.isValidSubject(property)) {
-                return `Error: Invalid property subject in where clause: '${property}'. Pass \`class\` to use shortnames.`;
-              }
-
-              const info = ctx
-                ? resolveKey(ctx, property)
-                : { subject: property, shortname: property, datatype: '' };
-              const coerced = coerceValueIn(info, value as JSONValue);
-              // The query index matches array membership on scalars.
-              whereObj[info.subject] = (
-                Array.isArray(coerced) && coerced.length === 1
-                  ? coerced[0]
-                  : coerced
-              ) as string | number | string[];
-              filterProps.push(info.subject);
-            }
-
-            if (classSubject) {
-              whereObj[core.properties.isA] = classSubject;
-            }
-
-            const results = await store.search('', {
-              filters: whereObj,
-              limit,
-              include: true,
-            });
-
-            const resources = await Promise.all(
-              results.map(subject => store.getResource(subject)),
-            );
-
-            const selectProps = ctx
-              ? select.map(s => resolveKey(ctx, s).subject)
-              : select;
-            const props = Array.from(new Set([...selectProps, ...filterProps]));
-
             return shortenRefsDeep(
-              resources.map(res => {
-                const obj: Record<string, unknown> = {
-                  '@id': res.subject,
-                };
-
-                for (const prop of props) {
-                  const val = res.get(prop);
-
-                  if (val) {
-                    const info = ctx?.bySubject.get(prop);
-                    obj[info?.shortname ?? prop] = info
-                      ? compactValueOut(info, val as JSONValue)
-                      : val;
-                  }
-                }
-
-                return obj;
+              await queryResources(store, drive, {
+                class: classRef,
+                where: where as { property: string; value: JSONValue }[],
+                select,
+                limit,
               }),
             );
           } catch (error) {
@@ -804,22 +646,18 @@ export function useAtomicMCPTools({
 
             for (const subjectOrRef of subjects) {
               const subject = expandSubject(subjectOrRef);
-              const res = await store.getResource(subject);
+              let entry: Record<string, unknown>;
 
-              if (res.error) {
-                result[subject] = `Error: ${res.error.message}`;
+              try {
+                entry = await readResourceCompact(store, subject, {
+                  includeCommitData,
+                });
+              } catch (error) {
+                result[subject] = `Error: ${(error as Error).message}`;
                 continue;
               }
 
-              const classes = res.getClasses();
-              const ctx = await buildClassContext(store, classes);
-              const compact = await toCompact(store, res, {
-                includeCommitData,
-                context: ctx,
-              });
-
-              const entry: Record<string, unknown> = compact;
-              entry._schema = classes.map(c => describeClassCompact(ctx, c));
+              const res = await store.getResource(subject);
 
               // Class-specific view context: documents get _documentContent,
               // tables/chatrooms/folders/ontologies get a _view block — the
@@ -1050,19 +888,19 @@ export function useAtomicMCPTools({
           const originalResource = resource.clone();
 
           try {
-            const ctx = await buildClassContext(store, resource.getClasses());
-            const info = resolveKey(ctx, property);
-            const coerced = coerceValueIn(info, value as JSONValue);
-
-            await resource.set(info.subject, coerced);
+            const { property: resolvedProperty, value: coerced } =
+              await setResourceProperty(store, subject, property, value, {
+                // The person reviews assistant edits before they are saved.
+                save: false,
+              });
 
             // Notify parent component about the edited resource
             onResourceEdited?.(originalResource);
 
             const propertyEcho =
-              info.subject === property
+              resolvedProperty === property
                 ? property
-                : `${property} (${info.subject})`;
+                : `${property} (${resolvedProperty})`;
 
             return `Changed property ${propertyEcho} on resource ${subject} to ${JSON.stringify(coerced)}`;
           } catch (error) {
@@ -1153,42 +991,8 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             ),
         }),
         execute: async ({ jsonAD }) => {
-          const createOne = async (data: Record<string, JSONValue>) => {
-            const { isA, parent, propVals, resolved } = await fromCompact(
-              store,
-              data,
-              { resolveClass },
-            );
-
-            const parentResource = await store.getResource(parent);
-
-            if (parentResource.hasClasses(dataBrowser.classes.table)) {
-              // The parent is a table meaning the resource that is being created is a row. We should add a createdAt property to it.
-              const createdAt = propVals[commits.properties.createdAt];
-
-              if (createdAt === null || createdAt === undefined) {
-                propVals[commits.properties.createdAt] = Date.now();
-              }
-            }
-
-            const resource = await store.newResource({
-              parent,
-              isA,
-              propVals,
-            });
-
-            await resource.save();
-
-            if (
-              !parentResource.hasClasses(core.classes.ontology) &&
-              !parentResource.hasClasses(dataBrowser.classes.table)
-            ) {
-              // Notify the store that we created a resource but not if the parent is an ontology or table as in that case we don't want them to show in the sidebar.
-              await store.notifyResourceManuallyCreated(resource);
-            }
-
-            return { subject: resource.subject, resolved };
-          };
+          const createOne = (data: Record<string, JSONValue>) =>
+            createResourceFromCompact(store, drive, data);
 
           let data: unknown;
 

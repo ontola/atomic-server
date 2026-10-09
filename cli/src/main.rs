@@ -1,6 +1,6 @@
 use atomic_lib::agents::Agent;
+use atomic_lib::config::ClientConfig;
 use atomic_lib::config::Config;
-use atomic_lib::config::{ClientConfig, SharedConfig};
 use atomic_lib::mapping::Mapping;
 use atomic_lib::serialize::Format;
 use atomic_lib::{errors::AtomicResult, Storelike};
@@ -10,6 +10,7 @@ use dirs::home_dir;
 use std::{path::PathBuf, sync::Mutex};
 
 mod commit;
+mod connect;
 mod get;
 mod new;
 mod print;
@@ -133,6 +134,27 @@ enum Commands {
     Validate,
     /// Print the current agent
     Agent,
+    /// Connect this machine with its own key, approved in the app. Your agent
+    /// secret is never needed.
+    #[command(after_help = "\
+        Makes a key on this machine and prints a link to your Atomic app. There \
+        you pick which drives it may reach and whether it may edit, and click \
+        Allow. Revoke it any time under Connected apps in your account settings.\
+    ")]
+    Connect {
+        /// The server your drives live on, e.g. https://atomicdata.dev
+        #[arg(long)]
+        server: Option<String>,
+        /// Where the app runs, for the approval link. Defaults to --server.
+        #[arg(long)]
+        app: Option<String>,
+        /// The name you see in the app. Defaults to "atomic-cli on <host>".
+        #[arg(long)]
+        name: Option<String>,
+        /// Ask for edit rights too. You still decide in the app.
+        #[arg(long)]
+        write: bool,
+    },
 }
 
 #[derive(Subcommand, Clone)]
@@ -243,22 +265,11 @@ fn set_agent_config() -> CLIResult<Config> {
             Ok(found)
         }
         Err(_e) => {
-            println!(
-                "No config found at {:?}. Let's create one!",
+            Err(format!(
+                "No config found at {:?}. Run `atomic-cli connect --server <your server>` to connect this machine.",
                 agent_config_path
-            );
-            let server = promptly::prompt("What's the base url of your Atomic Server?")?;
-            let agent_secret = promptly::prompt("Enter your agent secret")?;
-            let config = atomic_lib::config::Config {
-                shared: SharedConfig {
-                    agent_secret,
-                    initial_drive: None,
-                },
-                client: Some(ClientConfig { server_url: server }),
-            };
-            config.save(&agent_config_path)?;
-            println!("New config file created at {:?}", agent_config_path);
-            Ok(config)
+            )
+            .into())
         }
     }
 }
@@ -395,12 +406,73 @@ async fn exec_command(context: &mut Context) -> AtomicResult<()> {
         Commands::Validate => {
             validate(context).await;
         }
+        Commands::Connect {
+            server,
+            app,
+            name,
+            write,
+        } => {
+            connect_command(context, server, app, name, write).await?;
+        }
         Commands::Agent => {
             let config = context.read_config();
             let agent = Agent::from_secret(&config.shared.agent_secret).unwrap();
             println!("{}", agent.subject);
         }
     };
+    Ok(())
+}
+
+async fn connect_command(
+    context: &mut Context,
+    server: Option<String>,
+    app: Option<String>,
+    name: Option<String>,
+    write: bool,
+) -> AtomicResult<()> {
+    let path = atomic_lib::config::default_config_file_path()?;
+    if path.exists() {
+        // The same file can hold a local server's own agent: never replace it
+        // without asking.
+        let replace: bool = promptly::prompt_default(
+            format!("{:?} already exists. Replace it with the new key?", path),
+            false,
+        )
+        .map_err(|e| format!("Invalid input: {}", e))?;
+        if !replace {
+            return Err("Kept the existing config.".into());
+        }
+    }
+    let server = match server {
+        Some(s) => s,
+        None => promptly::prompt("What's the base url of your Atomic Server?")
+            .map_err(|e| format!("Invalid input: {}", e))?,
+    };
+    let name = name.unwrap_or_else(|| {
+        let host = std::env::var("HOSTNAME")
+            .or_else(|_| std::env::var("COMPUTERNAME"))
+            .unwrap_or_default();
+        if host.is_empty() {
+            "atomic-cli".into()
+        } else {
+            format!("atomic-cli on {host}")
+        }
+    });
+    let config = connect::connect(
+        &context.store,
+        connect::ConnectOpts {
+            server,
+            app,
+            name,
+            write,
+        },
+    )
+    .await?;
+    config.save(&path)?;
+    println!(
+        "\nConnected. The key is stored in {:?}.\nRevoke it any time under Connected apps in your account settings.",
+        path
+    );
     Ok(())
 }
 

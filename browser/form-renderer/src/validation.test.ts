@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   isOverLength,
@@ -440,5 +441,19 @@ describe('JSON Schema limits', () => {
     expect(
       validateFieldValue(withOptions('short-text', { pattern: '(' }), 'abc'),
     ).toBeNull();
+  });
+});
+
+/** The same answers are checked against the server in `server/src/forms.rs`. */
+describe('verdicts shared with the server', () => {
+  const { cases } = JSON.parse(
+    readFileSync(
+      new URL('../shared/validation-cases.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { cases: { type: FieldBlock['type']; value: string; valid: boolean }[] };
+
+  it.each(cases)('$type $value is valid: $valid', ({ type, value, valid }) => {
+    expect(validateFieldValue(field(type, type), value) === null).toBe(valid);
   });
 });

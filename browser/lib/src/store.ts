@@ -71,6 +71,14 @@ import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
 const LOCAL_READ_DEADLINE_MS = 1_000;
+/**
+ * The same deadline while a drive sync runs. The sync keeps the local
+ * database's worker busy writing what the server sends, so a read queues
+ * behind those writes for most of the second above, and a device opening a
+ * large drive painted each sidebar item a second late. The server answers in
+ * tens of milliseconds, so it is asked almost at once.
+ */
+const LOCAL_READ_DEADLINE_DURING_SYNC_MS = 150;
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
@@ -145,6 +153,18 @@ export interface RepeatedCommitFailure {
   failures: number;
   /** Origin the writes are sent to. */
   server: string;
+  /** Drive the store was on when the write kept failing. */
+  drive?: string;
+  /** Milliseconds since the write first became dirty. */
+  ageMs: number;
+  /** Writes still waiting in the outbox, this one included. */
+  outboxSize: number;
+  /** Whether the websocket to the server was up. */
+  connected: boolean;
+  /** The write creates the resource, so it can fail for its parent. */
+  isGenesis: boolean;
+  /** A finished drive resync already re-armed this write once. */
+  rearmedAfterResync: boolean;
 }
 
 type RepeatedCommitFailureCallback = (failure: RepeatedCommitFailure) => void;
@@ -1583,6 +1603,12 @@ export class Store {
             error: e instanceof Error ? e : new Error(String(e)),
             failures: entry.failures ?? 0,
             server: this.getServerUrl(),
+            drive: this.getDrive(),
+            ageMs: Math.max(0, Date.now() - entry.enqueuedAt),
+            outboxSize: this.outbox.size,
+            connected: this._serverConnected,
+            isGenesis: entry.signedGenesis !== undefined,
+            rearmedAfterResync: entry.rearmedAfterResync === true,
           });
         },
         onBlocked: (entry, e) => {
@@ -3605,24 +3631,46 @@ export class Store {
     // Local hits come from the durable KV index in ClientDb (title,
     // description, Loro body, 1-edit prefix fuzzy, PropValSub filters).
     const clientDb = this.clientDb;
-    const kvResults =
+    const offline = !this._serverConnected && !opts.serverOnly;
+    const limit = opts.limit ?? 30;
+
+    // The local OPFS search can take a while on a large drive, so it must not
+    // delay the hosted request: both start now and run concurrently.
+    const localSearch: Promise<string[]> =
       !opts.serverOnly &&
       clientDb?.isReady &&
       typeof clientDb.search === 'function'
-        ? await clientDb.search(query, {
-            limit: opts.limit ?? 30,
-            parents: parentScope,
-            filters: opts.filters,
-          })
-        : [];
+        ? Promise.resolve()
+            .then(() =>
+              clientDb.search(query, {
+                limit,
+                parents: parentScope,
+                filters: opts.filters,
+              }),
+            )
+            .then(hits => {
+              if (hits.length > 0) {
+                searchDebug('[search] local kv →', hits.length, hits);
+                opts.onPartial?.(this.withoutDestroyed(hits));
+              }
 
-    if (kvResults.length > 0) {
-      searchDebug('[search] local kv →', kvResults.length, kvResults);
-    }
+              return hits;
+            })
+            .catch(e => {
+              // When the server can still answer, a broken local index must
+              // not take the whole search down.
+              if (offline) throw e;
+
+              searchDebug('[search] local kv failed', e);
+
+              return [] as string[];
+            })
+        : Promise.resolve([]);
 
     // Offline: hosted `/search` is unreachable. Return whatever the local
     // index has (empty if ClientDb is down).
-    if (!this._serverConnected && !opts.serverOnly) {
+    if (offline) {
+      const kvResults = await localSearch;
       searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
       return this.withoutDestroyed(kvResults);
@@ -3638,15 +3686,21 @@ export class Store {
     // returns new matches. Evict only the in-memory synthetic resource so every
     // retry observes the server's current result set.
     this._resources.delete(this.resolveSubject(searchSubject));
-    const searchResource = await this.fetchResourceFromServer(searchSubject, {
+    const serverSearch = this.fetchResourceFromServer(searchSubject, {
       noWebSocket: true,
     });
+    // Avoid an unhandled rejection if the server fails while we still await
+    // the local search.
+    serverSearch.catch(() => undefined);
+
+    const kvResults = await localSearch;
+    const searchResource = await serverSearch;
     const results = searchResource.get(server.properties.results) ?? [];
     searchDebug('[search] server search returned', results.length);
 
     return this.withoutDestroyed([
       ...new Set([...kvResults, ...results]),
-    ]).slice(0, opts.limit ?? 30);
+    ]).slice(0, limit);
   }
 
   /**
@@ -4181,7 +4235,7 @@ export class Store {
     let local = this._serverConnected
       ? await withDeadline<boolean | undefined>(
           this.hydrateFromLocalDb(subject),
-          LOCAL_READ_DEADLINE_MS,
+          this.localReadDeadlineMs(),
           undefined,
         )
       : await this.hydrateFromLocalDb(subject);
@@ -4730,6 +4784,8 @@ export class Store {
     }
   }
 
+  private warnedSchemeMismatch = new Set<string>();
+
   /** Opens a Websocket for some subject URL, or returns the existing one. */
   public getWebSocketForSubject(subject: string): WSClient | undefined {
     try {
@@ -4745,7 +4801,34 @@ export class Store {
         origin = new URL(this.serverUrl).origin;
       }
 
-      return this.webSockets.get(origin);
+      const ws = this.webSockets.get(origin);
+
+      if (ws) return ws;
+
+      // The same host under another scheme (`http://` subject, `https://`
+      // server) is this server, not a missing one: a proxy-terminated
+      // deployment whose server still names itself `http://`. Returning
+      // undefined here silently turns off subscriptions and live sync.
+      const serverOrigin = this.serverUrl
+        ? new URL(this.serverUrl).origin
+        : undefined;
+
+      if (
+        serverOrigin &&
+        origin !== serverOrigin &&
+        new URL(origin).host === new URL(serverOrigin).host
+      ) {
+        if (!this.warnedSchemeMismatch.has(origin)) {
+          this.warnedSchemeMismatch.add(origin);
+          console.warn(
+            `Subject origin ${origin} differs from the server URL ${serverOrigin} only by scheme; using the server's WebSocket. Set ATOMIC_SERVER_URL on the server to its public https URL.`,
+          );
+        }
+
+        return this.webSockets.get(serverOrigin) ?? this.getDefaultWebSocket();
+      }
+
+      return undefined;
     } catch (e) {
       throw new Error(
         `Could not open websocket for subject ${subject}: ${e.message}`,
@@ -5519,6 +5602,14 @@ export class Store {
     }
 
     this.emitSyncStatus();
+  }
+
+  /** How long a read waits for the local database before asking the
+   *  connected server instead. */
+  public localReadDeadlineMs(): number {
+    return this._driveSyncInProgress
+      ? LOCAL_READ_DEADLINE_DURING_SYNC_MS
+      : LOCAL_READ_DEADLINE_MS;
   }
 
   /** True once a drive sync has finished FOR THIS DRIVE in this session.

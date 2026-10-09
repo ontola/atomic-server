@@ -51,7 +51,7 @@ export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
           </Row>
           {canWrite && !failed ? (
             <LoadingRow>
-              <Spinner size='2rem' />
+              <Spinner size='2.5rem' />
             </LoadingRow>
           ) : (
             <div>
