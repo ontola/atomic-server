@@ -625,10 +625,6 @@ msgid "Reading schema"
 msgstr ""
 
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
-msgid "Listing user classes"
-msgstr ""
-
-#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Loading skill: <0/>"
 msgstr ""
 
@@ -12412,4 +12408,12 @@ msgstr ""
 
 #: src/views/OntologyPage/Class/ClassConstraintEditor.tsx
 msgid "Allows only"
+msgstr ""
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Searching schemas"
+msgstr ""
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Saving schema"
 msgstr ""

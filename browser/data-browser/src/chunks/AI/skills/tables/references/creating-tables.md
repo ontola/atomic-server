@@ -1,5 +1,7 @@
 # Creating Tables
 
+Before any of this: call `find_schema` to see whether a class for these rows already exists on the drive, and reuse it. To make a new row class, prefer `ensure_ontology` with a JSON Schema (constraints like `enum` and `minimum` go in the schema; renaming a shortname or changing a type makes a new property) over the manual steps below, then create the Table resource with that class as its `classtype`.
+
 ## Step-by-Step Execution
 
 ## Step 1: Define the Properties
