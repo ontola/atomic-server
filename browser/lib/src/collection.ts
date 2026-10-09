@@ -7,6 +7,7 @@ import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import { isCommitSubject } from './commit.js';
 import { core } from './ontologies/core.js';
+import { withDeadline } from './withDeadline.js';
 
 /**
  * Strips `did:ad:commit:` subjects from a member list. Commit resources don't
@@ -1208,7 +1209,19 @@ export class Collection {
       return 'no-db';
     }
 
-    const result = await this.store.queryLocalDb({
+    // While a drive sync is still pulling data, the local database may hold
+    // only part of the members (a chat of thousands of messages, say). The
+    // server has them all, so let it answer instead of a partial list, and do
+    // not queue a query behind the sync's writes first.
+    if (
+      this.store.serverConnected &&
+      this.store.isDriveSyncPulling() &&
+      !this.store.hasCompletedDriveSyncFor(drive)
+    ) {
+      return 'no-db';
+    }
+
+    const query = this.store.queryLocalDb({
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
@@ -1228,6 +1241,18 @@ export class Collection {
         : undefined,
     });
 
+    // With a server to ask, a local query that has not answered by the read
+    // deadline (a worker busy with a drive sync's writes) is no answer. A
+    // local-only parent has no server to ask, so it waits as long as it takes.
+    const result =
+      this.store.serverConnected &&
+      !(
+        typeof this.params.value === 'string' &&
+        this.store.isLocalOnlySubject(this.params.value)
+      )
+        ? await withDeadline(query, this.store.localReadDeadlineMs(), null)
+        : await query;
+
     // Worker returned no result (query error / DB not available). Don't
     // overwrite the page — `fetchPage` races us against `/query`, and a
     // late `setEmptyPage` here can clobber a server result that already
@@ -1236,9 +1261,7 @@ export class Collection {
       return 'no-db';
     }
 
-    // While a drive sync is still pulling data, the local database may hold
-    // only part of the members (a chat of thousands of messages, say). The
-    // server has them all, so let it answer instead of a partial list.
+    // The sync may have started pulling while the query ran.
     if (
       this.store.serverConnected &&
       this.store.isDriveSyncPulling() &&

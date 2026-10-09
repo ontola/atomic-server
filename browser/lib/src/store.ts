@@ -71,6 +71,14 @@ import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
 const LOCAL_READ_DEADLINE_MS = 1_000;
+/**
+ * The same deadline while a drive sync runs. The sync keeps the local
+ * database's worker busy writing what the server sends, so a read queues
+ * behind those writes for most of the second above, and a device opening a
+ * large drive painted each sidebar item a second late. The server answers in
+ * tens of milliseconds, so it is asked almost at once.
+ */
+const LOCAL_READ_DEADLINE_DURING_SYNC_MS = 150;
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
@@ -4144,7 +4152,7 @@ export class Store {
     let local = this._serverConnected
       ? await withDeadline<boolean | undefined>(
           this.hydrateFromLocalDb(subject),
-          LOCAL_READ_DEADLINE_MS,
+          this.localReadDeadlineMs(),
           undefined,
         )
       : await this.hydrateFromLocalDb(subject);
@@ -5511,6 +5519,14 @@ export class Store {
     }
 
     this.emitSyncStatus();
+  }
+
+  /** How long a read waits for the local database before asking the
+   *  connected server instead. */
+  public localReadDeadlineMs(): number {
+    return this._driveSyncInProgress
+      ? LOCAL_READ_DEADLINE_DURING_SYNC_MS
+      : LOCAL_READ_DEADLINE_MS;
   }
 
   /** True once a drive sync has finished FOR THIS DRIVE in this session.
