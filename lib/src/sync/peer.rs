@@ -160,7 +160,11 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     match relay_url {
         Ok(Some(url)) => tracing::info!("Iroh relay connected: {url}"),
         Ok(None) => tracing::warn!("Iroh relay: none (direct connections only)"),
-        Err(_) => tracing::warn!("Iroh relay: timed out after 10s (connections may fail)"),
+        Err(_) => tracing::warn!(
+            "Peer-to-peer discovery is unreachable (the Iroh relay did not answer within 10s, \
+             often a firewall or TLS-inspecting proxy). Syncing via this server is unaffected. \
+             Repeated relay/pkarr errors are hidden; set RUST_LOG to see them."
+        ),
     }
 
     let bg_store = store.clone();

@@ -8,6 +8,13 @@ fn reported_by_sentry_actix(target: &str) -> bool {
     target.starts_with("tracing_actix_web")
 }
 
+/// Iroh relay and pkarr retry forever behind a firewall or TLS-inspecting
+/// proxy, logging a WARN each time (about 250 lines in 12 seconds). One summary
+/// is logged at startup (`sync::peer::start`), so these are errors-only unless
+/// the user sets `RUST_LOG`.
+const QUIET_DISCOVERY_TARGETS: &str =
+    "iroh=error,iroh_relay=error,pkarr=error,swarm_discovery=error,netwatch=error,portmapper=error";
+
 /// Start logging / tracing. Creates a subscribers that logs to stdout.
 /// Also optionally creates a Chrome trace file. Starts OpenTelemetry if configured.
 /// Returns a [tracing_chrome::FlushGuard] that should be dropped when the server is no longer needed.
@@ -31,7 +38,7 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         tracing_subscriber::EnvFilter::new(format!(
-            "{log_level},loro_internal=warn,pkarr=warn,reqwest=warn"
+            "{log_level},loro_internal=warn,reqwest=warn,{QUIET_DISCOVERY_TARGETS}"
         ))
     });
     // Sentry layer: `error!` events become Sentry issues, `warn!`/`info!`
@@ -199,7 +206,16 @@ pub fn init_sentry(config: &crate::config::Config) -> Option<sentry::ClientInitG
 
 #[cfg(test)]
 mod tests {
-    use super::reported_by_sentry_actix;
+    use super::{reported_by_sentry_actix, QUIET_DISCOVERY_TARGETS};
+
+    #[test]
+    fn discovery_filter_directives_parse_and_silence_warnings() {
+        use tracing_subscriber::EnvFilter;
+        let filter = EnvFilter::new(format!("info,{QUIET_DISCOVERY_TARGETS}"));
+        let rendered = filter.to_string();
+        assert!(rendered.contains("iroh_relay=error"), "{rendered}");
+        assert!(rendered.contains("pkarr=error"), "{rendered}");
+    }
 
     #[test]
     fn request_failures_are_left_to_sentry_actix() {
