@@ -83,3 +83,32 @@ Two layers, the safe one first.
 
 Layer 1 first: measure per tree, build in its own PR. Layer 2 needs Joep's go on
 the versioning approach before code.
+
+## Short property keys in the signed document: measured (2026-10-09)
+
+Joep approved a protocol version for short property keys. Before building,
+measured on the real rows of one "hallo" message (genesis commit row 1837 B raw,
+1067 B deflated; message row 540 B raw, 350 B deflated):
+
+| Change to the commit row | Deflated | Gain |
+| --- | --- | --- |
+| Replace `https://atomicdata.dev/properties/` and `/classes/` by one byte | 1032 B | 35 B (3%) |
+| Drop one copy of the signature text (subject is derived from it) | 991 B | 76 B (7%) |
+| Store `loroUpdate` as msgpack `bin`, not an int array | about 0 after deflate | on raw rows only |
+
+Deflate already folds the repeated URLs, so a fixed dictionary of short keys
+inside the Loro document saves about 35 B of 3.3 KB per message, and it costs a
+protocol version, a second signing form and a dictionary that must never change.
+**Recommendation: do not build it.**
+
+What is left in the commit row is mostly incompressible identifiers written as
+base64 text: the subject/signature (87 B, twice), the agent id (57 B), the parent
+subject (88 B, twice, once in `properties` and once in the update) and the Loro
+peer id. The real floor is raw bytes for these, which are protocol-neutral
+storage changes:
+
+1. Do not store the signature twice (subject is derived from it): about 75 B.
+2. Store ids as raw bytes in the row (base64 to 32/64 B): about 25% of the id bytes.
+3. Chat log / frozen resource (31 to 44 B per message, measured earlier) remains
+   the only change that is an order of magnitude, and does not touch the signed
+   document format.
